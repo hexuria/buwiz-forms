@@ -1,0 +1,372 @@
+{
+ "code": "1701MS",
+ "title": "Annual Income Tax Return for Individuals Earning Income from Business/Profession (Micro and Small taxpayers)",
+ "page": "views/form_1701ms_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the year (YYYY)",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:984"
+  },
+  {
+   "label": "Item 1 — Month the short period ends",
+   "control": "button-row",
+   "options": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11"
+   ],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1025"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:991"
+  },
+  {
+   "label": "Item 3 — Short period return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1005"
+  },
+  {
+   "label": "Item 4 — Civil status",
+   "options": [
+    "Single",
+    "Married",
+    "Widow/er",
+    "Legally Separated",
+    "Not Applicable"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1041"
+  },
+  {
+   "label": "Item 5 — If married, filing",
+   "options": [
+    "Jointly",
+    "Separately",
+    "Not applicable"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1064"
+  },
+  {
+   "label": "Item 11 — Source of income",
+   "options": [
+    "Income from business",
+    "Mixed income",
+    "Income from profession",
+    "Compensation income (spouse column only)"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1207"
+  },
+  {
+   "label": "Item 12 — Income is subject to",
+   "options": [
+    "Graduated rates",
+    "8% rate",
+    "Exempt",
+    "Special/preferential rate"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1208"
+  },
+  {
+   "label": "Item 17 — Method of deduction",
+   "options": [
+    "Itemized deductions",
+    "Optional standard deduction (40%)"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1227"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 18 — ATC",
+   "control": "text",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 0,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1231"
+  },
+  {
+   "label": "Item 18 — ATC",
+   "control": "text",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 0,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1231"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Field labels turn red only; messages are listed in a 'Needs review' section after Part II, and Queue for submission is disabled while any error exists.",
+  "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:786"
+ },
+ "lists": [
+  {
+   "label": "10A — Allowable itemized deductions (schedule total)",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 0 (single total)",
+   "official_rows": 0,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:160"
+  },
+  {
+   "label": "10B — Special allowable itemized deductions (schedule total)",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 0 (single total)",
+   "official_rows": 0,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:167"
+  },
+  {
+   "label": "13 — Other non-operating income (schedule total)",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 0 (single total)",
+   "official_rows": 0,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:181"
+  },
+  {
+   "label": "20 — Other non-operating income (schedule total)",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 0 (single total)",
+   "official_rows": 0,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:241"
+  }
+ ],
+ "print_preview": {
+  "slug": "1701ms-2024",
+  "how": "launch_frozen_form_preview",
+  "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1661"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — For the year (YYYY)",
+   "now": "The year box is free text and stays editable after the library tile set the year; Save draft under a different year overwrites any saved Draft for that year, and a blank box is saved as year 0.",
+   "why": "Draft rows are keyed by TIN, form, year and period taken from the draft as it stands, so upsert_from_draft updates whichever row matches the new year.",
+   "options": [
+    {
+     "name": "Read-only year from the tile",
+     "detail": "Show the year the tile set as text and remove the free-text box, so the draft key cannot change on this page."
+    },
+    {
+     "name": "Year combobox limited to free years",
+     "detail": "Offer only the tile's year, or years with no saved Draft, so a save cannot land on another year's row."
+    },
+    {
+     "name": "Guard the save",
+     "detail": "Refuse Save draft and Queue when the year differs from the saved key or is blank, instead of writing year 0."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:984"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 9 — Email address",
+   "now": "The submitted taxpayer email is upper-cased whenever Part V Item 7 or Item 9 holds a value, although the page shows it as typed.",
+   "why": "to_bir_field_map runs an uppercase pass over every text control, emails included, when part_v_capitalizes() is true, which breaks the rule that the email is never upper-cased.",
+   "options": [
+    {
+     "name": "Exclude the email keys",
+     "detail": "Skip txtEmaila and txtEmailb in the uppercase pass, as SELECT_CONTROLS already excludes the select controls."
+    },
+    {
+     "name": "Block queue with a notice",
+     "detail": "Keep the official capital() behaviour only if the owner accepts it, and show a notice before queueing when Part V triggers it."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-core/src/forms/form_1701ms.rs:1339"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 3 — Short period return?",
+   "now": "A short-period return can be queued with any month and year that pass the future-date check; the official alert requiring the current month and year never appears.",
+   "why": "The Item 1 block of validate_on only checks for future dates, so the official validateCurrentYear rule with the short-period alert text is not ported.",
+   "options": [
+    {
+     "name": "Port the alert",
+     "detail": "Add the verbatim text 'For short period return, the month should be the current month and the year should be the current year.' to the short-period branch."
+    },
+    {
+     "name": "Limit the month buttons",
+     "detail": "When Item 3 is Yes, offer only the current month and year so the invalid state cannot be entered."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-core/src/forms/form_1701ms.rs:1571"
+  },
+  {
+   "id": "F4",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Item 4 — Civil status",
+   "now": "Five buttons sit in one row: Single, Married, Widow/er, Legally Separated, Not Applicable.",
+   "why": "Five single-value options are above the four-option limit for button rows, so a combobox is the better control.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "Single-select combobox with the five labels in the same row position."
+    },
+    {
+     "name": "Vertical radio list",
+     "detail": "A stacked list of five radio rows keeps every label visible without a dropdown."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1041"
+  },
+  {
+   "id": "F5",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month the short period ends",
+   "now": "Eleven month buttons labelled 01 to 11 wrap across the row whenever Item 3 is Yes.",
+   "why": "Eleven values form a list, not a choice row, and buttons waste space where a combobox needs one control.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "One combobox with 01 to 11 in place of the eleven buttons."
+    },
+    {
+     "name": "Read-only chip with popup",
+     "detail": "Show the chosen month as text and open the 01 to 11 list on click."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1025"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors only turn the field label red; the messages sit in a Needs review block below Part II, and Queue for submission is greyed out with no message beside it. The Item 8 name and Item 10 phone labels never turn red because their keys differ.",
+   "why": "field() matches keys 'name' and 'phone' against validation keys 'taxpayer_name' and 'contact_number', so those two highlights never fire and the rest depend on a panel far from the input.",
+   "options": [
+    {
+     "name": "Inline message under each field",
+     "detail": "Render the message text beneath the input, not only a red label."
+    },
+    {
+     "name": "Jump-to-error list",
+     "detail": "Move Needs review above Part I and make each entry scroll to its field."
+    },
+    {
+     "name": "Fix the highlight keys",
+     "detail": "Pass 'taxpayer_name' and 'contact_number' as the error keys for the name and phone fields."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:786"
+  },
+  {
+   "id": "F7",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Item 18 — ATC",
+   "now": "The row reads 'Item 18 — ATC: II012' with only the code, while the description helper exists and is used only by the print sheet.",
+   "why": "The user cannot tell which of the seven codes was derived from Items 11 and 12 without memorising the table.",
+   "options": [
+    {
+     "name": "Code and description",
+     "detail": "Show the code with its text from form_1701ms_atc_description in the same row."
+    },
+    {
+     "name": "Read-only chip",
+     "detail": "Show the code and description as a chip that says it was set from Items 11 and 12."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1231"
+  },
+  {
+   "id": "F8",
+   "issue": "lists",
+   "severity": "medium",
+   "field": "10A — Allowable itemized deductions (schedule total)",
+   "now": "Schedules 10A, 10B, 13 and 20 take one total per column, with no rows for the descriptions the official View Details popups collect.",
+   "why": "The official validationSpecify10A check (Empty fields are not allowed) needs a description with each amount, and the port neither asks for it nor reproduces the check.",
+   "options": [
+    {
+     "name": "Description and amount rows",
+     "detail": "Add rows with an Add row button under each schedule and sum them into the total."
+    },
+    {
+     "name": "Required description per total",
+     "detail": "Keep one total per schedule and require a description when the amount is non-zero, as the official check does."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:160"
+  },
+  {
+   "id": "F9",
+   "issue": "validation",
+   "severity": "low",
+   "field": "7 — Foreign tax credits",
+   "now": "The Part V Item 7 and Item 9 messages use the second official wording only; the official first wording 'Part V - Item 7B Foreign Tax Amount ...' and 'Part V - Item 9B Amount ...' never appears.",
+   "why": "The official validate() lists both wordings, and the port emits only the non-B form.",
+   "options": [
+    {
+     "name": "Use the official wording",
+     "detail": "Emit the Item 7B and Item 9B texts for the first occurrence, matching the official source order."
+    },
+    {
+     "name": "Record the deviation",
+     "detail": "If the second wording was chosen on purpose, record it as a documented deviation next to the validation inventory."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-core/src/forms/form_1701ms.rs:1715"
+  },
+  {
+   "id": "F10",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "When every check passes, no line says 'Validation successful. Click on Edit if you wish to modify your entries.'",
+   "why": "The official validate() shows this alert on success, and the page renders only the error list.",
+   "options": [
+    {
+     "name": "Success line in the review slot",
+     "detail": "Show the verbatim success text where the Needs review list would be when there are no errors."
+    },
+    {
+     "name": "Status bar message",
+     "detail": "Show the same text in the status message bar after a clean check."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701ms_view.rs:1691"
+  }
+ ]
+}

@@ -1,0 +1,260 @@
+{
+ "code": "2200A",
+ "title": "Excise Tax Return for Alcohol Products",
+ "page": "views/form_2200a_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:724"
+  },
+  {
+   "label": "Item 1 — Day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:749"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:750"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 1 — Month",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:724"
+  },
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:751"
+  },
+  {
+   "label": "Item 12 — Availing of tax relief under a Special Law/International Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:825"
+  },
+  {
+   "label": "Manner of payment",
+   "options": [
+    "13 — Payment on actual removal",
+    "14 — Prepayment / advance deposit",
+    "15 — Other similar schemes"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:851"
+  }
+ ],
+ "atc": [
+  {
+   "label": "ATC (3 digits after XA)",
+   "control": "text",
+   "multi": true,
+   "official_slots": 3,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:1005"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Only the month, day, year, place, manner, email and schedule-row labels can turn red; the other has_error keys never match; errors render via self.section(\"Needs review\", issues, cx) after Part III, capped at 20.",
+  "where": "crates/bir-desktop/src/views/form_2200a_view.rs:1531"
+ },
+ "lists": [
+  {
+   "label": "Others (specify) — row 1",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 3",
+   "official_rows": 3,
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:1003"
+  }
+ ],
+ "print_preview": {
+  "slug": "2200a-2020",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_2200a_view.rs:1380"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Twelve small outline buttons, Jan to Dec, fill a row above Day and Year.",
+   "why": "Twelve options is far past the two-to-three limit for buttons, and the official Item 1 month is a two-digit text box, so a combobox fits better.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A searchable Jan to Dec list that shows the chosen month in the box."
+    },
+    {
+     "name": "Two-digit box",
+     "detail": "Match the official MM box and validate on blur, as Day and Year already do."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:724"
+  },
+  {
+   "id": "F2",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "The month, day and year come from the library tile but stay editable, and a new month saves as a second Draft beside the original.",
+   "why": "filing_period() is Monthly(month), so changing the month changes the period key, and upsert_from_draft inserts a row instead of replacing the original.",
+   "options": [
+    {
+     "name": "Lock after first save",
+     "detail": "Fix the month once saved; another month needs its own tile."
+    },
+    {
+     "name": "Warn before saving",
+     "detail": "Confirm that a changed month creates a separate draft and leaves the original in place."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:737"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 6 — Taxpayer's Name",
+   "now": "Errors on Items 3, 6, 7, 7A, 8, 12A and 15 leave their labels black, and only the Needs review panel shows them.",
+   "why": "has_error matches input keys to validator keys such as taxpayer_name, number_of_attached_sheets and contact_number, which never equal name, sheets or phone.",
+   "options": [
+    {
+     "name": "Matching keys",
+     "detail": "Report each error under the input key so the label turns red."
+    },
+    {
+     "name": "Inline message",
+     "detail": "Show the official alert under each field as well."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:604"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Others (specify) — row 1",
+   "now": "A bad ATC, or a blank description, bracket or rate, on an Others row leaves the row unmarked, and the message shows only in Needs review.",
+   "why": "The row checks has_error('others[N]'), but the model reports others[N].atc_digits, .description, .bracket and .rate, which never match.",
+   "options": [
+    {
+     "name": "Row-level key",
+     "detail": "Report row errors under others[N] so the whole Others box turns red."
+    },
+    {
+     "name": "Per-cell highlight",
+     "detail": "Pass each sub-key to its own input so only the faulty cell is red."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:1004"
+  },
+  {
+   "id": "F5",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Every error is listed only in a Needs review section after Part III, at the bottom of a long page.",
+   "why": "Queue for submission is disabled while errors exist, and the reasons sit at the bottom, capped at 20 messages.",
+   "options": [
+    {
+     "name": "Summary above Part I",
+     "detail": "Show the error count and the first messages beside the toolbar."
+    },
+    {
+     "name": "Jump links",
+     "detail": "Make each Needs review line scroll to and focus its field."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200a_view.rs:1531"
+  },
+  {
+   "id": "F6",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 8 — Contact Number",
+   "now": "The print preview leaves the Item 8 contact number, the Item 9 email, the Item 10 and 11 place codes and the Others row ATC, description and rate blank.",
+   "why": "The frozen sheet records these as left out: one 40-slot comb under Items 8 and 9 cannot take phoneNumber or txtEmail, the place combs have no separate cells, and the Others cells have no column captions (html-frozen/2200a-2020/writer-cells.json lines 1276, 1280 and 1396).",
+   "options": [
+    {
+     "name": "Assign the shared comb",
+     "detail": "Give the 40-slot comb to one of phone or email and find a cell for the other."
+    },
+    {
+     "name": "Map place and Others cells",
+     "detail": "Add writer-cell joins for the place codes and Others text once the sheet geometry is confirmed."
+    }
+   ],
+   "where": "html-frozen/2200a-2020/writer-cells.json:1276"
+  },
+  {
+   "id": "F7",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Print preview",
+   "now": "The 2200-P print preview now opens a frozen sheet, a change that arrived in the 2200-A print commit 2f0b6506.",
+   "why": "That commit edits form_2200p_view.rs by 34 lines, which is outside 2200-A's own files and is not a one-line registration.",
+   "options": [
+    {
+     "name": "Split the 2200-P hunk",
+     "detail": "Move the 2200-P change into its own commit and review it against 2200-P."
+    },
+    {
+     "name": "Revert the 2200-P hunk",
+     "detail": "Restore the previous 2200-P stub until its preview is reviewed."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200p_view.rs:1296"
+  }
+ ]
+}

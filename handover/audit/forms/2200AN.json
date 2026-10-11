@@ -1,0 +1,366 @@
+{
+ "code": "2200AN",
+ "title": "Excise Tax Return for Automobiles and Non-Essential Goods",
+ "page": "views/form_2200an_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:525"
+  },
+  {
+   "label": "Item 1 — Day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:529"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:530"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 1 — Month",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:505"
+  },
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:531"
+  },
+  {
+   "label": "Item 10 — Place of production",
+   "options": [
+    "Region",
+    "Province",
+    "City"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:547"
+  },
+  {
+   "label": "Item 11 — Place of removal",
+   "options": [
+    "Region",
+    "Province",
+    "City"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:547"
+  },
+  {
+   "label": "Item 12 — Availing of tax relief?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:683"
+  },
+  {
+   "label": "Manner of payment (Items 13–15)",
+   "options": [
+    "Payment on Actual Removal",
+    "Prepayment/Advance Deposit",
+    "Other similar schemes"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:709"
+  }
+ ],
+ "atc": [
+  {
+   "label": "ATC (XG…)",
+   "control": "text",
+   "multi": true,
+   "official_slots": 2,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:790"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Only the day and email labels can turn red (field() compares keys); the place, relief and manner rows never check errors; errors render via self.section(\"Needs review\", issues, cx) after Part III, capped at 20.",
+  "where": "crates/bir-desktop/src/views/form_2200an_view.rs:1311"
+ },
+ "lists": [],
+ "print_preview": {
+  "slug": "2200an-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_2200an_view.rs:1160"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — Month",
+   "now": "Clicking a month tile ignores that month, and the draft opens dated today, or 12/31 for an earlier year.",
+   "why": "new_draft drops the period argument, and new_from_profile(profile, year) takes the month and day only from today or December 31.",
+   "options": [
+    {
+     "name": "Pass the tile month",
+     "detail": "Give new_from_profile the period and set Item 1 to it, as 2200-A does."
+    },
+    {
+     "name": "Lock after first save",
+     "detail": "Once saved, change the month only by opening the matching tile."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:940"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 1 — Month",
+   "now": "Any 2200-AN tile reopens the newest 2200-AN of the year, even when it is for another month and is queued or filed.",
+   "why": "load_draft scans every MMDD key and returns the latest row, so a monthly tile can never reach its own month, and a filed return blocks the next one.",
+   "options": [
+    {
+     "name": "Look up by tile month",
+     "detail": "Find the draft for the tile's month first and create one only if none exists, as 2200-A's load_draft does."
+    },
+    {
+     "name": "Year list with New",
+     "detail": "List this year's returns by month with a New action."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:946"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "The monthly 2200-AN tiles do not show a saved return as in progress.",
+   "why": "Drafts are saved under an open-ended key, which get_form_filing_progress counts as open-ended, while the registry lists 2200-AN as monthly.",
+   "options": [
+    {
+     "name": "Save under the month",
+     "detail": "Key 2200-AN drafts by Monthly(month) for their Item 1 month, as 2200-A does."
+    },
+    {
+     "name": "Map open-ended rows",
+     "detail": "Read each open-ended 2200-AN row into its month when building progress."
+    }
+   ],
+   "where": "crates/bir-core/src/db/drafts.rs:2764"
+  },
+  {
+   "id": "F4",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Queue for submission",
+   "now": "Queue for submission is enabled for a complete return and then only reports that 2200-AN is not enabled in this build.",
+   "why": "The button checks only validation errors, while the registry turns queueing off for 2200-AN because no PROD SFTP folder exists.",
+   "options": [
+    {
+     "name": "Hide while queueing is off",
+     "detail": "Render the button only when can_queue_for_submission is true."
+    },
+    {
+     "name": "Disabled with a reason",
+     "detail": "Grey the button out with a line saying queueing is off for 2200-AN in this build."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:1249"
+  },
+  {
+   "id": "F5",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Item 10 — Place of production",
+   "now": "Each place level is a button labelled like 'Region: (select)' that opens a wrapped list of every option, with no search.",
+   "why": "Lists this long belong in a combobox, and the 2200-A page already uses a searchable select for the same codes.",
+   "options": [
+    {
+     "name": "Searchable select per level",
+     "detail": "Use the searchable select that 2200-A uses for region, province and city."
+    },
+    {
+     "name": "Cascading combobox",
+     "detail": "Enable province after region and city after province, as 2200-A does."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:585"
+  },
+  {
+   "id": "F6",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Twelve small outline buttons set the month above the Day and Year boxes.",
+   "why": "Twelve options is past the button limit, and the official txtMonth is a dropdown, so a combobox matches both.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A searchable Jan to Dec list that matches the official dropdown."
+    },
+    {
+     "name": "Native select",
+     "detail": "A plain select with the twelve months."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:505"
+  },
+  {
+   "id": "F7",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 2 — Amended return?",
+   "now": "Item 2 is pre-set to No, so the official alert 'Please select an option in item number 2.' can never appear.",
+   "why": "is_amended is a plain bool that defaults to false, so there is no unanswered state for rule 2200an-validate-010-amended to check.",
+   "options": [
+    {
+     "name": "Optional bool",
+     "detail": "Store None until the filer picks Yes or No, as tax_relief already does."
+    },
+    {
+     "name": "Unselected radios",
+     "detail": "Start with neither button selected and keep the official alert until a choice is made."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2200an.rs:338"
+  },
+  {
+   "id": "F8",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Taxpayer's Name",
+   "now": "Errors on Items 8 to 11, 12A and 15 leave their labels black, and place, relief and manner errors never turn anything red.",
+   "why": "field() compares keys that differ (taxpayer_name vs name, contact_number vs phone, tax_relief_specify vs relief, manner_other vs other), and render_place, the relief row and render_manner never check errors.",
+   "options": [
+    {
+     "name": "Matching keys",
+     "detail": "Report each error under the input key so its label turns red."
+    },
+    {
+     "name": "Row-level state",
+     "detail": "Give the place, relief and manner rows a red state when their rule fails."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:393"
+  },
+  {
+   "id": "F9",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Every error is listed only in a Needs review section after Part III, capped at 20 lines.",
+   "why": "Queue for submission stays disabled while errors exist, and the reasons sit beneath the schedules.",
+   "options": [
+    {
+     "name": "Summary above Part I",
+     "detail": "Show the error count and first messages beside the toolbar."
+    },
+    {
+     "name": "Jump links",
+     "detail": "Make each Needs review line focus its field."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:1311"
+  },
+  {
+   "id": "F10",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Email Address",
+   "now": "The print preview shows the email in capitals and cuts it at 28 characters, the width of its printed comb.",
+   "why": "The frozen filler uppercases every writer-cell join, and txtEmail is one (html-frozen/2200an-2018/writer-cells.json:86, 28 slots), so the email breaks the rule that it is never upper-cased.",
+   "options": [
+    {
+     "name": "Print the email as typed",
+     "detail": "Skip the uppercase for txtEmail in the filler, as the submit path already does."
+    },
+    {
+     "name": "Wider email cell",
+     "detail": "Map the email to a cell that holds the full address instead of a 28-slot comb."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:83"
+  },
+  {
+   "id": "F11",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 10 — Place of production",
+   "now": "The print preview leaves the Item 10 and 11 place names and the Item 12A tax-relief text blank.",
+   "why": "The sheet records the place combs as holding option codes, not printable text, and Item 12A as left blank (html-frozen/2200an-2018/writer-cells.json lines 1219 and 1243).",
+   "options": [
+    {
+     "name": "Print the names",
+     "detail": "Write the region, province and city names into the place combs instead of their option codes."
+    },
+    {
+     "name": "Print 12A as text",
+     "detail": "Map the relief text to the 12A comb, which the sheet guide currently leaves empty."
+    }
+   ],
+   "where": "html-frozen/2200an-2018/writer-cells.json:1219"
+  },
+  {
+   "id": "F12",
+   "issue": "atc",
+   "severity": "low",
+   "field": "ATC (XG…)",
+   "now": "The ATC for each Others row is typed freely, and a bad code shows up only later in Needs review.",
+   "why": "No code list is offered, while the rule is an XG prefix with up to six letters or digits, which a picker or input mask could enforce as the filer types.",
+   "options": [
+    {
+     "name": "Combobox of XG codes",
+     "detail": "Offer the XG codes printed for the fixed rows, with free entry for others."
+    },
+    {
+     "name": "Input mask",
+     "detail": "Fix the XG prefix and allow only letters and digits as the filer types."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200an_view.rs:790"
+  }
+ ]
+}

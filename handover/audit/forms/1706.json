@@ -1,0 +1,199 @@
+{
+  "code": "1706",
+  "title": "Capital Gains Tax Return for Onerous Transfer of Real Property Classified as Capital Asset",
+  "page": "views/form_1706_view.rs",
+  "page_kind": "kit",
+  "period": [
+    {
+      "label": "Item 1 — Month of transaction",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:27"
+    },
+    {
+      "label": "Item 1 — Day",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:28"
+    },
+    {
+      "label": "Item 1 — Year",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:29"
+    }
+  ],
+  "choice_rows": [
+    {
+      "label": "Item 2 — Amended return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:259"
+    },
+    {
+      "label": "Item 15 — Classification of property",
+      "options": [
+        "Residential",
+        "Commercial",
+        "Condominium Residential",
+        "Agricultural",
+        "Industrial",
+        "Condominium Commercial",
+        "Others (specify)"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:434"
+    },
+    {
+      "label": "Item 17 — Is the property being sold your principal residence?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:383"
+    },
+    {
+      "label": "Item 18 — Do you intend to construct or acquire a new principal residence within 18 months?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:391"
+    },
+    {
+      "label": "Item 19 — Does the selling price cover more than one property?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:400"
+    },
+    {
+      "label": "Item 20 — Availing of tax relief under an International Tax Treaty or Special Law?",
+      "options": [
+        "No",
+        "Yes — International Tax Treaty",
+        "Yes — Special Law"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:427"
+    },
+    {
+      "label": "Item 21 — Description of transaction",
+      "options": [
+        "Cash Sale",
+        "Foreclosure Sale",
+        "Exempt",
+        "Others",
+        "Installment Sale"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:461"
+    },
+    {
+      "label": "Item 30 — Determination of taxable base",
+      "options": [
+        "30A Gross selling price",
+        "30B Bid price (foreclosure sale)",
+        "30C FMV of land and improvement",
+        "30D Taxable installment collected",
+        "30E Unutilized portion of sales proceeds",
+        "30F Others"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:550"
+    },
+    {
+      "label": "If overpayment, mark one:",
+      "options": [
+        "To be refunded",
+        "To be issued a Tax Credit Certificate"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:583"
+    }
+  ],
+  "atc": [
+    {
+      "label": "Item 4 — ATC",
+      "control": "button-row",
+      "multi": false,
+      "official_slots": 2,
+      "options_count": 2,
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:274"
+    }
+  ],
+  "validation": {
+    "inline": false,
+    "needs_review_panel": true,
+    "how": "Errors render only in the 'Needs review' list after all sections; the failing caption turns red and Queue for submission is disabled with no text beside it.",
+    "where": "crates/bir-desktop/src/views/event_form_kit.rs:883"
+  },
+  "lists": [
+    {
+      "label": "Schedule 1 — Computation of tax base on the unutilized portion of sales proceeds",
+      "growable_officially": false,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 10 (20 cells)",
+      "official_rows": 10,
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:619"
+    }
+  ],
+  "print_preview": {
+    "slug": "1706-2018",
+    "how": "launch_frozen_form_preview",
+    "where": "crates/bir-desktop/src/views/form_1706_view.rs:785"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "issue": "period-editable",
+      "severity": "medium",
+      "field": "Item 1 — Month of transaction",
+      "now": "The transaction date opens as 01 / 01 / <filing year>, and nothing marks it as a placeholder.",
+      "why": "The official page starts blank and alerts 'Please indicate date of transaction on item 1.' (rules/forms/1706-v2018/validations.json:177), but the draft is seeded with January 1, so that alert cannot fire and the filename and XML carry 01012025 unless the user retypes it.",
+      "options": [
+        {
+          "name": "Blank until typed",
+          "detail": "Seed month and day as 0, as the 1707 draft does, so the fields start empty and the required-date alert can fire."
+        },
+        {
+          "name": "Date picker",
+          "detail": "Replace the three boxes with one date control that writes MM/DD/YYYY and blocks queueing while it is empty."
+        }
+      ],
+      "where": "crates/bir-core/src/forms/form_1706.rs:402"
+    },
+    {
+      "id": "F2",
+      "issue": "choice-buttons",
+      "severity": "medium",
+      "field": "Item 15 — Classification of property",
+      "now": "Seven classification buttons wrap across the Part I section.",
+      "why": "Seven options is above the four-option limit for button rows, and the buttons run in a different order from the official radio ids (form_1706.rs:61-69 against :72-82).",
+      "options": [
+        {
+          "name": "Combobox",
+          "detail": "One combobox listing the seven classes in official radio order: Residential, Agricultural, Commercial, Industrial, Condominium Residential, Condominium Commercial, Others (specify)."
+        },
+        {
+          "name": "Radio list",
+          "detail": "A vertical radio list keeps all seven options visible without wrapping."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1706_view.rs:434"
+    }
+  ]
+}

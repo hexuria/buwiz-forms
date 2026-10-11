@@ -1,0 +1,377 @@
+{
+ "code": "0605",
+ "title": "BIR Form No. 0605 — Payment Form",
+ "page": "views/form_0605_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 2 — Year ended (month)",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:558-573"
+  },
+  {
+   "label": "Item 2 — Year ended",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:623"
+  },
+  {
+   "label": "Item 3 — Quarter",
+   "control": "button-row",
+   "options": [
+    "None",
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:574-589"
+  },
+  {
+   "label": "Item 7 — Return period (MM/DD/YYYY)",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:627"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 1 —",
+   "options": [
+    "Calendar",
+    "Fiscal"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:591-610"
+  },
+  {
+   "label": "Item 11 — Taxpayer classification",
+   "options": [
+    "Individual",
+    "Non-Individual"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:747-769"
+  },
+  {
+   "label": "Item 17 — Manner of payment",
+   "options": [
+    "Self-Assessment",
+    "Tax Deposit / Advance Payment",
+    "Income Tax Second Installment (Individual)",
+    "Penalties",
+    "Others (Specify)",
+    "Preliminary / Final Assessment / Deficiency Tax",
+    "Accounts Receivable / Delinquent Account"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:779-793"
+  },
+  {
+   "label": "Approval —",
+   "options": [
+    "Pre-approved by Investigating Office",
+    "Not approved by Investigating Office"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:823-847"
+  },
+  {
+   "label": "Item 18 — Type of payment",
+   "options": [
+    "Installment",
+    "Partial Payment",
+    "Full Payment"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:794-808"
+  },
+  {
+   "label": "Item 8 — Tax type",
+   "options": [
+    "CG — CAPITAL GAINS TAX-Real Property",
+    "CS — CAPITAL GAINS TAX-Stocks",
+    "DN — DONORS TAX",
+    "DO — DOCUMENTARY STAMP TAX-ONE TIME",
+    "DS — DOCUMENTARY STAMP TAX",
+    "ES — ESTATE TAX",
+    "ET — ENERGY TAX",
+    "IE — IMPROPERLY ACCUMULATED EARNINGS",
+    "IT — INCOME TAX",
+    "MC — MISCELLANEOUS TAX",
+    "PM — PERCENTAGE TAX-MONTHLY",
+    "PT — PERCENTAGE TAX-QUARTERLY",
+    "QP — QUALIFYING FEES-PAGCOR",
+    "RF — REGISTRATION FEE",
+    "SL — PERCENTAGE TAX-SPECIAL LAWS",
+    "SO — PERCENTAGE TAX-STOCKS(IPO)",
+    "ST — PERCENTAGE TAX-STOCKS",
+    "TR — TRAVEL TAX-PTA",
+    "VT — VALUE ADDED TAX",
+    "WB — WITHHOLDING TAX-BANKS AND OTHER FINANCIAL INSTITUTIONS",
+    "WC — WITHHOLDING TAX-COMPENSATION",
+    "WE — WITHHOLDING TAX-EXPANDED",
+    "WF — WITHHOLDING TAX-FINAL",
+    "WG — WITHHOLDING TAX-VAT AND OTHER PERCENTAGE TAXES",
+    "WO — WITHHOLDING TAX-OTHERS",
+    "WR — WITHHOLDING TAX-FRINGE BENEFITS",
+    "WW — WITHHOLDING TAX-PERCENTAGE TAX ON WINNING AND PRIZES",
+    "WV — WITHHOLDING TAX-VALUE ADDED TAX (VAT)",
+    "WP — WITHHOLDING TAX-PERCENTAGE TAX",
+    "XA — EXCISE TAX-ALCOHOL",
+    "XB — EXCISE TAX-SWEETENED BEVERAGES",
+    "XF — EXCISE TAX-TOBACCO INSPECTION AND MONITORING FESS",
+    "XG — EXCISE TAX-AUTOMOBILES AND NON-ESSENTIALS",
+    "XM — EXCISE TAX-MINERALS",
+    "XP — EXCISE TAX-PETROLEUM",
+    "XS — EXCISE TAX-SPECIFIC",
+    "XT — EXCISE TAX-TOBACCO",
+    "XV — EXCISE TAX-AD VALOREM",
+    "XC — EXCISE TAX-PERFORMANCE OF SERVICES ON INVASIVE COSMETICS PROCEDURES",
+    "MA — MICRO TAXPAYER ABATEMENT"
+   ],
+   "control": "chips",
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:643-666"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 6 — ATC",
+   "control": "chips",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 144,
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:667-713"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Errors render only in a 'Needs review' card after every section (first 25 messages, no field marker); Queue for submission is disabled while any exist.",
+  "where": "crates/bir-desktop/src/views/form_0605_view.rs:1319-1320"
+ },
+ "lists": [],
+ "print_preview": {
+  "slug": "0605-1999",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_0605_view.rs:1168-1170"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 2 — Year ended",
+   "now": "The year is an editable box prefilled from the tile, and saving after a change writes the draft under that other year and replaces any saved Draft already stored there.",
+   "why": "The taxable year is part of the save key, and upsert_from_draft updates an existing Draft row without asking (crates/bir-core/src/db/queueable.rs:154-166).",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the tile's year as fixed text so the save key cannot move from this page."
+    },
+    {
+     "name": "Confirm before moving",
+     "detail": "If the year stays editable, ask before saving under another year and refuse to overwrite an existing Draft."
+    },
+    {
+     "name": "Combobox",
+     "detail": "Offer only the tile's year and the year before it in a combobox."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:623"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 2 — Year ended",
+   "now": "From the 13th 0605 payment of a tax year, the dashboard tile opens payment 12's record instead of a new draft.",
+   "why": "The dashboard passes the next open-ended key (crates/bir-desktop/src/views/dashboard.rs:1133), but load_draft and new_from_profile clamp it to 1–12, so the 'Open-ended persistence slot must be from 1 to 12' check (crates/bir-core/src/forms/form_0605_official.rs:665) can never fire.",
+   "options": [
+    {
+     "name": "Refuse with a message",
+     "detail": "Show a plain message that this year's in-app 0605 slots are used up instead of opening slot 12."
+    },
+    {
+     "name": "Keep the real key",
+     "detail": "Store the open-ended key unclamped; FilingPeriod::OpenEnded holds a u32 and the queue column is an i64."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:956"
+  },
+  {
+   "id": "F3",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 3 — Quarter",
+   "now": "Item 3 opens with a quarter already selected from the payment count, so payment 1 shows Q1, payment 2 shows Q2, and payment 4 onward shows Q4.",
+   "why": "new_from_profile sets quarter from the clamped open-ended key (crates/bir-core/src/forms/form_0605.rs:489), although the model says the slot is not used to derive the quarter (form_0605.rs:385-386).",
+   "options": [
+    {
+     "name": "Start unset",
+     "detail": "Default Item 3 to None and make the user pick Q1–Q4 on each return."
+    },
+    {
+     "name": "Combobox",
+     "detail": "Offer None and Q1–Q4 in a combobox with None selected until the user picks one."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_0605.rs:489"
+  },
+  {
+   "id": "F4",
+   "issue": "other",
+   "severity": "high",
+   "field": "Approval —",
+   "now": "The two approval buttons, 'Pre-approved by Investigating Office' and 'Not approved by Investigating Office', write the two XML approval flags as if their meaning were known.",
+   "why": "The model says neither reviewed save sets those flags and their meaning is not established (crates/bir-core/src/forms/form_0605.rs:103-105 and 550), so the label-to-flag pairing is an assumption.",
+   "options": [
+    {
+     "name": "Flag for review",
+     "detail": "Keep the official sentence and list the approval flags as unverified in Needs review until their meaning is confirmed."
+    },
+    {
+     "name": "Neutral labels",
+     "detail": "Show 'Option 1' and 'Option 2' beside the official sentence so the page claims no mapping."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:823-847"
+  },
+  {
+   "id": "F5",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 7 — Return period (MM/DD/YYYY)",
+   "now": "A mistyped or impossible Item 7 date, such as 02/29/2025, shows the generic line Item 7 — Return period (MM/DD/YYYY): \"…\" is not a MM/DD/YYYY date. instead of the official alert text.",
+   "why": "The official alerts for the format, leap-year, month, day and year branches of Items 4 and 7 (rules/forms/0605-v2003/validations.json rules 15, 17, 22, 24, 36, 37, 39, 41, 42, 44) have no port, so their verbatim text never appears.",
+   "options": [
+    {
+     "name": "Port the official alerts",
+     "detail": "Return each official text for its own branch, in the official rule order, instead of the generic messages."
+    },
+    {
+     "name": "Split the date input",
+     "detail": "Use separate month, day and year boxes so each official alert maps to one field."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:319-322"
+  },
+  {
+   "id": "F6",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 13 — Taxpayer's Name",
+   "now": "The page shows the name and address as typed or loaded, but the queued XML uppercases the name, address, line of business and Item 17 'Others' text every time.",
+   "why": "The recorded rule is that capital() fires only on blur and profile-loaded fields keep their case (memory note bir-caps-display-only), but the port applies capital() unconditionally.",
+   "options": [
+    {
+     "name": "Match the blur rule",
+     "detail": "Apply capital() only to values the user edited on the page, as the official blur handler does."
+    },
+    {
+     "name": "Keep the case as entered",
+     "detail": "Store the typed case in the XML and leave the uppercase display to the print renderer, as the memory note requires."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_0605_official.rs:749-753"
+  },
+  {
+   "id": "F7",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Item 6 — ATC",
+   "now": "Up to 24 ATC chips appear at once under a separate 'Find an ATC' box, out of 122 offered for a non-PT tax type (144 in total).",
+   "why": "A single ATC from a list this size needs a combobox, because the chip list shows only the first 24 matches and hides the rest until the user types.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A single-select combobox that filters the offered ATCs as the user types."
+    },
+    {
+     "name": "Select with search",
+     "detail": "A searchable select that opens the full list already limited to the chosen tax type."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:667-689"
+  },
+  {
+   "id": "F8",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors appear only in a 'Needs review' card after every section (first 25 messages, no field marker), and 'Queue for submission' is disabled with no reason beside it.",
+   "why": "The user has to scroll past the whole form to learn which item blocks filing, because no field carries its own message.",
+   "options": [
+    {
+     "name": "Inline error text",
+     "detail": "Show each message under its own field, using the official alert wording."
+    },
+    {
+     "name": "Pinned summary",
+     "detail": "Show the error count and jump links next to the Queue button."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:1319-1320"
+  },
+  {
+   "id": "F9",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 2 — Year ended (month)",
+   "now": "Twelve month buttons wrap across the Return period card, and all are disabled under the default Calendar basis, with December still disabled under Fiscal.",
+   "why": "Twelve options are too many for a button row, the row does nothing until Item 1 changes, and a combobox fits more than four options.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "Jan–Dec in one combobox, enabled only when Item 1 is Fiscal."
+    },
+    {
+     "name": "Fixed text",
+     "detail": "Under Calendar, show 'Dec' as read-only text and show the combobox only for Fiscal."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:558-573"
+  },
+  {
+   "id": "F10",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Item 17 — Manner of payment",
+   "now": "Seven buttons wrap across the Part II card, and choosing 'Others (Specify)' reveals a description box below them.",
+   "why": "Seven exclusive choices are more than a button row should carry, and each long label takes its own chip width.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "One combobox with the seven official manners, revealing the description box for 'Others (Specify)'."
+    },
+    {
+     "name": "Radio list",
+     "detail": "A vertical radio group, one manner per line, so the long labels fit at phone width."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0605_view.rs:779-793"
+  }
+ ]
+}

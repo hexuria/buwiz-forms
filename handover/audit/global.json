@@ -1,0 +1,10 @@
+[
+ {"title": "Print preview fails on Linux (every form)", "severity": "high",
+  "now": "Print preview failed: the window handle kind is not supported.",
+  "why": "The in-app preview embeds a web view (wry). On Linux wry only accepts an Xlib window handle, but GPUI gives XCB on X11 (and Wayland on Wayland). The open-in-browser fallback only runs if the window itself can't open, so it never runs here. macOS and Windows are fine.",
+  "options": [
+   {"name": "Open in browser on Linux", "detail": "Use the existing file + open-in-browser path on Linux. One cfg change; prints from the browser."},
+   {"name": "Try in-app, then fall back", "detail": "Keep the in-app window; if the web view fails, close it and open the browser instead."},
+   {"name": "GTK-hosted window", "detail": "Host the preview in a GTK window wry accepts. Most work; keeps printing in-app."}],
+  "where": "views/frozen_html_preview.rs:181-196, views/form_html_preview_launcher.rs:131-168, lb-wry-0.53.3/src/webkitgtk/mod.rs:156-165"}
+]

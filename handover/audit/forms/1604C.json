@@ -1,0 +1,231 @@
+{
+ "code": "1604C",
+ "title": "Annual Information Return of Income Taxes Withheld on Compensation",
+ "page": "views/form_1604c_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:483"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:485"
+  },
+  {
+   "label": "Item 8 — Category of withholding agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:525"
+  },
+  {
+   "label": "Item 8A — If private, top withholding agent?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:553"
+  },
+  {
+   "label": "Item 11 — Refunds of overwithholding/overremittance released to employees?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:566"
+  },
+  {
+   "label": "Item 13 — Month of first crediting of overremittance",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:580"
+  }
+ ],
+ "atc": [],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Red label works for model errors via has_error(key, error_key), but message text appears only in the bottom 'Needs review' box, capped at 20.",
+  "where": "crates/bir-desktop/src/views/form_1604c_view.rs:361"
+ },
+ "lists": [
+  {
+   "label": "Part II — Summary of Remittances per BIR Form No. 1601-C",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 12",
+   "official_rows": 12,
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:683"
+  }
+ ],
+ "print_preview": {
+  "slug": "1604c-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1604c_view.rs:968"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Item 13 — Month of first crediting of overremittance",
+   "now": "The first crediting month is shown as twelve small buttons (Jan–Dec) rather than one drop-down.",
+   "why": "The official form uses a select (frm1604c:select13, BIR-Form1604C.hta:694) and alerts 'Please select a month from the list on Item 13.' (BIR-Form1604C.hta:3066).",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "Use a select with an empty first entry, as the official select13 does."
+    },
+    {
+     "name": "Dropdown beside Item 11A",
+     "detail": "Put the month in a dropdown next to the Item 11A date parts, as the official txtRefMonth does."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:580"
+  },
+  {
+   "id": "F2",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — For the year",
+   "now": "The year comes from the dashboard tile, yet the year box stays editable, and a different year saves the return as a separate draft.",
+   "why": "A draft is stored under its own year (crates/bir-core/src/db/queueable.rs:141), so the typed year decides which row is written.",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the period as a chip and change it only from the dashboard tile."
+    },
+    {
+     "name": "Combobox with warning",
+     "detail": "Keep a picker, but warn before saving that another period opens a separate draft."
+    },
+    {
+     "name": "Lock after first save",
+     "detail": "Allow changing the period only until a draft for that period has been saved."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:483"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 11A — Date of refund",
+   "now": "Item 11A is one text box that expects MM/DD/YYYY, and a wrong date is reported only in the bottom Needs review box.",
+   "why": "The official form splits Item 11A into a month drop-down and day and year boxes (BIR-Form1604C.hta:631; frm1604c:txtRefMonth, txtRefDate and txtRefYear in the layout), and the page has no such split.",
+   "options": [
+    {
+     "name": "Month select plus day and year boxes",
+     "detail": "Mirror the official split so each part is checked as it is entered."
+    },
+    {
+     "name": "Date picker",
+     "detail": "Use a calendar control that writes MM/DD/YYYY."
+    },
+    {
+     "name": "Text with an inline hint",
+     "detail": "Keep the text box and show the format and the error beside it."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:598"
+  },
+  {
+   "id": "F4",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 7 — Registered address",
+   "now": "The print preview shows only the first 71 characters of Item 7, although the saved return keeps up to 150.",
+   "why": "to_print_field_map() fills 40 and 31 slots (crates/bir-core/src/forms/form_1604c.rs:405), so later characters are dropped from the print only.",
+   "options": [
+    {
+     "name": "Limit Item 7 to 71 characters",
+     "detail": "Add a validation message so the limit is seen before printing."
+    },
+    {
+     "name": "Shrink the text to fit",
+     "detail": "Reduce the printed font so all 150 characters fit the two lines."
+    },
+    {
+     "name": "Separate page",
+     "detail": "Print the overflow on an extra page and reference it on the sheet."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1604c.rs:405"
+  },
+  {
+   "id": "F5",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "Messages appear only in the bottom Needs review box, which stops at 20 entries, while Queue for submission is disabled at the top with no reason shown.",
+   "why": "The list is cut with take(20) (form_1604c_view.rs:1001), and the red label carries only the colour, not the message.",
+   "options": [
+    {
+     "name": "Message beside the field",
+     "detail": "Show each message under its own field as well as in the panel."
+    },
+    {
+     "name": "Show all messages",
+     "detail": "Render the full list in a scrollable panel instead of stopping at 20."
+    },
+    {
+     "name": "Reason beside Queue",
+     "detail": "Show the first blocking message next to the disabled Queue button."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1604c_view.rs:1001"
+  },
+  {
+   "id": "F6",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 10 — Email address (BIR confirmation)",
+   "now": "The print preview shows the email in capital letters, although the stored email keeps the case typed.",
+   "why": "The print fill upper-cases writer-cell text joins and txtEmail is one (html-frozen/1604c-2018/writer-cells.json, p1c37), while the official capital() skips txtEmail (validation/package/js/string-util.js:241).",
+   "options": [
+    {
+     "name": "Skip the email in the upper-case step",
+     "detail": "Exempt txtEmail in frozen_html.rs so print matches the stored value."
+    },
+    {
+     "name": "Named input on the sheet",
+     "detail": "Give the frozen sheet a named txtEmail input so the join is not upper-cased."
+    },
+    {
+     "name": "Document the caps",
+     "detail": "Keep the caps on paper and say on the preview that the email prints in capitals."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:83"
+  }
+ ]
+}

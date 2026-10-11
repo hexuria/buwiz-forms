@@ -1,0 +1,51 @@
+{
+ "code": "2552",
+ "title": "Percentage Tax Return for Transactions Involving Shares of Stock",
+ "page": "views/form_2552_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {"label": "Item 1 — Date of transaction or of listing (MM/DD/YYYY)", "control": "text", "options": [], "prefilled_from_library": false, "editable": true, "where": "views/form_2552_view.rs:638-658"}
+ ],
+ "choice_rows": [
+  {"label": "Item 2 — Amended return?", "options": ["Yes", "No"], "control": "button-row", "where": "views/form_2552_view.rs:664-683"},
+  {"label": "Item 10 — Availing of tax relief under a Special Law or International Tax Treaty?", "options": ["Yes", "No"], "control": "button-row", "where": "views/form_2552_view.rs:721-735"},
+  {"label": "Item 11 — Kind of transaction", "options": ["11A — Listed and traded through the LSE", "11B — IPO, primary", "11B — IPO, secondary"], "control": "button-row", "where": "views/form_2552_view.rs:741-760"},
+  {"label": "If overpayment, mark one:", "options": ["To be refunded", "To be issued a Tax Credit Certificate"], "control": "button-row", "where": "views/form_2552_view.rs:994-1012"}
+ ],
+ "atc": [],
+ "validation": {"inline": false, "needs_review_panel": true, "how": "'Needs review' section lists up to 20 official messages verbatim, parse errors first; a field label turns red inline with no message beside it", "where": "views/form_2552_view.rs:1383-1392 and 1504-1505 (red label at 514)"},
+ "lists": [
+  {"label": "Part V Schedule 1 — Shares listed and traded through the LSE", "growable_officially": true, "add_remove_in_ui": true, "rows_in_ui": "dynamic 0-100 (FORM_2552_MAX_SCHEDULE_ROWS)", "official_rows": 5, "where": "views/form_2552_view.rs:886-958 (add at 944; remove at 810-822)"},
+  {"label": "Part V Schedule 2 — Primary public offering", "growable_officially": true, "add_remove_in_ui": true, "rows_in_ui": "dynamic 0-100 (FORM_2552_MAX_SCHEDULE_ROWS)", "official_rows": 5, "where": "views/form_2552_view.rs:886-958 (add at 944; remove at 810-822)"},
+  {"label": "Part V Schedule 3 — Secondary public offering", "growable_officially": true, "add_remove_in_ui": true, "rows_in_ui": "dynamic 0-100 (FORM_2552_MAX_SCHEDULE_ROWS)", "official_rows": 5, "where": "views/form_2552_view.rs:886-958 (add at 944; remove at 810-822)"},
+  {"label": "Part IV — Summary of Transactions not Subject to Tax", "growable_officially": false, "add_remove_in_ui": true, "rows_in_ui": "dynamic 0-5 (FORM_2552_ROWS)", "official_rows": 5, "where": "views/form_2552_view.rs:1029-1050"},
+  {"label": "Part VI — Details of Transactions not Subject to Percentage Tax", "growable_officially": false, "add_remove_in_ui": true, "rows_in_ui": "dynamic 0-5 (FORM_2552_ROWS)", "official_rows": 5, "where": "views/form_2552_view.rs:1060-1082"}
+ ],
+ "print_preview": {"slug": "2552-2018", "how": "launch_frozen_form_preview", "where": "views/form_2552_view.rs:1353"},
+ "findings": [
+  {"id": "F1", "issue": "period-editable", "severity": "medium", "field": "Item 1 — Date of transaction or of listing (MM/DD/YYYY)",
+   "now": "The Item 1 date opens filled with today's date (or 31 December for an earlier tax year), and the user can file with that date unchanged.",
+   "why": "new_draft takes _period and sets month and day from the clock (views/form_2552_view.rs:1120-1129), so the library tile's period does not set the transaction date.",
+   "options": [
+    {"name": "Blank the date", "detail": "Leave MM and DD empty so the official required-field alerts ('Month field on Page 1 Item 1 is required.') drive entry."},
+    {"name": "Flag as default", "detail": "Keep today's date but mark it as a default that must be confirmed before queueing."}
+   ],
+   "where": "views/form_2552_view.rs:1120-1129"},
+  {"id": "F2", "issue": "validation", "severity": "medium", "field": "Needs review",
+   "now": "The Needs review section shows at most 20 messages, with parse errors listed before validation errors, so later alerts are hidden and the order does not follow the official rule order.",
+   "why": "The list is capped with take(20) over the chained parse and validation errors, which does not follow the source order in rules/forms/2552-v2018/validations.json.",
+   "options": [
+    {"name": "Lift the cap", "detail": "Show every message and state the total above the list."},
+    {"name": "Sort by rule order", "detail": "Order the messages by the official rule order before display."}
+   ],
+   "where": "views/form_2552_view.rs:1383-1386"},
+  {"id": "F3", "issue": "lists", "severity": "medium", "field": "Remove",
+   "now": "Remove deletes a Part IV, Part V or Part VI row and its amounts at once, with no confirmation or undo.",
+   "why": "The row's Remove button calls edit() to delete the row directly (views/form_2552_view.rs:810-822), and a Part V list can hold up to 100 entries.",
+   "options": [
+    {"name": "Confirm when filled", "detail": "Ask 'Remove row N?' only when the row has an amount typed."},
+    {"name": "Undo notice", "detail": "Show an undo notice for a few seconds after each removal."}
+   ],
+   "where": "views/form_2552_view.rs:810-822"}
+ ]
+}

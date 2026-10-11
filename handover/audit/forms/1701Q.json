@@ -1,0 +1,265 @@
+{
+ "code": "1701Q",
+ "title": "Quarterly Income Tax Return for Individuals, Estates and Trusts",
+ "page": "views/form_1701q_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:495"
+  },
+  {
+   "label": "Item 2 — Quarter",
+   "control": "segmented",
+   "options": [
+    "Q1",
+    "Q2",
+    "Q3"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:496"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 3 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:497"
+  },
+  {
+   "label": "Item 7 — Taxpayer/Filer type",
+   "options": [
+    "Single Proprietor",
+    "Professional",
+    "Estate",
+    "Trust"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:578"
+  },
+  {
+   "label": "Item 15 — Claiming foreign tax credits?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:581"
+  },
+  {
+   "label": "Item 16A — Method of deduction",
+   "options": [
+    "Itemized Deduction",
+    "Optional Standard Deduction (OSD)"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:621"
+  },
+  {
+   "label": "Item 19 — Spouse type",
+   "options": [
+    "Single Proprietor",
+    "Professional",
+    "Compensation Earner"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:682"
+  },
+  {
+   "label": "Item 24 — Claiming foreign tax credits?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:694"
+  },
+  {
+   "label": "Item 25A — Method of deduction",
+   "options": [
+    "Itemized Deduction",
+    "Optional Standard Deduction (OSD)"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:723"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 8 — ATC",
+   "control": "chips",
+   "multi": false,
+   "official_slots": 6,
+   "options_count": 6,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:579"
+  },
+  {
+   "label": "Item 20 — Spouse ATC",
+   "control": "chips",
+   "multi": false,
+   "official_slots": 7,
+   "options_count": 7,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:683"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "No input is highlighted at all; messages are listed only in a Needs review section after Part III (first 25), and Queue for submission is disabled while any error exists.",
+  "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:357"
+ },
+ "lists": [],
+ "print_preview": {
+  "slug": "1701q-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:1119"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — For the year",
+   "now": "Item 1 year and Item 2 quarter stay editable after the tile set them; Save draft under another year or quarter overwrites any saved Draft for that key, and a blank year is saved as year 0.",
+   "why": "Drafts are keyed by TIN, form, year and quarter taken from the draft as it stands after sync, and upsert_from_draft updates the row that matches.",
+   "options": [
+    {
+     "name": "Read-only period from the tile",
+     "detail": "Show year and quarter as text set by the tile, so the key cannot change on this page."
+    },
+    {
+     "name": "Restricted period choices",
+     "detail": "Offer only the tile's year and quarter, or periods with no saved Draft."
+    },
+    {
+     "name": "Guard the save",
+     "detail": "Refuse Save draft and Queue when the period differs from the saved key or the year is blank."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:495"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "medium",
+   "field": "59A — Tax paid in return previously filed (amended)",
+   "now": "After Item 3 changes, disabled amount boxes keep their old figures and the totals ignore them; switching back shows a figure the totals do not yet include, until the next keystroke.",
+   "why": "edit() recomputes the draft but never reloads the input text, and set_value runs only once at construction, so the boxes go stale.",
+   "options": [
+    {
+     "name": "Reload inputs after edit",
+     "detail": "Copy the 1701MS pattern: sync first, apply the change, then reset every input from the draft."
+    },
+    {
+     "name": "Clear hidden lines",
+     "detail": "When recompute disables a line, clear its text so the box never shows an amount the draft does not hold."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:279"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "No input is highlighted when validation fails; the reasons appear only in the Needs review list after Part III, and Queue for submission is disabled.",
+   "why": "field() has no error check at all, so the user cannot see which box holds the problem.",
+   "options": [
+    {
+     "name": "Red label as on 1702EX",
+     "detail": "Reuse the field() error check so the label turns red when its key is in validation_errors."
+    },
+    {
+     "name": "Message under the field",
+     "detail": "Show the message text beneath the input, matching the Needs review entry."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:357"
+  },
+  {
+   "id": "F4",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Item 8 — ATC",
+   "now": "Six chips with long labels, such as 'II012 Business Income - Graduated IT Rates', sit in one row.",
+   "why": "Six single-value choices with long labels read better as one combobox than as a chip row.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "Single-select combobox showing the code and label for each of the six ATCs."
+    },
+    {
+     "name": "Wrapped chip grid",
+     "detail": "Keep the chips in a wrapping grid with equal widths (acceptable, but noisier)."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:579"
+  },
+  {
+   "id": "F5",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Item 20 — Spouse ATC",
+   "now": "Seven chips wrap across the row, and all are disabled when the spouse is a compensation earner.",
+   "why": "Seven single-value options exceed the button limit, and the compensation case is already fixed by the model.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "Single-select combobox with the seven codes; keep it disabled when the spouse is a compensation earner."
+    },
+    {
+     "name": "Read-only chip for compensation",
+     "detail": "Show Compensation Income as one read-only chip when Item 19 is Compensation Earner."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:683"
+  },
+  {
+   "id": "F6",
+   "issue": "other",
+   "severity": "low",
+   "field": "Items 32–35 (not shown)",
+   "now": "No control shows Items 32–35, so payment details cannot be entered on the desktop.",
+   "why": "The draft holds payment_details, but the view never renders them and the submit map (form_1701q_official.rs:602) never writes them.",
+   "options": [
+    {
+     "name": "Add a payment block",
+     "detail": "Show the four payment rows under Part III and write them into the submit map."
+    },
+    {
+     "name": "State the gap on the page",
+     "detail": "Tell the user that payment details are completed outside the app."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-core/src/forms/form_1701q.rs:411"
+  },
+  {
+   "id": "F7",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "When every check passes, no line says 'Validation successful. Click on Edit if you wish to modify your entries.'",
+   "why": "The official validate() shows this alert on success, and the page renders only the error list.",
+   "options": [
+    {
+     "name": "Success line in the review slot",
+     "detail": "Show the verbatim success text where the Needs review list would be when there are no errors."
+    },
+    {
+     "name": "Status bar message",
+     "detail": "Show the same text in the status message bar after a clean check."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1701q_view.rs:1149"
+  }
+ ]
+}

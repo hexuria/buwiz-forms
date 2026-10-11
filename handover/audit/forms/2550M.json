@@ -1,0 +1,309 @@
+{
+ "code": "2550M",
+ "title": "BIR Form No. 2550M — Monthly Value-Added Tax Declaration",
+ "page": "views/form_2550m_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the month of",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1098-1113"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1128"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1129-1143"
+  },
+  {
+   "label": "Item 11 — Availing of tax relief under a Special Law or International Tax Treaty?",
+   "options": [
+    "No",
+    "Yes — Special Rate",
+    "Yes — International Tax Treaty"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1167-1181"
+  },
+  {
+   "label": "Schedule 4 — Input tax on sale to Government closed to expense (20B)",
+   "options": [
+    "Use Schedule 4",
+    "In use"
+   ],
+   "control": "checkbox",
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1474-1480"
+  },
+  {
+   "label": "Schedule 5 — Input tax allocable to exempt sales (20C)",
+   "options": [
+    "Use Schedule 5",
+    "In use"
+   ],
+   "control": "checkbox",
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1504-1510"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Add an ATC",
+   "control": "chips",
+   "multi": true,
+   "official_slots": 36,
+   "options_count": 36,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1242-1266"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Field label turns red; messages list in a 'Needs review' section at the bottom of the page (first 20 only), and Queue for submission is disabled while any error exists.",
+  "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1997"
+ },
+ "lists": [
+  {
+   "label": "Schedule 1 — Vatable Sales/Receipts, Private (Item 12)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (Add an ATC chips and Remove, up to 36)",
+   "official_rows": 36,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1187-1266"
+  },
+  {
+   "label": "Schedule 2 — Capital goods not exceeding P1 million (18A/18B)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (Add a row / Remove)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1295-1370"
+  },
+  {
+   "label": "Schedule 3 Part A — Capital goods exceeding P1 million (18C/18D)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (Add a row / Remove)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1295-1370"
+  },
+  {
+   "label": "Schedule 3 Part B — Capital goods of previous periods (20A)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (Add a row / Remove)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1295-1370"
+  },
+  {
+   "label": "Schedule 6 — Creditable VAT withheld (23A)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (Add a row / Remove)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1295-1370"
+  },
+  {
+   "label": "Schedule 7 — Advance payments (23B)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (Add a row / Remove)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1295-1370"
+  },
+  {
+   "label": "Schedule 8 — VAT withheld on sales to Government (23C)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (Add a row / Remove)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1295-1370"
+  }
+ ],
+ "print_preview": {
+  "slug": "2550m-2007",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1827-1839"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Add an ATC",
+   "now": "All 36 ATC codes appear as outline chips, and each label cuts its description at 40 characters with no ellipsis.",
+   "why": "The official form lists 36 ATC checkboxes (AtcCode1 to AtcCode36 in 2550m-v2007.json), and a wall of 36 chips is harder to scan and search than that list.",
+   "options": [
+    {
+     "name": "Multi-select combobox",
+     "detail": "Search by code or full description, pick several ATCs, and add a sales row for each pick."
+    },
+    {
+     "name": "Checkbox list",
+     "detail": "One checkbox per ATC with the full description, matching the official AtcCode checkboxes."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1242-1266"
+  },
+  {
+   "id": "F2",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — For the month of",
+   "now": "The month is a row of 12 outline buttons (Jan to Dec).",
+   "why": "The official form uses a month select (frm2550m:RtnYear with '01 - January' and so on, BIR-Form2550M.hta:303), and 12 options are far past the 4-option limit for buttons.",
+   "options": [
+    {
+     "name": "Select dropdown",
+     "detail": "A plain month select with the full month names, the same control the official form uses."
+    },
+    {
+     "name": "Combobox",
+     "detail": "A searchable 12-month combobox."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1098-1113"
+  },
+  {
+   "id": "F3",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — For the month of",
+   "now": "The tile sets the month, but the buttons stay active; a changed month saves as a second draft while the tile keeps reopening the old one.",
+   "why": "new_draft takes the month from the tile (form_2550m_view.rs:1633-1640) and drafts are saved by period (the upsert select_row in db/queueable.rs:144-154), so a changed period creates a new row.",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the tile's month as a chip; a different month means opening that month's own tile."
+    },
+    {
+     "name": "Combobox with warning",
+     "detail": "Keep the month editable in a combobox and warn that saving moves the draft to the new month."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1098-1113"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors only turn labels red and list at the bottom under Needs review, and Queue for submission is disabled with no message beside it.",
+   "why": "The list sits after the last section and stops at 20 messages, so the blocking schedule is not visible from the button.",
+   "options": [
+    {
+     "name": "Inline message",
+     "detail": "Show the official row alert text next to the schedule row it concerns."
+    },
+    {
+     "name": "Summary above the body",
+     "detail": "Show the Needs review list above Part I with a link to each item."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2550m_view.rs:1997"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "medium",
+   "field": "(commit af872f65)",
+   "now": "The 2550M upload commit also changes form_2552.rs (every 2552 schedule control value is upper-cased), the 2552 layout and the 2552 fixtures.",
+   "why": "Changing another form's upload output inside a 2550M commit goes beyond the form's own files and one-line registrations.",
+   "options": [
+    {
+     "name": "Split commit",
+     "detail": "Land the 2552 change as its own commit with its fixtures and test."
+    },
+    {
+     "name": "Revert the 2552 part",
+     "detail": "Keep the 2550M files in this commit and re-check 2552 separately."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2552.rs:531-534"
+  },
+  {
+   "id": "F6",
+   "issue": "other",
+   "severity": "low",
+   "field": "(schedule row keys)",
+   "now": "28 schedule-row key templates (for example txtDescription{i}, txtAmountSales{n}, txtAtcCde{n}) are not in 2550m-v2007.json.",
+   "why": "They are inserted by anchor after write() (official_payload, form_2550m.rs:1853), so the UnknownKey guard in official_xml.rs:227-232 never checks them.",
+   "options": [
+    {
+     "name": "Extend the layout",
+     "detail": "Generate the schedule-row keys into 2550m-v2007.json from a sample save that has rows."
+    },
+    {
+     "name": "Test against the HTA",
+     "detail": "Assert that each row key appears as an element id in BIR-Form2550M.hta."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2550m.rs:1853"
+  },
+  {
+   "id": "F7",
+   "issue": "other",
+   "severity": "low",
+   "field": "(computed money fields)",
+   "now": "A negative amount that rounds to zero displays and uploads as 0.00.",
+   "why": "formatCurrency (string-util.js:321-356) keeps the minus sign, but official_amount drops it when the cents round to zero (official_xml.rs:493-497), so uploaded bytes can differ.",
+   "options": [
+    {
+     "name": "Match formatCurrency",
+     "detail": "Keep the minus sign for any negative input, as formatCurrency does."
+    },
+    {
+     "name": "Clamp in calculation",
+     "detail": "Round tiny negatives to zero in the calculation and document the deviation."
+    }
+   ],
+   "where": "crates/bir-core/src/official_xml.rs:493-497"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "low",
+   "field": "Email address for the BIR confirmation",
+   "now": "A blank or malformed email shows 'Enter the email address BIR sends the filing confirmation to.', which no official alert uses.",
+   "why": "The official HTA has no such text, so the filer sees wording eBIRForms never shows.",
+   "options": [
+    {
+     "name": "Keep as app note",
+     "detail": "Keep the check but mark it as an app rule, not an official alert."
+    },
+    {
+     "name": "Remove",
+     "detail": "Rely on the official alerts for the email field."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2550m.rs:1557-1558"
+  }
+ ]
+}

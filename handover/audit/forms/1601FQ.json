@@ -1,0 +1,316 @@
+{
+ "code": "1601FQ",
+ "title": "Quarterly Remittance Return of Final Income Taxes Withheld",
+ "page": "views/form_1601fq_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:589"
+  },
+  {
+   "label": "Item 2 — Quarter",
+   "control": "button-row",
+   "options": [
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:574-590"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 3 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:591-605"
+  },
+  {
+   "label": "Item 4 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:606-632"
+  },
+  {
+   "label": "Item 11 — Category of withholding agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:683-707"
+  },
+  {
+   "label": "Item 13 — Payees availing of tax relief under a Special Law or Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:921-927"
+  },
+  {
+   "label": "Item 13A — If yes, specify",
+   "options": [
+    "Special Rate",
+    "International Tax Treaty",
+    "Both"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:936-951"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Add an ATC (search by code or nature of payment)",
+   "control": "button-row",
+   "multi": true,
+   "official_slots": 6,
+   "options_count": 40,
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:798-846"
+  },
+  {
+   "label": "C — ATC",
+   "control": "text",
+   "multi": true,
+   "official_slots": 5,
+   "options_count": 79,
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:975"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Messages go into a Needs review section after the totals (first 20 only); fields only turn their label red, and Queue for submission is disabled while any error exists.",
+  "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:1308-1313, 1429-1430"
+ },
+ "lists": [
+  {
+   "label": "Part II — Computation of Tax (Items 14–20)",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic",
+   "official_rows": 6,
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:790-868"
+  },
+  {
+   "label": "Items 13/13A and Part IV — Schedule 1 (tax treaty / special law rates)",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 5",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:911-1020"
+  }
+ ],
+ "print_preview": {
+  "slug": "1601-fq-2020",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:1264-1276"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 4 — Any taxes withheld?",
+   "now": "Choosing No removes every ATC row and all Schedule 1 rows at once, with no warning.",
+   "why": "set_any_tax_withheld(false) empties the ATC schedule and resets Schedule 1 (form_1601fq.rs:775-785), and the official page asks first (rule 1601fq-change-001, 'You are about to change the value . Doing this will clear all computation fields Do you wish to proceed?'), which the desktop never shows.",
+   "options": [
+    {
+     "name": "Official confirm",
+     "detail": "Show the official confirmation text and clear only on Yes, leaving the rows in place on No."
+    },
+    {
+     "name": "Undo bar",
+     "detail": "Clear as now but keep the removed rows in a one-step Undo bar."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1601fq.rs:775-785"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 13 — Payees availing of tax relief under a Special Law or Tax Treaty?",
+   "now": "Choosing No deletes every Schedule 1 row (treaty code, ATC, amount and rate) at once, with no prompt.",
+   "why": "set_tax_relief(None) clears all Schedule 1 rows (form_1601fq.rs:802) and the view reloads blank inputs, although the model's own comment names the official handler confirmDisableTreaty, which suggests a confirmation step.",
+   "options": [
+    {
+     "name": "Confirm before clearing",
+     "detail": "Ask before clearing and keep the rows if the user declines."
+    },
+    {
+     "name": "Hide, do not clear",
+     "detail": "Hide the Schedule 1 rows on No and keep the data until the user chooses Yes again."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1601fq.rs:797-802"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 2 — Quarter",
+   "now": "In March the page accepts Q1 for the current year, but BIR's rule blocks Q1 until April.",
+   "why": "form_1601fq.rs:1201 blocks only January and February (month0 < 2) and the test at 1796-1815 pins March as open, while rule 1601fq-validate-004 reads 'Current-year Q1 is selected before April.'",
+   "options": [
+    {
+     "name": "Match the rule",
+     "detail": "Change the Q1 cutoff to block through March, as 1601EQ does, and update the test."
+    },
+    {
+     "name": "Check the official HTA",
+     "detail": "Confirm the cutoff in the official source first, then align the rule file and the model together."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1601fq.rs:1201-1204"
+  },
+  {
+   "id": "F4",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Print preview",
+   "now": "Print preview draws the September 2020 sheet for a January 2018 return, so the printed layout and item text can differ from the page.",
+   "why": "The sheet slug is 1601-fq-2020 (form_1601fq_view.rs:1276), and the rules say January 2018 and September 2020 are separate revisions (rules/forms/1601fq-v2018/HANDOFF.md:3).",
+   "options": [
+    {
+     "name": "Label the preview",
+     "detail": "Show 'This preview uses the September 2020 sheet' in the status message beside the preview."
+    },
+    {
+     "name": "Add a 2018 sheet",
+     "detail": "Build and register a January 2018 frozen sheet with its own key map before printing."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:1276"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "medium",
+   "field": "B — Treaty code",
+   "now": "The Schedule 1 treaty code and ATC are free-text boxes with the placeholders 'NA or US' and 'NA or WI330', so a typo shows up only later under Needs review.",
+   "why": "The official sheet uses dropdowns (drpTreatyCode and drpATCCode in 1601fq-v2018.json), and the model rejects unknown codes only at validation (form_1601fq.rs:1369 and 1375).",
+   "options": [
+    {
+     "name": "Dropdown per cell",
+     "detail": "Use a select in each row that starts with NA and then lists the treaty or ATC codes."
+    },
+    {
+     "name": "Searchable ATC combobox",
+     "detail": "Use a combobox for the ATC column that filters the 1601-FQ list by code or description."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:969-981"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Queue for submission",
+   "now": "Errors are listed only in a Needs review block after the totals, and only the first 20 appear.",
+   "why": "The list is cut with take(20) (form_1601fq_view.rs:1312) and drawn last (1429-1430), and fields only turn their label red (459-477).",
+   "options": [
+    {
+     "name": "Panel under toolbar",
+     "detail": "Pin the Needs review list above the scrolling body so it stays visible while editing."
+    },
+    {
+     "name": "Inline messages",
+     "detail": "Show each message under its own field, keyed by the error field names the model returns."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:1308-1313"
+  },
+  {
+   "id": "F7",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Add an ATC (search by code or nature of payment)",
+   "now": "Up to 12 outline buttons, one per matching ATC, fill the page under Search ATC, and the rest need a narrower search.",
+   "why": "Forty private or thirty-nine government options each take a full-width button instead of one line of a searchable multi-select.",
+   "options": [
+    {
+     "name": "Multi-select combobox",
+     "detail": "A combobox that searches code and description and shows each pick as a removable chip."
+    },
+    {
+     "name": "Dropdown list",
+     "detail": "A dropdown under the search box that closes after each pick and lists the matches in one scroll area."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:798-846"
+  },
+  {
+   "id": "F8",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — For the Year",
+   "now": "The year can be retyped on a return opened from a tile, and saving then stores it under that other year.",
+   "why": "The year is part of the storage key (crates/bir-core/src/db/queueable.rs:144-154), so the tile for the original year no longer finds this draft.",
+   "options": [
+    {
+     "name": "Read-only year",
+     "detail": "Show the tile's year as text, since the library tile already fixes the period."
+    },
+    {
+     "name": "Guarded edit",
+     "detail": "Allow a change only through the tile picker, with a message that it opens a different return."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:589"
+  },
+  {
+   "id": "F9",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Queue for submission",
+   "now": "One click queues the return; the official internet and email warning and the question 'Are you sure you want to submit?' never appear.",
+   "why": "Rule 1601fq-final-001 is not implemented, and mark_submitted queues straight after validation (form_1601fq_view.rs:1151-1206).",
+   "options": [
+    {
+     "name": "Official confirm",
+     "detail": "Show the full official text with Yes and No, and queue only on Yes."
+    },
+    {
+     "name": "Confirm with email",
+     "detail": "Show the email address that will receive the receipt in a confirm step before queueing."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601fq_view.rs:1367-1372"
+  },
+  {
+   "id": "F10",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Print preview",
+   "now": "The 1601FQ work changed shared files and another form's model, so this form's diff is wider than its own files.",
+   "why": "010022d8 touched shared official_xml.rs, queueable.rs, queueable_forms.rs, status.rs and support_level.rs, df8bc455 edited form_1603q.rs (47 changed lines), and 4491832d set render_contract, html_component, html_spec and pagination for 1601FQ, beyond one-line registrations.",
+   "options": [
+    {
+     "name": "Split commits",
+     "detail": "Move the shared edits and the 1603Q change into their own reviewed commits with the affected sample payloads attached."
+    },
+    {
+     "name": "Revert shared edits",
+     "detail": "Restore the shared files from main and keep only form-local 1601FQ code, with the registration line."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/support_level.rs:536-550"
+  }
+ ]
+}

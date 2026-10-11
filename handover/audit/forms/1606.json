@@ -1,0 +1,249 @@
+{
+ "code": "1606",
+ "title": "BIR Form No. 1606",
+ "page": "views/form_1606_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month of transaction",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:676"
+  },
+  {
+   "label": "Item 1 — Day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:677"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:678"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:679"
+  },
+  {
+   "label": "Item 4 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:688"
+  },
+  {
+   "label": "Item 14 — Category of Withholding Agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:740"
+  },
+  {
+   "label": "Item 15 — Classification of Property",
+   "options": [
+    "Residential",
+    "Commercial",
+    "Condominium Residential",
+    "Agricultural",
+    "Industrial",
+    "Condominium Commercial",
+    "Others (Specify)"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:840"
+  },
+  {
+   "label": "Item 18 — Does the selling price cover more than one property?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:828"
+  },
+  {
+   "label": "Item 19 — Tax relief under an International Tax Treaty or Special Law?",
+   "options": [
+    "No",
+    "Yes — International Tax Treaty",
+    "Yes — Special Law"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:846"
+  },
+  {
+   "label": "Item 20 — Description of Transaction",
+   "options": [
+    "Cash Sale",
+    "Foreclosure Sale",
+    "Exempt",
+    "Others",
+    "Installment Sale"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:934"
+  },
+  {
+   "label": "Item 28 — Determination of Taxable Base (mark one)",
+   "options": [
+    "28A",
+    "28B",
+    "28C",
+    "28D",
+    "28E"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:942"
+  },
+  {
+   "label": "Item 29 — Is the seller habitually engaged in real estate business?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:948"
+  },
+  {
+   "label": "Item 31 — Tax Rate",
+   "options": [
+    "0%",
+    "1.5%",
+    "3%",
+    "5%",
+    "6%",
+    "Not selected"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:1034"
+  },
+  {
+   "label": "Item 37 — If overremittance, mark one",
+   "options": [
+    "To be refunded",
+    "To be issued a Tax Credit Certificate"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:1004"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 13 — ATC (seller)",
+   "control": "button-row",
+   "multi": false,
+   "official_slots": 2,
+   "options_count": 2,
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:714"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Labels turn red only; messages render at the bottom via body.child(self.section(\"Needs review\", issues, cx)), first 20 only",
+  "where": "crates/bir-desktop/src/views/form_1606_view.rs:1432"
+ },
+ "lists": [],
+ "print_preview": {
+  "slug": "1606-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1606_view.rs:1278"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — Month of transaction",
+   "now": "A current-year return opens with today's month and day in Item 1, and any other year opens with 01 and 01, so the return can be queued with a date nobody entered.",
+   "why": "Those defaults are set in the draft constructor rather than typed by the filer, so a return queued without edits files an invented transaction date.",
+   "options": [
+    {
+     "name": "Blank until entered",
+     "detail": "Leave MM and DD empty so the required-field check forces a real entry."
+    },
+    {
+     "name": "Month and day selectors",
+     "detail": "Use a 12-option month combobox and a day selector so the date is chosen rather than defaulted."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1606.rs:440"
+  },
+  {
+   "id": "F2",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors show as red labels and as one list below Part II that stops at 20 messages, so later alerts never appear and Queue stays disabled with no message beside the field.",
+   "why": "The brief requires every official alert to appear verbatim and in order, and the 20-message cap drops alerts silently once blank schedule rows produce more than 20 messages.",
+   "options": [
+    {
+     "name": "Inline message",
+     "detail": "Render each alert under its own field, verbatim and in the official order."
+    },
+    {
+     "name": "Uncapped summary",
+     "detail": "Show the complete alert list above the schedules with a jump link to each field."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:1312"
+  },
+  {
+   "id": "F3",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Item 15 — Classification of Property",
+   "now": "Seven classification buttons wrap across the row, including long labels such as 'Condominium Residential' and 'Others (Specify)'.",
+   "why": "Seven options is well above the four-option limit in the brief, so this row should be a combobox.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "One dropdown with the seven official labels, keeping the 'Others (Specify)' text box directly below it."
+    },
+    {
+     "name": "Native select",
+     "detail": "A select with the same labels that does not wrap and keeps keyboard selection."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:841"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Item 1 — Month of transaction",
+   "now": "A one-digit month or day such as 5 is accepted and quietly shown as 05, so the 'Format should be MM/DD/YYYY' alert never appears.",
+   "why": "The official Validate blocks a one-digit month and day with 'Please enter a valid month on item 1. Format should be MM/DD/YYYY.' and the day variant (BIR-Form1606.hta lines 2919 and 2923).",
+   "options": [
+    {
+     "name": "Official alert",
+     "detail": "Keep the text box and reject a one-digit entry with the official alert, verbatim."
+    },
+    {
+     "name": "Month combobox",
+     "detail": "A 12-option month combobox removes one-digit entries, though the day field still needs the official alert."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1606_view.rs:249"
+  }
+ ]
+}

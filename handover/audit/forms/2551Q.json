@@ -1,0 +1,76 @@
+{
+ "code": "2551Q",
+ "title": "Quarterly Percentage Tax Return",
+ "page": "views/form_2551q_view.rs",
+ "page_kind": "bespoke",
+ "period": [
+  {"label": "Taxable Year", "control": "text", "options": [], "prefilled_from_library": true, "editable": false, "where": "views/form_2551q_view.rs:2263-2269"},
+  {"label": "Quarter", "control": "text", "options": [], "prefilled_from_library": true, "editable": false, "where": "views/form_2551q_view.rs:2270-2274"},
+  {"label": "1. Taxable-period basis", "control": "button-row", "options": ["Calendar", "Fiscal"], "prefilled_from_library": true, "editable": true, "where": "views/form_2551q_view.rs:1868-1939"},
+  {"label": "2. Year-end month", "control": "text", "options": [], "prefilled_from_library": false, "editable": true, "where": "views/form_2551q_view.rs:1943-1965"}
+ ],
+ "choice_rows": [
+  {"label": "Amended Return", "options": [], "control": "checkbox", "where": "views/form_2551q_view.rs:2014-2030"},
+  {"label": "13. Income-tax-rate election", "options": ["Not applicable", "Graduated", "8%"], "control": "radio", "where": "views/form_2551q_view.rs:2170-2200"},
+  {"label": "Item 24 overpayment disposition", "options": ["To be refunded", "To be issued a Tax Credit Certificate"], "control": "radio", "where": "views/form_2551q_view.rs:2494-2530"},
+  {"label": "12A. Tax-relief specification", "options": [], "control": "select", "where": "views/form_2551q_view.rs:2227-2241"}
+ ],
+ "atc": [
+  {"label": "Choose an ATC code", "control": "combobox", "multi": true, "official_slots": 6, "options_count": 22, "where": "views/form_2551q_view.rs:2327-2338"}
+ ],
+ "validation": {"inline": true, "needs_review_panel": false, "how": "red text under each field via get_error() for year-end month, attached sheets, schedule rows and others; messages with no input control appear only under 'Copy Errors' and as a section icon", "where": "views/form_2551q_view.rs:1584-1589 (get_error); 3083-3093 (Copy Errors)"},
+ "lists": [
+  {"label": "Add ATC Line", "growable_officially": true, "add_remove_in_ui": true, "rows_in_ui": "dynamic 1-22 (MAX_EDITABLE_SCHEDULE_1_ROWS = ATC_TABLE_2551Q.len())", "official_rows": 6, "where": "views/form_2551q_view.rs:2337-2340 (add); 2407-2409 (remove)"}
+ ],
+ "print_preview": {"slug": "2551q-2018", "how": "custom", "where": "views/form_2551q_view.rs:1388 (launcher at views/form_html_preview_launcher.rs:74)"},
+ "findings": [
+  {"id": "F1", "issue": "validation", "severity": "high", "field": "13. Income-tax-rate election",
+   "now": "When Item 13 conflicts with the profile's election, or the profile's own election conflicts, Submit only sets 'Fix validation errors to continue.' and no message appears beside the field.",
+   "why": "item_13_election and annual_income_tax_election have no get_error() call in the view, so the only signals are a section icon (has_section_error, line 1617) and the Copy Errors text (crates/bir-core/src/forms/form_2551q.rs:1410-1416 and 1469-1479).",
+   "options": [
+    {"name": "Inline under the control", "detail": "Render get_error(\"item_13_election\") under the Item 13 choices and get_error(\"annual_income_tax_election\") under the Filing period header."},
+    {"name": "Summary list", "detail": "Add a 'Needs review' list that prints every message, as the 2552 page does at views/form_2552_view.rs:1504-1505."}
+   ],
+   "where": "views/form_2551q_view.rs:1599-1630"},
+  {"id": "F2", "issue": "other", "severity": "medium", "field": "2. Year-end month",
+   "now": "The year-end error reads 'Fiscal year-end month must be a whole number from 1 to 12', and the overpayment error reads 'Select exactly one disposition for this overpayment.', so the official alerts are not used.",
+   "why": "The official alerts 'Please enter valid Year Ended month on item 2.' and 'Please select overpayment option.' (rules/forms/2551q-v2018/validations.json) appear nowhere in crates/, and 12 of the 27 official messages in that file are missing.",
+   "options": [
+    {"name": "Use the official text", "detail": "Show the official alert text verbatim, in official order, as the message for these checks."},
+    {"name": "Official text plus hint", "detail": "Show the official text as the message and keep the friendlier explanation as a hint under it."}
+   ],
+   "where": "views/form_2551q_view.rs:1224"},
+  {"id": "F3", "issue": "lists", "severity": "medium", "field": "Add ATC Line",
+   "now": "Add ATC Line accepts up to 22 distinct ATC lines, but a return with more than six lines cannot be queued, so the user can build a draft that cannot be filed in the app.",
+   "why": "MAX_EDITABLE_SCHEDULE_1_ROWS equals ATC_TABLE_2551Q.len() (22), while FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY is 6 (crates/bir-core/src/forms/form_2551q.rs:43) and the official layout has six ATC slots.",
+   "options": [
+    {"name": "Cap at six", "detail": "Limit the list to the six official slots and direct larger schedules to a separate filing."},
+    {"name": "Block the seventh line", "detail": "Keep 22 options but show an inline message on the seventh line that queueing needs an attachment protocol."}
+   ],
+   "where": "views/form_2551q_view.rs:94"},
+  {"id": "F4", "issue": "other", "severity": "medium", "field": "Submit",
+   "now": "The button labelled 'Submit' only queues the return for background submission, and the page does not say that nothing has reached BIR yet.",
+   "why": "submit_btn calls mark_submitted, while the 2552 page labels the same action 'Queue for submission' (views/form_2552_view.rs:1443).",
+   "options": [
+    {"name": "Rename", "detail": "Use 'Queue for submission', as the 2552 page does."},
+    {"name": "Confirm dialog", "detail": "Show a confirmation that the return is queued and not yet received by BIR."}
+   ],
+   "where": "views/form_2551q_view.rs:2888-2890"},
+  {"id": "F5", "issue": "other", "severity": "low", "field": "Copy Errors",
+   "now": "Copy Errors puts 'field: message' lines on the clipboard using internal keys such as 'tin' and 'item_13_election'.",
+   "why": "The toolbar joins validation_errors as format!(\"{field}: {message}\"), so the copied text does not use the labels shown on the page.",
+   "options": [
+    {"name": "Use labels", "detail": "Map each key to its on-page label before copying."},
+    {"name": "Copy messages only", "detail": "Copy the official message text alone, one per line."}
+   ],
+   "where": "views/form_2551q_view.rs:3083-3088"},
+  {"id": "F6", "issue": "choice-buttons", "severity": "low", "field": "1. Taxable-period basis",
+   "now": "Calendar/Fiscal, the Item 13 election and the overpayment disposition are round radio dots on plain clickable divs, while the other pages use labelled buttons.",
+   "why": "They are built from div elements with on_click handlers (views/form_2551q_view.rs:1873-1915, 2170-2200 and 2494-2530), so the controls look and behave differently from the rest of the desktop forms.",
+   "options": [
+    {"name": "Labelled buttons", "detail": "Use the same labelled button-row component as the 2550Q and 2552 pages for two- and three-option choices."},
+    {"name": "Keep radios with labels", "detail": "Keep the radio look but make the whole label row the click target and add a focus state."}
+   ],
+   "where": "views/form_2551q_view.rs:1868-1939"}
+ ]
+}

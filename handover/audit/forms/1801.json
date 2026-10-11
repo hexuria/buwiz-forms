@@ -1,0 +1,373 @@
+{
+ "code": "1801",
+ "title": "Estate Tax Return",
+ "page": "views/form_1801_view.rs",
+ "page_kind": "kit",
+ "period": [
+  {
+   "label": "Item 1 — Month of death",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:26"
+  },
+  {
+   "label": "Item 1 — Day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:27"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:28"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:285"
+  },
+  {
+   "label": "Item 9 — Non-resident alien?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:341"
+  },
+  {
+   "label": "Item 14 — Availing of tax relief under a Special Law / International Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:300"
+  },
+  {
+   "label": "15A — Has an extension to file the return been granted?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:359"
+  },
+  {
+   "label": "15B — Has the estate been settled judicially?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:367"
+  },
+  {
+   "label": "15C — Has an extension to pay the tax been granted?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:375"
+  },
+  {
+   "label": "15D — Has an installment payment been granted?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:383"
+  },
+  {
+   "label": "15D — Frequency of payment",
+   "options": [
+    "Monthly",
+    "Quarterly",
+    "Semi-Annual",
+    "Others"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:412"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 4 — ATC",
+   "control": "text",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 1,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:336"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Errors render in a 'Needs review' list after all sections (`body.child(section(\"Needs review\", issues, cx))`); only the label turns red, and only when an error key equals an input key (here only email, since amount errors are keyed 'amounts').",
+  "where": "crates/bir-desktop/src/views/event_form_kit.rs:884"
+ },
+ "lists": [
+  {
+   "label": "Schedule 1 — Real properties",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 6",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:445"
+  },
+  {
+   "label": "Schedule 1A — Family home",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 6",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:445"
+  },
+  {
+   "label": "Schedule 2 — Shares of stock",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 6",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:472"
+  },
+  {
+   "label": "Schedule 2A — Other personal properties",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 6",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:501"
+  },
+  {
+   "label": "Schedule 3 — Taxable transfers",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 6",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:501"
+  },
+  {
+   "label": "Schedule 4 — Business interest",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 6",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:526"
+  },
+  {
+   "label": "Schedule 5 — Ordinary deductions",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 7 categories",
+   "official_rows": 7,
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:546"
+  }
+ ],
+ "print_preview": {
+  "slug": "1801-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1801_view.rs:874"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "lists",
+   "severity": "high",
+   "field": "Schedule 1 — Real properties",
+   "now": "Each Part V table shows six fixed rows with no Add row control, so a seventh property, share, transfer or business interest cannot be entered.",
+   "why": "The official tables grow (the layout has two rows per table), and form_1801_view.rs:108-109, form_1801.rs:33 and form_1801.rs:810 plus commit f0ccc302 describe an 'Add row' button that the page never built, so the omission is silent.",
+   "options": [
+    {
+     "name": "Add row button",
+     "detail": "Append rows on demand and splice them after the last row, as table_rows and official_layout already expect."
+    },
+    {
+     "name": "Raise the visible limit",
+     "detail": "Render rows up to the model limit of 20 with a visible row count."
+    },
+    {
+     "name": "Warn when full",
+     "detail": "Show a notice when a table is full and the filer must add the rest by hand."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:110"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 13 — Email address",
+   "now": "The typed e-mail is written in upper case into the uploaded XML and into the Print preview.",
+   "why": "The email must never be upper-cased, and form_1801.rs:630 applies up() to txtEmail where form_2000.rs:1004 keeps it as typed.",
+   "options": [
+    {
+     "name": "Write as typed",
+     "detail": "Set txtEmail to the trimmed text the filer typed, as form_2000.rs:1004 does."
+    },
+    {
+     "name": "Exclude from the upper-case pass",
+     "detail": "Keep up() for the other text controls and skip txtEmail, matching the documented capital() behaviour."
+    },
+    {
+     "name": "Record a reviewed exception",
+     "detail": "If the official HTA really uppercases txtEmail, document it as an exception while the displayed value stays as typed."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1801.rs:630"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "medium",
+   "field": "39 — Share of surviving spouse",
+   "now": "Item 39 is rounded with JavaScript toFixed(2), so a half-centavo value shows one centavo lower than formatCurrency gives, for example 5.005 shows 5.00 instead of 5.01.",
+   "why": "formatCurrency rounds floor(x×100 + 0.50000000001) (official_xml.rs:473-482, bir-rules static_ir.rs:4343), so the printed and uploaded amounts can disagree with the official form.",
+   "options": [
+    {
+     "name": "Use official_amount",
+     "detail": "Round computed money with official_amount, as form_1800.rs does through cents()."
+    },
+    {
+     "name": "Cite the official line",
+     "detail": "If the HTA calls toFixed(2) on this line, cite that line and keep toFixed for this field only."
+    },
+    {
+     "name": "Add half-centavo samples",
+     "detail": "Add sample payloads with values such as 5.005 to lock the rounding rule."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1801.rs:516"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 7 — ESTATE OF",
+   "now": "Errors for the Item 1 date, the Item 7 name, the Item 8 address and the Item 10 executor leave their labels black, so only the Needs review list shows them.",
+   "why": "has_error (event_form_kit.rs:154-163) matches only equal keys, and death_date, estate_name, residence_address and administrator_name differ from the input keys month, day, year, name, address and admin_name.",
+   "options": [
+    {
+     "name": "Map keys to inputs",
+     "detail": "Report each error under its editor key so has_error matches."
+    },
+    {
+     "name": "Message beside field",
+     "detail": "Render each message under its own input as well as in the list."
+    },
+    {
+     "name": "Focus first error",
+     "detail": "Scroll to and focus the first failing input when Queue or Save is pressed."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/event_form_kit.rs:154"
+  },
+  {
+   "id": "F5",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 5 — TIN (profile)",
+   "now": "The TIN is read-only text, but the Needs review line says 'Please enter a valid TIN number on Item 5.'",
+   "why": "The draft copies the profile TIN at creation (form_1801.rs new_from_profile) and load_draft never refreshes it (queueable_forms.rs:43-47), so a bad TIN blocks Queue with no fix on this page.",
+   "options": [
+    {
+     "name": "Editable TIN",
+     "detail": "Let the filer correct the TIN on the draft, under the same checksum rule as the profile."
+    },
+    {
+     "name": "Refresh from profile",
+     "detail": "Re-read the profile TIN when an editable draft opens."
+    },
+    {
+     "name": "Link to profile",
+     "detail": "Replace the alert with a button that opens the taxpayer profile."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1801_view.rs:323"
+  },
+  {
+   "id": "F6",
+   "issue": "other",
+   "severity": "medium",
+   "field": "n/a",
+   "now": "Commit f0ccc302, a 1801 feature, adds a 74-line extend_layout to the shared official_inputs.rs, and commit df48af19 edits form_1707.rs and form_1707a.rs.",
+   "why": "Shared modules and other forms may change only for one-line registrations, and these edits add logic that other forms now depend on.",
+   "options": [
+    {
+     "name": "Move to a 1801-only module",
+     "detail": "Keep extend_layout in form_1801.rs or a 1801-only helper file."
+    },
+    {
+     "name": "Split the commits",
+     "detail": "Move the 1707 and 1707A edits into their own commits with their own tests."
+    },
+    {
+     "name": "Keep with a note",
+     "detail": "Accept the shared helper and record it as a reviewed shared change."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/official_inputs.rs:209"
+  },
+  {
+   "id": "F7",
+   "issue": "period-editable",
+   "severity": "low",
+   "field": "Item 1 — Month of death",
+   "now": "A new 1801 opens Item 1 as 01/01 of the tile's year, a placeholder that is accepted if the filer does not change it.",
+   "why": "The death date goes into the XML, and validation accepts 1 January as long as it is not in the future.",
+   "options": [
+    {
+     "name": "Blank until entered",
+     "detail": "Start Item 1 empty and require a valid date before Queue."
+    },
+    {
+     "name": "Visible placeholder",
+     "detail": "Keep the default but show it as a placeholder that must be confirmed."
+    },
+    {
+     "name": "Confirm notice",
+     "detail": "Show a 'confirm the date of death' line until Item 1 is edited."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1801.rs:370"
+  },
+  {
+   "id": "F8",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "A clean check shows no 'Validation successful' confirmation because the page has no Validate action.",
+   "why": "The official alert validate-025 is never shown, so the set of official alerts reproduced is incomplete.",
+   "options": [
+    {
+     "name": "Show the official success text",
+     "detail": "Display 'Validation successful. Click on Edit if you wish to modify your entries.' after a clean check."
+    },
+    {
+     "name": "Add a Validate action",
+     "detail": "Add a Validate button that runs the check and shows the official success line or the Needs review list."
+    },
+    {
+     "name": "Accept the gap",
+     "detail": "Record the missing success line as an accepted difference from the official page."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/event_form_kit.rs:884"
+  }
+ ]
+}

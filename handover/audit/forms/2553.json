@@ -1,0 +1,108 @@
+{
+ "code": "2553",
+ "title": "BIR Form No. 2553 - Return of Percentage Tax Payable Under Special Laws",
+ "page": "views/form_2553_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {"label": "Item 1 —", "control": "button-row", "options": ["Calendar", "Fiscal"], "prefilled_from_library": true, "editable": true, "where": "crates/bir-desktop/src/views/form_2553_view.rs:501"},
+  {"label": "Item 2 — Month the year ends", "control": "button-row", "options": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], "prefilled_from_library": true, "editable": true, "where": "crates/bir-desktop/src/views/form_2553_view.rs:456"},
+  {"label": "Item 2 — Year ended", "control": "text", "options": [], "prefilled_from_library": true, "editable": true, "where": "crates/bir-desktop/src/views/form_2553_view.rs:532"},
+  {"label": "Item 3 — Quarter", "control": "button-row", "options": ["Q1", "Q2", "Q3", "Q4"], "prefilled_from_library": true, "editable": true, "where": "crates/bir-desktop/src/views/form_2553_view.rs:475"}
+ ],
+ "choice_rows": [
+  {"label": "Item 4 — Amended return?", "options": ["Yes", "No"], "control": "button-row", "where": "crates/bir-desktop/src/views/form_2553_view.rs:558"},
+  {"label": "Item 13 — Availing of tax relief under a Special Law or International Tax Treaty?", "options": ["No", "Yes — Special Rate", "Yes — International Tax Treaty"], "control": "button-row", "where": "crates/bir-desktop/src/views/form_2553_view.rs:631"},
+  {"label": "If overpayment, mark one:", "options": ["To be refunded", "To be issued a Tax Credit Certificate"], "control": "button-row", "where": "crates/bir-desktop/src/views/form_2553_view.rs:863"}
+ ],
+ "atc": [
+  {"label": "Add an ATC (Item 14)", "control": "chips", "multi": true, "official_slots": 5, "options_count": 4, "where": "crates/bir-desktop/src/views/form_2553_view.rs:796"}
+ ],
+ "validation": {"inline": false, "needs_review_panel": true, "how": "Messages render only in the bottom 'Needs review' panel, first 20 only; a field label turns red only for parse errors and the Email field.", "where": "crates/bir-desktop/src/views/form_2553_view.rs:1336"},
+ "lists": [
+  {"label": "Part II — Computation of Tax (Items 14–19)", "growable_officially": false, "add_remove_in_ui": true, "rows_in_ui": "dynamic", "official_rows": 5, "where": "crates/bir-desktop/src/views/form_2553_view.rs:776"}
+ ],
+ "print_preview": {"slug": "2553-1999", "how": "launch_frozen_form_preview", "where": "crates/bir-desktop/src/views/form_2553_view.rs:1186"},
+ "findings": [
+  {"id": "F1", "issue": "period-buttons", "severity": "high", "field": "Item 2 — Month the year ends",
+   "now": "Clicking Fiscal while the year-end is December silently switches the month to Jun, with no alert or message.",
+   "why": "The official alert 'You have entered a filing year ending in December. This filing will be considered as a Calendar Year Filing.' (rule 2553-input-019) is never raised, so the filed period changes without notice.",
+   "options": [
+    {"name": "Show the official alert", "detail": "Keep December and raise the verbatim input-019 text in Needs review, as the official page does."},
+    {"name": "Combobox", "detail": "Open Fiscal with no preset month and require a Jan to Nov pick from a combobox."},
+    {"name": "Read-only chip", "detail": "Show the year-end as a read-only chip that changes only through an explicit Change action."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:512"},
+  {"id": "F2", "issue": "validation", "severity": "medium", "field": "Item 9 — Taxpayer's Name",
+   "now": "An invalid Taxpayer Name keeps a normal-coloured label; the red message appears only in the Needs review panel at the bottom.",
+   "why": "The label check compares editor keys such as name with validation keys such as taxpayer_name, so only the Email field ever matches.",
+   "options": [
+    {"name": "Map error keys", "detail": "Translate each validation field name to its editor key before the label colour check."},
+    {"name": "Inline message", "detail": "Render the matching message directly under the field so the error sits next to the input."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:363"},
+  {"id": "F3", "issue": "validation", "severity": "medium", "field": "Queue for submission",
+   "now": "The button is greyed out while any error exists, and nothing beside it says why; the reason sits in Needs review far below.",
+   "why": "The button is disabled whenever validation_errors is non-empty, so the status line that explains the block can never show.",
+   "options": [
+    {"name": "Status line", "detail": "Show 'N items need review' beside the toolbar buttons while errors exist."},
+    {"name": "Enabled button", "detail": "Keep the button enabled and scroll to Needs review when it is clicked."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:1278"},
+  {"id": "F4", "issue": "period-buttons", "severity": "medium", "field": "Item 2 — Month the year ends",
+   "now": "Twelve month chips wrap across the row; under the default Calendar basis all twelve are greyed out, and in Fiscal mode Dec is greyed out.",
+   "why": "Twelve options is well past the four-option limit for buttons, and the disabled chips hide which months can actually be picked.",
+   "options": [
+    {"name": "Combobox", "detail": "Use one combobox that lists only the valid months and appears only when Fiscal is chosen."},
+    {"name": "Read-only chip", "detail": "Show Dec as a read-only chip under Calendar and open the combobox only after Fiscal is chosen."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:459"},
+  {"id": "F5", "issue": "other", "severity": "medium", "field": "20A — Tax paid in return previously filed (amended only)",
+   "now": "After Item 4 is switched to No, the greyed 20A box keeps its old amount while 20C and the saved return exclude it.",
+   "why": "edit() recomputes and zeroes tax_paid_previous but never reloads the input text, so the screen and the draft disagree.",
+   "options": [
+    {"name": "Reset the box", "detail": "Reload the 20A editor to blank whenever Item 4 changes to No, as clear_atc already does for ATC rows."},
+    {"name": "Read-only chip", "detail": "Show 20A as a computed read-only amount that appears only when Item 4 is Yes."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:564"},
+  {"id": "F6", "issue": "atc", "severity": "low", "field": "Add an ATC (Item 14)",
+   "now": "Four outlined chips sit under the schedule, and codes already used stay visible but greyed out.",
+   "why": "ATC is multi-select with five official slots, so a multi-select combobox fits better than per-option chips.",
+   "options": [
+    {"name": "Multi-select combobox", "detail": "One combobox that adds a row per pick and hides codes that are already used."},
+    {"name": "Chips without taken options", "detail": "Keep the chips but remove taken options instead of greying them out."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:796"},
+  {"id": "F7", "issue": "other", "severity": "low", "field": "15D — Tax rate",
+   "now": "Removing a middle ATC leaves an empty 'Item 15 — ' card whose tax rate reads '?%'.",
+   "why": "clear_atc blanks the row in place (crates/bir-core/src/forms/form_2553.rs:309-317) and the row renderer has no fallback for a blank ATC.",
+   "options": [
+    {"name": "Compact rows", "detail": "Shift later rows up when one is removed so no gap appears."},
+    {"name": "Hide blank rows", "detail": "Render only filled rows and place the next pick in the first gap."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:730"},
+  {"id": "F8", "issue": "other", "severity": "low", "field": "14C — Taxable amount",
+   "now": "A typed amount such as 1234.567 stays as typed, while the computed amounts use the rounded 1,234.57.",
+   "why": "Only the Change event is subscribed, so nothing rewrites the box with formatCurrency output on blur as the official page does.",
+   "options": [
+    {"name": "Reformat on blur", "detail": "On blur, write official_amount of the value back into the box."},
+    {"name": "Two-decimal limit", "detail": "Refuse a third decimal digit while typing."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:940"},
+  {"id": "F9", "issue": "validation", "severity": "low", "field": "Needs review",
+   "now": "Only the first 20 messages appear, and any further errors are dropped with no count.",
+   "why": "The take(20) cap truncates the list silently.",
+   "options": [
+    {"name": "Show all", "detail": "Remove the cap and let the panel scroll."},
+    {"name": "Overflow line", "detail": "Keep 20 rows and add an 'and N more' line."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:1220"},
+  {"id": "F10", "issue": "period-editable", "severity": "low", "field": "Item 3 — Quarter",
+   "now": "A new return opens with a quarter already chosen from today's date, which is Q4 for any year other than the current one.",
+   "why": "new_draft ignores the library tile's period argument (_period), so the quarter comes from the clock rather than from the user or the tile.",
+   "options": [
+    {"name": "Unselected quarter", "detail": "Open with no quarter chosen so the official 'Select a Quarter on Item no. 3.' alert guards queueing."},
+    {"name": "Tile period", "detail": "Use the library tile's period when one is supplied and leave the quarter blank only when it is not."}
+   ],
+   "where": "crates/bir-desktop/src/views/form_2553_view.rs:961"}
+ ]
+}

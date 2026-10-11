@@ -1,0 +1,7 @@
+# Phone-width label sweep (layout only)
+Problem found on every hand-rolled form page so far: each page has its own copies of small row helpers — typically `choice_row` / `labelled_row` (a question label + Yes/No or option chips), `computed` (a label + read-only amount box), and the label part of `field`/`grid` cells. At a 390 px window (Phone, `crate::views::event_form_kit::Layout::for_width(window.viewport_size().width) == Layout::Phone`) their labels don't wrap: long questions run off the right edge, amount labels overflow their shaded box, and choice rows keep the label on the first line with chips wrapped under it.
+Fix in each page you're given (only those files):
+1. Every row-helper label div: `.min_w_0().flex_1()` (plus `.max_w_full()` where it is in a flex row) so text wraps; value/amount boxes `.flex_none()` so they keep their width.
+2. Choice rows on Phone: stack — label on its own line, chips/buttons on the next line, full width (`flex_col` / `w_full`). If the helper has no access to the layout, add a `layout: Layout` parameter (or `phone: bool`) and pass it from the caller the way the page already passes layout elsewhere; if the page has no layout at all, compute it in render and thread it.
+3. Don't change field keys, behaviour, order, validation, or submit/queue code. form_2550q_view.rs: keep exactly one `.evaluate(`.
+Report per file: helpers changed (file:line). Don't commit, don't build.

@@ -1,0 +1,180 @@
+{
+  "code": "1707A",
+  "title": "Annual Capital Gains Tax Return for Onerous Transfer of Shares of Stock Not Traded Through the Local Stock Exchange",
+  "page": "views/form_1707a_view.rs",
+  "page_kind": "kit",
+  "period": [
+    {
+      "label": "Item 1 — For the",
+      "control": "button-row",
+      "options": [
+        "Calendar year",
+        "Fiscal year"
+      ],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:167"
+    },
+    {
+      "label": "Item 1 — Year-end month (fiscal)",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:24"
+    },
+    {
+      "label": "Item 1 — Year-end day (fiscal)",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:25"
+    },
+    {
+      "label": "Item 1 — Year ended",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:258"
+    }
+  ],
+  "choice_rows": [
+    {
+      "label": "Item 2 — Amended return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:186"
+    },
+    {
+      "label": "Item 12 — Availing of tax relief under Special Law or International Tax Treaty?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:224"
+    }
+  ],
+  "atc": [
+    {
+      "label": "Item 4 — ATC",
+      "control": "button-row",
+      "multi": false,
+      "official_slots": 2,
+      "options_count": 2,
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:201"
+    }
+  ],
+  "validation": {
+    "inline": false,
+    "needs_review_panel": true,
+    "how": "Errors render only in the 'Needs review' list after all sections; the failing caption turns red and Queue for submission is disabled with no text beside it.",
+    "where": "crates/bir-desktop/src/views/event_form_kit.rs:883"
+  },
+  "lists": [
+    {
+      "label": "Schedule 1 — Capital gains",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 10",
+      "official_rows": 4,
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:287"
+    },
+    {
+      "label": "Schedule 2 — Capital losses",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 10",
+      "official_rows": 4,
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:287"
+    }
+  ],
+  "print_preview": {
+    "slug": "1707a-2021",
+    "how": "launch_frozen_form_preview",
+    "where": "crates/bir-desktop/src/views/form_1707a_view.rs:533"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "issue": "lists",
+      "severity": "high",
+      "field": "Schedule 1 — Capital gains",
+      "now": "Schedules 1 and 2 each show ten fixed rows, and an entry past row ten cannot be recorded.",
+      "why": "The official schedules are unbounded (rules/forms/1707a-v2021/README.md:3) and the model allows 40 rows (form_1707a.rs:37), but the page and read_inputs stop at ten (form_1707a_view.rs:60, 436-475), so the return cannot be completed here and stored rows past ten are dropped on the next edit.",
+      "options": [
+        {
+          "name": "Add and remove rows",
+          "detail": "Let the user add rows past ten and delete blank ones, up to the model's 40-row limit."
+        },
+        {
+          "name": "More pop-up",
+          "detail": "Keep rows 1 to 4 on the page and open a pop-up for the rest, mirroring the official 'More' list."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:60"
+    },
+    {
+      "id": "F2",
+      "issue": "other",
+      "severity": "medium",
+      "field": "Item 11 — E-mail address",
+      "now": "The upload writes the email in capitals, so a lower-case address reaches BIR as upper case.",
+      "why": "The official layout flags txtI11Email uppercase (crates/bir-core/data/official-xml/1707a-v2021.json:288), which breaks the rule that the email is never upper-cased; the repo's own sample upload shows SAMPLE.TAXPAYER@EXAMPLE.COM (crates/bir-core/tests/sample-payloads/1707A-12312025.plain.xml:26) even though the model passes the typed address through (form_1707a.rs:574).",
+      "options": [
+        {
+          "name": "Drop the flag",
+          "detail": "Remove uppercase from the txtI11Email parts after checking a real 1707-A upload."
+        },
+        {
+          "name": "Record an exception",
+          "detail": "If real 1707-A uploads are capitalised, keep the flag and document 1707-A as the one form whose email the official app capitalises."
+        }
+      ],
+      "where": "crates/bir-core/data/official-xml/1707a-v2021.json:288"
+    },
+    {
+      "id": "F3",
+      "issue": "period-editable",
+      "severity": "medium",
+      "field": "Item 1 — Year ended",
+      "now": "Year ended is editable, but the dashboard row and the draft still use the year from the library tile.",
+      "why": "taxable_year() returns the tile year (form_1707a.rs:1082-1084), while the file name and XML use the typed year end (form_1707a.rs:1089-1094), so the saved row and the filed period can disagree.",
+      "options": [
+        {
+          "name": "Lock to tile year",
+          "detail": "Make the year read-only, since the library tile already sets it (form_1707a.rs:289)."
+        },
+        {
+          "name": "Key by year ended",
+          "detail": "Derive the draft's year from the typed year end so the list and the file agree."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1707a_view.rs:258"
+    },
+    {
+      "id": "F4",
+      "issue": "other",
+      "severity": "medium",
+      "field": "Item 11 — E-mail address",
+      "now": "The printed 1707-A sheet shows no email.",
+      "why": "The email shares the contact-number comb with no join of its own on the frozen sheet (html-frozen/1707a-2021/writer-cells.json:500), so the print preview drops it.",
+      "options": [
+        {
+          "name": "Join the email cell",
+          "detail": "Map the email to its own cell on the sheet so the preview fills it."
+        },
+        {
+          "name": "Combined line",
+          "detail": "Print the contact number and email together in the shared comb so both are visible."
+        }
+      ],
+      "where": "html-frozen/1707a-2021/writer-cells.json:500"
+    }
+  ]
+}

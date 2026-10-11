@@ -1,0 +1,233 @@
+{
+ "code": "0619F",
+ "title": "BIR Form No. 0619-F — Monthly Remittance Form of Final Income Taxes Withheld",
+ "page": "views/form_0619f_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:400-414"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:415"
+  },
+  {
+   "label": "Item 2 — Due month / year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": false,
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:416-420"
+  },
+  {
+   "label": "Item 2 — Due day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:421"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 3 — Amended form?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:422-432"
+  },
+  {
+   "label": "Item 4 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:433-447"
+  },
+  {
+   "label": "Item 5 — Tax type code",
+   "options": [
+    "WB",
+    "WF"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:448-465"
+  },
+  {
+   "label": "Item 11 — Category of withholding agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:484-502"
+  }
+ ],
+ "atc": [
+  {
+   "label": "ATC",
+   "control": "text",
+   "multi": false,
+   "official_slots": 0,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:532-536"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Errors render only in a 'Needs review' card after every section (first 20 messages, no field marker); Queue for submission is disabled while any exist.",
+  "where": "crates/bir-desktop/src/views/form_0619f_view.rs:936-937"
+ },
+ "lists": [],
+ "print_preview": {
+  "slug": "0619f-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_0619f_view.rs:788-789"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — Month",
+   "now": "Item 1 Month and Year are prefilled from the tile but stay editable, and saving after a change writes the draft under the new month and replaces any saved Draft already stored there.",
+   "why": "The month is the save key (crates/bir-core/src/forms/form_0619f.rs:413-415), and upsert_from_draft overwrites an existing Draft row for that key (crates/bir-core/src/db/queueable.rs:163-166).",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the tile's month and year as fixed text so the save key cannot move from this page."
+    },
+    {
+     "name": "Confirm before moving",
+     "detail": "If the month stays editable, ask before saving under another month and refuse to overwrite an existing Draft."
+    },
+    {
+     "name": "Combobox",
+     "detail": "Offer the open months in a combobox with the tile's month preselected."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:400-407"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 3 — Amended form?",
+   "now": "A month that already has a filed return opens read-only, so 'Yes' on Item 3 cannot be saved for it, and the official amended-return alert is never shown.",
+   "why": "Official rule 0619f-save-010 requires Item 3 'Yes' for a return that follows a finalized one (rules/forms/0619f-v2018/validations.json), but the port keeps one editable draft per month and has no amendment branch.",
+   "options": [
+    {
+     "name": "Amendment branch",
+     "detail": "Let a filed month open a new draft with Item 3 set to Yes, and port the official alert for the case where Item 3 is No."
+    },
+    {
+     "name": "Explicit block",
+     "detail": "Show the official sentence on a filed month instead of a silent read-only form, so the user knows an amendment is needed."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:422-432"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "medium",
+   "field": "13 — Final tax withheld (WMF10, tax type WB)",
+   "now": "After 'Item 5 — Tax type code' changes from WB to WF, the disabled '13 — Final tax withheld (WMF10, tax type WB)' box still shows its old figure while '15 — Total' already excludes it.",
+   "why": "official_recompute clears the item the chosen tax type disables (crates/bir-core/src/forms/form_0619f_official.rs:80-85), but the tax-type buttons call edit() without writing the cleared value back (crates/bir-desktop/src/views/form_0619f_view.rs:460-462).",
+   "options": [
+    {
+     "name": "Reload on edit",
+     "detail": "Write the recomputed value back into both Item 13 and Item 14 inputs after every tax-type change."
+    },
+    {
+     "name": "Hide the disabled box",
+     "detail": "Show only the Item 13 or Item 14 box that the selected tax type uses."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:460-462"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors appear only in a 'Needs review' card after all sections (first 20 messages, no field marker), Queue for submission is disabled without an inline reason, and Save and Print preview say 'Fix the highlighted numbers' when nothing is highlighted.",
+   "why": "field() has no error state (crates/bir-desktop/src/views/form_0619f_view.rs:279-314), so the bottom card is the only place an error can show.",
+   "options": [
+    {
+     "name": "Inline error text",
+     "detail": "Show each message under its field and tint the box, using the official alert wording."
+    },
+    {
+     "name": "Pinned summary",
+     "detail": "Show the error count with jump links next to the Queue button."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:936-937"
+  },
+  {
+   "id": "F5",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Twelve month buttons (Jan–Dec) wrap across the Return period card, with the chosen month shown with a check mark.",
+   "why": "Twelve options are too many for a button row, and a combobox fits more than four options.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "Jan–Dec in one combobox placed next to the year, in the form's own order."
+    },
+    {
+     "name": "Select",
+     "detail": "A plain select with the same twelve months, which is shorter at phone width."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:400-414"
+  },
+  {
+   "id": "F6",
+   "issue": "choice-buttons",
+   "severity": "low",
+   "field": "Item 5 — Tax type code",
+   "now": "The two buttons read only 'WB' and 'WF', and the amounts they enable (Item 13 or Item 14) appear only in the fixed 'ATC' line at the bottom of Part II.",
+   "why": "A bare code forces the user to cross-read Part II to learn which amount a choice enables.",
+   "options": [
+    {
+     "name": "Descriptive labels",
+     "detail": "Label each button with its code and the item it enables, such as 'WB — Item 13'."
+    },
+    {
+     "name": "Help line",
+     "detail": "Keep the codes and add one line under the pair that names the item each one enables."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619f_view.rs:448-465"
+  }
+ ]
+}

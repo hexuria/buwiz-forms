@@ -1,0 +1,177 @@
+{
+  "code": "1707",
+  "title": "Capital Gains Tax Return for Onerous Transfer of Shares of Stock Not Traded Through the Local Stock Exchange",
+  "page": "views/form_1707_view.rs",
+  "page_kind": "kit",
+  "period": [
+    {
+      "label": "Item 1 — Month of transaction",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:27"
+    },
+    {
+      "label": "Item 1 — Day",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:28"
+    },
+    {
+      "label": "Item 1 — Year",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:29"
+    }
+  ],
+  "choice_rows": [
+    {
+      "label": "Item 2 — Amended return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:239"
+    },
+    {
+      "label": "Item 8 — Availing of tax relief under Special Law or International Tax Treaty?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:340"
+    },
+    {
+      "label": "Item 9 — Description of transaction",
+      "options": [
+        "Cash Sale",
+        "Installment Sale",
+        "Foreclosure Sale",
+        "Others"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:379"
+    }
+  ],
+  "atc": [
+    {
+      "label": "Item 3 — ATC",
+      "control": "button-row",
+      "multi": false,
+      "official_slots": 2,
+      "options_count": 3,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:292"
+    }
+  ],
+  "validation": {
+    "inline": false,
+    "needs_review_panel": true,
+    "how": "Errors render only in the 'Needs review' list after all sections; the failing caption turns red and Queue for submission is disabled with no text beside it.",
+    "where": "crates/bir-desktop/src/views/event_form_kit.rs:883"
+  },
+  "lists": [
+    {
+      "label": "Item 6 — Seller",
+      "growable_officially": false,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 3",
+      "official_rows": 3,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:317"
+    },
+    {
+      "label": "Item 7 — Buyer",
+      "growable_officially": false,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 3",
+      "official_rows": 3,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:317"
+    },
+    {
+      "label": "Schedule 2 — Description of shares of stock",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 10 (A–C, D, D.2–D.7)",
+      "official_rows": 4,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:418"
+    },
+    {
+      "label": "Schedule 3 — Cost and other allowable expenses",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 10 (A–C, D, D.2–D.7)",
+      "official_rows": 4,
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:437"
+    }
+  ],
+  "print_preview": {
+    "slug": "1707-2021",
+    "how": "launch_frozen_form_preview",
+    "where": "crates/bir-desktop/src/views/form_1707_view.rs:712"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "issue": "lists",
+      "severity": "high",
+      "field": "Schedule 2 — Description of shares of stock",
+      "now": "Schedules 2 and 3 stop at ten rows, and there is no control to add an eleventh.",
+      "why": "The official pop-ups are unbounded (rules/forms/1707-v2021/README.md:3), and read_inputs rebuilds each schedule from the ten visible rows (form_1707_view.rs:608-653), so a longer schedule cannot be filed from this page and any stored row past ten is dropped on the next edit.",
+      "options": [
+        {
+          "name": "Add and remove rows",
+          "detail": "Let the user add rows past ten and delete blank ones, as the official pop-up does."
+        },
+        {
+          "name": "More pop-up",
+          "detail": "Keep rows A to D on the page and open a pop-up for the rest, mirroring the official OTHERS list."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:79"
+    },
+    {
+      "id": "F2",
+      "issue": "lists",
+      "severity": "medium",
+      "field": "Schedule 2 — Description of shares of stock",
+      "now": "Row labels run A, B, C, D, D.2 through D.7, so D.1 never appears.",
+      "why": "The model writes the fourth row as the first official pop-up entry (form_1707.rs:696-700, numbered from index 3), so the entry the official numbers D.1 is labelled 'D'.",
+      "options": [
+        {
+          "name": "Label row four D.1",
+          "detail": "Show D.1 for the fourth row and continue D.2 to D.7, matching the official pop-up numbering."
+        },
+        {
+          "name": "Separate summary row",
+          "detail": "Keep 'D' as the read-only OTHERS total and start the editable pop-up rows at D.1 below it."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1707_view.rs:84"
+    },
+    {
+      "id": "F3",
+      "issue": "validation",
+      "severity": "medium",
+      "field": "Queue for submission",
+      "now": "Errors appear only in the 'Needs review' list below all sections, and the disabled Queue button gives no reason.",
+      "why": "A failing caption turns red, but the message sits at the bottom of a long page, so the user has to scroll to learn which item blocks queueing (event_form_kit.rs:608-612, 771, 833, 883-885).",
+      "options": [
+        {
+          "name": "Inline message",
+          "detail": "Show each alert text under the field it belongs to."
+        },
+        {
+          "name": "Issue summary",
+          "detail": "Pin a count of open issues above the sections with a link that jumps to the first one."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/event_form_kit.rs:883"
+    }
+  ]
+}

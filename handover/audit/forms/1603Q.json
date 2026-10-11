@@ -1,0 +1,212 @@
+{
+ "code": "1603Q",
+ "title": "Quarterly Remittance Return of Final Income Taxes Withheld on Fringe Benefits Paid to Employees Other Than Rank and File",
+ "page": "views/form_1603q_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:462"
+  },
+  {
+   "label": "Item 2 — Quarter",
+   "control": "button-row",
+   "options": [
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:463"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 3 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:465"
+  },
+  {
+   "label": "Item 4 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:480"
+  },
+  {
+   "label": "Item 11 — Category of withholding agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:555"
+  },
+  {
+   "label": "Item 13 — Availing of tax relief under a Special Law or Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:588"
+  },
+  {
+   "label": "Item 13A — If yes, specify",
+   "options": [
+    "Special Rate",
+    "International Tax Treaty",
+    "Both"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:596"
+  }
+ ],
+ "atc": [],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Red label only for non-numeric input (field() compares input keys to model keys); model messages go to the bottom 'Needs review' box, capped at 20; Queue is disabled at the top with no reason shown.",
+  "where": "crates/bir-desktop/src/views/form_1603q_view.rs:337"
+ },
+ "lists": [
+  {
+   "label": "Part IV — Schedule 1 (fringe benefits)",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 2",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:622"
+  }
+ ],
+ "print_preview": {
+  "slug": "1603q-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1603q_view.rs:940"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 2 — Quarter",
+   "now": "The quarter from the dashboard tile stays clickable on the page, and choosing another quarter saves the return as a separate draft.",
+   "why": "A draft is stored under its own quarter and year (crates/bir-core/src/db/queueable.rs:141), so the page's choice decides which row is written.",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the period as a chip and change it only from the dashboard tile."
+    },
+    {
+     "name": "Combobox with warning",
+     "detail": "Keep a picker, but warn before saving that another period opens a separate draft."
+    },
+    {
+     "name": "Lock after first save",
+     "detail": "Allow changing the period only until a draft for that period has been saved."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:455"
+  },
+  {
+   "id": "F2",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 1 — For the Year",
+   "now": "Only non-numeric entries turn a label red; a bad year, sheet count, name or amount shows only in the bottom 'Needs review' box, and Queue is disabled at the top without a reason.",
+   "why": "field() matches input keys such as 'sheets' and 'value0' against model keys such as 'number_of_attached_sheets' and 'monetary_value[0]' (crates/bir-core/src/forms/form_1603q.rs:539).",
+   "options": [
+    {
+     "name": "Pass the model error key",
+     "detail": "Give field() an error key, as the 1604-C page already does with has_error(key, error_key)."
+    },
+    {
+     "name": "Message beside the field",
+     "detail": "Show each message under its own field, not only in the bottom panel."
+    },
+    {
+     "name": "Reason beside Queue",
+     "detail": "Show the first blocking message next to the disabled Queue button."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:337"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "medium",
+   "field": "15 — Tax remitted in return previously filed (amended only)",
+   "now": "After Item 3 changes to No, the disabled Item 15 box still shows the old amount, but Items 17 and 18 leave that amount out.",
+   "why": "The Item 3 buttons call edit() without reloading the money editors (form_1603q_view.rs:469-474), while recompute() zeroes the amount (crates/bir-core/src/forms/form_1603q.rs:264).",
+   "options": [
+    {
+     "name": "Reload on toggle",
+     "detail": "Reload the money editors after Item 3 changes, as set_withheld() already does for Item 4."
+    },
+    {
+     "name": "Clear the box",
+     "detail": "Blank the Item 15 text when Item 3 is No."
+    },
+    {
+     "name": "Hide when not amended",
+     "detail": "Show Item 15 only when Item 3 is Yes."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1603q_view.rs:474"
+  },
+  {
+   "id": "F4",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 13A — If yes, specify",
+   "now": "With Item 13 set to Yes and no 13A choice, Queue is blocked by 'Specify the tax relief on Item 13A.', a message the official 1603-Q never shows.",
+   "why": "The official validation has no 13A check (BIR-Form1603Qv2018.hta:2821-2904), so the page is stricter than the official form.",
+   "options": [
+    {
+     "name": "Drop the page-only rule",
+     "detail": "Accept a blank 13A, which the page already writes as selTreaty value 0."
+    },
+    {
+     "name": "Keep and label it",
+     "detail": "Keep the rule but show it as a page check rather than an official alert."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1603q.rs:524"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 12 — Email Address",
+   "now": "The print preview shows the email in capital letters, although the stored email keeps the case typed.",
+   "why": "The print fill upper-cases writer-cell text joins and txtEmail is one (html-frozen/1603q-2018/writer-cells.json, p1c49), while the official capital() skips txtEmail (validation/package/js/string-util.js:241).",
+   "options": [
+    {
+     "name": "Skip the email in the upper-case step",
+     "detail": "Exempt txtEmail in frozen_html.rs so print matches the stored value."
+    },
+    {
+     "name": "Named input on the sheet",
+     "detail": "Give the frozen sheet a named txtEmail input so the join is not upper-cased."
+    },
+    {
+     "name": "Document the caps",
+     "detail": "Keep the caps on paper and say on the preview that the email prints in capitals."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:83"
+  }
+ ]
+}

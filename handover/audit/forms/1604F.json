@@ -1,0 +1,151 @@
+{
+ "code": "1604F",
+ "title": "BIR Form No. 1604-F",
+ "page": "views/form_1604f_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:468"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:469"
+  },
+  {
+   "label": "Item 8 — Category of withholding agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:510"
+  },
+  {
+   "label": "Item 8A — If private, top withholding agent?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:538"
+  },
+  {
+   "label": "Item 11 — Payees availing of tax relief under a Special Law or International Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:551"
+  }
+ ],
+ "atc": [],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Labels turn red only; messages render at the bottom via body.child(self.section(\"Needs review\", issues, cx)), first 20 only",
+  "where": "crates/bir-desktop/src/views/form_1604f_view.rs:1051"
+ },
+ "lists": [
+  {
+   "label": "Schedule 1 — Remittance per BIR Form No. 1601-FQ on Final Taxes Withheld",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 4",
+   "official_rows": 4,
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:623"
+  },
+  {
+   "label": "Schedule 2 — Remittance per BIR Form No. 1602Q on Interest Payments",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 4",
+   "official_rows": 4,
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:623"
+  },
+  {
+   "label": "Schedule 3 — Remittance per BIR Form No. 1603Q on Fringe Benefits",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 4",
+   "official_rows": 4,
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:623"
+  }
+ ],
+ "print_preview": {
+  "slug": "1604f-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1604f_view.rs:900"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 10 — Email (BIR confirmation)",
+   "now": "The submitted Item 10 field frm1604f:email is written in capitals whatever the filer typed, while the txtEmail copy keeps the typed case.",
+   "why": "The email must never be upper-cased, and the unit test at crates/bir-core/src/forms/form_1604f.rs:708 locks the capitals in.",
+   "options": [
+    {
+     "name": "Keep typed case",
+     "detail": "Write the trimmed email unchanged, as txtEmail and the 1604E and 1606 maps already do."
+    },
+    {
+     "name": "Capitals in print only",
+     "detail": "Keep the stored value as typed and let the frozen-sheet renderer capitalise it for display, where display casing belongs."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1604f.rs:295"
+  },
+  {
+   "id": "F2",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — For the year",
+   "now": "The year stays a free-text box after the return is created from the tile, and a retyped year saves as a separate new draft, leaving any saved draft for the original year unchanged.",
+   "why": "Drafts are keyed by TIN, form and year (crates/bir-core/src/db/queueable.rs:154), so an edited year inserts a second row instead of updating the return the filer opened.",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the tile's year as a locked chip, so a different year means opening that year's own tile."
+    },
+    {
+     "name": "Year combobox on new drafts",
+     "detail": "Offer 2018 to the current year in a combobox only before the draft is saved, then lock it."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:468"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors show as red labels and as one list below Schedule 3 that stops at 20 messages, so later alerts never appear and Queue stays disabled with no message beside the field.",
+   "why": "The brief requires every official alert to appear verbatim and in order, and the 20-message cap drops alerts silently once blank schedule rows produce more than 20 messages.",
+   "options": [
+    {
+     "name": "Inline message",
+     "detail": "Render each alert under its own field, verbatim and in the official order."
+    },
+    {
+     "name": "Uncapped summary",
+     "detail": "Show the complete alert list above the schedules with a jump link to each field."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1604f_view.rs:934"
+  }
+ ]
+}

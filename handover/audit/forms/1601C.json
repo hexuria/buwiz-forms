@@ -1,0 +1,290 @@
+{
+ "code": "1601C",
+ "title": "Monthly Remittance Return of Income Taxes Withheld on Compensation",
+ "page": "views/form_1601c_view.rs",
+ "page_kind": "bespoke",
+ "period": [],
+ "choice_rows": [
+  {
+   "label": "Amended Return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "checkbox",
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1344-1381"
+  },
+  {
+   "label": "Any Taxes Withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "checkbox",
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1384-1424"
+  },
+  {
+   "label": "11 Category of Withholding Agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "chips",
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1892-1924"
+  },
+  {
+   "label": "13 Payees availing of tax relief under Special Law or International Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "checkbox",
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1433-1484"
+  },
+  {
+   "label": "13A If yes, specify",
+   "options": [
+    "Special Rate",
+    "International Tax Treaty",
+    "Both"
+   ],
+   "control": "select",
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1802-1818"
+  }
+ ],
+ "atc": [
+  {
+   "label": "ATC",
+   "control": "text",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1430"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": false,
+  "how": "Errors are stored but never drawn: Validate only sets them and Generate XML & Submit is disabled by them, so no message appears on the page.",
+  "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1237-1259"
+ },
+ "lists": [
+  {
+   "label": "Part IV - Schedule I",
+   "growable_officially": false,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic (0-3)",
+   "official_rows": 3,
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1651-1783"
+  }
+ ],
+ "print_preview": {
+  "slug": "1601c-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1028-1044"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "validation",
+   "severity": "high",
+   "field": "Validate",
+   "now": "Validate gives no result, and Generate XML & Submit stays disabled with no message saying why.",
+   "why": "validation_errors is read only by the Submit disable and the agent accessor (form_1601c_view.rs:637-638), never by render().",
+   "options": [
+    {
+     "name": "Needs review panel",
+     "detail": "List validation_errors under the header as 1601EQ and 1601FQ do, and show the official success alert after a clean Validate."
+    },
+    {
+     "name": "Inline field errors",
+     "detail": "Show each error under its field, keyed by the field names the model already returns."
+    },
+    {
+     "name": "Status line",
+     "detail": "Show the first error and a count in the status banner whenever Submit is disabled."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1237-1259"
+  },
+  {
+   "id": "F2",
+   "issue": "validation",
+   "severity": "high",
+   "field": "12 Email Address (no field on this page)",
+   "now": "Submit can be blocked by an email, ZIP, telephone or line-of-business problem, yet the page has no input for any of them.",
+   "why": "validate() checks these profile values (form_1601c.rs:645-720) while the view draws only the TIN, RDO and address block (form_1601c_view.rs:1303-1328).",
+   "options": [
+    {
+     "name": "Read-only with fix link",
+     "detail": "Show the four values in the taxpayer block with a Fix in Profile action that opens the profile tab."
+    },
+    {
+     "name": "Editable inputs",
+     "detail": "Add email, ZIP, telephone and line-of-business inputs as 1601EQ and 1601FQ already do."
+    },
+    {
+     "name": "Blocker message",
+     "detail": "Name the blocking profile field in the status line whenever Submit is disabled."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1303-1328"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "14 Total Amount of Compensation",
+   "now": "When the errors are shown, the Item 14 message reads 'Invalid amount in Item 14. Value must be greater than zero(0) when Any Taxes Withheld is YES.' instead of BIR's 'Invalid amount in Item no.14. Value must be greater than zero(0).'",
+   "why": "Most 1601C messages are the model's own wording (for example 'Address is required' and 'Valid ZIP Code required') and they run in the order TIN, RDO, name, address, ZIP, phone, category, not BIR's order, so the official alerts are neither verbatim nor in order.",
+   "options": [
+    {
+     "name": "Port the official table",
+     "detail": "Rebuild validate() from rules/forms/1601c-v2018/validations.json in its order, using each exact_message text."
+    },
+    {
+     "name": "Keep wording, fix order",
+     "detail": "Keep the model's text but reorder the checks to BIR's sequence and use the official text wherever one exists."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1601c.rs:996-1009"
+  },
+  {
+   "id": "F4",
+   "issue": "other",
+   "severity": "medium",
+   "field": "22 Total Taxable Compensation (14 - 21)",
+   "now": "Typing 1.005 in Item 14 shows 1.00 in Item 22, while the XML carries 1.01 for Item 14 and 1.00 for Item 22; BIR's rule would give 1.01 for Item 22.",
+   "why": "round_currency uses (x*100).round()/100 instead of the formatCurrency rule in official_amount (official_xml.rs:478), and parse_money keeps the typed value unrounded (form_1601c_view.rs:429-445).",
+   "options": [
+    {
+     "name": "Round on entry",
+     "detail": "Apply cents() to each typed money input on sync, as 1601EQ and 1601FQ do."
+    },
+    {
+     "name": "Official rule in compute",
+     "detail": "Replace round_currency with the official_amount rounding so computed and submitted values agree."
+    },
+    {
+     "name": "Reject extra decimals",
+     "detail": "Report more than two decimals as an error instead of rounding silently."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1601c.rs:70-72"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "medium",
+   "field": "TAXPAYER PROFILE",
+   "now": "The filing period is not shown anywhere on the page: the return's month and year come only from the dashboard tile.",
+   "why": "The official layout has For the Month and For the Year (1601c-v2018.json entries 0-1, txtMonth and txtYear), but the view draws only the TIN, RDO and address block.",
+   "options": [
+    {
+     "name": "Read-only period strip",
+     "detail": "Show For the Month and For the Year as read-only chips at the top, as the official Item 1 row does."
+    },
+    {
+     "name": "Fixed with change button",
+     "detail": "Show the tile period with a Change action that reopens the dashboard picker, so the draft key stays in step."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1303-1328"
+  },
+  {
+   "id": "F6",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Any Taxes Withheld?",
+   "now": "A new return opens with Any Taxes Withheld on Yes and Category Private already chosen, so the user never has to answer either question.",
+   "why": "new_from_profile sets any_taxes_withheld to true and category_of_agent to P (form_1601c.rs:253, 263), while the official layout leaves both unchecked (1601c-v2018.json TaxWithheld_1 and _2, CatAgent_P and _G default false), so BIR's Item 3 and Item 11 prompts can never fire.",
+   "options": [
+    {
+     "name": "Start unanswered",
+     "detail": "Leave both unset until the user picks, and keep Submit disabled until they do."
+    },
+    {
+     "name": "Keep default and flag",
+     "detail": "Keep Yes and Private but mark both chips as needing confirmation until the user touches them."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1601c.rs:253"
+  },
+  {
+   "id": "F7",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "ATC",
+   "now": "Item 5 ATC is an editable text box, so the user can type a code other than WW010, and only the hidden validation would reject it.",
+   "why": "The official txtATC is fixed to WW010 (1601c-v2018.json line 72) and the model requires it (form_1601c.rs:41, 737-742), so a free-text input is the wrong control.",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show WW010 as a fixed chip with no input, as the printed sheet does."
+    },
+    {
+     "name": "Locked single option",
+     "detail": "Use a one-option combobox that is pre-selected and disabled."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1430"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Print Preview",
+   "now": "The 1601C fix also changed the shared page header and the 2552 and 2553 XML layouts, so other forms' output can change along with it.",
+   "why": "cdb1a9b4 changed the shared form_engine.rs (61 lines) and event_form_kit.rs (42 lines), and bf5ab759 rewrote 2552-v2018.json (706 changed lines), 2553, and the shared official_xml.rs and filing_queue.rs, beyond the form's own files and one-line registrations.",
+   "options": [
+    {
+     "name": "Split commits",
+     "detail": "Move the shared edits into their own reviewed commits, each with the sample-payload diffs for every form it touches."
+    },
+    {
+     "name": "Revert shared edits",
+     "detail": "Restore the 2552 and 2553 layouts and the shared files from main and keep only 1601C-local code."
+    }
+   ],
+   "where": "crates/bir-desktop/src/components/form_engine.rs:242"
+  },
+  {
+   "id": "F9",
+   "issue": "other",
+   "severity": "low",
+   "field": "36 Total Amount Payable",
+   "now": "Totals show as 'P 1234.56' and computed rows as '1234.56', with no thousands comma, while the XML and BIR's sheet group the digits.",
+   "why": "The view formats with Rust {:.2} (form_1601c_view.rs:1637-1640 and 1888) instead of the official_amount grouping that the XML uses.",
+   "options": [
+    {
+     "name": "Use official_amount",
+     "detail": "Render each money label with official_amount, as 1601EQ and 1601FQ already do for computed rows."
+    },
+    {
+     "name": "Add grouping helper",
+     "detail": "Keep {:.2} but insert thousands separators with the same rounding."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1637-1640"
+  },
+  {
+   "id": "F10",
+   "issue": "choice-buttons",
+   "severity": "low",
+   "field": "Amended Return?",
+   "now": "Yes and No are one toggle that flips on each click, so the other answer is never visible, unlike the paired Yes and No buttons on 1601EQ and 1601FQ.",
+   "why": "The toggles draw only the current answer (form_1601c_view.rs:1344-1381 and 1384-1424), so the user cannot see the alternative before clicking.",
+   "options": [
+    {
+     "name": "Paired Yes/No buttons",
+     "detail": "Two outline buttons with the chosen one primary, as 1601EQ Item 3 does."
+    },
+    {
+     "name": "Labelled checkbox",
+     "detail": "A checkbox labelled with the question and checked for Yes."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1601c_view.rs:1344-1381"
+  }
+ ]
+}

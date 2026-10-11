@@ -1,0 +1,205 @@
+{
+ "code": "0619E",
+ "title": "BIR Form No. 0619-E — Monthly Remittance Form of Creditable Income Taxes Withheld (Expanded)",
+ "page": "views/form_0619e_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:397-411"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:412"
+  },
+  {
+   "label": "Item 2 — Due month / year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": false,
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:413-417"
+  },
+  {
+   "label": "Item 2 — Due day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:418"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 3 — Amended form?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:419-429"
+  },
+  {
+   "label": "Item 4 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:430-444"
+  },
+  {
+   "label": "Item 12 — Category of withholding agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:468-486"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 5 — ATC / Item 6 — Tax type",
+   "control": "text",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:445-449"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Errors render only in a 'Needs review' card after every section (first 20 messages, no field marker); Queue for submission is disabled while any exist.",
+  "where": "crates/bir-desktop/src/views/form_0619e_view.rs:912-913"
+ },
+ "lists": [],
+ "print_preview": {
+  "slug": "0619e-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_0619e_view.rs:764-765"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — Month",
+   "now": "Item 1 Month and Year are prefilled from the tile but stay editable, and saving after a change writes the draft under the new month and replaces any saved Draft already stored there.",
+   "why": "The month is the save key (crates/bir-core/src/forms/form_0619e.rs:374-376), and upsert_from_draft overwrites an existing Draft row for that key (crates/bir-core/src/db/queueable.rs:163-166).",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the tile's month and year as fixed text so the save key cannot move from this page."
+    },
+    {
+     "name": "Confirm before moving",
+     "detail": "If the month stays editable, ask before saving under another month and refuse to overwrite an existing Draft."
+    },
+    {
+     "name": "Combobox",
+     "detail": "Offer the open months in a combobox with the tile's month preselected."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:397-405"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 3 — Amended form?",
+   "now": "A month that already has a filed return opens read-only, so 'Yes' on Item 3 cannot be saved for it, and the official amended-return alert is never shown.",
+   "why": "Official rule 0619e-save-008 requires Item 3 'Yes' for a return that follows a finalized one (rules/forms/0619e-v2018/validations.json), but the port keeps one editable draft per month and has no amendment branch.",
+   "options": [
+    {
+     "name": "Amendment branch",
+     "detail": "Let a filed month open a new draft with Item 3 set to Yes, and port the official alert for the case where Item 3 is No."
+    },
+    {
+     "name": "Explicit block",
+     "detail": "Show the official sentence on a filed month instead of a silent read-only form, so the user knows an amendment is needed."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:419-429"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "medium",
+   "field": "14 — Amount of remittance",
+   "now": "After 'Item 4 — Any taxes withheld?' is set to No, the disabled '14 — Amount of remittance' box still shows its old figure while Items 16 and 18 already count zero.",
+   "why": "official_recompute zeroes Item 14 when no taxes are withheld (crates/bir-core/src/forms/form_0619e_official.rs:78-80), but edit() never writes the cleared value back into the input (crates/bir-desktop/src/views/form_0619e_view.rs:200-209).",
+   "options": [
+    {
+     "name": "Reload on edit",
+     "detail": "Write the recomputed value back into the input after every toggle so the box matches the total."
+    },
+    {
+     "name": "Hide when not applicable",
+     "detail": "Show the Item 14 row only when Item 4 is Yes, so no stale figure is visible."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:438-442"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors appear only in a 'Needs review' card after all sections (first 20 messages, no field marker), Queue for submission is disabled without an inline reason, and Save and Print preview say 'Fix the highlighted numbers' when nothing is highlighted.",
+   "why": "field() has no error state (crates/bir-desktop/src/views/form_0619e_view.rs:276-310), so the bottom card is the only place an error can show.",
+   "options": [
+    {
+     "name": "Inline error text",
+     "detail": "Show each message under its field and tint the box, using the official alert wording."
+    },
+    {
+     "name": "Pinned summary",
+     "detail": "Show the error count with jump links next to the Queue button."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:912-913"
+  },
+  {
+   "id": "F5",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Twelve month buttons (Jan–Dec) wrap across the Return period card, with the chosen month shown with a check mark.",
+   "why": "Twelve options are too many for a button row, and a combobox fits more than four options.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "Jan–Dec in one combobox placed next to the year, in the form's own order."
+    },
+    {
+     "name": "Select",
+     "detail": "A plain select with the same twelve months, which is shorter at phone width."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_0619e_view.rs:397-411"
+  }
+ ]
+}

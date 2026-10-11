@@ -1,0 +1,259 @@
+{
+ "code": "1702EX",
+ "title": "Annual Income Tax Return for Corporations, Partnerships and Other Non-Individual Taxpayers Exempt from Income Tax",
+ "page": "views/form_1702ex_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the",
+   "control": "segmented",
+   "options": [
+    "Calendar",
+    "Fiscal"
+   ],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:833"
+  },
+  {
+   "label": "Item 2 — Month the year ends",
+   "control": "button-row",
+   "options": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12"
+   ],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:868"
+  },
+  {
+   "label": "Item 2 — Year ended (YYYY)",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:870"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 3 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:871"
+  },
+  {
+   "label": "Item 4 — Short period return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:886"
+  },
+  {
+   "label": "Item 13 — Method of deduction",
+   "options": [
+    "Itemized deductions",
+    "Optional standard deduction (40%)"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:924"
+  },
+  {
+   "label": "If overpayment, mark one box only",
+   "options": [
+    "To be refunded",
+    "To be issued a Tax Credit Certificate",
+    "To be carried over"
+   ],
+   "control": "button-row",
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:1149"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 5 — ATC",
+   "control": "chips",
+   "multi": false,
+   "official_slots": 2,
+   "options_count": 2,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:901"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "The field label turns red; messages are listed in a Needs review section after Part II (first 20), and Queue for submission is disabled while any error exists.",
+  "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:694"
+ },
+ "lists": [
+  {
+   "label": "Schedule 1 Items 17D–17I — Others",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 6",
+   "official_rows": 6,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:375"
+  },
+  {
+   "label": "Schedule 2 — Special allowable itemized deductions",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 4",
+   "official_rows": 4,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:1042"
+  },
+  {
+   "label": "Schedule 3 Items 2–3 — Non-deductible expenses/taxable other income",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 2",
+   "official_rows": 2,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:383"
+  },
+  {
+   "label": "Schedule 3 Items 5–6 — Non-taxable income and income subject to final tax",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 2",
+   "official_rows": 2,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:391"
+  },
+  {
+   "label": "Schedule 3 Items 7–8 — Special deductions",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 2",
+   "official_rows": 2,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:399"
+  },
+  {
+   "label": "48–49 — Other tax credits/payments",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 2",
+   "official_rows": 2,
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:367"
+  }
+ ],
+ "print_preview": {
+  "slug": "1702ex-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:1405"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 2 — Year ended (YYYY)",
+   "now": "The year box stays editable after the tile set it; Save draft under another year overwrites any saved Draft for that year, and a blank box is saved as year 0.",
+   "why": "The annual draft is keyed by TIN, form and the year as it stands after sync, so upsert_from_draft updates whichever row that year matches.",
+   "options": [
+    {
+     "name": "Read-only year from the tile",
+     "detail": "Show the tile's year as text, so the key cannot change on this page."
+    },
+    {
+     "name": "Year choices limited to free years",
+     "detail": "Offer only the tile's year or years with no saved Draft."
+    },
+    {
+     "name": "Guard the save",
+     "detail": "Refuse Save draft and Queue when the year differs from the saved key or is blank."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:870"
+  },
+  {
+   "id": "F2",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 2 — Month the year ends",
+   "now": "Twelve month buttons labelled 01 to 12 sit in one row, shown for a fiscal or short-period return.",
+   "why": "Twelve values form a list, and a combobox fits that better than a row of buttons.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "One combobox with 01 to 12 in place of the twelve buttons."
+    },
+    {
+     "name": "Read-only chip with popup",
+     "detail": "Show the month as text and open the 01 to 12 list on click."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:868"
+  },
+  {
+   "id": "F3",
+   "issue": "lists",
+   "severity": "medium",
+   "field": "Schedule 1 Items 17D–17I — Others",
+   "now": "The Schedule 1, Schedule 2 and Schedule 3 lists show fixed rows (6, 4 and 2) with no Add row, although the official popups accept more rows.",
+   "why": "The model accepts up to 100 popup rows (FORM_1702EX_MAX_ROWS), but the view draws only the fixed lines, so extra entries cannot be recorded.",
+   "options": [
+    {
+     "name": "Add-row list",
+     "detail": "Let each popup-backed list grow with an Add row control, up to the model limit, matching the official OTHERS behaviour."
+    },
+    {
+     "name": "Combined extra line",
+     "detail": "Keep the fixed lines and add one text and amount line that totals any extra items."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:986"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "Messages appear only in the Needs review section after Part II; the field label turns red, but no message sits beside the field.",
+   "why": "Errors are shown far from the input that caused them, so a user must scroll to read why Queue for submission is disabled.",
+   "options": [
+    {
+     "name": "Message under the field",
+     "detail": "Show the message text beneath each input in addition to the red label."
+    },
+    {
+     "name": "Jump-to-error list",
+     "detail": "Make each Needs review entry scroll to its field."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:1555"
+  },
+  {
+   "id": "F5",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "When every check passes, no line says 'Validation successful. Click on Edit if you wish to modify your entries.'",
+   "why": "The official validate() shows this alert on success, and the page renders only the error list.",
+   "options": [
+    {
+     "name": "Success line in the review slot",
+     "detail": "Show the verbatim success text where Needs review would be when there are no errors."
+    },
+    {
+     "name": "Status bar message",
+     "detail": "Show the same text in the status message bar after a clean check."
+    }
+   ],
+   "where": "/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/forms/crates/bir-desktop/src/views/form_1702ex_view.rs:1435"
+  }
+ ]
+}

@@ -1,0 +1,293 @@
+{
+  "code": "2200C",
+  "title": "BIR Form No. 2200-C — Excise Tax Return for Cosmetic Procedures",
+  "page": "views/form_2200c_view.rs",
+  "page_kind": "handrolled",
+  "period": [
+    {
+      "label": "Item 1 — Month",
+      "control": "button-row",
+      "options": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec"
+      ],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:489-504"
+    },
+    {
+      "label": "Item 1 — Day",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:56,519"
+    },
+    {
+      "label": "Item 1 — Year",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:57,520"
+    }
+  ],
+  "choice_rows": [
+    {
+      "label": "Item 2 — Amended return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:521-532"
+    },
+    {
+      "label": "Item 11 — Place where the invasive cosmetic procedures took place",
+      "options": [],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:550-634"
+    },
+    {
+      "label": "Item 12 — Availing of tax relief?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:681-691"
+    },
+    {
+      "label": "Manner of payment",
+      "options": [
+        "Payment on Actual Removal",
+        "Prepayment/Advance Deposit",
+        "Other similar schemes"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:703-722"
+    }
+  ],
+  "atc": [
+    {
+      "label": "Item 3 — ATC",
+      "control": "text",
+      "multi": false,
+      "official_slots": 1,
+      "options_count": 1,
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:541-545"
+    }
+  ],
+  "validation": {
+    "inline": false,
+    "needs_review_panel": true,
+    "how": "Messages render as text in a 'Needs review' section after Part III (first 20 only); a field only turns its label red, and Queue for submission is disabled with no message beside it.",
+    "where": "crates/bir-desktop/src/views/form_2200c_view.rs:1235"
+  },
+  "lists": [
+    {
+      "label": "Part V Schedule 1 — Summary of Cosmetic Procedures Performed",
+      "growable_officially": false,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 10",
+      "official_rows": 10,
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:730-766"
+    }
+  ],
+  "print_preview": {
+    "slug": "2200c-2018",
+    "how": "launch_frozen_form_preview",
+    "where": "crates/bir-desktop/src/views/form_2200c_view.rs:1079"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "issue": "other",
+      "severity": "high",
+      "field": "Print preview",
+      "now": "Print preview leaves all ten Schedule 1 rows blank and also drops Item 6, Items 9-10 and Item 11, so the paper copy shows only the Item 16 total.",
+      "why": "writer-cells.json has no join for the Schedule 1 product cells (left_out p2c25 onward, 'no printed row number or product label') nor for the RDO, contact/email and place combs.",
+      "options": [
+        {
+          "name": "Map rows by column order",
+          "detail": "Join the ten Schedule 1 rows to the grid's column combs in order, since the row count is fixed at ten."
+        },
+        {
+          "name": "Print a generated table",
+          "detail": "Append a table of columns A to J to the frozen sheet so the paper copy carries every entered value."
+        },
+        {
+          "name": "Warn before preview",
+          "detail": "Show a notice naming Schedule 1 and Items 6, 9-11 as not on the frozen sheet until the grid is mapped."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:1079; html-frozen/2200c-2018/writer-cells.json:262-296"
+    },
+    {
+      "id": "F2",
+      "issue": "validation",
+      "severity": "medium",
+      "field": "Queue for submission",
+      "now": "With any error the button greys out with no message beside it, the reason appears only under Needs review below Part III, and a bad Schedule 1 row turns no row field red.",
+      "why": "The button is disabled whenever validation_errors or parse_errors is non-empty, and field() matches only exact keys such as ca0, so the schedule[n] error from validate() never highlights its row.",
+      "options": [
+        {
+          "name": "Inline message per field",
+          "detail": "Show the alert text directly under the failing field instead of only in the panel."
+        },
+        {
+          "name": "Toolbar summary",
+          "detail": "Show the first error text beside Queue for submission so the disabled button still explains itself."
+        },
+        {
+          "name": "Keep enabled and scroll",
+          "detail": "Let a click scroll to Needs review and highlight the first failing row instead of greying out."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:1171-1175; crates/bir-desktop/src/views/form_2200c_view.rs:393; crates/bir-desktop/src/views/form_2200c_view.rs:1235"
+    },
+    {
+      "id": "F3",
+      "issue": "choice-buttons",
+      "severity": "medium",
+      "field": "Item 11 — Place where the invasive cosmetic procedures took place",
+      "now": "Each Region, Province and City choice opens a wrap of outline buttons on the page (17 regions, up to 7 provinces per region, up to 53 cities per province).",
+      "why": "A button list this long is hard to scan, and 2200M and 2200P already use a searchable combobox for their Region, Province and City choices.",
+      "options": [
+        {
+          "name": "Combobox",
+          "detail": "A searchable select per level, the same control the 2200M place_block uses."
+        },
+        {
+          "name": "Read-only chip",
+          "detail": "Show the chosen place as one chip and open the picker only when the filer chooses Change."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:580-632"
+    },
+    {
+      "id": "F4",
+      "issue": "period-buttons",
+      "severity": "medium",
+      "field": "Item 1 — Month",
+      "now": "Item 1 Month is a row of twelve small buttons, and opening the form from the library ignores the dashboard period, so the date starts as today or as 12/31 in other years.",
+      "why": "The official page uses a month dropdown (BIR-Form2200Cv2018.hta:411), and new_draft discards the period argument.",
+      "options": [
+        {
+          "name": "Combobox",
+          "detail": "A twelve-item select matching the official month dropdown."
+        },
+        {
+          "name": "Segmented control",
+          "detail": "Keep buttons only if all twelve fit one row at desktop width."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:489-504; crates/bir-desktop/src/views/form_2200c_view.rs:859-861"
+    },
+    {
+      "id": "F5",
+      "issue": "other",
+      "severity": "medium",
+      "field": "Item 6 — RDO Code",
+      "now": "The RDO shows as bold text taken from the profile with no control on this page, yet a missing or invalid value blocks queueing with 'Please enter a valid RDO Code on Page 1 Item 6.'",
+      "why": "The official page offers an RDO dropdown in div#rdoContainer (BIR-Form2200Cv2018.hta:525-527) that the filer can change, while the port renders it as read-only text.",
+      "options": [
+        {
+          "name": "Dropdown",
+          "detail": "Offer the official RDO list as a searchable select bound to the draft's rdo_code."
+        },
+        {
+          "name": "Read-only with profile link",
+          "detail": "Keep it fixed but link the chip to the profile setting that owns the RDO."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:664-670; crates/bir-core/src/forms/form_2200c.rs:526-531"
+    },
+    {
+      "id": "F6",
+      "issue": "other",
+      "severity": "low",
+      "field": "(A) Procedures — exempt",
+      "now": "After the form reloads, Schedule 1 boxes show raw numbers such as 50010 or 1234.5, while the money boxes show grouped two-decimal amounts such as 1,234.00.",
+      "why": "initial() formats schedule cells with format!(\"{value}\") instead of official_amount, so they are not rounded or grouped like formatCurrency.",
+      "options": [
+        {
+          "name": "official_amount",
+          "detail": "Reuse the formatter the money boxes and computed rows already use."
+        },
+        {
+          "name": "Format on blur",
+          "detail": "Show the raw value while typing and the official_amount text when the box loses focus."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:189-193"
+    },
+    {
+      "id": "F7",
+      "issue": "validation",
+      "severity": "low",
+      "field": "Item 1 — Day",
+      "now": "Typing 100 or more into Item 1 Day, or 10000 or more into Item 1 Year, shows the 'is required' alert instead of the official date or year alert.",
+      "why": "sync_from_inputs maps out-of-range numbers to 0 (day range 0-99, year range 0-9999), and validate() reports a zero as a missing field.",
+      "options": [
+        {
+          "name": "Pass the typed number through",
+          "detail": "Let validate() raise the valid-date alert that the official validateDate raises."
+        },
+        {
+          "name": "Limit the boxes",
+          "detail": "Cap typing at two digits for Day and four for Year, as the official maxlength does."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:225-238"
+    },
+    {
+      "id": "F8",
+      "issue": "validation",
+      "severity": "low",
+      "field": "Needs review",
+      "now": "When more than twenty messages exist, the Needs review section silently stops at the twentieth.",
+      "why": "The .take(20) call drops the remaining messages with no count and no more note.",
+      "options": [
+        {
+          "name": "Show all",
+          "detail": "Remove the cap, since the page already scrolls."
+        },
+        {
+          "name": "Count note",
+          "detail": "Keep twenty and add a '+N more' line under the list."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200c_view.rs:1109-1118"
+    },
+    {
+      "id": "F9",
+      "issue": "validation",
+      "severity": "low",
+      "field": "Item 10 — Email Address",
+      "now": "A malformed address such as 'abc' is reported as 'E-mail address on page 1 item 10 is required.', and 'a@b' passes validation.",
+      "why": "validate() only checks for an '@' and no whitespace, so it uses the mandatory-field text for a format failure, unlike the 2200M and 2200P pages that apply the official pattern.",
+      "options": [
+        {
+          "name": "Official pattern",
+          "detail": "Reuse email_matches_official_pattern with the official text 'Please enter a valid e-mail address on page 1 item 10'."
+        },
+        {
+          "name": "Presence only",
+          "detail": "Match the 2200C HTA, which defines validateEmail (BIR-Form2200Cv2018.hta:3554) but never calls it, and drop the '@' rule."
+        }
+      ],
+      "where": "crates/bir-core/src/forms/form_2200c.rs:553-556"
+    }
+  ]
+}

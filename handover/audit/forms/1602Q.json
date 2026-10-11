@@ -1,0 +1,301 @@
+{
+ "code": "1602Q",
+ "title": "Quarterly Remittance Return of Final Taxes Withheld on Interest Paid on Deposits and Yield on Deposit Substitutes/Trusts/Etc.",
+ "page": "views/form_1602q_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:573"
+  },
+  {
+   "label": "Item 2 — Quarter",
+   "control": "button-row",
+   "options": [
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:574"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 3 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:576"
+  },
+  {
+   "label": "Item 4 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:591"
+  },
+  {
+   "label": "Item 11 — Category of withholding agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:666"
+  },
+  {
+   "label": "Item 13 — Payees availing of tax relief under a Special Law or Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:693"
+  },
+  {
+   "label": "Item 13A — If yes, specify",
+   "options": [
+    "Special Rate",
+    "International Tax Treaty",
+    "Both"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:712"
+  },
+  {
+   "label": "If over-remittance, mark one:",
+   "options": [
+    "To be refunded",
+    "To be issued a Tax Credit Certificate",
+    "To be carried over to the next quarter"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:893"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Row 1 — ATC",
+   "control": "text",
+   "multi": true,
+   "official_slots": 2,
+   "options_count": 13,
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:783"
+  },
+  {
+   "label": "Row 2 — ATC",
+   "control": "text",
+   "multi": true,
+   "official_slots": 2,
+   "options_count": 13,
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:783"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Red label only for non-numeric input (field() compares input keys to model keys); model messages go to the bottom 'Needs review' box, capped at 20; Queue is disabled at the top with no reason shown.",
+  "where": "crates/bir-desktop/src/views/form_1602q_view.rs:448"
+ },
+ "lists": [
+  {
+   "label": "Schedule 1 — regular rates",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 15",
+   "official_rows": 15,
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:738"
+  },
+  {
+   "label": "Schedule 2 — tax treaty rates",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 2",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:772"
+  },
+  {
+   "label": "Schedule 3 — preferential rates",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 2",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:809"
+  }
+ ],
+ "print_preview": {
+  "slug": "1602q-2019",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1602q_view.rs:1175"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "choice-buttons",
+   "severity": "high",
+   "field": "Item 13A — If yes, specify",
+   "now": "Once Item 13 is set to Yes, 'Special Rate' is already highlighted, so the return can be queued without you choosing a relief type.",
+   "why": "The official form leaves Item 13A blank and blocks queueing with 'Please select an option in item 13A.' (BIR-Form1602Qv2018.hta:5502), but the page fills the value before that check can run.",
+   "options": [
+    {
+     "name": "Blank until chosen",
+     "detail": "Leave Item 13A unselected after Item 13 is Yes so the existing validation message still applies."
+    },
+    {
+     "name": "Combobox",
+     "detail": "Use a select with an empty first entry, matching the official lstSpecialTax list (BIR-Form1602Qv2018.hta:635)."
+    },
+    {
+     "name": "Buttons with no default",
+     "detail": "Keep the three buttons but highlight none until the user clicks one."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:369"
+  },
+  {
+   "id": "F2",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 2 — Quarter",
+   "now": "The quarter comes from the dashboard tile, yet Q1–Q4 stay clickable, and picking another quarter saves the return as a separate draft while the tile's draft stays behind.",
+   "why": "A draft is stored under its own quarter and year (crates/bir-core/src/db/queueable.rs:141), so the page's choice decides which row is written.",
+   "options": [
+    {
+     "name": "Read-only chip",
+     "detail": "Show the period as a chip and change it only from the dashboard tile."
+    },
+    {
+     "name": "Combobox with warning",
+     "detail": "Keep a picker, but warn before saving that another period opens a separate draft."
+    },
+    {
+     "name": "Lock after first save",
+     "detail": "Allow changing the period only until a draft for that period has been saved."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:566"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 1 — For the Year",
+   "now": "Most model errors do not turn their labels red; the messages appear only in the bottom 'Needs review' box, and 'Queue for submission' is disabled at the top with no reason shown.",
+   "why": "field() matches input keys such as 'year' against model keys such as 'taxable_year' (crates/bir-core/src/forms/form_1602q.rs:696), so only non-numeric entries turn a label red.",
+   "options": [
+    {
+     "name": "Pass the model error key",
+     "detail": "Give field() an error key, as the 1604-C page already does with has_error(key, error_key)."
+    },
+    {
+     "name": "Message beside the field",
+     "detail": "Show each message under its own field, not only in the bottom panel."
+    },
+    {
+     "name": "Reason beside Queue",
+     "detail": "Show the first blocking message next to the disabled Queue button."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:448"
+  },
+  {
+   "id": "F4",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Row 1 — ATC",
+   "now": "ATC is typed as free text (placeholder 'e.g. WC161'), and an unknown code is reported only after you try to queue.",
+   "why": "Only 13 ATC codes are accepted (crates/bir-core/src/forms/form_1602q.rs:126), and the official checks each code on blur (BIR-Form1602Qv2018.hta:1964).",
+   "options": [
+    {
+     "name": "Combobox per row",
+     "detail": "Offer the 13 accepted ATCs in a combobox for each Schedule 2 row."
+    },
+    {
+     "name": "Read-only chips",
+     "detail": "List the accepted codes as chips beside Schedule 2 so the user copies a valid one."
+    },
+    {
+     "name": "Check on blur",
+     "detail": "Keep the text box but flag an unknown code when the field is left, as the official does."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:783"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "medium",
+   "field": "20 — Tax remitted in return previously filed (amended only)",
+   "now": "After Item 3 changes from Yes to No, the disabled Item 20 box still shows the old amount, but Items 22 and 23 leave that amount out.",
+   "why": "The Item 3 buttons call edit() without reloading the editors (form_1602q_view.rs:585), while recompute() zeroes the amount (crates/bir-core/src/forms/form_1602q.rs:429).",
+   "options": [
+    {
+     "name": "Reload on toggle",
+     "detail": "Reload the editors after Item 3 changes, as set_withheld() already does for Item 4."
+    },
+    {
+     "name": "Clear the box",
+     "detail": "Blank the Item 20 text when Item 3 is No."
+    },
+    {
+     "name": "Hide when not amended",
+     "detail": "Show Item 20 only when Item 3 is Yes."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:585"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "The Needs review box shows at most 20 messages, so a return with more problems shows only the first 20.",
+   "why": "The list is cut with take(20) before it is rendered.",
+   "options": [
+    {
+     "name": "Show all messages",
+     "detail": "Render every message in a scrollable list."
+    },
+    {
+     "name": "Count line",
+     "detail": "Add 'N more problems' under the list when it is cut."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1602q_view.rs:1208"
+  },
+  {
+   "id": "F7",
+   "issue": "other",
+   "severity": "low",
+   "field": "Email Address",
+   "now": "The print preview shows the email in capital letters, although the stored email keeps the case typed.",
+   "why": "The print fill upper-cases writer-cell text joins and txtEmail is one (html-frozen/1602q-2019/writer-cells.json, p1c49), while the official capital() skips txtEmail (validation/package/js/string-util.js:241).",
+   "options": [
+    {
+     "name": "Skip the email in the upper-case step",
+     "detail": "Exempt txtEmail in frozen_html.rs so print matches the stored value."
+    },
+    {
+     "name": "Named input on the sheet",
+     "detail": "Give the frozen sheet a named txtEmail input so the join is not upper-cased."
+    },
+    {
+     "name": "Document the caps",
+     "detail": "Keep the caps on paper and say on the preview that the email prints in capitals."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:83"
+  }
+ ]
+}

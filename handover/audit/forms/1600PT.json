@@ -1,0 +1,354 @@
+{
+ "code": "1600PT",
+ "title": "BIR Form No. 1600-PT — Monthly Remittance Return of Other Percentage Taxes Withheld",
+ "page": "views/form_1600pt_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:696"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:697"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:700"
+  },
+  {
+   "label": "Item 3 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:707"
+  },
+  {
+   "label": "Item 10 — Category of Withholding Agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:769"
+  },
+  {
+   "label": "Item 12 — Availing of tax relief under a Special Law or International Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:776"
+  }
+ ],
+ "atc": [
+  {
+   "label": "ATCs (tap to add or remove, at most five)",
+   "control": "chips",
+   "multi": true,
+   "official_slots": 5,
+   "options_count": 31,
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:815"
+  },
+  {
+   "label": "Row 1 — ATC",
+   "control": "text",
+   "multi": true,
+   "official_slots": 5,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:888"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Labels turn red via has_error; messages render only in the bottom card: body.child(self.section(\"Needs review\", issues, cx)).",
+  "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:1317"
+ },
+ "lists": [
+  {
+   "label": "Part II — Computation of Tax",
+   "growable_officially": true,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:815"
+  },
+  {
+   "label": "Page 2 — Schedule 1 (optional)",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 5",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:919"
+  }
+ ],
+ "print_preview": {
+  "slug": "1600-pt-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:1153"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "lists",
+   "severity": "high",
+   "field": "ATCs (tap to add or remove, at most five)",
+   "now": "After five ATCs are ticked, tapping an unticked ATC adds nothing and the status line reads 'Select at most five ATCs (Items 13 to 17).', so a sixth ATC cannot be recorded.",
+   "why": "The official form takes a sixth ATC in its other-taxes table (tblPartIIOtherTax), so filers with more than five ATCs cannot finish this return in the app.",
+   "options": [
+    {
+     "name": "Other-taxes table",
+     "detail": "Add a second Part II table for ATC 6 and up, with description, tax base and rate, mirroring the official tblPartIIOtherTax."
+    },
+    {
+     "name": "Block with a notice",
+     "detail": "Show a notice that a sixth ATC must be filed in eBIRForms, and keep the in-app cap until the table is modelled."
+    },
+    {
+     "name": "Raise the cap",
+     "detail": "Extend the model and the submit layout past five Part II rows once the other-taxes table is modelled."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1600pt.rs:542-543"
+  },
+  {
+   "id": "F2",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Changing the month on an open draft makes Save write a new draft for that month, and the draft opened from the tile keeps the old month and its data.",
+   "why": "Drafts are keyed by TIN, year and the monthly period column, so an edited month becomes a different row.",
+   "options": [
+    {
+     "name": "Lock the period",
+     "detail": "Show Month and Year read-only once a draft exists, with a separate 'Start another month' action."
+    },
+    {
+     "name": "Move the same row",
+     "detail": "On a month change, rekey the existing draft after a confirm step instead of inserting a second row."
+    },
+    {
+     "name": "Open the saved draft",
+     "detail": "On a month change, load that month's saved draft, or create one, and say so in the status line."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:691"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 1 — Year",
+   "now": "A blank Year box shows 'Year shall not be greater than the present year and not earlier than 2018.' instead of the required-field alert.",
+   "why": "The blank year becomes 0 and fails the range check first, while the official checkDate skips blanks and validateAll then raises 'Year field on Page 1 Item 1 is required.' (BIR-Form1600PTv2018.hta:2987).",
+   "options": [
+    {
+     "name": "Required check first",
+     "detail": "Test for a blank year before the range check, as the official validateAll does."
+    },
+    {
+     "name": "Inline year message",
+     "detail": "Show the required message under the Year box as well as in Needs review."
+    },
+    {
+     "name": "Numeric year control",
+     "detail": "Use a numeric control limited to 2018 through the current year, so a blank never reaches the range check."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1600pt.rs:803-807"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 5 — TIN",
+   "now": "A TIN or RDO error appears only in Needs review, while the Item 5 and Item 6 rows stay black and read-only with no hint of where to fix them.",
+   "why": "readonly() never calls has_error, and both values come from the profile, so the page gives no control to correct them.",
+   "options": [
+    {
+     "name": "Fix-in-profile link",
+     "detail": "Show a 'Fix in profile' link beside Item 5 and Item 6 when either message applies."
+    },
+    {
+     "name": "Red read-only row",
+     "detail": "Colour the read-only row red and place its message beside it."
+    },
+    {
+     "name": "Overridable field",
+     "detail": "Let the filer correct Item 5 and Item 6 on the return, with the profile value as the default."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:762"
+  },
+  {
+   "id": "F5",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors collect in a card below Schedule 1, showing only the first 20, while the Queue for submission button at the top is greyed out with no message beside it.",
+   "why": "The message sits far from the controls that cause it, and errors past the 20th are dropped without a count (take(20) at form_1600pt_view.rs:1188).",
+   "options": [
+    {
+     "name": "Inline messages",
+     "detail": "Show each message under its field and keep the red label."
+    },
+    {
+     "name": "Summary under toolbar",
+     "detail": "Show a count with jump links directly under the toolbar, above the sections."
+    },
+    {
+     "name": "Full list",
+     "detail": "Drop the 20-message cap, or show 'and N more' when it applies."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:1317"
+  },
+  {
+   "id": "F6",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Twelve month buttons (Jan to Dec) fill a row of the Return period card and wrap onto several lines on a phone.",
+   "why": "Twelve options exceed the four-option threshold, and the official page uses a month select (BIR-Form1600PTv2018.hta:406).",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A type-to-filter month list, which the rules recommend for more than four options."
+    },
+    {
+     "name": "Native select",
+     "detail": "A dropdown of the twelve months, matching the official month select."
+    },
+    {
+     "name": "Segmented grid",
+     "detail": "Four by three month chips that stay on one screen at every width."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:696"
+  },
+  {
+   "id": "F7",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "ATCs (tap to add or remove, at most five)",
+   "now": "Government filers see up to 31 ATC chips in one wrapped block (Private filers see 6), which is slow to scan on a phone.",
+   "why": "Picking up to five codes from a 31-item list is a search task, and chips cannot filter.",
+   "options": [
+    {
+     "name": "Multi-select combobox",
+     "detail": "Filter by code or description, with each chosen ATC shown as a removable tag."
+    },
+    {
+     "name": "Chosen chips plus picker",
+     "detail": "Show only the chosen ATCs as chips and open a filtered picker to add more."
+    },
+    {
+     "name": "Grouped chips",
+     "detail": "Keep chips but group them by rate under collapsible headings."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600pt_view.rs:815"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 11 — Email Address",
+   "now": "A malformed email shows 'Enter the email address BIR sends the filing confirmation to.' rather than the official alert.",
+   "why": "The official alert 'Please enter a valid e-mail address on page 1 item 10' (BIR-Form1600PTv2018.hta:3408) must appear verbatim, and this divergence is not noted on the page.",
+   "options": [
+    {
+     "name": "Use the official text",
+     "detail": "Show the official alert verbatim, as the verbatim rule requires."
+    },
+    {
+     "name": "Record the deviation",
+     "detail": "Keep the friendlier text and record the deviation in the form's rules notes."
+    },
+    {
+     "name": "Corrected item number",
+     "detail": "Use the official wording with 'item 11' and flag it as a known deviation."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1600pt.rs:878-881"
+  },
+  {
+   "id": "F9",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Page header (titles and Print preview)",
+   "now": "The header titles and Print preview button this page renders come from components/form_engine.rs, which commit cdb1a9b4 changed together with the shared event_form_kit.rs and the 1601C and 2550Q pages.",
+   "why": "Shared-file edits beyond one-line registrations break the rule that a form's change touches only its own files.",
+   "options": [
+    {
+     "name": "Split the commit",
+     "detail": "Ship the shared header change as its own reviewed commit."
+    },
+    {
+     "name": "Keep the header local",
+     "detail": "Move this form's header into its own view file."
+    },
+    {
+     "name": "Drop other forms' edits",
+     "detail": "Remove the 1601C, 2550Q and event_form_kit edits from this change and ship them separately."
+    }
+   ],
+   "where": "crates/bir-desktop/src/components/form_engine.rs:231-306"
+  },
+  {
+   "id": "F10",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Print preview",
+   "now": "This form's Print preview depends on a frozen-sheet writer map added to shared bir-print code in commit 366af7e6, which also changed the 1606 model and view, the shared support-level registry and a generated manifest.",
+   "why": "A form's change should touch only its own files plus one-line registrations, and this commit goes well beyond that.",
+   "options": [
+    {
+     "name": "Split the commit",
+     "detail": "Ship the 1606 changes and the shared frozen-sheet code as separate reviewed commits."
+    },
+    {
+     "name": "One-line registration",
+     "detail": "Keep only this form's slug and writer-map arm in shared code, with the sheet map in its own html-frozen folder."
+    },
+    {
+     "name": "Revert the 1606 edits",
+     "detail": "Drop the form_1606 changes from this commit and land them with 1606's own work."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:139-156"
+  }
+ ]
+}

@@ -1,0 +1,322 @@
+{
+ "code": "2000OT",
+ "title": "Documentary Stamp Tax Declaration/Return (One-Time Transactions)",
+ "page": "views/form_2000ot_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Date of transaction (MM/DD/YYYY)",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:527"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:531"
+  },
+  {
+   "label": "Item 3 — ATC",
+   "options": [
+    "DO102 — shares with par value (P1.50 / P200)",
+    "DO122 — real property (P15 / P1,000)",
+    "DO125 — stock without par value (50% of DST paid)"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:504"
+  },
+  {
+   "label": "Item 11 — Other party to the transaction",
+   "options": [
+    "Creditor/Mortgagor/etc.",
+    "Debtor/Mortgagee/etc."
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:600"
+  },
+  {
+   "label": "Item 12 — Nature of transaction",
+   "options": [
+    "Transfer of shares of stock not traded through the local stock exchange",
+    "Transfer of real property classified as capital asset",
+    "Transfer of real property other than capital asset"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:614"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 3 — ATC",
+   "control": "button-row",
+   "multi": false,
+   "official_slots": 3,
+   "options_count": 3,
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:504"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Only the Item 10 email label turns red (validator keys such as transaction_date never match input keys); all messages render via self.section(\"Needs review\", issues, cx) after the totals, capped at 20 by .take(20).",
+  "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:1241"
+ },
+ "lists": [
+  {
+   "label": "Schedules 1.A and 2 — Real Property and Taxable Base",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 5",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:684"
+  },
+  {
+   "label": "Schedule 1.B — Shares of Stock",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 3",
+   "official_rows": 3,
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:733"
+  }
+ ],
+ "print_preview": {
+  "slug": "2000-ot-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:1085"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "lists",
+   "severity": "high",
+   "field": "Schedules 1.A and 2 — Real Property and Taxable Base",
+   "now": "Only Property 1 to Property 5 appear, with no Add or remove control, so a sixth property cannot be entered.",
+   "why": "The official Schedule 1.A grows with Add and the layout writer already emits rows past five, so the desktop page forces an incomplete return.",
+   "options": [
+    {
+     "name": "Add property button",
+     "detail": "Append a Property N block on demand, up to the FORM_2000OT_MAX_ROWS limit of 50, as the official Add does."
+    },
+    {
+     "name": "Remove per row",
+     "detail": "Give each Property block a remove control so unused rows can be cleared."
+    },
+    {
+     "name": "Reveal as filled",
+     "detail": "Show one more blank Property block whenever the last one holds data."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:684"
+  },
+  {
+   "id": "F2",
+   "issue": "lists",
+   "severity": "high",
+   "field": "Schedule 1.B — Shares of Stock",
+   "now": "Only Shares 1 to Shares 3 appear, with no way to add a fourth share lot.",
+   "why": "The official Schedule 1.B grows with Add and the model accepts up to 50 rows, so a transfer with more lots cannot be declared here.",
+   "options": [
+    {
+     "name": "Add shares button",
+     "detail": "Append a Shares N block on demand, capped at FORM_2000OT_MAX_ROWS."
+    },
+    {
+     "name": "Remove per row",
+     "detail": "Let the filer delete an unused Shares block."
+    },
+    {
+     "name": "Reveal as filled",
+     "detail": "Show one more blank Shares block whenever the last one holds data."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:733"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "high",
+   "field": "BIR Form No. 2000-OT",
+   "now": "Opening the 2000-OT tile always reloads the newest 2000-OT of the year, even when it is queued or filed and read-only.",
+   "why": "load_draft returns the row with the latest updated_at and never filters by status, and the page has no New return action, so a second transaction has no clean starting point.",
+   "options": [
+    {
+     "name": "Blank draft when newest is filed",
+     "detail": "Open a new Draft when the newest return is queued or filed, and keep the old one listed."
+    },
+    {
+     "name": "New return action",
+     "detail": "Add a toolbar button that creates a blank draft for another transaction date."
+    },
+    {
+     "name": "List of this year's returns",
+     "detail": "Show this year's 2000-OT returns by transaction date with a New option."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:871"
+  },
+  {
+   "id": "F4",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 10 — Email Address",
+   "now": "The print preview shows the email in capitals and cuts it at 24 characters, the width of its printed comb.",
+   "why": "The frozen filler uppercases every writer-cell join, and txtEmail is one (html-frozen/2000-ot-2018/writer-cells.json:50, 24 slots), so the email breaks the rule that it is never upper-cased.",
+   "options": [
+    {
+     "name": "Print the email as typed",
+     "detail": "Skip the uppercase for txtEmail in the filler, as the submit path already does."
+    },
+    {
+     "name": "Wider email cell",
+     "detail": "Map the email to a cell that holds the full address instead of a 24-slot comb."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:83"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 1 — Date of transaction (MM/DD/YYYY)",
+   "now": "The print preview leaves the transaction date and the Item 5 TIN blank on page 1, and the TIN blank on page 2.",
+   "why": "The frozen sheet has no join for txtTransactionDate or the TIN parts (writer-cells.json lines 621 to 633 and 761), so the printed copy identifies neither the taxpayer nor the transaction.",
+   "options": [
+    {
+     "name": "Compose the date and TIN",
+     "detail": "Join one composed value to each comb, since the filler spreads one character per slot."
+    },
+    {
+     "name": "Split the date key",
+     "detail": "Map the three date combs to MM, DD and YYYY parts of the transaction date instead of one key."
+    }
+   ],
+   "where": "html-frozen/2000-ot-2018/writer-cells.json:621"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 1 — Date of transaction (MM/DD/YYYY)",
+   "now": "A missing or invalid transaction date shows only as text in Needs review, and its label stays black.",
+   "why": "field() matches input keys to validator keys, and transaction_date, taxpayer_name and contact_number never equal the input keys date, name and phone, so only the email label turns red.",
+   "options": [
+    {
+     "name": "Matching keys",
+     "detail": "Report each error under the input key so the label turns red."
+    },
+    {
+     "name": "Inline message",
+     "detail": "Show the official alert text under the field as well as in the panel."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:399"
+  },
+  {
+   "id": "F7",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Queue for submission",
+   "now": "The submit button is greyed out while any error exists, and the reasons appear only in Needs review below the totals.",
+   "why": "The review section is the last block on the page and lists at most 20 messages, so the filer has to scroll to the bottom to see what blocks the button.",
+   "options": [
+    {
+     "name": "Summary above Part I",
+     "detail": "Show the error count and the first few messages beside the toolbar."
+    },
+    {
+     "name": "Reason on the button",
+     "detail": "Add helper text such as 'Fix 3 items' next to the disabled button."
+    },
+    {
+     "name": "Jump links",
+     "detail": "Make each Needs review line focus its field."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:1241"
+  },
+  {
+   "id": "F8",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — Date of transaction (MM/DD/YYYY)",
+   "now": "Item 1 stays editable on a saved draft, and retyping the date and saving leaves the earlier return behind as a second Draft.",
+   "why": "The date is the period key (MMDD), so upsert_from_draft inserts a new row for each new date instead of replacing the old one.",
+   "options": [
+    {
+     "name": "Lock after first save",
+     "detail": "Make Item 1 read-only once saved; a different date needs a new return."
+    },
+    {
+     "name": "Duplicate as new return",
+     "detail": "Offer an explicit copy action so a second date never edits the first return in place."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:525"
+  },
+  {
+   "id": "F9",
+   "issue": "other",
+   "severity": "medium",
+   "field": "17 — Tax due",
+   "now": "Item 17 shows P1.50 for a P250 par-value base and P15 for a P1,400 real-property base, dropping the partial block.",
+   "why": "DO102 uses floor and DO122 uses round per block, while rules/forms/2000ot-v2018/calculations.json records the legal rule as per block or fraction thereof (ceiling) and flags the official formula, pending confirmation of the pinned form text.",
+   "options": [
+    {
+     "name": "Ceiling per block",
+     "detail": "Use ceiling division once the pinned form text confirms the rule."
+    },
+    {
+     "name": "Keep official result with a warning",
+     "detail": "Keep the eBIRForms result but show a warning that the official formula may undercharge."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2000ot.rs:397"
+  },
+  {
+   "id": "F10",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 4 — No. of sheets attached",
+   "now": "Typing 2.5 saves 2 without a message, and typing -1 becomes 999, which then reports 'Item 4 holds at most two digits.'",
+   "why": "sync_from_inputs casts the parsed number to u16 and substitutes 999 outside 0 to 999 without recording a parse error.",
+   "options": [
+    {
+     "name": "Whole-number box",
+     "detail": "Accept digits only, as the phone box does."
+    },
+    {
+     "name": "Parse error",
+     "detail": "Report 'enter a whole number' through parse_errors instead of coercing the value."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:224"
+  },
+  {
+   "id": "F11",
+   "issue": "atc",
+   "severity": "low",
+   "field": "Item 3 — ATC",
+   "now": "Three outline buttons with long rate text, such as 'DO102 — shares with par value (P1.50 / P200)', sit in one row.",
+   "why": "Only one ATC can be chosen (ATC_1 to ATC_3 are one radio group), and a single-choice list of three long labels fits a combobox better.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "One select that lists the three ATCs, with the rate shown in Item 16 instead."
+    },
+    {
+     "name": "Short codes",
+     "detail": "Segment the buttons as DO102, DO122 and DO125 and show the rate text as a hint."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000ot_view.rs:504"
+  }
+ ]
+}

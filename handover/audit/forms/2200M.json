@@ -1,0 +1,272 @@
+{
+  "code": "2200M",
+  "title": "BIR Form No. 2200-M — Excise Tax Return for Mineral Products",
+  "page": "views/form_2200m_view.rs",
+  "page_kind": "handrolled",
+  "period": [
+    {
+      "label": "Item 1 — Month",
+      "control": "button-row",
+      "options": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec"
+      ],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:730-745; crates/bir-core/src/forms/form_2200m.rs:367-373"
+    },
+    {
+      "label": "Item 1 — Day",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:58,755"
+    },
+    {
+      "label": "Item 1 — Year",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:59,756"
+    }
+  ],
+  "choice_rows": [
+    {
+      "label": "Item 2 — Amended return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:757-771"
+    },
+    {
+      "label": "Item 12 — Availing of tax relief under a Special Law or International Tax Treaty?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:831-846"
+    },
+    {
+      "label": "Manner of payment",
+      "options": [
+        "13 — Payment on actual removal",
+        "14 — Prepayment / advance deposit",
+        "15 — Other similar schemes"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:858-893"
+    }
+  ],
+  "atc": [
+    {
+      "label": "Row #1 — XM010",
+      "control": "text",
+      "multi": true,
+      "official_slots": 10,
+      "options_count": 0,
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:896-915; crates/bir-core/src/forms/form_2200m.rs:61-80"
+    },
+    {
+      "label": "Row #9 — XM060",
+      "control": "text",
+      "multi": true,
+      "official_slots": 10,
+      "options_count": 0,
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:896-915; crates/bir-core/src/forms/form_2200m.rs:80"
+    }
+  ],
+  "validation": {
+    "inline": false,
+    "needs_review_panel": true,
+    "how": "Messages render as text in a 'Needs review' section after Part III (first 20 only); a field only turns its label red, and Queue for submission is disabled with no message beside it.",
+    "where": "crates/bir-desktop/src/views/form_2200m_view.rs:1437"
+  },
+  "lists": [
+    {
+      "label": "Part V — Schedule 1: Removals and Excise Tax Due",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 10",
+      "official_rows": 10,
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:945-967"
+    }
+  ],
+  "print_preview": {
+    "slug": "2200m-2018",
+    "how": "launch_frozen_form_preview",
+    "where": "crates/bir-desktop/src/views/form_2200m_view.rs:1286"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "issue": "lists",
+      "severity": "high",
+      "field": "Part V — Schedule 1: Removals and Excise Tax Due",
+      "now": "Schedule 1 always shows ten rows (eight fixed plus two 'Others') with no Add control, so a filer with more removal lines cannot enter them.",
+      "why": "The official page has an Add button (sched1AddBtn, BIR-Form2200Mv2018.hta:2923, calling addRowSched1 at line 4177) that appends rows, and the model accepts up to 200 rows, yet the view loops only over FORM_2200M_SCHEDULE_ROWS.",
+      "options": [
+        {
+          "name": "Add row button",
+          "detail": "Append rows like the official Add, capped at FORM_2200M_MAX_ROWS, with Delete allowed only on rows 11 and up."
+        },
+        {
+          "name": "Block with a clear message",
+          "detail": "Refuse to queue when the filer needs more than ten rows and say that the page cannot add them yet."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:954-956; crates/bir-core/src/forms/form_2200m.rs:35-37"
+    },
+    {
+      "id": "F2",
+      "issue": "period-editable",
+      "severity": "medium",
+      "field": "Item 1 — Month",
+      "now": "The month buttons stay active after the draft opens from a library tile, so picking another month and saving files the draft under that month, and the original tile then opens a new blank draft.",
+      "why": "The dashboard period selects the saved draft (queueable_forms.rs:43-47), but the save key is the draft's own month (db/queueable.rs:141-152 via filing_period() at form_2200m.rs:1074-1076), so the two keys can split.",
+      "options": [
+        {
+          "name": "Lock month after first save",
+          "detail": "Keep Item 1 — Month read-only once a draft exists so the tile period stays the key."
+        },
+        {
+          "name": "Open by stored key",
+          "detail": "Open the draft by its stored Item 1 month and show the tile period only as a label."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:730-745; crates/bir-core/src/forms/form_2200m.rs:1074-1076"
+    },
+    {
+      "id": "F3",
+      "issue": "validation",
+      "severity": "medium",
+      "field": "Queue for submission",
+      "now": "Queue for submission greys out whenever any error exists, and the explanation sits only under Needs review after Part III, far below the toolbar.",
+      "why": "The button is disabled while validation_errors or parse_errors is non-empty, so the 'Fix the items listed under Needs review before submitting.' message in mark_submitted cannot be reached from the button.",
+      "options": [
+        {
+          "name": "Inline message per field",
+          "detail": "Show each official alert text under the field that failed, not only in the panel."
+        },
+        {
+          "name": "Toolbar summary",
+          "detail": "Show the first error text beside Queue for submission."
+        },
+        {
+          "name": "Keep enabled and scroll",
+          "detail": "Let a click scroll to Needs review and focus the first failing field."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:1375-1381; crates/bir-desktop/src/views/form_2200m_view.rs:1178; crates/bir-desktop/src/views/form_2200m_view.rs:1437"
+    },
+    {
+      "id": "F4",
+      "issue": "period-buttons",
+      "severity": "medium",
+      "field": "Item 1 — Month",
+      "now": "Item 1 Month is a row of twelve small buttons rather than a dropdown.",
+      "why": "The official page uses a month select (BIR-Form2200Mv2018.hta:420), and twelve options is past the four-option limit for a button row.",
+      "options": [
+        {
+          "name": "Combobox",
+          "detail": "A twelve-item select like the official dropdown and the place pickers already on this page."
+        },
+        {
+          "name": "Segmented control",
+          "detail": "Keep buttons only where all twelve fit one row."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:730-745"
+    },
+    {
+      "id": "F5",
+      "issue": "other",
+      "severity": "medium",
+      "field": "Item 5 — RDO Code",
+      "now": "The RDO shows as bold static text from the profile with no control on this page, so a missing or invalid value blocks queueing and the page offers no way to fix it.",
+      "why": "The official page shows an RDO dropdown in div#rdoContainer (BIR-Form2200Mv2018.hta:517-519) that the filer can change, while the port renders it as static text.",
+      "options": [
+        {
+          "name": "Dropdown",
+          "detail": "Offer the official RDO list as a searchable select bound to rdo_code."
+        },
+        {
+          "name": "Read-only with profile link",
+          "detail": "Keep it fixed but link to the profile setting that owns the RDO."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:819; crates/bir-core/src/forms/form_2200m.rs:827-831"
+    },
+    {
+      "id": "F6",
+      "issue": "other",
+      "severity": "medium",
+      "field": "n/a (shared files)",
+      "now": "Not a page control: the 2200M commit 46aea156 also changed shared files beyond one-line registrations, so the layout generator and a shared test now behave differently for every form.",
+      "why": "tools/official-xml/official.js:191-196 adds an RDO-select injection to the shared prepare() function, which every form's layout generation runs through and which is gated only on the page's getRdo(), and official_xml.rs:561-566 replaces the exact 2012.0 trailer assertion with a per-form year check.",
+      "options": [
+        {
+          "name": "Scope the generator change",
+          "detail": "Gate the RDO injection on the 2200M layout id so other forms' generated output cannot change."
+        },
+        {
+          "name": "Per-form trailer table",
+          "detail": "Replace the relaxed assertion with an expected trailer per layout id, keeping the 2012.0 check for the older layouts."
+        }
+      ],
+      "where": "tools/official-xml/official.js:191-196; crates/bir-core/src/official_xml.rs:561-566"
+    },
+    {
+      "id": "F7",
+      "issue": "validation",
+      "severity": "low",
+      "field": "Item 1 — Day",
+      "now": "Typing 32 to 99 into Item 1 Day shows 'Day field on Page 1 Item 1 is required.' instead of the official 'Please provide a valid date. (MM/DD/YYYY format) in Page 1 Item 1.'",
+      "why": "sync_from_inputs maps any day outside 0-31 to 0, and validate() then reports a blank Day rather than the official date alert (BIR-Form2200Mv2018.hta:4522).",
+      "options": [
+        {
+          "name": "Pass the typed number through",
+          "detail": "Let validate() raise the valid-date alert that the official validateDate raises."
+        },
+        {
+          "name": "Two-digit box",
+          "detail": "Cap the Day box at two digits, as the official maxlength does."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_2200m_view.rs:343-347"
+    },
+    {
+      "id": "F8",
+      "issue": "validation",
+      "severity": "low",
+      "field": "Item 1 — Year",
+      "now": "Typing a future year shows 'Page 1 Item 1 Date cannot be a future date ' and keeps the value, where the official page clears the year and shows 'Year shall not be greater than the present year'.",
+      "why": "The official Year box runs checkYear() on blur (BIR-Form2200Mv2018.hta:440 and 4793-4800), but the port's date_error() returns only the validateDate future-date text (form_2200m.rs:779), so the year alert never appears.",
+      "options": [
+        {
+          "name": "Mirror checkYear",
+          "detail": "Clear the Year box and show 'Year shall not be greater than the present year' when the year is above the current year."
+        },
+        {
+          "name": "Keep the date alert",
+          "detail": "Keep the future-date text, since the date check is what fails, but note that it is the validateDate message."
+        }
+      ],
+      "where": "crates/bir-core/src/forms/form_2200m.rs:779; crates/bir-desktop/src/views/form_2200m_view.rs:343-357"
+    }
+  ]
+}

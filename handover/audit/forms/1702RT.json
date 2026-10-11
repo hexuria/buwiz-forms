@@ -1,0 +1,286 @@
+{
+  "code": "1702RT",
+  "title": "BIR Form No. 1702-RT — Annual Income Tax Return (Regular Income Tax Rate)",
+  "page": "views/form_1702rt_view.rs",
+  "page_kind": "handrolled",
+  "period": [
+    {
+      "label": "Item 1 —",
+      "control": "button-row",
+      "options": [
+        "Calendar",
+        "Fiscal"
+      ],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:821-844"
+    },
+    {
+      "label": "Item 2 — Month ended",
+      "control": "button-row",
+      "options": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec"
+      ],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:781-794 and :845-856 (enabled only for Fiscal or Short period; crates/bir-core/src/forms/form_1702rt.rs:461 new_draft passes month 12)"
+    },
+    {
+      "label": "Item 2 — Year ended (YYYY)",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:857; crates/bir-desktop/src/views/form_1702rt_view.rs:93; crates/bir-desktop/src/views/form_1702rt_view.rs:522-524"
+    }
+  ],
+  "choice_rows": [
+    {
+      "label": "Item 3 — Amended return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:858-868"
+    },
+    {
+      "label": "Item 4 — Short period return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:869-879"
+    },
+    {
+      "label": "Item 13 — Method of deductions",
+      "options": [
+        "Itemized",
+        "Optional standard deduction (40%)"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:936-962"
+    }
+  ],
+  "atc": [
+    {
+      "label": "Item 5 — Other ATC",
+      "control": "chips",
+      "multi": true,
+      "official_slots": 2,
+      "options_count": 8,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:797-820 and :934 (OTHER_ATCS at :57-66; MCIT IC055 is derived from incorporation date at :881-885, not a control)"
+    }
+  ],
+  "validation": {
+    "inline": false,
+    "needs_review_panel": true,
+    "how": "No field is marked; messages are plain text lines in one 'Needs review' block after Schedule V (first 25 only), while Save and Print preview say 'Fix the highlighted entries'.",
+    "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:1672-1680 and :1790-1795"
+  },
+  "lists": [
+    {
+      "label": "54 — Other tax credit (specify)",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 2 (Items 53 and 54)",
+      "official_rows": 2,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:154-157 and :1065-1165; crates/bir-core/src/forms/form_1702rt.rs:243-244; layout counter txtPg2Pt4I54CtrModal"
+    },
+    {
+      "label": "Schedule 1 — Items 17d to 17i",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 6",
+      "official_rows": 6,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:69-70 and :1166-1224; crates/bir-core/src/forms/form_1702rt.rs:302; layout counter txtPg3Sc1I17iCtrModal"
+    },
+    {
+      "label": "Schedule II — Special allowable itemized deductions",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed 4",
+      "official_rows": 4,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:1218-1224; crates/bir-core/src/forms/form_1702rt.rs:342; layout counter txtPg3Sc2I4CtrModal"
+    },
+    {
+      "label": "Schedule V — Reconciliation of net income per books",
+      "growable_officially": true,
+      "add_remove_in_ui": false,
+      "rows_in_ui": "fixed; each item has its own description and amount fields (no add or remove)",
+      "official_rows": 10,
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:1225-1380 (label at :1370); layout counters txtPg4Sc5I3/I6/I8CtrModal"
+    }
+  ],
+  "print_preview": {
+    "slug": "1702rt-2018c",
+    "how": "launch_frozen_form_preview",
+    "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:1632-1662 (launch at :1643; fields from to_bir_field_map, crates/bir-core/src/forms/form_1702rt_xml.rs:27)"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "issue": "period-editable",
+      "severity": "high",
+      "field": "Item 2 — Year ended (YYYY)",
+      "now": "The year is a free text box that stays editable after the library tile has set it; typing another year and saving stores the draft under that year.",
+      "why": "Annual drafts are keyed by (TIN, form, year), and the save upserts over any existing Draft with that key, so an edited year can silently replace another year's draft.",
+      "options": [
+        {
+          "name": "Read-only year from the tile",
+          "detail": "Show the tile's year as a label and open another year only from its own library tile."
+        },
+        {
+          "name": "Confirm before re-keying",
+          "detail": "If the typed year differs from the tile's year, block Save and Queue until the filer confirms, and never replace an existing Draft row."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:857; crates/bir-desktop/src/views/form_1702rt_view.rs:522-524; crates/bir-desktop/src/views/form_1702rt_view.rs:1483-1490; crates/bir-desktop/src/views/form_1702rt_view.rs:1429-1446; crates/bir-desktop/src/views/queueable_forms.rs:42-48; crates/bir-core/src/db/queueable.rs:154-166"
+    },
+    {
+      "id": "F2",
+      "issue": "lists",
+      "severity": "high",
+      "field": "Schedule II — Special allowable itemized deductions",
+      "now": "Schedule II shows four rows, Schedule 1 shows six rows for 17d to 17i, Part IV shows two rows for Items 53 and 54, and Schedule V has fixed fields per item, with no add or remove control anywhere.",
+      "why": "The official form grows these groups through 'add more' popups (layout counters for Schedule 1 Item 17i, Schedule II Item 4, Part IV Item 54 and Schedule V Items 3, 6 and 8), so a return with more entries cannot be recorded and nothing warns the filer.",
+      "options": [
+        {
+          "name": "Add / remove row buttons",
+          "detail": "Let the filer add rows to each growable group up to the official maximum, and remove unused rows."
+        },
+        {
+          "name": "Blocking 'needs more rows' alert",
+          "detail": "When a draft needs more rows than the page offers, block queueing with an explicit message instead of capping silently."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:154-157; crates/bir-desktop/src/views/form_1702rt_view.rs:69-70; crates/bir-desktop/src/views/form_1702rt_view.rs:1065-1224; crates/bir-desktop/src/views/form_1702rt_view.rs:1225-1380; crates/bir-core/src/forms/form_1702rt.rs:243-244; crates/bir-core/src/forms/form_1702rt.rs:302; crates/bir-core/src/forms/form_1702rt.rs:342"
+    },
+    {
+      "id": "F3",
+      "issue": "validation",
+      "severity": "medium",
+      "field": "Part III — Details of payment (row labels 23 to 26)",
+      "now": "A missing detail on the cash/bank debit memo row (labelled 23) shows the official alert 'Please provide data on Page 1 Part III Item 26.', and the other three rows read 27, 28 and 29.",
+      "why": "The official alert numbers are one step off from the printed rows on screen (the rule package's recommended behaviour is to report the printed item), so the filer is sent to the wrong row.",
+      "options": [
+        {
+          "name": "Keep the official text and add the row",
+          "detail": "Show the verbatim official alert and add 'row 23 — Cash/Bank debit memo' beside it."
+        },
+        {
+          "name": "Align the labels",
+          "detail": "Relabel the rows to match the official alert numbers, once the printed form is confirmed."
+        }
+      ],
+      "where": "crates/bir-core/src/forms/form_1702rt_official.rs:468-486; crates/bir-desktop/src/views/form_1702rt_view.rs:167-172; crates/bir-desktop/src/views/form_1702rt_view.rs:1037-1058"
+    },
+    {
+      "id": "F4",
+      "issue": "period-buttons",
+      "severity": "medium",
+      "field": "Item 2 — Month ended",
+      "now": "Twelve small month buttons fill a row and are greyed out unless Fiscal or Short period is chosen.",
+      "why": "Twelve buttons take a full row and give no clear reason for the greyed state, while a combobox is compact and can carry a short hint.",
+      "options": [
+        {
+          "name": "Combobox",
+          "detail": "A single-select combobox showing the chosen month, disabled with a hint for Calendar returns."
+        },
+        {
+          "name": "Read-only chip",
+          "detail": "Show 'Dec' as a read-only chip for Calendar returns and open the combobox only for Fiscal or Short period."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:781-794; crates/bir-desktop/src/views/form_1702rt_view.rs:845-856"
+    },
+    {
+      "id": "F5",
+      "issue": "atc",
+      "severity": "medium",
+      "field": "Item 5 — Other ATC",
+      "now": "Eight ATC options are shown as chips with code and label in one row.",
+      "why": "The official form picks this ATC from a dropdown (drpPg1I5AtcOther is a select in the rule package), so a row of chips does not match the official control and is harder to scan.",
+      "options": [
+        {
+          "name": "Single-select combobox",
+          "detail": "Use a combobox with the same eight options as the official dropdown, showing the chosen code."
+        },
+        {
+          "name": "Keep chips with a count",
+          "detail": "Keep the chips but add a 'Selected: IC010' line so the choice is visible on phone widths."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:797-820; crates/bir-desktop/src/views/form_1702rt_view.rs:934"
+    },
+    {
+      "id": "F6",
+      "issue": "validation",
+      "severity": "medium",
+      "field": "Needs review",
+      "now": "No field is marked when it has an error; the messages sit in a 'Needs review' block after Schedule V, the list stops at 25, and Queue for submission is disabled with no message beside it.",
+      "why": "Save draft and Print preview tell the filer to fix 'the highlighted entries', yet nothing is highlighted, so the filer has to scroll to the end to find out what to fix.",
+      "options": [
+        {
+          "name": "Outline the field with its message",
+          "detail": "Show each official alert under or beside the field it concerns and outline that field."
+        },
+        {
+          "name": "Summary beside Queue",
+          "detail": "Show the count of open items with jump links next to the Queue for submission button."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:648-677; crates/bir-desktop/src/views/form_1702rt_view.rs:1672-1680; crates/bir-desktop/src/views/form_1702rt_view.rs:1790-1795; crates/bir-desktop/src/views/form_1702rt_view.rs:1488; crates/bir-desktop/src/views/form_1702rt_view.rs:1638; crates/bir-desktop/src/views/form_1702rt_view.rs:1735-1741"
+    },
+    {
+      "id": "F7",
+      "issue": "validation",
+      "severity": "medium",
+      "field": "Amount inputs (whole pesos, Parts II to V and Schedules 1 to 5)",
+      "now": "Typing centavos such as '1,234.50' is refused with '\"1,234.50\" is not a whole-peso amount.' and Save draft stops, with no field name in the message.",
+      "why": "The message does not say which cell to fix, and whole-peso entries are rejected rather than rounded, while the 1702-MX page rounds the same kind of entry to whole pesos.",
+      "options": [
+        {
+          "name": "Round like the MX page",
+          "detail": "Accept decimals and round them to whole pesos with the same half-up rule, showing the rounded value."
+        },
+        {
+          "name": "Name the field in the message",
+          "detail": "Prefix each parse message with the field's on-screen label and outline that input."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702rt_view.rs:500-510; crates/bir-core/src/forms/form_1702rt.rs:92-106"
+    },
+    {
+      "id": "F8",
+      "issue": "other",
+      "severity": "medium",
+      "field": "(outside the form's files: app shell, agent control plane, shared XML writer, cross-form asset)",
+      "now": "The 1702RT commit removes the legacy 1702RT route and its agent entries and rewrites the trailer-year check in the shared XML writer, and the print-comb commit c0b1dcdb also changes html-frozen/1701q-2018/writer-cells.json.",
+      "why": "Routing, agent and shared-writer changes are outside the form's own files and go beyond one-line registrations, so the branch rule is broken and other forms' output is affected.",
+      "options": [
+        {
+          "name": "Separate shared commits",
+          "detail": "Move the app.rs and ids.rs removals, the trailer-year change and the 1701Q asset into commits reviewed as shared changes."
+        },
+        {
+          "name": "Registrations only",
+          "detail": "Keep the 1702RT entries in app.rs and ids.rs, adding one line per form, and make the trailer year a per-layout value."
+        }
+      ],
+      "where": "crates/bir-desktop/src/app.rs (a9c151b8, -60); crates/bir-desktop/src/agent/ids.rs (a9c151b8, -16); crates/bir-core/src/official_xml.rs:560-567 (a9c151b8 trailer-year logic); html-frozen/1701q-2018/writer-cells.json (c0b1dcdb, +311/-147)"
+    }
+  ]
+}

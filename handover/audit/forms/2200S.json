@@ -1,0 +1,323 @@
+{
+ "code": "2200S",
+ "title": "BIR Form No. 2200-S — Excise Tax Return for Sweetened Beverages",
+ "page": "views/form_2200s_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:482-495"
+  },
+  {
+   "label": "Item 1 — Day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:510"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:511"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:512-523"
+  },
+  {
+   "label": "Item 12 — Place of production",
+   "options": [
+    "Region",
+    "Province",
+    "City"
+   ],
+   "control": "chips",
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:528-580"
+  },
+  {
+   "label": "Item 13 — Place of removal",
+   "options": [
+    "Region",
+    "Province",
+    "City"
+   ],
+   "control": "chips",
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:528-580"
+  },
+  {
+   "label": "Item 14 — Tax relief under a Special Law or Treaty?",
+   "options": [
+    "No",
+    "Yes — Special Law",
+    "Yes — International Tax Treaty"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:669-686"
+  },
+  {
+   "label": "Manner of payment",
+   "options": [
+    "Payment on Actual Removal",
+    "Prepayment/Advance Deposit"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:702-717"
+  },
+  {
+   "label": "Item 17 — Other similar schemes?",
+   "options": [
+    "Yes"
+   ],
+   "control": "checkbox",
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:722-731"
+  },
+  {
+   "label": "Others (specify)",
+   "options": [
+    "Include"
+   ],
+   "control": "checkbox",
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:797-809"
+  }
+ ],
+ "atc": [
+  {
+   "label": "ATC (XB + 3 digits)",
+   "control": "text",
+   "multi": true,
+   "official_slots": 1,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:811-819"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Field label turns red; messages list in a 'Needs review' section after Part III (first 20 only), and Queue for submission is disabled while any error exists.",
+  "where": "crates/bir-desktop/src/views/form_2200s_view.rs:1310"
+ },
+ "lists": [
+  {
+   "label": "Others (specify)",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 1 (Include toggle)",
+   "official_rows": 1,
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:788-837"
+  },
+  {
+   "label": "Schedule 1 — Computation of Excise Tax (beverage rows)",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 10",
+   "official_rows": 10,
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:742-787"
+  }
+ ],
+ "print_preview": {
+  "slug": "2200s-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_2200s_view.rs:1146-1162"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "lists",
+   "severity": "high",
+   "field": "Others (specify)",
+   "now": "Schedule 1 has one Others row behind an Include toggle, and the page has no Add or Delete for a second Others row.",
+   "why": "The official HTA adds and deletes Others rows with Add and Delete buttons (BIR-Form2200S.hta:1653 calling addFieldsForSched1 at line 7268), so a filer with more than one other beverage cannot enter the full Schedule 1.",
+   "options": [
+    {
+     "name": "Repeating Others cards",
+     "detail": "Each Others row is a card with ATC, description, bracket, rate, sales and volume, plus Add and Remove buttons, as in the HTA."
+    },
+    {
+     "name": "Others table with Add row",
+     "detail": "One table for all Others rows with an Add row button, a per-row Remove, and a total that feeds Item 18."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:788-837"
+  },
+  {
+   "id": "F2",
+   "issue": "choice-buttons",
+   "severity": "medium",
+   "field": "Item 12 — Place of production",
+   "now": "Region, Province and City are each picked from a wrap of outline buttons, one button per place, opened by pressing the level button.",
+   "why": "The place data holds 17 regions, 86 provinces and 1,617 cities, and the 2200T page already uses searchable dropdowns for the same geography.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A searchable combobox per level (Region, then Province, then City), as on the 2200T page."
+    },
+    {
+     "name": "Select dropdown",
+     "detail": "A plain dropdown per level, which keeps long lists out of the page flow."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:552-620"
+  },
+  {
+   "id": "F3",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Item 1 month is a row of 12 outline buttons (Jan to Dec) that wraps across the Return period card.",
+   "why": "The official form uses a month select (frm2200S:txtMonth1, BIR-Form2200S.hta:442), and 12 options are far past the 4-option limit for buttons.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A 12-month combobox that accepts typing, so 'mar' selects March."
+    },
+    {
+     "name": "Select dropdown",
+     "detail": "A plain Jan to Dec select, the same control the official form uses."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:482-495"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "A field with an error only turns its label red, the message appears in a Needs review section after Part III, and Queue for submission is disabled with no message beside it.",
+   "why": "The filer must scroll past Part III to learn which item blocks queueing, and the list stops after 20 messages.",
+   "options": [
+    {
+     "name": "Inline message",
+     "detail": "Show the official alert text under the field it concerns, for example 'Please enter a valid Email Address on Item 11.'"
+    },
+    {
+     "name": "Summary above the body",
+     "detail": "Show the Needs review list above Part I with a link that scrolls to each item."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:1310"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Basic excise tax due",
+   "now": "Typing a sales value or volume of one trillion or more shows 'Enter non-negative amounts in pesos and centavos below one trillion.', and a Basic excise tax due that overflows shows no alert at all.",
+   "why": "The official computeBasicTaxDue alert 'Exceeded maximum amount of 999,999,999,999.99 on Basic Excise Tax Due.' (BIR-Form2200S.hta:7394 and 7419) also clears that row's sales and volume, which the page never does.",
+   "options": [
+    {
+     "name": "Official alert verbatim",
+     "detail": "When a computed basic tax due exceeds 999,999,999,999.99, show the HTA sentence and reset that row's sales and volume to 0.00 as the HTA does."
+    },
+    {
+     "name": "Reject at entry",
+     "detail": "Refuse the typed value at its field and show the official sentence there."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2200s.rs:850-858"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Save draft",
+   "now": "Save draft writes the draft even when required items such as Item 6 or Item 7 are blank, and no official Save alert is ever shown.",
+   "why": "The official Save runs its own checks and returns after the first alert (validations.json save-phase rules 037 to 048, for example 'Please indicate a valid Day.' at BIR-Form2200S.hta:7709), while save_draft only stops on unparseable numbers.",
+   "options": [
+    {
+     "name": "Official Save checks",
+     "detail": "Run the Save-phase checks before a non-draft save and show the first verbatim alert in Needs review."
+    },
+    {
+     "name": "Non-blocking notice",
+     "detail": "Keep saving the draft, but show the first official Save alert as a notice."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:997-1031"
+  },
+  {
+   "id": "F7",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 1 — Day",
+   "now": "A one-digit day such as 5 is accepted and shown as 05, with no alert.",
+   "why": "The official HTA rejects a one-character day with 'Please enter a valid day on item 1. Format should be MM/DD/YYYY.' (BIR-Form2200S.hta:7714, validations.json 2200s-validate-006), and the page parses the day as a plain number.",
+   "options": [
+    {
+     "name": "Two-digit entry",
+     "detail": "Require two digits and show the official alert when one digit is typed."
+    },
+    {
+     "name": "Pad with notice",
+     "detail": "Keep the 05 display but raise the official alert once so the format is taught."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2200s_view.rs:201-207"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 21 — Payment on returns previously filed (amended only)",
+   "now": "App-only messages such as 'Item 21 applies only to an amended return.' and 'Totals are out of date. Recompute the return.' appear in Needs review.",
+   "why": "Neither text appears in BIR-Form2200S.hta or validations.json, so the filer sees wording the official form never shows.",
+   "options": [
+    {
+     "name": "Keep as app note",
+     "detail": "Keep the check but show it as a note outside the official alert list."
+    },
+    {
+     "name": "Remove",
+     "detail": "Drop the message and rely on the official alerts."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2200s.rs:859-875"
+  },
+  {
+   "id": "F9",
+   "issue": "other",
+   "severity": "medium",
+   "field": "(commit c203d591)",
+   "now": "The 2200S commit adds a 130-line shared module (excise_places.rs) and 20 lines to the shared tools/official-xml/official.js, beyond the form's own files and one-line registrations.",
+   "why": "The module is now also imported by the 2200C and 2200AN forms, so a shared surface changed inside a form-only commit.",
+   "options": [
+    {
+     "name": "Separate commit",
+     "detail": "Land the shared place data and the tool change as a separate reviewed commit."
+    },
+    {
+     "name": "Keep form-local",
+     "detail": "Move the place lookups into the 2200S module and leave shared files alone."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/excise_places.rs:1"
+  }
+ ]
+}

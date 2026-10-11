@@ -1,0 +1,430 @@
+{
+ "code": "1701A",
+ "title": "BIR Form No. 1701A — Annual Income Tax Return for Individuals Earning Income Purely from Business/Profession",
+ "page": "views/form_1701a_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Year (YYYY)",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:976"
+  },
+  {
+   "label": "Item 1 — Month of the short period",
+   "control": "button-row",
+   "options": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12"
+   ],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1020"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:977"
+  },
+  {
+   "label": "Item 3 — Short period return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:992"
+  },
+  {
+   "label": "Item 1 — Month of the short period",
+   "options": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1020"
+  },
+  {
+   "label": "Item 6 — Taxpayer type",
+   "options": [
+    "Single proprietor",
+    "Professional"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1100"
+  },
+  {
+   "label": "Item 13 — Claiming foreign tax credits?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1140"
+  },
+  {
+   "label": "Item 16 — Civil status",
+   "options": [
+    "Single",
+    "Married",
+    "Legally separated",
+    "Widow/er"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1176"
+  },
+  {
+   "label": "Item 17 — If married, spouse has income?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1178"
+  },
+  {
+   "label": "Item 18 — Filing status",
+   "options": [
+    "Joint filing",
+    "Separate filing"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1202"
+  },
+  {
+   "label": "Item 68 — Spouse type",
+   "options": [
+    "Single proprietor",
+    "Professional"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1100"
+  },
+  {
+   "label": "Spouse claiming foreign tax credits?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1252"
+  },
+  {
+   "label": "If overpayment, mark one box only",
+   "options": [
+    "To be refunded",
+    "To be issued a Tax Credit Certificate",
+    "To be carried over"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1390"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 7 — ATC (sets Item 19, the tax rate)",
+   "control": "button-row",
+   "multi": false,
+   "official_slots": 4,
+   "options_count": 4,
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1101"
+  },
+  {
+   "label": "Item 69 — Spouse ATC",
+   "control": "button-row",
+   "multi": false,
+   "official_slots": 4,
+   "options_count": 4,
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1101"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Messages only in a 'Needs review' block after Part II totals (first 20); labels turn red; Queue for submission is disabled.",
+  "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1790"
+ },
+ "lists": [
+  {
+   "label": "42 — Other income (row 42)",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 1 (Item 42 only)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:152"
+  },
+  {
+   "label": "51 — Other non-operating income (row 51)",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 1 (Item 51 only)",
+   "official_rows": 0,
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:217"
+  }
+ ],
+ "print_preview": {
+  "slug": "1701a-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1638"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "lists",
+   "severity": "high",
+   "field": "42 — Other income (row 42)",
+   "now": "Items 42 and 51 take one amount each and there is no '(add more...)' control, so a second other-income row cannot be entered.",
+   "why": "The model stores up to 100 add-more rows and folds Items 42 and 51 into OTHERS when two or more exist (crates/bir-core/src/forms/form_1701a.rs:182, 280-283), but the official add-more links (BIR-Form1701A.hta:1128, 1265) have no counterpart on this page.",
+   "options": [
+    {
+     "name": "Modal list like the official form",
+     "detail": "Open a list from Item 42 and Item 51 with description, taxpayer and spouse columns and the OTHERS subtotal."
+    },
+    {
+     "name": "Inline repeating rows",
+     "detail": "Show extra rows under Items 42 and 51 with an Add row button, capped at 100."
+    },
+    {
+     "name": "Block with a clear message",
+     "detail": "Stop Queue for submission and name the item when more than one row is needed, as a stop-gap."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:152"
+  },
+  {
+   "id": "F2",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — Year (YYYY)",
+   "now": "The year box stays editable after creation, and Save draft under another year can overwrite the Draft already stored for that year.",
+   "why": "upsert_from_draft selects the stored draft by taxable_year and UPDATEs a matching Draft with this page's data (crates/bir-core/src/db/queueable.rs:154-175).",
+   "options": [
+    {
+     "name": "Read-only year",
+     "detail": "Show the year as fixed text once the draft exists and open other years from the library."
+    },
+    {
+     "name": "Guard the save",
+     "detail": "Refuse Save draft when the year differs from the stored year and point to the existing draft."
+    },
+    {
+     "name": "Confirm before overwrite",
+     "detail": "Ask before saving when a Draft already exists for the new year."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:976"
+  },
+  {
+   "id": "F3",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 11 — Email address",
+   "now": "The printed 1701A sheet shows the Item 11 email in capitals because its writer cell is a text join.",
+   "why": "The 1701 sheet leaves its email unjoined because the official capital() skips txtEmail, and frozen_html.rs:83 uppercases every joined value, so the 1701A print breaks the never-upper-cased rule.",
+   "options": [
+    {
+     "name": "Drop the join",
+     "detail": "Remove the txtEmail join so the sheet prints the email as typed, matching the 1701 sheet."
+    },
+    {
+     "name": "Exempt the key in the renderer",
+     "detail": "Skip uppercasing for txtEmail in frozen_html.rs while keeping other joins in capitals."
+    },
+    {
+     "name": "Accept caps and record it",
+     "detail": "If the team decides printed sheets are all caps, record that email as an explicit exception."
+    }
+   ],
+   "where": "html-frozen/1701a-2018/writer-cells.json:85"
+  },
+  {
+   "id": "F4",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — Month of the short period",
+   "now": "Twelve buttons labelled 01 to 12 appear when Item 3 is Yes, with no month names.",
+   "why": "Twelve options are a combobox case, and bare numbers are harder to read as months.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A dropdown of January to December that stores 1 to 12."
+    },
+    {
+     "name": "Select with month names",
+     "detail": "A native dropdown with month names and the same numeric values."
+    },
+    {
+     "name": "Buttons with names",
+     "detail": "Keep the buttons but label them with month names; not recommended for twelve options."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1020"
+  },
+  {
+   "id": "F5",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Item 7 — ATC (sets Item 19, the tax rate)",
+   "now": "Four long-label ATC buttons sit together, and the two that do not match the Item 6 type are greyed out.",
+   "why": "ATC is a single pick, so the four official radio slots map to one combobox.",
+   "options": [
+    {
+     "name": "Filtered combobox",
+     "detail": "Show only the two ATCs valid for the chosen Item 6 type."
+    },
+    {
+     "name": "Combobox with all four",
+     "detail": "Show all four codes and mark the invalid ones as unavailable inside the list."
+    },
+    {
+     "name": "Vertical radio list",
+     "detail": "A stacked single-choice list with the same labels."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1101"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Labels turn red, but the message text appears only in the Needs review list after Part II, and Queue for submission stays disabled.",
+   "why": "The filer has to find the bottom block to learn why filing is blocked.",
+   "options": [
+    {
+     "name": "Inline messages",
+     "detail": "Show each message under its field, using the error keys the page already tracks."
+    },
+    {
+     "name": "Summary beside Queue",
+     "detail": "Put the Needs review list next to Queue for submission with a jump link per item."
+    },
+    {
+     "name": "Jump to first error",
+     "detail": "Add a button that scrolls to the first field with a message."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:1790"
+  },
+  {
+   "id": "F7",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 8 — Taxpayer's name (Last, First, Middle)",
+   "now": "Name and address are sent in capitals even when they were only loaded from the profile.",
+   "why": "Under the bir-caps-display-only decision, profile-loaded fields keep their mixed case in the upload.",
+   "options": [
+    {
+     "name": "Uppercase only typed values",
+     "detail": "Capitalise values the filer typed, as the official blur does, and keep profile values as stored."
+    },
+    {
+     "name": "Caps in the renderer",
+     "detail": "Keep stored casing in the field map and let the print layer uppercase on the sheet."
+    },
+    {
+     "name": "Check a real upload first",
+     "detail": "Compare a profile-only upload against the official output before changing the map."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1701a.rs:943"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 3 — Short period return?",
+   "now": "Choosing Yes shows no notice, while the official form tells the filer the Month must change to match the last return period.",
+   "why": "The official processShortPeriod alert (BIR-Form1701A.hta:3372) has no desktop counterpart.",
+   "options": [
+    {
+     "name": "Inline note",
+     "detail": "Show the official sentence verbatim under Item 3 when Yes is chosen."
+    },
+    {
+     "name": "Toast on change",
+     "detail": "Show the same sentence as a notification when Yes is selected."
+    },
+    {
+     "name": "Record as a known gap",
+     "detail": "Document the missing notice rather than add it."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1701a_view.rs:992"
+  },
+  {
+   "id": "F9",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 4 — TIN / Item 5 — RDO",
+   "now": "A bad Item 4 check digit shows 'You have entered an incorrect TIN' with no item suffix, and a bad month reuses the Item 1 year message.",
+   "why": "The official TIN check messages end with the item number (BIR-Form1701A.hta:5780) and the official form has no month alert at all.",
+   "options": [
+    {
+     "name": "Official Item 4 wording",
+     "detail": "Show 'Please enter a valid TIN number on Item 4.' for a bad check digit, the text the official Item 4 checks use."
+    },
+    {
+     "name": "Add the item suffix",
+     "detail": "Show 'You have entered an incorrect TIN on Item 4.' following the official pattern."
+    },
+    {
+     "name": "Own month message",
+     "detail": "Give the month field its own message instead of the Item 1 year text."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1701a.rs:1365"
+  },
+  {
+   "id": "F10",
+   "issue": "other",
+   "severity": "low",
+   "field": "Print preview",
+   "now": "Nothing visible changes, but commit f6829947 adds a 79-line 1701A test inside the shared bir-print module.",
+   "why": "Outside the form's own files only one-line registrations are allowed.",
+   "options": [
+    {
+     "name": "Move the test",
+     "detail": "Move the filled-document test into the form_1701a test module and keep only the registration in frozen_html.rs."
+    },
+    {
+     "name": "Keep only the registration",
+     "detail": "Delete the test from frozen_html.rs and rely on the form's own sample-payload tests."
+    },
+    {
+     "name": "Record an exception",
+     "detail": "Record the test as a documented exception to the one-line rule."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:2386"
+  }
+ ]
+}

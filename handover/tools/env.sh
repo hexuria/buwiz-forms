@@ -1,0 +1,5 @@
+export PATH=/home/agent/.local/share/mbx/bin:/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/bin:$HOME/.cargo/bin:$PATH LC_ALL=C.UTF-8 CC=/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/bin/cc AR=/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/bin/ar CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/bin/cc
+export CFLAGS="-I/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/syslib/include" RUSTFLAGS="-L /tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/syslib"
+export PKG_CONFIG=/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/bin/pkg-config RUST_FONTCONFIG_DLOPEN=1 CXX=/tmp/claude-1000/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7/scratchpad/bin/c++
+export CARGO_TARGET_DIR=/home/agent/.cache/buwiz-target
+export CARGO_INCREMENTAL=0

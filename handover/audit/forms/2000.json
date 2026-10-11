@@ -1,0 +1,337 @@
+{
+ "code": "2000",
+ "title": "Monthly Documentary Stamp Tax Declaration/Return",
+ "page": "views/form_2000_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the month of",
+   "control": "button-row",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:598"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:626"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 1 — For the month of",
+   "options": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:598"
+  },
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:627"
+  },
+  {
+   "label": "Item 10 — Other party to the transaction",
+   "options": [
+    "Creditor/Mortgagor/etc.",
+    "Debtor/Mortgagee/etc.",
+    "None"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:695"
+  },
+  {
+   "label": "Item 13 — Mode of affixture",
+   "options": [
+    "eDST System",
+    "Constructive Affixture",
+    "Loose Stamps"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:720"
+  },
+  {
+   "label": "Is the term of the debt instrument less than a year?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:854"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Choose ATC",
+   "control": "button-row",
+   "multi": true,
+   "official_slots": 3,
+   "options_count": 25,
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:773"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Errors render in a 'Needs review' list after the totals, capped at 20 lines (`body = body.child(self.section(\"Needs review\", issues, cx))`); only the email label turns red, because field() compares error keys with input keys.",
+  "where": "crates/bir-desktop/src/views/form_2000_view.rs:1459"
+ },
+ "lists": [
+  {
+   "label": "Schedule 1 — Computation of Tax Due",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 3",
+   "official_rows": 3,
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:882"
+  },
+  {
+   "label": "Schedule 2 — Payments thru Constructive Affixture",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 3",
+   "official_rows": 3,
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:910"
+  },
+  {
+   "label": "Schedule 3 — Advance Payments during the month",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 3",
+   "official_rows": 3,
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:910"
+  },
+  {
+   "label": "Schedule 4 — Documentary Stamps Remitted / Loose Stamps",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 3",
+   "official_rows": 3,
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:947"
+  }
+ ],
+ "print_preview": {
+  "slug": "2000-dst-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_2000_view.rs:1300"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — For the month of",
+   "now": "Changing the month, or the Item 1 year, and pressing Save draft moves the return to another period's row, and if that period already holds a draft its content is overwritten.",
+   "why": "The draft is keyed by TIN, form, year and month (form_2000.rs:1404-1408), upsert_from_draft updates whichever row matches (db/queueable.rs:154-168), and the dashboard tile keeps reopening the original period.",
+   "options": [
+    {
+     "name": "Lock the period",
+     "detail": "Disable the month buttons and the year input once a draft exists, because the tile defines the period."
+    },
+    {
+     "name": "Explicit move",
+     "detail": "Make a period change a 'move return' action that refuses to overwrite a non-empty draft."
+    },
+    {
+     "name": "Refuse on save",
+     "detail": "Block Save when the edited period differs from the period the draft was opened for."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:609"
+  },
+  {
+   "id": "F2",
+   "issue": "lists",
+   "severity": "high",
+   "field": "Schedule 1 — Computation of Tax Due",
+   "now": "Schedules 1 to 4 each show three fixed rows with no add control, so a fourth ATC line, payment or remittance cannot be entered.",
+   "why": "The official schedules grow ('Add' appends rows, per form_2000.rs:31-33) and the model allows 50 rows (form_2000.rs:35, 1209), so the extra lines are silently left out.",
+   "options": [
+    {
+     "name": "Add row button",
+     "detail": "Append rows on demand and splice them after the last row, as official_layout already does."
+    },
+    {
+     "name": "Scrollable table",
+     "detail": "Show up to the model limit of 50 rows in a scrollable table with a count."
+    },
+    {
+     "name": "Warn when full",
+     "detail": "Show a notice when a schedule is full and the filer must add the rest by hand."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:882"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 4 — TIN",
+   "now": "TIN and RDO are read-only text on this page, yet the alerts say 'Please enter a valid TIN number on Item 4.' and 'Please enter a valid RDO Code on Item 5.'",
+   "why": "The draft copies the profile values at creation (form_2000.rs:582-583) and load_draft never refreshes them (queueable_forms.rs:43-47), so a bad value blocks Queue with no fix on this page.",
+   "options": [
+    {
+     "name": "Editable identifiers",
+     "detail": "Let the filer correct the TIN and RDO on the draft, under the profile's own rules."
+    },
+    {
+     "name": "Refresh from profile",
+     "detail": "Re-read the profile values when an editable draft opens."
+    },
+    {
+     "name": "Link to profile",
+     "detail": "Replace the alerts with a button that opens the taxpayer profile."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:662"
+  },
+  {
+   "id": "F4",
+   "issue": "atc",
+   "severity": "medium",
+   "field": "Choose ATC",
+   "now": "Each Schedule 1 row opens a wrapped list of 25 outline buttons with full ATC descriptions and no search, which the filer scans for each of the three rows.",
+   "why": "The official form takes several ATCs, so a searchable multi-select combobox would replace the wall of buttons.",
+   "options": [
+    {
+     "name": "Multi-select combobox",
+     "detail": "Searchable list showing code, description and rate, one selection per Schedule 1 row."
+    },
+    {
+     "name": "Chips plus combobox",
+     "detail": "Show the chosen ATCs as chips with a combobox beside them to add more."
+    },
+    {
+     "name": "Grouped select",
+     "detail": "Group the 25 options by DS family in a single select."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:803"
+  },
+  {
+   "id": "F5",
+   "issue": "period-buttons",
+   "severity": "medium",
+   "field": "Item 1 — For the month of",
+   "now": "Twelve month buttons (Jan to Dec) wrap across the Return period section.",
+   "why": "Twelve options exceed the four-option button limit in the audit rule, so a combobox fits better.",
+   "options": [
+    {
+     "name": "Combobox",
+     "detail": "A single month combobox showing the current month."
+    },
+    {
+     "name": "Native select",
+     "detail": "A plain select with twelve months, the least code."
+    },
+    {
+     "name": "Quarter then month",
+     "detail": "Pick the quarter first, then the month, if the filer prefers fewer choices on screen."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:598"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 6 — Taxpayer's Name",
+   "now": "Errors for the year, name, address, zip, phone, other party and TIN leave their labels black, so the filer finds them only in the list.",
+   "why": "field() (form_2000_view.rs:495-499) compares error keys such as taxpayer_name, registered_address and zip_code with the input keys name, address and zip.",
+   "options": [
+    {
+     "name": "Map keys to inputs",
+     "detail": "Report each error under its editor key so the comparison matches."
+    },
+    {
+     "name": "Message beside field",
+     "detail": "Render each message under its own input as well as in the list."
+    },
+    {
+     "name": "Focus first error",
+     "detail": "Scroll to and focus the first failing input when Queue is pressed."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:495"
+  },
+  {
+   "id": "F7",
+   "issue": "validation",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "The Needs review list stops at 20 messages with no 'and N more' line, while Queue stays disabled.",
+   "why": "A return with many schedule date errors can show only part of the problem, so the filer cannot see what still blocks Queue.",
+   "options": [
+    {
+     "name": "Show all messages",
+     "detail": "Remove the 20-line cap, as the shared kit does at 30 with a scroll area."
+    },
+    {
+     "name": "Count line",
+     "detail": "Keep the cap and add an 'and N more' line."
+    },
+    {
+     "name": "Group by section",
+     "detail": "Group messages under their schedule so the list is shorter."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_2000_view.rs:1333"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "medium",
+   "field": "n/a",
+   "now": "Commit 0c3641af, titled as a 2000 fix, also changes crates/bir-core/src/forms/form_2000ot.rs (about 88 lines) and tools/official-xml/official.js.",
+   "why": "Outside the form's own files only one-line registrations may change, and this edit alters the 2000OT model.",
+   "options": [
+    {
+     "name": "Split the commit",
+     "detail": "Move the 2000OT changes into their own commit with their own tests."
+    },
+    {
+     "name": "Revert the 2000OT lines",
+     "detail": "Restore form_2000ot.rs if the 2000 fix does not need them."
+    },
+    {
+     "name": "Keep with a note",
+     "detail": "Keep the change and record it as an accepted shared fix in the review notes."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_2000ot.rs:19"
+  }
+ ]
+}

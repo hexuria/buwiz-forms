@@ -1,0 +1,318 @@
+{
+ "code": "1700",
+ "title": "BIR Form No. 1700 — Annual Income Tax Return for Individuals Earning Purely Compensation Income",
+ "page": "views/form_1700_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — For the year (YYYY)",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1042"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1043"
+  },
+  {
+   "label": "Item 6 — Taxpayer type",
+   "options": [
+    "Employee (graduated rates)",
+    "NRANETB (25%)"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1035"
+  },
+  {
+   "label": "Item 12 — Claiming foreign tax credits?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1103"
+  },
+  {
+   "label": "Item 15 — Civil status",
+   "options": [
+    "Single",
+    "Married",
+    "Legally separated",
+    "Widow/er"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1137"
+  },
+  {
+   "label": "Item 16 — If married, spouse has income?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1138"
+  },
+  {
+   "label": "Item 17 — Filing status",
+   "options": [
+    "Joint filing",
+    "Separate filing"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1147"
+  },
+  {
+   "label": "Item 20 — Spouse taxpayer type",
+   "options": [
+    "Employee (graduated rates)",
+    "NRANETB (25%)"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1035"
+  },
+  {
+   "label": "Item 24 — Spouse claiming foreign tax credits?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1196"
+  },
+  {
+   "label": "Employer 1",
+   "options": [
+    "Taxpayer",
+    "Spouse"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1298"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 3 — ATC: II011",
+   "control": "text",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 0,
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1060"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Messages only in a 'Needs review' block after Part III totals (first 20); labels turn red; Queue for submission is disabled.",
+  "where": "crates/bir-desktop/src/views/form_1700_view.rs:1800"
+ },
+ "lists": [
+  {
+   "label": "Part VI — Schedule 1: compensation and tax withheld",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "dynamic (rows 1–4, then one blank row, up to 12)",
+   "official_rows": 4,
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1228"
+  }
+ ],
+ "print_preview": {
+  "slug": "1700-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1700_view.rs:1648"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 10 — Email address",
+   "now": "The Item 10 email goes into the submitted XML and onto the printed sheet in capitals.",
+   "why": "The XML field map calls to_uppercase on the email, a test locks that in, and the email must never be upper-cased.",
+   "options": [
+    {
+     "name": "Keep typed casing in the field map",
+     "detail": "Drop the to_uppercase on txtPg1I10Email and change the test to expect the typed value."
+    },
+    {
+     "name": "Caps on the sheet only",
+     "detail": "Keep the stored value as typed and let the print layer handle any capitals; the print map inherits the email from to_bir_field_map."
+    },
+    {
+     "name": "Exempt the email from the print join",
+     "detail": "Remove the Item 10 text join in html-frozen/1700-2018/writer-cells.json (line 79) so the sheet prints the email as typed."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1700.rs:685"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "high",
+   "field": "January 2018 (ENCS)",
+   "now": "The header reads January 2018 (ENCS) and Print preview opens the 1700-2018 sheet.",
+   "why": "The layout id and rule package are named 1700-v2013 and rules/forms/1700-v2013 describes the June 2013 HTA, so the identifiers and the content disagree.",
+   "options": [
+    {
+     "name": "Rename to the 2018 identifier",
+     "detail": "If January 2018 is the filed revision, rename FORM_1700_FORM_ID and the layout id to a 2018 id."
+    },
+    {
+     "name": "Regenerate from the June 2013 HTA",
+     "detail": "If June 2013 is the filed revision, regenerate the layout from BIR-Form1700.hta and replace the alert texts."
+    },
+    {
+     "name": "Mark the rule package superseded",
+     "detail": "Keep January 2018 and record in rules/forms/1700-v2013 that the 2018 HTA is the source, so the two stop disagreeing."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1475"
+  },
+  {
+   "id": "F3",
+   "issue": "period-editable",
+   "severity": "high",
+   "field": "Item 1 — For the year (YYYY)",
+   "now": "The year box stays editable after the draft is created, and changing it then pressing Save draft writes the draft under the new year.",
+   "why": "upsert_from_draft finds a draft by taxable_year and UPDATEs any existing Draft for that year with this page's data (crates/bir-core/src/db/queueable.rs:154-175), so another year's draft can be overwritten.",
+   "options": [
+    {
+     "name": "Read-only year",
+     "detail": "Show the year as fixed text once the draft exists, like Item 3 ATC, and open another year from the library instead."
+    },
+    {
+     "name": "Guard the save",
+     "detail": "Refuse Save draft when the year differs from the stored year and point the user to the existing draft for that year."
+    },
+    {
+     "name": "Confirm before overwrite",
+     "detail": "Ask before saving when a Draft already exists for the new year."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1042"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Queue for submission",
+   "now": "The button is disabled and the reason appears only in a 'Needs review' block after the Part III totals at the bottom of the page.",
+   "why": "Labels turn red but no message sits beside any field, so the user must scroll past every section to learn what blocks filing.",
+   "options": [
+    {
+     "name": "Inline messages",
+     "detail": "Render each message under its field, using the error keys the page already tracks, and keep the red label."
+    },
+    {
+     "name": "Summary beside Queue",
+     "detail": "Show the Needs review list in the toolbar next to Queue for submission, with a jump link per item."
+    },
+    {
+     "name": "Jump to first error",
+     "detail": "Add a button that scrolls to the first red field and shows its message."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:1800"
+  },
+  {
+   "id": "F5",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Item 7 — Taxpayer's name (Last, First, Middle)",
+   "now": "Name, address and line of business are sent in capitals even when they were only loaded from the profile.",
+   "why": "The bir-caps-display-only decision says profile-loaded fields get no blur and keep their mixed case in the upload.",
+   "options": [
+    {
+     "name": "Uppercase only typed values",
+     "detail": "Mirror the official blur behaviour: capitalise values the filer typed and keep profile values as stored."
+    },
+    {
+     "name": "Caps in the renderer",
+     "detail": "Keep stored casing in to_bir_field_map and let the print layer uppercase on the sheet."
+    },
+    {
+     "name": "Check a real upload first",
+     "detail": "Compare one profile-only upload against the official output before changing the map."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1700.rs:668"
+  },
+  {
+   "id": "F6",
+   "issue": "lists",
+   "severity": "low",
+   "field": "Part VI — Schedule 1: compensation and tax withheld",
+   "now": "The editor shows at most 12 employer rows and has no add control; a new row appears only after the last blank one is filled.",
+   "why": "EDITOR_EMPLOYER_ROWS (12) is below FORM_1700_MAX_EMPLOYERS (100), so employers 13 and up are hidden but still count in the Item 4 OTHERS subtotal.",
+   "options": [
+    {
+     "name": "Show every stored row",
+     "detail": "Render all rows the draft holds, with an explicit Add employer button up to 100."
+    },
+    {
+     "name": "Refuse more than 12",
+     "detail": "Block loading or saving a draft with more than 12 employers and say why."
+    },
+    {
+     "name": "Official popup list",
+     "detail": "Mirror the official (add more...) popup as its own list with a visible count."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1700_view.rs:482"
+  },
+  {
+   "id": "F7",
+   "issue": "other",
+   "severity": "low",
+   "field": "Item 4 — TIN / Item 5 — RDO",
+   "now": "A bad Item 4 check digit shows 'You have entered an incorrect TIN' with no item suffix, and the spouse Item 20 check shows a wording the official form does not use.",
+   "why": "The official TIN check messages end with the item number (BIR-Form1700v2018.hta:2486) and no official alert says 'Item no. 20' (desktop-only text).",
+   "options": [
+    {
+     "name": "Official Item 4 wording",
+     "detail": "Show 'Please enter a valid TIN number on Item 4.' for a bad check digit, the text the official Item 4 checks use."
+    },
+    {
+     "name": "Add the item suffix",
+     "detail": "Show 'You have entered an incorrect TIN on Item 4.' following the official pattern."
+    },
+    {
+     "name": "Drop the Item 20 text",
+     "detail": "Remove the non-official Item 20 message or replace it with official Item 20 handling if one exists."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1700.rs:1154"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "low",
+   "field": "Print preview",
+   "now": "Nothing visible changes, but the 1700 print commit also puts an 80-line test in the shared bir-print module, and commit f638078f changes form_1702ex.rs.",
+   "why": "Outside the form's own files only one-line registrations are allowed.",
+   "options": [
+    {
+     "name": "Move the test",
+     "detail": "Move the filled-document test into the form_1700 test module and keep only the registration in frozen_html.rs."
+    },
+    {
+     "name": "Keep only the registration",
+     "detail": "Delete the test from frozen_html.rs and rely on the form's own sample-payload tests."
+    },
+    {
+     "name": "Record an exception",
+     "detail": "Record the test as a documented exception to the one-line rule."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:1826"
+  }
+ ]
+}

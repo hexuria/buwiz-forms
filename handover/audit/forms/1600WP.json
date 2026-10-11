@@ -1,0 +1,282 @@
+{
+ "code": "1600WP",
+ "title": "BIR Form No. 1600-WP — Remittance Return of Percentage Tax on Winnings and Prizes Withheld by Race Track Operators",
+ "page": "views/form_1600wp_view.rs",
+ "page_kind": "handrolled",
+ "period": [
+  {
+   "label": "Item 1 — Month",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:666"
+  },
+  {
+   "label": "Item 1 — Day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:667"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:668"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:671"
+  },
+  {
+   "label": "Item 4 — Any taxes withheld?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:679"
+  },
+  {
+   "label": "Item 7 — Category of Withholding Agent",
+   "options": [
+    "Private",
+    "Government"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:744"
+  },
+  {
+   "label": "Sequence 1 — ATC",
+   "options": [
+    "WB191",
+    "WB192",
+    "WB193",
+    "WB194"
+   ],
+   "control": "chips",
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:895"
+  }
+ ],
+ "atc": [
+  {
+   "label": "ATCs (tap to add or remove)",
+   "control": "chips",
+   "multi": true,
+   "official_slots": 2,
+   "options_count": 2,
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:782"
+  },
+  {
+   "label": "Sequence 1 — ATC",
+   "control": "chips",
+   "multi": true,
+   "official_slots": 10,
+   "options_count": 2,
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:895"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Labels turn red via has_error; messages render only in the card after Schedule II: body = body.child(self.section(\"Needs review\", issues, cx)).",
+  "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:1306"
+ },
+ "lists": [
+  {
+   "label": "Part II — Computation of Tax",
+   "growable_officially": false,
+   "add_remove_in_ui": true,
+   "rows_in_ui": "dynamic",
+   "official_rows": 2,
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:782"
+  },
+  {
+   "label": "Schedule II — Winners",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 10",
+   "official_rows": 10,
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:908"
+  }
+ ],
+ "print_preview": {
+  "slug": "1600wp-2010",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:1142"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 1 — Day",
+   "now": "The Day box opens already filled with 1, so the return can be queued for the 1st of the month without the filer ever typing a day.",
+   "why": "The official Day box starts blank and raises 'Please enter a valid day on Item 1.' (BIR-Form1600WP.hta:3175), but new_from_profile sets day to 1, so that alert can never fire for a default draft.",
+   "options": [
+    {
+     "name": "Start blank",
+     "detail": "Leave Day empty until the filer types it, matching the official default and its alert."
+    },
+    {
+     "name": "Flag the default",
+     "detail": "Keep 1 but mark it unconfirmed and block queueing until the filer edits it."
+    },
+    {
+     "name": "Use the tile's day",
+     "detail": "Take the day from the library tile when it carries one, otherwise start blank."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1600wp.rs:257"
+  },
+  {
+   "id": "F2",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — Month",
+   "now": "Editing Month or Year on an open draft makes Save write a second draft, and the draft from the tile keeps the old date.",
+   "why": "Drafts are keyed by TIN, year and the monthly period column (filing_period is Monthly(month)), so an edited month becomes a different row.",
+   "options": [
+    {
+     "name": "Lock the period",
+     "detail": "Show Month and Year read-only once a draft exists, with a separate 'Start another month' action."
+    },
+    {
+     "name": "Move the same row",
+     "detail": "On a month change, rekey the existing draft after a confirm step instead of inserting a second row."
+    },
+    {
+     "name": "Open the saved draft",
+     "detail": "On a month change, load that month's saved draft, or create one, and say so in the status line."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:666"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 5 — TIN",
+   "now": "A TIN or RDO error shows only in Needs review, while the Item 5 and Item 6 rows are read-only and not highlighted.",
+   "why": "readonly() never calls has_error, and both values come from the profile, so the page offers no way to correct them.",
+   "options": [
+    {
+     "name": "Fix-in-profile link",
+     "detail": "Show a 'Fix in profile' link beside Item 5 and Item 6 when either message applies."
+    },
+    {
+     "name": "Red read-only row",
+     "detail": "Colour the read-only row red and place its message beside it."
+    },
+    {
+     "name": "Overridable field",
+     "detail": "Let the filer correct Item 5 and Item 6 on the return, with the profile value as the default."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:741"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Needs review",
+   "now": "Errors collect in a card below Schedule II, showing only the first 20, while Queue for submission at the top is greyed out with no message beside it.",
+   "why": "The message sits far from the controls that cause it, and errors past the 20th are dropped without a count (take(20) at form_1600wp_view.rs:1177).",
+   "options": [
+    {
+     "name": "Inline messages",
+     "detail": "Show each message under its field and keep the red label."
+    },
+    {
+     "name": "Summary under toolbar",
+     "detail": "Show a count with jump links directly under the toolbar, above the sections."
+    },
+    {
+     "name": "Full list",
+     "detail": "Drop the 20-message cap, or show 'and N more' when it applies."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:1306"
+  },
+  {
+   "id": "F5",
+   "issue": "choice-buttons",
+   "severity": "low",
+   "field": "Sequence 1 — ATC",
+   "now": "Each of the ten Schedule II rows repeats its own pair of ATC chips, so the schedule shows twenty ATC chips above the totals.",
+   "why": "A single-value pick repeated on ten rows is clutter, and a per-row combobox keeps the ATC list check the official form applies (BIR-Form1600WP.hta:3328).",
+   "options": [
+    {
+     "name": "Combobox per row",
+     "detail": "A compact type-to-filter picker per row that still offers only the category's two ATCs."
+    },
+    {
+     "name": "One table column",
+     "detail": "A single table with an ATC column so the ten rows scan together."
+    },
+    {
+     "name": "Inline chips",
+     "detail": "Keep the two chips but place them on the row's TIN and name line to save height."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1600wp_view.rs:895"
+  },
+  {
+   "id": "F6",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Page header (titles and Print preview)",
+   "now": "The header titles and Print preview button this page renders come from components/form_engine.rs, which commit cdb1a9b4 changed together with the shared event_form_kit.rs and the 1601C and 2550Q pages.",
+   "why": "Shared-file edits beyond one-line registrations break the rule that a form's change touches only its own files.",
+   "options": [
+    {
+     "name": "Split the commit",
+     "detail": "Ship the shared header change as its own reviewed commit."
+    },
+    {
+     "name": "Keep the header local",
+     "detail": "Move this form's header into its own view file."
+    },
+    {
+     "name": "Drop other forms' edits",
+     "detail": "Remove the 1601C, 2550Q and event_form_kit edits from this change and ship them separately."
+    }
+   ],
+   "where": "crates/bir-desktop/src/components/form_engine.rs:231-306"
+  },
+  {
+   "id": "F7",
+   "issue": "other",
+   "severity": "medium",
+   "field": "Print preview",
+   "now": "This form's Print preview depends on a frozen-sheet writer map added to shared bir-print code in commit 366af7e6, which also changed the 1606 model and view, the shared support-level registry and a generated manifest.",
+   "why": "A form's change should touch only its own files plus one-line registrations, and this commit goes well beyond that.",
+   "options": [
+    {
+     "name": "Split the commit",
+     "detail": "Ship the 1606 changes and the shared frozen-sheet code as separate reviewed commits."
+    },
+    {
+     "name": "One-line registration",
+     "detail": "Keep only this form's slug and writer-map arm in shared code, with the sheet map in its own html-frozen folder."
+    },
+    {
+     "name": "Revert the 1606 edits",
+     "detail": "Drop the form_1606 changes from this commit and land them with 1606's own work."
+    }
+   ],
+   "where": "crates/bir-print/src/frozen_html.rs:139-156"
+  }
+ ]
+}

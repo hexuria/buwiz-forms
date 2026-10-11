@@ -1,0 +1,253 @@
+{
+  "code": "1702Q",
+  "title": "BIR Form No. 1702Q — Quarterly Income Tax Return for Corporations, Partnerships and Other Non-Individual Taxpayers",
+  "page": "views/form_1702q_view.rs",
+  "page_kind": "handrolled",
+  "period": [
+    {
+      "label": "Item 1 — For the",
+      "control": "button-row",
+      "options": [
+        "Calendar",
+        "Fiscal"
+      ],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:909-930"
+    },
+    {
+      "label": "Item 2 — Month the fiscal year ends",
+      "control": "button-row",
+      "options": [
+        "01",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11"
+      ],
+      "prefilled_from_library": false,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:931-946 (shown only for Fiscal; crates/bir-core/src/forms/form_1702q.rs:649-664 defaults year_end_month to 12)"
+    },
+    {
+      "label": "Item 2 — Year ended (YYYY)",
+      "control": "text",
+      "options": [],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:947; crates/bir-desktop/src/views/form_1702q_view.rs:456-461"
+    },
+    {
+      "label": "Item 3 — Quarter",
+      "control": "button-row",
+      "options": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "prefilled_from_library": true,
+      "editable": true,
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:948-961; crates/bir-desktop/src/views/form_1702q_view.rs:1238 (new_draft takes the tile's quarter)"
+    }
+  ],
+  "choice_rows": [
+    {
+      "label": "Item 4 — Amended return?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:962-976"
+    },
+    {
+      "label": "Item 12 — Method of deductions",
+      "options": [
+        "Itemized deductions",
+        "Optional standard deduction (40%)"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:977-999"
+    },
+    {
+      "label": "Item 13 — Availing of tax relief under a special law/treaty?",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "control": "button-row",
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:1000-1015"
+    }
+  ],
+  "atc": [
+    {
+      "label": "MCIT",
+      "control": "chips",
+      "multi": true,
+      "official_slots": 2,
+      "options_count": 1,
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:1037-1047"
+    },
+    {
+      "label": "Regular/special rate ATC",
+      "control": "chips",
+      "multi": true,
+      "official_slots": 2,
+      "options_count": 41,
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:1021-1036 and :1052 (FORM_1702Q_ATC_OPTIONS, crates/bir-core/src/forms/form_1702q.rs:76-326)"
+    }
+  ],
+  "validation": {
+    "inline": false,
+    "needs_review_panel": true,
+    "how": "A field's label turns red when it has an error (field(), :786-790), but the messages sit in one 'Needs review' block at the end of the page, capped at 20 with no field names.",
+    "where": "crates/bir-desktop/src/views/form_1702q_view.rs:1468-1472 and crates/bir-desktop/src/views/form_1702q_view.rs:1593-1594"
+  },
+  "lists": [],
+  "print_preview": {
+    "slug": "1702q-2018",
+    "how": "launch_frozen_form_preview",
+    "where": "crates/bir-desktop/src/views/form_1702q_view.rs:1427-1457 (to_print_field_map, crates/bir-core/src/forms/form_1702q.rs:1117)"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "issue": "period-editable",
+      "severity": "high",
+      "field": "Item 3 — Quarter",
+      "now": "The quarter stays a live Q1 / Q2 / Q3 row after the library tile has chosen one; switching it and saving stores the draft under the new quarter.",
+      "why": "Drafts are keyed by (TIN, form, year, quarter) and the save upserts over any existing Draft with that key, so a changed quarter silently replaces the saved draft for that quarter.",
+      "options": [
+        {
+          "name": "Lock the period once it is set",
+          "detail": "Show the tile's quarter as read-only text and open other quarters only from their own tiles."
+        },
+        {
+          "name": "Confirm before re-keying",
+          "detail": "If the quarter differs from the tile's quarter, block Save and Queue until the filer confirms, and never replace an existing Draft row."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:948-961; crates/bir-desktop/src/views/queueable_forms.rs:42-48; crates/bir-core/src/db/queueable.rs:154-166"
+    },
+    {
+      "id": "F2",
+      "issue": "period-editable",
+      "severity": "high",
+      "field": "Item 2 — Year ended (YYYY)",
+      "now": "Clearing the year or typing a non-number turns the draft's year into 0, and Save draft still stores it; the only hint is 'Invalid year entered. Please provide a valid year.' at the bottom in Needs review.",
+      "why": "The year setter falls back to 0 without a parse error, and Save only refuses on parse errors, so the draft is stored under year 0, which no library tile opens.",
+      "options": [
+        {
+          "name": "Parse-error for the year",
+          "detail": "Treat a blank or non-numeric year as a parse error like the amount fields, so Save refuses until it is fixed (the 1702MX page already does this)."
+        },
+        {
+          "name": "Year as a combobox",
+          "detail": "Offer only the valid years, so no typed value can become 0."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:460; crates/bir-desktop/src/views/form_1702q_view.rs:627-674; crates/bir-desktop/src/views/form_1702q_view.rs:1278-1283"
+    },
+    {
+      "id": "F3",
+      "issue": "period-buttons",
+      "severity": "medium",
+      "field": "Item 2 — Month the fiscal year ends",
+      "now": "Eleven small buttons labelled 01 to 11 show only numbers, so the filer has to know which month each number is.",
+      "why": "Bare numbers are easy to misread and the row takes a full line, while a month name list is shorter and clearer.",
+      "options": [
+        {
+          "name": "Combobox with month names",
+          "detail": "A single-select combobox listing January to November, showing the chosen month name."
+        },
+        {
+          "name": "Segmented month names",
+          "detail": "Keep buttons but label them Jan to Nov, wrapping into two rows."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:931-946 (labels at :936)"
+    },
+    {
+      "id": "F4",
+      "issue": "atc",
+      "severity": "medium",
+      "field": "Regular/special rate ATC",
+      "now": "Forty-one ATC options, each with its rate in the label, are shown as chips in one wrapping row.",
+      "why": "The official form has two ATC slots and the filer must find one code among 41, which a chip row does not make easy to scan or search.",
+      "options": [
+        {
+          "name": "Searchable combobox",
+          "detail": "Single-select combobox with type-to-filter by IC code, keeping the MCIT checkbox as its own control."
+        },
+        {
+          "name": "Grouped combobox",
+          "detail": "Group the codes by IC family (010, 020, 030 ...) inside one combobox to keep the list short."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:1021-1036; crates/bir-desktop/src/views/form_1702q_view.rs:1052"
+    },
+    {
+      "id": "F5",
+      "issue": "validation",
+      "severity": "medium",
+      "field": "Needs review",
+      "now": "Errors appear only in a 'Needs review' block after the schedules, the list stops at 20, and Queue for submission is disabled with no message beside it.",
+      "why": "A filer who fixes the visible labels still has to scroll to the end to see the messages, and any message beyond the twentieth is dropped without a count.",
+      "options": [
+        {
+          "name": "Message under each field",
+          "detail": "Show the matching official alert under the field as well as the red label."
+        },
+        {
+          "name": "Summary beside Queue",
+          "detail": "Show the count of open items and jump links next to the Queue for submission button."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:1468-1472; crates/bir-desktop/src/views/form_1702q_view.rs:1593-1594; crates/bir-desktop/src/views/form_1702q_view.rs:777-790; crates/bir-desktop/src/views/form_1702q_view.rs:1527-1534"
+    },
+    {
+      "id": "F6",
+      "issue": "choice-buttons",
+      "severity": "low",
+      "field": "Optional standard deduction (40%)",
+      "now": "The OSD button greys out after an ATC is picked, with no text saying why.",
+      "why": "Only the ATC rates 30%, 25% and 20% (and IC021) allow OSD, so the choice disappears for other codes without an explanation.",
+      "options": [
+        {
+          "name": "Inline reason",
+          "detail": "Show a short hint under the Item 12 row, such as 'OSD needs an ATC at 30%, 25% or 20%'."
+        },
+        {
+          "name": "Read-only note",
+          "detail": "Replace the greyed button with a read-only chip that states OSD is not available for the chosen ATC."
+        }
+      ],
+      "where": "crates/bir-desktop/src/views/form_1702q_view.rs:989-997; crates/bir-core/src/forms/form_1702q.rs:730-739"
+    },
+    {
+      "id": "F7",
+      "issue": "other",
+      "severity": "low",
+      "field": "(outside the form's files: shared frozen-HTML renderer)",
+      "now": "The 1702Q print commit adds a test of about 75 lines to the shared frozen-HTML renderer, not only its one-line slug registration.",
+      "why": "The branch rule keeps changes outside a form's own files to one-line registrations.",
+      "options": [
+        {
+          "name": "Move the test",
+          "detail": "Put the 1702Q print test beside its form (bir-core tests or sample payloads) and keep only the slug line in the renderer."
+        },
+        {
+          "name": "Record the exception",
+          "detail": "Accept the test as a registration exception and say so in the commit message."
+        }
+      ],
+      "where": "crates/bir-print/src/frozen_html.rs:199-201 (slug registration, 8f52c1b7); :2313-2383 (test added by 8f52c1b7)"
+    }
+  ]
+}

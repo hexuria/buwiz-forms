@@ -1,0 +1,144 @@
+<title>Forms Push Handover</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;600&family=Public+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: a filing ledger: status strip, 43-form grid, the loop, then the resume card and links. */
+:root{--paper:#f4f6f3;--sheet:#ffffff;--ink:#1c2745;--muted:#5d6579;--rule:#d6dae1;--accent:#2756c7;
+--ok:#1f7a4d;--ok-bg:#e6f3ea;--todo:#9a6a00;--todo-bg:#fbf1d8;--bad:#b4322a;--bad-bg:#fbeceb;--chip:#edf0f6;
+--display:"Archivo",system-ui,sans-serif;--body:"Public Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#11141c;--sheet:#1a1f2b;--ink:#e7eaf3;--muted:#a3abbe;--rule:#2f3647;--accent:#82a5ff;
+--ok:#72d4a2;--ok-bg:#173126;--todo:#f0c463;--todo-bg:#362c15;--bad:#ff8a80;--bad-bg:#3a1f22;--chip:#252c3c;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#11141c;--sheet:#1a1f2b;--ink:#e7eaf3;--muted:#a3abbe;--rule:#2f3647;--accent:#82a5ff;
+--ok:#72d4a2;--ok-bg:#173126;--todo:#f0c463;--todo-bg:#362c15;--bad:#ff8a80;--bad-bg:#3a1f22;--chip:#252c3c;color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);line-height:1.5;padding-inline:16px;padding-block:28px 56px}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:34px}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
+h1{font-size:clamp(1.8rem,4.4vw,2.8rem);font-weight:800}h2{font-size:1.35rem}h3{font-size:1.02rem}
+p{margin:0;max-width:65ch}.muted{color:var(--muted)}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+a{color:var(--accent)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,.mono{font-family:var(--mono);font-size:.85em}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.tile{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:16px;display:grid;gap:6px;align-content:start}
+.tile b{font-family:var(--display);font-size:2.2rem;line-height:1;font-variant-numeric:tabular-nums}
+.tile.ok{border-color:var(--ok)}.tile.ok b{color:var(--ok)}.tile.todo{border-color:var(--todo)}.tile.todo b{color:var(--todo)}
+.grid43{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px}
+.f{font-family:var(--mono);font-size:.78rem;font-weight:600;text-align:center;padding:8px 2px;border-radius:5px}
+.f.done{background:var(--ok-bg);color:var(--ok)}.f.run{background:var(--todo-bg);color:var(--todo);outline:1px dashed var(--todo)}.f.todo{background:var(--bad-bg);color:var(--bad)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem}.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.loop{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.step{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;display:grid;gap:2px;min-width:0;flex:1 1 130px}
+.step .who{font-family:var(--mono);font-size:.7rem;color:var(--muted)}.arrow{color:var(--muted);font-family:var(--mono)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:8px}
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:16px;display:grid;gap:10px}
+.cmd{display:flex;gap:8px;align-items:stretch;min-width:0}.cmd pre{flex:1;min-width:0;margin:0;background:var(--chip);border-radius:6px;padding:8px 10px;overflow-x:auto;font-family:var(--mono);font-size:.8rem}
+.cmd button{font-family:var(--body);font-size:.8rem;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:6px;padding:0 10px;cursor:pointer}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.link{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:12px;display:grid;gap:4px;text-decoration:none;color:inherit}.link:hover{border-color:var(--accent)}
+.link .k{font-family:var(--mono);font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.link strong{color:var(--accent)}
+ul.q{margin:0;padding-left:18px;display:grid;gap:6px}
+.warn{border-left:3px solid var(--todo);padding-left:12px}
+</style>
+<div class="wrap">
+<header style="display:grid;gap:10px">
+  <span class="eyebrow">buwiz-forms · e-BIRForms 7.9.6.2.1 · 2026-10-11</span>
+  <h1>Forms Push Handover</h1>
+  <p>Where the "all 43 BIR forms" work stopped, and exactly how to pick it up. Green is done and pushed. Amber is running. Red is next.</p>
+</header>
+
+<section class="tiles" aria-label="Status">
+  <div class="tile ok"><b>43/43</b><span>forms upload byte-for-byte like BIR's own app, hash pinned</span></div>
+  <div class="tile ok"><b>PR #82</b><span>open, not merged, full verify passed at <code>a03e3647</code></span></div>
+  <div class="tile todo"><b>36/43</b><span>pages render-checked at phone, tablet, desktop</span></div>
+  <div class="tile todo"><b>295</b><span>audit findings not acted on yet (54 high)</span></div>
+</section>
+
+<section style="display:grid;gap:12px">
+  <h2>All 43 forms</h2>
+  <div class="legend"><span><i style="background:var(--ok)"></i>Render-checked and fixed</span><span><i style="background:var(--todo)"></i>Render check running</span><span><i style="background:var(--bad)"></i>Not render-checked yet</span></div>
+  <div class="grid43" id="g43"></div>
+</section>
+
+<section style="display:grid;gap:12px">
+  <h2>The loop we ran, per 3 forms</h2>
+  <div class="loop">
+    <div class="step"><strong>Render</strong><span class="who">reviewer · Haiku max</span></div><span class="arrow">→</span>
+    <div class="step"><strong>Fix</strong><span class="who">view-builder · Sonnet low<br>form-porter · Opus low (core)</span></div><span class="arrow">→</span>
+    <div class="step"><strong>Build-check</strong><span class="who">build-runner · Haiku low</span></div><span class="arrow">→</span>
+    <div class="step"><strong>Merge</strong><span class="who">merge_branch.sh</span></div><span class="arrow">→</span>
+    <div class="step"><strong>Verify</strong><span class="who">verify_final.sh</span></div><span class="arrow">→</span>
+    <div class="step"><strong>Push</strong><span class="who">PR #82</span></div>
+  </div>
+  <p class="muted">Rules: at most 3 forms per batch, at most 2 coding agents at once, agents never start agents. The head chef only coordinates.</p>
+</section>
+
+<section style="display:grid;gap:12px">
+  <h2>What's left</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Work</th><th>Detail</th><th>Who</th></tr></thead>
+    <tbody>
+      <tr><td>Render 7 forms</td><td>2200M, 2200P, 2200S (batch 12 was running), then 2200T, 2550M, 2552 and 2553. Watch for: Part III after the schedules, sibling-form wording, off-by-one labels, rates in labels.</td><td>reviewer → view-builder</td></tr>
+      <tr><td>Final verify and push</td><td>Run <code>verify_final.sh</code> after the last merge, then push <code>forms/integration</code>.</td><td>build-runner</td></tr>
+      <tr><td>Audit fixes (beyond the goal)</td><td>Shared first: Linux print preview opens in the browser; lock the period chosen in the library; inline errors; comboboxes for month and ATC; schedules that can add rows. Then per form, the high findings.</td><td>owner decides</td></tr>
+    </tbody>
+  </table></div>
+  <div class="card warn"><h3>Questions only the owner can answer</h3>
+    <ul class="q">
+      <li>1706 numbering: the rule package and the printed sheet disagree. Which one is right?</li>
+      <li>1702Q: the sheet says "do not enter centavos", but the page shows centavos. Whole pesos?</li>
+      <li>Corporations: show Tax Classification, so their 2550Q can pass validation?</li>
+      <li>Add the missing Part III and declaration blocks? (1702Q, 1706, 2200 family; 1700 has no Part IV fields; 2200AN and 2200C have no "sheets attached" field.)</li>
+      <li>Emails in capitals in some XML (1604F, 1700, 1707A, 1800, 1801, 1701MS): check each against a real upload before changing anything.</li>
+      <li>OK to delete the 14 GB build folder? The disk stays near full.</li>
+    </ul>
+  </div>
+</section>
+
+<section style="display:grid;gap:12px">
+  <h2>How to resume</h2>
+  <div class="card">
+    <h3>1. Same session, if the machine still exists</h3>
+    <div class="cmd"><pre id="c1">claude --resume 75a3a4d5-f426-4ca2-af38-3fdce8d073d7</pre><button type="button" data-copy="c1">Copy</button></div>
+    <p class="muted">Transcript: <code>~/.claude/projects/-home-agent-workspace/75a3a4d5-f426-4ca2-af38-3fdce8d073d7.jsonl</code>. Memory notes: <code>buwiz-forms-integration-status</code>, <code>buwiz-forms-rust-build-sandbox</code>.</p>
+  </div>
+  <div class="card">
+    <h3>2. Fresh machine</h3>
+    <div class="cmd"><pre id="c2">git clone https://github.com/hexuria/buwiz-forms &amp;&amp; cd buwiz-forms &amp;&amp; git switch forms/integration</pre><button type="button" data-copy="c2">Copy</button></div>
+    <p>Then read the GitHub issue that links this page, and PR #82's "Status and remaining work".</p>
+  </div>
+  <div class="card">
+    <h3>3. Things that lived in /tmp and are probably gone</h3>
+    <ul class="q">
+      <li><strong>Review app:</strong> Xvfb <code>:98</code>, x11vnc <code>:5901</code>, noVNC <code>localhost:6081</code>, with its own HOME and database. Rebuild from <code>forms/integration</code> merged with PR #85 so the database key survives restarts.</li>
+      <li><strong>Linux runtime:</strong> GTK, WebKit and Mesa fetched with <code>apt-get download</code>. Linking needs unversioned <code>.so</code> links plus <code>-lzstd -ljitterentropy</code>.</li>
+      <li><strong>Mesa needs two workarounds:</strong> an LD_PRELOAD that reports a non-SVE CPU to LLVM, and <code>MESA_SHADER_CACHE_DISABLE=true</code>.</li>
+      <li><strong>Agent briefs:</strong> NAV.md (app navigation), BATCH.md (render steps), SWEEP.md (phone label fix), AUDIT.md (audit schema). The tools <code>merge_branch.sh</code>, <code>verify_final.sh</code>, <code>check_print.py</code> and <code>sync_capabilities.py</code>. All of these sat in the session scratchpad.</li>
+      <li><strong>Unverified work:</strong> pushed as <code>wip/annual</code>, <code>wip/income-1700</code>, <code>wip/income-1701a</code>, <code>wip/income-1701ms</code>, <code>wip/income-1702ex</code>, <code>wip/income-1702q</code>. Review before using.</li>
+    </ul>
+  </div>
+</section>
+
+<section style="display:grid;gap:12px">
+  <h2>Links</h2>
+  <div class="links">
+    <a class="link" href="https://github.com/hexuria/buwiz-forms/pull/82"><span class="k">Pull request</span><strong>#82 · all 43 forms</strong><span class="muted">forms/integration, open, not merged</span></a>
+    <a class="link" href="https://github.com/hexuria/buwiz-forms/pull/84"><span class="k">Pull request</span><strong>#84 · missing icons</strong><span class="muted">debug asset lookup, against main</span></a>
+    <a class="link" href="https://github.com/hexuria/buwiz-forms/pull/85"><span class="k">Pull request</span><strong>#85 · Linux data loss</strong><span class="muted">keyring had no backend, against main</span></a>
+    <a class="link" href="https://claude.ai/artifact/XQopFKE41YTAe7dP3JgdxP"><span class="k">Artifact</span><strong>Form Fields Audit</strong><span class="muted">295 findings, one visual report per form</span></a>
+    <a class="link" href="https://claude.ai/artifact/RypxHAP8YpNRFqWier3MxK"><span class="k">Artifact</span><strong>Forms Crew Roster</strong><span class="muted">agents, models, effort, prompts</span></a>
+    <a class="link" href="https://claude.ai/artifact/QgNvpAj3zrfmSUhYR3ffrf"><span class="k">Artifact</span><strong>Agents explained</strong><span class="muted">where the tokens go, and why Haiku</span></a>
+  </div>
+</section>
+</div>
+<script>
+(function(){
+  var done="0605 0619E 0619F 1600PT 1600VT 1600WP 1601C 1601EQ 1601FQ 1602Q 1603Q 1604C 1604E 1604F 1606 1700 1701 1701A 1701MS 1701Q 1702EX 1702MX 1702Q 1702RT 1706 1707 1707A 1800 1801 2000 2000OT 2200A 2200AN 2200C 2550Q 2551Q".split(" ");
+  var run=["2200M","2200P","2200S"], todo=["2200T","2550M","2552","2553"];
+  var g=document.getElementById("g43");
+  done.concat(run,todo).sort().forEach(function(c){var d=document.createElement("div");d.className="f "+(run.indexOf(c)>=0?"run":todo.indexOf(c)>=0?"todo":"done");d.textContent=c;g.appendChild(d)});
+  document.querySelectorAll("[data-copy]").forEach(function(b){b.addEventListener("click",function(){var t=document.getElementById(b.dataset.copy).textContent;
+    try{navigator.clipboard.writeText(t).then(function(){b.textContent="Copied"},function(){sel(b.dataset.copy)})}catch(e){sel(b.dataset.copy)}})});
+  function sel(id){var r=document.createRange();r.selectNodeContents(document.getElementById(id));var s=getSelection();s.removeAllRanges();s.addRange(r)}
+})();
+</script>

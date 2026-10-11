@@ -1,0 +1,316 @@
+{
+ "code": "1800",
+ "title": "Donor's Tax Return",
+ "page": "views/form_1800_view.rs",
+ "page_kind": "kit",
+ "period": [
+  {
+   "label": "Item 1 — Month of donation",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:26"
+  },
+  {
+   "label": "Item 1 — Day",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": false,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:27"
+  },
+  {
+   "label": "Item 1 — Year",
+   "control": "text",
+   "options": [],
+   "prefilled_from_library": true,
+   "editable": true,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:28"
+  }
+ ],
+ "choice_rows": [
+  {
+   "label": "Item 2 — Amended return?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:224"
+  },
+  {
+   "label": "Item 13 — Availing of tax relief under a Special Law / International Tax Treaty?",
+   "options": [
+    "Yes",
+    "No"
+   ],
+   "control": "button-row",
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:239"
+  }
+ ],
+ "atc": [
+  {
+   "label": "Item 4 — ATC",
+   "control": "text",
+   "multi": false,
+   "official_slots": 1,
+   "options_count": 1,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:275"
+  }
+ ],
+ "validation": {
+  "inline": false,
+  "needs_review_panel": true,
+  "how": "Errors render in a 'Needs review' list after all sections (`body.child(section(\"Needs review\", issues, cx))`); only the label turns red, and only when an error key equals an input key (email, surcharge, interest, compromise).",
+  "where": "crates/bir-desktop/src/views/event_form_kit.rs:884"
+ },
+ "lists": [
+  {
+   "label": "Schedule A — Donated personal property",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 5",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:321"
+  },
+  {
+   "label": "Schedule B — Donated real property",
+   "growable_officially": true,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 5",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:340"
+  },
+  {
+   "label": "Item 12 — Donees",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 5",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:311"
+  },
+  {
+   "label": "Items 28–32 — Deductions",
+   "growable_officially": false,
+   "add_remove_in_ui": false,
+   "rows_in_ui": "fixed 5",
+   "official_rows": 5,
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:413"
+  }
+ ],
+ "print_preview": {
+  "slug": "1800-2018",
+  "how": "launch_frozen_form_preview",
+  "where": "crates/bir-desktop/src/views/form_1800_view.rs:623"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "issue": "lists",
+   "severity": "high",
+   "field": "Schedule A — Donated personal property",
+   "now": "Schedules A and B show five fixed rows with no add control, so a donor with a sixth item cannot enter it.",
+   "why": "The official form grows both schedules (11 indexed families) and the model caps them at five (form_1800.rs:35, 549-554), so the omission is silent and the donor tax is understated.",
+   "options": [
+    {
+     "name": "Add row button",
+     "detail": "Append rows on demand and splice them into the layout after row five, as the 1801 Part V tables are meant to work."
+    },
+    {
+     "name": "Per-row delete",
+     "detail": "Use the official chkScheduleADelete and chkScheduleB pattern so a row can be removed as well as added."
+    },
+    {
+     "name": "Warn before typing",
+     "detail": "Show a 'more than five items: file the rest with the RDO' notice beside the schedules."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:322"
+  },
+  {
+   "id": "F2",
+   "issue": "other",
+   "severity": "high",
+   "field": "Item 11 — Email address",
+   "now": "The typed e-mail is written in upper case into the uploaded XML and into the Print preview.",
+   "why": "The email must never be upper-cased, official_inputs.rs:147-149 says capital() skips txtEmail, and form_2000.rs:1004 writes the typed value.",
+   "options": [
+    {
+     "name": "Write as typed",
+     "detail": "Set txtEmail to the trimmed text the filer typed, as form_2000.rs:1004 does."
+    },
+    {
+     "name": "Exclude from the upper-case pass",
+     "detail": "Keep up() for the other text controls and skip txtEmail, matching the documented capital() behaviour."
+    },
+    {
+     "name": "Record a reviewed exception",
+     "detail": "If the official HTA really uppercases txtEmail, document that as an exception while the displayed value stays as typed."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1800.rs:356"
+  },
+  {
+   "id": "F3",
+   "issue": "validation",
+   "severity": "high",
+   "field": "38 / 14 — Net gifts subject to tax",
+   "now": "Any amount in Items 28–32, or net gifts under P250,000, leaves Queue for submission disabled under Needs review, and nothing on the page warns before the figures are typed.",
+   "why": "The port refuses these returns instead of filing the official negative tax or a deduction Item 33 never carries, so donors in these cases cannot file in the app.",
+   "options": [
+    {
+     "name": "Warn at entry",
+     "detail": "Show a note beside Item 36 and the deduction rows when the exemption or deduction rule applies."
+    },
+    {
+     "name": "Route to RDO",
+     "detail": "Replace the generic Needs review text with a 'file this return with the RDO' banner that states the reason."
+    },
+    {
+     "name": "Floor at zero after review",
+     "detail": "Only once the official behaviour is confirmed, allow zero tax due and keep the official figure in the XML."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1800.rs:513"
+  },
+  {
+   "id": "F4",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 7 — Donor's name",
+   "now": "The name alert reads 'Item 8' under the field labelled 'Item 7 — Donor's name', the RDO alert reads 'Item 5' under 'Item 6 — RDO code', and the empty-TIN alert reads 'Item 4', which is the ATC line.",
+   "why": "The alerts are verbatim official text, but the on-page numbering differs, so the filer is sent to the wrong line.",
+   "options": [
+    {
+     "name": "Pointer after the alert",
+     "detail": "Keep the verbatim text and add the on-page label, for example '(Item 7 on this page)'."
+    },
+    {
+     "name": "Link alert to field",
+     "detail": "Make each Needs review line clickable so it scrolls to and focuses its input."
+    },
+    {
+     "name": "Relabel to the paper form",
+     "detail": "Align the page labels with the item numbers the alerts cite, after checking the printed form."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1800.rs:499"
+  },
+  {
+   "id": "F5",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 6 — RDO code",
+   "now": "Errors for the TIN, RDO, donation date, donor name, treaty and donees leave their labels black, so the filer finds them only in the Needs review list.",
+   "why": "has_error matches only keys equal to an input key (event_form_kit.rs:154-163), and these error keys (rdo_code, donation_date, donor_name, tax_relief, donees) differ from the input keys (rdo, month, name, relief).",
+   "options": [
+    {
+     "name": "Map keys to inputs",
+     "detail": "Report each error under its editor key, for example 'rdo' for rdo_code, so has_error matches."
+    },
+    {
+     "name": "Message beside field",
+     "detail": "Render each message under its own input as well as in the list."
+    },
+    {
+     "name": "Focus first error",
+     "detail": "Scroll to and focus the first failing input when Queue or Save is pressed."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/event_form_kit.rs:154"
+  },
+  {
+   "id": "F6",
+   "issue": "validation",
+   "severity": "medium",
+   "field": "Item 5 — Donor's TIN (profile)",
+   "now": "The TIN is shown as read-only text, yet the Needs review line tells the filer to enter a valid TIN on Item 4 or Item 5.",
+   "why": "The draft copies the profile TIN at creation (form_1800.rs:203) and load_draft never refreshes it (queueable_forms.rs:43-47), so a bad TIN blocks Queue with no fix on this page.",
+   "options": [
+    {
+     "name": "Editable TIN",
+     "detail": "Let the filer correct the TIN on the draft, under the same checksum rule as the profile."
+    },
+    {
+     "name": "Refresh from profile",
+     "detail": "Re-read the profile TIN when an editable draft opens."
+    },
+    {
+     "name": "Link to profile",
+     "detail": "Replace the alert with a button that opens the taxpayer profile."
+    }
+   ],
+   "where": "crates/bir-desktop/src/views/form_1800_view.rs:262"
+  },
+  {
+   "id": "F7",
+   "issue": "period-editable",
+   "severity": "medium",
+   "field": "Item 1 — Month of donation",
+   "now": "A new return opens Item 1 with today's month and day and the tile's year, and the filer has to notice and change it.",
+   "why": "The donation date goes into the XML and the filename, so an unchanged default misdates the gift.",
+   "options": [
+    {
+     "name": "Blank until entered",
+     "detail": "Start Item 1 empty and require a valid date before Queue."
+    },
+    {
+     "name": "Visible placeholder",
+     "detail": "Default to 12/31 of the tile year and show it as a placeholder the filer must replace."
+    },
+    {
+     "name": "Confirm notice",
+     "detail": "Keep today's date but show a 'confirm the donation date' line until Item 1 is edited."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1800.rs:198"
+  },
+  {
+   "id": "F8",
+   "issue": "other",
+   "severity": "low",
+   "field": "Needs review",
+   "now": "A clean check shows no confirmation, the official amended-return alert never appears, and the port shows 'Item 17C applies only to an amended return.' instead.",
+   "why": "Official alerts must appear verbatim and in order, and the port substitutes a non-official line for one of them.",
+   "options": [
+    {
+     "name": "Show the official success text",
+     "detail": "Display 'Validation successful. Click on 'Edit' if you wish to modify your entries.' after a clean check."
+    },
+    {
+     "name": "Add the official amended alert",
+     "detail": "Emit the save-009 text under its official condition and keep the Item 17C line only as an extra."
+    },
+    {
+     "name": "Remove the substitute",
+     "detail": "Drop the non-official line once the official condition is ported."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1800.rs:587"
+  },
+  {
+   "id": "F9",
+   "issue": "other",
+   "severity": "low",
+   "field": "n/a",
+   "now": "Commit c5b822e9, titled as a 1800 fix, also edits crates/bir-core/src/forms/form_1706.rs at lines 9 and 666.",
+   "why": "Outside the form's own files only one-line registrations may change, and this edit touches another form's model.",
+   "options": [
+    {
+     "name": "Split the commit",
+     "detail": "Move the 1706 lines into a separate 1706 commit so the 1800 change stays in its own files."
+    },
+    {
+     "name": "Revert the 1706 lines",
+     "detail": "Restore form_1706.rs if the 1800 fix does not need them."
+    },
+    {
+     "name": "Keep with a note",
+     "detail": "Keep the change and record it as an accepted shared fix in the review notes."
+    }
+   ],
+   "where": "crates/bir-core/src/forms/form_1706.rs:9"
+  }
+ ]
+}
