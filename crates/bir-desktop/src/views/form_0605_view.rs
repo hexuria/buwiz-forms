@@ -15,7 +15,7 @@ use bir_core::forms::form_0605::{
 };
 use bir_core::forms::form_0605_official::{
     FORM_0605_ATCS, FORM_0605_TAX_TYPES, form_0605_atc, form_0605_atc_offered_for,
-    form_0605_tax_type,
+    form_0605_tax_type, form_0605_typed_date_alert,
 };
 use bir_core::forms::queueable::{QueueableForm, period_column};
 use bir_core::forms::{FilingPeriod, FilingStatus, can_queue_for_submission};
@@ -60,10 +60,42 @@ impl Layout {
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+const MONTH_VALUES: [&str; 12] = [
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
+];
+const MANNER_VALUES: [&str; 7] = ["0", "1", "2", "3", "4", "5", "6"];
+
+/// Item 2 month rows: Jan–Nov under Fiscal (December is the calendar year
+/// end), all twelve otherwise so the read-only box can show "Dec".
+fn month_rows(fiscal: bool) -> Vec<(&'static str, &'static str)> {
+    let count = if fiscal { 11 } else { 12 };
+    MONTH_VALUES
+        .iter()
+        .zip(MONTHS)
+        .take(count)
+        .map(|(value, label)| (*value, label))
+        .collect()
+}
+
+/// Item 17 rows, one per official manner of payment.
+fn manner_rows() -> Vec<(&'static str, &'static str)> {
+    MANNER_VALUES
+        .iter()
+        .zip(Form0605MannerOfPayment::ALL)
+        .map(|(value, manner)| (*value, manner.label()))
+        .collect()
+}
+
+fn manner_value(manner: Option<Form0605MannerOfPayment>) -> Option<&'static str> {
+    let manner = manner?;
+    Form0605MannerOfPayment::ALL
+        .iter()
+        .position(|m| *m == manner)
+        .map(|index| MANNER_VALUES[index])
+}
 
 /// Every editor input: (key, label, placeholder).
 const INPUTS: &[(&str, &str, &str)] = &[
-    ("year", "Item 2 — Year ended", "YYYY"),
     ("due", "Item 4 — Due date (MM/DD/YYYY)", "optional"),
     ("sheets", "Item 5 — No. of sheets attached", "0"),
     (
@@ -169,6 +201,10 @@ pub struct Form0605View {
     tax_type: Entity<ComboboxState>,
     /// Item 6 ATC combobox (one value, listing the ATCs offered for the tax type).
     atc: Entity<ComboboxState>,
+    /// Item 2 year-end month combobox (enabled only under Fiscal).
+    month: Entity<ComboboxState>,
+    /// Item 17 manner-of-payment combobox.
+    manner: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -181,7 +217,6 @@ impl Form0605View {
     fn initial(draft: &Form0605Draft, key: &str) -> String {
         let p = &draft.payment_details;
         match key {
-            "year" => draft.taxable_year.to_string(),
             "due" => draft.due_date.map(|d| d.to_string()).unwrap_or_default(),
             "sheets" => draft.number_of_sheets.to_string(),
             "period" => draft
@@ -259,13 +294,6 @@ impl Form0605View {
             }
             parsed
         };
-        if let Some(year) = number("year", self.input_text("year", cx), &mut errors) {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         if let Some(sheets) = number("sheets", self.input_text("sheets", cx), &mut errors) {
             draft.number_of_sheets = if (0.0..=999.0).contains(&sheets) {
                 sheets as u16
@@ -312,20 +340,24 @@ impl Form0605View {
                 *slot = Some(value);
             }
         }
-        for (key, slot) in [
-            ("due", &mut draft.due_date),
-            ("period", &mut draft.return_period),
+        for (key, item, slot) in [
+            ("due", 4, &mut draft.due_date),
+            ("period", 7, &mut draft.return_period),
         ] {
             let text = self.input_text(key, cx);
-            match parse_date(&text) {
-                Ok(value) => *slot = value,
-                Err(()) => errors.push((
-                    key.to_string(),
-                    format!(
-                        "{}: \"{text}\" is not a MM/DD/YYYY date.",
-                        Self::label_of(key)
-                    ),
-                )),
+            // The official alert for the branch the typed date fails.
+            match form_0605_typed_date_alert(item, &text) {
+                Some(alert) => errors.push((key.to_string(), alert.to_string())),
+                None => match parse_date(&text) {
+                    Ok(value) => *slot = value,
+                    Err(()) => errors.push((
+                        key.to_string(),
+                        format!(
+                            "{}: \"{text}\" is not a MM/DD/YYYY date.",
+                            Self::label_of(key)
+                        ),
+                    )),
+                },
             }
         }
         draft.line_of_business = self.input_text("lob", cx);
@@ -438,7 +470,6 @@ impl Form0605View {
     /// The validation field names an editor key feeds (for inline errors).
     fn draft_fields(key: &str) -> &'static [&'static str] {
         match key {
-            "year" => &["taxable_year"],
             "due" => &["due_date"],
             "sheets" => &["number_of_sheets"],
             "period" => &["return_period"],
@@ -616,22 +647,6 @@ impl Form0605View {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
         let fiscal = d.filing_basis == Form0605FilingBasis::Fiscal;
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            months = months.child(
-                Self::choice(
-                    ("0605_month", index),
-                    *name,
-                    d.year_end_month == month,
-                    !editable || !fiscal || month == 12,
-                )
-                .small()
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.year_end_month = month)),
-                ),
-            );
-        }
         let quarters: Vec<Button> = (0..=4u8)
             .map(|quarter| {
                 let label = if quarter == 0 {
@@ -669,20 +684,23 @@ impl Form0605View {
                     )),
                 ],
             ),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 2 — Year ended (month)"),
-                )
-                .child(months)
-                .into_any_element(),
-            self.field("year", layout, false),
-            Self::choice_row("Item 3 — Quarter", quarters),
+            select_field(
+                "Item 2 — Year ended (month)",
+                &self.month,
+                &month_rows(fiscal),
+                Some(MONTH_VALUES[usize::from(d.year_end_month.clamp(1, 12)) - 1]),
+                !editable || !fiscal,
+                self.error_for(&["year_end_month"]).as_deref(),
+                cx,
+            ),
+            with_field_error(
+                Self::fixed("Item 2 — Year ended", d.taxable_year.to_string()),
+                self.error_for(&["taxable_year"]),
+            ),
+            with_field_error(
+                Self::choice_row("Item 3 — Quarter", quarters),
+                self.error_for(&["quarter"]),
+            ),
             self.field("due", layout, false),
             self.field("sheets", layout, false),
             self.field("period", layout, false),
@@ -798,21 +816,6 @@ impl Form0605View {
     fn render_payment(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let manners: Vec<Button> = Form0605MannerOfPayment::ALL
-            .into_iter()
-            .enumerate()
-            .map(|(index, manner)| {
-                Self::choice(
-                    ("0605_manner", index),
-                    manner.label(),
-                    d.manner_of_payment == Some(manner),
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.edit(cx, |d| d.manner_of_payment = Some(manner))
-                }))
-            })
-            .collect();
         let types: Vec<Button> = Form0605TypeOfPayment::ALL
             .into_iter()
             .enumerate()
@@ -835,41 +838,55 @@ impl Form0605View {
                     | Form0605MannerOfPayment::AccountsReceivableOrDelinquentAccount
             )
         );
-        let mut children = vec![Self::choice_row("Item 17 — Manner of payment", manners)];
+        let mut children = vec![select_field(
+            "Item 17 — Manner of payment",
+            &self.manner,
+            &manner_rows(),
+            manner_value(d.manner_of_payment),
+            !editable,
+            self.error_for(&["manner_of_payment"]).as_deref(),
+            cx,
+        )];
         if d.manner_of_payment == Some(Form0605MannerOfPayment::Others) {
             children.push(self.field("others", layout, false));
         }
         if assessment {
             let approval = d.approval_selection;
-            children.push(Self::choice_row(
-                "Approval —",
-                vec![
-                    Self::choice(
-                        "0605_preapproved",
-                        "Pre-approved by Investigating Office",
-                        approval == Form0605ApprovalSelection::XmlOption1,
-                        !editable,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| {
-                            d.approval_selection = Form0605ApprovalSelection::XmlOption1
-                        })
-                    })),
-                    Self::choice(
-                        "0605_not_approved",
-                        "Not approved by Investigating Office",
-                        approval == Form0605ApprovalSelection::XmlOption2,
-                        !editable,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.edit(cx, |d| {
-                            d.approval_selection = Form0605ApprovalSelection::XmlOption2
-                        })
-                    })),
-                ],
+            children.push(with_field_error(
+                Self::choice_row(
+                    "Approval —",
+                    vec![
+                        Self::choice(
+                            "0605_preapproved",
+                            "Pre-approved by Investigating Office",
+                            approval == Form0605ApprovalSelection::XmlOption1,
+                            !editable,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| {
+                                d.approval_selection = Form0605ApprovalSelection::XmlOption1
+                            })
+                        })),
+                        Self::choice(
+                            "0605_not_approved",
+                            "Not approved by Investigating Office",
+                            approval == Form0605ApprovalSelection::XmlOption2,
+                            !editable,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| {
+                                d.approval_selection = Form0605ApprovalSelection::XmlOption2
+                            })
+                        })),
+                    ],
+                ),
+                self.error_for(&["approval_selection"]),
             ));
         }
-        children.push(Self::choice_row("Item 18 — Type of payment", types));
+        children.push(with_field_error(
+            Self::choice_row("Item 18 — Type of payment", types),
+            self.error_for(&["type_of_payment"]),
+        ));
         if d.type_of_payment == Some(Form0605TypeOfPayment::Installment) {
             children.push(self.field("installments", layout, false));
         }
@@ -972,6 +989,36 @@ impl QueueableFormView for Form0605View {
             cx,
             |this: &mut Self, code, _, cx| this.edit(cx, |d| d.atc = form_0605_atc(&code)),
         ));
+        let month = form_controls::new_select_state(
+            &month_rows(draft.filing_basis == Form0605FilingBasis::Fiscal),
+            window,
+            cx,
+        );
+        subscriptions.push(form_controls::on_select(
+            &month,
+            &month_rows(false),
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Ok(month) = value.parse::<u8>() {
+                    this.edit(cx, |d| d.year_end_month = month);
+                }
+            },
+        ));
+        let manner = form_controls::new_select_state(&manner_rows(), window, cx);
+        subscriptions.push(form_controls::on_select(
+            &manner,
+            &manner_rows(),
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                let manner = MANNER_VALUES
+                    .iter()
+                    .position(|v| *v == value)
+                    .map(|index| Form0605MannerOfPayment::ALL[index]);
+                this.edit(cx, |d| d.manner_of_payment = manner);
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
@@ -980,6 +1027,8 @@ impl QueueableFormView for Form0605View {
             inputs,
             tax_type,
             atc,
+            month,
+            manner,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1255,8 +1304,24 @@ impl Render for Form0605View {
             window,
             cx,
         );
+        let fiscal = self.draft.filing_basis == Form0605FilingBasis::Fiscal;
+        form_controls::sync_select(
+            &self.month,
+            &month_rows(fiscal),
+            Some(MONTH_VALUES[usize::from(self.draft.year_end_month.clamp(1, 12)) - 1]),
+            window,
+            cx,
+        );
+        form_controls::sync_select(
+            &self.manner,
+            &manner_rows(),
+            manner_value(self.draft.manner_of_payment),
+            window,
+            cx,
+        );
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
+        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1319,6 +1384,11 @@ impl Render for Form0605View {
                                         this.revert_to_draft(window, cx)
                                     })),
                             )
+                        })
+                        .when(is_draft && error_count > 0, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {error_count} item(s) under Needs review to queue."
+                            )))
                         })
                         .child(
                             Button::new("0605_submit")

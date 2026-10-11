@@ -22,6 +22,11 @@ pub const FORM_0619E_LAYOUT_ID: &str = "0619e-v2018";
 /// Official `formType` and PROD SFTP folder (`ftpTargetFolder.PROD['0619E']`).
 pub const FORM_0619E_FORM_TYPE: &str = "0619E";
 
+/// `saveXML` alert (0619e-save-008) for a month that already has a filed return
+/// while Item 3 is No. The port keeps one return per month, so the page
+/// shows it on a filed month instead of opening an amendment.
+pub const FORM_0619E_AMENDED_ALERT: &str = "If your intention is to make an amended return, kindly tick Amended Return to 'Yes' before hitting 'Save' or 'Final Copy' or 'Submit'.";
+
 /// `loadBGData` splits the escaped, upper-cased address at this length.
 const ADDRESS_SPLIT: usize = 127;
 
