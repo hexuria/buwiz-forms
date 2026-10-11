@@ -275,11 +275,42 @@ impl Form2553Draft {
         draft
     }
 
-    /// Item 1: calendar years end in December (`dateyear` / `datemonth`).
-    pub fn set_tax_period_basis(&mut self, basis: TaxPeriodBasis) {
+    /// Item 1 radio click, like the official `dateyear()`: Calendar locks
+    /// Item 2 to December; Fiscal with December clears the month and returns
+    /// the official alert.
+    pub fn set_tax_period_basis(&mut self, basis: TaxPeriodBasis) -> Option<&'static str> {
         self.tax_period_basis = basis;
-        if basis == TaxPeriodBasis::Calendar {
-            self.year_end_month = 12;
+        match basis {
+            TaxPeriodBasis::Calendar => {
+                self.year_end_month = 12;
+                None
+            }
+            TaxPeriodBasis::Fiscal if self.year_end_month == 12 => {
+                self.year_end_month = 0;
+                Some("You have entered invalid month for Fiscal Year")
+            }
+            TaxPeriodBasis::Fiscal => None,
+        }
+    }
+
+    /// Item 2 month change, like the official `datemonth()`: the basis
+    /// follows the month and the official notice is returned.
+    pub fn set_year_end_month(&mut self, month: u8) -> Option<&'static str> {
+        self.year_end_month = month;
+        match self.tax_period_basis {
+            TaxPeriodBasis::Calendar if month != 12 => {
+                self.tax_period_basis = TaxPeriodBasis::Fiscal;
+                Some(
+                    "You have entered a filing year not ending in December. This filing will be considered as a Fiscal Year Filing.",
+                )
+            }
+            TaxPeriodBasis::Fiscal if month == 12 => {
+                self.tax_period_basis = TaxPeriodBasis::Calendar;
+                Some(
+                    "You have entered a filing year ending in December. This filing will be considered as a Calendar Year Filing.",
+                )
+            }
+            _ => None,
         }
     }
 
@@ -460,7 +491,9 @@ impl FormValidator for Form2553Draft {
         }
         if self.taxable_year == 0 {
             err("taxable_year", "Please enter valid year on item 2.");
-        } else if self.taxable_year < 1900 || self.taxable_year > 9999 {
+        } else if self.taxable_year < 1900 {
+            // The official future-year check (2553-defect-023) is commented
+            // out in validateForm, so later years pass as they do there.
             err(
                 "taxable_year",
                 "Invalid date entry on Item no.2. Entry should not be lower than 1900.",
@@ -744,6 +777,49 @@ mod tests {
             .into_iter()
             .map(|(_, message)| message)
             .collect()
+    }
+
+    #[test]
+    fn item_2_year_follows_the_official_checks() {
+        let mut draft = sample();
+        draft.taxable_year = 1899;
+        assert_eq!(
+            messages(&draft),
+            ["Invalid date entry on Item no.2. Entry should not be lower than 1900."]
+        );
+        // 2553-defect-023: the official future-year branch is commented out.
+        draft.taxable_year = 9999;
+        assert!(messages(&draft).is_empty(), "{:?}", messages(&draft));
+    }
+
+    #[test]
+    fn fiscal_december_becomes_calendar_like_datemonth() {
+        let mut draft = sample();
+        draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+        draft.year_end_month = 6;
+        assert_eq!(
+            draft.set_year_end_month(12),
+            Some(
+                "You have entered a filing year ending in December. This filing will be considered as a Calendar Year Filing."
+            )
+        );
+        assert_eq!(draft.tax_period_basis, TaxPeriodBasis::Calendar);
+        assert_eq!(draft.year_end_month, 12);
+        assert_eq!(
+            draft.set_year_end_month(6),
+            Some(
+                "You have entered a filing year not ending in December. This filing will be considered as a Fiscal Year Filing."
+            )
+        );
+        assert_eq!(draft.tax_period_basis, TaxPeriodBasis::Fiscal);
+        assert_eq!(draft.set_year_end_month(3), None);
+        // dateyear(): Fiscal with December clears the month, never June.
+        draft.set_tax_period_basis(TaxPeriodBasis::Calendar);
+        assert_eq!(
+            draft.set_tax_period_basis(TaxPeriodBasis::Fiscal),
+            Some("You have entered invalid month for Fiscal Year")
+        );
+        assert_eq!(draft.year_end_month, 0);
     }
 
     #[test]
