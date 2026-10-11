@@ -254,13 +254,6 @@ impl Form1601FqView {
             parsed
         };
         let mut draft = self.draft.clone();
-        if let Some(year) = number("year", "Item 1 year", cx) {
-            draft.taxable_year = if (0.0..=9999.0).contains(&year) {
-                year as u16
-            } else {
-                0
-            };
-        }
         if let Some(sheets) = number("sheets", "Item 5", cx) {
             draft.number_of_attached_sheets = if (0.0..=999.0).contains(&sheets) {
                 sheets as u16
@@ -572,25 +565,47 @@ impl Form1601FqView {
             .into_any_element()
     }
 
+    /// Plain label + value for an item the library tile decides.
+    fn read_only_row(layout: Layout, label: &str, value: String) -> AnyElement {
+        let label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let value = div().font_weight(FontWeight::BOLD).child(value);
+        match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.45)))
+                .child(value.w(relative(0.55))),
+        }
+        .into_any_element()
+    }
+
     fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
-        let quarters = (1..=4u8)
-            .map(|quarter| {
-                Self::choice(
-                    ("1601fq_qtr", quarter as usize),
-                    format!("Q{quarter}"),
-                    self.draft.quarter == quarter,
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.quarter = quarter)))
-                .into_any_element()
-            })
-            .collect();
         let amended = self.draft.is_amended;
         let withheld = self.draft.any_tax_withheld;
         let children = vec![
-            self.field("year", "Item 1 — For the Year", layout, !editable),
-            Self::labelled_row("Item 2 — Quarter", quarters),
+            Self::read_only_row(
+                layout,
+                "Item 1 — For the Year",
+                self.draft.taxable_year.to_string(),
+            ),
+            Self::read_only_row(
+                layout,
+                "Item 2 — Quarter",
+                format!("Q{}", self.draft.quarter),
+            ),
             Self::labelled_row(
                 "Item 3 — Amended return?",
                 vec![
