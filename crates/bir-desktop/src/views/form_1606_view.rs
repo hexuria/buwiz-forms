@@ -24,7 +24,9 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{self, field_error, messages_for, select_field};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form1606View {}
@@ -127,6 +129,14 @@ fn parse_amount(value: &str) -> Option<f64> {
     cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
+/// Item 15 choices: the label doubles as the stored key.
+fn property_class_options() -> Vec<(&'static str, &'static str)> {
+    Form1606PropertyClass::ALL
+        .iter()
+        .map(|class| (class.label(), class.label()))
+        .collect()
+}
+
 fn format_tin(tin: &str) -> String {
     let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
     if digits.len() < 9 {
@@ -147,6 +157,8 @@ pub struct Form1606View {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    /// Item 15 "Classification of Property" combobox.
+    property_class: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -502,12 +514,16 @@ impl Form1606View {
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if self.has_error(&keys) {
+        let message = messages_for(
+            self.parse_errors.iter().chain(&self.validation_errors),
+            &keys,
+        );
+        let label = if message.is_some() {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -522,8 +538,18 @@ impl Form1606View {
                 .w_full()
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
+        };
+        match message {
+            Some(message) => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(row)
+                .child(field_error(message))
+                .into_any_element(),
+            None => row.into_any_element(),
         }
-        .into_any_element()
     }
 
     fn text_field(&self, key: &str, layout: Layout, disabled: bool) -> AnyElement {
@@ -649,6 +675,13 @@ impl Form1606View {
             .gap_1()
             .child(title)
             .child(div().flex().flex_wrap().gap_2().children(buttons))
+            .children(
+                messages_for(
+                    self.parse_errors.iter().chain(&self.validation_errors),
+                    error_keys,
+                )
+                .map(field_error),
+            )
             .into_any_element()
     }
 
@@ -783,22 +816,20 @@ impl Form1606View {
     fn render_property(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let classes = Form1606PropertyClass::ALL
-            .iter()
-            .enumerate()
-            .map(|(index, class)| {
-                let class = *class;
-                Self::choice(
-                    ("1606_class", index),
-                    class.label(),
-                    d.property_class == Some(class),
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.edit(cx, |d| d.property_class = Some(class))
-                }))
-            })
-            .collect();
+        let class_options = property_class_options();
+        let class_select = select_field(
+            "Item 15 — Classification of Property",
+            &self.property_class,
+            &class_options,
+            d.property_class.map(Form1606PropertyClass::label),
+            !editable,
+            messages_for(
+                self.parse_errors.iter().chain(&self.validation_errors),
+                &["property_class"],
+            )
+            .as_deref(),
+            cx,
+        );
         let relief = d.tax_relief;
         let relief_buttons = [
             ("1606_relief_no", "No", Form1606TaxRelief::No),
@@ -844,11 +875,7 @@ impl Form1606View {
         self.section(
             "Part I — Property",
             vec![
-                self.choice_row(
-                    "Item 15 — Classification of Property",
-                    &["property_class"],
-                    classes,
-                ),
+                class_select,
                 self.grid(layout, fields),
                 self.choice_row(
                     "Item 19 — Tax relief under an International Tax Treaty or Special Law?",
@@ -1085,12 +1112,29 @@ impl QueueableFormView for Form1606View {
             ));
             inputs.insert(key, input);
         }
+        let class_options = property_class_options();
+        let property_class = form_controls::new_select_state(&class_options, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &property_class,
+            &class_options,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Some(class) = Form1606PropertyClass::ALL
+                    .into_iter()
+                    .find(|class| class.label() == value)
+                {
+                    this.edit(cx, |d| d.property_class = Some(class));
+                }
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            property_class,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1308,6 +1352,13 @@ impl FormViewTrait for Form1606View {
 impl Render for Form1606View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        form_controls::sync_select(
+            &self.property_class,
+            &property_class_options(),
+            self.draft.property_class.map(Form1606PropertyClass::label),
+            window,
+            cx,
+        );
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {

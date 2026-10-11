@@ -28,7 +28,11 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, field_error, messages_for, select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form0605View {}
@@ -57,9 +61,6 @@ const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-/// Matches the pickers show at once.
-const PICKER_LIMIT: usize = 24;
-
 /// Every editor input: (key, label, placeholder).
 const INPUTS: &[(&str, &str, &str)] = &[
     ("year", "Item 2 — Year ended", "YYYY"),
@@ -70,8 +71,6 @@ const INPUTS: &[(&str, &str, &str)] = &[
         "Item 7 — Return period (MM/DD/YYYY)",
         "MM/DD/YYYY",
     ),
-    ("tax_filter", "Item 8 — Find a tax type", "code or name"),
-    ("atc_filter", "Item 6 — Find an ATC", "code or name"),
     ("lob", "Item 12 — Line of Business/Occupation", ""),
     ("name", "Item 13 — Taxpayer's Name", ""),
     ("phone", "Item 14 — Telephone Number", "digits only"),
@@ -141,21 +140,23 @@ fn optional_money_text(value: Option<f64>) -> String {
     value.map(official_amount).unwrap_or_default()
 }
 
-/// Rows of an official code table matching `filter` (code or description).
-fn matching(
-    table: &[(&'static str, &'static str)],
-    filter: &str,
-) -> Vec<(usize, &'static str, &'static str)> {
-    let needle = filter.trim().to_uppercase();
+/// Combobox rows `(code, "code — description")` of an official code table,
+/// keeping the codes `keep` accepts.
+fn code_rows(
+    table: &'static [(&'static str, &'static str)],
+    keep: impl Fn(&str) -> bool,
+) -> Vec<(&'static str, String)> {
     table
         .iter()
-        .enumerate()
-        .filter(|(_, (code, description))| {
-            needle.is_empty()
-                || code.to_uppercase().contains(&needle)
-                || description.to_uppercase().contains(&needle)
-        })
-        .map(|(index, (code, description))| (index, *code, *description))
+        .filter(|(code, _)| keep(code))
+        .map(|(code, description)| (*code, format!("{code} — {description}")))
+        .collect()
+}
+
+/// `code_rows` as the `&str` pairs the form controls take.
+fn borrowed<'a>(rows: &'a [(&'static str, String)]) -> Vec<(&'a str, &'a str)> {
+    rows.iter()
+        .map(|(code, label)| (*code, label.as_str()))
         .collect()
 }
 
@@ -164,6 +165,10 @@ pub struct Form0605View {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    /// Item 8 tax type combobox (one value).
+    tax_type: Entity<ComboboxState>,
+    /// Item 6 ATC combobox (one value, listing the ATCs offered for the tax type).
+    atc: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -430,7 +435,45 @@ impl Form0605View {
         .into_any_element()
     }
 
-    /// A labelled input. On phones the label sits above the field.
+    /// The validation field names an editor key feeds (for inline errors).
+    fn draft_fields(key: &str) -> &'static [&'static str] {
+        match key {
+            "year" => &["taxable_year"],
+            "due" => &["due_date"],
+            "sheets" => &["number_of_sheets"],
+            "period" => &["return_period"],
+            "lob" => &["line_of_business"],
+            "name" => &["taxpayer_name"],
+            "phone" => &["contact_number"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "others" => &["other_manner_description"],
+            "installments" => &["number_of_installments"],
+            "i19" => &["item_19_basic_tax_or_payment"],
+            "i20a" => &["item_20a_surcharge"],
+            "i20b" => &["item_20b_interest"],
+            "i20c" => &["item_20c_compromise"],
+            "cash" => &["payment_23_cash_or_bank_debit_memo.amount"],
+            "check_date" => &["payment_24_check.date"],
+            "check_amount" => &["payment_24_check.amount"],
+            "tdm_date" => &["payment_25_tax_debit_memo.date"],
+            "tdm_amount" => &["payment_25_tax_debit_memo.amount"],
+            "other_date" => &["payment_26_others.date"],
+            "other_amount" => &["payment_26_others.amount"],
+            _ => &[],
+        }
+    }
+
+    /// Validation and parse messages for the given field names, one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors.iter().chain(&self.validation_errors),
+            keys,
+        )
+    }
+
+    /// A labelled input. On phones the label sits above the field; a
+    /// validation message for it shows directly underneath.
     fn field(&self, key: &str, layout: Layout, disabled: bool) -> AnyElement {
         let editable = self.draft.lifecycle.is_editable();
         let input = self
@@ -438,11 +481,19 @@ impl Form0605View {
             .get(key)
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled || !editable));
+        let mut keys = vec![key];
+        keys.extend_from_slice(Self::draft_fields(key));
+        let message = self.error_for(&keys);
         let label = div()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(Self::label_of(key).to_string());
-        match layout {
+        let label = if message.is_some() {
+            label.text_color(gpui::red())
+        } else {
+            label
+        };
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -457,8 +508,18 @@ impl Form0605View {
                 .w_full()
                 .child(label.w(relative(0.5)))
                 .child(body.w(relative(0.5))),
+        };
+        match message {
+            Some(message) => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(row)
+                .child(field_error(message))
+                .into_any_element(),
+            None => row.into_any_element(),
         }
-        .into_any_element()
     }
 
     /// Two columns on desktop, one otherwise.
@@ -634,92 +695,53 @@ impl Form0605View {
         let d = &self.draft;
         let tax_code = d.tax_type.as_ref().map(|t| t.code().to_string());
         let atc_code = d.atc.as_ref().map(|a| a.code().to_string());
-        let describe = |table: &[(&str, &str)], code: &Option<String>| {
-            code.as_ref()
-                .and_then(|code| table.iter().find(|(c, _)| c == code))
-                .map(|(c, description)| format!("{c} — {description}"))
-                .unwrap_or_else(|| "Not selected".to_string())
-        };
-        let mut tax_picks = div().flex().flex_wrap().gap_2().w_full().min_w_0();
-        let tax_matches = matching(FORM_0605_TAX_TYPES, &self.input_text("tax_filter", cx));
-        let tax_count = tax_matches.len();
-        for (index, code, description) in tax_matches.into_iter().take(PICKER_LIMIT) {
-            // Wrapper keeps a long chip inside the card (clipped, never wider).
-            tax_picks = tax_picks.child(
-                div().max_w_full().min_w_0().overflow_hidden().child(
-                    Self::choice(
-                        ("0605_tax", index),
-                        format!("{code} — {description}"),
-                        tax_code.as_deref() == Some(code),
-                        !editable,
-                    )
-                    .small()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.edit(cx, |d| {
-                            // getTaxTypeCode() clears the ATC.
-                            d.tax_type = form_0605_tax_type(code);
-                            d.atc = None;
-                        })
-                    })),
-                ),
-            );
-        }
-        let mut atc_picks = div().flex().flex_wrap().gap_2();
-        let mut atc_count = 0;
-        if let Some(tax) = tax_code.clone() {
-            let offered: Vec<_> = matching(FORM_0605_ATCS, &self.input_text("atc_filter", cx))
-                .into_iter()
-                .filter(|(_, code, _)| form_0605_atc_offered_for(code, &tax))
-                .collect();
-            atc_count = offered.len();
-            for (index, code, description) in offered.into_iter().take(PICKER_LIMIT) {
-                atc_picks = atc_picks.child(
-                    Self::choice(
-                        ("0605_atc", index),
-                        format!("{code} — {description}"),
-                        atc_code.as_deref() == Some(code),
-                        !editable,
-                    )
-                    .small()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.edit(cx, |d| d.atc = form_0605_atc(code))
-                    })),
-                );
-            }
-        }
-        let more = |shown: usize| {
-            div()
-                .text_xs()
-                .child(if shown > PICKER_LIMIT {
-                    format!("{shown} match; showing {PICKER_LIMIT}. Type to narrow.")
-                } else {
-                    format!("{shown} match.")
-                })
-                .into_any_element()
-        };
-        let mut children = vec![
-            Self::fixed(
-                "Item 8 — Tax type",
-                describe(FORM_0605_TAX_TYPES, &tax_code),
-            ),
-            self.field("tax_filter", layout, false),
-            tax_picks.into_any_element(),
-            more(tax_count),
-            Self::fixed("Item 6 — ATC", describe(FORM_0605_ATCS, &atc_code)),
-        ];
-        if tax_code.is_some() {
-            children.push(self.field("atc_filter", layout, false));
-            children.push(atc_picks.into_any_element());
-            children.push(more(atc_count));
+        let tax_rows = code_rows(FORM_0605_TAX_TYPES, |_| true);
+        let tax_select = select_field(
+            "Item 8 — Tax type",
+            &self.tax_type,
+            &borrowed(&tax_rows),
+            tax_code.as_deref(),
+            !editable,
+            self.error_for(&["tax_type"]).as_deref(),
+            cx,
+        );
+        // Form 0605 stores one ATC (`Form0605Draft::atc`), so a single select.
+        let atc_error = self.error_for(&["atc"]);
+        let atc_select = if tax_code.is_some() {
+            select_field(
+                "Item 6 — ATC",
+                &self.atc,
+                &borrowed(&self.atc_rows()),
+                atc_code.as_deref(),
+                !editable,
+                atc_error.as_deref(),
+                cx,
+            )
         } else {
-            children.push(
+            with_field_error(
                 div()
                     .text_sm()
                     .child("Please select a valid Tax Type on Item 8.")
                     .into_any_element(),
-            );
+                atc_error,
+            )
+        };
+        self.section(
+            "Tax type and ATC (Items 6 and 8)",
+            vec![self.grid(layout, vec![tax_select, atc_select])],
+            cx,
+        )
+    }
+
+    /// ATC rows the official page offers for the chosen tax type (none until
+    /// a tax type is picked).
+    fn atc_rows(&self) -> Vec<(&'static str, String)> {
+        match self.draft.tax_type.as_ref() {
+            Some(tax) => code_rows(FORM_0605_ATCS, |code| {
+                form_0605_atc_offered_for(code, tax.code())
+            }),
+            None => Vec::new(),
         }
-        self.section("Tax type and ATC (Items 6 and 8)", children, cx)
     }
 
     fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -924,12 +946,40 @@ impl QueueableFormView for Form0605View {
             ));
             inputs.insert(key.to_string(), input);
         }
+        let tax_rows = code_rows(FORM_0605_TAX_TYPES, |_| true);
+        let tax_type = form_controls::new_select_state(&borrowed(&tax_rows), window, cx);
+        subscriptions.push(form_controls::on_select(
+            &tax_type,
+            &borrowed(&tax_rows),
+            window,
+            cx,
+            |this: &mut Self, code, _, cx| {
+                this.edit(cx, |d| {
+                    // getTaxTypeCode() clears the ATC.
+                    d.tax_type = form_0605_tax_type(&code);
+                    d.atc = None;
+                })
+            },
+        ));
+        // The ATC box lists only what the tax type offers (kept in step by
+        // `render`); events resolve against the full table.
+        let atc_rows = code_rows(FORM_0605_ATCS, |_| true);
+        let atc = form_controls::new_select_state(&[], window, cx);
+        subscriptions.push(form_controls::on_select(
+            &atc,
+            &borrowed(&atc_rows),
+            window,
+            cx,
+            |this: &mut Self, code, _, cx| this.edit(cx, |d| d.atc = form_0605_atc(&code)),
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            tax_type,
+            atc,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1189,6 +1239,22 @@ impl FormViewTrait for Form0605View {
 impl Render for Form0605View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let tax_code = self.draft.tax_type.as_ref().map(|t| t.code().to_string());
+        let atc_code = self.draft.atc.as_ref().map(|a| a.code().to_string());
+        form_controls::sync_select(
+            &self.tax_type,
+            &borrowed(&code_rows(FORM_0605_TAX_TYPES, |_| true)),
+            tax_code.as_deref(),
+            window,
+            cx,
+        );
+        form_controls::sync_select(
+            &self.atc,
+            &borrowed(&self.atc_rows()),
+            atc_code.as_deref(),
+            window,
+            cx,
+        );
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1353,7 +1419,9 @@ impl Render for Form0605View {
 
 #[cfg(test)]
 mod tests {
-    use super::{FORM_0605_TAX_TYPES, Layout, format_tin, matching, parse_amount, parse_date};
+    use super::{
+        FORM_0605_TAX_TYPES, Layout, borrowed, code_rows, format_tin, parse_amount, parse_date,
+    };
     use gpui::px;
 
     #[test]
@@ -1372,10 +1440,14 @@ mod tests {
         assert!(parse_date("12/31/2025").unwrap().is_some());
         assert!(parse_date("31/12/2025").is_err());
         assert_eq!(format_tin("12345678800000"), "123-456-788-00000");
+        let rows = code_rows(FORM_0605_TAX_TYPES, |_| true);
+        let options = borrowed(&rows);
+        assert_eq!(options.len(), FORM_0605_TAX_TYPES.len());
         assert!(
-            matching(FORM_0605_TAX_TYPES, "income")
+            options
                 .iter()
-                .any(|(_, code, _)| *code == "IT")
+                .any(|(code, label)| *code == "IT" && label.starts_with("IT — "))
         );
+        assert!(code_rows(FORM_0605_TAX_TYPES, |code| code == "IT").len() == 1);
     }
 }

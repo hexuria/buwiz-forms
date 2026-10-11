@@ -23,7 +23,11 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, field_error, messages_for, select_field, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -49,8 +53,20 @@ impl Layout {
     }
 }
 
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+/// Item 2 month choices: (month number, label).
+const MONTH_OPTIONS: [(&str, &str); 12] = [
+    ("1", "January"),
+    ("2", "February"),
+    ("3", "March"),
+    ("4", "April"),
+    ("5", "May"),
+    ("6", "June"),
+    ("7", "July"),
+    ("8", "August"),
+    ("9", "September"),
+    ("10", "October"),
+    ("11", "November"),
+    ("12", "December"),
 ];
 
 /// Text inputs: (key, label, placeholder).
@@ -106,6 +122,8 @@ pub struct Form2553View {
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
     inputs: BTreeMap<String, Entity<InputState>>,
+    /// Item 2 "Month the year ends" combobox.
+    year_end_month: Entity<ComboboxState>,
     validation_errors: Vec<(String, String)>,
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
@@ -353,29 +371,73 @@ impl Form2553View {
         .into_any_element()
     }
 
-    /// A labelled input. On phones the label sits above the field.
+    /// The validation field names an editor key feeds (for inline errors).
+    fn draft_fields(key: &str) -> Vec<&str> {
+        let fields: &[&str] = match key {
+            "year" => &["taxable_year"],
+            "sheets" => &["number_of_attached_sheets"],
+            "lob" => &["line_of_business"],
+            "name" => &["taxpayer_name"],
+            "phone" => &["contact_number"],
+            "address" => &["registered_address"],
+            "zip" => &["zip_code"],
+            "prev" => &["tax_paid_previous"],
+            "cwt" => &["creditable_tax_withheld"],
+            "sur" => &["surcharge"],
+            "int" => &["interest"],
+            "comp" => &["compromise"],
+            _ => &[],
+        };
+        fields.to_vec()
+    }
+
+    /// Validation and parse messages for the given field names, one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.parse_errors.iter().chain(&self.validation_errors),
+            keys,
+        )
+    }
+
+    /// Messages for one editor input (its own key plus the draft fields it feeds).
+    fn input_error(&self, key: &str) -> Option<String> {
+        let mut keys = vec![key];
+        keys.extend(Self::draft_fields(key));
+        let row = |prefix: &str| {
+            key.strip_prefix(prefix)
+                .and_then(|n| n.parse::<usize>().ok())
+        };
+        let dynamic = if let Some(index) = row("amt") {
+            Some(format!("schedule[{index}].taxable_amount"))
+        } else {
+            row("rate").map(|index| format!("schedule[{index}].tax_rate"))
+        };
+        if let Some(dynamic) = &dynamic {
+            keys.push(dynamic);
+        }
+        self.error_for(&keys)
+    }
+
+    /// A labelled input. On phones the label sits above the field; a
+    /// validation message for it shows directly underneath.
     fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
         let input = self
             .inputs
             .get(key)
             .expect("editor input registry is complete");
         let body = div().child(Input::new(input).disabled(disabled));
-        let error = self
-            .validation_errors
-            .iter()
-            .chain(self.parse_errors.iter())
-            .any(|(field, _)| field == key || field.starts_with(&format!("{key}[")));
+        let message = self.input_error(key);
         let label = div()
             .min_w_0()
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        let label = if error {
+        let label = if message.is_some() {
             label.text_color(gpui::red())
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -390,8 +452,18 @@ impl Form2553View {
                 .w_full()
                 .child(label.w(relative(0.45)))
                 .child(body.w(relative(0.55))),
+        };
+        match message {
+            Some(message) => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(row)
+                .child(field_error(message))
+                .into_any_element(),
+            None => row.into_any_element(),
         }
-        .into_any_element()
     }
 
     /// Two columns on desktop, one otherwise.
@@ -494,30 +566,17 @@ impl Form2553View {
         let editable = self.draft.lifecycle.is_editable();
         let basis = self.draft.tax_period_basis;
         let fiscal = basis == TaxPeriodBasis::Fiscal;
-        let mut months = div().flex().flex_wrap().gap_1();
-        for (index, name) in MONTHS.iter().enumerate() {
-            let month = index as u8 + 1;
-            // Fiscal years cannot end in December (`dateyear`).
-            let unavailable = !fiscal || month == 12;
-            months = months.child(
-                Self::choice(
-                    ("2553_month", index),
-                    *name,
-                    self.draft.year_end_month == month,
-                    !editable || unavailable,
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    let mut notice = None;
-                    this.edit(cx, |d| {
-                        notice = d.set_year_end_month(month);
-                    });
-                    if let Some(notice) = notice {
-                        this.status_message = Some(notice.to_string());
-                    }
-                })),
-            );
-        }
+        // Calendar years always end in December, so the picker is read-only.
+        let month_value = self.draft.year_end_month.to_string();
+        let month = select_field(
+            "Item 2 — Year ended: month",
+            &self.year_end_month,
+            &MONTH_OPTIONS,
+            Some(month_value.as_str()),
+            !editable || !fiscal,
+            self.error_for(&["year_end_month"]).as_deref(),
+            cx,
+        );
         let quarters: Vec<Button> = (1..=4u8)
             .map(|quarter| {
                 Self::choice(
@@ -560,22 +619,12 @@ impl Form2553View {
                     )),
                 ],
             ),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .min_w_0()
-                        .max_w_full()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child("Item 2 — Year ended: month"),
-                )
-                .child(months.w_full())
-                .into_any_element(),
+            month,
             self.field("year", "Item 2 — Year ended: year", layout, !editable),
-            Self::choice_row(layout, "Item 3 — Quarter", quarters),
+            with_field_error(
+                Self::choice_row(layout, "Item 3 — Quarter", quarters),
+                self.error_for(&["quarter"]),
+            ),
             Self::choice_row(
                 layout,
                 "Item 4 — Amended return?",
@@ -655,6 +704,7 @@ impl Form2553View {
             .iter()
             .find(|(k, _, _)| *k == "email")
             .map(|(key, label, _)| self.field(key, label, layout, !editable));
+        let treaty_error = self.error_for(&["tax_treaty"]);
         let treaty_row = Self::choice_row(
             layout,
             "Item 13 — Are you availing of tax relief under Special Law or International Tax Treaty?",
@@ -693,7 +743,7 @@ impl Form2553View {
         self.section(
             "Part I — Background Information",
             std::iter::once(self.grid(layout, fields))
-                .chain(std::iter::once(treaty_row))
+                .chain(std::iter::once(with_field_error(treaty_row, treaty_error)))
                 .chain(email)
                 .collect(),
             cx,
@@ -792,6 +842,7 @@ impl Form2553View {
                 )
                 .child(due)
         };
+        let atc_key = format!("schedule[{row}].atc_code");
         div()
             .flex()
             .flex_col()
@@ -801,6 +852,7 @@ impl Form2553View {
             .border_color(cx.theme().border)
             .rounded_md()
             .child(heading)
+            .children(self.error_for(&[atc_key.as_str()]).map(field_error))
             .child(body)
             .into_any_element()
     }
@@ -852,6 +904,11 @@ impl Form2553View {
                     .into_any_element(),
             );
         }
+        children.extend(
+            self.error_for(&["schedule"])
+                .map(field_error)
+                .map(IntoElement::into_any_element),
+        );
         children.push(self.computed("19 — Total tax due", self.draft.total_tax_due, cx));
         children.extend(self.render_totals(layout, cx));
         self.section("Part II — Computation of Tax", children, cx)
@@ -883,8 +940,10 @@ impl Form2553View {
             cx,
         );
         let mut overpayment = Vec::new();
+        let mut overpayment_error = None;
         if d.total_amount_payable < 0.0 {
             let over = d.overpayment;
+            overpayment_error = self.error_for(&["overpayment"]);
             overpayment.push(Self::choice_row(
                 layout,
                 "If overpayment, mark one box only:",
@@ -926,7 +985,11 @@ impl Form2553View {
             self.grid(layout, penalties),
             total,
         ];
-        out.extend(overpayment);
+        out.extend(
+            overpayment
+                .into_iter()
+                .map(|row| with_field_error(row, overpayment_error.clone())),
+        );
         out
     }
 }
@@ -981,12 +1044,39 @@ impl QueueableFormView for Form2553View {
             ));
             inputs.insert(key, input);
         }
+        let year_end_month = form_controls::new_select_state(&MONTH_OPTIONS, window, cx);
+        subscriptions.push(form_controls::on_select(
+            &year_end_month,
+            &MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                let Ok(month) = value.parse::<u8>() else {
+                    return;
+                };
+                // Fiscal years cannot end in December (`dateyear`); a refused
+                // pick re-renders the draft's month back into the box.
+                let fiscal = this.draft.tax_period_basis == TaxPeriodBasis::Fiscal;
+                if !fiscal || month == 12 {
+                    cx.notify();
+                    return;
+                }
+                let mut notice = None;
+                this.edit(cx, |d| {
+                    notice = d.set_year_end_month(month);
+                });
+                if let Some(notice) = notice {
+                    this.status_message = Some(notice.to_string());
+                }
+            },
+        ));
         let validation_errors = draft.validate();
         Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
             inputs,
+            year_end_month,
             validation_errors,
             parse_errors: Vec::new(),
             status_message: None,
@@ -1243,6 +1333,14 @@ impl FormViewTrait for Form2553View {
 impl Render for Form2553View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let month_value = self.draft.year_end_month.to_string();
+        form_controls::sync_select(
+            &self.year_end_month,
+            &MONTH_OPTIONS,
+            Some(month_value.as_str()),
+            window,
+            cx,
+        );
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
