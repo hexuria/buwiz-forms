@@ -457,6 +457,9 @@ pub struct Form2550QV2View {
     validation_setup: Form2550QRepoDiagnosticSetupOutcome,
     validation_state: Form2550QDiagnosticState,
     validation_input_revision: InputRevision,
+    /// Set when Validate runs the form's official checks; cleared by any
+    /// input change. Queue requires it (the candidate diagnostic does not gate).
+    validated_at_current_revision: bool,
     semantic_field_targets: SemanticFieldTargets<Entity<InputState>>,
     semantic_focus_error: Option<String>,
     /// The raw identity controls sit behind an "Advanced" toggle; they open
@@ -875,6 +878,7 @@ impl Form2550QV2View {
             validation_setup,
             validation_state,
             validation_input_revision: InputRevision::default(),
+            validated_at_current_revision: false,
             semantic_field_targets,
             semantic_focus_error,
             show_raw_identity,
@@ -1857,6 +1861,7 @@ impl Form2550QV2View {
     }
 
     fn raw_control_changed(&mut self) {
+        self.validated_at_current_revision = false;
         match advance_input_revision(&mut self.validation_input_revision) {
             Ok(_) => {
                 self.validation_state = diagnostic_state_from_setup(&self.validation_setup);
@@ -1871,6 +1876,14 @@ impl Form2550QV2View {
     }
 
     fn run_validation_diagnostic(&mut self, cx: &mut Context<Self>) {
+        // The form's own official checks (ported HTA validation) gate Queue.
+        // Synchronization does not advance the user-edit revision.
+        if self.editor_state_error.is_none() && self.semantic_focus_error.is_none() {
+            self.sync_from_inputs(None, cx);
+            self.validated_at_current_revision = self.editor_state_error.is_none();
+        } else {
+            self.validated_at_current_revision = false;
+        }
         let setup = self.validation_setup.clone();
         match setup {
             Form2550QRepoDiagnosticSetupOutcome::Unavailable { reason } => {
@@ -2048,6 +2061,10 @@ impl Form2550QV2View {
 
     /// Advanced: the eleven raw identity controls, collapsed by default.
     fn render_raw_identity_block(&self, cx: &mut Context<Self>) -> AnyElement {
+        // Exact-text replay for official samples only; filers never see it.
+        if !cfg!(feature = "dev-tools") {
+            return div().into_any_element();
+        }
         let open = self.show_raw_identity;
         let toggle = gpui_component::button::Button::new("2550q_raw_identity_toggle")
             .label(if open {
@@ -2185,6 +2202,28 @@ impl Form2550QV2View {
     }
 
     fn render_validation_diagnostic(&self, cx: &Context<Self>) -> AnyElement {
+        let mut root = div().flex().flex_col().gap_4();
+        if self.validated_at_current_revision && self.validation_errors.is_empty() {
+            root = root.child(
+                div()
+                    .p_3()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(cx.theme().success)
+                    .bg(cx.theme().success.opacity(0.1))
+                    .font_weight(FontWeight::BOLD)
+                    .child("Validation successful."),
+            );
+        }
+        #[cfg(feature = "dev-tools")]
+        {
+            root = root.child(self.render_candidate_diagnostic_box(cx));
+        }
+        root.into_any_element()
+    }
+
+    #[cfg(feature = "dev-tools")]
+    fn render_candidate_diagnostic_box(&self, cx: &Context<Self>) -> AnyElement {
         let (title, message) = match &self.validation_state {
             Form2550QDiagnosticState::NotRun => (
                 "Validation not run",
@@ -2648,7 +2687,7 @@ impl Render for Form2550QV2View {
         let queue_reason = match queue_blocked_reason(
             editor_is_editable,
             self.validation_errors.len(),
-            &self.validation_state,
+            self.validated_at_current_revision,
         ) {
             Some(text) => div()
                 .text_xs()
@@ -2775,8 +2814,10 @@ impl Render for Form2550QV2View {
             .mx_auto()
             .flex()
             .flex_col()
-            .gap_6()
-            .child(
+            .gap_6();
+        #[cfg(feature = "dev-tools")]
+        {
+            content = content.child(
                 div()
                     .p_4()
                     .rounded_lg()
@@ -2785,9 +2826,10 @@ impl Render for Form2550QV2View {
                     .bg(cx.theme().warning.opacity(0.1))
                     .child(div().font_weight(FontWeight::BOLD).child("Evidence boundary"))
                     .child(div().mt_1().text_sm().child(
-                        "The April 2024 official form, guidelines, and two 160-field saves prove local draft/XML behavior. Valid returns can be queued for background submission; HTML parity, additional schedule sheets, and native PDF output remain disabled until separately certified.",
+                        "Dev tools: the candidate rules-engine diagnostic below is informational and does not gate Queue. Queue follows the form's own official checks after Validate.",
                     )),
             );
+        }
         if let Some(error) = &self.editor_state_error {
             content = content.child(
                 div()
@@ -2980,7 +3022,7 @@ impl Render for Form2550QV2View {
                             .disabled(!queue_button_enabled(
                                 editor_is_editable,
                                 !self.validation_errors.is_empty(),
-                                &self.validation_state,
+                                self.validated_at_current_revision,
                             ))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.mark_submitted(window, cx);
@@ -3509,7 +3551,7 @@ fn model_error_keys(ui_key: &str) -> &'static [&'static str] {
 fn queue_blocked_reason(
     editor_is_editable: bool,
     error_count: usize,
-    validation_state: &Form2550QDiagnosticState,
+    validated: bool,
 ) -> Option<String> {
     if !editor_is_editable {
         return None;
@@ -3519,8 +3561,8 @@ fn queue_blocked_reason(
             "{error_count} item(s) need review before queueing."
         ));
     }
-    if !matches!(validation_state, Form2550QDiagnosticState::Incomplete(_)) {
-        return Some("Run Validate first; queueing needs a completed validation.".to_string());
+    if !validated {
+        return Some("Click Validate first; queueing needs the form's checks to pass on the current entries.".to_string());
     }
     None
 }
@@ -4036,16 +4078,15 @@ fn format_optional_money(value: Option<f64>) -> String {
 const QUEUE_BUTTON_LABEL: &str = "Queue for submission";
 
 /// The queue button is enabled only for an editable draft with no blocking
-/// validation errors, matching the 2551Q and 1601-C pages. Validation must also
-/// have actually run and be available (not "not run" or "unavailable").
+/// validation errors after Validate ran at the current input revision,
+/// matching the 2551Q and 1601-C pages. The candidate rules diagnostic does
+/// not gate it.
 fn queue_button_enabled(
     editor_is_editable: bool,
     has_blocking_errors: bool,
-    validation_state: &Form2550QDiagnosticState,
+    validated_at_current_revision: bool,
 ) -> bool {
-    editor_is_editable
-        && !has_blocking_errors
-        && matches!(validation_state, Form2550QDiagnosticState::Incomplete(_))
+    editor_is_editable && !has_blocking_errors && validated_at_current_revision
 }
 
 /// Revert pulls a Queued return back before the worker sends it. Once
@@ -4069,8 +4110,9 @@ mod tests {
         RawValue, SHORT_PERIOD_NO, SHORT_PERIOD_YES, SIGNATORY, StableInstanceId, TAX_RELIEF_NO,
         TAX_RELIEF_YES, YEAR_END_MONTH, advance_input_revision, candidate_radio_raw_is_selected,
         candidate_radio_ui_key, candidate_radio_values, diagnostic_state_from_setup,
-        queue_button_enabled, raw_text_override, repeated_member_is_parsed, revert_button_enabled,
-        should_capture_raw, singleton_is_parsed, singleton_raw_key, stable_parse_path,
+        queue_blocked_reason, queue_button_enabled, raw_text_override, repeated_member_is_parsed,
+        revert_button_enabled, should_capture_raw, singleton_is_parsed, singleton_raw_key,
+        stable_parse_path,
     };
 
     #[test]
@@ -4079,20 +4121,15 @@ mod tests {
         let src = include_str!("form_2550q_view.rs");
         assert!(!src.contains(concat!("Manual / External", " Filing")));
         assert!(src.contains(concat!("this.mark_", "submitted(window, cx)")));
-        let ran = Form2550QDiagnosticState::Incomplete("ran".to_string());
-        assert!(queue_button_enabled(true, false, &ran));
-        assert!(!queue_button_enabled(true, true, &ran));
-        assert!(!queue_button_enabled(false, false, &ran));
-        assert!(!queue_button_enabled(
-            true,
-            false,
-            &Form2550QDiagnosticState::Unavailable("x".to_string())
-        ));
-        assert!(!queue_button_enabled(
-            true,
-            false,
-            &Form2550QDiagnosticState::NotRun
-        ));
+        assert!(queue_button_enabled(true, false, true));
+        assert!(!queue_button_enabled(true, true, true));
+        assert!(!queue_button_enabled(false, false, true));
+        assert!(!queue_button_enabled(true, false, false));
+        // The candidate diagnostic no longer gates the reason line either.
+        assert_eq!(queue_blocked_reason(true, 0, true), None);
+        assert!(queue_blocked_reason(true, 0, false).is_some());
+        assert!(queue_blocked_reason(true, 2, true).is_some());
+        assert_eq!(queue_blocked_reason(false, 0, false), None);
         assert!(revert_button_enabled(
             &bir_core::forms::FilingStatus::Queued
         ));
