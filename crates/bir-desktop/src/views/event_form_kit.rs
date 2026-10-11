@@ -741,6 +741,94 @@ pub fn computed_text<V: 'static>(label_text: &str, value: String, cx: &Context<V
         .into_any_element()
 }
 
+/// The printed declaration, verbatim from the official sheet.
+pub const DECLARATION_TEXT: &str = "I/We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes.";
+
+/// Note under the read-only payment table.
+pub const PAYMENT_NOTE: &str = "Filled in when you pay (bank, ePay or ATM). Not part of the upload.";
+
+/// Printed rows of the 2200 family's "Details of Payment" (Items 25 to 28).
+pub const PAYMENT_ROWS_2200: &[&str] = &[
+    "25 Cash/Bank Debit Memo",
+    "26 Check",
+    "27 Tax Debit Memo",
+    "28 Others (specify)",
+];
+
+/// Printed columns after "Particulars" in the 2200 family.
+pub const PAYMENT_COLUMNS_2200: &[&str] =
+    &["Drawee Bank/Agency", "Number", "Date (MM/DD/YYYY)", "Amount"];
+
+/// The printed declaration (muted text) followed by the read-only "Details
+/// of Payment" part. `part_title` is the printed heading (for example
+/// "Part IV – Details of Payment"), `rows` the printed row captions (for
+/// example "25 Cash/Bank Debit Memo") and `columns` the printed column
+/// headings after "Particulars". Every cell shows "—"; there are no inputs,
+/// field keys or upload data. The table scrolls sideways inside its own
+/// container, so it never exceeds the window. Append the result before
+/// "Needs review".
+pub fn declaration_and_payment<V: 'static>(
+    phone: bool,
+    part_title: &str,
+    rows: &[&str],
+    columns: &[&str],
+    cx: &Context<V>,
+) -> Vec<AnyElement> {
+    let muted = cx.theme().muted_foreground;
+    let first_width = if phone { px(150.) } else { px(220.) };
+    let cell_width = if phone { px(110.) } else { px(150.) };
+    let cell = |text: String, width: Pixels, bold: bool| {
+        let cell = div().w(width).flex_none().px_2().py_1().text_sm().child(text);
+        if bold {
+            cell.font_weight(FontWeight::BOLD)
+        } else {
+            cell
+        }
+    };
+    let mut header = div()
+        .flex()
+        .border_b_1()
+        .border_color(cx.theme().border)
+        .child(cell("Particulars".to_string(), first_width, true));
+    for column in columns {
+        header = header.child(cell((*column).to_string(), cell_width, true));
+    }
+    let mut table = div().flex().flex_col().child(header);
+    for row in rows {
+        let mut line = div()
+            .flex()
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(cell((*row).to_string(), first_width, false));
+        for _ in columns {
+            line = line.child(cell("—".to_string(), cell_width, false));
+        }
+        table = table.child(line);
+    }
+    let payment = vec![
+        div()
+            .id("payment_details_scroll")
+            .w_full()
+            .overflow_x_scroll()
+            .child(table)
+            .into_any_element(),
+        div()
+            .text_sm()
+            .text_color(muted)
+            .child(PAYMENT_NOTE)
+            .into_any_element(),
+    ];
+    vec![
+        div()
+            .p_3()
+            .text_sm()
+            .text_color(muted)
+            .child(DECLARATION_TEXT)
+            .into_any_element(),
+        section(part_title, payment, cx),
+    ]
+}
+
 pub fn choice(
     id: impl Into<ElementId>,
     label_text: impl Into<SharedString>,

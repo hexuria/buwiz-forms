@@ -1270,6 +1270,13 @@ impl Render for Form2200CView {
         ) {
             body = body.child(self.render_schedule(layout, cx));
         }
+        body = body.children(crate::views::event_form_kit::declaration_and_payment(
+            layout == Layout::Phone,
+            "Part IV – Details of Payment",
+            crate::views::event_form_kit::PAYMENT_ROWS_2200,
+            crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
+            cx,
+        ));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }
