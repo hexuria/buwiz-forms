@@ -1457,6 +1457,7 @@ impl Render for Form2000View {
             })
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
+            .child(self.render_totals(layout, cx))
             .child(self.render_schedule1(layout, cx));
         if sched2 {
             body = body.child(self.render_payment_schedule(2, layout, cx));
@@ -1467,7 +1468,6 @@ impl Render for Form2000View {
         if sched4 {
             body = body.child(self.render_schedule4(layout, cx));
         }
-        body = body.child(self.render_totals(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

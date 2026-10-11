@@ -570,7 +570,8 @@ impl Form1801View {
         section("Part V — Schedules", children, cx)
     }
 
-    fn render_computation(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+    /// Returns (Part II, Part IV) in printed order.
+    fn render_computation(&self, layout: Layout, cx: &Context<Self>) -> (AnyElement, AnyElement) {
         let d = &self.draft;
         let cols = |caption: &str, c: bir_core::forms::form_1801::Form1801Columns| {
             kit::computed_text(
@@ -586,7 +587,24 @@ impl Form1801View {
         };
         let (payable, first, total) = d.payables();
         let shown = bir_core::official_xml::official_amount;
-        let children = vec![
+        let part_ii = vec![
+            computed("16 — Net taxable estate", d.net_taxable_estate, cx),
+            kit::computed_text("17 — Applicable tax rate", "6%".to_string(), cx),
+            kit::computed_text("18 — Estate tax due", shown(d.estate_tax_due()), cx),
+            self.f("foreign", layout, false),
+            self.f("prev", layout, !d.is_amended),
+            computed("19C — Total credits", d.total_credits, cx),
+            kit::computed_text("20 — Tax payable", shown(payable), cx),
+            self.f("installment", layout, false),
+            self.f("inst_year", layout, false),
+            kit::computed_text("22 — Tax payable (1st installment)", shown(first), cx),
+            self.f("surcharge", layout, false),
+            self.f("interest", layout, false),
+            self.f("compromise", layout, false),
+            computed("23D — Total penalties", d.total_penalties, cx),
+            kit::computed_text("24 — Total amount payable", shown(total), cx),
+        ];
+        let part_iv = vec![
             cols("29 — Real properties (A / B / C)", d.real_property),
             cols("30 — Family home", d.family_home),
             cols("31 — Personal properties", d.personal_property),
@@ -609,25 +627,19 @@ impl Form1801View {
             ),
             computed("38 — Net estate", d.net_estate, cx),
             computed("39 — Share of surviving spouse", d.spouse_share, cx),
-            computed("40 / 16 — Net taxable estate", d.net_taxable_estate, cx),
-            kit::computed_text("18 — Estate tax due (6%)", shown(d.estate_tax_due()), cx),
-            self.f("foreign", layout, false),
-            self.f("prev", layout, !d.is_amended),
-            computed("19C — Total credits", d.total_credits, cx),
-            kit::computed_text("20 — Tax payable", shown(payable), cx),
-            self.f("inst_year", layout, false),
-            self.f("installment", layout, false),
-            kit::computed_text("22 — Tax payable (1st installment)", shown(first), cx),
-            self.f("surcharge", layout, false),
-            self.f("interest", layout, false),
-            self.f("compromise", layout, false),
-            computed("23D — Total penalties", d.total_penalties, cx),
-            kit::computed_text("24 — Total amount payable", shown(total), cx),
+            computed("40 — Net taxable estate", d.net_taxable_estate, cx),
         ];
-        section(
-            "Part II / IV — Computation of tax",
-            vec![grid(layout, children)],
-            cx,
+        (
+            section(
+                "Part II — Computation of tax",
+                vec![grid(layout, part_ii)],
+                cx,
+            ),
+            section(
+                "Part IV — Computation of estate",
+                vec![grid(layout, part_iv)],
+                cx,
+            ),
         )
     }
 }
@@ -885,10 +897,12 @@ impl FormViewTrait for Form1801View {
 impl Render for Form1801View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let (part_ii, part_iv) = self.render_computation(layout, cx);
         let sections = vec![
             self.render_part_one(layout, cx),
+            part_ii,
+            part_iv,
             self.render_schedules(layout, cx),
-            self.render_computation(layout, cx),
         ];
         kit::render_page(self, sections, window, cx)
     }

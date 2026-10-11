@@ -61,16 +61,16 @@ const TEXT_INPUTS: &[(&str, &str, &str)] = &[
     ("oname", "Item 11A — Other party's name", ""),
     ("otin", "Item 11B — Other party's TIN", "digits only"),
     ("loc", "Item 13 — Location of real property", ""),
-    ("others", "Schedule 2 C — Others (specify)", ""),
+    ("others", "Schedule 1C — Others (specify)", ""),
 ];
 
 /// Money inputs outside the schedule rows: (key, label).
 const MONEY_INPUTS: &[(&str, &str)] = &[
     (
         "gsp",
-        "Schedule 2 A — Gross selling price / bid price / net gift",
+        "Schedule 1A — Gross selling price / bid price / net gift",
     ),
-    ("othamt", "Schedule 2 C — Others amount"),
+    ("othamt", "Schedule 1C — Others amount"),
     (
         "prev",
         "18 — Tax paid in return previously filed (amended only)",
@@ -525,7 +525,8 @@ impl Form2000OTView {
         } else {
             button.outline()
         };
-        button.disabled(disabled)
+        // Let long chips shrink to the panel and wrap instead of clipping.
+        button.disabled(disabled).min_w_0().max_w_full()
     }
 
     fn render_header_items(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
@@ -613,7 +614,7 @@ impl Form2000OTView {
                         .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
-                        .child("Item 6 — RDO Code"),
+                        .child("Item 6 — RDO Code of Location of the Property"),
                 )
                 .child(
                     div()
@@ -632,8 +633,8 @@ impl Form2000OTView {
         }
         let mut party_choices = Vec::new();
         for (index, (value, label)) in [
-            (Form2000OTOtherParty::Creditor, "Creditor/Mortgagor/etc."),
-            (Form2000OTOtherParty::Debtor, "Debtor/Mortgagee/etc."),
+            (Form2000OTOtherParty::Creditor, "Seller/Transferor/Donor"),
+            (Form2000OTOtherParty::Debtor, "Buyer/Transferee/Donee"),
         ]
         .into_iter()
         .enumerate()
@@ -740,19 +741,19 @@ impl Form2000OTView {
             vec![
                 self.field("gsp", MONEY_INPUTS[0].1, layout, !editable),
                 self.computed(
-                    "Schedule 2 B — Total FMV per Schedule 1.A",
+                    "Schedule 1B — Total FMV per Schedule 1.A",
                     d.total_fair_market_value,
                     cx,
                 ),
                 self.field(
                     "others",
-                    "Schedule 2 C — Others (specify)",
+                    "Schedule 1C — Others (specify)",
                     layout,
                     !editable,
                 ),
                 self.field("othamt", MONEY_INPUTS[1].1, layout, !editable),
                 self.computed(
-                    "Schedule 2 item 2 — Taxable base",
+                    "Schedule 2 — Taxable base",
                     d.real_property_taxable_base,
                     cx,
                 ),
@@ -1267,6 +1268,7 @@ impl Render for Form2000OTView {
             })
             .child(self.render_header_items(layout, cx))
             .child(self.render_part_one(layout, cx));
+        body = body.child(self.render_totals(layout, cx));
         match self.draft.atc {
             Form2000OTAtc::Do122 => body = body.child(self.render_real_property(layout, cx)),
             Form2000OTAtc::Do102 | Form2000OTAtc::Do125 => {
@@ -1274,7 +1276,6 @@ impl Render for Form2000OTView {
             }
             Form2000OTAtc::Unanswered => {}
         }
-        body = body.child(self.render_totals(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
         }

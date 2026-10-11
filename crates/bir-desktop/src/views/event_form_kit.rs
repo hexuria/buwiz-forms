@@ -624,8 +624,8 @@ pub fn field(
             .items_center()
             .gap_4()
             .w_full()
-            .child(caption.w(relative(0.45)))
-            .child(body.w(relative(0.55))),
+            .child(caption.w(relative(0.45)).min_w_0().max_w_full())
+            .child(body.w(relative(0.55)).min_w_0()),
     }
     .into_any_element()
 }
