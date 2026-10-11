@@ -160,6 +160,9 @@ pub fn start_db_watcher(db: Arc<Mutex<Database>>, cx: &mut gpui::Context<crate::
 
     cx.spawn(async move |_app_state, cx| {
         let mut last_version: Option<i32> = None;
+        // In-process writers (the background cron shares this connection,
+        // so data_version never moves for them) bump this counter instead.
+        let mut last_local_seq = bir_core::ipc::local_change_seq();
         loop {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(poll_interval_ms))
@@ -180,19 +183,29 @@ pub fn start_db_watcher(db: Arc<Mutex<Database>>, cx: &mut gpui::Context<crate::
                 })
                 .await;
 
+            let local_seq = bir_core::ipc::local_change_seq();
+            let local_changed = local_seq != last_local_seq;
+            last_local_seq = local_seq;
+
             let current_version = if let Some(v) = current_version_opt {
                 v
             } else {
+                if local_changed {
+                    cx.update(|cx| {
+                        bus.update(cx, |_, cx| {
+                            cx.emit(AppEvent::DatabaseChanged);
+                        })
+                    });
+                }
                 continue;
             };
 
-            if let Some(lv) = last_version
-                && lv != current_version
-            {
+            if local_changed || last_version.is_some_and(|lv| lv != current_version) {
                 tracing::info!(
-                    "Database Watcher: External DB change detected (v{} -> v{})",
-                    lv,
-                    current_version
+                    "Database Watcher: DB change detected (v{:?} -> v{}, in-process: {})",
+                    last_version,
+                    current_version,
+                    local_changed
                 );
                 cx.update(|cx| {
                     bus.update(cx, |_, cx| {

@@ -2762,17 +2762,25 @@ impl Database {
             let (legacy_slot, period_key, status_str) = row?;
             let state = quarter_state_from_db(&status_str);
             let period = period_from_row(form_code, legacy_slot, period_key.as_deref());
+            // Several rows can name one period (a NULL-quarter row next to
+            // one with a legacy quarter); the row scan order is unspecified, so the most
+            // advanced return wins rather than whichever row came last.
+            let keep_most_advanced = |slot: &mut QuarterState, state: QuarterState| {
+                if state_rank(&state) > state_rank(slot) {
+                    *slot = state;
+                }
+            };
             match period {
                 FilingPeriod::Monthly(month) => {
-                    let idx = usize::from(month - 1);
-                    progress.months[idx] = state;
+                    let idx = usize::from(month.clamp(1, 12) - 1);
+                    keep_most_advanced(&mut progress.months[idx], state);
                 }
                 FilingPeriod::Quarterly(quarter) => {
-                    let idx = usize::from(quarter - 1);
-                    progress.quarters[idx] = state;
+                    let idx = usize::from(quarter.clamp(1, 4) - 1);
+                    keep_most_advanced(&mut progress.quarters[idx], state);
                 }
                 FilingPeriod::Annual => {
-                    progress.annual_status = state;
+                    keep_most_advanced(&mut progress.annual_status, state);
                 }
                 // A monthly form keyed by its Item 1 date (`MMDD`, e.g.
                 // 2200-AN) shows on its month's tile; the most advanced
@@ -5959,6 +5967,51 @@ mod tests {
 
         assert_eq!(annual.annual_status, QuarterState::Submitted);
         assert_eq!(open_ended.open_ended_count, 1);
+    }
+
+    #[test]
+    fn quarterly_2550q_submitted_shows_on_its_quarter_tile() {
+        let db = test_db();
+        let tin = "123456789000";
+        // Stored the way the queue path writes a 2550Q row: legacy quarter
+        // column plus the period key, then moved to Submitted by the worker.
+        let key = FilingPeriod::Quarterly(3).to_period_key();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '2550Q', 2026, 3, ?2, 'Queued', '{}')",
+                params![tin, key],
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Submitted'
+                 WHERE tin = ?1 AND form_code = '2550Q' AND quarter = 3",
+                params![tin],
+            )
+            .unwrap();
+        // A Draft for Q1, and a stray Q3 Draft row with no legacy quarter
+        // (the unique index on `quarter` ignores NULL) that must not mask the
+        // submitted return.
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '2550Q', 2026, 1, ?2, 'Draft', '{}'),
+                        (?1, '2550Q', 2026, NULL, ?3, 'Draft', '{}')",
+                params![tin, FilingPeriod::Quarterly(1).to_period_key(), key],
+            )
+            .unwrap();
+
+        let progress = db.get_form_filing_progress(tin, "2550Q", 2026).unwrap();
+        assert_eq!(progress.quarters[0], QuarterState::Draft);
+        assert_eq!(progress.quarters[1], QuarterState::NotStarted);
+        assert_eq!(progress.quarters[2], QuarterState::Submitted);
+        assert_eq!(progress.quarters[3], QuarterState::NotStarted);
+
+        let other_year = db.get_form_filing_progress(tin, "2550Q", 2025).unwrap();
+        assert_eq!(other_year.quarters[2], QuarterState::NotStarted);
     }
 
     #[test]

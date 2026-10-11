@@ -160,6 +160,11 @@ pub struct AppState {
     pub(crate) _subscriptions: Vec<Subscription>,
     /// Whether the window-aware subscription for global dashboard notifications has been set up.
     pub(crate) global_dashboard_notif_subscribed: bool,
+    /// Whether the Tax Form Library was the active view on the last render.
+    /// A form view or the background worker can change a return's status
+    /// while the library is hidden, so it reloads its tiles each time it
+    /// becomes visible again.
+    pub(crate) dashboard_was_visible: bool,
     pub(crate) is_mini_sidebar: bool,
     pub(crate) is_sidebar_hidden: bool,
     /// Painted bounds of the sidebar and the content column, for the agent tree.
@@ -877,6 +882,7 @@ impl AppState {
             show_archived: false,
             _subscriptions: vec![profile_sub, filter_sub],
             global_dashboard_notif_subscribed: false,
+            dashboard_was_visible: false,
             is_mini_sidebar: false,
             is_sidebar_hidden: false,
             layout_probe: crate::layout_probe::LayoutProbe::default(),
@@ -1863,6 +1869,13 @@ impl Render for AppState {
                 cx,
             );
         }
+
+        let dashboard_visible = self.active_view == ActiveView::Dashboard;
+        if dashboard_visible && !self.dashboard_was_visible {
+            self.dashboard_view
+                .update(cx, |view, cx| view.refresh_filing_progress(cx));
+        }
+        self.dashboard_was_visible = dashboard_visible;
 
         // Set up window-aware subscription for global dashboard notifications (once)
         if !self.global_dashboard_notif_subscribed {

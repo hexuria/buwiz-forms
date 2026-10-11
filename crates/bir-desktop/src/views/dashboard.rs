@@ -115,6 +115,10 @@ pub struct DashboardView {
     active_profile: Option<TaxpayerProfile>,
     db: Arc<Mutex<Database>>,
     selected_year: i32,
+    /// Whether the user picked `selected_year` in the library's year filter.
+    /// Until they do, annual returns open on the previous year (see
+    /// [`annual_filing_year`]).
+    year_picked_by_user: bool,
     smart_date_filter: Entity<SmartDateFilterState>,
     filter_state: Entity<FilterState>,
     /// Cached filing progress per form code -> per year
@@ -135,6 +139,21 @@ pub struct DashboardView {
     header_menu_open: bool,
 }
 
+/// The year an annual (FilingFrequency::Annual) return opens on from the
+/// library. A year the user picked in the year filter is respected as is;
+/// otherwise the current calendar year falls back to the previous one,
+/// because BIR does not accept a calendar-year annual return for the current
+/// year (1702-RT: "Year (Page 1 Item 2) cannot be greater than or equal to
+/// current year when filing for Calendar Year.").
+fn annual_filing_year(selected_year: i32, picked_by_user: bool, current_year: i32) -> u16 {
+    let year = if !picked_by_user && selected_year >= current_year {
+        current_year - 1
+    } else {
+        selected_year
+    };
+    year.max(0) as u16
+}
+
 impl DashboardView {
     pub fn set_mini_sidebar(&mut self, is_mini: bool, cx: &mut Context<Self>) {
         self.is_mini_sidebar = is_mini;
@@ -150,6 +169,7 @@ impl DashboardView {
             &smart_date_filter,
             |this: &mut Self, _, event: &SmartDateFilterEvent, cx| {
                 this.selected_year = event.year;
+                this.year_picked_by_user |= event.user_picked;
                 if let Some(profile) = this.active_profile.clone() {
                     this.reload_filing_progress(&profile, cx);
                 }
@@ -211,6 +231,7 @@ impl DashboardView {
             active_profile: None,
             db,
             selected_year: now.year(),
+            year_picked_by_user: false,
             smart_date_filter,
             filter_state,
             filing_progress: std::collections::HashMap::new(),
@@ -296,6 +317,25 @@ impl DashboardView {
         }
     }
 
+    /// The year an annual return tile shows and opens.
+    fn annual_year(&self) -> u16 {
+        annual_filing_year(
+            self.selected_year,
+            self.year_picked_by_user,
+            Local::now().date_naive().year(),
+        )
+    }
+
+    /// Re-read every tile's filing state for the active profile, e.g. when
+    /// the library becomes visible again after a form view or the background
+    /// worker changed a return's status.
+    pub fn refresh_filing_progress(&mut self, cx: &mut Context<Self>) {
+        if let Some(profile) = self.active_profile.clone() {
+            self.reload_filing_progress(&profile, cx);
+            cx.notify();
+        }
+    }
+
     /// Query the DB for all form progress for this profile in the selected year.
     fn reload_filing_progress(&mut self, profile: &TaxpayerProfile, cx: &mut Context<Self>) {
         self.filing_progress.clear();
@@ -310,11 +350,19 @@ impl DashboardView {
             let applicable_codes = profile.active_form_codes_for_year(year);
             self.consistency_issues = obligations.consistency_report.issues;
 
+            let annual_year = self.annual_year();
             for code in applicable_codes.clone() {
                 let mut year_progress = std::collections::HashMap::new();
                 if let Ok(progress) = db.get_form_filing_progress(&profile.tin.full(), &code, year)
                 {
                     year_progress.insert(year, progress);
+                }
+                // Annual tiles show (and open) the default annual year.
+                if annual_year != year
+                    && let Ok(progress) =
+                        db.get_form_filing_progress(&profile.tin.full(), &code, annual_year)
+                {
+                    year_progress.insert(annual_year, progress);
                 }
                 self.filing_progress.insert(code, year_progress);
             }
@@ -611,6 +659,7 @@ impl Render for DashboardView {
         };
 
         let year = self.selected_year as u16;
+        let annual_year = self.annual_year();
 
         let mut available_forms =
             bir_core::integration::applicable_form_decisions_for_profile_and_year(profile, year);
@@ -751,7 +800,7 @@ impl Render for DashboardView {
                     && can_open_certification_draft(&code);
                 let is_fileable = is_release_fileable || is_certification_draft;
                 let support_label = if is_certification_draft {
-                    "Certification preview"
+                    "Dev preview (not yet certified)"
                 } else {
                     support.action_label()
                 };
@@ -1048,8 +1097,14 @@ impl Render for DashboardView {
                         })
                     }
                     FilingFrequency::Annual => {
-                        let status = progress
-                            .as_ref()
+                        // BIR rejects a calendar-year annual return for the
+                        // current year, so without an explicit pick the tile
+                        // shows and opens last year's return.
+                        let year = annual_year;
+                        let status = self
+                            .filing_progress
+                            .get(&code)
+                            .and_then(|y| y.get(&year))
                             .map(|p| p.annual_status.clone())
                             .unwrap_or(QuarterState::NotStarted);
 
@@ -1098,7 +1153,7 @@ impl Render for DashboardView {
                                                 accent
                                             }}
                                         >
-                                            {if is_release_fileable {
+                                            {if is_fileable {
                                                 match &status {
                                                     QuarterState::Paid => "View Paid Return",
                                                     QuarterState::Confirmed => {
@@ -1111,8 +1166,6 @@ impl Render for DashboardView {
                                                         "File Annual Return"
                                                     }
                                                 }
-                                            } else if is_certification_draft {
-                                                "Open certification draft"
                                             } else {
                                                 support_label
                                             }}
@@ -1179,7 +1232,7 @@ impl Render for DashboardView {
                                             font_weight={FontWeight::BOLD}
                                             text_color={cx.theme().foreground}
                                         >
-                                            {if is_release_fileable { "+" } else { "" }}
+                                            {if is_fileable { "+" } else { "" }}
                                         </div>
                                     })
                                     .child(rsx! {
@@ -1188,10 +1241,8 @@ impl Render for DashboardView {
                                             font_weight={FontWeight::BOLD}
                                             text_color={cx.theme().foreground}
                                         >
-                                            {if is_release_fileable {
+                                            {if is_fileable {
                                                 "File New Return"
-                                            } else if is_certification_draft {
-                                                "Open certification draft"
                                             } else {
                                                 support_label
                                             }}
@@ -2527,5 +2578,13 @@ mod tests {
             false,
             true,
         ));
+    }
+
+    #[::core::prelude::v1::test]
+    fn annual_forms_default_to_last_year_unless_the_user_picked_one() {
+        assert_eq!(annual_filing_year(2026, false, 2026), 2025);
+        assert_eq!(annual_filing_year(2026, true, 2026), 2026);
+        assert_eq!(annual_filing_year(2024, true, 2026), 2024);
+        assert_eq!(annual_filing_year(2024, false, 2026), 2024);
     }
 }
