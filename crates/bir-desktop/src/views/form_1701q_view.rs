@@ -24,10 +24,84 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    messages_for, new_select_state, on_select, select_field, sync_select, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 impl EventEmitter<QueueableFormEvent> for Form1701QView {}
+
+/// ATC dropdown options as owned `(code, "code label")` pairs.
+fn atc_options(choices: &[Form1701QAtc]) -> Vec<(String, String)> {
+    choices
+        .iter()
+        .map(|atc| {
+            (
+                atc.code().to_string(),
+                format!("{} {}", atc.code(), atc.label()),
+            )
+        })
+        .collect()
+}
+
+/// Borrow owned option pairs in the form the shared controls take.
+fn option_refs(options: &[(String, String)]) -> Vec<(&str, &str)> {
+    options
+        .iter()
+        .map(|(value, label)| (value.as_str(), label.as_str()))
+        .collect()
+}
+
+/// The ATCs Item 8 offers: an estate or trust only has the graduated code.
+fn taxpayer_atc_choices(estate: bool) -> Vec<Form1701QAtc> {
+    if estate {
+        vec![Form1701QAtc::Ii012]
+    } else {
+        Form1701QAtc::TAXPAYER_CHOICES.to_vec()
+    }
+}
+
+/// Validation keys behind an input key, plus the parse-error label it uses.
+fn error_keys(key: &str) -> Vec<String> {
+    let model = match key {
+        "sheets" => "number_of_sheets".to_string(),
+        "name" => "taxpayer_name".to_string(),
+        "address" => "registered_address".to_string(),
+        "zip" => "zip_code".to_string(),
+        "birth" => "date_of_birth".to_string(),
+        "ftn" => "foreign_tax_number".to_string(),
+        "spouse_rdo" => "spouse_rdo_code".to_string(),
+        "spouse_ftn" => "spouse_foreign_tax_number".to_string(),
+        "d43" => "item_43_description".to_string(),
+        "d48" => "item_48_description".to_string(),
+        "d61" => "item_61_description".to_string(),
+        other => other.to_string(),
+    };
+    let mut keys = vec![model];
+    if key == "sheets" {
+        keys.push("Item 4".to_string());
+    } else if let Some(item) = key
+        .get(1..)
+        .and_then(|n| n.parse::<u8>().ok())
+        .filter(|_| key.starts_with(['a', 'b']))
+    {
+        let (who, suffix) = if key.starts_with('a') {
+            ("taxpayer", "A")
+        } else {
+            ("spouse", "B")
+        };
+        keys.push(format!("item_{item}_{who}"));
+        if item == 59 {
+            keys.push("item_59".to_string());
+        }
+        if let Some((_, label)) = AMOUNT_INPUTS.iter().find(|(i, _)| *i == item) {
+            keys.push(format!("{item}{suffix} {label}"));
+        }
+    }
+    keys
+}
 
 /// Width classes the page lays out for.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -143,6 +217,8 @@ pub struct Form1701QView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    atc_select: Entity<ComboboxState>,
+    spouse_atc_select: Entity<ComboboxState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -354,7 +430,14 @@ impl Form1701QView {
             .text_sm()
             .font_weight(FontWeight::MEDIUM)
             .child(label.to_string());
-        match layout {
+        let keys = error_keys(key);
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let label = if self.error_for(&keys).is_some() {
+            label.text_color(gpui::red())
+        } else {
+            label
+        };
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -370,7 +453,23 @@ impl Form1701QView {
                 .child(label.w(relative(0.5)))
                 .child(body.w(relative(0.5))),
         }
-        .into_any_element()
+        .into_any_element();
+        self.with_err(row, &keys)
+    }
+
+    /// The messages recorded for any of `keys`, if any.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
+    }
+
+    /// `element` with the messages for `keys` directly under it.
+    fn with_err(&self, element: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(element, self.error_for(keys))
     }
 
     fn text(&self, key: &str, layout: Layout) -> AnyElement {
@@ -518,8 +617,14 @@ impl Form1701QView {
         let d = &self.draft;
         let amended = d.is_amended;
         let children = vec![
-            Self::read_only_row(layout, "Item 1 — For the year", d.taxable_year.to_string()),
-            Self::read_only_row(layout, "Item 2 — Quarter", format!("Q{}", d.quarter)),
+            self.with_err(
+                Self::read_only_row(layout, "Item 1 — For the year", d.taxable_year.to_string()),
+                &["taxable_year"],
+            ),
+            self.with_err(
+                Self::read_only_row(layout, "Item 2 — Quarter", format!("Q{}", d.quarter)),
+                &["quarter"],
+            ),
             Self::choice_row(
                 layout,
                 "Item 3 — Amended return?",
@@ -555,8 +660,11 @@ impl Form1701QView {
                 .into_any_element()
         };
         let head_fields = vec![
-            fixed("Item 5 — TIN", format_tin(&d.tin)),
-            fixed("Item 6 — RDO Code", d.rdo_code.clone()),
+            self.with_err(fixed("Item 5 — TIN", format_tin(&d.tin)), &["tin"]),
+            self.with_err(
+                fixed("Item 6 — RDO Code", d.rdo_code.clone()),
+                &["rdo_code"],
+            ),
         ];
         let fields = vec![
             self.text("name", layout),
@@ -586,25 +694,24 @@ impl Form1701QView {
             d.filer_type,
             Some(Form1701QFilerType::Estate | Form1701QFilerType::Trust)
         );
-        let atcs: Vec<Button> = Form1701QAtc::TAXPAYER_CHOICES
-            .into_iter()
-            .enumerate()
-            .map(|(index, atc)| {
-                Self::choice(
-                    ("1701q_atc", index),
-                    format!("{} {}", atc.code(), atc.label()),
-                    d.atc == Some(atc),
-                    !editable || (estate && atc != Form1701QAtc::Ii012),
-                )
-                .small()
-                .on_click(cx.listener(move |this, _, _, cx| this.edit(cx, |d| d.atc = Some(atc))))
-            })
-            .collect();
+        let atc_options = atc_options(&taxpayer_atc_choices(estate));
+        let atc_field = select_field(
+            "Item 8 — ATC",
+            &self.atc_select,
+            &option_refs(&atc_options),
+            d.atc.map(Form1701QAtc::code),
+            !editable,
+            self.error_for(&["atc"]).as_deref(),
+            cx,
+        );
         let foreign = d.claims_foreign_tax_credits;
         let mut rows = vec![
             self.grid(layout, head_fields),
-            Self::choice_row(layout, "Item 7 — Taxpayer/Filer type", filer),
-            Self::choice_row(layout, "Item 8 — ATC", atcs),
+            self.with_err(
+                Self::choice_row(layout, "Item 7 — Taxpayer/Filer type", filer),
+                &["filer_type"],
+            ),
+            atc_field,
             self.grid(layout, fields),
             Self::choice_row(
                 layout,
@@ -621,15 +728,18 @@ impl Form1701QView {
                     ),
                 ],
             ),
-            div()
-                .text_sm()
-                .child(format!(
-                    "Item 16 — Tax rate: {}",
-                    d.tax_rate
-                        .map(Form1701QTaxRate::label)
-                        .unwrap_or("follows the ATC")
-                ))
-                .into_any_element(),
+            self.with_err(
+                div()
+                    .text_sm()
+                    .child(format!(
+                        "Item 16 — Tax rate: {}",
+                        d.tax_rate
+                            .map(Form1701QTaxRate::label)
+                            .unwrap_or("follows the ATC")
+                    ))
+                    .into_any_element(),
+                &["tax_rate"],
+            ),
         ];
         if d.tax_rate == Some(Form1701QTaxRate::Graduated) {
             let methods: Vec<Button> = Form1701QDeductionMethod::ALL
@@ -647,10 +757,9 @@ impl Form1701QView {
                     }))
                 })
                 .collect();
-            rows.push(Self::choice_row(
-                layout,
-                "Item 16A — Method of deduction",
-                methods,
+            rows.push(self.with_err(
+                Self::choice_row(layout, "Item 16A — Method of deduction", methods),
+                &["deduction_method"],
             ));
         }
         self.section(
@@ -696,25 +805,22 @@ impl Form1701QView {
                 })
                 .collect();
             let compensation = d.spouse_type == Some(Form1701QSpouseType::CompensationEarner);
-            let atcs: Vec<Button> = Form1701QAtc::SPOUSE_CHOICES
-                .into_iter()
-                .enumerate()
-                .map(|(index, atc)| {
-                    Self::choice(
-                        ("1701q_spouse_atc", index),
-                        format!("{} {}", atc.code(), atc.label()),
-                        d.spouse_atc == Some(atc),
-                        !editable || compensation,
-                    )
-                    .small()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.edit(cx, |d| d.spouse_atc = Some(atc))
-                    }))
-                })
-                .collect();
+            let spouse_options = atc_options(&Form1701QAtc::SPOUSE_CHOICES);
+            let spouse_atc_field = select_field(
+                "Item 20 — Spouse ATC",
+                &self.spouse_atc_select,
+                &option_refs(&spouse_options),
+                d.spouse_atc.map(Form1701QAtc::code),
+                !editable || compensation,
+                self.error_for(&["spouse_atc"]).as_deref(),
+                cx,
+            );
             let foreign = d.spouse_claims_foreign_tax_credits;
-            rows.push(Self::choice_row(layout, "Item 19 — Spouse type", kinds));
-            rows.push(Self::choice_row(layout, "Item 20 — Spouse ATC", atcs));
+            rows.push(self.with_err(
+                Self::choice_row(layout, "Item 19 — Spouse type", kinds),
+                &["spouse_type"],
+            ));
+            rows.push(spouse_atc_field);
             rows.push(self.grid(
                 layout,
                 vec![
@@ -755,10 +861,9 @@ impl Form1701QView {
                         }))
                     })
                     .collect();
-                rows.push(Self::choice_row(
-                    layout,
-                    "Item 25A — Method of deduction",
-                    methods,
+                rows.push(self.with_err(
+                    Self::choice_row(layout, "Item 25A — Method of deduction", methods),
+                    &["spouse_deduction_method"],
                 ));
             }
         }
@@ -913,10 +1018,13 @@ impl Form1701QView {
             self.computed_line(28, "Tax payable/(overpayment)", layout, cx),
             self.computed_line(29, "Add: Total penalties", layout, cx),
             self.computed_line(30, "Total amount payable/(overpayment)", layout, cx),
-            self.computed(
-                "31 — Aggregate amount payable/(overpayment)",
-                self.draft.item_31_aggregate_amount_payable,
-                cx,
+            self.with_err(
+                self.computed(
+                    "31 — Aggregate amount payable/(overpayment)",
+                    self.draft.item_31_aggregate_amount_payable,
+                    cx,
+                ),
+                &["item_31"],
             ),
         ];
         self.section("Part III — Total Tax Payable", children, cx)
@@ -955,6 +1063,38 @@ impl QueueableFormView for Form1701QView {
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();
+        let all_taxpayer = atc_options(&Form1701QAtc::TAXPAYER_CHOICES);
+        let atc_select = new_select_state(&option_refs(&all_taxpayer), window, cx);
+        subscriptions.push(on_select(
+            &atc_select,
+            &option_refs(&all_taxpayer),
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Some(atc) = Form1701QAtc::TAXPAYER_CHOICES
+                    .into_iter()
+                    .find(|a| a.code() == value)
+                {
+                    this.edit(cx, |d| d.atc = Some(atc));
+                }
+            },
+        ));
+        let all_spouse = atc_options(&Form1701QAtc::SPOUSE_CHOICES);
+        let spouse_atc_select = new_select_state(&option_refs(&all_spouse), window, cx);
+        subscriptions.push(on_select(
+            &spouse_atc_select,
+            &option_refs(&all_spouse),
+            window,
+            cx,
+            |this: &mut Self, value, _, cx| {
+                if let Some(atc) = Form1701QAtc::SPOUSE_CHOICES
+                    .into_iter()
+                    .find(|a| a.code() == value)
+                {
+                    this.edit(cx, |d| d.spouse_atc = Some(atc));
+                }
+            },
+        ));
         Self {
             draft,
             db,
@@ -964,6 +1104,8 @@ impl QueueableFormView for Form1701QView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            atc_select,
+            spouse_atc_select,
             _subscriptions: subscriptions,
         }
     }
@@ -1178,6 +1320,26 @@ impl FormViewTrait for Form1701QView {
 impl Render for Form1701QView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let estate = matches!(
+            self.draft.filer_type,
+            Some(Form1701QFilerType::Estate | Form1701QFilerType::Trust)
+        );
+        let taxpayer_options = atc_options(&taxpayer_atc_choices(estate));
+        sync_select(
+            &self.atc_select,
+            &option_refs(&taxpayer_options),
+            self.draft.atc.map(Form1701QAtc::code),
+            window,
+            cx,
+        );
+        let spouse_options = atc_options(&Form1701QAtc::SPOUSE_CHOICES);
+        sync_select(
+            &self.spouse_atc_select,
+            &option_refs(&spouse_options),
+            self.draft.spouse_atc.map(Form1701QAtc::code),
+            window,
+            cx,
+        );
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1195,6 +1357,8 @@ impl Render for Form1701QView {
                     .into_any_element()
             })
             .collect();
+        let issue_count = self.parse_errors.len() + self.validation_errors.len();
+        let can_submit = is_draft && issue_count == 0;
 
         let toolbar =
             div()
@@ -1247,15 +1411,16 @@ impl Render for Form1701QView {
                             Button::new("1701q_submit")
                                 .label("Queue for submission")
                                 .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
+                                .disabled(!can_submit)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.mark_submitted(window, cx)
                                 })),
-                        ),
+                        )
+                        .when(is_draft && !can_submit, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {issue_count} item(s) under Needs review to queue."
+                            )))
+                        }),
                 );
 
         let mut body = div()
@@ -1307,6 +1472,12 @@ impl Render for Form1701QView {
             .child(self.render_schedules(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
+        } else {
+            let done = div()
+                .text_sm()
+                .child("Validation successful. Click on Edit if you wish to modify your entries.")
+                .into_any_element();
+            body = body.child(self.section("Needs review", vec![done], cx));
         }
 
         div()

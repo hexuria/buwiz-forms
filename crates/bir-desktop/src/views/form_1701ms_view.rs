@@ -23,9 +23,37 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
 use gpui_rsx::rsx;
 
+use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    messages_for, new_select_state, on_select, select_field, sync_select, with_field_error,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::forms::form_1701ms::form_1701ms_atc_description;
 use bir_core::profile::TaxpayerProfile;
+
+/// Item 1 short-period end months (`(value, label)`); December is not allowed.
+const MONTH_OPTIONS: &[(&str, &str)] = &[
+    ("1", "01"),
+    ("2", "02"),
+    ("3", "03"),
+    ("4", "04"),
+    ("5", "05"),
+    ("6", "06"),
+    ("7", "07"),
+    ("8", "08"),
+    ("9", "09"),
+    ("10", "10"),
+    ("11", "11"),
+];
+
+/// Item 4 civil statuses as `(value, label)`; the printed label is the value.
+fn civil_options() -> Vec<(&'static str, &'static str)> {
+    Form1701MsCivilStatus::ALL
+        .iter()
+        .map(|s| (s.label(), s.label()))
+        .collect()
+}
 
 impl EventEmitter<QueueableFormEvent> for Form1701MsView {}
 
@@ -513,6 +541,8 @@ pub struct Form1701MsView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    month_select: Entity<ComboboxState>,
+    civil_select: Entity<ComboboxState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -782,7 +812,7 @@ impl Form1701MsView {
         } else {
             label
         };
-        match layout {
+        let row = match layout {
             Layout::Phone => div()
                 .flex()
                 .flex_col()
@@ -798,7 +828,23 @@ impl Form1701MsView {
                 .child(label.w(relative(0.55)))
                 .child(body.w(relative(0.45))),
         }
-        .into_any_element()
+        .into_any_element();
+        self.with_err(row, &[key, error_key])
+    }
+
+    /// The messages recorded for any of `keys`, if any.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
+    }
+
+    /// `element` with the messages for `keys` directly under it.
+    fn with_err(&self, element: AnyElement, keys: &[&str]) -> AnyElement {
+        with_field_error(element, self.error_for(keys))
     }
 
     fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
@@ -1014,28 +1060,15 @@ impl Form1701MsView {
         let _ = window;
         let editable = self.draft.lifecycle.is_editable();
         let d = &self.draft;
-        let mut months = Vec::new();
-        if d.is_short_period {
-            for month in 1..=11u8 {
-                months.push(
-                    Self::choice(
-                        ("1701ms_month", month as usize),
-                        format!("{month:02}"),
-                        d.month == month,
-                        !editable,
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.edit(window, cx, |d| d.month = month)
-                    })),
-                );
-            }
-        }
         let mut children =
             vec![
-                Self::read_only_row(
-                    layout,
-                    "Item 1 — For the year (YYYY)",
-                    d.taxable_year.to_string(),
+                self.with_err(
+                    Self::read_only_row(
+                        layout,
+                        "Item 1 — For the year (YYYY)",
+                        d.taxable_year.to_string(),
+                    ),
+                    &["taxable_year"],
                 ),
                 self.choice_row(
                     "Item 2 — Amended return?",
@@ -1070,24 +1103,27 @@ impl Form1701MsView {
                     ],
                 ),
             ];
-        if !months.is_empty() {
-            children.push(self.choice_row("Item 1 — Month the short period ends", months));
+        if d.is_short_period {
+            let month_value = d.month.to_string();
+            children.push(select_field(
+                "Item 1 — Month the short period ends",
+                &self.month_select,
+                MONTH_OPTIONS,
+                Some(month_value.as_str()),
+                !editable,
+                self.error_for(&["month"]).as_deref(),
+                cx,
+            ));
         }
-        let mut statuses = Vec::new();
-        for (index, status) in Form1701MsCivilStatus::ALL.iter().copied().enumerate() {
-            statuses.push(
-                Self::choice(
-                    ("1701ms_civil", index),
-                    status.label(),
-                    d.civil_status == status,
-                    !editable,
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.edit(window, cx, |d| d.civil_status = status)
-                })),
-            );
-        }
-        children.push(self.choice_row("Item 4 — Civil status", statuses));
+        children.push(select_field(
+            "Item 4 — Civil status",
+            &self.civil_select,
+            &civil_options(),
+            Some(d.civil_status.label()),
+            !editable,
+            self.error_for(&["civil_status"]).as_deref(),
+            cx,
+        ));
         let married = d.civil_status == Form1701MsCivilStatus::Married;
         let filing = [
             (Form1701MsFiling::Jointly, "Jointly"),
@@ -1110,7 +1146,10 @@ impl Form1701MsView {
                 }))
             })
             .collect();
-        children.push(self.choice_row("Item 5 — If married, filing", buttons));
+        children.push(self.with_err(
+            self.choice_row("Item 5 — If married, filing", buttons),
+            &["filing"],
+        ));
         self.section("Return period", vec![self.grid(layout, children)], cx)
     }
 
@@ -1136,7 +1175,13 @@ impl Form1701MsView {
                 .into_any_element(),
         ];
         for (key, label, _) in TEXT_INPUTS.iter().skip(1).take(3) {
-            taxpayer.push(self.field(key, key, label, layout, !editable));
+            // The model reports these under its own field names.
+            let error_key = match *key {
+                "name" => "taxpayer_name",
+                "phone" => "contact_number",
+                other => other,
+            };
+            taxpayer.push(self.field(key, error_key, label, layout, !editable));
         }
         let mut blocks = vec![(Who::Taxpayer, taxpayer)];
         if d.is_joint() {
@@ -1175,6 +1220,10 @@ impl Form1701MsView {
         let editable = self.draft.lifecycle.is_editable();
         let column = who.column(&self.draft);
         let p = who.prefix();
+        let error_prefix = match who {
+            Who::Taxpayer => "taxpayer",
+            Who::Spouse => "spouse",
+        };
         let mut sources = vec![
             (Form1701MsSource::Business, "Income from business"),
             (Form1701MsSource::Mixed, "Mixed income"),
@@ -1252,9 +1301,18 @@ impl Form1701MsView {
                 }))
             })
             .collect();
+        let source_key = format!("{}.source", error_prefix);
+        let option_key = format!("{}.tax_option", error_prefix);
+        let deduction_key = format!("{}.deduction", error_prefix);
         let mut children = vec![
-            self.choice_row("Item 11 — Source of income", source_buttons),
-            self.choice_row("Item 12 — Income is subject to", option_buttons),
+            self.with_err(
+                self.choice_row("Item 11 — Source of income", source_buttons),
+                &[source_key.as_str()],
+            ),
+            self.with_err(
+                self.choice_row("Item 12 — Income is subject to", option_buttons),
+                &[option_key.as_str()],
+            ),
         ];
         if column.relief_items_open() {
             for (id, label, _) in COLUMN_TEXT.iter().take(5) {
@@ -1273,16 +1331,19 @@ impl Form1701MsView {
                 ));
             }
         }
-        children.push(self.choice_row("Item 17 — Method of deduction", deduction_buttons));
-        children.push(
-            div()
-                .text_sm()
-                .child(format!(
-                    "Item 18 — ATC: {}",
-                    column.atc().unwrap_or("(select Items 11 and 12)")
-                ))
-                .into_any_element(),
-        );
+        children.push(self.with_err(
+            self.choice_row("Item 17 — Method of deduction", deduction_buttons),
+            &[deduction_key.as_str()],
+        ));
+        // Item 18 follows from Items 11 and 12, so it is shown, not picked.
+        let atc_text = match column.atc() {
+            Some(code) => format!(
+                "{code} — {} (set from Items 11 and 12)",
+                form_1701ms_atc_description(code)
+            ),
+            None => "(select Items 11 and 12)".to_string(),
+        };
+        children.push(Self::read_only_row(layout, "Item 18 — ATC", atc_text));
         children
     }
 
@@ -1419,10 +1480,13 @@ impl Form1701MsView {
             .collect();
         let mut children = vec![
             self.columns(layout, blocks, cx),
-            self.computed(
-                "30 — Aggregate amount payable (overpayment)",
-                d.aggregate_amount_payable,
-                cx,
+            self.with_err(
+                self.computed(
+                    "30 — Aggregate amount payable (overpayment)",
+                    d.aggregate_amount_payable,
+                    cx,
+                ),
+                &["aggregate_amount_payable"],
             ),
             div()
                 .font_weight(FontWeight::BOLD)
@@ -1460,18 +1524,21 @@ impl Form1701MsView {
                     this.edit(window, cx, |d| d.to_be_carried_over = !d.to_be_carried_over)
                 })),
             ];
-            children.push(self.choice_row("Item 31 — If overpayment, mark at most two", toggles));
+            children.push(self.with_err(
+                self.choice_row("Item 31 — If overpayment, mark at most two", toggles),
+                &["overpayment"],
+            ));
             let amounts = vec![
                 self.field(
                     "refund",
-                    "overpayment",
+                    "refund_amount",
                     TEXT_INPUTS[11].1,
                     layout,
                     !editable || !d.to_be_refunded,
                 ),
                 self.field(
                     "tcc",
-                    "overpayment",
+                    "tcc_amount",
                     TEXT_INPUTS[12].1,
                     layout,
                     !editable || !d.to_be_issued_tcc,
@@ -1486,9 +1553,10 @@ impl Form1701MsView {
             ];
             children.push(self.grid(layout, amounts));
         }
-        children.push(self.choice_row(
-            "Declaration under the penalties of perjury",
-            vec![
+        children.push(self.with_err(
+            self.choice_row(
+                "Declaration under the penalties of perjury",
+                vec![
                     Self::choice(
                         "1701ms_perjury",
                         "I declare this return true and correct",
@@ -1499,6 +1567,8 @@ impl Form1701MsView {
                         this.edit(window, cx, |d| d.perjury_agreed = !d.perjury_agreed)
                     })),
                 ],
+            ),
+            &["perjury_agreed"],
         ));
         self.section("Part II — Total tax payable", children, cx)
     }
@@ -1531,6 +1601,34 @@ impl QueueableFormView for Form1701MsView {
             inputs.insert(key, input);
         }
         let validation_errors = draft.validate();
+        let month_select = new_select_state(MONTH_OPTIONS, window, cx);
+        subscriptions.push(on_select(
+            &month_select,
+            MONTH_OPTIONS,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                if let Ok(month) = value.parse::<u8>() {
+                    this.edit(window, cx, |d| d.month = month);
+                }
+            },
+        ));
+        let civil_options = civil_options();
+        let civil_select = new_select_state(&civil_options, window, cx);
+        subscriptions.push(on_select(
+            &civil_select,
+            &civil_options,
+            window,
+            cx,
+            |this: &mut Self, value, window, cx| {
+                if let Some(status) = Form1701MsCivilStatus::ALL
+                    .into_iter()
+                    .find(|s| s.label() == value)
+                {
+                    this.edit(window, cx, |d| d.civil_status = status);
+                }
+            },
+        ));
         Self {
             draft,
             db,
@@ -1540,6 +1638,8 @@ impl QueueableFormView for Form1701MsView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            month_select,
+            civil_select,
             _subscriptions: subscriptions,
         }
     }
@@ -1767,6 +1867,21 @@ impl FormViewTrait for Form1701MsView {
 impl Render for Form1701MsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
+        let month_value = self.draft.month.to_string();
+        sync_select(
+            &self.month_select,
+            MONTH_OPTIONS,
+            Some(month_value.as_str()),
+            window,
+            cx,
+        );
+        sync_select(
+            &self.civil_select,
+            &civil_options(),
+            Some(self.draft.civil_status.label()),
+            window,
+            cx,
+        );
         let is_draft = self.draft.lifecycle.is_editable();
         let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
@@ -1784,6 +1899,8 @@ impl Render for Form1701MsView {
                     .into_any_element()
             })
             .collect();
+        let issue_count = self.parse_errors.len() + self.validation_errors.len();
+        let can_submit = is_draft && issue_count == 0;
 
         let toolbar =
             div()
@@ -1836,15 +1953,16 @@ impl Render for Form1701MsView {
                             Button::new("1701ms_submit")
                                 .label("Queue for submission")
                                 .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
+                                .disabled(!can_submit)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.mark_submitted(window, cx)
                                 })),
-                        ),
+                        )
+                        .when(is_draft && !can_submit, |row| {
+                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
+                                "Fix {issue_count} item(s) under Needs review to queue."
+                            )))
+                        }),
                 );
 
         let mut body = div()
@@ -1895,6 +2013,12 @@ impl Render for Form1701MsView {
         body = body.child(self.render_totals(layout, cx));
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
+        } else {
+            let done = div()
+                .text_sm()
+                .child("Validation successful. Click on Edit if you wish to modify your entries.")
+                .into_any_element();
+            body = body.child(self.section("Needs review", vec![done], cx));
         }
 
         div()
