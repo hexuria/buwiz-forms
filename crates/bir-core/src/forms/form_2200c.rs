@@ -221,6 +221,34 @@ pub struct Form2200CDraft {
 impl Form2200CDraft {
     pub const FORM_CODE: &'static str = "2200C";
 
+    /// A new return for the library tile's `month` of `year`: today when that
+    /// month is the current one, else the month's last day. A `month` outside
+    /// 1-12 falls back to [`Self::new_from_profile`].
+    pub fn new_for_month(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
+        let mut draft = Self::new_from_profile(profile, year);
+        if !(1..=12).contains(&month) {
+            return draft;
+        }
+        let today = chrono::Local::now().date_naive();
+        let current = i32::from(year) == chrono::Datelike::year(&today)
+            && u32::from(month) == chrono::Datelike::month(&today);
+        draft.month = month;
+        draft.day = if current {
+            chrono::Datelike::day(&today) as u8
+        } else {
+            let (next_year, next_month) = if month == 12 {
+                (i32::from(year) + 1, 1)
+            } else {
+                (i32::from(year), u32::from(month) + 1)
+            };
+            chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1)
+                .and_then(|first| first.pred_opt())
+                .map(|last| chrono::Datelike::day(&last) as u8)
+                .unwrap_or(28)
+        };
+        draft
+    }
+
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16) -> Self {
         let today = chrono::Local::now().date_naive();
         let (month, day) = if i32::from(year) == chrono::Datelike::year(&today) {
@@ -341,6 +369,37 @@ impl Form2200CDraft {
         self.tax_payment = cents(self.tax_payment);
         self.total_payment = pesos(self.tax_payment + self.penalties_paid);
         self.balance_carried_forward = pesos(self.amount_payable - self.total_payment);
+    }
+
+    /// The print preview's map: the submit map plus `derived:` keys for the
+    /// printed combs that Items 9-10 and the three Item 11 levels share
+    /// (one 40-slot comb each, values placed under their own captions).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let mut put = |key: &str, value: String| {
+            if !value.trim().is_empty() {
+                fields.insert(format!("derived:{key}"), value);
+            }
+        };
+        put(
+            "contact_email",
+            super::excise_places::shared_comb_line(
+                &[(0, self.contact_number.trim()), (13, self.email.trim())],
+                40,
+            ),
+        );
+        put(
+            "place",
+            super::excise_places::shared_comb_line(
+                &[
+                    (0, self.place.region.as_str()),
+                    (10, self.place.province.as_str()),
+                    (24, self.place.city.as_str()),
+                ],
+                40,
+            ),
+        );
+        fields
     }
 
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
@@ -551,7 +610,9 @@ impl FormValidator for Form2200CDraft {
             );
         }
         let email = self.email.trim();
-        if email.is_empty() || !email.contains('@') || email.contains(char::is_whitespace) {
+        // validateAll only checks presence (checkMandatory); the page never
+        // calls validateEmail, so there is no format alert to raise here.
+        if email.is_empty() {
             err("email", "E-mail address on page 1 item 10 is required.");
         }
         if self.place.region.is_empty() {
@@ -917,6 +978,41 @@ mod tests {
             &|d| d.schedule[0].exempt_procedures = 0.0,
             "Please complete row #1 in Page 2 Part V.",
         );
+    }
+
+    #[test]
+    fn print_map_adds_only_the_shared_comb_lines() {
+        let draft = sample();
+        let submit = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        for (key, value) in &submit {
+            assert_eq!(print.get(key), Some(value), "{key}");
+        }
+        let extra: Vec<&String> = print.keys().filter(|k| !submit.contains_key(*k)).collect();
+        assert!(extra.iter().all(|k| k.starts_with("derived:")));
+        let line = &print["derived:contact_email"];
+        assert!(line.starts_with(draft.contact_number.trim()));
+        assert_eq!(&line[13..], draft.email.trim());
+    }
+
+    #[test]
+    fn email_is_checked_for_presence_only_like_validate_all() {
+        let mut draft = sample();
+        draft.email = "abc".into();
+        assert!(
+            FormValidator::validate(&draft)
+                .iter()
+                .all(|(key, _)| key != "email")
+        );
+    }
+
+    #[test]
+    fn new_for_month_starts_in_the_tiles_month() {
+        let profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        let draft = Form2200CDraft::new_for_month(&profile, 2019, 2);
+        assert_eq!((draft.month, draft.day, draft.year), (2, 28, 2019));
+        let draft = Form2200CDraft::new_for_month(&profile, 2019, 12);
+        assert_eq!((draft.month, draft.day), (12, 31));
     }
 
     #[test]

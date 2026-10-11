@@ -530,6 +530,43 @@ impl Form2200PDraft {
         self.balance_to_carry_over = cents(self.amount_payable - self.total_payment);
     }
 
+    /// The print preview's map: the submit map plus `derived:` keys for the
+    /// printed combs that Items 8-9, the three Item 10 levels and the three
+    /// Item 11 levels share (one 40-slot comb each, values placed under their
+    /// own captions).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let mut put = |key: &str, value: String| {
+            if !value.trim().is_empty() {
+                fields.insert(format!("derived:{key}"), value);
+            }
+        };
+        put(
+            "contact_email",
+            super::excise_places::shared_comb_line(
+                &[(0, self.contact_number.trim()), (12, self.email.trim())],
+                40,
+            ),
+        );
+        for (key, place) in [
+            ("place_of_production", &self.place_of_production),
+            ("place_of_removal", &self.place_of_removal),
+        ] {
+            put(
+                key,
+                super::excise_places::shared_comb_line(
+                    &[
+                        (0, place.region.as_str()),
+                        (10, place.province.as_str()),
+                        (24, place.city.as_str()),
+                    ],
+                    40,
+                ),
+            );
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
@@ -1177,6 +1214,28 @@ mod tests {
             .into_iter()
             .map(|(_, message)| message)
             .collect()
+    }
+
+    #[test]
+    fn print_map_adds_only_the_shared_comb_lines() {
+        let draft = sample();
+        let submit = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        for (key, value) in &submit {
+            assert_eq!(print.get(key), Some(value), "{key}");
+        }
+        assert!(
+            print
+                .keys()
+                .filter(|k| !submit.contains_key(*k))
+                .all(|k| k.starts_with("derived:"))
+        );
+        let line = &print["derived:contact_email"];
+        assert!(line.starts_with(draft.contact_number.trim()));
+        assert_eq!(&line[12..], draft.email.trim());
+        let place = &print["derived:place_of_production"];
+        assert!(place.starts_with(draft.place_of_production.region.as_str()));
+        assert_eq!(&place[24..], draft.place_of_production.city.as_str());
     }
 
     #[test]

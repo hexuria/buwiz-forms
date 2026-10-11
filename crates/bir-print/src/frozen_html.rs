@@ -2228,10 +2228,19 @@ mod tests {
         });
         draft.schedule = schedule;
         draft.recompute();
-        let fields = draft.to_bir_field_map();
+        draft.contact_number = "09171234567".into();
+        draft.email = "Me@Example.ph".into();
+        draft.place = bir_core::forms::excise_places::ExcisePlace {
+            region: "010000000".into(),
+            province: "012800000".into(),
+            city: "012801000".into(),
+        };
+        let fields = draft.to_print_field_map();
         let html = filled_document("2200c-2018", &fields).unwrap();
         // Item 6 RDO comb (p1c26), 4 slots.
         assert_eq!(comb_text(&html, "p1c26"), "039");
+        // Items 9-10 share comb p1c36: contact from slot 0, email (as typed) from slot 13.
+        assert_eq!(comb_text(&html, "p1c36"), "09171234567  Me@Example.ph");
         // Schedule 1 row 1 runs p2c25 (A) to p2c34 (J), top to bottom.
         let row_1 = [
             "1.00",
@@ -2281,10 +2290,11 @@ mod tests {
             named_values(&html, "p2c126"),
             vec![fields["frm2200C:ACexciseTotal"].clone()]
         );
-        // Items 9-11 share full-width combs (p1c36, p1c41) with several captions;
-        // they stay empty until the layout splits them.
-        assert_eq!(comb_text(&html, "p1c36"), "");
-        assert_eq!(comb_text(&html, "p1c41"), "");
+        // Item 11 shares comb p1c41: region from slot 0, province from 10, city from 24.
+        assert_eq!(
+            comb_text(&html, "p1c41"),
+            "010000000 012800000     012801000"
+        );
     }
 
     fn withholding_profile(code: &str) -> bir_core::profile::TaxpayerProfile {

@@ -128,3 +128,34 @@ mod tests {
         assert!(!is_official_place("2200S", ncr, province, "999999999"));
     }
 }
+
+/// One line for a printed comb that several items share: each `(slot,
+/// text)` starts at its slot and is cut one slot short of the next part (and
+/// at `width`), so the values sit under their own captions.
+pub fn shared_comb_line(parts: &[(usize, &str)], width: usize) -> String {
+    let mut slots = vec![' '; width];
+    for (index, (start, text)) in parts.iter().enumerate() {
+        let end = parts
+            .get(index + 1)
+            .map_or(width, |(next, _)| next.saturating_sub(1))
+            .min(width);
+        for (slot, ch) in (*start..end).zip(text.trim().chars()) {
+            slots[slot] = ch;
+        }
+    }
+    slots.into_iter().collect::<String>().trim_end().to_string()
+}
+
+#[cfg(test)]
+mod shared_comb_tests {
+    use super::shared_comb_line;
+
+    #[test]
+    fn parts_start_at_their_slots_and_stop_before_the_next() {
+        assert_eq!(
+            shared_comb_line(&[(0, "0917123"), (4, "a@b.ph")], 12),
+            "091 a@b.ph"
+        );
+        assert_eq!(shared_comb_line(&[(0, ""), (2, "xyz")], 4), "  xy");
+    }
+}
