@@ -125,11 +125,11 @@ errors, window responsive throughout, back to idle CPU afterwards.
 
 ```bash
 export GPUI_AGENT=1 GPUI_AGENT_TOKEN='dev-secret' GPUI_AGENT_ADDR='127.0.0.1:17421'
-cargo run --locked --bin bir --features dev-tools,agent
+cargo run --locked --bin bir-desktop --features dev-tools,agent
 ```
 
 1. **Idle cost.** Leave the app alone on the Global Dashboard with no agent
-   traffic. `ps -o pcpu -p $(pgrep -f 'target/debug/bir$')` should sit at a few
+   traffic. `ps -o pcpu -p $(pgrep -f 'target/debug/bir-desktop$')` should sit at a few
    percent, not ~50. Window drag / scroll should feel the same as a build
    without `GPUI_AGENT`.
 2. **Submitted return.** Select the Juan dummy TIN `00000000000000`, open the

@@ -3,13 +3,15 @@ name = "bir-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Shared eBIRForms models, database, and form XML."
+repository = "https://github.com/hexuria/buwiz-forms"
 build = "build.rs"
 
 [lints.rust]
 unexpected_cfgs = "allow"
 
 [dependencies]
-bir-rules = { path = "../bir-rules" }
+bir-rules = { path = "../bir-rules", version = "0.1.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }

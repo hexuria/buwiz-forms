@@ -2,6 +2,9 @@
 name = "bir-print"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
+description = "eBIRForms print and frozen-HTML rendering."
+repository = "https://github.com/hexuria/buwiz-forms"
 
 [features]
 default = []
@@ -11,7 +14,7 @@ name = "verify_certification_pdf"
 path = "src/bin/verify_certification_pdf.rs"
 
 [dependencies]
-bir-core = { path = "../bir-core" }
+bir-core = { path = "../bir-core", version = "0.1.0" }
 tempfile = "3.27.0"
 serde.workspace = true
 serde_json.workspace = true

@@ -138,6 +138,19 @@ The script supports apt, dnf, pacman and zypper. The full package list is in
 
 More in [docs/platforms/linux.md](docs/platforms/linux.md).
 
+## Headless command line (`bir`)
+
+Without the desktop app, the headless agent installs as the crate `bir`:
+
+```bash
+cargo install bir     # build from source
+cargo binstall bir    # prebuilt Linux x86_64 and macOS arm64 binaries
+```
+
+This `bir` is a command line tool, not the desktop app. The desktop app comes
+from the dmg, deb or exe on the Releases page. Publish flow and tags are in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#publishing-the-bir-cli).
+
 ## Using the app
 
 **Set up a profile.** Create a taxpayer profile (Cmd/Ctrl+N) with the TIN and

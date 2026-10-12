@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/bir",
     "crates/bir-core",
     "crates/bir-desktop",
     "crates/bir-mcp",
@@ -52,7 +53,9 @@ rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 
 # gpui-agent control plane (main). One rev for bir-desktop (`agent` feature) and
 # bir-mcp, so both sides speak one protocol and one discovery format.
-gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "19d20333b5e5313a98c502002bc2c4a667510fa2" }
+# `version` lets crates.io `bir` (via bir-desktop) resolve the published crate;
+# local and CI builds use the git rev.
+gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "19d20333b5e5313a98c502002bc2c4a667510fa2" }
 
 # Error handling
 thiserror = "2"
