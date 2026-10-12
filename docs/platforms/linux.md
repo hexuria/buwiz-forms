@@ -15,7 +15,7 @@ there, but nobody has run it on that platform.
 | Submission queue and dry run (SFTP upload, IMAP receipts) | ✓ |  |
 | Encrypted database (SQLCipher) | ✓ |  |
 | Database key storage | partial | Needs PR #85. Until it is merged the key is not kept between launches. After it: Secret Service, or a key file when there is none. |
-| Close button (X) and quit shortcut | ✓ | X, Ctrl+Q and Alt+F4 quit the app. Ctrl+W hides the window with `xdotool` (X11 only, optional). |
+| Close button (X) and quit shortcut | ✓ | X, Ctrl+Q, Alt+F4 and Ctrl+W quit the app. |
 | System tray icon | partial | Needs a StatusNotifier host. Many desktops have none; the app then runs without a tray. |
 | Global show/hide hotkey | partial | Super+Shift+E suggestion. Hiding uses `xdotool`, which is X11 only. Wayland: unverified. |
 | Single-instance guard | ✓ | Loopback ping only (`instance.port`). The platform hook is an empty stub. |
@@ -119,7 +119,7 @@ sudo apt-get install -y \
 
 ## Close, quit and the tray
 
-- The window's X button, Ctrl+Q and Alt+F4 quit the app. They go through the
+- The window's X button, Ctrl+Q, Alt+F4 and Ctrl+W quit the app. They go through the
   same guarded quit path as the tray's Quit. The window stays open only when
   unsaved Profile compliance changes block quitting.
 - Why: many Linux desktops (GNOME, fluxbox) have no StatusNotifier tray host,
@@ -128,10 +128,6 @@ sudo apt-get install -y \
 - The tray icon needs a StatusNotifier host and GTK. The app calls `gtk::init`
   at startup and, if the tray cannot be created, logs a warning and carries on
   without it. If you have no tray, the app has no "run in background" mode.
-- Ctrl+W runs the hide code, which calls `xdotool` to unmap the window. With
-  no tray and no `xdotool`, it does nothing. With `xdotool` and no tray, you
-  have no way to bring the window back except launching the app again (the
-  second launch pings the first to show). Avoid Ctrl+W.
 
 ## Single instance
 

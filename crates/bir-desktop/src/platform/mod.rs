@@ -52,6 +52,24 @@ pub fn close_button_quits() -> bool {
     cfg!(target_os = "linux")
 }
 
+/// What the main window's close-window shortcut (Cmd+W / Ctrl+W) does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseWindowRoute {
+    /// Quit through the guarded `request_application_quit` (Linux).
+    Quit,
+    /// Hide the window to the tray (macOS, Windows).
+    Hide,
+}
+
+/// Route the close-window shortcut: quit wherever the close button quits.
+pub fn close_window_route(close_button_quits: bool) -> CloseWindowRoute {
+    if close_button_quits {
+        CloseWindowRoute::Quit
+    } else {
+        CloseWindowRoute::Hide
+    }
+}
+
 /// Dynamically locates application resources across local dev, macOS bundles, and Linux tarballs.
 pub fn find_resource_dir(name: &str) -> PathBuf {
     let current_exe = std::env::current_exe().unwrap_or_default();
@@ -285,6 +303,18 @@ mod resource_tests {
     #[test]
     fn close_button_quits_only_on_linux() {
         assert_eq!(close_button_quits(), cfg!(target_os = "linux"));
+    }
+
+    #[test]
+    fn close_window_quits_where_the_close_button_quits() {
+        assert_eq!(close_window_route(true), CloseWindowRoute::Quit);
+        assert_eq!(close_window_route(false), CloseWindowRoute::Hide);
+        let expected = if cfg!(target_os = "linux") {
+            CloseWindowRoute::Quit
+        } else {
+            CloseWindowRoute::Hide
+        };
+        assert_eq!(close_window_route(close_button_quits()), expected);
     }
 
     #[cfg(target_os = "linux")]

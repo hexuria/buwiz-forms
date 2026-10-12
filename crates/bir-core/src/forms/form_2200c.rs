@@ -734,6 +734,9 @@ impl QueueableForm for Form2200CDraft {
         self.compute();
         true
     }
+    fn amended_return_answer(&self) -> Option<bool> {
+        Some(self.is_amended)
+    }
     fn draft_id(&self) -> Option<i64> {
         self.id
     }
@@ -1033,5 +1036,43 @@ mod tests {
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    /// save-009 (BIR-Form2200Cv2018.hta saveXML L8860/L8887).
+    #[test]
+    fn save_009_refuses_amended_no_once_an_original_is_filed() {
+        use crate::db::{Database, DbError};
+        use crate::filing_queue::QueueAuthSource;
+        use crate::forms::queueable::AMENDED_RETURN_ALERT;
+
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let d = sample();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, ?2, ?3, 9001, ?4, 'Submitted', '{}')",
+                rusqlite::params![
+                    d.tin,
+                    Form2200CDraft::FORM_CODE,
+                    i64::from(d.year),
+                    d.filing_period().to_period_key()
+                ],
+            )
+            .unwrap();
+        let submit = |d: &Form2200CDraft| {
+            let mut d = d.clone();
+            d.id = Some(db.save_queueable_draft(&d).unwrap());
+            d.queue(QueueAuthSource::Gui).unwrap();
+            db.save_queued_queueable(&d)
+        };
+        let error = submit(&d).unwrap_err();
+        assert!(matches!(error, DbError::AmendedReturnRequired));
+        assert_eq!(error.to_string(), AMENDED_RETURN_ALERT);
+
+        let mut amended = d.clone();
+        assert!(amended.mark_amended());
+        assert_eq!(amended.amended_return_answer(), Some(true));
+        assert!(submit(&amended).is_ok());
     }
 }

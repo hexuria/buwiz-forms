@@ -274,13 +274,26 @@ impl AppState {
         cx.hide_other_apps();
     }
 
+    /// Cmd+W / Ctrl+W. On Linux (`close_button_quits`) it quits like the X
+    /// button, through the guarded `request_application_quit`; elsewhere it
+    /// hides the window to the tray.
     pub(crate) fn handle_close_window(
         &mut self,
         _action: &CloseWindow,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) {
-        crate::platform::hide_from_dock();
+        match crate::platform::close_window_route(crate::platform::close_button_quits()) {
+            crate::platform::CloseWindowRoute::Quit => {
+                let hook = self.quit_hook.clone();
+                self.request_application_quit(window, cx, move || {
+                    if let Some(hook) = hook {
+                        hook();
+                    }
+                });
+            }
+            crate::platform::CloseWindowRoute::Hide => crate::platform::hide_from_dock(),
+        }
     }
 
     pub(crate) fn handle_minimize_window(

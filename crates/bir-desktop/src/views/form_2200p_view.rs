@@ -1478,8 +1478,9 @@ impl FormViewTrait for Form2200PView {
         };
         if let Err(error) = saved {
             self.draft = before;
-            self.status_message = Some(format!(
-                "Could not queue Form 2200P. No submission was started: {error}"
+            self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                "Form 2200P",
+                &error,
             ));
             cx.notify();
             return;
