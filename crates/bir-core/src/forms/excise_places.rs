@@ -146,9 +146,55 @@ pub fn shared_comb_line(parts: &[(usize, &str)], width: usize) -> String {
     slots.into_iter().collect::<String>().trim_end().to_string()
 }
 
+/// The contact number and email that share one printed comb (2200-A,
+/// 2200-C, 2200-P, 1707-A): the number from slot 0, the email from
+/// `email_slot`, as [`shared_comb_line`] places them. When either part would
+/// be cut, the whole value is returned instead (number padded to the email
+/// slot, or followed by one space when it is longer), so the print filler
+/// prints the full line in smaller type rather than losing characters.
+pub fn contact_email_comb_line(
+    contact: &str,
+    email: &str,
+    email_slot: usize,
+    width: usize,
+) -> String {
+    let (contact, email) = (contact.trim(), email.trim());
+    if email.is_empty() {
+        return contact.to_string();
+    }
+    let contact_fits = contact.chars().count() < email_slot;
+    let email_fits = email_slot + email.chars().count() <= width;
+    if contact_fits && email_fits {
+        return shared_comb_line(&[(0, contact), (email_slot, email)], width);
+    }
+    if contact.chars().count() < email_slot {
+        format!("{contact:<email_slot$}{email}")
+    } else {
+        format!("{contact} {email}")
+    }
+}
+
 #[cfg(test)]
 mod shared_comb_tests {
-    use super::shared_comb_line;
+    use super::{contact_email_comb_line, shared_comb_line};
+
+    #[test]
+    fn contact_email_line_keeps_long_values_whole() {
+        assert_eq!(
+            contact_email_comb_line("0917", "a@b.ph", 12, 40),
+            "0917        a@b.ph"
+        );
+        let long = "andrea.mae.galang.accounting@example.com.ph";
+        assert_eq!(
+            contact_email_comb_line("09171234567", long, 12, 40),
+            format!("09171234567 {long}")
+        );
+        assert_eq!(
+            contact_email_comb_line("(02) 8123-4567 loc 89", "a@b.ph", 12, 40),
+            "(02) 8123-4567 loc 89 a@b.ph"
+        );
+        assert_eq!(contact_email_comb_line("", "", 12, 40), "");
+    }
 
     #[test]
     fn parts_start_at_their_slots_and_stop_before_the_next() {

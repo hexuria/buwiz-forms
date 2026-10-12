@@ -1758,6 +1758,51 @@ mod tests {
     }
 
     #[test]
+    fn shared_contact_email_comb_prints_long_values_whole_in_smaller_type() {
+        for (slug, cell, slot) in [
+            ("2200a-2020", "p1c34", 12),
+            ("2200c-2018", "p1c36", 13),
+            ("2200p-2020", "p1c34", 12),
+            ("1707a-2021", "p1c39", 12),
+        ] {
+            let long = format!(
+                "{:<slot$}{}",
+                "09171234567", "andrea.mae.galang.accounting@example.com.ph"
+            );
+            assert!(long.chars().count() > 40);
+            let mut fields = BTreeMap::new();
+            fields.insert("derived:contact_email".to_string(), long.clone());
+            let html = filled_document(slug, &fields).unwrap();
+            assert!(
+                html.contains(&format!("readonly value=\"{long}\" style=\"font-size:")),
+                "{slug}: long line printed whole, in smaller type"
+            );
+            assert_eq!(comb_text(&html, cell), "", "{slug}: boxes left empty");
+        }
+    }
+
+    #[test]
+    fn shared_contact_email_comb_prints_short_values_in_the_boxes() {
+        for (slug, cell) in [
+            ("2200a-2020", "p1c34"),
+            ("2200c-2018", "p1c36"),
+            ("2200p-2020", "p1c34"),
+            ("1707a-2021", "p1c39"),
+        ] {
+            let short = "0917123      a@b.ph";
+            let mut fields = BTreeMap::new();
+            fields.insert("derived:contact_email".to_string(), short.to_string());
+            let html = filled_document(slug, &fields).unwrap();
+            assert!(!html.contains("readonly value="), "{slug}: no overlay");
+            assert_eq!(
+                comb_text(&html, cell).replace(' ', ""),
+                "0917123a@b.ph",
+                "{slug}"
+            );
+        }
+    }
+
+    #[test]
     fn email_longer_than_its_comb_prints_whole() {
         let long = "Andrea.Mae.Galang.Accounting@Example-Company.com.ph";
         let mut fields = BTreeMap::new();

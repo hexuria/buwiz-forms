@@ -1437,7 +1437,7 @@ impl FormViewTrait for Form2200MView {
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !can_queue_for_submission(Form2200MDraft::FORM_CODE) {
-            self.status_message = Some(QUEUE_UNAVAILABLE.into());
+            self.status_message = Some(queue_unavailable());
             cx.notify();
             return;
         }
@@ -1578,7 +1578,9 @@ impl FormViewTrait for Form2200MView {
 
 /// Why Queue for submission is off: the registry leaves 2200-M unqueueable
 /// (the official PROD SFTP map has no 2200Mv2018 folder).
-const QUEUE_UNAVAILABLE: &str = "In-app submission isn't available for 2200-M in this build.";
+fn queue_unavailable() -> String {
+    super::form_header::queue_unavailable_message("2200-M")
+}
 
 impl Render for Form2200MView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1730,7 +1732,7 @@ impl Form2200MView {
             message: self
                 .status_message
                 .clone()
-                .or_else(|| unavailable.then(|| QUEUE_UNAVAILABLE.to_string())),
+                .or_else(|| unavailable.then(queue_unavailable)),
             separate_validate: separate_validate_button(&self.db),
         }
     }
@@ -1808,7 +1810,7 @@ mod tests {
         assert!(src.contains(concat!("render_header_", "buttons(")));
         assert!(src.contains(concat!("render_status_", "box(")));
         assert!(src.contains(concat!("revert_for_", "amendment(")));
-        assert!(src.contains("QUEUE_UNAVAILABLE.to_string()"));
+        assert!(src.contains("unavailable.then(queue_unavailable)"));
         assert!(!src.contains(concat!("Queued for background ", "submission")));
         assert!(!src.contains(concat!("\"Queue for ", "submission\"")));
     }

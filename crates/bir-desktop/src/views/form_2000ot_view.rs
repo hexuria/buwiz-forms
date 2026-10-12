@@ -35,6 +35,10 @@ use crate::views::form_header::{
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
 /// Item 3 options: (stored value, label).
+/// Info note beside DO102/DO122 (owner decision Q6A): the tax keeps BIR's
+/// page floor/round computation.
+const BLOCK_ROUNDING_NOTE: &str = "Computed like BIR's eBIRForms. The law's 'per block or fraction thereof' may mean a higher amount; check with your RDO.";
+
 const ATC_OPTIONS: &[(&str, &str)] = &[
     ("DO102", "DO102 — shares with par value (P1.50 / P200)"),
     ("DO122", "DO122 — real property (P15 / P1,000)"),
@@ -1562,6 +1566,18 @@ impl Render for Form2000OTView {
                 body = body.child(self.render_shares(layout, cx))
             }
             Form2000OTAtc::Unanswered => {}
+        }
+        if matches!(self.draft.atc, Form2000OTAtc::Do102 | Form2000OTAtc::Do122) {
+            body = body.child(
+                div()
+                    .id("2000ot_block_rounding_note")
+                    .mt_2()
+                    .p_3()
+                    .rounded_md()
+                    .text_sm()
+                    .bg(cx.theme().muted.opacity(0.6))
+                    .child(BLOCK_ROUNDING_NOTE),
+            );
         }
         if !issues.is_empty() {
             body = body.child(self.section("Needs review", issues, cx));
