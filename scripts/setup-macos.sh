@@ -316,9 +316,9 @@ OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
 To drive the app from the CLI (gpui-agent was installed at the Cargo.lock
 rev): build the host with the agent feature and launch with env vars —
 
-    cargo build --locked --bin bir --features agent
+    cargo build --locked --bin bir-desktop --features agent
     export GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret
-    ./target/debug/bir &        # then, another shell:
+    ./target/debug/bir-desktop &        # then, another shell:
     gpui-agent hello            # protocol, app, platform, ready
     gpui-agent keybindings      # {id, chord, scope, dangerous}
 

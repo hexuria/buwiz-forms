@@ -82,7 +82,7 @@ revision. Set `GPUI_AGENT_TOKEN` for secure driving. For local-only driving,
 # Build the painted app with the control plane. `dev-tools` is not required;
 # add it only for --dev-export-live-database or to open a form that is still
 # being certified from a *release* build.
-cargo build --locked --bin bir --features agent
+cargo build --locked --bin bir-desktop --features agent
 
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=dev-secret          # required to bind (protocol v2 HMAC)
@@ -90,7 +90,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421      # default; use 127.0.0.1:17423 when 
 # Release binaries also need:
 # export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
-./target/debug/bir
+./target/debug/bir-desktop
 ```
 
 Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:
@@ -105,7 +105,7 @@ gpui-agent screenshot --out form.png --mode scrolled --target form-1601c-scroll
 ```
 
 Before driving a host, check who owns the port — `lsof -nP -iTCP:17421
--sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show `bir` or
+-sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show `bir-desktop` (`bir` in a packaged install) or
 `bir-headless`. Another process there (an editor forwarding a remote machine,
 say) answers the protocol convincingly; `hello.os` and the chord style
 (`cmd-b` on macOS, `ctrl-b` on Linux) tell the two apart. A `focused`-scope
@@ -115,6 +115,35 @@ and macOS screenshots need Screen Recording granted to that exact binary path.
 The full contract — authorization, the two-host port handoff, screenshot and
 scroll semantics, and the AI-agent playbook — is in
 [`crates/bir-desktop/docs/AGENT.md`](../crates/bir-desktop/docs/AGENT.md).
+
+## Publishing the `bir` CLI
+
+The headless agent is the crates.io package `bir` (`crates/bir`, binary `bir`).
+The desktop GUI is the cargo target `bir-desktop` in `crates/bir-desktop`, so
+the two binaries never collide. Packaging renames the desktop build output:
+`scripts/alias_desktop_bin.py <target dir>` copies `bir-desktop` to `bir`
+(`bir.exe` on Windows) before the dmg, deb and exe steps, so installed
+artifacts and the `[package.metadata.deb]` asset path still use `bir`. Run it
+after `cargo build --release` and before `cargo deb --no-build`.
+
+- Desktop releases use tags `vMAJOR.MINOR.PATCH` (`just publish`).
+- The CLI uses tags `bir-vMAJOR.MINOR.PATCH` (`just publish-bir`, which runs
+  `scripts/publish_bir.py`). With no argument it bumps the patch of
+  `crates/bir`; with one it tags that exact version. The recipe tags and
+  pushes. It does not run `cargo publish` and reads no registry token.
+- `.github/workflows/bir.yml` runs on `bir-v*` tags only. It checks the tag
+  against `crates/bir/Cargo.toml`, builds `x86_64-unknown-linux-gnu` and
+  `aarch64-apple-darwin`, uploads `bir-<target>.tgz` plus `.sha256` and
+  `SHA256SUMS` to the GitHub Release, then runs `cargo publish` for
+  `bir-rules`, `bir-core`, `bir-print`, `bir-desktop` and `bir`.
+- `cargo binstall bir` reads `[package.metadata.binstall]` in
+  `crates/bir/Cargo.toml`: it fetches
+  `bir-v<version>/bir-<target>.tgz`, with the `bir` binary at the archive root.
+- Publishing needs the `CARGO_REGISTRY_TOKEN` Actions secret and
+  `gpui-agent` 0.1.0 on crates.io. Local builds use the git rev pinned in the
+  workspace `Cargo.toml`; the `version` next to it is what crates.io uses.
+- The toolchain is pinned to Rust 1.99.0.
+- `scripts/test_publish_bir.py` tests the publish script.
 
 ## Versioning & Build Numbers
 

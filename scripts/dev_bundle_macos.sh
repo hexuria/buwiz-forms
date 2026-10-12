@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Wrap the debug `bir` binary in a minimal .app so a development run is a real
+# Wrap the debug `bir-desktop` binary in a minimal .app so a development run is a real
 # bundle: macOS then shows the app's notifications natively (own name, own
 # icon) instead of dropping them or routing through Script Editor.
 #
-#   cargo build --locked --bin bir --features dev-tools,agent
+#   cargo build --locked --bin bir-desktop --features dev-tools,agent
 #   scripts/dev_bundle_macos.sh            # -> target/debug/eBIRForms.app
 #   open target/debug/eBIRForms.app        # or run Contents/MacOS/bir directly
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 profile="${1:-debug}"
-binary="$root/target/$profile/bir"
+binary="$root/target/$profile/bir-desktop"
 app="$root/target/$profile/eBIRForms.app"
 
 [[ -x "$binary" ]] || { echo "no binary at $binary (build it first)" >&2; exit 1; }

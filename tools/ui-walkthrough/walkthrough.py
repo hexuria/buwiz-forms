@@ -561,8 +561,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", default=env("WALK_OUT", str(REPO / "target" / "ui-walkthrough")),
                    help="output folder for PNGs, index.html, layout.json, app.log")
-    p.add_argument("--bin", default=env("WALK_BIN", str(Path(target) / "debug" / "bir")),
-                   help="app binary built with --features agent (default $CARGO_TARGET_DIR/debug/bir)")
+    p.add_argument("--bin", default=env("WALK_BIN", str(Path(target) / "debug" / "bir-desktop")),
+                   help="app binary built with --features agent (default $CARGO_TARGET_DIR/debug/bir-desktop)")
     p.add_argument("--data-from", help="directory holding bir_data.db (+ -wal/-shm) and bir_key.txt to copy in")
     p.add_argument("--demo-profile", action="store_true",
                    help="if the DB has no active profile, create a demo one through the agent")
