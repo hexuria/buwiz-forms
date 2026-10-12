@@ -714,6 +714,9 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             );
             crate::notification::send_notification(&notice_title, &notice_body);
             let submitted_file = filename.clone();
+            // Keep the exact bytes that were encrypted for PUT, so an
+            // amendment can later snapshot what BIR received.
+            draft.submitted_payload = Some(xml_payload);
             draft.transition_to_submitted(filename);
             if let Ok(db_guard) = db.lock() {
                 match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
@@ -1524,6 +1527,8 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             session_source.is_dry_run(),
                         );
                         crate::notification::send_notification(&notice_title, &notice_body);
+                        // Keep the exact bytes that were encrypted for PUT.
+                        draft.submitted_payload = Some(xml_payload);
                         draft.transition_to_submitted(filename.clone());
                         if let Ok(db_guard) = db_clone.lock() {
                             match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {

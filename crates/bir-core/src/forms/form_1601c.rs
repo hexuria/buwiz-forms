@@ -218,6 +218,12 @@ pub struct Form1601CDraft {
     pub submission_filename: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_id: Option<i64>,
+    /// The exact plaintext XML of this generation: written at queue time and
+    /// replaced with the bytes actually encrypted for PUT at submission. Kept
+    /// so a later amendment can snapshot what BIR received. Absent on returns
+    /// queued before this field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submitted_payload: Option<String>,
 
     /// SHA-256 over the exact reviewed 1601Cv2018 field map at the moment the
     /// user queues the return. Queue retries must reproduce this fingerprint.
@@ -333,6 +339,7 @@ impl Form1601CDraft {
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
+            submitted_payload: None,
             queued_submission_fingerprint: None,
             queue_authorization: None,
             submission_claim_token: None,
@@ -386,6 +393,8 @@ impl Form1601CDraft {
             return Err(errors);
         }
 
+        // Keep the reviewed plaintext so a later amendment can snapshot it.
+        self.submitted_payload = Some(self.to_bir_xml_payload());
         self.queued_submission_fingerprint = Some(self.submission_fingerprint());
         self.queue_authorization = Some(QueueAuthorization::new(
             "1601C",
@@ -462,6 +471,7 @@ impl Form1601CDraft {
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;
+        self.submitted_payload = None;
         self.queued_submission_fingerprint = None;
         self.queue_authorization = None;
         self.submission_claim_token = None;
@@ -562,6 +572,7 @@ impl Form1601CDraft {
             self.next_retry_at = None;
             self.queued_submission_fingerprint = None;
             self.queue_authorization = None;
+            self.submitted_payload = None;
         } else {
             let delay_minutes = 2i64.pow(self.submission_attempts - 1);
             self.next_retry_at =

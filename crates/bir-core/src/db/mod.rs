@@ -27,6 +27,7 @@ mod forms_set;
 mod google_calendar;
 mod inbox_oauth;
 mod jobs;
+mod legacy_amendment;
 mod migrations;
 mod notices;
 mod profiles;

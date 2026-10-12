@@ -1223,6 +1223,9 @@ impl Database {
 
         existing.status = FilingStatus::Submitted;
         existing.submitted_at = draft.submitted_at.clone();
+        if draft.submitted_payload.is_some() {
+            existing.submitted_payload = draft.submitted_payload.clone();
+        }
         existing.submission_filename = draft.submission_filename.clone();
         existing.submission_attempts = 0;
         existing.next_retry_at = None;

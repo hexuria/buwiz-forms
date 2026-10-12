@@ -23,7 +23,7 @@ use bir_core::forms::form_2551q::{
     FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election,
     OFFICIAL_YEAR_ENDED_MONTH_MESSAGE, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
 };
-use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus, FormValidator};
+use bir_core::forms::{ATC_TABLE_2551Q, FilingPeriod, FilingStatus, FormValidator};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
@@ -33,8 +33,8 @@ use crate::components::tax_relief_select::{
     TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
 };
 use crate::views::form_header::{
-    DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps, FormHeaderState,
-    render_header_buttons, render_status_box, separate_validate_button,
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, separate_validate_button,
 };
 use bir_core::forms::queueable::can_user_revert;
 
@@ -970,8 +970,7 @@ impl Form2551QView {
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // 2551Q keeps its own cancel/release path (not the generic
-        // amendment revert), gated like every other form (D7A).
+        // D7A: Queued, Submitted and Confirmed revert; Paid never does.
         if !can_user_revert(&self.draft.status) {
             return;
         }
@@ -986,27 +985,33 @@ impl Form2551QView {
             return;
         }
         let before_revert = self.draft.clone();
+        // D8A: a Submitted or Confirmed return keeps a read-only snapshot of
+        // what BIR received and becomes an amended Draft.
         let persistence_result = match self.db.lock() {
             Ok(db) => db
-                .cancel_queued_2551q_submission(&before_revert)
-                .and_then(|mut canceled| {
-                    if let Some(profile) = db.get_profile(&canceled.tin)? {
+                .revert_2551q_for_amendment(
+                    &before_revert.tin,
+                    before_revert.taxable_year,
+                    before_revert.quarter,
+                )
+                .and_then(|mut reverted| {
+                    if let Some(profile) = db.get_profile(&reverted.draft.tin)? {
                         // Reverting is the explicit consent boundary for
                         // replacing the reviewed snapshot with the current
                         // effective profile segment.
-                        let _ = canceled.reconcile_with_effective_profile(&profile);
-                        db.save_2551q_draft(&canceled)?;
+                        let _ = reverted.draft.reconcile_with_effective_profile(&profile);
+                        db.save_2551q_draft(&reverted.draft)?;
                     }
-                    Ok(canceled)
+                    Ok(reverted)
                 })
-                .map_err(|_| "database_write"),
-            Err(_) => Err("database_lock"),
+                .map_err(|error| error.to_string()),
+            Err(_) => Err("The form database is temporarily unavailable".to_string()),
         };
         use gpui_component::WindowExt;
-        let canceled = match persistence_result {
-            Ok(canceled) => canceled,
-            Err(error_category) => {
-                tracing::warn!(error_category, "2551Q queue cancellation was rejected");
+        let reverted = match persistence_result {
+            Ok(reverted) => reverted,
+            Err(error) => {
+                tracing::warn!("2551Q revert to Draft was rejected");
                 self.draft = match self.db.lock() {
                     Ok(db) => db
                         .get_2551q_draft(
@@ -1019,15 +1024,10 @@ impl Form2551QView {
                         .unwrap_or(before_revert),
                     Err(_) => before_revert,
                 };
-                self.status_message = Some(
-                    "Submission has already started and can no longer be canceled.".to_string(),
-                );
+                self.status_message = Some(format!("Could not revert to Draft: {error}"));
                 window.push_notification(
                     gpui_component::notification::Notification::new()
-                        .message(
-                            "Submission has already started. The queued return was not canceled."
-                                .to_string(),
-                        )
+                        .message(format!("Could not revert to Draft: {error}"))
                         .with_type(gpui_component::notification::NotificationType::Warning)
                         .autohide(true),
                     cx,
@@ -1036,13 +1036,31 @@ impl Form2551QView {
                 return;
             }
         };
-        self.draft = canceled;
+        let amended = reverted.snapshot_id.is_some();
+        let draft = reverted.draft;
+        // Refresh the editors so Amended Return shows Yes.
+        self.is_amended = draft.is_amended;
+        self.original_return_filed_and_paid_on_time = draft.original_return_filed_and_paid_on_time;
+        if amended {
+            self.header.load_sent_snapshot_for(
+                &self.db,
+                "2551Q",
+                &draft.tin,
+                draft.taxable_year,
+                &FilingPeriod::Quarterly(draft.quarter),
+            );
+        }
+        self.draft = draft;
         self.is_validated = false;
         self.validation_errors.clear();
-        self.status_message = None;
+        self.status_message = amended.then(|| AMENDED_REVERT_MESSAGE.to_string());
         window.push_notification(
             gpui_component::notification::Notification::new()
-                .message("Form reverted to Draft. You may edit and resubmit.".to_string())
+                .message(if amended {
+                    AMENDED_REVERT_MESSAGE.to_string()
+                } else {
+                    "Form reverted to Draft. You may edit and resubmit.".to_string()
+                })
                 .with_type(gpui_component::notification::NotificationType::Info)
                 .autohide(true),
             cx,
@@ -2837,6 +2855,13 @@ impl Render for Form2551QView {
                             })),
                     )
             });
+        self.header.ensure_sent_snapshot_for(
+            &self.db,
+            "2551Q",
+            &self.draft.tin,
+            self.draft.taxable_year,
+            &FilingPeriod::Quarterly(self.draft.quarter),
+        );
         let props = self.header_props();
         let header_buttons = render_header_buttons(self, &props, HEADER_ACTIONS, is_mobile, cx);
         let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx)

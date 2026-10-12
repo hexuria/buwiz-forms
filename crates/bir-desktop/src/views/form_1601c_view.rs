@@ -13,7 +13,7 @@ use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Databa
 use bir_core::forms::form_1601c::{
     FORM_1601C_ATC, Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS,
 };
-use bir_core::forms::{FilingStatus, FormValidator, can_queue_for_submission};
+use bir_core::forms::{FilingPeriod, FilingStatus, FormValidator, can_queue_for_submission};
 use bir_core::official_xml::{official_amount, parse_official_amount};
 
 use crate::components::combobox::ComboboxState;
@@ -26,8 +26,8 @@ use crate::views::form_controls::{
     self, field_error, messages_for, select_field, with_field_error,
 };
 use crate::views::form_header::{
-    DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps, FormHeaderState,
-    render_header_buttons, render_status_box, separate_validate_button,
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, separate_validate_button,
 };
 use bir_core::forms::queueable::can_user_revert;
 use gpui_component::select::{Select, SelectEvent};
@@ -1018,8 +1018,7 @@ impl FormViewTrait for Form1601CView {
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // 1601-C keeps its own cancel/release path (not the generic
-        // amendment revert), gated like every other form (D7A).
+        // D7A: Queued, Submitted and Confirmed revert; Paid never does.
         if !can_user_revert(&self.draft.status) {
             return;
         }
@@ -1034,50 +1033,58 @@ impl FormViewTrait for Form1601CView {
             cx.notify();
             return;
         }
-        if !matches!(self.draft.status, FilingStatus::Queued) {
-            self.status_message = Some(
-                "This immutable return cannot be reverted after submission has started."
-                    .to_string(),
-            );
-            cx.notify();
-            return;
-        }
-        let queued = self.draft.clone();
-        let canceled = match self.db.lock() {
-            Ok(db) => db.cancel_queued_1601c_submission(&queued).ok(),
-            Err(_) => None,
+        let tin = self.draft.tin.clone();
+        let year = self.draft.taxable_year;
+        let month = self.draft.month;
+        // D8A: a Submitted or Confirmed return keeps a read-only snapshot of
+        // what BIR received and becomes an amended Draft.
+        let outcome = match self.db.lock() {
+            Ok(db) => db
+                .revert_1601c_for_amendment(&tin, year, month)
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
         };
-        let Some(canceled) = canceled else {
-            self.draft = match self.db.lock() {
-                Ok(db) => db
-                    .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
-                    .ok()
-                    .flatten()
-                    .unwrap_or(queued),
-                Err(_) => queued,
-            };
-            self.status_message = Some(
-                "Submission has already started. The queued return was not canceled.".to_string(),
-            );
-            use gpui_component::WindowExt;
-            window.push_notification(
-                gpui_component::notification::Notification::new()
-                    .message(
-                        "Submission has already started. Keep any BIR confirmation or receipt and do not retry this return."
-                            .to_string(),
-                    )
-                    .with_type(gpui_component::notification::NotificationType::Warning)
-                    .autohide(false),
-                cx,
-            );
-            cx.notify();
-            return;
+        use gpui_component::WindowExt;
+        let reverted = match outcome {
+            Ok(reverted) => reverted,
+            Err(error) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_1601c_draft(&tin, year, month)
+                {
+                    self.draft = current;
+                }
+                self.status_message = Some(format!("Could not revert to Draft: {error}"));
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(format!("Could not revert to Draft: {error}"))
+                        .with_type(gpui_component::notification::NotificationType::Warning)
+                        .autohide(false),
+                    cx,
+                );
+                cx.notify();
+                return;
+            }
         };
-        self.draft = canceled;
+        let amended = reverted.snapshot_id.is_some();
+        let draft = reverted.draft;
+        // Refresh the editors so Amended Return shows Yes.
+        self.is_amended = draft.is_amended;
+        self.any_taxes_withheld = draft.taxes_withheld_answer();
+        self.category_of_agent = draft.category_of_agent.clone();
+        self.draft = draft;
         self.release_claim_confirm_open = false;
-        self.status_message = None;
+        self.status_message = amended.then(|| AMENDED_REVERT_MESSAGE.to_string());
         self.is_validated = false;
         self.validation_errors.clear();
+        if amended {
+            self.header.load_sent_snapshot_for(
+                &self.db,
+                "1601C",
+                &tin,
+                year,
+                &FilingPeriod::Monthly(month),
+            );
+        }
         cx.emit(Form1601CEvent::Saved);
         cx.notify();
     }
@@ -1240,6 +1247,13 @@ impl Render for Form1601CView {
                             })),
                     )
             });
+        self.header.ensure_sent_snapshot_for(
+            &self.db,
+            "1601C",
+            &self.draft.tin,
+            self.draft.taxable_year,
+            &FilingPeriod::Monthly(self.draft.month),
+        );
         let props = self.header_props();
         let header_buttons =
             render_header_buttons(self, &props, HEADER_ACTIONS, layout == Layout::Phone, cx);
