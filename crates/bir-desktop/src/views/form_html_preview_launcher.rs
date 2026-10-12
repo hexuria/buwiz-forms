@@ -11,7 +11,7 @@ use gpui::WindowHandle;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use gpui::{AppContext, TitlebarOptions, WindowBounds, WindowOptions, px, size};
 
 #[derive(Debug, Clone)]
@@ -128,7 +128,10 @@ fn launch_frozen_html<T: 'static>(
     title: &str,
     cx: &mut Context<T>,
 ) -> Result<HtmlPreviewLaunchKind, String> {
-    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    // Linux opens the preview in the system browser instead of an embedded
+    // webview: wry's webkitgtk backend only accepts an Xlib window handle and
+    // rejects the XCB/Wayland handles GPUI provides (UnsupportedWindowHandle).
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         let options = frozen_preview_window_options(title, cx);
         let opened = cx
@@ -151,7 +154,7 @@ fn launch_frozen_html<T: 'static>(
             }
             Err(error) => {
                 let path = write_frozen_html_document(&html)?;
-                open::that(&path).map_err(|open_error| {
+                open::that_detached(&path).map_err(|open_error| {
                     format!("{error}; also failed to open {path:?}: {open_error}")
                 })?;
                 Ok(HtmlPreviewLaunchKind::FrozenHtmlDocument)
@@ -159,11 +162,12 @@ fn launch_frozen_html<T: 'static>(
         }
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (title, cx);
         let path = write_frozen_html_document(&html)?;
-        open::that(&path).map_err(|error| format!("frozen HTML could not be opened: {error}"))?;
+        open::that_detached(&path)
+            .map_err(|error| format!("frozen HTML could not be opened: {error}"))?;
         Ok(HtmlPreviewLaunchKind::FrozenHtmlDocument)
     }
 }
@@ -177,7 +181,7 @@ fn write_frozen_html_document(html: &str) -> Result<std::path::PathBuf, String> 
     Ok(path)
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn frozen_preview_window_options<T: 'static>(title: &str, cx: &mut Context<T>) -> WindowOptions {
     crate::window_identity::identified(WindowOptions {
         window_bounds: Some(WindowBounds::centered(size(px(1200.), px(900.)), cx)),

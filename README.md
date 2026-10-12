@@ -3,443 +3,205 @@
 [![CI](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml)
 [![Release](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml)
 
-A modern, native, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework, E-BIRForms is an offline-first reimplementation of the traditional eBIRForms workflow for macOS, Windows, and Linux.
+E-BIRForms is an offline-first desktop app to prepare, validate, print and
+submit Philippine BIR returns. It is a native Rust app built with the
+[GPUI](https://gpui.rs/) framework. It covers 43 eBIRForms 7.9.6.2.1 forms. A
+submission queue sends returns to BIR in the background, and a dry-run mode
+lets you test the whole flow without sending anything. Profiles, TINs and
+drafts stay in an encrypted SQLite database on your own machine.
 
-The project is under active development. Form filing support and frozen HTML
-preview are tracked separately. Preview fills catalog-stamped TIN/branch
-`name=` values. 1601C and 2551Q also fill leftover identity keys (including email)
-and demo tax money rows onto cell-id inputs via `html-frozen/*/writer-cells.json`.
-2551Q also fills Year Ended (MM/YYYY) and quarter xboxes. Writer-cell letter
-combs ASCII-uppercase for BIR CAPITAL LETTERS print; profile/DB values stay as stored.
+## Platform status
 
----
+| Platform | Status | Details |
+| --- | --- | --- |
+| macOS | Fully tested | [docs/platforms/macos.md](docs/platforms/macos.md) |
+| Linux | Fully tested | [docs/platforms/linux.md](docs/platforms/linux.md) |
+| Windows | Not yet verified. Tracked in [#90](https://github.com/hexuria/buwiz-forms/issues/90) | [docs/platforms/windows.md](docs/platforms/windows.md) |
 
-## Current Development Status
+Not every feature works the same on every platform. The full table is in
+[docs/FEATURES.md](docs/FEATURES.md).
 
-Last verified: **July 19, 2026**. The authoritative sources are
-[`support_level.rs`](crates/bir-core/src/forms/support_level.rs),
-[`form-migration-status.json`](packages/form-specs/form-migration-status.json),
-and [`form-release-evidence.json`](packages/form-specs/form-release-evidence.json).
-If this summary conflicts with those files, the machine-readable status wins.
+## macOS
 
-| Forms | Queue authority | Current implementation | HTML renderer status |
-| --- | --- | --- | --- |
-| `2551Q:2018` | Proven | Typed model, XML, formulas, persistence, queue adapter, editor, contract, HTML, and pagination exist | `html_only`, but still `ScaffoldOnly`; visual and signed cross-platform package evidence are incomplete |
-| `1601C:2018` | Proven | Typed model, exact XML round trip, formulas, persistence, queue adapter, editor, contract, HTML, and pagination exist | Experimental calibration only; it remains `ScaffoldOnly` while visual, native output, and packaged-offline evidence are incomplete |
-| `0605:1999`, `0619E:2018`, `0619F:2018`, `2550Q:2024` | Blocked | Typed model, XML, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; all remain `ScaffoldOnly` and fail the current visual release gate |
-| `1701Q:2018` | Blocked | Typed model, exact XML round trip, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; queue/submission and release evidence remain incomplete |
-| `1701:2018`, `1702RT:2018C`, `1702MX:2018C` | Blocked | Typed model, XML, formulas, persistence, editor, contract, HTML, and pagination exist | Experimental calibration only; queue, visual, native, and packaged-offline evidence remain incomplete |
-
-No form is currently marked `release_ready`. There is no retained fallback
-renderer: unsupported or failed output stays blocked with a diagnostic instead
-of silently switching document implementations.
-
-### Frozen HTML preview
-
-Print/preview uses committed freeze sheets in `html-frozen/`. The desktop app
-fills catalog-stamped TIN `input[name]` values via `to_bir_field_map()`, and
-for 1601C/2551Q also leftover identity keys, 2551Q header period fields, and demo tax money rows listed in
-`writer-cells.json` (letter combs ASCII-uppercase on the fill path only).
-CI checks the inventory with `freeze_html.py --verify` and the fail-closed name
-stamper with `stamp_frozen_names.py --check-all`.
-
-## 🌟 Key Features
-
-### 🔐 Security & Privacy
-- **Touch ID / Biometrics & App Lock**: Lock the application securely with a 4-digit PIN. Leverage native OS-level authentication (Touch ID on macOS, Windows Hello) via Robius Authentication for seamless unlocking.
-- **Offline-First & Local Storage**: All profiles, TINs, and drafts are securely encrypted and stored entirely on your local machine using SQLite (`bir_data.db`). 
-
-### 🗄️ Lean & Ephemeral Architecture
-- **On-Demand PDF Generation**: Documents (e.g., BIR forms, email confirmation receipts) are generated instantly on-the-fly only when you need to view or print them, completely eliminating the need to store large PDF files in the database.
-- **Zero-Bloat Ephemeral Storage**: When previewing generated documents, artifacts are written to a unique temporary directory that is automatically garbage-collected the moment the window closes. The app leaves absolutely zero leftover bloat on your hard drive.
-- **Explicit Exporting**: Because files are ephemeral, users maintain total control over persistence by explicitly **Exporting** PDFs to their desired persistent storage locations.
-
-### ⚡️ Power User Capabilities
-- **Keyboard Shortcuts**: Built for speed with global shortcuts.
-  - `Cmd + Enter`: Submit Current Form
-  - `Cmd + N`: Create New Profile
-  - `Cmd + B`: Toggle Sidebar
-  - `Cmd + F`: Focus Search / Command Palette
-  - `Cmd + Shift + X`: Open Cron Tasks
-  - `Cmd + K`: Open Command Palette
-- **Advanced Easy Filters**: Instantly sort and filter your dashboard by predefined timeframes: **Q1-Q4, Monthly, Yearly**, and by status (Pending, Confirmed, Paid).
-
-### 🤖 Automation & Background Tasks
-- **In-Process Background Engine**: A robust cron engine runs background tasks on a dedicated thread within the app — no separate daemon process needed.
-- **Auto Fetch & Auto Receipt Tracking**: Integrated IMAP fetching automatically scans your inbox for official BIR confirmation receipts and automatically updates the status of your submitted forms from "Submitted" to "Confirmed" and "Paid".
-
-### 💼 Taxpayer Management
-- **Multi-Profile Support**: Seamlessly manage multiple taxpayer profiles from a single unified workspace.
-- **Global Dashboard**: A comprehensive overview of all actionable tax deadlines and historical filings across all profiles.
-- **Form Generation**: Robust, schema-driven form generation (e.g., 2551Q) mapping directly to official BIR XML standards.
-
-### 🛠 Form Digitization & Developer Tools
-- **Frozen HTML preview**: Exact BIR revisions print from committed freeze sheets. Catalog TIN/branch keys are stamped onto `name=`. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill onto cell ids via `writer-cells.json`; remaining leftovers stay unjoined. Official PDFs are calibration evidence only.
-- **Structured Tracing**: Debug builds automatically log form save, sync, and HTML preview/print/export events to the terminal via `tracing`. Override log levels at runtime with `RUST_LOG=bir_desktop=trace just run`.
-
-### 🛡️ Data Integrity
-- **Profile Snapshot at Save Time**: When you save a form, it captures your tax profile information at that exact moment. If you later update your profile, the saved form retains the original data — guaranteeing consistency between what was filed and what is stored.
-- **Post-Submission Lock**: Once a form is submitted, all fields become read-only. The only way to update data is to revert to Draft status and re-submit.
-- **Immutable Output Snapshot**: Opening output fills one frozen HTML document from the writer map. Preview and print reuse that document and never mutate the draft lifecycle.
-
----
-
-## 🛠 Prerequisites
-
-- **Rust Toolchain**: Ensure you have the latest stable Rust installed.
-  ```bash
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  ```
-- **Python 3.13**: Used by freeze inventory/stamp checks and packaging identity scripts.
-
-### 🍏 macOS Dependencies
-Run the one-shot setup script (idempotent; installs Xcode CLT, Homebrew
-packages, and the Rust toolchain with both universal-build targets):
+**Prerequisites (to build from source):** Xcode command line tools, Homebrew,
+and a Rust toolchain with both Apple targets. One idempotent script installs
+them all:
 
 ```bash
 scripts/setup-macos.sh           # install everything
 scripts/setup-macos.sh --check   # verify an existing install
-scripts/setup-macos.sh --extras  # also cargo-audit/outdated/machete + node
-scripts/setup-macos.sh --no-agent # skip the gpui-agent CLI
 ```
 
-It also installs the `gpui-agent` CLI at the rev pinned in Cargo.lock — see
-[Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent).
+OpenSSL compiles from vendored source, so the system perl and clang are
+enough. The app uses the system WebView for print preview. You need no other
+document renderer.
 
-No external document renderer is required. The app uses the platform WebView
-with its bundled offline HTML form assets. OpenSSL compiles from vendored
-source — the system perl + clang are all it needs.
+**Install:** download the `.dmg` from the
+[Releases](https://github.com/hexuria/buwiz-forms/releases) page and drag
+`eBIRForms.app` to Applications. The release workflow signs and notarizes the
+DMG, and stops if the Apple secrets are missing.
 
-### 🪟 Windows Dependencies
-Run the one-shot setup script (idempotent; installs Chocolatey packages,
-VS 2022 Build Tools, Rust, and the required `OPENSSL_*` env vars):
+**Build and run from source:**
+
+```bash
+just run                  # development build with diagnostics
+just _package-mac         # universal .app and .dmg in target/release-artifacts
+```
+
+**Where data lives:** `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`.
+The database key is in the macOS Keychain.
+
+**Notes:**
+- The window's close button and Cmd+Q hide the app to the menu bar. Use the
+  tray menu's Quit to quit.
+- The global show/hide hotkey is off in Mac App Store builds.
+
+More in [docs/platforms/macos.md](docs/platforms/macos.md).
+
+## Windows
+
+Windows is not yet verified. Treat it as untested until
+[#90](https://github.com/hexuria/buwiz-forms/issues/90) is closed.
+
+**Prerequisites (to build from source):** Visual Studio 2022 Build Tools with
+the C++ workload and Windows 11 SDK, Rust, OpenSSL, Strawberry Perl and NASM.
+One script installs them and sets the `OPENSSL_*` variables:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
 ```
-The script self-elevates via UAC — it works from a regular PowerShell window.
-It also installs the `gpui-agent` CLI at the rev pinned in `crates/bir-desktop/Cargo.toml`
-— see [Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent).
 
-Or install the pieces manually:
-- **OpenSSL** (Required for SQLCipher and networking):
-  ```powershell
-  choco install openssl -y
-  ```
-  *Note: Ensure the `OPENSSL_DIR` environment variable is set to your OpenSSL installation path (e.g., `C:\Program Files\OpenSSL`), and `OPENSSL_LIB_DIR` to the VC x64 lib dir (e.g., `C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD`).*
-- **Visual Studio 2022 Build Tools** with the C++ workload and Windows 11 SDK.
-- **Strawberry Perl and NASM** (required by the vendored `openssl-src` build; Strawberry Perl must precede Git Bash's perl on `PATH`).
+The script asks for administrator rights through UAC. Strawberry Perl must come
+before Git Bash's perl on `PATH`.
 
-### 🐧 Linux Dependencies
-The fastest path is the cross-distro setup script, which detects your package
-manager (apt, dnf, pacman, zypper), installs the system libraries below plus
-the Rust toolchain and `just`, then verifies the result:
+**Install:** the release workflow builds `eBIRForms-Windows-x64-<version>-Setup.exe`
+and an `.msi`. Run the Setup program and start eBIRForms from the Start menu.
+
+**Build and run from source:**
+
+```powershell
+just run                  # development build with diagnostics
+just exe                  # Inno Setup installer
+just msix                 # MSIX package
+```
+
+**Where data lives:** `%LOCALAPPDATA%\Taxman\eBIRForms\bir_data.db`. The
+database key is meant to be kept in Windows Credential Manager (untested).
+
+**Notes:**
+- The close button and Alt+F4 hide the app to the tray. Use the tray menu's
+  Quit to quit.
+- Windows Hello unlock is built in but untested.
+
+More in [docs/platforms/windows.md](docs/platforms/windows.md).
+
+## Linux
+
+**Install the `.deb`** (Debian, Ubuntu and relatives). Download it from the
+[Releases](https://github.com/hexuria/buwiz-forms/releases) page and install:
 
 ```bash
-scripts/setup-linux.sh           # install everything
+sudo apt install ./eBIRForms-Linux-x64-<version>.deb
+```
+
+The package installs `/usr/bin/ebirforms`, the assets in
+`/usr/share/ebirforms/assets`, a desktop entry
+(`/usr/share/applications/dev.goldcoders.bir.desktop`) and hicolor icons
+(48, 64, 128, 256 and 512 px, `/usr/share/icons/hicolor/<size>/apps/dev.goldcoders.bir.png`). After install,
+eBIRForms appears in your application menu under Office. You can also run
+`ebirforms` from a terminal. It needs GTK 3, WebKitGTK 4.1, Vulkan,
+xkbcommon, Wayland client, fontconfig and freetype. `apt` pulls them in. Noto
+Sans must be installed, or the window shows as a blank frame.
+
+**Build from source:**
+
+```bash
+scripts/setup-linux.sh           # installs system libraries, Rust and just
 scripts/setup-linux.sh --check   # verify an existing install
-scripts/setup-linux.sh --extras  # also cargo-audit/outdated/machete + node
-scripts/setup-linux.sh --no-agent # skip the gpui-agent CLI
+just run                         # development build with diagnostics
+just _package-linux              # .deb (or a tarball without cargo-deb)
 ```
 
-It covers Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro, and openSUSE. It also
-installs the `gpui-agent` CLI (pinned to the same git rev as the app's embedded
-host crate) so the app can be driven headlessly — see
-[Driving the app with gpui-agent](#-driving-the-app-with-gpui-agent). On other
-distributions, install the equivalent of these Ubuntu/Debian packages:
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-  build-essential pkg-config perl python3 \
-  libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev \
-  libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
-  libwayland-client0 libasound2-dev libudev-dev libvulkan-dev \
-  libfontconfig1-dev libfreetype-dev libssl-dev libpolkit-gobject-1-dev \
-  libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev \
-  mesa-vulkan-drivers libappindicator3-dev librsvg2-dev patchelf xvfb \
-  fonts-noto-core fonts-noto-color-emoji
-```
-- **WebKitGTK** powers the bundled offline HTML preview, print, and PDF export host.
-- **OpenSSL** compiles from source (`openssl-src` vendored) — a C toolchain and `perl` are required even when `libssl-dev` is installed.
-- **Noto Sans** is the UI font — without it the window presents as a blank white frame.
-- Headless machines can run the GTK print tests under the virtual framebuffer: `xvfb-run -a just test`.
-- **Blank window on a VM / software GPU:** llvmpipe's Vulkan path can present stale frames. Force the Gl backend with `VK_ICD_FILENAMES=/dev/null just run`.
+The script supports apt, dnf, pacman and zypper. The full package list is in
+[docs/platforms/linux.md](docs/platforms/linux.md).
 
----
+**Where data lives:** `~/.taxman-ebir/bir_data.db`.
 
-## 🚀 Getting Started
+**Notes:**
+- The window's X button, Ctrl+Q and Alt+F4 quit the app.
+- The tray icon needs a StatusNotifier host, which many desktops lack. The app
+  starts without a tray when none is found.
+- Print preview opens in your default browser.
+- Exports need `xdg-desktop-portal` or `zenity`. Without them files go to
+  `~/Documents/eBIRForms/exports`.
+- Blank window on a VM or software GPU: start with `VK_ICD_FILENAMES=/dev/null`.
 
-1. **Clone the Repository**
-   ```bash
-   git clone <repository_url>
-   cd bir
-   ```
+More in [docs/platforms/linux.md](docs/platforms/linux.md).
 
-2. **Install `just` (Command Runner)**
-   The project is completely standardized via a `justfile` for cross-platform simplicity. You will need `just` to build, run, and package the app.
-   - **macOS:** `brew install just`
-   - **Windows:** `choco install just`
-   - **Linux / Cargo:** `cargo install just`
+## Using the app
 
-3. **Install Developer Tools (Optional but Recommended)**
-   We use a few standard Cargo extensions for maintaining code quality, dependencies, and security:
-   ```bash
-   cargo install cargo-audit cargo-outdated cargo-machete
-   ```
+**Set up a profile.** Create a taxpayer profile (Cmd/Ctrl+N) with the TIN and
+registered details. You can keep many profiles in one workspace. The profile
+page has tabs for the tax profile, email settings (used to read BIR
+receipts), the calendar, security (an optional PIN or authenticator lock) and
+export. A saved return keeps a
+snapshot of the profile as it was at save time.
 
-4. **Build and Run**
-   To see all available commands, simply run:
-   ```bash
-   just help
-   ```
+**Browse the tax form library.** The dashboard has two tabs, Calendar and Tax
+Form Library. The Calendar shows your deadlines. The library has a card for
+each form. Pick a form and a period to open its editor.
 
-   **To run the application locally (development mode):**
-   ```bash
-   just run
-   ```
+**Fill a return.** Type into the form. Validation errors show on the form, and
+totals are computed for you.
 
----
+**Validate, Submit, more.** The editor header has three controls:
+`[Validate] [Submit] [⋯]`. Validate checks the return. With the default
+"Separate Validate button" setting, Submit waits until you have validated.
+The ⋯ menu has Save draft, Print preview, Revert to Draft and, after an
+amendment, View what was sent. Submit is hidden for the four 2200 excise forms
+that cannot be queued.
 
-## 🏗 Available Commands
+**Statuses.** A return moves through Draft, Queued, Submitted, Confirmed and
+Paid. Submit queues the return. The background engine uploads it over SFTP.
+When BIR receipt emails arrive in the inbox you configured, the
+status moves to Confirmed and then to Paid. A submitted return
+is read-only.
 
-We follow a "less is better" philosophy. You only need to remember a few core commands:
+**Dry run and live sending.** Live sending to BIR is opt-in: set
+`BIR_SFTP_LIVE=1`. Set `BIR_SFTP_DRY_RUN=1` to simulate a submission; nothing
+is sent. In debug builds the Dev Mode panel defaults to dry run.
 
-- `just run` — Run the app locally with developer diagnostics.
-- `just install` — Automatically figure out your OS and build the installer package (macOS DMG/PKG, Windows MSIX/EXE, Linux DEB/Tarball).
-- `DEV_MODE=true just install --inspector` — Compiles a package with internal diagnostics unlocked.
-- `just _package-mac --agent` — Mac release `.app` with the gpui-agent control plane compiled in. Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
-- `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
+**Revert to Draft as an amendment.** Queued, Submitted and Confirmed returns
+can be reverted to Draft. Paid returns cannot. Reverting a Submitted or
+Confirmed return starts an amendment and keeps a read-only copy of what BIR
+received.
 
-**Quality & Testing:**
-- `just check` — Run code formatting (`cargo fmt`), linting (`cargo clippy`), and type checking (`cargo check`) across the workspace.
-- `just test` — Run all unit and integration test suites.
+**Print preview.** Print preview fills the frozen printed sheet of the exact
+BIR revision with your data. It never changes the return's status. On macOS
+and Windows it opens in its own window with a Print button. On Linux it opens
+in your default browser. Export what you want to keep.
 
-**Frozen HTML:**
-- Product CI checks out `hexuria/buwiz-forms-html` and runs `freeze_html.py --verify` plus `stamp_frozen_names.py --check-all`.
-- `just build-frozen-html-identity` — Hash `html-frozen/` into the non-promotional packaging identity.
+**Notifications drawer.** The bell in the top bar opens a drawer with alerts
+and receipts. It closes when you change page.
 
-**Dependency Management:**
-- `just audit` — Check for security vulnerabilities in dependencies using the RustSec database.
-- `just outdated` — Display a list of dependencies that have newer versions available.
-- `just unused` — Scan `Cargo.toml` for dependencies that are no longer being used.
+**Theme.** Switch between light and dark with the theme button in the top bar,
+or Cmd/Ctrl+Shift+T.
 
----
+**Dev Mode (debug builds only).** Debug builds have a Dev Mode panel with
+switches for submission mode, test SFTP server, showing uncertified forms and a
+separate dev database. A release build ignores every one of them.
 
-## 🤖 Driving the app with gpui-agent
+**Keyboard shortcuts** (Cmd on macOS, Ctrl elsewhere): Enter submits the
+current form, N creates a profile, B toggles the sidebar, F focuses search, K
+opens the command palette, Shift+X opens cron tasks, comma opens Settings.
 
-The agent is a build feature, off by default. Nothing in a product build can
-reach it unless you compile `--features agent` (Mac release bundle:
-`just _package-mac --agent`). Even a feature-enabled binary stays silent
-until `GPUI_AGENT=1`. There is no `scripts/bir-agent` wrapper: launch the
-host with env vars, then talk to it with `gpui-agent`.
+## More documentation
 
-The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
-and is installed automatically by every setup script — `setup-windows.ps1`,
-`setup-linux.sh`, and `setup-macos.sh` all resolve the rev the app pins
-(`crates/bir-desktop/Cargo.toml` / `Cargo.lock`) so driver and host can never
-drift on protocol version. Manually:
-`cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
-
-**Windows note:** the HMAC token handshake fails closed on Windows at the
-current pin — gpui-agent's nonce source is `/dev/urandom` (Unix-only), so the
-host drops connections before the challenge. For local-only driving on
-Windows, set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`
-(never on shared machines).
-
-```bash
-# Build the painted app with the control plane. `dev-tools` is not required;
-# add it only for --dev-export-live-database or to open a form that is still
-# being certified from a *release* build.
-cargo build --locked --bin bir --features agent
-
-export GPUI_AGENT=1
-export GPUI_AGENT_TOKEN=dev-secret          # required to bind (protocol v2 HMAC)
-export GPUI_AGENT_ADDR=127.0.0.1:17421      # default; use 127.0.0.1:17423 when NativeChat owns 17421
-# Release binaries also need:
-# export GPUI_AGENT_ALLOW_RELEASE=1
-export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
-./target/debug/bir
-```
-
-Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:
-
-```bash
-gpui-agent hello                 # protocol, app, platform, os, ready
-gpui-agent keybindings           # {id, chord, scope, dangerous}
-gpui-agent keybinding --id app.toggle_sidebar --scope focused --activate
-gpui-agent invoke profile.set --arg tin=00000000000000
-gpui-agent invoke filing.start --arg code=1601C --arg year=2026 --arg period=9
-gpui-agent screenshot --out form.png --mode scrolled --target form-1601c-scroll
-```
-
-Before driving a host, check who owns the port — `lsof -nP -iTCP:17421
--sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show `bir` or
-`bir-headless`. Another process there (an editor forwarding a remote machine,
-say) answers the protocol convincingly; `hello.os` and the chord style
-(`cmd-b` on macOS, `ctrl-b` on Linux) tell the two apart. A `focused`-scope
-keybinding needs `--activate` when the app is not the frontmost application,
-and macOS screenshots need Screen Recording granted to that exact binary path.
-
-The full contract — authorization, the two-host port handoff, screenshot and
-scroll semantics, and the AI-agent playbook — is in
-[`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
-
-## 🔢 Versioning & Build Numbers
-
-The project uses **two independent version identifiers** to satisfy both Apple App Store and Microsoft Store requirements:
-
-| Identifier | Source of Truth | Changed By | When |
-|---|---|---|---|
-| **App Version** (semver) | `Cargo.toml` → `version = "0.1.0"` | You, manually | Feature release or hotfix |
-| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed cross-store default | `just app` (ephemeral) or `just bump-build` (committed) | Every store submission |
-
-### Why Two Numbers?
-
-Apple and Microsoft handle versioning differently:
-
-| | macOS App Store | Microsoft Store |
-|---|---|---|
-| Marketing version | `CFBundleShortVersionString = "0.1.0"` | Store listing description |
-| Build identifier | `CFBundleVersion = "26"` (separate field) | `Version = "0.1.26.0"` in AppxManifest |
-| Multiple builds per version? | ✅ Yes | ❌ No — each submission needs a higher `Version` |
-
-**macOS** has two separate fields — one for the user-facing version, one for the internal build counter. **Microsoft** has only a single `Version` field, and the 4th part (Revision) must always be `0`.
-
-### How the Version Maps to Each Store
-
-Given `Cargo.toml version = "0.1.0"` and `BUILD_NUMBER = 26`:
-
-```
-macOS App Store:
-  CFBundleShortVersionString = "0.1.0"    ← what users see
-  CFBundleVersion            = "26"       ← internal build number
-
-Microsoft Store:
-  AppxManifest Version       = "0.1.26.0" ← Major.Minor.BuildNumber.0
-  Store listing              = "0.1.0"    ← what users see (set in Partner Center)
-```
-
-### Developer Workflow
-
-**Submitting a macOS App Store build** (most common):
-```bash
-just app  # Queries App Store Connect and passes the next counter without editing tracked source
-```
-
-Keeping the checkout clean lets packaged renderer identity verification bind
-the build to its exact curated source revision before the app is assembled.
-
-**Persisting one counter for both stores:**
-```bash
-just bump-build
-git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
-just app   # macOS package; the live API counter is passed through the environment
-just msix  # Windows package; uses the committed default counter
-```
-
-**Releasing a new version** (feature release or hotfix):
-```bash
-# 1. Manually edit Cargo.toml: version = "0.2.0"
-# 2. Then bump and build as usual:
-just bump-build
-git add Cargo.toml justfile && git commit -m "release: v0.2.0"
-```
-
-> **Note:** `just bump-build` only works on macOS — it requires the Apple App Store Connect API credentials (`.p8` key, `APP_STORE_ISSUER_ID`, `APP_STORE_KEY_ID` in `.env`). On Windows, simply `git pull` to get the latest `BUILD_NUMBER` from the justfile, then run `just msix`.
-
-### Version Progression Example
-
-| Action | Cargo.toml | BUILD_NUMBER | macOS | Windows MSIX |
-|---|---|---|---|---|
-| Current | `0.1.0` | 26 | `0.1.0` (build 26) | `0.1.26.0` |
-| Bump build | `0.1.0` | 27 | `0.1.0` (build 27) | `0.1.27.0` |
-| Bump build | `0.1.0` | 28 | `0.1.0` (build 28) | `0.1.28.0` |
-| Hotfix | `0.1.1` | 29 | `0.1.1` (build 29) | `0.1.29.0` |
-| Feature release | `0.2.0` | 30 | `0.2.0` (build 30) | `0.2.30.0` |
-| Stable release | `1.0.0` | 31 | `1.0.0` (build 31) | `1.0.31.0` |
-
-## 🔐 CI/CD Secrets & Codesigning
-
-The GitHub Actions workflows (`ci.yml` and `release.yml`) are fully automated. Windows and Linux builds require **no secrets** to compile successfully. 
-
-However, if you want to automatically codesign and notarize the **macOS** DMG on GitHub Releases, you must configure the following Repository Secrets in your GitHub settings:
-
-| Secret Name | Required For | Description |
-|---|---|---|
-| `APPLE_CERTIFICATE_P12` | macOS Codesign | Base64-encoded `Developer ID Application` .p12 certificate |
-| `APPLE_CERTIFICATE_PASSWORD` | macOS Codesign | Password to unlock the .p12 certificate |
-| `APPLE_TEAM_ID` | macOS Codesign & Notarization | Your Apple Developer Team ID (e.g., `A1B2C3D4E5`) |
-| `APPLE_ID` | macOS Notarization | Your Apple ID email address |
-| `APPLE_APP_PASSWORD` | macOS Notarization | App-specific password generated at appleid.apple.com |
-
-> **Note:** If these secrets are missing, the macOS release workflow will gracefully skip the signing and notarization steps and still provide an unsigned DMG and ZIP fallback.
-
-## 📂 Architecture
-
-- `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.
-  - `forms/` — Form data models, `FormValidator` trait, ATC tax code tables, and the form registry.
-  - `db/` — Decomposed database layer with domain-specific modules (`profiles.rs`, `drafts.rs`, `submissions.rs`, `receipts.rs`, `jobs.rs`, `notices.rs`, `migrations.rs`).
-- `crates/bir-desktop/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming. Opt-in gpui-agent / `bir-headless` runbook: [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
-  - `components/form_engine.rs` — `FormViewTrait` providing shared status pipeline, header, and action infrastructure for all tax forms.
-  - `components/form_parts.rs` — Reusable UI primitives: `form_accordion`, `taxpayer_info_section`, `atc_schedule_table`, `computation_row_*`, `penalty_summary_section`, and more.
-  - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.
-- `crates/bir-print/`: Frozen HTML fill/print, native output coordination, PDF validation, and PDF merging.
-- `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
-- `packages/form-specs/`: Paper/pagination specifications plus migration and release-evidence manifests.
-- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill through `writer-cells.json`. Letter combs ASCII-uppercase on the fill path only.
-
-### 🧩 Form Engine
-
-Adding a new BIR tax form now crosses two separately gated tracks:
-
-1. **Filing support** — authoritative source evidence, typed domain model,
-   formulas, validation, XML, persistence, queue submission, and desktop UI.
-2. **Print presentation** — frozen HTML in `html-frozen/`, catalog TIN `name=`
-   stamps, `writer-cells.json` identity and money fills, and `fill_by_name` from
-   `to_bir_field_map()`.
-3. **Promotion evidence** — filing support changes only after the in-app gates
-   pass; HTML release changes only after freeze verify/stamp checks and
-   packaged identity evidence pass.
-
-Each of these three concerns is machine-checked. Freeze `--verify` / `--check-all`
-states what a preview sheet must satisfy, `cargo run -p
-bir-rules-codegen -- status` states the validation-rules boundary conditions,
-and `npm run audit:no-legacy` states what must stay absent. Read those three
-rather than any prose description of them.
-
----
-
-## 🧠 Reference and Boundary Tooling
-
-- `scripts/reference/` — deterministic form provenance tooling.
-  `inventory_form.py` pins an exact revision, `prepare_official_reference.py`
-  renders a pinned official PDF into calibration-only rasters, and
-  `verify_form_conversion.py` audits a conversion at the `preview` and
-  `release` stages. Reference hashes are pinned in Rust; regenerate the
-  manifest with `npm run references:generate`.
-- `rules/agent-boundaries/` — the fail-closed boundary record for the 2550Q
-  candidate rule set. `cargo run -p bir-rules-codegen -- status` asserts on its
-  contents, so it is a safety contract rather than documentation.
-
-Narrative design notes, migration research, and agent workflow definitions are
-maintained in a separate private repository and are deliberately not published
-here. Paths of the form `docs/...` in source comments refer to that repository.
-README and runbook examples use standard `npm`, `python3`, and `cargo` commands
-so developers can run the workflow without an agent-specific command wrapper.
-
----
-
-## [Download Forms](https://www.bir.gov.ph/bir-forms)
-
-## 📜 Development Notes
-
-- **Database Location:** 
-  - macOS: `~/Library/Application Support/Taxman/eBIRForms/bir_data.db`
-  - Linux/Windows: `~/.taxman-ebir/bir_data.db`
-  - gpui-agent / `bir-headless` live path, token, and `--wait` handoff: [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md)
-- **Background Engine:** Background cron tasks (auto-fetch) run in-process on a dedicated thread and are decoupled from the active taxpayer profile.
-- **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
-- **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate. Google OAuth for a shared inbox is stored once in `inbox_oauth_tokens` (SQLCipher) and copied onto every profile that uses that mailbox. Never log raw tokens.
-- **Feature Flags:**
-  - `dev-tools` — Developer diagnostics: the `--dev-export-live-database` command, and (in a **release** build) permission to open a form whose HTML release certification is still in progress. A debug build already satisfies that gate through `debug_assertions`, so `dev-tools` changes nothing there. Automatically included in `just run`.
-  - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features agent`) and the `bir-headless` daemon. It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the app can open. Off in product/release builds unless you pass `just _package-mac --agent`, which compiles the feature into the Mac bundle. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. There is no `scripts/bir-agent` wrapper; set those env vars and use `gpui-agent`. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](crates/bir-desktop/docs/AGENT.md).
-- **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_desktop=debug,bir_print=debug,bir_core=info`).
+- [docs/FORMS.md](docs/FORMS.md): the 43 forms, queue support, parity proof
+  and printed sheets.
+- [docs/FEATURES.md](docs/FEATURES.md): the feature matrix for all three platforms.
+- Platform pages: [macOS](docs/platforms/macos.md),
+  [Windows](docs/platforms/windows.md), [Linux](docs/platforms/linux.md).
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): commands, gpui-agent, versioning,
+  CI/CD, architecture, reference tooling and development notes.
+- [Download the official forms](https://www.bir.gov.ph/bir-forms) from BIR.

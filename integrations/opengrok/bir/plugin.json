@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bir",
+  "version": "0.1.0",
+  "description": "Draft-only BIR returns (2551Q, 1601C) in the BIR desktop app. Never submits, queues, files or pays."
+}

@@ -1,0 +1,2081 @@
+//! Editor for BIR Form 1601-FQ, Quarterly Remittance Return of Final Income
+//! Taxes Withheld, January 2018. Rust owns every
+//! calculation, validation and the official submit plaintext
+//! (`bir_core::forms::form_1601fq`); this view only edits source values. The
+//! layout reflows for desktop, tablet and phone widths.
+
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+
+use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
+use bir_core::filing_queue::QueueAuthSource;
+use bir_core::forms::form_1601fq::{
+    FORM_1601FQ_FIRST_ITEM, FORM_1601FQ_GOVERNMENT_ATCS, FORM_1601FQ_MAIN_ROWS,
+    FORM_1601FQ_NOT_APPLICABLE, FORM_1601FQ_PRIVATE_ATCS, FORM_1601FQ_SCHEDULE1_ROWS,
+    FORM_1601FQ_TREATIES, Form1601FqAtcOption, Form1601FqCategory, Form1601FqDraft,
+    Form1601FqScheduleRow, Form1601FqTaxRelief,
+};
+use bir_core::forms::queueable::{QueueableForm, can_user_revert, period_column};
+use bir_core::forms::{FilingStatus, can_queue_for_submission};
+use bir_core::official_xml::official_amount;
+use gpui::prelude::FluentBuilder;
+use gpui::*;
+use gpui_component::button::{Button, ButtonVariants};
+use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::*;
+use gpui_rsx::rsx;
+use std::rc::Rc;
+
+use crate::components::combobox::{ComboboxEvent, ComboboxState};
+use crate::components::form_engine::FormViewTrait;
+use crate::views::form_controls::{
+    self, MultiChange, messages_for, multi_select_field, select_field, with_field_error,
+};
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
+    separate_validate_button,
+};
+use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::profile::TaxpayerProfile;
+
+impl EventEmitter<QueueableFormEvent> for Form1601FqView {}
+
+/// Width classes the page lays out for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    Phone,
+    Tablet,
+    Desktop,
+}
+
+impl Layout {
+    fn for_width(width: Pixels) -> Self {
+        if width < px(700.) {
+            Self::Phone
+        } else if width < px(1100.) {
+            Self::Tablet
+        } else {
+            Self::Desktop
+        }
+    }
+}
+
+/// Text inputs: (key, label, placeholder).
+const TEXT_INPUTS: &[(&str, &str, &str)] = &[
+    ("year", "Item 1 — For the Year", "YYYY"),
+    ("sheets", "Item 5 — No. of sheets attached", "0"),
+    ("name", "Item 8 — Withholding Agent's Name", ""),
+    ("address", "Item 9 — Registered Address", ""),
+    ("zip", "Item 9A — Zip Code", ""),
+    ("phone", "Item 10 — Contact Number", "digits only"),
+    ("email", "Item 12 — Email Address", ""),
+    (
+        "lob",
+        "Line of business (kept with the return, not printed)",
+        "",
+    ),
+];
+
+/// Money inputs outside the ATC rows: (key, label).
+const MONEY_INPUTS: &[(&str, &str)] = &[
+    ("rem1", "23 — Remittances made: 1st month of the quarter"),
+    ("rem2", "24 — Remittances made: 2nd month of the quarter"),
+    (
+        "prev",
+        "25 — Tax remitted in return previously filed (amended only)",
+    ),
+    ("sur", "28 — Surcharge"),
+    ("int", "29 — Interest"),
+    ("comp", "30 — Compromise"),
+];
+
+fn base_key(popup_index: usize) -> String {
+    format!("base_{popup_index}")
+}
+
+/// Schedule 1 editor keys for row `i`: treaty, ATC, amount, rate.
+fn s1_key(field: &str, row: usize) -> String {
+    format!("s1_{field}_{row}")
+}
+
+/// Accepts `1,234.56`, `1234.5`, blank (zero).
+fn parse_amount(value: &str) -> Option<f64> {
+    let cleaned: String = value
+        .chars()
+        .filter(|c| *c != ',' && !c.is_whitespace())
+        .collect();
+    if cleaned.is_empty() {
+        return Some(0.0);
+    }
+    cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
+/// The popup list as `(popup index, "CODE (rate%) — description")`. The
+/// picker searches the whole label; the index is the stored value because a
+/// code can be listed twice with different rates.
+///
+/// The official popup lists a few entries twice with identical code, rate and
+/// description (private list: WI202 at popup rows 29 and 37). Only those get a
+/// " (popup row N)" suffix, N being the 1-based row of the popup the official
+/// page itself indexes (`txtRate<i>`), so the labels stay distinct.
+fn atc_pairs(options: &[Form1601FqAtcOption]) -> Vec<(String, String)> {
+    let label = |option: &Form1601FqAtcOption| {
+        format!(
+            "{} ({}%) — {}",
+            option.code, option.rate_text, option.description
+        )
+    };
+    options
+        .iter()
+        .enumerate()
+        .map(|(index, option)| {
+            let mut text = label(option);
+            if options.iter().filter(|other| label(other) == text).count() > 1 {
+                text.push_str(&format!(" (popup row {})", index + 1));
+            }
+            (index.to_string(), text)
+        })
+        .collect()
+}
+
+/// Schedule 1 column C: `NA`, then every ATC code of either list once.
+fn schedule1_atc_pairs() -> Vec<(String, String)> {
+    let mut pairs = vec![(
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+    )];
+    for option in FORM_1601FQ_PRIVATE_ATCS
+        .iter()
+        .chain(FORM_1601FQ_GOVERNMENT_ATCS)
+    {
+        if !pairs.iter().any(|(code, _)| code == option.code) {
+            pairs.push((
+                option.code.to_string(),
+                format!("{} — {}", option.code, option.description),
+            ));
+        }
+    }
+    pairs
+}
+
+/// Schedule 1 column B: `NA`, then every treaty code.
+fn treaty_pairs() -> Vec<(String, String)> {
+    let mut pairs = vec![(
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+        FORM_1601FQ_NOT_APPLICABLE.to_string(),
+    )];
+    pairs.extend(
+        FORM_1601FQ_TREATIES
+            .iter()
+            .map(|(code, name)| (code.to_string(), format!("{code} — {name}"))),
+    );
+    pairs
+}
+
+fn as_refs(pairs: &[(String, String)]) -> Vec<(&str, &str)> {
+    pairs
+        .iter()
+        .map(|(v, l)| (v.as_str(), l.as_str()))
+        .collect()
+}
+
+/// The ticked ATCs as popup indices.
+fn selected_atc_values(draft: &Form1601FqDraft) -> Vec<String> {
+    draft
+        .schedule
+        .iter()
+        .map(|row| row.popup_index.to_string())
+        .collect()
+}
+
+/// Official confirm text from the BIR page (`cancelAllCompute`), verbatim.
+const WITHHELD_NO_QUESTION: &str = "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II. ";
+
+/// Official Item 13 "No" confirm text (`confirmDisableTreaty`), verbatim.
+const RELIEF_NO_QUESTION: &str =
+    "Warning: pressing OK will clear all values in Schedule 1.\nPress OK to do so.";
+
+pub struct Form1601FqView {
+    draft: Form1601FqDraft,
+    /// Item 13 "No" waiting for the user's answer (Schedule 1 would be cleared).
+    relief_no_pending: bool,
+    /// Item 4 "No" waiting for the user's answer in the inline confirmation.
+    withheld_no_pending: bool,
+    db: Arc<Mutex<Database>>,
+    scroll_handle: ScrollHandle,
+    inputs: BTreeMap<String, Entity<InputState>>,
+    validation_errors: Vec<(String, String)>,
+    parse_errors: Vec<(String, String)>,
+    status_message: Option<String>,
+    release_claim_confirm_open: bool,
+    /// The official submit confirm is open (OK queues, Cancel changes nothing).
+    submit_confirm_open: bool,
+    /// Validate ran at the current entries; every edit clears it.
+    validated: bool,
+    /// Shared header: ⋯ menu, status box and "View what was sent".
+    header: FormHeaderState,
+    /// Schedule 1 editors to reload from the draft on the next render (a new
+    /// ATC brings its own rate, like `getATCdrpTaxRate`).
+    refresh_schedule1: bool,
+    /// Searchable multi-select for the Part II ATCs (values are popup indices).
+    atc_select: Entity<ComboboxState>,
+    /// Schedule 1 column B / C selects, one per row. They write into the
+    /// hidden `s1_treaty_<row>` / `s1_atc_<row>` editors.
+    treaty_selects: Vec<Entity<ComboboxState>>,
+    s1_atc_selects: Vec<Entity<ComboboxState>>,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl Form1601FqView {
+    /// Editor text for one input from the draft.
+    fn initial(draft: &Form1601FqDraft, key: &str) -> String {
+        let money = |value: f64| {
+            if value == 0.0 {
+                String::new()
+            } else {
+                official_amount(value)
+            }
+        };
+        match key {
+            "year" => draft.taxable_year.to_string(),
+            "sheets" => draft.number_of_attached_sheets.to_string(),
+            "name" => draft.taxpayer_name.clone(),
+            "address" => draft.registered_address.clone(),
+            "zip" => draft.zip_code.clone(),
+            "phone" => draft.contact_number.clone(),
+            "email" => draft.email.clone(),
+            "lob" => draft.line_of_business.clone(),
+            "rem1" => money(draft.remittance_first_month),
+            "rem2" => money(draft.remittance_second_month),
+            "prev" => money(draft.tax_remitted_previous),
+            "sur" => money(draft.surcharge),
+            "int" => money(draft.interest),
+            "comp" => money(draft.compromise),
+            _ => {
+                if let Some(index) = key
+                    .strip_prefix("base_")
+                    .and_then(|n| n.parse::<usize>().ok())
+                {
+                    return draft
+                        .schedule
+                        .iter()
+                        .find(|row| row.popup_index == index)
+                        .map(|row| money(row.tax_base))
+                        .unwrap_or_default();
+                }
+                let mut parts = key.splitn(3, '_');
+                let (Some("s1"), Some(field), Some(row)) =
+                    (parts.next(), parts.next(), parts.next())
+                else {
+                    return String::new();
+                };
+                let Some(row) = row
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|row| draft.schedule1.get(row))
+                else {
+                    return String::new();
+                };
+                match field {
+                    "treaty" => row.treaty_code.clone(),
+                    "atc" => row.atc_code.clone(),
+                    "amt" => money(row.income_payment),
+                    "rate" => money(row.tax_rate),
+                    _ => String::new(),
+                }
+            }
+        }
+    }
+
+    fn input_text(&self, key: &str, cx: &App) -> String {
+        self.inputs
+            .get(key)
+            .map(|input| input.read(cx).value().to_string())
+            .unwrap_or_default()
+    }
+
+    /// Create the editor for `key` if it does not exist yet.
+    fn ensure_input(
+        &mut self,
+        key: String,
+        placeholder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.inputs.contains_key(&key) {
+            return;
+        }
+        let value = Self::initial(&self.draft, &key);
+        let placeholder = placeholder.to_string();
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+        self._subscriptions.push(cx.subscribe_in(
+            &input,
+            window,
+            move |this: &mut Self, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.validated = false;
+                    this.sync_from_inputs(cx);
+                }
+            },
+        ));
+        self.inputs.insert(key, input);
+    }
+
+    /// Read every editor value into the draft, then recompute and validate.
+    /// A malformed number is reported instead of becoming zero.
+    fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let mut parse_errors = Vec::new();
+        let mut refresh = false;
+        let mut number = |key: &str, label: &str, cx: &App| -> Option<f64> {
+            let text = self.input_text(key, cx);
+            let parsed = parse_amount(&text);
+            if parsed.is_none() {
+                parse_errors.push((
+                    key.to_string(),
+                    format!("{label}: \"{text}\" is not a number."),
+                ));
+            }
+            parsed
+        };
+        let mut draft = self.draft.clone();
+        if let Some(sheets) = number("sheets", "Item 5", cx) {
+            draft.number_of_attached_sheets = if (0.0..=999.0).contains(&sheets) {
+                sheets as u16
+            } else {
+                999
+            };
+        }
+        for (key, label) in MONEY_INPUTS {
+            if let Some(value) = number(key, label, cx) {
+                match *key {
+                    "rem1" => draft.remittance_first_month = value,
+                    "rem2" => draft.remittance_second_month = value,
+                    "prev" => draft.tax_remitted_previous = value,
+                    "sur" => draft.surcharge = value,
+                    "int" => draft.interest = value,
+                    _ => draft.compromise = value,
+                }
+            }
+        }
+        for row in &mut draft.schedule {
+            let label = format!("Tax base for {}", row.atc_code);
+            if let Some(value) = number(&base_key(row.popup_index), &label, cx) {
+                row.tax_base = value;
+            }
+        }
+        for index in 0..draft.schedule1.len() {
+            let item = index + 1;
+            let treaty = self.input_text(&s1_key("treaty", index), cx);
+            let atc = self.input_text(&s1_key("atc", index), cx);
+            let amount = number(
+                &s1_key("amt", index),
+                &format!("Schedule 1 row {item} amount"),
+                cx,
+            );
+            let rate = number(
+                &s1_key("rate", index),
+                &format!("Schedule 1 row {item} rate"),
+                cx,
+            );
+            draft.schedule1[index].treaty_code = treaty.trim().to_uppercase();
+            let atc = atc.trim().to_uppercase();
+            if atc != draft.schedule1[index].atc_code {
+                draft.set_schedule1_atc(index, &atc);
+                refresh = true;
+            } else if let Some(rate) = rate {
+                draft.schedule1[index].tax_rate = rate;
+            }
+            if let Some(amount) = amount {
+                draft.schedule1[index].income_payment = amount;
+            }
+        }
+        draft.taxpayer_name = self.input_text("name", cx);
+        draft.registered_address = self.input_text("address", cx);
+        draft.zip_code = self.input_text("zip", cx).trim().to_string();
+        draft.contact_number = self.input_text("phone", cx).trim().to_string();
+        draft.email = self.input_text("email", cx).trim().to_string();
+        draft.line_of_business = self.input_text("lob", cx);
+        draft.recompute();
+        draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
+        self.validation_errors = draft.validate();
+        self.parse_errors = parse_errors;
+        self.refresh_schedule1 |= refresh;
+        self.draft = draft;
+        cx.notify();
+    }
+
+    fn edit(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut Form1601FqDraft)) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        change(&mut self.draft);
+        self.validated = false;
+        self.draft.recompute();
+        self.validation_errors = self.draft.validate();
+        self.status_message = None;
+        cx.notify();
+    }
+
+    fn add_atc(&mut self, popup_index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let mut draft = self.draft.clone();
+        match draft.add_atc(popup_index) {
+            Ok(()) => {
+                self.draft = draft;
+                self.validated = false;
+                self.ensure_input(base_key(popup_index), "0.00", window, cx);
+                self.status_message = None;
+                self.sync_from_inputs(cx);
+            }
+            Err(message) => {
+                self.status_message = Some(message);
+                cx.notify();
+            }
+        }
+    }
+
+    /// Apply a new ATC list from the picker: untick what left, tick what
+    /// arrived, through the model's own `remove_atc` / `add_atc`.
+    fn apply_atc_selection(
+        &mut self,
+        next: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let current = selected_atc_values(&self.draft);
+        for value in current.iter().filter(|v| !next.contains(v)) {
+            if let Ok(index) = value.parse::<usize>() {
+                self.remove_atc(index, window, cx);
+            }
+        }
+        for value in next.iter().filter(|v| !current.contains(v)) {
+            if let Ok(index) = value.parse::<usize>() {
+                self.add_atc(index, window, cx);
+            }
+        }
+    }
+
+    /// Write a Schedule 1 select's choice into its editor and re-read the page.
+    fn set_s1_choice(
+        &mut self,
+        key: String,
+        value: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        if let Some(input) = self.inputs.get(&key) {
+            let value = value.to_string();
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        self.sync_from_inputs(cx);
+    }
+
+    fn remove_atc(&mut self, popup_index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.draft.remove_atc(popup_index);
+        self.validated = false;
+        if let Some(input) = self.inputs.get(&base_key(popup_index)) {
+            input.update(cx, |state, cx| state.set_value("", window, cx));
+        }
+        self.sync_from_inputs(cx);
+    }
+
+    /// Item 4 "No": apply now when no entered row would be lost, else ask first.
+    fn request_withheld_no(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let blank = Form1601FqScheduleRow::default();
+        let loses_rows = !self.draft.schedule.is_empty()
+            || (self.draft.tax_relief.is_some()
+                && self.draft.schedule1.iter().any(|row| *row != blank));
+        if loses_rows {
+            self.withheld_no_pending = true;
+            cx.notify();
+        } else {
+            self.apply_withheld_no(window, cx);
+        }
+    }
+
+    fn apply_withheld_no(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.withheld_no_pending = false;
+        self.edit(cx, |d| d.set_any_tax_withheld(false));
+        self.reload_schedule1_inputs(window, cx);
+    }
+
+    /// Inline official question with "Yes, remove" and "Cancel".
+    fn withheld_no_confirm(&self, cx: &Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .rounded_md()
+            .bg(cx.theme().muted)
+            .child(div().text_sm().child(WITHHELD_NO_QUESTION))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(
+                        Button::new("1601fq_wipe_yes")
+                            .label("Yes, remove")
+                            .danger()
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.apply_withheld_no(window, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new("1601fq_wipe_cancel")
+                            .label("Cancel")
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.withheld_no_pending = false;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// Reload the Schedule 1 editors from the draft.
+    fn reload_schedule1_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for index in 0..FORM_1601FQ_SCHEDULE1_ROWS {
+            for field in ["treaty", "atc", "amt", "rate"] {
+                let key = s1_key(field, index);
+                if let Some(input) = self.inputs.get(&key) {
+                    let value = Self::initial(&self.draft, &key);
+                    input.update(cx, |state, cx| state.set_value(value, window, cx));
+                }
+            }
+        }
+    }
+
+    fn set_relief(
+        &mut self,
+        relief: Option<Form1601FqTaxRelief>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        self.relief_no_pending = false;
+        self.draft.set_tax_relief(relief);
+        self.reload_schedule1_inputs(window, cx);
+        self.sync_from_inputs(cx);
+    }
+
+    /// Item 13 "No": when Yes is set, ask first (official `confirmDisableTreaty`);
+    /// Cancel keeps Yes and every Schedule 1 row.
+    fn request_relief_no(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        if self.draft.tax_relief.is_some() {
+            self.relief_no_pending = true;
+            cx.notify();
+        } else {
+            self.set_relief(None, window, cx);
+        }
+    }
+
+    fn notify(
+        &self,
+        kind: notification::NotificationType,
+        message: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.push_notification(
+            notification::Notification::new()
+                .message(message)
+                .with_type(kind)
+                .autohide(true),
+            cx,
+        );
+    }
+
+    fn release_claim(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let draft = &self.draft;
+        let result = match self.db.lock() {
+            Ok(db) => db
+                .release_abandoned_claimed_queueable::<Form1601FqDraft>(
+                    &draft.tin,
+                    draft.taxable_year,
+                    period_column(&draft.filing_period()),
+                    ABANDONED_CLAIM_RELEASE_REASON,
+                )
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        self.release_claim_confirm_open = false;
+        match result {
+            Ok(AbandonedClaimRelease::Released { draft, .. }) => {
+                self.draft = draft;
+                self.status_message = None;
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Ok(AbandonedClaimRelease::AlreadyClear { draft, .. }) => {
+                if let Some(draft) = draft {
+                    self.draft = draft;
+                }
+            }
+            Err(error) => {
+                self.notify(
+                    notification::NotificationType::Error,
+                    format!("Could not release the claim: {error}"),
+                    window,
+                    cx,
+                );
+            }
+        }
+        self.validation_errors = self.draft.validate();
+        cx.notify();
+    }
+
+    // ── Rendering helpers ──
+
+    fn section(&self, title: &str, children: Vec<AnyElement>, cx: &Context<Self>) -> AnyElement {
+        rsx! {
+            <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
+                <div text_lg font_weight={FontWeight::BOLD}>{title.to_string()}</div>
+                {...children}
+            </div>
+        }
+        .into_any_element()
+    }
+
+    /// A labelled input. On phones the label sits above the field.
+    fn field(&self, key: &str, label: &str, layout: Layout, disabled: bool) -> AnyElement {
+        let Some(input) = self.inputs.get(key) else {
+            return div().into_any_element();
+        };
+        let body = div().child(Input::new(input).disabled(disabled));
+        let keys = self.error_keys(key);
+        let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let error = self.error_for(&key_refs);
+        let label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let label = if error.is_some() {
+            label.text_color(gpui::red())
+        } else {
+            label
+        };
+        let row = match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(body.w_full()),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.45)))
+                .child(body.w(relative(0.55))),
+        }
+        .into_any_element();
+        with_field_error(row, error)
+    }
+
+    /// The model error keys an editor key feeds (plus the key itself, which
+    /// carries the "not a number" parse error).
+    fn error_keys(&self, key: &str) -> Vec<String> {
+        let model = match key {
+            "year" => "taxable_year",
+            "sheets" => "number_of_attached_sheets",
+            "name" => "taxpayer_name",
+            "address" => "registered_address",
+            "zip" => "zip_code",
+            "phone" => "contact_number",
+            "email" => "email",
+            "lob" => "line_of_business",
+            "rem1" => "remittance_first_month",
+            "rem2" => "remittance_second_month",
+            "prev" => "tax_remitted_previous",
+            "sur" => "surcharge",
+            "int" => "interest",
+            "comp" => "compromise",
+            _ => "",
+        };
+        let mut keys = vec![key.to_string()];
+        if !model.is_empty() {
+            keys.push(model.to_string());
+        } else if let Some(popup) = key
+            .strip_prefix("base_")
+            .and_then(|n| n.parse::<usize>().ok())
+            && let Some(index) = self
+                .draft
+                .schedule
+                .iter()
+                .position(|r| r.popup_index == popup)
+        {
+            keys.push(format!("schedule[{index}].tax_base"));
+        } else if let Some(rest) = key.strip_prefix("s1_") {
+            // `s1_<field>_<row>`
+            if let Some((field, row)) = rest.split_once('_') {
+                let model = match field {
+                    "treaty" => "treaty_code",
+                    "atc" => "atc_code",
+                    "amt" => "income_payment",
+                    _ => "tax_rate",
+                };
+                keys.push(format!("schedule1[{row}].{model}"));
+            }
+        }
+        keys
+    }
+
+    /// Messages recorded for any of `keys` (validation and parse errors),
+    /// joined into one line.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(
+            self.validation_errors
+                .iter()
+                .chain(self.parse_errors.iter()),
+            keys,
+        )
+    }
+
+    /// Two columns on desktop, one otherwise.
+    fn grid(&self, layout: Layout, children: Vec<AnyElement>) -> AnyElement {
+        if layout == Layout::Desktop {
+            let mut rows = div().flex().flex_col().gap_3().w_full();
+            let mut iter = children.into_iter();
+            while let Some(left) = iter.next() {
+                let mut row = div()
+                    .flex()
+                    .gap_6()
+                    .w_full()
+                    .child(div().flex_1().child(left));
+                row = match iter.next() {
+                    Some(right) => row.child(div().flex_1().child(right)),
+                    None => row.child(div().flex_1()),
+                };
+                rows = rows.child(row);
+            }
+            rows.into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .w_full()
+                .children(children)
+                .into_any_element()
+        }
+    }
+
+    fn computed(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
+        rsx! {
+            <div flex flex_wrap items_center justify_between gap_2 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
+                <div text_sm font_weight={FontWeight::MEDIUM}>{label.to_string()}</div>
+                <div text_right font_weight={FontWeight::BOLD}>{official_amount(value)}</div>
+            </div>
+        }
+        .into_any_element()
+    }
+
+    fn choice(
+        id: impl Into<ElementId>,
+        label: impl Into<SharedString>,
+        selected: bool,
+        disabled: bool,
+    ) -> Button {
+        let label: SharedString = label.into();
+        let button = Button::new(id).label(if selected {
+            format!("✓ {label}")
+        } else {
+            label.to_string()
+        });
+        let button = if selected {
+            button.primary()
+        } else {
+            button.outline()
+        };
+        button.disabled(disabled)
+    }
+
+    /// A labelled row of choice buttons with its validation message (for
+    /// `error_keys`) directly underneath.
+    fn labelled_row(
+        &self,
+        label: &str,
+        error_keys: &[&str],
+        choices: Vec<AnyElement>,
+    ) -> AnyElement {
+        let row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .max_w_full()
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(label.to_string()),
+            )
+            .children(choices)
+            .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
+    }
+
+    /// Plain label + value for an item the library tile decides, with its
+    /// validation message (for `error_keys`) underneath.
+    fn read_only_row(
+        &self,
+        layout: Layout,
+        label: &str,
+        value: String,
+        error_keys: &[&str],
+    ) -> AnyElement {
+        let label = div()
+            .text_sm()
+            .font_weight(FontWeight::MEDIUM)
+            .child(label.to_string());
+        let value = div().font_weight(FontWeight::BOLD).child(value);
+        let row = match layout {
+            Layout::Phone => div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .w_full()
+                .child(label)
+                .child(value),
+            _ => div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .w_full()
+                .child(label.w(relative(0.45)))
+                .child(value.w(relative(0.55))),
+        }
+        .into_any_element();
+        with_field_error(row, self.error_for(error_keys))
+    }
+
+    fn render_period(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let amended = self.draft.is_amended;
+        let withheld = self.draft.any_tax_withheld;
+        let children = vec![
+            self.read_only_row(
+                layout,
+                "Item 1 — For the Year",
+                self.draft.taxable_year.to_string(),
+                &["taxable_year"],
+            ),
+            self.read_only_row(
+                layout,
+                "Item 2 — Quarter",
+                format!("Q{}", self.draft.quarter),
+                &["quarter"],
+            ),
+            self.labelled_row(
+                "Item 3 — Amended return?",
+                &["is_amended"],
+                vec![
+                    Self::choice("1601fq_amended_yes", "Yes", amended, !editable)
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = true)),
+                        )
+                        .into_any_element(),
+                    Self::choice("1601fq_amended_no", "No", !amended, !editable)
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.edit(cx, |d| d.is_amended = false)),
+                        )
+                        .into_any_element(),
+                ],
+            ),
+            self.labelled_row(
+                "Item 4 — Any taxes withheld?",
+                &["any_tax_withheld"],
+                vec![
+                    Self::choice(
+                        "1601fq_withheld_yes",
+                        "Yes",
+                        withheld == Some(true),
+                        !editable,
+                    )
+                    .on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.edit(cx, |d| d.set_any_tax_withheld(true))
+                        }),
+                    )
+                    .into_any_element(),
+                    Self::choice(
+                        "1601fq_withheld_no",
+                        "No",
+                        withheld == Some(false),
+                        !editable,
+                    )
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.request_withheld_no(window, cx)),
+                    )
+                    .into_any_element(),
+                ],
+            ),
+            self.field(
+                "sheets",
+                "Item 5 — No. of sheets attached",
+                layout,
+                !editable,
+            ),
+        ];
+        let mut body = vec![self.grid(layout, children)];
+        if self.withheld_no_pending {
+            body.push(self.withheld_no_confirm(cx));
+        }
+        self.section("Return period", body, cx)
+    }
+
+    fn render_part_one(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let category = self.draft.category;
+        let tile = |label: &str, value: String, keys: &[&str]| {
+            let row = div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(label.to_string()),
+                )
+                .child(div().font_weight(FontWeight::BOLD).child(value))
+                .into_any_element();
+            with_field_error(row, self.error_for(keys))
+        };
+        let mut fields = vec![
+            tile("Item 6 — TIN", format_tin(&self.draft.tin), &["tin"]),
+            tile(
+                "Item 7 — RDO Code",
+                self.draft.rdo_code.clone(),
+                &["rdo_code"],
+            ),
+        ];
+        for (key, label, _) in TEXT_INPUTS.iter().skip(2) {
+            fields.push(self.field(key, label, layout, !editable));
+        }
+        let category_row = self.labelled_row(
+            "Item 11 — Category of withholding agent",
+            &["category"],
+            vec![
+                Self::choice(
+                    "1601fq_category_private",
+                    "Private",
+                    category == Some(Form1601FqCategory::Private),
+                    !editable,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.edit(cx, |d| d.set_category(Form1601FqCategory::Private))
+                }))
+                .into_any_element(),
+                Self::choice(
+                    "1601fq_category_government",
+                    "Government",
+                    category == Some(Form1601FqCategory::Government),
+                    !editable,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.edit(cx, |d| d.set_category(Form1601FqCategory::Government))
+                }))
+                .into_any_element(),
+            ],
+        );
+        self.section(
+            "Part I — Background Information",
+            vec![self.grid(layout, fields), category_row],
+            cx,
+        )
+    }
+
+    fn render_atc_row(&self, index: usize, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let entry = &self.draft.schedule[index];
+        let code = entry.atc_code.clone();
+        let popup_index = entry.popup_index;
+        let item = if index < FORM_1601FQ_MAIN_ROWS {
+            format!("Item {}", FORM_1601FQ_FIRST_ITEM + index)
+        } else {
+            format!("Other ATC {}", index + 1 - FORM_1601FQ_MAIN_ROWS)
+        };
+        let option = self.draft.atc_options().get(popup_index);
+        let rate = option
+            .map(|o| format!("{}%", o.rate_text))
+            .unwrap_or_else(|| "?".into());
+        let heading = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(format!("{item} — {code} at {rate}")),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(option.map(|o| o.description).unwrap_or("").to_string()),
+                    ),
+            )
+            .child(
+                Button::new(("1601fq_remove_atc", index))
+                    .label("Remove")
+                    .outline()
+                    .small()
+                    .disabled(!editable)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.remove_atc(popup_index, window, cx)
+                    })),
+            )
+            .into_any_element();
+        let heading = with_field_error(
+            heading,
+            self.error_for(&[format!("schedule[{index}].atc_code").as_str()]),
+        );
+        let base = self.field(
+            &base_key(popup_index),
+            "Tax base (consolidated for the quarter)",
+            layout,
+            !editable,
+        );
+        let withheld = self.computed("Tax withheld", entry.tax_withheld, cx);
+        let body = if layout == Layout::Phone {
+            div().flex().flex_col().gap_2().child(base).child(withheld)
+        } else {
+            div()
+                .flex()
+                .gap_4()
+                .items_center()
+                .child(div().flex_1().child(base))
+                .child(div().flex_1().child(withheld))
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_md()
+            .child(heading)
+            .child(body)
+            .into_any_element()
+    }
+
+    fn render_schedule(&self, layout: Layout, view: &mut Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let mut children: Vec<AnyElement> = (0..self.draft.schedule.len())
+            .map(|row| self.render_atc_row(row, layout, view))
+            .collect();
+        let can_add =
+            editable && self.draft.any_tax_withheld == Some(true) && self.draft.category.is_some();
+        let atc_error = self.error_for(&["schedule"]);
+        if can_add {
+            let pairs = atc_pairs(self.draft.atc_options());
+            let selected = selected_atc_values(&self.draft);
+            let on_change: MultiChange<Self> = Rc::new(Self::apply_atc_selection);
+            children.push(multi_select_field(
+                "1601fq_atc",
+                "Add ATCs (search by code or nature of payment)",
+                &self.atc_select,
+                &as_refs(&pairs),
+                &selected,
+                pairs.len(),
+                !editable,
+                atc_error.as_deref(),
+                on_change,
+                view,
+            ));
+        } else if editable && self.draft.any_tax_withheld != Some(true) {
+            children.push(with_field_error(
+                div()
+                    .text_sm()
+                    .child("Answer Item 4 \"Yes\" and Item 11 to add ATCs.")
+                    .into_any_element(),
+                atc_error,
+            ));
+        } else if atc_error.is_some() {
+            children.push(with_field_error(div().into_any_element(), atc_error));
+        }
+        if self.draft.schedule.len() > FORM_1601FQ_MAIN_ROWS {
+            children.push(self.computed(
+                "Total of other selected ATCs",
+                self.draft.total_other_tax_withheld,
+                view,
+            ));
+        }
+        children.push(self.computed(
+            "20 — Taxes withheld based on regular rates",
+            self.draft.total_taxes_withheld,
+            view,
+        ));
+        self.section("Part II — Computation of Tax (Items 14–20)", children, view)
+    }
+
+    fn render_totals(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let d = &self.draft;
+        let children = vec![
+            self.computed(
+                "21 — Taxes withheld based on tax treaty rates (Schedule 1)",
+                d.taxes_withheld_treaty,
+                cx,
+            ),
+            self.computed(
+                "22 — Total taxes withheld for the quarter",
+                d.total_taxes_withheld,
+                cx,
+            ),
+            self.field("rem1", MONEY_INPUTS[0].1, layout, !editable),
+            self.field("rem2", MONEY_INPUTS[1].1, layout, !editable),
+            self.field(
+                "prev",
+                MONEY_INPUTS[2].1,
+                layout,
+                !editable || !d.is_amended,
+            ),
+            self.computed("26 — Total remittances made", d.total_remittances, cx),
+            self.computed("27 — Tax still due/(over-remittance)", d.tax_still_due, cx),
+            self.field("sur", MONEY_INPUTS[3].1, layout, !editable),
+            self.field("int", MONEY_INPUTS[4].1, layout, !editable),
+            self.field("comp", MONEY_INPUTS[5].1, layout, !editable),
+            self.computed("31 — Total penalties", d.total_penalties, cx),
+            with_field_error(
+                self.computed(
+                    "32 — Total amount still due/(over-remittance)",
+                    d.total_amount_due,
+                    cx,
+                ),
+                self.error_for(&["total_amount_due"]),
+            ),
+        ];
+        self.section(
+            "Part II — Remittances, Penalties and Amount Still Due (Items 21–32)",
+            vec![self.grid(layout, children)],
+            cx,
+        )
+    }
+
+    fn render_relief(&self, layout: Layout, cx: &Context<Self>) -> AnyElement {
+        let editable = self.draft.lifecycle.is_editable();
+        let relief = self.draft.tax_relief;
+        let pick = |id: &'static str, label: &'static str, value: Option<Form1601FqTaxRelief>| {
+            Self::choice(id, label, relief == value, !editable)
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.set_relief(value, window, cx)),
+                )
+                .into_any_element()
+        };
+        let mut children = vec![self.labelled_row(
+            "Item 13 — Payees availing of tax relief under a Special Law or Tax Treaty?",
+            &["schedule1"],
+            vec![
+                pick("1601fq_relief_yes", "Yes", Some(relief.unwrap_or_default())),
+                Self::choice("1601fq_relief_no", "No", relief.is_none(), !editable)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.request_relief_no(window, cx)
+                    }))
+                    .into_any_element(),
+            ],
+        )];
+        if self.relief_no_pending && relief.is_some() {
+            children.push(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .p_3()
+                    .rounded_md()
+                    .bg(cx.theme().muted)
+                    .child(div().text_sm().child(RELIEF_NO_QUESTION))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_2()
+                            .child(
+                                Button::new("1601fq_relief_no_ok")
+                                    .label("OK")
+                                    .danger()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.set_relief(None, window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("1601fq_relief_no_cancel")
+                                    .label("Cancel")
+                                    .outline()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.relief_no_pending = false;
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .into_any_element(),
+            );
+        }
+        if relief.is_some() {
+            let kind = |id: &'static str, label: &'static str, value: Form1601FqTaxRelief| {
+                Self::choice(id, label, relief == Some(value), !editable)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.edit(cx, |d| d.tax_relief = Some(value))
+                    }))
+                    .into_any_element()
+            };
+            children.push(self.labelled_row(
+                "Item 13A — If yes, specify",
+                &["tax_relief"],
+                vec![
+                    kind(
+                        "1601fq_relief_special",
+                        "Special Rate",
+                        Form1601FqTaxRelief::SpecialRate,
+                    ),
+                    kind(
+                        "1601fq_relief_treaty",
+                        "International Tax Treaty",
+                        Form1601FqTaxRelief::InternationalTaxTreaty,
+                    ),
+                    kind("1601fq_relief_both", "Both", Form1601FqTaxRelief::Both),
+                ],
+            ));
+            children.push(
+                div()
+                    .text_sm()
+                    .child("Schedule 1 — treaty code: NA or a treaty. ATC: NA or a 1601-FQ ATC; picking one fills its rate.")
+                    .into_any_element(),
+            );
+            let treaty_options = treaty_pairs();
+            let atc_options = schedule1_atc_pairs();
+            for (index, row) in self.draft.schedule1.iter().enumerate() {
+                let item = index + 1;
+                let nature = self.draft.schedule1_nature(row);
+                let treaty_keys = self.error_keys(&s1_key("treaty", index));
+                let treaty_keys: Vec<&str> = treaty_keys.iter().map(String::as_str).collect();
+                let atc_keys = self.error_keys(&s1_key("atc", index));
+                let atc_keys: Vec<&str> = atc_keys.iter().map(String::as_str).collect();
+                let mut fields = Vec::new();
+                if let (Some(treaty_state), Some(atc_state)) = (
+                    self.treaty_selects.get(index),
+                    self.s1_atc_selects.get(index),
+                ) {
+                    fields.push(select_field(
+                        "B — Treaty code",
+                        treaty_state,
+                        &as_refs(&treaty_options),
+                        Some(row.treaty_code.as_str()),
+                        !editable,
+                        self.error_for(&treaty_keys).as_deref(),
+                        cx,
+                    ));
+                    fields.push(select_field(
+                        "C — ATC",
+                        atc_state,
+                        &as_refs(&atc_options),
+                        Some(row.atc_code.as_str()),
+                        !editable,
+                        self.error_for(&atc_keys).as_deref(),
+                        cx,
+                    ));
+                }
+                fields.extend([
+                    self.field(
+                        &s1_key("amt", index),
+                        "E — Amount of income payment",
+                        layout,
+                        !editable,
+                    ),
+                    self.field(
+                        &s1_key("rate", index),
+                        "F — Tax rate (%)",
+                        layout,
+                        !editable,
+                    ),
+                ]);
+                children.push(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_3()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .rounded_md()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::BOLD)
+                                .child(format!("Schedule 1 row {item}")),
+                        )
+                        .child(div().text_sm().child(format!("D — {nature}")))
+                        .child(self.grid(layout, fields))
+                        .child(self.computed("G — Tax withheld", row.tax_withheld, cx))
+                        .into_any_element(),
+                );
+            }
+            children.push(self.computed(
+                "Schedule 1 total (Item 21)",
+                self.draft.schedule1_total,
+                cx,
+            ));
+        }
+        self.section(
+            "Items 13/13A and Part IV — Schedule 1 (tax treaty / special law rates)",
+            children,
+            cx,
+        )
+    }
+}
+
+impl QueueableFormView for Form1601FqView {
+    type Draft = Form1601FqDraft;
+
+    fn new(
+        draft: Form1601FqDraft,
+        db: Arc<Mutex<Database>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let validation_errors = draft.validate();
+        let rows: Vec<usize> = draft.schedule.iter().map(|row| row.popup_index).collect();
+        let mut subscriptions = Vec::new();
+
+        // Part II ATC picker. The list depends on Item 11, so the handler
+        // resolves the chosen label against the current category's list.
+        let atc_list = atc_pairs(draft.atc_options());
+        let atc_select = form_controls::new_select_state(&as_refs(&atc_list), window, cx);
+        subscriptions.push(cx.subscribe_in(
+            &atc_select,
+            window,
+            |this: &mut Self, _, event: &ComboboxEvent, window, cx| {
+                let Some(label) = event.selected.as_deref() else {
+                    return;
+                };
+                let pairs = atc_pairs(this.draft.atc_options());
+                let Some((value, _)) = pairs.iter().find(|(_, l)| l == label) else {
+                    return;
+                };
+                let mut next = selected_atc_values(&this.draft);
+                if next.contains(value) {
+                    return;
+                }
+                next.push(value.clone());
+                this.apply_atc_selection(next, window, cx);
+            },
+        ));
+
+        // Schedule 1 treaty / ATC selects, one pair per row.
+        let treaty_list = treaty_pairs();
+        let s1_atc_list = schedule1_atc_pairs();
+        let mut treaty_selects = Vec::new();
+        let mut s1_atc_selects = Vec::new();
+        for row in 0..FORM_1601FQ_SCHEDULE1_ROWS {
+            let treaty = form_controls::new_select_state(&as_refs(&treaty_list), window, cx);
+            subscriptions.push(form_controls::on_select(
+                &treaty,
+                &as_refs(&treaty_list),
+                window,
+                cx,
+                move |this: &mut Self, value, window, cx| {
+                    this.set_s1_choice(s1_key("treaty", row), &value, window, cx)
+                },
+            ));
+            treaty_selects.push(treaty);
+            let atc = form_controls::new_select_state(&as_refs(&s1_atc_list), window, cx);
+            subscriptions.push(form_controls::on_select(
+                &atc,
+                &as_refs(&s1_atc_list),
+                window,
+                cx,
+                move |this: &mut Self, value, window, cx| {
+                    this.set_s1_choice(s1_key("atc", row), &value, window, cx)
+                },
+            ));
+            s1_atc_selects.push(atc);
+        }
+
+        let mut view = Self {
+            draft,
+            db,
+            scroll_handle: ScrollHandle::new(),
+            inputs: BTreeMap::new(),
+            validation_errors,
+            parse_errors: Vec::new(),
+            status_message: None,
+            release_claim_confirm_open: false,
+            submit_confirm_open: false,
+            validated: false,
+            header: FormHeaderState::new(),
+            withheld_no_pending: false,
+            relief_no_pending: false,
+            refresh_schedule1: false,
+            atc_select,
+            treaty_selects,
+            s1_atc_selects,
+            _subscriptions: subscriptions,
+        };
+        for (key, _, placeholder) in TEXT_INPUTS {
+            view.ensure_input(key.to_string(), placeholder, window, cx);
+        }
+        for (key, _) in MONEY_INPUTS {
+            view.ensure_input(key.to_string(), "0.00", window, cx);
+        }
+        for index in rows {
+            view.ensure_input(base_key(index), "0.00", window, cx);
+        }
+        for row in 0..FORM_1601FQ_SCHEDULE1_ROWS {
+            view.ensure_input(s1_key("treaty", row), "NA or US", window, cx);
+            view.ensure_input(s1_key("atc", row), "NA or WI330", window, cx);
+            view.ensure_input(s1_key("amt", row), "0.00", window, cx);
+            view.ensure_input(s1_key("rate", row), "0.00", window, cx);
+        }
+        view
+    }
+
+    fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1601FqDraft {
+        let quarter = if (1..=4).contains(&period) {
+            period
+        } else {
+            let today = chrono::Local::now().date_naive();
+            if i32::from(year) == chrono::Datelike::year(&today) {
+                ((chrono::Datelike::month(&today) - 1) / 3 + 1) as u8
+            } else {
+                4
+            }
+        };
+        Form1601FqDraft::new_from_profile(profile, year, quarter)
+    }
+}
+
+fn format_tin(tin: &str) -> String {
+    let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
+    if digits.len() < 9 {
+        return tin.to_string();
+    }
+    let branch = digits.get(9..).unwrap_or("");
+    format!(
+        "{}-{}-{}-{:0>5}",
+        &digits[0..3],
+        &digits[3..6],
+        &digits[6..9],
+        branch
+    )
+}
+
+impl FormViewTrait for Form1601FqView {
+    fn form_title(&self) -> &'static str {
+        "BIR Form No. 1601-FQ"
+    }
+    fn form_subtitle(&self) -> &'static str {
+        "Quarterly Remittance Return of Final Income Taxes Withheld"
+    }
+    fn form_version(&self) -> &'static str {
+        "January 2018 (ENCS)"
+    }
+    fn current_status(&self) -> FilingStatus {
+        self.draft.lifecycle.status.clone()
+    }
+    fn submitted_at(&self) -> Option<&str> {
+        self.draft.lifecycle.submitted_at.as_deref()
+    }
+    fn confirmed_at(&self) -> Option<&str> {
+        self.draft.lifecycle.confirmed_at.as_deref()
+    }
+
+    fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            self.notify(
+                notification::NotificationType::Error,
+                "Fix the highlighted numbers before saving.".into(),
+                window,
+                cx,
+            );
+            return;
+        }
+        let result = match self.db.lock() {
+            Ok(db) => db
+                .save_queueable_draft(&self.draft)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match result {
+            Ok(id) => {
+                self.draft.id = Some(id);
+                self.notify(
+                    notification::NotificationType::Success,
+                    "1601-FQ draft saved.".into(),
+                    window,
+                    cx,
+                );
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Save failed".into(),
+                error,
+            )),
+        }
+    }
+
+    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
+        if !can_queue_for_submission(Form1601FqDraft::FORM_CODE) {
+            self.status_message =
+                Some("1601-FQ is not enabled for in-app submission in this build.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message =
+                Some("This return is already queued or filed and cannot be queued again.".into());
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        let before = self.draft.clone();
+        if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
+            self.validation_errors = errors;
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        let saved = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_queueable(&self.draft)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        if let Err(error) = saved {
+            self.draft = before;
+            self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                "Form 1601-FQ",
+                &error,
+            ));
+            cx.notify();
+            return;
+        }
+        // D5C: the toast and the stepper are the only confirmation.
+        self.status_message = None;
+        self.notify(
+            notification::NotificationType::Success,
+            "Form 1601-FQ queued.".into(),
+            window,
+            cx,
+        );
+        cx.emit(QueueableFormEvent::Saved);
+        bir_core::background_cron::wake();
+        cx.notify();
+    }
+
+    fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message =
+            Some("1601-FQ payment status needs a verified confirmation workflow.".into());
+        cx.notify();
+    }
+
+    /// D7A + D8A: a claimed queue keeps the "nothing reached BIR" release;
+    /// otherwise the generic revert (Submitted/Confirmed keep a snapshot of
+    /// what BIR received and mark the return amended).
+    fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let status = self.draft.lifecycle.status.clone();
+        if !can_user_revert(&status) {
+            return;
+        }
+        if matches!(status, FilingStatus::Queued) && !self.draft.lifecycle.is_unclaimed() {
+            self.release_claim_confirm_open = true;
+            self.status_message = Some(
+                "Submission was claimed. Confirm nothing reached BIR to return it to an editable Draft. This does not file.".into(),
+            );
+            cx.notify();
+            return;
+        }
+        match revert_for_amendment(&self.db, &self.draft) {
+            Ok(reverted) => {
+                self.draft = reverted.draft;
+                self.validated = false;
+                self.validation_errors = self.draft.validate();
+                self.parse_errors.clear();
+                self.status_message = reverted
+                    .snapshot_id
+                    .map(|_| AMENDED_REVERT_MESSAGE.to_string());
+                if reverted.snapshot_id.is_some() {
+                    self.header.load_sent_snapshot(&self.db, &self.draft);
+                }
+                self.notify(
+                    notification::NotificationType::Success,
+                    "Form 1601-FQ reverted to Draft.".into(),
+                    window,
+                    cx,
+                );
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form1601FqDraft>(
+                        &self.draft.tin,
+                        self.draft.taxable_year,
+                        period_column(&self.draft.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
+                self.notify(
+                    notification::NotificationType::Error,
+                    format!("Could not revert to Draft: {error}"),
+                    window,
+                    cx,
+                );
+            }
+        }
+        cx.notify();
+    }
+
+    fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() {
+            cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                "Fix the highlighted numbers first. No filing state was changed.".into(),
+            ));
+            return;
+        }
+        let fields = self.draft.to_bir_field_map();
+        match super::form_html_preview_launcher::launch_frozen_form_preview(
+            "1601-fq-2020",
+            &fields,
+            "1601-FQ — Print Preview",
+            cx,
+        ) {
+            Ok(kind) => cx.emit(QueueableFormEvent::PushNotification(
+                "info".into(),
+                "Print preview".into(),
+                format!(
+                    "{} This preview uses the September 2020 printed sheet (no January 2018 sheet is available). No filing state was changed.",
+                    kind.status_message()
+                ),
+            )),
+            Err(error) => cx.emit(QueueableFormEvent::PushNotification(
+                "error".into(),
+                "Print preview failed".into(),
+                format!("{error}. No filing state was changed."),
+            )),
+        }
+    }
+}
+
+impl Form1601FqView {
+    /// Queue for submission: the same checks as queueing, then the official
+    /// confirm prompt. Nothing changes until the filer clicks OK.
+    fn request_submit(&mut self, cx: &mut Context<Self>) {
+        self.submit_confirm_open = false;
+        if !can_queue_for_submission(Form1601FqDraft::FORM_CODE) {
+            self.status_message =
+                Some("This form is not enabled for in-app submission in this build.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message =
+                Some("This return is already queued or filed and cannot be queued again.".into());
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(cx);
+        if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".into());
+            cx.notify();
+            return;
+        }
+        self.submit_confirm_open = true;
+        cx.notify();
+    }
+}
+
+impl Form1601FqView {
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        FormHeaderProps {
+            slug: "1601fq",
+            status: self.draft.lifecycle.status.clone(),
+            editor_safe: true,
+            validated: self.validated,
+            blocking_errors: self.parse_errors.len() + self.validation_errors.len(),
+            first_error: self
+                .parse_errors
+                .iter()
+                .chain(self.validation_errors.iter())
+                .next()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.status_message.clone(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.sync_from_inputs(cx);
+        self.validated = self.draft.lifecycle.is_editable();
+        cx.notify();
+    }
+
+    /// Submit opens the official final-copy confirm; OK queues.
+    fn header_submit(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.request_submit(cx);
+    }
+
+    fn header_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.save_draft(window, cx);
+    }
+
+    fn header_print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_pdf(window, cx);
+    }
+
+    fn header_revert(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.revert_to_draft(window, cx);
+    }
+
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let filename = self.draft.lifecycle.submission_filename.clone();
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form1601FqDraft>(
+                        &self.draft.tin,
+                        self.draft.taxable_year,
+                        period_column(&self.draft.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
+                self.notify(
+                    notification::NotificationType::Success,
+                    "1601FQ marked Confirmed (simulated, nothing was sent to BIR).".into(),
+                    window,
+                    cx,
+                );
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => self.notify(
+                notification::NotificationType::Error,
+                format!("Simulated confirmation failed: {error}"),
+                window,
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form1601FqView> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.parse_errors.len() + this.validation_errors.len(),
+    on_validate: Form1601FqView::header_validate,
+    on_submit: Form1601FqView::header_submit,
+    on_save: Form1601FqView::header_save,
+    on_print: Form1601FqView::header_print,
+    on_revert: Form1601FqView::header_revert,
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form1601FqView::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
+
+/// The official submit prompt (rule 1601fq-final-001, `openAlertEmail`), verbatim.
+const SUBMIT_CONFIRM_TEXT: &str = "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?";
+
+impl Render for Form1601FqView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = Layout::for_width(window.viewport_size().width);
+        if std::mem::take(&mut self.refresh_schedule1) {
+            self.reload_schedule1_inputs(window, cx);
+        }
+        let atc_list = atc_pairs(self.draft.atc_options());
+        form_controls::sync_multi_select(
+            &self.atc_select,
+            &as_refs(&atc_list),
+            &selected_atc_values(&self.draft),
+            window,
+            cx,
+        );
+        let treaty_list = treaty_pairs();
+        let s1_atc_list = schedule1_atc_pairs();
+        for (row, entry) in self.draft.schedule1.iter().enumerate() {
+            if let Some(state) = self.treaty_selects.get(row) {
+                form_controls::sync_select(
+                    state,
+                    &as_refs(&treaty_list),
+                    Some(entry.treaty_code.as_str()),
+                    window,
+                    cx,
+                );
+            }
+            if let Some(state) = self.s1_atc_selects.get(row) {
+                form_controls::sync_select(
+                    state,
+                    &as_refs(&s1_atc_list),
+                    Some(entry.atc_code.as_str()),
+                    window,
+                    cx,
+                );
+            }
+        }
+        let is_draft = self.draft.lifecycle.is_editable();
+        let pad = match layout {
+            Layout::Phone => px(12.),
+            Layout::Tablet => px(20.),
+            Layout::Desktop => px(32.),
+        };
+        let issues: Vec<AnyElement> = self
+            .parse_errors
+            .iter()
+            .chain(self.validation_errors.iter())
+            .map(|(_, message)| {
+                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
+                    .into_any_element()
+            })
+            .collect();
+
+        self.header.ensure_sent_snapshot(&self.db, &self.draft);
+        let props = self.header_props();
+        let header_buttons =
+            render_header_buttons(self, &props, HEADER_ACTIONS, layout == Layout::Phone, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx);
+        let toolbar =
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .px(pad)
+                .py_3()
+                .border_b_1()
+                .border_color(cx.theme().border)
+                .child(Button::new("1601fq_back").label("← Back").on_click(
+                    cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
+                ))
+                .child(header_buttons);
+
+        let schedule = self.render_schedule(layout, cx);
+        let mut body = div()
+            .w_full()
+            .max_w(px(1180.))
+            .mx_auto()
+            .flex()
+            .flex_col()
+            .gap_5()
+            .when(self.release_claim_confirm_open, |col| {
+                col.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            Button::new("1601fq_release_confirm")
+                                .label("Nothing reached BIR — release")
+                                .danger()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.release_claim(window, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("1601fq_release_cancel")
+                                .label("Keep queued")
+                                .outline()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.release_claim_confirm_open = false;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            })
+            .when(self.submit_confirm_open && is_draft, |col| {
+                col.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .p_3()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .child(div().text_sm().child(SUBMIT_CONFIRM_TEXT))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .child(
+                                    Button::new("1601fq_submit_confirm")
+                                        .label("OK")
+                                        .primary()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.mark_submitted(window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new("1601fq_submit_cancel")
+                                        .label("Cancel")
+                                        .outline()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.submit_confirm_open = false;
+                                            cx.notify();
+                                        })),
+                                ),
+                        ),
+                )
+            })
+            .when(!issues.is_empty(), |col| {
+                col.child(self.section("Needs review", issues, cx))
+            })
+            .child(self.render_period(layout, cx))
+            .child(self.render_part_one(layout, cx))
+            .child(self.render_relief(layout, cx))
+            .child(schedule);
+        body = body.child(self.render_totals(layout, cx));
+
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .h_full()
+            .bg(cx.theme().background)
+            .child(toolbar)
+            .child(
+                div()
+                    .px(pad)
+                    .py_4()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(self.render_header(cx))
+                    .when(layout != Layout::Phone, |d| {
+                        d.child(div().mt_4().child(self.render_status_pipeline(cx)))
+                    })
+                    .when_some(status_box, |d, b| d.child(div().mt_3().child(b))),
+            )
+            .child(
+                div()
+                    .id("1601fq_scroll")
+                    .flex_1()
+                    .w_full()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll_handle)
+                    .p(pad)
+                    .child(body),
+            )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn submit_confirm_is_the_official_text() {
+        let rules: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../rules/forms/1601fq-v2018/validations.json"
+        ))
+        .expect("rules json");
+        let rules = rules
+            .as_array()
+            .or_else(|| rules.get("rules").and_then(|r| r.as_array()))
+            .expect("rule list");
+        let official = rules
+            .iter()
+            .find(|rule| rule["rule_id"] == "1601fq-final-001")
+            .and_then(|rule| rule["exact_message"].as_str())
+            .expect("final-copy rule")
+            .replace("\\n", "\n");
+        assert_eq!(super::SUBMIT_CONFIRM_TEXT, official);
+    }
+
+    use super::{Layout, atc_pairs, format_tin, parse_amount, schedule1_atc_pairs, treaty_pairs};
+    use bir_core::forms::form_1601fq::FORM_1601FQ_PRIVATE_ATCS;
+    use gpui::px;
+
+    #[test]
+    fn layout_breakpoints() {
+        assert!(Layout::for_width(px(390.)) == Layout::Phone);
+        assert!(Layout::for_width(px(820.)) == Layout::Tablet);
+        assert!(Layout::for_width(px(1280.)) == Layout::Desktop);
+    }
+
+    #[test]
+    fn amounts_accept_official_formatting() {
+        assert_eq!(parse_amount("1,234.50"), Some(1234.5));
+        assert_eq!(parse_amount(""), Some(0.0));
+        assert_eq!(parse_amount("12a"), None);
+        assert_eq!(format_tin("12345678800000"), "123-456-788-00000");
+    }
+
+    #[test]
+    fn atc_picker_lists_the_whole_popup_with_unique_labels() {
+        let pairs = atc_pairs(FORM_1601FQ_PRIVATE_ATCS);
+        assert_eq!(pairs.len(), 40);
+        assert_eq!(pairs[0].0, "0");
+        assert!(pairs[0].1.starts_with("WI226 ("));
+        // WC212 is listed twice (30% and 25%); the labels still differ.
+        assert_eq!(
+            pairs
+                .iter()
+                .filter(|(_, l)| l.starts_with("WC212 "))
+                .count(),
+            2
+        );
+        let mut labels: Vec<&String> = pairs.iter().map(|(_, l)| l).collect();
+        labels.sort();
+        labels.dedup();
+        assert_eq!(labels.len(), 40);
+    }
+
+    #[test]
+    fn schedule1_selects_start_with_na_and_have_unique_codes() {
+        let treaties = treaty_pairs();
+        assert_eq!(treaties[0].0, "NA");
+        assert_eq!(treaties.len(), 1 + 43);
+        let atcs = schedule1_atc_pairs();
+        assert_eq!(atcs[0].0, "NA");
+        let mut codes: Vec<&String> = atcs.iter().map(|(c, _)| c).collect();
+        codes.sort();
+        codes.dedup();
+        assert_eq!(codes.len(), atcs.len());
+    }
+}

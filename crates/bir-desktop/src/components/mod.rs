@@ -1,3 +1,4 @@
+pub mod assist_panel;
 pub mod auth_gate;
 pub mod combobox;
 pub mod command_palette;
@@ -19,6 +20,7 @@ pub mod form_parts;
 pub mod otp_paste;
 pub mod rate_limiter;
 pub mod rdo_selector;
+pub mod setting_row;
 pub mod status_badge;
 pub mod tax_relief_select;
 pub mod tin_input;

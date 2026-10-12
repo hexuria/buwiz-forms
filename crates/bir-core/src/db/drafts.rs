@@ -57,11 +57,11 @@ pub enum AbandonedClaimRelease<T> {
     },
 }
 
-fn abandoned_claim_audit(reason: &str) -> String {
+pub(super) fn abandoned_claim_audit(reason: &str) -> String {
     format!("Abandoned claim released ({reason}); human confirmed nothing reached BIR")
 }
 
-fn require_abandoned_release_reason(reason: &str) -> Result<(), DbError> {
+pub(super) fn require_abandoned_release_reason(reason: &str) -> Result<(), DbError> {
     if reason != ABANDONED_CLAIM_RELEASE_REASON {
         return Err(DbError::Other(format!(
             "Abandoned claim release requires reason `{ABANDONED_CLAIM_RELEASE_REASON}`"
@@ -70,15 +70,15 @@ fn require_abandoned_release_reason(reason: &str) -> Result<(), DbError> {
     Ok(())
 }
 
-fn claim_fields_present(token: &Option<String>, claimed_at: &Option<String>) -> bool {
+pub(super) fn claim_fields_present(token: &Option<String>, claimed_at: &Option<String>) -> bool {
     token.is_some() && claimed_at.is_some()
 }
 
-fn claim_fields_partial(token: &Option<String>, claimed_at: &Option<String>) -> bool {
+pub(super) fn claim_fields_partial(token: &Option<String>, claimed_at: &Option<String>) -> bool {
     token.is_some() != claimed_at.is_some()
 }
 
-fn filing_status_to_db(status: &FilingStatus) -> &'static str {
+pub(super) fn filing_status_to_db(status: &FilingStatus) -> &'static str {
     match status {
         FilingStatus::Draft => "Draft",
         FilingStatus::Queued => "Queued",
@@ -106,6 +106,18 @@ fn quarter_state_from_db(status: &str) -> QuarterState {
         "Queued" => QuarterState::Queued,
         "Draft" => QuarterState::Draft,
         _ => QuarterState::Draft,
+    }
+}
+
+/// How far a return has gone, for picking one state per month tile.
+fn state_rank(state: &QuarterState) -> u8 {
+    match state {
+        QuarterState::NotStarted => 0,
+        QuarterState::Draft => 1,
+        QuarterState::Queued => 2,
+        QuarterState::Submitted => 3,
+        QuarterState::Confirmed => 4,
+        QuarterState::Paid => 5,
     }
 }
 
@@ -516,6 +528,17 @@ impl Database {
             return Err(DbError::Other(
                 "Only a queued 2551Q draft can be saved through the submission path".to_string(),
             ));
+        }
+        if !draft.is_amended
+            && self.has_filed_original(
+                &draft.tin,
+                "2551Q",
+                draft.taxable_year,
+                &FilingPeriod::Quarterly(draft.quarter).to_period_key(),
+                draft.id,
+            )?
+        {
+            return Err(DbError::AmendedReturnRequired);
         }
         if draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some() {
             return Err(DbError::Other(
@@ -1211,6 +1234,9 @@ impl Database {
 
         existing.status = FilingStatus::Submitted;
         existing.submitted_at = draft.submitted_at.clone();
+        if draft.submitted_payload.is_some() {
+            existing.submitted_payload = draft.submitted_payload.clone();
+        }
         existing.submission_filename = draft.submission_filename.clone();
         existing.submission_attempts = 0;
         existing.next_retry_at = None;
@@ -1774,6 +1800,17 @@ impl Database {
             return Err(DbError::Other(
                 "Only a queued 1601C draft can be saved through the submission path".to_string(),
             ));
+        }
+        if !draft.is_amended
+            && self.has_filed_original(
+                &draft.tin,
+                "1601C",
+                draft.taxable_year,
+                &FilingPeriod::Monthly(draft.month).to_period_key(),
+                draft.id,
+            )?
+        {
+            return Err(DbError::AmendedReturnRequired);
         }
 
         let mut verified = draft.clone();
@@ -2732,6 +2769,7 @@ impl Database {
         year: u16,
     ) -> Result<FormFilingProgress, DbError> {
         let mut progress = FormFilingProgress::new_empty(form_code, year);
+        let monthly = matches!(frequency_for_form(form_code), FilingFrequency::Monthly);
 
         let mut stmt = self.conn.prepare(
             "SELECT quarter, period_key, status FROM form_drafts
@@ -2749,17 +2787,34 @@ impl Database {
             let (legacy_slot, period_key, status_str) = row?;
             let state = quarter_state_from_db(&status_str);
             let period = period_from_row(form_code, legacy_slot, period_key.as_deref());
+            // Several rows can name one period (a NULL-quarter row next to
+            // one with a legacy quarter); the row scan order is unspecified, so the most
+            // advanced return wins rather than whichever row came last.
+            let keep_most_advanced = |slot: &mut QuarterState, state: QuarterState| {
+                if state_rank(&state) > state_rank(slot) {
+                    *slot = state;
+                }
+            };
             match period {
                 FilingPeriod::Monthly(month) => {
-                    let idx = usize::from(month - 1);
-                    progress.months[idx] = state;
+                    let idx = usize::from(month.clamp(1, 12) - 1);
+                    keep_most_advanced(&mut progress.months[idx], state);
                 }
                 FilingPeriod::Quarterly(quarter) => {
-                    let idx = usize::from(quarter - 1);
-                    progress.quarters[idx] = state;
+                    let idx = usize::from(quarter.clamp(1, 4) - 1);
+                    keep_most_advanced(&mut progress.quarters[idx], state);
                 }
                 FilingPeriod::Annual => {
-                    progress.annual_status = state;
+                    keep_most_advanced(&mut progress.annual_status, state);
+                }
+                // A monthly form keyed by its Item 1 date (`MMDD`, e.g.
+                // 2200-AN) shows on its month's tile; the most advanced
+                // return of that month wins.
+                FilingPeriod::OpenEnded(mmdd) if monthly && (1..=12).contains(&(mmdd / 100)) => {
+                    let idx = (mmdd / 100 - 1) as usize;
+                    if state_rank(&state) > state_rank(&progress.months[idx]) {
+                        progress.months[idx] = state;
+                    }
                 }
                 FilingPeriod::OpenEnded(_) => {
                     if counts_as_started_or_filed(&state) {
@@ -3894,7 +3949,10 @@ mod tests {
         let db = test_db();
         let profile = test_profile();
         let mut draft = Form0605Draft::new_from_profile(&profile, 2025, 1);
-        draft.filing_basis = Form0605FilingBasis::Fiscal;
+        // The official TIN check digit must hold for a valid return.
+        draft.tin = "123-456-788-00000".to_string();
+        // A December year end is a calendar year on the official page.
+        draft.filing_basis = Form0605FilingBasis::Calendar;
         draft.quarter = 1;
         draft.year_end_month = 12;
         draft.due_date = Some(Form0605Date::new(2025, 12, 31).unwrap());
@@ -3917,14 +3975,18 @@ mod tests {
         draft.payment_details.check.date = "12/31/2025".to_string();
         draft.payment_details.check.amount = Some(2_030.0);
         draft.recompute();
-        assert!(draft.validate().is_empty(), "test draft must be valid");
+        assert!(
+            draft.validate().is_empty(),
+            "test draft must be valid: {:?}",
+            draft.validate()
+        );
 
         db.save_form_draft(
             &draft.tin,
             "0605",
             draft.taxable_year,
             Some(draft.month),
-            &draft.status,
+            &draft.lifecycle.status,
             &draft,
         )
         .expect("0605 draft should save");
@@ -3973,7 +4035,7 @@ mod tests {
             "0619E",
             draft.taxable_year,
             Some(draft.month),
-            &draft.status,
+            &draft.lifecycle.status,
             &draft,
         )
         .expect("0619-E draft should save");
@@ -4023,7 +4085,7 @@ mod tests {
             "0619F",
             draft.taxable_year,
             Some(draft.month),
-            &draft.status,
+            &draft.lifecycle.status,
             &draft,
         )
         .expect("0619-F draft should save");
@@ -5930,6 +5992,79 @@ mod tests {
 
         assert_eq!(annual.annual_status, QuarterState::Submitted);
         assert_eq!(open_ended.open_ended_count, 1);
+    }
+
+    #[test]
+    fn quarterly_2550q_submitted_shows_on_its_quarter_tile() {
+        let db = test_db();
+        let tin = "123456789000";
+        // Stored the way the queue path writes a 2550Q row: legacy quarter
+        // column plus the period key, then moved to Submitted by the worker.
+        let key = FilingPeriod::Quarterly(3).to_period_key();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '2550Q', 2026, 3, ?2, 'Queued', '{}')",
+                params![tin, key],
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Submitted'
+                 WHERE tin = ?1 AND form_code = '2550Q' AND quarter = 3",
+                params![tin],
+            )
+            .unwrap();
+        // A Draft for Q1, and a stray Q3 Draft row with no legacy quarter
+        // (the unique index on `quarter` ignores NULL) that must not mask the
+        // submitted return.
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '2550Q', 2026, 1, ?2, 'Draft', '{}'),
+                        (?1, '2550Q', 2026, NULL, ?3, 'Draft', '{}')",
+                params![tin, FilingPeriod::Quarterly(1).to_period_key(), key],
+            )
+            .unwrap();
+
+        let progress = db.get_form_filing_progress(tin, "2550Q", 2026).unwrap();
+        assert_eq!(progress.quarters[0], QuarterState::Draft);
+        assert_eq!(progress.quarters[1], QuarterState::NotStarted);
+        assert_eq!(progress.quarters[2], QuarterState::Submitted);
+        assert_eq!(progress.quarters[3], QuarterState::NotStarted);
+
+        let other_year = db.get_form_filing_progress(tin, "2550Q", 2025).unwrap();
+        assert_eq!(other_year.quarters[2], QuarterState::NotStarted);
+    }
+
+    #[test]
+    fn monthly_form_keyed_by_item_one_date_shows_on_its_month() {
+        let db = test_db();
+        for (mmdd, status) in [
+            (315, FilingStatus::Draft),
+            (320, FilingStatus::Draft),
+            (1105, FilingStatus::Draft),
+        ] {
+            db.save_form_draft_v2(
+                "123456789000",
+                "2200AN",
+                2026,
+                &FilingPeriod::OpenEnded(mmdd),
+                &status,
+                &TestDraft { value: 1 },
+            )
+            .unwrap();
+        }
+        let progress = db
+            .get_form_filing_progress("123456789000", "2200AN", 2026)
+            .unwrap();
+        assert_eq!(progress.months[2], QuarterState::Draft);
+        assert_eq!(progress.months[10], QuarterState::Draft);
+        assert_eq!(progress.months[0], QuarterState::NotStarted);
+        assert_eq!(progress.open_ended_count, 0);
+        assert!(state_rank(&QuarterState::Queued) > state_rank(&QuarterState::Draft));
     }
 
     #[test]

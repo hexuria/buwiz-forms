@@ -47,8 +47,10 @@ made this way; `sample_payloads_test` requires our plaintext to equal them.
 
 ## Known gaps
 
-- `1702mx-v2018c` has no layout yet: its amount fields drop zero values and
-  normalize `1,234.50` / `(5.00)`, so the field count depends on the values.
+- `1702mx-v2018c` amounts (`numbertext`) are normalized (`1,234.50` ->
+  `1234.50`, `(5.00)` -> `-5.00`) and written only when non-zero. Those
+  entries carry `"number": "omit-zero"`; `official_xml::write` applies the
+  rule and `read` accepts the missing `<div>`s.
 - `value_rules` is non-empty for 1600PT, 1600VT, 1702EX, 1702RT and 1707A
   (commas stripped, parentheses become a minus sign). Their field maps must
   apply the same rule before `official_xml::write`.

@@ -27,13 +27,97 @@
     },
     {
       "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I6TIN1",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I6TIN2",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I6TIN3",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I6TIN4",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
       "key": "BranchMaskP1",
       "expected": "(5.00)",
       "official": "-5.00"
     },
     {
       "probe": "(5.00)",
+      "key": "frm1702RT:txtRDO",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:drpPg1Pt1I7RDOCode",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I8Name1",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I8Name2",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I8Name3",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I9Address1",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I9Address2",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I9Address3",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtZIP",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
       "key": "frm1702RT:txtPg1Pt1I10",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1702RT:txtPg1Pt1I11Contact",
       "expected": "(5.00)",
       "official": "-5.00"
     },
@@ -1552,12 +1636,24 @@
       "after": "\t\n            "
     },
     {
+      "key": "frm1702RT:drpPg1Pt1I7RDOCode",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1702RT:drpPg1Pt1I7RDOCode",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "\t\n            "
+    },
+    {
       "key": "frm1702RT:txtPg1Pt1I8Name1",
       "kind": "value",
       "parts": [
         {
           "source": "frm1702RT:txtPg1Pt1I8Name1",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1569,7 +1665,7 @@
       "parts": [
         {
           "source": "frm1702RT:txtPg1Pt1I8Name2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1581,7 +1677,7 @@
       "parts": [
         {
           "source": "frm1702RT:txtPg1Pt1I8Name3",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1593,7 +1689,7 @@
       "parts": [
         {
           "source": "frm1702RT:txtPg1Pt1I9Address1",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1605,7 +1701,7 @@
       "parts": [
         {
           "source": "frm1702RT:txtPg1Pt1I9Address2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1617,7 +1713,7 @@
       "parts": [
         {
           "source": "frm1702RT:txtPg1Pt1I9Address3",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

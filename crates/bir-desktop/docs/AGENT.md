@@ -493,6 +493,12 @@ gpui-agent invoke form.pdf
 
 Semantic invokes that do not need a GPU/window:
 
+- Identity: `app.info` (read-only `{app, mode: desktop|headless, database:
+  test|real, profiles: [{tin, name}]}`; `test` when `EBIR_TEST_ENV` is set or
+  `BIR_DATABASE_PATH` points outside the data dir). `bir-mcp` reads it to let
+  the user choose between running BIR apps. Both hosts publish an upstream
+  `gpui_agent::discovery` record (`GPUI_AGENT_RUNTIME_DIR`, named by
+  `GPUI_AGENT_CONNECT_ID`).
 - Profiles: `profile.list` / `search` / `set` / `create` / `save` / `edit` / `tab`
 - Demo HTML: `profile.html`, `dues.html` (`calendar.html`)
 - Forms Set: `profile.forms_set.get`, `profile.forms_set` (confirm-gated write)

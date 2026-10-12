@@ -146,7 +146,7 @@
       "parts": [
         {
           "source": "frm1602Q:txtTaxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -158,7 +158,7 @@
       "parts": [
         {
           "source": "frm1602Q:txtAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

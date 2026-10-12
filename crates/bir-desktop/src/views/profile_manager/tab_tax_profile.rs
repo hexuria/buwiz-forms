@@ -44,6 +44,10 @@ impl ProfileManagerView {
                     .id(crate::agent::ids::PROFILE_TIN)
                     .child(self.tin_input.clone()),
             )
+            .when(
+                self.tin_duplicate_error.is_none() && self.errors.iter().any(|e| e.field == "tin"),
+                |this| this.child(self.field_error("tin", cx)),
+            )
             .when(self.tin_duplicate_error.is_some(), |this| {
                 let msg = self.tin_duplicate_error.clone().unwrap_or_default();
                 this.child(rsx! {
@@ -117,6 +121,21 @@ impl ProfileManagerView {
                                 {Self::field_label("EOPT Tier", cx)}
                                 {Combobox::new(&self.eopt_tier_select)}
                             </div>
+                        </div>
+                    },
+                )
+            })
+            .when(!is_individual && !is_cooperative, |this| {
+                this.child(
+                    // Row: EOPT Tier (Micro/Small/Medium/Large) for corporations,
+                    // partnerships, estates and trusts; 2550Q needs it for every type.
+                    rsx! {
+                        <div flex gap_4 w_full>
+                            <div flex_1 min_w_0>
+                                {Self::field_label("EOPT Tier", cx)}
+                                {Combobox::new(&self.eopt_tier_select)}
+                            </div>
+                            <div flex_1 min_w_0></div>
                         </div>
                     },
                 )

@@ -7,6 +7,9 @@ use gpui_rsx::rsx;
 /// Event emitted when the user changes the selected year.
 pub struct SmartDateFilterEvent {
     pub year: i32,
+    /// True when the user picked this year in the filter, false when the
+    /// filter only clamped it (e.g. to the profile's first business year).
+    pub user_picked: bool,
 }
 
 #[allow(dead_code)]
@@ -36,6 +39,7 @@ impl SmartDateFilterState {
             self.selected_year = min_year;
             cx.emit(SmartDateFilterEvent {
                 year: self.selected_year,
+                user_picked: false,
             });
         }
         cx.notify();
@@ -128,6 +132,7 @@ impl Render for SmartDateFilterState {
                                                         this.selected_year -= 1;
                                                         cx.emit(SmartDateFilterEvent {
                                                             year: this.selected_year,
+                                                            user_picked: true,
                                                         });
                                                         cx.notify();
                                                     }))
@@ -160,6 +165,7 @@ impl Render for SmartDateFilterState {
                                                         this.selected_year += 1;
                                                         cx.emit(SmartDateFilterEvent {
                                                             year: this.selected_year,
+                                                            user_picked: true,
                                                         });
                                                         cx.notify();
                                                     }))
@@ -211,7 +217,10 @@ impl Render for SmartDateFilterState {
                                                     })
                                                     .on_click(cx.listener(move |this, _, _, cx| {
                                                         this.selected_year = yr;
-                                                        cx.emit(SmartDateFilterEvent { year: yr });
+                                                        cx.emit(SmartDateFilterEvent {
+                                                            year: yr,
+                                                            user_picked: true,
+                                                        });
                                                         this.open = false;
                                                         cx.notify();
                                                     }))

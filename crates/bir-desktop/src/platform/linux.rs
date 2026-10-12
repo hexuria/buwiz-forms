@@ -27,7 +27,7 @@ pub fn bind_global_keys(cx: &mut App) {
         KeyBinding::new("ctrl-k", OpenCommandPalette, None),
         KeyBinding::new("f1", OpenGlobalDashboard, None),
         KeyBinding::new("ctrl-q", QuitApplication, None),
-        KeyBinding::new("alt-f4", CloseWindow, None),
+        KeyBinding::new("alt-f4", QuitApplication, None),
         KeyBinding::new("ctrl-w", CloseWindow, None),
         KeyBinding::new("f11", ToggleFullScreen, None),
         KeyBinding::new("ctrl-=", ZoomIn, None),
@@ -45,18 +45,18 @@ pub fn bind_global_keys(cx: &mut App) {
 #[allow(dead_code)]
 pub fn reveal_in_file_manager(path: &std::path::Path) {
     if let Some(parent) = path.parent() {
-        let _ = open::that(parent);
+        let _ = open::that_detached(parent);
     }
 }
 
 /// Open a file with the default system application.
 pub fn open_in_system(path: &std::path::Path) {
-    let _ = open::that(path);
+    let _ = open::that_detached(path);
 }
 
 // ── Native Print ─────────────────────────────────────────────────────────────
 
-/// Print a PDF using `lp` (CUPS), falling back to `open::that`.
+/// Print a PDF using `lp` (CUPS), falling back to `open::that_detached`.
 pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
     let path = path.to_path_buf();
 
@@ -64,7 +64,7 @@ pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
         let result = std::process::Command::new("lp").arg(&path).spawn();
 
         if result.is_err() {
-            let _ = open::that(&path);
+            let _ = open::that_detached(&path);
         }
     });
 

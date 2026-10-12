@@ -12,6 +12,7 @@
 use bir_core::db::{AlertAction, AlertSeverity, AppAlert, Database};
 use gpui::*;
 use gpui_component::ActiveTheme;
+use gpui_component::Sizable;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
@@ -23,8 +24,10 @@ use std::sync::{Arc, Mutex};
 pub enum NotificationsEvent {
     ReconnectGoogleAccount,
     OpenProfileManager,
-    /// A toast or system banner for an alert was clicked: show this page.
+    /// A toast or system banner for an alert was clicked: open the drawer.
     Open,
+    /// The drawer's × button.
+    Close,
 }
 
 impl EventEmitter<NotificationsEvent> for NotificationsView {}
@@ -87,10 +90,11 @@ impl NotificationsView {
         // means waiting for a genuine failure — and an empty screen does not
         // distinguish "working" from "broken".
         //
-        // Env-gated rather than automatic so ordinary debug runs stay clean,
+        // Opt-in rather than automatic so ordinary debug runs stay clean,
         // and `debug_assertions` on the seeder means it cannot ship at all.
+        // `BIR_SEED_EXAMPLE_ALERTS` (env) or the Dev Mode switch.
         #[cfg(debug_assertions)]
-        if std::env::var_os("BIR_SEED_EXAMPLE_ALERTS").is_some()
+        if bir_core::dev_mode::example_alerts().value
             && let Ok(db) = view.db.lock()
         {
             let _ = db.seed_example_alerts(view.active_session_tin.as_deref());
@@ -163,7 +167,7 @@ impl NotificationsView {
         }
     }
 
-    /// Number of unresolved alerts, for a sidebar badge.
+    /// Number of unresolved alerts, for the bell badge.
     pub fn active_count(&self) -> usize {
         self.alerts.len()
     }
@@ -212,21 +216,24 @@ impl NotificationsView {
         let id = alert.id;
         let action = alert.action;
 
+        // The header wraps: a long title keeps its own lines, and the
+        // seen-count drops under it rather than being cut off.
         let root = rsx! {
             <div
                 flex
                 flex_col
                 gap_2
-                p_4
+                p_3
                 rounded_lg
                 border_1
                 border_color={cx.theme().border}
                 bg={cx.theme().background}
                 border_l_4
             >
-                <div flex flex_row items_center justify_between gap_4>
-                    <div flex flex_row items_center gap_2>
+                <div flex flex_row flex_wrap items_start justify_between gap_x_4 gap_y_1>
+                    <div flex flex_row flex_1 items_start gap_2 min_w={px(160.)}>
                         <div
+                            flex_shrink_0
                             text_xs
                             font_weight={FontWeight::BOLD}
                             text_color={accent}
@@ -237,11 +244,11 @@ impl NotificationsView {
                         >
                             {Self::severity_label(alert.severity)}
                         </div>
-                        <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().foreground}>
+                        <div flex_1 min_w_0 text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().foreground}>
                             {alert.title.clone()}
                         </div>
                     </div>
-                    <div text_xs text_color={cx.theme().muted_foreground}>
+                    <div flex_shrink_0 py_1 text_xs text_color={cx.theme().muted_foreground}>
                         {Self::occurrence_summary(alert)}
                     </div>
                 </div>
@@ -250,7 +257,7 @@ impl NotificationsView {
                     {alert.detail.clone()}
                 </div>
 
-                <div flex flex_row items_center gap_2>
+                <div flex flex_row flex_wrap items_center gap_2>
                     {...action.label().map(|label| {
                         Button::new(("alert_action", id as usize))
                             .primary()
@@ -281,7 +288,7 @@ impl NotificationsView {
 
     fn render_empty_state(&self, cx: &mut Context<Self>) -> AnyElement {
         let root = rsx! {
-            <div flex flex_col items_center justify_center gap_2 p_12>
+            <div flex flex_col items_center justify_center gap_2 p_8>
                 <div text_lg font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().foreground}>
                     {"Nothing needs your attention"}
                 </div>
@@ -312,22 +319,33 @@ impl Render for NotificationsView {
                 .collect()
         };
 
+        let close = Button::new("notifications_close")
+            .ghost()
+            .small()
+            .icon(gpui_component::IconName::Close)
+            .on_click(cx.listener(|_this, _ev, _window, cx| {
+                cx.emit(NotificationsEvent::Close);
+            }));
+
         rsx! {
-            <div flex flex_col size_full p_8 gap_6 bg={cx.theme().background}>
-                <div flex flex_col gap_1>
-                    <div text_3xl font_weight={FontWeight::BLACK} text_color={cx.theme().primary}>
-                        {"Notifications"}
+            <div flex flex_col size_full p_4 gap_3 bg={cx.theme().background}>
+                <div flex flex_row items_start justify_between gap_2>
+                    <div flex flex_col gap_1 min_w_0>
+                        <div text_lg font_weight={FontWeight::BOLD} text_color={cx.theme().primary}>
+                            {"Notifications"}
+                        </div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {subtitle}
+                        </div>
                     </div>
-                    <div text_base text_color={cx.theme().muted_foreground}>
-                        {subtitle}
-                    </div>
+                    {close}
                 </div>
 
                 <div
                     id="notifications_scroll"
                     flex
                     flex_col
-                    gap_3
+                    gap_2
                     flex_1
                     min_h_0
                     overflow_y_scroll

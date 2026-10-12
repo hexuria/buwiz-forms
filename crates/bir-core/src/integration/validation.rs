@@ -1177,12 +1177,12 @@ fn report_missing_ttce_categories(
         ),
         (
             RegisteredTaxType::WithholdingCompensation,
-            &["1601C", "1604CF", "2316"],
+            &["1601C", "1604C", "1604CF", "2316"],
             "COR/profile version registers compensation withholding but TTCE did not produce compensation withholding obligations.",
         ),
         (
             RegisteredTaxType::WithholdingFinal,
-            &["0619F", "1601F", "1601FQ", "1602", "1603"],
+            &["0619F", "1601F", "1601FQ", "1602", "1603", "1604F"],
             "COR/profile version registers final withholding but TTCE did not produce final withholding obligations.",
         ),
         (
@@ -1327,13 +1327,13 @@ fn is_expanded_withholding_form(code: &str) -> bool {
 }
 
 fn is_compensation_withholding_form(code: &str) -> bool {
-    matches!(code, "0620" | "1601C" | "1604CF" | "2316")
+    matches!(code, "0620" | "1601C" | "1604C" | "2316")
 }
 
 fn is_final_withholding_form(code: &str) -> bool {
     matches!(
         code,
-        "0619F" | "1600WP" | "1601F" | "1601FQ" | "1602" | "1602Q" | "1603" | "1603Q"
+        "0619F" | "1600WP" | "1601F" | "1601FQ" | "1602" | "1602Q" | "1603" | "1603Q" | "1604F"
     )
 }
 

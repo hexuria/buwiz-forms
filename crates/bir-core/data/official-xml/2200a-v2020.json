@@ -5,7 +5,7 @@
   "official_hta": "BIR-Form2200Av2020.hta",
   "official_hta_sha256": "1df302eeb1352eccb88f6aa7a23fdcc185b6fbb4d15435996250f985a0198e2c",
   "header": "<?xml version='1.0'?>",
-  "lead": "\n\t\t\t\t\t",
+  "lead": "\t\t\t\t\t",
   "value_rules": [],
   "entries": [
     {
@@ -18,7 +18,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtDateDay",
@@ -30,7 +30,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtDateYear",
@@ -42,19 +42,19 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:amendedRtn_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:amendedRtn_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSheets",
@@ -66,7 +66,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinA",
@@ -78,7 +78,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinB",
@@ -90,7 +90,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinC",
@@ -102,7 +102,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:branchCode",
@@ -114,19 +114,19 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
-      "key": "frm2200Av2020:txtRDOCode",
+      "key": "frm2200Av2020:rdoCode",
       "kind": "value",
       "parts": [
         {
-          "source": "frm2200Av2020:txtRDOCode",
+          "source": "frm2200Av2020:rdoCode",
           "codec": "raw"
         }
       ],
       "default": "000",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:registeredName",
@@ -134,11 +134,11 @@
       "parts": [
         {
           "source": "frm2200Av2020:registeredName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:registeredAddress",
@@ -146,11 +146,11 @@
       "parts": [
         {
           "source": "frm2200Av2020:registeredAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:zipCode",
@@ -162,7 +162,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:phoneNumber",
@@ -174,7 +174,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtEmail",
@@ -186,7 +186,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:prodRegion",
@@ -198,7 +198,7 @@
         }
       ],
       "default": "00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:prodProvince",
@@ -210,7 +210,7 @@
         }
       ],
       "default": "00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:prodCity",
@@ -222,7 +222,7 @@
         }
       ],
       "default": "00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:remRegion",
@@ -234,7 +234,7 @@
         }
       ],
       "default": "00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:remProvince",
@@ -246,7 +246,7 @@
         }
       ],
       "default": "00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:remCity",
@@ -258,19 +258,19 @@
         }
       ],
       "default": "00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:optTreaty_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:optTreaty_2",
       "kind": "bool",
       "default": "true",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:treatyY",
@@ -282,25 +282,25 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:optPayment_1",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:optPayment_2",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:optPayment_3",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:paymentOther",
@@ -312,7 +312,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtExciseDue",
@@ -324,7 +324,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtLess_Balance",
@@ -336,7 +336,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtLess_Excise",
@@ -348,7 +348,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtLess_Tot",
@@ -360,7 +360,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtNetTaxDue",
@@ -372,7 +372,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPrevReturn",
@@ -384,7 +384,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtStillDue",
@@ -396,7 +396,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPen_Surcharge",
@@ -408,7 +408,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPen_Interest",
@@ -420,7 +420,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPen_Compromise",
@@ -432,7 +432,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPen_Tot",
@@ -444,7 +444,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtAmtPayable",
@@ -456,7 +456,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPay_TaxPayment",
@@ -468,7 +468,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPay_Penalties",
@@ -480,7 +480,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtPay_Tot",
@@ -492,7 +492,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtBalance",
@@ -504,7 +504,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:cashBank",
@@ -516,7 +516,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:cashNum",
@@ -528,7 +528,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:cashDate",
@@ -540,7 +540,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:cashAmt",
@@ -552,7 +552,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:checkBank",
@@ -564,7 +564,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:checkNum",
@@ -576,7 +576,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:checkDate",
@@ -588,7 +588,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:checkAmt",
@@ -600,7 +600,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:taxNum",
@@ -612,7 +612,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:taxDate",
@@ -624,7 +624,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:taxAmt",
@@ -636,7 +636,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:othersDetails",
@@ -648,7 +648,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:othersBank",
@@ -660,7 +660,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:othersNum",
@@ -672,7 +672,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:othersDate",
@@ -684,7 +684,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:othersAmt",
@@ -696,7 +696,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinA",
@@ -708,7 +708,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinB",
@@ -720,7 +720,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinC",
@@ -732,7 +732,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:branchCode",
@@ -744,7 +744,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:registeredName",
@@ -752,11 +752,11 @@
       "parts": [
         {
           "source": "frm2200Av2020:registeredName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2020_Export",
@@ -768,7 +768,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2020_Taxable",
@@ -780,7 +780,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2020_Due",
@@ -792,7 +792,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2020B_Export",
@@ -804,7 +804,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2020B_Taxable",
@@ -816,7 +816,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2020B_Due",
@@ -828,7 +828,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2021_Export",
@@ -840,7 +840,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2021_Taxable",
@@ -852,7 +852,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2021_Due",
@@ -864,7 +864,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2022_Export",
@@ -876,7 +876,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2022_Taxable",
@@ -888,7 +888,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2022_Due",
@@ -900,7 +900,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2023_Export",
@@ -912,7 +912,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2023_Taxable",
@@ -924,7 +924,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2023_Due",
@@ -936,7 +936,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2024_Export",
@@ -948,7 +948,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2024_Taxable",
@@ -960,7 +960,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1A_2024_Due",
@@ -972,7 +972,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2020_Export",
@@ -984,7 +984,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2020_Taxable",
@@ -996,7 +996,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2020_Due",
@@ -1008,7 +1008,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2020B_Export",
@@ -1020,7 +1020,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2020B_Taxable",
@@ -1032,7 +1032,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2020B_Due",
@@ -1044,7 +1044,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2021_Export",
@@ -1056,7 +1056,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2021_Taxable",
@@ -1068,7 +1068,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2021_Due",
@@ -1080,7 +1080,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2022_Export",
@@ -1092,7 +1092,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2022_Taxable",
@@ -1104,7 +1104,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2022_Due",
@@ -1116,7 +1116,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2023_Export",
@@ -1128,7 +1128,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2023_Taxable",
@@ -1140,7 +1140,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2023_Due",
@@ -1152,7 +1152,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2024_Export",
@@ -1164,7 +1164,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2024_Taxable",
@@ -1176,7 +1176,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_1B_2024_Due",
@@ -1188,7 +1188,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020_Export",
@@ -1200,7 +1200,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020_Taxable",
@@ -1212,7 +1212,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020_Due",
@@ -1224,7 +1224,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020B_Export",
@@ -1236,7 +1236,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020B_Taxable",
@@ -1248,7 +1248,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020B_Due",
@@ -1260,7 +1260,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2021_Export",
@@ -1272,7 +1272,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2021_Taxable",
@@ -1284,7 +1284,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2021_Due",
@@ -1296,7 +1296,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2022_Export",
@@ -1308,7 +1308,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2022_Taxable",
@@ -1320,7 +1320,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2022_Due",
@@ -1332,7 +1332,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2023_Export",
@@ -1344,7 +1344,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2023_Taxable",
@@ -1356,7 +1356,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2023_Due",
@@ -1368,7 +1368,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2024_Export",
@@ -1380,7 +1380,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2024_Taxable",
@@ -1392,7 +1392,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2024_Due",
@@ -1404,7 +1404,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020A_Export",
@@ -1416,7 +1416,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020A_Taxable",
@@ -1428,7 +1428,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020A_Due",
@@ -1440,7 +1440,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020B2_Export",
@@ -1452,7 +1452,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020B2_Taxable",
@@ -1464,7 +1464,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2020B2_Due",
@@ -1476,7 +1476,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2021B_Export",
@@ -1488,7 +1488,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2021B_Taxable",
@@ -1500,7 +1500,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2021B_Due",
@@ -1512,7 +1512,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2022B_Export",
@@ -1524,7 +1524,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2022B_Taxable",
@@ -1536,7 +1536,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2022B_Due",
@@ -1548,7 +1548,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2023B_Export",
@@ -1560,7 +1560,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2023B_Taxable",
@@ -1572,7 +1572,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2023B_Due",
@@ -1584,7 +1584,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2024B_Export",
@@ -1596,7 +1596,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2024B_Taxable",
@@ -1608,7 +1608,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2A_2024B_Due",
@@ -1620,7 +1620,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2020_Export",
@@ -1632,7 +1632,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2020_Taxable",
@@ -1644,7 +1644,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2020_Due",
@@ -1656,7 +1656,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2020B_Export",
@@ -1668,7 +1668,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2020B_Taxable",
@@ -1680,7 +1680,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2020B_Due",
@@ -1692,7 +1692,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2021_Export",
@@ -1704,7 +1704,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2021_Taxable",
@@ -1716,7 +1716,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2021_Due",
@@ -1728,7 +1728,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2022_Export",
@@ -1740,7 +1740,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2022_Taxable",
@@ -1752,7 +1752,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2022_Due",
@@ -1764,7 +1764,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2023_Export",
@@ -1776,7 +1776,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2023_Taxable",
@@ -1788,7 +1788,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2023_Due",
@@ -1800,7 +1800,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2024_Export",
@@ -1812,7 +1812,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2024_Taxable",
@@ -1824,7 +1824,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2B_2024_Due",
@@ -1836,7 +1836,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2020_Export",
@@ -1848,7 +1848,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2020_Taxable",
@@ -1860,7 +1860,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2020_Due",
@@ -1872,7 +1872,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2020B_Export",
@@ -1884,7 +1884,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2020B_Taxable",
@@ -1896,7 +1896,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2020B_Due",
@@ -1908,7 +1908,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2021_Export",
@@ -1920,7 +1920,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2021_Taxable",
@@ -1932,7 +1932,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2021_Due",
@@ -1944,7 +1944,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2022_Export",
@@ -1956,7 +1956,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2022_Taxable",
@@ -1968,7 +1968,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2022_Due",
@@ -1980,7 +1980,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2023_Export",
@@ -1992,7 +1992,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2023_Taxable",
@@ -2004,7 +2004,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2023_Due",
@@ -2016,7 +2016,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2024_Export",
@@ -2028,7 +2028,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2024_Taxable",
@@ -2040,7 +2040,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2C_2024_Due",
@@ -2052,7 +2052,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2020_Export",
@@ -2064,7 +2064,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2020_Taxable",
@@ -2076,7 +2076,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2020_Due",
@@ -2088,7 +2088,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2020B_Export",
@@ -2100,7 +2100,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2020B_Taxable",
@@ -2112,7 +2112,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2020B_Due",
@@ -2124,7 +2124,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2021_Export",
@@ -2136,7 +2136,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2021_Taxable",
@@ -2148,7 +2148,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2021_Due",
@@ -2160,7 +2160,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2022_Export",
@@ -2172,7 +2172,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2022_Taxable",
@@ -2184,7 +2184,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2022_Due",
@@ -2196,7 +2196,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2023_Export",
@@ -2208,7 +2208,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2023_Taxable",
@@ -2220,7 +2220,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2023_Due",
@@ -2232,7 +2232,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2024_Export",
@@ -2244,7 +2244,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2024_Taxable",
@@ -2256,7 +2256,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_2D_2024_Due",
@@ -2268,7 +2268,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020_Export",
@@ -2280,7 +2280,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020_Taxable",
@@ -2292,7 +2292,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020_Due",
@@ -2304,7 +2304,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020B_Export",
@@ -2316,7 +2316,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020B_Taxable",
@@ -2328,7 +2328,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020B_Due",
@@ -2340,7 +2340,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2021_Export",
@@ -2352,7 +2352,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2021_Taxable",
@@ -2364,7 +2364,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2021_Due",
@@ -2376,7 +2376,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2022_Export",
@@ -2388,7 +2388,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2022_Taxable",
@@ -2400,7 +2400,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2022_Due",
@@ -2412,7 +2412,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2023_Export",
@@ -2424,7 +2424,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2023_Taxable",
@@ -2436,7 +2436,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2023_Due",
@@ -2448,7 +2448,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2024_Export",
@@ -2460,7 +2460,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2024_Taxable",
@@ -2472,7 +2472,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2024_Due",
@@ -2484,7 +2484,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinA",
@@ -2496,7 +2496,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinB",
@@ -2508,7 +2508,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:tinC",
@@ -2520,7 +2520,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:branchCode",
@@ -2532,7 +2532,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:registeredName",
@@ -2540,11 +2540,11 @@
       "parts": [
         {
           "source": "frm2200Av2020:registeredName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020A_Export",
@@ -2556,7 +2556,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020A_Taxable",
@@ -2568,7 +2568,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2020A_Due",
@@ -2580,7 +2580,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020B2_Export",
@@ -2592,7 +2592,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020B2_Taxable",
@@ -2604,7 +2604,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020B2_Due",
@@ -2616,7 +2616,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2021B_Export",
@@ -2628,7 +2628,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2021B_Taxable",
@@ -2640,7 +2640,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2021B_Due",
@@ -2652,7 +2652,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2022B_Export",
@@ -2664,7 +2664,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2022B_Taxable",
@@ -2676,7 +2676,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2022B_Due",
@@ -2688,7 +2688,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2023B_Export",
@@ -2700,7 +2700,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2023B_Taxable",
@@ -2712,7 +2712,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2023B_Due",
@@ -2724,7 +2724,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2024B_Export",
@@ -2736,7 +2736,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2024B_Taxable",
@@ -2748,7 +2748,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3A_2024B_Due",
@@ -2760,7 +2760,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020_Export",
@@ -2772,7 +2772,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020_Taxable",
@@ -2784,7 +2784,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020_Due",
@@ -2796,7 +2796,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020B_Export",
@@ -2808,7 +2808,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020B_Taxable",
@@ -2820,7 +2820,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2020B_Due",
@@ -2832,7 +2832,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2021_Export",
@@ -2844,7 +2844,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2021_Taxable",
@@ -2856,7 +2856,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2021_Due",
@@ -2868,7 +2868,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2022_Export",
@@ -2880,7 +2880,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2022_Taxable",
@@ -2892,7 +2892,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2022_Due",
@@ -2904,7 +2904,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2023_Export",
@@ -2916,7 +2916,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2023_Taxable",
@@ -2928,7 +2928,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2023_Due",
@@ -2940,7 +2940,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2024_Export",
@@ -2952,7 +2952,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2024_Taxable",
@@ -2964,7 +2964,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_3B_2024_Due",
@@ -2976,13 +2976,13 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Check",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Atc",
@@ -2994,7 +2994,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Desc",
@@ -3006,7 +3006,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Bracket",
@@ -3018,7 +3018,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Rate",
@@ -3030,7 +3030,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Export",
@@ -3042,7 +3042,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Taxable",
@@ -3054,7 +3054,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others1_Due",
@@ -3066,13 +3066,13 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Check",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Atc",
@@ -3084,7 +3084,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Desc",
@@ -3096,7 +3096,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Bracket",
@@ -3108,7 +3108,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Rate",
@@ -3120,7 +3120,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Export",
@@ -3132,7 +3132,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Taxable",
@@ -3144,7 +3144,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others2_Due",
@@ -3156,13 +3156,13 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Check",
       "kind": "bool",
       "default": "false",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Atc",
@@ -3174,7 +3174,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Desc",
@@ -3186,7 +3186,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Bracket",
@@ -3198,7 +3198,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Rate",
@@ -3210,7 +3210,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Export",
@@ -3222,7 +3222,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Taxable",
@@ -3234,7 +3234,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_xa_others3_Due",
@@ -3246,7 +3246,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtSched1_TotalDue",
@@ -3258,7 +3258,7 @@
         }
       ],
       "default": "0.00",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtCurrentPage",
@@ -3270,7 +3270,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "frm2200Av2020:txtMaxPage",
@@ -3282,7 +3282,7 @@
         }
       ],
       "default": "3",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "txtFinalFlag",
@@ -3294,7 +3294,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "txtEnroll",
@@ -3306,7 +3306,7 @@
         }
       ],
       "default": "N",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "ebirOnlineConfirmUsername",
@@ -3318,7 +3318,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "ebirOnlineUsername",
@@ -3330,7 +3330,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "ebirOnlineSecret",
@@ -3342,7 +3342,7 @@
         }
       ],
       "default": "",
-      "after": "\n\t\t\t\t\t"
+      "after": "\t\t\t\t\t"
     },
     {
       "key": "driveSelectTPExport",
@@ -3354,7 +3354,7 @@
         }
       ],
       "default": "0",
-      "after": "\n\t\t\t\t\t\n\t\t\t\t\tAll Rights Reserved BIR 2012.0"
+      "after": "\t\t\t\t\t\t\t\t\t\tAll Rights Reserved BIR 2012.0"
     }
   ]
 }

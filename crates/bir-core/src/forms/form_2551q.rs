@@ -287,6 +287,12 @@ pub struct Form2551QDraft {
     pub submission_filename: Option<String>,
     #[serde(default)]
     pub receipt_id: Option<i64>,
+    /// The exact plaintext XML of this generation: written at queue time and
+    /// replaced with the bytes actually encrypted for PUT at submission. Kept
+    /// so a later amendment can snapshot what BIR received. Absent on returns
+    /// queued before this field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submitted_payload: Option<String>,
     /// SHA-256 over the exact BIR field map plus internal calculation inputs at
     /// the moment the user queues the return for submission.
     #[serde(default)]
@@ -425,6 +431,7 @@ impl Form2551QDraft {
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
+            submitted_payload: None,
             queued_submission_fingerprint: None,
             submission_claim_token: None,
             submission_claimed_at: None,
@@ -1027,6 +1034,8 @@ impl Form2551QDraft {
                 }
             };
         }
+        // Keep the reviewed plaintext so a later amendment can snapshot it.
+        self.submitted_payload = Some(self.to_bir_xml_payload()?);
         self.queued_submission_fingerprint = Some(self.submission_fingerprint());
         self.queue_authorization = Some(QueueAuthorization::new(
             "2551Q",
@@ -1118,6 +1127,7 @@ impl Form2551QDraft {
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;
+        self.submitted_payload = None;
         self.queued_submission_fingerprint = None;
         self.queue_authorization = None;
         self.submission_claim_token = None;
@@ -1236,6 +1246,7 @@ impl Form2551QDraft {
             self.next_retry_at = None;
             self.queued_submission_fingerprint = None;
             self.queue_authorization = None;
+            self.submitted_payload = None;
         } else {
             let delay_mins = 2i64.pow(self.submission_attempts - 1);
             let next_time = chrono::Utc::now() + chrono::Duration::minutes(delay_mins);
@@ -1288,6 +1299,17 @@ use crate::validation::{
     fits_official_maxlength, rdo_code_is_official_option, validate_email, validate_ph_phone,
     validate_zip,
 };
+
+/// `2551q-validate-month` / `2551q-save-month` (official text, verbatim).
+pub const OFFICIAL_YEAR_ENDED_MONTH_MESSAGE: &str =
+    "Please enter valid Year Ended month on item 2.";
+/// `2551q-validate-overpayment-formatted` (official text, verbatim).
+pub const OFFICIAL_OVERPAYMENT_OPTION_MESSAGE: &str = "Please select overpayment option.";
+/// `2551q-validate-telephone` (official text, verbatim).
+pub const OFFICIAL_TELEPHONE_MESSAGE: &str = "Please enter Telephone Number on Item 10.";
+/// `2551q-validate-zero-atc` (official text, verbatim).
+pub const OFFICIAL_ZERO_ATC_MESSAGE: &str =
+    "If you are filing zero transaction, please select the applicable ATC in Page 2 Schedule 1.";
 
 impl FormValidator for Form2551QDraft {
     fn validate(&self) -> Vec<(String, String)> {
@@ -1343,7 +1365,7 @@ impl FormValidator for Form2551QDraft {
         if !(1..=12).contains(&self.year_end_month) {
             errors.push((
                 "year_end_month".to_string(),
-                "Year-end month must be between 1 and 12".to_string(),
+                OFFICIAL_YEAR_ENDED_MONTH_MESSAGE.to_string(),
             ));
         } else if matches!(self.tax_period_basis, TaxPeriodBasis::Calendar)
             && self.year_end_month != 12
@@ -1504,7 +1526,13 @@ impl FormValidator for Form2551QDraft {
             ("email", "Email Address", self.email.as_str()),
         ] {
             if value.trim().is_empty() {
-                errors.push((key.to_string(), format!("{label} is required")));
+                let message = if key == "contact_number" {
+                    // `2551q-validate-telephone`
+                    OFFICIAL_TELEPHONE_MESSAGE.to_string()
+                } else {
+                    format!("{label} is required")
+                };
+                errors.push((key.to_string(), message));
             }
         }
 
@@ -1577,7 +1605,8 @@ impl FormValidator for Form2551QDraft {
         if self.schedule_1.is_empty() {
             errors.push((
                 "schedule_1".to_string(),
-                "Schedule 1 requires at least one ATC row".to_string(),
+                // `2551q-validate-zero-atc`
+                OFFICIAL_ZERO_ATC_MESSAGE.to_string(),
             ));
         }
         if self.schedule_1.len() > FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY {
@@ -1863,8 +1892,7 @@ impl FormValidator for Form2551QDraft {
             if matches!(self.overpayment_disposition, OverpaymentDisposition::None) {
                 errors.push((
                     "overpayment_disposition".to_string(),
-                    "Choose exactly one overpayment disposition: refund or tax credit certificate"
-                        .to_string(),
+                    OFFICIAL_OVERPAYMENT_OPTION_MESSAGE.to_string(),
                 ));
             }
         } else if !matches!(self.overpayment_disposition, OverpaymentDisposition::None) {
@@ -3619,6 +3647,54 @@ mod tests {
         draft
             .transition_to_queued()
             .expect("one overpayment disposition should satisfy the queue gate");
+    }
+
+    fn messages(draft: &Form2551QDraft, field: &str) -> Vec<String> {
+        draft
+            .validate()
+            .into_iter()
+            .filter(|(key, _)| key == field)
+            .map(|(_, message)| message)
+            .collect()
+    }
+
+    #[test]
+    fn overpayment_without_option_uses_the_official_alert() {
+        let draft = make_draft(50_000.0, 4_000.0, 2026, 1);
+        assert_eq!(
+            messages(&draft, "overpayment_disposition"),
+            vec!["Please select overpayment option.".to_string()]
+        );
+    }
+
+    #[test]
+    fn invalid_year_ended_month_uses_the_official_alert() {
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.year_end_month = 0;
+        assert_eq!(
+            messages(&draft, "year_end_month"),
+            vec!["Please enter valid Year Ended month on item 2.".to_string()]
+        );
+    }
+
+    #[test]
+    fn blank_telephone_uses_the_official_alert() {
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.contact_number.clear();
+        assert_eq!(
+            messages(&draft, "contact_number"),
+            vec!["Please enter Telephone Number on Item 10.".to_string()]
+        );
+    }
+
+    #[test]
+    fn no_atc_uses_the_official_zero_transaction_alert() {
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.schedule_1.clear();
+        assert!(messages(&draft, "schedule_1").contains(
+            &"If you are filing zero transaction, please select the applicable ATC in Page 2 Schedule 1."
+                .to_string()
+        ));
     }
 
     #[test]

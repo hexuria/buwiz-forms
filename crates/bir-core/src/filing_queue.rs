@@ -362,7 +362,7 @@ mod tests {
         assert!(xml.contains("frm1601c:txtMonth"), "{xml}");
         assert_eq!(
             fields.len(),
-            crate::forms::form_1601c::EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT
+            crate::forms::form_1601c::EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
         );
     }
 

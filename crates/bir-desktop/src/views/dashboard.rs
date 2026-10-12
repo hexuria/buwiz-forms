@@ -51,6 +51,14 @@ const TABLET_2_COL_MIN_CONTENT: f32 = 750.0; // 365 * 2 + 20 * 1
 
 /// Shared by Tax Form Library cards and the Calendar tab's three columns so
 /// both tabs wrap at the same window widths.
+/// 1701Q and 1702Q have only Q1-Q3 (the fourth quarter is the annual return).
+fn quarter_count(code: &str) -> usize {
+    match code {
+        "1701Q" | "1702Q" => 3,
+        _ => 4,
+    }
+}
+
 fn tax_form_grid_columns(window_width: f32, sidebar_width: f32) -> usize {
     let available_content_width = window_width - sidebar_width - CONTENT_PADDING_X;
     if available_content_width >= DESKTOP_3_COL_MIN_CONTENT {
@@ -78,6 +86,42 @@ fn dashboard_grid_row_count(item_count: usize, columns: usize) -> usize {
 
 /// Pack tiles into rows using the Tax Form Library gap and wrap. Each tile
 /// already has an explicit width from [`tax_form_card_width`].
+/// A period heading such as "October Deadlines" only shows when at least one
+/// of the calendar columns has an item under it.
+fn deadline_heading_visible(upcoming: usize, action_required: usize, overdue: usize) -> bool {
+    upcoming + action_required + overdue > 0
+}
+
+/// Extra pill on an Action Required entry. Submitted and Confirmed returns
+/// stay in the list because they still need payment.
+fn needs_payment_label(status: &bir_core::forms::FilingStatus) -> Option<&'static str> {
+    match status {
+        bir_core::forms::FilingStatus::Submitted | bir_core::forms::FilingStatus::Confirmed => {
+            Some("Needs payment")
+        }
+        _ => None,
+    }
+}
+
+/// Support label shown on a Tax Form Library card: the dev-preview label for
+/// a certification draft, otherwise the form's own support label.
+fn library_support_label(is_certification_draft: bool, action_label: &'static str) -> &'static str {
+    if is_certification_draft {
+        "Dev preview (not yet certified)"
+    } else {
+        action_label
+    }
+}
+
+/// The annual card's header label, matching the quarterly and monthly cards:
+/// shown whenever the form is not release-fileable (e.g. a dev preview).
+fn annual_card_header_label(
+    is_release_fileable: bool,
+    support_label: &'static str,
+) -> Option<&'static str> {
+    (!is_release_fileable).then_some(support_label)
+}
+
 fn wrap_dashboard_grid(items: Vec<AnyElement>, columns: usize) -> Div {
     let columns = columns.max(1);
     let mut grid = div().flex().flex_col().gap(px(GRID_GAP)).w_full();
@@ -107,6 +151,10 @@ pub struct DashboardView {
     active_profile: Option<TaxpayerProfile>,
     db: Arc<Mutex<Database>>,
     selected_year: i32,
+    /// Whether the user picked `selected_year` in the library's year filter.
+    /// Until they do, annual returns open on the previous year (see
+    /// [`annual_filing_year`]).
+    year_picked_by_user: bool,
     smart_date_filter: Entity<SmartDateFilterState>,
     filter_state: Entity<FilterState>,
     /// Cached filing progress per form code -> per year
@@ -127,6 +175,21 @@ pub struct DashboardView {
     header_menu_open: bool,
 }
 
+/// The year an annual (FilingFrequency::Annual) return opens on from the
+/// library. A year the user picked in the year filter is respected as is;
+/// otherwise the current calendar year falls back to the previous one,
+/// because BIR does not accept a calendar-year annual return for the current
+/// year (1702-RT: "Year (Page 1 Item 2) cannot be greater than or equal to
+/// current year when filing for Calendar Year.").
+fn annual_filing_year(selected_year: i32, picked_by_user: bool, current_year: i32) -> u16 {
+    let year = if !picked_by_user && selected_year >= current_year {
+        current_year - 1
+    } else {
+        selected_year
+    };
+    year.max(0) as u16
+}
+
 impl DashboardView {
     pub fn set_mini_sidebar(&mut self, is_mini: bool, cx: &mut Context<Self>) {
         self.is_mini_sidebar = is_mini;
@@ -142,6 +205,7 @@ impl DashboardView {
             &smart_date_filter,
             |this: &mut Self, _, event: &SmartDateFilterEvent, cx| {
                 this.selected_year = event.year;
+                this.year_picked_by_user |= event.user_picked;
                 if let Some(profile) = this.active_profile.clone() {
                     this.reload_filing_progress(&profile, cx);
                 }
@@ -203,6 +267,7 @@ impl DashboardView {
             active_profile: None,
             db,
             selected_year: now.year(),
+            year_picked_by_user: false,
             smart_date_filter,
             filter_state,
             filing_progress: std::collections::HashMap::new(),
@@ -215,6 +280,12 @@ impl DashboardView {
             consistency_issues: Vec::new(),
             header_menu_open: false,
         }
+    }
+
+    /// Switch the Calendar / Tax Form Library tab (agent `dashboard.tab`).
+    pub(crate) fn agent_set_tab(&mut self, tab: ProfileTab, cx: &mut Context<Self>) {
+        self.active_tab = tab;
+        cx.notify();
     }
 
     pub(crate) fn agent_dues(&self) -> Vec<(String, u16, u8, String, String)> {
@@ -288,6 +359,25 @@ impl DashboardView {
         }
     }
 
+    /// The year an annual return tile shows and opens.
+    fn annual_year(&self) -> u16 {
+        annual_filing_year(
+            self.selected_year,
+            self.year_picked_by_user,
+            Local::now().date_naive().year(),
+        )
+    }
+
+    /// Re-read every tile's filing state for the active profile, e.g. when
+    /// the library becomes visible again after a form view or the background
+    /// worker changed a return's status.
+    pub fn refresh_filing_progress(&mut self, cx: &mut Context<Self>) {
+        if let Some(profile) = self.active_profile.clone() {
+            self.reload_filing_progress(&profile, cx);
+            cx.notify();
+        }
+    }
+
     /// Query the DB for all form progress for this profile in the selected year.
     fn reload_filing_progress(&mut self, profile: &TaxpayerProfile, cx: &mut Context<Self>) {
         self.filing_progress.clear();
@@ -302,11 +392,19 @@ impl DashboardView {
             let applicable_codes = profile.active_form_codes_for_year(year);
             self.consistency_issues = obligations.consistency_report.issues;
 
+            let annual_year = self.annual_year();
             for code in applicable_codes.clone() {
                 let mut year_progress = std::collections::HashMap::new();
                 if let Ok(progress) = db.get_form_filing_progress(&profile.tin.full(), &code, year)
                 {
                     year_progress.insert(year, progress);
+                }
+                // Annual tiles show (and open) the default annual year.
+                if annual_year != year
+                    && let Ok(progress) =
+                        db.get_form_filing_progress(&profile.tin.full(), &code, annual_year)
+                {
+                    year_progress.insert(annual_year, progress);
                 }
                 self.filing_progress.insert(code, year_progress);
             }
@@ -603,6 +701,7 @@ impl Render for DashboardView {
         };
 
         let year = self.selected_year as u16;
+        let annual_year = self.annual_year();
 
         let mut available_forms =
             bir_core::integration::applicable_form_decisions_for_profile_and_year(profile, year);
@@ -739,14 +838,11 @@ impl Render for DashboardView {
 
                 let support = form_support_level(&code);
                 let is_release_fileable = support.is_fileable_in_app();
-                let is_certification_draft = cfg!(any(debug_assertions, feature = "dev-tools"))
+                let is_certification_draft = crate::dev_mode::show_uncertified_forms()
                     && can_open_certification_draft(&code);
                 let is_fileable = is_release_fileable || is_certification_draft;
-                let support_label = if is_certification_draft {
-                    "Certification preview"
-                } else {
-                    support.action_label()
-                };
+                let support_label =
+                    library_support_label(is_certification_draft, support.action_label());
 
                 let card = match &form_def.frequency {
                     FilingFrequency::Quarterly => {
@@ -767,7 +863,8 @@ impl Render for DashboardView {
 
                         // Interactive quarter dots — each one is clickable
                         let mut quarter_dots = div().flex().gap_2().w_full();
-                        for (idx, q_state) in quarters.iter().enumerate() {
+                        for (idx, q_state) in quarters.iter().enumerate().take(quarter_count(&code))
+                        {
                             let q_num = (idx + 1) as u8;
                             let should_dim =
                                 has_quarter_filter && !active_quarters.contains(&q_num);
@@ -1039,8 +1136,14 @@ impl Render for DashboardView {
                         })
                     }
                     FilingFrequency::Annual => {
-                        let status = progress
-                            .as_ref()
+                        // BIR rejects a calendar-year annual return for the
+                        // current year, so without an explicit pick the tile
+                        // shows and opens last year's return.
+                        let year = annual_year;
+                        let status = self
+                            .filing_progress
+                            .get(&code)
+                            .and_then(|y| y.get(&year))
                             .map(|p| p.annual_status.clone())
                             .unwrap_or(QuarterState::NotStarted);
 
@@ -1049,14 +1152,28 @@ impl Render for DashboardView {
                         let hover_bg = Self::state_hover_bg(&status, cx);
                         let code_click = code.clone();
 
+                        let header_label =
+                            annual_card_header_label(is_release_fileable, support_label);
                         Self::build_card(form_def, year, card_width, cx)
-                            .child(rsx! {
-                                <div flex justify_between items_center>
-                                    <div text_xs text_color={cx.theme().muted_foreground}>
-                                        {format!("Year {}:", year)}
-                                    </div>
-                                </div>
-                            })
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(format!("Year {}:", year)),
+                                    )
+                                    .children(header_label.map(|label| {
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(label)
+                                    })),
+                            )
                             .child({
                                 let mut dot = div()
                                     .id(format!("annual_{}_{}", form_def.form_code, year))
@@ -1089,7 +1206,7 @@ impl Render for DashboardView {
                                                 accent
                                             }}
                                         >
-                                            {if is_release_fileable {
+                                            {if is_fileable {
                                                 match &status {
                                                     QuarterState::Paid => "View Paid Return",
                                                     QuarterState::Confirmed => {
@@ -1102,8 +1219,6 @@ impl Render for DashboardView {
                                                         "File Annual Return"
                                                     }
                                                 }
-                                            } else if is_certification_draft {
-                                                "Open certification draft"
                                             } else {
                                                 support_label
                                             }}
@@ -1170,7 +1285,7 @@ impl Render for DashboardView {
                                             font_weight={FontWeight::BOLD}
                                             text_color={cx.theme().foreground}
                                         >
-                                            {if is_release_fileable { "+" } else { "" }}
+                                            {if is_fileable { "+" } else { "" }}
                                         </div>
                                     })
                                     .child(rsx! {
@@ -1179,10 +1294,8 @@ impl Render for DashboardView {
                                             font_weight={FontWeight::BOLD}
                                             text_color={cx.theme().foreground}
                                         >
-                                            {if is_release_fileable {
+                                            {if is_fileable {
                                                 "File New Return"
-                                            } else if is_certification_draft {
-                                                "Open certification draft"
                                             } else {
                                                 support_label
                                             }}
@@ -1367,6 +1480,11 @@ impl Render for DashboardView {
         }
         overdue_deadlines.sort_by_key(ResolvedTaxDeadline::final_deadline_date);
 
+        let show_deadline_heading = deadline_heading_visible(
+            upcoming_deadlines.len(),
+            matching_actionable_forms.len(),
+            overdue_deadlines.len(),
+        );
         self.upcoming_deadlines_list.update(cx, |list, _| {
             list.set_data(upcoming_deadlines, vec![]);
         });
@@ -1682,6 +1800,34 @@ impl Render for DashboardView {
                         );
                         let btn_form_code = f.form_code.clone();
 
+                        // Status pill, plus "Needs payment" for Submitted and
+                        // Confirmed returns that stay here until paid.
+                        let status_pills = div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .px_2()
+                                    .py(px(2.))
+                                    .bg(status_color.opacity(0.15))
+                                    .text_color(crate::theme::hue_on_tint(cx.theme(), status_color))
+                                    .rounded(px(4.))
+                                    .child(format!("{:?}", f.status)),
+                            )
+                            .children(needs_payment_label(&f.status).map(|label| {
+                                let warning = cx.theme().warning;
+                                div()
+                                    .text_xs()
+                                    .px_2()
+                                    .py(px(2.))
+                                    .bg(warning.opacity(0.15))
+                                    .text_color(crate::theme::hue_on_tint(cx.theme(), warning))
+                                    .rounded(px(4.))
+                                    .child(label)
+                            }));
+
                         action_inner = action_inner.child(rsx! {
                             <div
                                 id={card_id}
@@ -1749,19 +1895,7 @@ impl Render for DashboardView {
                                                 period_label
                                             )}
                                         </div>
-                                        <div
-                                            text_xs
-                                            px_2
-                                            py={px(2.)}
-                                            bg={status_color.opacity(0.15)}
-                                            text_color={crate::theme::hue_on_tint(
-                                                cx.theme(),
-                                                status_color,
-                                            )}
-                                            rounded={px(4.)}
-                                        >
-                                            {format!("{:?}", f.status)}
-                                        </div>
+                                        {status_pills}
                                     </div>
                                     <div text_sm text_color={cx.theme().muted_foreground}>
                                         {format!(
@@ -1819,18 +1953,21 @@ impl Render for DashboardView {
                 )
                 .id("calendar-columns");
 
-                let calendar_tab = rsx! {
-                    <div flex flex_col gap_4 w_full>
-                        <div
-                            text_xl
-                            font_weight={FontWeight::BOLD}
-                            text_color={cx.theme().foreground}
-                        >
-                            {deadline_header.clone()}
-                        </div>
-                        {calendar_grid}
-                    </div>
-                };
+                let calendar_tab = div()
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    .w_full()
+                    .when(show_deadline_heading, |col| {
+                        col.child(
+                            div()
+                                .text_xl()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(cx.theme().foreground)
+                                .child(deadline_header.clone()),
+                        )
+                    })
+                    .child(calendar_grid);
                 calendar_tab.into_any_element()
             }
             ProfileTab::Forms => {
@@ -2518,5 +2655,48 @@ mod tests {
             false,
             true,
         ));
+    }
+
+    #[::core::prelude::v1::test]
+    fn annual_forms_default_to_last_year_unless_the_user_picked_one() {
+        assert_eq!(annual_filing_year(2026, false, 2026), 2025);
+        assert_eq!(annual_filing_year(2026, true, 2026), 2026);
+        assert_eq!(annual_filing_year(2024, true, 2026), 2024);
+        assert_eq!(annual_filing_year(2024, false, 2026), 2024);
+    }
+
+    #[::core::prelude::v1::test]
+    fn deadline_heading_hidden_when_no_column_has_items() {
+        assert!(!deadline_heading_visible(0, 0, 0));
+        assert!(deadline_heading_visible(1, 0, 0));
+        assert!(deadline_heading_visible(0, 1, 0));
+        assert!(deadline_heading_visible(0, 0, 1));
+    }
+
+    #[::core::prelude::v1::test]
+    fn needs_payment_label_only_for_submitted_and_confirmed() {
+        assert_eq!(needs_payment_label(&FilingStatus::Draft), None);
+        assert_eq!(needs_payment_label(&FilingStatus::Queued), None);
+        assert_eq!(
+            needs_payment_label(&FilingStatus::Submitted),
+            Some("Needs payment")
+        );
+        assert_eq!(
+            needs_payment_label(&FilingStatus::Confirmed),
+            Some("Needs payment")
+        );
+        assert_eq!(needs_payment_label(&FilingStatus::Paid), None);
+    }
+
+    #[::core::prelude::v1::test]
+    fn annual_card_shows_dev_preview_label_for_certification_draft() {
+        let label = library_support_label(true, "Coming soon");
+        assert_eq!(label, "Dev preview (not yet certified)");
+        assert_eq!(
+            annual_card_header_label(false, label),
+            Some("Dev preview (not yet certified)")
+        );
+        assert_eq!(library_support_label(false, "Coming soon"), "Coming soon");
+        assert_eq!(annual_card_header_label(true, "File"), None);
     }
 }
