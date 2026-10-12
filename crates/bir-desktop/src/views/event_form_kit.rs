@@ -505,9 +505,9 @@ pub fn queue<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Context<V>)
     };
     if let Err(error) = saved {
         *this.draft_mut() = before;
-        this.kit_mut().status_message = Some(format!(
-            "Could not queue Form {}. No submission was started: {error}",
-            V::CODE
+        this.kit_mut().status_message = Some(bir_core::forms::queueable::queue_failure_message(
+            &format!("Form {}", V::CODE),
+            &error,
         ));
         cx.notify();
         return;

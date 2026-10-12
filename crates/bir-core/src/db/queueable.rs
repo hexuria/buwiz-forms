@@ -226,6 +226,21 @@ impl Database {
         self.upsert_from_draft(draft, "Draft")
     }
 
+    /// save-009: true when the form runs the official guard, its Amended
+    /// Return is No, and a filed original of the same return exists.
+    pub fn amended_return_required<F: QueueableForm>(&self, draft: &F) -> Result<bool, DbError> {
+        if draft.amended_return_answer() != Some(false) {
+            return Ok(false);
+        }
+        self.has_filed_original(
+            draft.tin(),
+            F::FORM_CODE,
+            draft.taxable_year(),
+            &draft.filing_period().to_period_key(),
+            draft.draft_id(),
+        )
+    }
+
     /// Persist the exact reviewed queue snapshot after revalidating it.
     pub fn save_queued_queueable<F: QueueableForm>(&self, draft: &F) -> Result<i64, DbError> {
         if !matches!(draft.lifecycle().status, FilingStatus::Queued) {
@@ -233,6 +248,9 @@ impl Database {
                 "Only a queued {} return can be saved through the submission path",
                 F::FORM_CODE
             )));
+        }
+        if self.amended_return_required(draft)? {
+            return Err(DbError::AmendedReturnRequired);
         }
         let mut verified = draft.clone();
         verified

@@ -239,6 +239,19 @@ impl SubmissionLifecycle {
     }
 }
 
+/// save-009, verbatim from the official `saveXML()` (e.g. 1800v2018 L3249).
+pub const AMENDED_RETURN_ALERT: &str = "If your intention is to make an amended return, kindly tick Amended Return to 'Yes' before hitting 'Save' or 'Final Copy' or 'Submit'.";
+
+/// Status-box text for a failed queue: the save-009 alert alone, otherwise
+/// the usual "Could not queue" line with the error.
+pub fn queue_failure_message(form_label: &str, error: &str) -> String {
+    if error == AMENDED_RETURN_ALERT {
+        AMENDED_RETURN_ALERT.to_string()
+    } else {
+        format!("Could not queue {form_label}. No submission was started: {error}")
+    }
+}
+
 /// A form the background worker can validate, serialize exactly like the
 /// official app, upload and confirm.
 pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 'static {
@@ -282,6 +295,13 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
     /// does. Returns false for a form that has no such item.
     fn mark_amended(&mut self) -> bool {
         false
+    }
+
+    /// The "Amended Return?" answer for a form whose official `saveXML()`
+    /// runs the save-009 guard (refuse Amended = No once a final original or
+    /// a V-numbered version exists). `None` for a form without that guard.
+    fn amended_return_answer(&self) -> Option<bool> {
+        None
     }
 
     /// `form_drafts.quarter` value: month, quarter, 0 for annual returns.
@@ -775,6 +795,9 @@ pub(crate) mod test_support {
         }
         fn lifecycle_mut(&mut self) -> &mut SubmissionLifecycle {
             &mut self.lifecycle
+        }
+        fn amended_return_answer(&self) -> Option<bool> {
+            Some(self.is_amended)
         }
         fn draft_id(&self) -> Option<i64> {
             self.id

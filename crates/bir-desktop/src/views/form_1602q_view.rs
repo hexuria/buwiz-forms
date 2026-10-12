@@ -1293,8 +1293,9 @@ impl FormViewTrait for Form1602QView {
         };
         if let Err(error) = saved {
             self.draft = before;
-            self.status_message = Some(format!(
-                "Could not queue Form 1602-Q. No submission was started: {error}"
+            self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                "Form 1602-Q",
+                &error,
             ));
             cx.notify();
             return;
