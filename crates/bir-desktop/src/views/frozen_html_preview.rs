@@ -262,6 +262,8 @@ impl FrozenHtmlPreviewView {
         #[cfg(target_os = "windows")]
         let preview_state = {
             let task_html = html.clone();
+            let preview_state = PreviewState::Pending { html };
+            set_preview_state(&preview_state);
             cx.spawn_in(window, async move |this, cx| {
                 cx.background_executor().timer(Duration::ZERO).await;
                 let raw_window_handle = this
@@ -301,7 +303,7 @@ impl FrozenHtmlPreviewView {
                 });
             })
             .detach();
-            PreviewState::Pending { html }
+            preview_state
         };
         #[cfg(target_os = "macos")]
         let preview_state = {
