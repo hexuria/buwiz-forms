@@ -32,6 +32,11 @@ use crate::components::form_engine::FormViewTrait;
 use crate::components::tax_relief_select::{
     TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
 };
+use crate::views::form_header::{
+    DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps, FormHeaderState,
+    render_header_buttons, render_status_box, separate_validate_button,
+};
+use bir_core::forms::queueable::can_user_revert;
 
 pub enum Form2551QEvent {
     BackToDashboard,
@@ -153,6 +158,8 @@ pub struct Form2551QView {
     is_email_tracking_active: bool,
     is_generating_pdf: bool,
     release_claim_confirm_open: bool,
+    /// Shared header: ⋯ menu and status box state.
+    header: FormHeaderState,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -547,6 +554,7 @@ impl Form2551QView {
             is_email_tracking_active,
             is_generating_pdf: false,
             release_claim_confirm_open: false,
+            header: FormHeaderState::new(),
             _subscriptions: subscriptions,
         };
         view.validation_errors = view.validate_for_submit(cx);
@@ -962,8 +970,10 @@ impl Form2551QView {
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.draft.status, FilingStatus::Paid) {
-            return; // Guard: cannot revert a Paid form
+        // 2551Q keeps its own cancel/release path (not the generic
+        // amendment revert), gated like every other form (D7A).
+        if !can_user_revert(&self.draft.status) {
+            return;
         }
         if self.draft.submission_claim_token.is_some() || self.draft.submission_claimed_at.is_some()
         {
@@ -2801,9 +2811,41 @@ impl Render for Form2551QView {
 
         let status_pipeline = <Self as FormViewTrait>::render_status_pipeline(self, cx);
 
+        let release_confirm = (matches!(self.draft.status, FilingStatus::Queued)
+            && submission_claim_active
+            && self.release_claim_confirm_open)
+            .then(|| {
+                div()
+                    .mt_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        gpui_component::button::Button::new("form-2551q-release-claim-confirm")
+                            .label("Confirm nothing reached BIR")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.confirm_release_abandoned_claim(window, cx);
+                            })),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("form-2551q-keep-queued")
+                            .label("Keep queued")
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.release_claim_confirm_open = false;
+                                cx.notify();
+                            })),
+                    )
+            });
+        let props = self.header_props();
+        let header_buttons = render_header_buttons(self, &props, HEADER_ACTIONS, is_mobile, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx)
+            .map(|b| div().mt_3().w_full().max_w(px(900.)).child(b));
+
         let status_banner = rsx! {
             <div
                 flex
+                flex_col
                 items_center
                 justify_center
                 px_8
@@ -2813,6 +2855,8 @@ impl Render for Form2551QView {
                 border_color={cx.theme().border}
             >
                 {status_pipeline}
+                {div().children(status_box)}
+                {div().children(release_confirm)}
             </div>
         };
 
@@ -2843,113 +2887,9 @@ impl Render for Form2551QView {
                         let mut toolbar = div().flex().items_center().gap_3();
 
                         match &self.draft.status {
-                            FilingStatus::Draft => {
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("save_btn")
-                                        .label("Save")
-                                        .outline()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.save(window, cx);
-                                        })),
-                                );
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("submit_btn")
-                                        .label("Queue for submission")
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.sync_from_inputs(cx);
-                                            this.validation_errors = this.validate_for_submit(cx);
-                                            this.suppressed_sections.clear();
-                                            if this.validation_errors.is_empty() {
-                                                this.is_validated = true;
-                                                this.status_message = None;
-                                                this.mark_submitted(cx);
-                                            } else {
-                                                this.is_validated = false;
-                                                let total = this.validation_errors.len();
-                                                let item_13_count = this
-                                                    .validation_errors
-                                                    .iter()
-                                                    .filter(|(f, _)| {
-                                                        f == "item_13_election"
-                                                            || f == "annual_income_tax_election"
-                                                    })
-                                                    .count();
-                                                let pointer = if item_13_count > 0 {
-                                                    format!(
-                                                        " {item_13_count} of them are shown under \"13. Income-tax-rate election\"."
-                                                    )
-                                                } else {
-                                                    " See the messages in the flagged sections.".to_string()
-                                                };
-                                                this.status_message = Some(format!(
-                                                    "Fix {total} validation error(s) to continue.{pointer}"
-                                                ));
-                                                use gpui_component::WindowExt;
-                                                window.push_notification(
-                                                    gpui_component::notification::Notification::new()
-                                                        .message("Please check the form for missing or invalid entries before submitting.".to_string())
-                                                        .with_type(gpui_component::notification::NotificationType::Error)
-                                                        .autohide(true),
-                                                    cx,
-                                                );
-                                                cx.notify();
-                                            }
-                                        }))
-                                );
-                            }
-                            FilingStatus::Queued => {
-                                if submission_claim_active && self.release_claim_confirm_open {
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new(
-                                            "form-2551q-release-claim-confirm",
-                                        )
-                                        .label("Confirm nothing reached BIR")
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.confirm_release_abandoned_claim(window, cx);
-                                        })),
-                                    );
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new("form-2551q-keep-queued")
-                                            .label("Keep queued")
-                                            .ghost()
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.release_claim_confirm_open = false;
-                                                cx.notify();
-                                            })),
-                                    );
-                                } else if submission_claim_active {
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new(
-                                            "form-2551q-return-draft",
-                                        )
-                                        .label("Return to Draft")
-                                        .outline()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.revert_to_draft(window, cx);
-                                        })),
-                                    );
-                                } else {
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new("cancel_queue_btn")
-                                            .label("Cancel Submission Queue")
-                                            .ghost()
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.revert_to_draft(window, cx);
-                                            })),
-                                    );
-                                }
-                            }
                             FilingStatus::Submitted => {
                                 let is_email_tracking_active = self.is_email_tracking_active;
 
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("revert_draft_btn")
-                                        .label("Revert Draft")
-                                        .ghost()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.revert_to_draft(window, cx);
-                                        }))
-                                );
 
                                 if is_email_tracking_active {
                                     toolbar = toolbar.child(
@@ -3007,14 +2947,6 @@ impl Render for Form2551QView {
                             }
                             FilingStatus::Confirmed => {
                                 toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("revert_draft_btn")
-                                        .label("Revert Draft")
-                                        .ghost()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.revert_to_draft(window, cx);
-                                        }))
-                                );
-                                toolbar = toolbar.child(
                                     gpui_component::button::Button::new("mark_paid_btn")
                                         .label("Mark as Paid")
                                         .on_click(cx.listener(|this, _, _, cx| {
@@ -3022,7 +2954,7 @@ impl Render for Form2551QView {
                                         }))
                                 );
                             }
-                            FilingStatus::Paid => {}
+                            FilingStatus::Draft | FilingStatus::Queued | FilingStatus::Paid => {}
                         }
 
                         // View Receipt — opens receipt file in system viewer (Preview.app).
@@ -3095,7 +3027,7 @@ impl Render for Form2551QView {
                             );
                         }
 
-                        toolbar
+                        toolbar.child(header_buttons)
                     }}
                 </div>
                 {status_banner}
@@ -3124,5 +3056,143 @@ impl Render for Form2551QView {
                 </div>
             </div>
         }
+    }
+}
+
+impl Form2551QView {
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        FormHeaderProps {
+            slug: "2551q",
+            status: self.draft.status.clone(),
+            editor_safe: true,
+            validated: self.is_validated,
+            blocking_errors: self.validation_errors.len(),
+            first_error: self
+                .validation_errors
+                .first()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.status_message.clone(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    /// The header's Validate: the same checks Submit runs.
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.sync_from_inputs(cx);
+        self.validation_errors = self.validate_for_submit(cx);
+        self.suppressed_sections.clear();
+        self.is_validated = true;
+        cx.notify();
+    }
+
+    /// The header's Submit: validate, then queue (the old Queue button).
+    fn header_submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        self.validation_errors = self.validate_for_submit(cx);
+        self.suppressed_sections.clear();
+        if self.validation_errors.is_empty() {
+            self.is_validated = true;
+            self.status_message = None;
+            self.mark_submitted(cx);
+        } else {
+            self.is_validated = false;
+            let total = self.validation_errors.len();
+            let item_13_count = self
+                .validation_errors
+                .iter()
+                .filter(|(f, _)| f == "item_13_election" || f == "annual_income_tax_election")
+                .count();
+            let pointer = if item_13_count > 0 {
+                format!(
+                    " {item_13_count} of them are shown under \"13. Income-tax-rate election\"."
+                )
+            } else {
+                " See the messages in the flagged sections.".to_string()
+            };
+            self.status_message = Some(format!(
+                "Fix {total} validation error(s) to continue.{pointer}"
+            ));
+            use gpui_component::WindowExt;
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(
+                        "Please check the form for missing or invalid entries before submitting."
+                            .to_string(),
+                    )
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            );
+            cx.notify();
+        }
+    }
+
+    /// Dev Mode "Simulate BIR confirmation" (debug builds only).
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let filename = self.draft.submission_filename.clone();
+        use gpui_component::WindowExt;
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_2551q_draft(
+                        &self.draft.tin,
+                        self.draft.taxable_year,
+                        self.draft.quarter,
+                    )
+                {
+                    self.draft = current;
+                }
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(
+                            "2551Q marked Confirmed (simulated, nothing was sent to BIR)."
+                                .to_string(),
+                        )
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form2551QEvent::Confirmed);
+            }
+            Err(error) => window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(format!("Simulated confirmation failed: {error}"))
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form2551QView> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.validation_errors.len(),
+    on_validate: Form2551QView::header_validate,
+    on_submit: Form2551QView::header_submit,
+    on_save: |this, window, cx| this.save(window, cx),
+    on_print: |this, window, cx| this.preview_pdf(window, cx),
+    on_revert: |this, window, cx| this.revert_to_draft(window, cx),
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form2551QView::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
+
+#[cfg(test)]
+mod header_tests {
+    #[test]
+    fn header_uses_shared_buttons_and_status_box() {
+        let src = include_str!("form_2551q_view.rs");
+        assert!(src.contains(concat!("render_header_", "buttons(")));
+        assert!(src.contains(concat!("render_status_", "box(")));
+        assert!(src.contains(concat!("can_user_", "revert(&self.draft.status)")));
+        assert!(!src.contains(concat!("\"Queue for ", "submission\"")));
+        assert!(!src.contains(concat!("\"Cancel Submission ", "Queue\"")));
     }
 }
