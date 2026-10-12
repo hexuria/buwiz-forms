@@ -73,6 +73,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - It's the only `build_as_child` call site in the repo.
 
 - **Implementation note (2026-10-12):** The confirmed chain is `launch_frozen_html` → `cx.open_window` → `FrozenHtmlPreviewView::new` → `build_as_child` → WebView2 `create_controller` → nested `wait_with_pump` → `BlinkCursor::blink` → `AsyncApp::update_entity` → `RefCell already borrowed` at `gpui/async_context.rs:65`. Windows now defers construction with `cx.spawn_in(window, ...)`, yields once, copies the raw handle in a short `update_in`, and builds WRY after that borrow returns. The second update installs `Ready` or `Failed`; macOS remains synchronous.
+- **Second root cause (2026-10-12):** The WebView2 child was visible and correctly sized according to `EnumChildWindows` (`WRY_WEBVIEW` and `Chrome_WidgetWin_*`), and JS metrics loaded, but the embedded area remained white. Setting `GPUI_DISABLE_DIRECT_COMPOSITION=1` made the filled 1601C and 2551Q documents render. gpui-pre-windows' DirectComposition visual was covering the WRY child HWND; the startup fallback now prefers the HWND swap-chain path while honoring an existing override.
 - [~] **2.1 Two-phase construction.**
   - `FrozenHtmlPreviewView` gets an explicit state: `enum PreviewState { Pending { html }, Ready(Entity<WebView>), Failed { error, html } }`.
   - `new()` only stores `Pending` and schedules creation with `cx.spawn_in(window, ...)`, yielding with a zero-duration background timer after `open_window` returns and the borrow is released.
@@ -91,6 +92,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 | Date | Result |
 |---|---|
 | 2026-10-12 | Implemented the Windows two-phase WebView construction and explicit pending/ready/failed state. The first main-branch smoke results were release: both previews panic with `RefCell already borrowed` (#97); debug: 1601C panics and 2551Q overflows its stack (`0xC00000FD`, #96); submit passes in both; `stack_reserve` is 1 MiB. |
+| 2026-10-12 | Confirmed the second #97 rendering cause: DirectComposition hid the visible, correctly sized WebView2 child HWND. With `GPUI_DISABLE_DIRECT_COMPOSITION=1`, filled 1601C and 2551Q previews rendered; the main window continued to paint normally. |
 
 ---
 
