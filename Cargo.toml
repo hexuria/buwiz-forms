@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/bir-core",
     "crates/bir-desktop",
+    "crates/bir-mcp",
     "crates/bir-print",
     "crates/bir-rules",
     "crates/bir-rules-codegen",
@@ -28,7 +29,10 @@ chrono = { version = "0.4", features = ["serde"] }
 aes = "0.8"
 cbc = "0.1"
 sha2 = "0.10"
-flate2 = "1"
+flate2 = { version = "1", default-features = false, features = ["zlib"] }
+# Bundle C zlib so IAF compression matches the official Encrypt.exe byte for
+# byte on every platform (system zlib versions differ).
+libz-sys = { version = "1", default-features = false, features = ["static", "libc"] }
 zeroize = { version = "1", features = ["derive"] }
 aes-gcm = "0.10"
 
@@ -45,6 +49,10 @@ russh-sftp = "3.0"
 rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 
 
+
+# gpui-agent control plane (main). One rev for bir-desktop (`agent` feature) and
+# bir-mcp, so both sides speak one protocol and one discovery format.
+gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "19d20333b5e5313a98c502002bc2c4a667510fa2" }
 
 # Error handling
 thiserror = "2"

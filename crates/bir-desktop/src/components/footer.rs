@@ -11,10 +11,13 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
     rsx! {
         <div
             w_full
-            h={px(72.)}
+            min_h={px(72.)}
             px_4
+            py_2
             flex
             flex_row
+            flex_wrap
+            gap_2
             items_center
             justify_between
             bg={cx.theme().background}
@@ -27,13 +30,15 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
                 // BIR Logo
                 <img src="images/bir-new-logo.png" w_12 h_12 object_fit={ObjectFit::Contain} />
             </div>
-            <div flex_shrink_0 flex flex_row items_center gap_2>
-                <div text_xs text_color={cx.theme().muted_foreground}>
+            // Wraps below the seals on narrow windows; text may shrink and wrap.
+            <div flex flex_row items_center gap_2 min_w_0 max_w_full>
+                <div flex_1 min_w_0 text_xs text_color={cx.theme().muted_foreground}>
                     {"© 2026 Goldcoders Corp. goldcoders.dev"}
                 </div>
                 // Goldcoders Logo
                 <div
                     id="goldcoders_logo"
+                    flex_shrink_0
                     cursor_pointer
                     on_click={|_event, _window, cx: &mut App| {
                         cx.open_url("https://www.facebook.com/goldcoders.corp");

@@ -174,8 +174,13 @@ fn env_flag_disabled(name: &str) -> bool {
     })
 }
 
+/// Dry run from the environment, or from the Dev Mode panel (debug builds
+/// only, and only while no `BIR_SFTP_*` mode variable is set).
 pub fn is_sftp_dry_run() -> bool {
-    sftp_dry_run_requested()
+    match crate::dev_mode::panel_submission_mode() {
+        Some(mode) => mode == crate::dev_mode::SubmissionMode::DryRun,
+        None => sftp_dry_run_requested(),
+    }
 }
 
 fn sftp_dry_run_requested() -> bool {
@@ -255,6 +260,36 @@ pub async fn resolve_sftp_endpoint(
     form_type: &str,
     tin: &str,
 ) -> Result<ResolvedSftpTarget, TransportError> {
+    // Dev Mode panel (debug builds, no env override). Its only modes are dry
+    // run and a test server; it can never reach the production dispatcher.
+    match crate::dev_mode::panel_submission_mode() {
+        Some(crate::dev_mode::SubmissionMode::DryRun) => {
+            let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
+            info!(
+                source = "dry-run",
+                folder = folder.as_str(),
+                "SFTP dry-run (Dev Mode panel): no network"
+            );
+            return Ok(ResolvedSftpTarget::DryRun { folder });
+        }
+        Some(crate::dev_mode::SubmissionMode::TestServer) => {
+            let endpoint = crate::dev_mode::test_server_endpoint(form_type)?;
+            info!(
+                source = "env",
+                host = endpoint.host.as_str(),
+                port = endpoint.port,
+                folder = endpoint.remote_folder.as_str(),
+                username_len = endpoint.username.len(),
+                password_len = endpoint.password.len(),
+                "Using Dev Mode test SFTP server"
+            );
+            return Ok(ResolvedSftpTarget::Live {
+                endpoint,
+                source: SftpEndpointSource::Env,
+            });
+        }
+        None => {}
+    }
     if sftp_dry_run_requested() {
         let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
         info!(

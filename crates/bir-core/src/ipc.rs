@@ -3,6 +3,26 @@
 //! On macOS: Uses `NSDistributedNotificationCenter` for instant, zero-polling IPC.
 //! On other platforms: No-op (desktop falls back to PRAGMA data_version polling).
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Bumped by every `post_db_changed` call in this process.
+///
+/// The desktop app runs the background cron in-process on the same SQLite
+/// connection, and `PRAGMA data_version` only moves when a *different*
+/// connection commits. Without this counter a status change made by the
+/// in-process worker (Queued -> Submitted, ...) never reached the views on
+/// Linux/Windows, where the distributed notification is a no-op.
+static LOCAL_CHANGE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Current value of the in-process change counter.
+pub fn local_change_seq() -> u64 {
+    LOCAL_CHANGE_SEQ.load(Ordering::Acquire)
+}
+
+fn bump_local_change_seq() {
+    LOCAL_CHANGE_SEQ.fetch_add(1, Ordering::AcqRel);
+}
+
 /// The notification name used for cross-process DB change signals.
 #[cfg(target_os = "macos")]
 const NOTIFICATION_NAME: &str = "dev.goldcoders.bir.DatabaseChanged";
@@ -12,6 +32,8 @@ const NOTIFICATION_NAME: &str = "dev.goldcoders.bir.DatabaseChanged";
 #[cfg(target_os = "macos")]
 pub fn post_db_changed() {
     use std::os::raw::c_void;
+
+    bump_local_change_seq();
 
     // SAFETY: These are raw bindings to Core Foundation C APIs that have no
     // safe Rust wrapper. The invariants upheld here are:
@@ -72,7 +94,9 @@ pub fn post_db_changed() {
 /// No-op on non-macOS platforms. Desktop uses PRAGMA data_version polling instead.
 #[cfg(not(target_os = "macos"))]
 pub fn post_db_changed() {
-    // No-op: Linux/Windows rely on PRAGMA data_version polling.
+    // No cross-process signal here: other processes are seen through PRAGMA
+    // data_version polling. The in-process counter covers this process.
+    bump_local_change_seq();
 }
 
 #[cfg(test)]
@@ -84,6 +108,8 @@ mod tests {
         // Just verify that calling the FFI doesn't cause a segfault or panic.
         // There's no clean way to intercept distributed notifications synchronously in a unit test
         // without standing up an entire NSApplication runloop, but ensuring memory safety is key.
+        let before = local_change_seq();
         post_db_changed();
+        assert!(local_change_seq() > before);
     }
 }

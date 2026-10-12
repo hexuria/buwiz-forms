@@ -147,7 +147,7 @@ impl ProfileManagerView {
                                                 .hover(|s| s.underline())
                                                 .child("Google")
                                                 .on_click(|_, _, _| {
-                                                    let _ = open::that(
+                                                    let _ = open::that_detached(
                                                         "https://myaccount.google.com/apppasswords",
                                                     );
                                                 })}
@@ -164,7 +164,7 @@ impl ProfileManagerView {
                                                 .hover(|s| s.underline())
                                                 .child("Outlook")
                                                 .on_click(|_, _, _| {
-                                                    let _ = open::that(
+                                                    let _ = open::that_detached(
                                                         "https://account.live.com/proofs/AppPassword",
                                                     );
                                                 })}
@@ -181,7 +181,7 @@ impl ProfileManagerView {
                                                 .hover(|s| s.underline())
                                                 .child("Yahoo")
                                                 .on_click(|_, _, _| {
-                                                    let _ = open::that(
+                                                    let _ = open::that_detached(
                                                         "https://login.yahoo.com/account/security/app-passwords",
                                                     );
                                                 })}

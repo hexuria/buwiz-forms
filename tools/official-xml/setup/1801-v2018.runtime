@@ -1,0 +1,1 @@
+Controls the page creates at load (getRdo selects, default schedule rows) are only in the loaded page: regen_all.sh derives this layout with gen_layout_runtime.js.

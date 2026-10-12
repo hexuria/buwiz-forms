@@ -230,20 +230,30 @@ impl AppState {
         cx.notify();
     }
 
-    /// Cmd+Q (Ctrl+Q / Alt+F4 elsewhere) and the menu's Quit put the app in
-    /// the tray, like the close button and Cmd+W. The background cron keeps
-    /// polling for BIR confirmations, which is the point of staying resident.
-    /// The only real quit is the tray menu's Quit (and the agent's `shutdown`),
-    /// both of which go through `request_application_quit`.
+    /// Cmd+Q / the menu's Quit (macOS) and Alt+F4 (Windows) put the app in
+    /// the tray, like Cmd+W and the close button there. The background cron
+    /// keeps polling for BIR confirmations, which is the point of staying
+    /// resident; the real quit is the tray menu's Quit (and the agent's
+    /// `shutdown`). On Linux (`close_button_quits`), Ctrl+Q and Alt+F4 quit
+    /// like the close button, through the guarded `request_application_quit`.
     pub(crate) fn handle_quit_application(
         &mut self,
         _action: &QuitApplication,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) {
-        crate::platform::hide_from_dock();
         #[cfg(feature = "agent")]
         self.note_keybinding_fired(crate::agent::ids::KEY_QUIT, "global");
+        if crate::platform::close_button_quits() {
+            let hook = self.quit_hook.clone();
+            self.request_application_quit(window, cx, move || {
+                if let Some(hook) = hook {
+                    hook();
+                }
+            });
+        } else {
+            crate::platform::hide_from_dock();
+        }
     }
 
     pub(crate) fn handle_hide_application(
@@ -264,13 +274,26 @@ impl AppState {
         cx.hide_other_apps();
     }
 
+    /// Cmd+W / Ctrl+W. On Linux (`close_button_quits`) it quits like the X
+    /// button, through the guarded `request_application_quit`; elsewhere it
+    /// hides the window to the tray.
     pub(crate) fn handle_close_window(
         &mut self,
         _action: &CloseWindow,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) {
-        crate::platform::hide_from_dock();
+        match crate::platform::close_window_route(crate::platform::close_button_quits()) {
+            crate::platform::CloseWindowRoute::Quit => {
+                let hook = self.quit_hook.clone();
+                self.request_application_quit(window, cx, move || {
+                    if let Some(hook) = hook {
+                        hook();
+                    }
+                });
+            }
+            crate::platform::CloseWindowRoute::Hide => crate::platform::hide_from_dock(),
+        }
     }
 
     pub(crate) fn handle_minimize_window(
