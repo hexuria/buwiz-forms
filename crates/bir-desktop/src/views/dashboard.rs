@@ -743,11 +743,24 @@ impl DashboardView {
             }
         }
 
+        // A draft or queued row of a period that is already filed (an
+        // amendment, or a leftover copy) is not late: the period met its
+        // deadline, so it stays an Action Required item, never Overdue.
         let placement_of = |item: &CalendarReturn| {
+            let deadline = Self::deadline_for_summary(all_deadlines, &item.summary);
+            let period_filed = deadline
+                .and_then(|deadline| Self::deadline_period_status(deadline, filing_progress))
+                .is_some_and(|status| {
+                    matches!(
+                        status,
+                        FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+                    )
+                });
             calendar_placement(
                 Some(&item.summary.status),
                 item.amount_payable,
-                Self::deadline_for_summary(all_deadlines, &item.summary)
+                deadline
+                    .filter(|_| !period_filed)
                     .and_then(ResolvedTaxDeadline::final_deadline_date),
                 today,
             )
@@ -2590,6 +2603,32 @@ mod tests {
         assert_eq!(columns.overdue[0].period, january_deadline.period);
         assert!(columns.action_required.is_empty());
         assert!(columns.upcoming.is_empty());
+    }
+
+    #[::core::prelude::v1::test]
+    fn leftover_draft_of_a_filed_period_is_action_required_not_overdue() {
+        let deadline = september_1601c_deadline();
+        let progress = progress_with_month("1601C", 9, QuarterState::Confirmed);
+        let mut confirmed_row = summary("1601C", None, Some(9));
+        confirmed_row.status = FilingStatus::Confirmed;
+        let confirmed = calendar_return(confirmed_row, Some(0.0));
+        let leftover_draft = calendar_return(summary("1601C", None, Some(9)), None);
+        let returns = vec![confirmed, leftover_draft];
+        let matching: Vec<&CalendarReturn> = returns.iter().collect();
+
+        let columns = DashboardView::split_calendar_columns(
+            std::slice::from_ref(&deadline),
+            &matching,
+            std::slice::from_ref(&deadline),
+            &returns,
+            &progress,
+            after_september_1601c_deadline(),
+        );
+        assert_eq!(column_counts(&columns), (0, 1, 0));
+        assert_eq!(
+            columns.action_required[0].summary.status,
+            FilingStatus::Draft
+        );
     }
 
     #[::core::prelude::v1::test]
