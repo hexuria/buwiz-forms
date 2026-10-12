@@ -37,6 +37,16 @@ fn resource_candidates(current_exe: &Path, name: &str) -> Vec<PathBuf> {
     candidates.push(parent.join("../..").join(name));
     candidates.push(parent.join("../../..").join(name));
 
+    // Debug builds may run from a CARGO_TARGET_DIR outside the repo, so fall
+    // back to the workspace's own resources. Debug-only: release binaries must
+    // not point at a build machine path.
+    #[cfg(debug_assertions)]
+    candidates.push(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(name),
+    );
+
     // Distribution packages install immutable application resources here.
     // Check this after Cargo layouts so a developer run cannot silently pick
     // stale resources from an older system installation.
@@ -73,11 +83,20 @@ pub fn close_window_route(close_button_quits: bool) -> CloseWindowRoute {
 /// Dynamically locates application resources across local dev, macOS bundles, and Linux tarballs.
 pub fn find_resource_dir(name: &str) -> PathBuf {
     let current_exe = std::env::current_exe().unwrap_or_default();
-    for candidate in resource_candidates(&current_exe, name) {
+    let candidates = resource_candidates(&current_exe, name);
+    for candidate in &candidates {
         if candidate.exists() {
-            return candidate.canonicalize().unwrap_or(candidate);
+            return candidate
+                .canonicalize()
+                .unwrap_or_else(|_| candidate.clone());
         }
     }
+
+    tracing::warn!(
+        name,
+        ?candidates,
+        "resource directory not found in any candidate; falling back to current directory"
+    );
 
     // Fallback to CWD
     std::env::current_dir().unwrap_or_default().join(name)
@@ -322,5 +341,22 @@ mod resource_tests {
     fn linux_resource_candidates_include_distribution_share_directory() {
         let candidates = resource_candidates(Path::new("/usr/bin/ebirforms"), "assets");
         assert!(candidates.contains(&PathBuf::from("/usr/share/ebirforms/assets")));
+    }
+}
+
+#[cfg(all(test, debug_assertions))]
+mod manifest_dir_resource_tests {
+    use super::resource_candidates;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn debug_build_includes_existing_manifest_dir_assets_candidate() {
+        let expected = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("assets");
+        let candidates: Vec<PathBuf> =
+            resource_candidates(Path::new("/elsewhere/target/debug/ebirforms"), "assets");
+        assert!(candidates.contains(&expected));
+        assert!(expected.is_dir());
     }
 }
