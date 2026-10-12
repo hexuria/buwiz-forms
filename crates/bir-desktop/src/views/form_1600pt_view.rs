@@ -13,7 +13,7 @@ use bir_core::forms::form_1600pt::{
     Form1600PtAgentCategory, Form1600PtDraft, Form1600PtScheduleRow, form_1600pt_atc_index,
     form_1600pt_popup,
 };
-use bir_core::forms::queueable::{QueueableForm, period_column};
+use bir_core::forms::queueable::{QueueableForm, can_user_revert, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
 use bir_core::official_xml::official_amount;
 use bir_core::profile::TaxpayerProfile;
@@ -29,6 +29,11 @@ use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::form_controls::{
     self, MultiChange, messages_for, multi_select_field, with_field_error,
+};
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
+    separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 
@@ -165,6 +170,10 @@ pub struct Form1600PtView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// Shared header state (menu, status box, what was sent).
+    header: FormHeaderState,
+    /// Validate ran at the current entries; every edit clears it.
+    validated: bool,
     /// Searchable ATC picker for Part II (values are indices into
     /// `FORM_1600PT_ATC_OPTIONS`).
     atc_select: Entity<ComboboxState>,
@@ -395,6 +404,7 @@ impl Form1600PtView {
             return;
         }
         change(&mut self.draft);
+        self.validated = false;
         self.draft.recompute();
         self.validation_errors = self.draft.validate();
         self.status_message = None;
@@ -412,6 +422,7 @@ impl Form1600PtView {
             return;
         }
         self.sync_from_inputs(cx);
+        self.validated = false;
         match change(&mut self.draft) {
             Ok(()) => {
                 self.status_message = None;
@@ -1073,6 +1084,7 @@ impl QueueableFormView for Form1600PtView {
                 window,
                 |this: &mut Self, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
+                        this.validated = false;
                         this.sync_from_inputs(cx);
                     }
                 },
@@ -1102,6 +1114,8 @@ impl QueueableFormView for Form1600PtView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            header: FormHeaderState::new(),
+            validated: false,
             atc_select,
             _subscriptions: subscriptions,
         }
@@ -1215,10 +1229,8 @@ impl FormViewTrait for Form1600PtView {
             cx.notify();
             return;
         }
-        self.status_message = Some(format!(
-            "Queued for background submission as {}.",
-            self.draft.submission_filename()
-        ));
+        self.status_message = None;
+        self.validated = false;
         self.notify(
             notification::NotificationType::Success,
             "Form 1600PT queued.".into(),
@@ -1236,14 +1248,16 @@ impl FormViewTrait for Form1600PtView {
         cx.notify();
     }
 
+    /// D7A + D8A: a claimed Queued return keeps the release-claim
+    /// confirmation; everything else goes through
+    /// `Database::revert_queueable_for_amendment`.
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !matches!(self.draft.lifecycle.status, FilingStatus::Queued) {
-            self.status_message =
-                Some("This return cannot be reverted after submission has started.".into());
-            cx.notify();
+        if !can_user_revert(&self.draft.lifecycle.status) {
             return;
         }
-        if !self.draft.lifecycle.is_unclaimed() {
+        if matches!(self.draft.lifecycle.status, FilingStatus::Queued)
+            && !self.draft.lifecycle.is_unclaimed()
+        {
             self.release_claim_confirm_open = true;
             self.status_message = Some(
                 "Submission was claimed. Confirm nothing reached BIR to return it to an editable Draft. This does not file.".into(),
@@ -1251,37 +1265,32 @@ impl FormViewTrait for Form1600PtView {
             cx.notify();
             return;
         }
-        let queued = self.draft.clone();
-        let canceled = match self.db.lock() {
-            Ok(db) => db
-                .cancel_queued_queueable(&queued)
-                .map_err(|e| e.to_string()),
-            Err(error) => Err(error.to_string()),
-        };
-        match canceled {
-            Ok(draft) => {
-                self.draft = draft;
-                self.status_message = None;
-                self.validation_errors = self.draft.validate();
-                cx.emit(QueueableFormEvent::Saved);
-            }
-            Err(error) => {
-                if let Ok(db) = self.db.lock()
-                    && let Ok(Some(current)) = db.get_queueable_draft::<Form1600PtDraft>(
-                        &queued.tin,
-                        queued.year,
-                        period_column(&queued.filing_period()),
-                    )
-                {
-                    self.draft = current;
+        match revert_for_amendment(&self.db, &self.draft) {
+            Ok(reverted) => {
+                self.draft = reverted.draft;
+                self.validated = false;
+                self.status_message = reverted
+                    .snapshot_id
+                    .map(|_| AMENDED_REVERT_MESSAGE.to_string());
+                if reverted.snapshot_id.is_some() {
+                    self.header.load_sent_snapshot(&self.db, &self.draft);
                 }
+                self.reload_inputs(window, cx);
+                self.validation_errors = self.draft.validate();
                 self.notify(
-                    notification::NotificationType::Warning,
-                    format!("The queued return was not canceled: {error}"),
+                    notification::NotificationType::Success,
+                    "Form 1600PT reverted to Draft.".into(),
                     window,
                     cx,
                 );
+                cx.emit(QueueableFormEvent::Saved);
             }
+            Err(error) => self.notify(
+                notification::NotificationType::Error,
+                format!("Could not revert to Draft: {error}"),
+                window,
+                cx,
+            ),
         }
         cx.notify();
     }
@@ -1330,8 +1339,16 @@ impl Render for Form1600PtView {
             cx,
         );
         let error_count = self.parse_errors.len() + self.validation_errors.len();
-        let is_draft = self.draft.lifecycle.is_editable();
-        let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
+        self.header.ensure_sent_snapshot(&self.db, &self.draft);
+        let props = self.header_props();
+        let header_buttons = render_header_buttons(self, &props, HEADER_ACTIONS, phone, cx);
+        // Under the stepper on wide layouts; top of the page on phone
+        // (where the stepper is not shown).
+        let (status_box, wide_status_box) =
+            match render_status_box(self, &props, HEADER_ACTIONS, cx) {
+                Some(status_box) if phone => (Some(status_box), None),
+                other => (None, other),
+            };
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1378,64 +1395,7 @@ impl Render for Form1600PtView {
                         cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
                     ),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .when(phone, |d| d.gap_1())
-                    .when(!phone, |d| d.gap_2())
-                    .child(
-                        // The only "Print preview" control on the page.
-                        Button::new("1600pt_preview")
-                            .label("Print preview")
-                            .outline()
-                            .when(phone, |b| b.small())
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("1600pt_save")
-                            .label("Save draft")
-                            .outline()
-                            .when(phone, |b| b.small())
-                            .disabled(!is_draft)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                            ),
-                    )
-                    .when(is_queued, |row| {
-                        row.child(
-                            Button::new("1600pt_cancel")
-                                .label("Cancel queue")
-                                .outline()
-                                .when(phone, |b| b.small())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.revert_to_draft(window, cx)
-                                })),
-                        )
-                    })
-                    .when(is_draft && error_count > 0, |row| {
-                        row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
-                            "Fix {error_count} item(s) under Needs review to queue."
-                        )))
-                    })
-                    .child(
-                        Button::new("1600pt_submit")
-                            .label("Queue for submission")
-                            .primary()
-                            .when(phone, |b| b.small())
-                            .disabled(
-                                !is_draft
-                                    || !self.validation_errors.is_empty()
-                                    || !self.parse_errors.is_empty(),
-                            )
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.mark_submitted(window, cx)),
-                            ),
-                    ),
-            );
+            .child(header_buttons);
 
         let mut body = div()
             .w_full()
@@ -1444,16 +1404,7 @@ impl Render for Form1600PtView {
             .flex()
             .flex_col()
             .gap_5()
-            .when_some(self.status_message.clone(), |col, message| {
-                col.child(
-                    div()
-                        .p_3()
-                        .rounded_md()
-                        .bg(cx.theme().muted)
-                        .text_sm()
-                        .child(message),
-                )
-            })
+            .when_some(status_box, |col, status_box| col.child(status_box))
             .when(self.release_claim_confirm_open, |col| {
                 col.child(
                     div()
@@ -1502,7 +1453,10 @@ impl Render for Form1600PtView {
                         .border_b_1()
                         .border_color(cx.theme().border)
                         .child(self.render_header_titles(cx))
-                        .child(div().mt_4().child(self.render_status_pipeline(cx))),
+                        .child(div().mt_4().child(self.render_status_pipeline(cx)))
+                        .when_some(wide_status_box, |d, status_box| {
+                            d.child(div().mt_3().child(status_box))
+                        }),
                 )
             })
             .child(
@@ -1522,10 +1476,97 @@ impl Render for Form1600PtView {
     }
 }
 
+impl Form1600PtView {
+    /// What the shared header shows (D1B–D8A).
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        let mut errors = self
+            .parse_errors
+            .iter()
+            .chain(self.validation_errors.iter());
+        FormHeaderProps {
+            slug: "1600pt",
+            status: self.draft.lifecycle.status.clone(),
+            editor_safe: true,
+            validated: self.validated,
+            blocking_errors: self.parse_errors.len() + self.validation_errors.len(),
+            first_error: errors.next().map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.status_message.clone(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.sync_from_inputs(cx);
+        self.validated = self.draft.lifecycle.is_editable();
+        self.header.reset_dismissal();
+        cx.notify();
+    }
+
+    /// Dev Mode "Simulate BIR confirmation" (debug builds only).
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let filename = self.draft.lifecycle.submission_filename.clone();
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form1600PtDraft>(
+                        &self.draft.tin,
+                        self.draft.year,
+                        period_column(&self.draft.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
+                self.notify(
+                    notification::NotificationType::Success,
+                    "1600PT marked Confirmed (simulated, nothing was sent to BIR).".into(),
+                    window,
+                    cx,
+                );
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => self.notify(
+                notification::NotificationType::Error,
+                format!("Simulated confirmation failed: {error}"),
+                window,
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form1600PtView> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.parse_errors.len() + this.validation_errors.len(),
+    on_validate: Form1600PtView::header_validate,
+    on_submit: Form1600PtView::mark_submitted,
+    on_save: Form1600PtView::save_draft,
+    on_print: Form1600PtView::preview_pdf,
+    on_revert: Form1600PtView::revert_to_draft,
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form1600PtView::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
+
 #[cfg(test)]
 mod tests {
     use super::{Layout, format_tin, parse_amount};
     use gpui::px;
+
+    #[test]
+    fn header_uses_shared_component_and_queue_action() {
+        let src = include_str!("form_1600pt_view.rs");
+        assert!(src.contains(concat!("on_submit: Form1600PtView::mark_", "submitted")));
+        assert!(src.contains(concat!("render_status_", "box(self")));
+        assert!(!src.contains(concat!("Queued for background", " submission as")));
+        assert!(!src.contains(concat!("item(s) under Needs review", " to queue")));
+        assert!(src.contains(concat!("revert_for_", "amendment(&self.db")));
+    }
 
     #[test]
     fn layout_breakpoints() {
