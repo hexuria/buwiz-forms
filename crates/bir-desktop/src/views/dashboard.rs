@@ -1,8 +1,10 @@
 use bir_core::calendar_rules::{DeadlinePeriod, DeadlineResolver, ResolvedTaxDeadline};
 use bir_core::db::{BirNotice, Database, NoticeSourceKind};
+use bir_core::forms::calendar_status::{ActionReason, CalendarPlacement, calendar_placement};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::forms::{
-    FormFilingProgress, QuarterState, can_open_certification_draft, form_support_level,
+    FilingStatus, FormFilingProgress, QuarterState, can_open_certification_draft,
+    form_support_level,
 };
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local, NaiveDate};
@@ -92,15 +94,26 @@ fn deadline_heading_visible(upcoming: usize, action_required: usize, overdue: us
     upcoming + action_required + overdue > 0
 }
 
-/// Extra pill on an Action Required entry. Submitted and Confirmed returns
-/// stay in the list because they still need payment.
-fn needs_payment_label(status: &bir_core::forms::FilingStatus) -> Option<&'static str> {
-    match status {
-        bir_core::forms::FilingStatus::Submitted | bir_core::forms::FilingStatus::Confirmed => {
-            Some("Needs payment")
-        }
-        _ => None,
-    }
+/// A saved return the Calendar may list, with the total amount payable it
+/// computed for itself (`None` when that total cannot be read).
+#[derive(Debug, Clone)]
+struct CalendarReturn {
+    summary: bir_core::forms::FormDraftSummary,
+    amount_payable: Option<f64>,
+}
+
+/// What the Calendar tab's columns hold. Each filing period lands in at most
+/// one of them (see [`calendar_placement`]).
+#[derive(Debug, Default)]
+struct CalendarColumns {
+    /// Untouched periods whose deadline has not passed.
+    upcoming: Vec<ResolvedTaxDeadline>,
+    /// Drafts and queued returns before their deadline, and filed returns
+    /// that still owe tax.
+    action_required: Vec<CalendarReturn>,
+    /// Periods past their deadline and still not filed: the expired part of
+    /// Action required, shown in its own column.
+    overdue: Vec<ResolvedTaxDeadline>,
 }
 
 /// Support label shown on a Tax Form Library card: the dev-preview label for
@@ -164,7 +177,8 @@ pub struct DashboardView {
     pub hide_tax_profiles: bool,
     active_tab: ProfileTab,
     deadlines: Vec<ResolvedTaxDeadline>,
-    actionable_forms: Vec<(String, bir_core::forms::FormDraftSummary)>,
+    /// Saved returns of the selected year that are not yet Paid.
+    actionable_forms: Vec<CalendarReturn>,
     upcoming_deadlines_list:
         Entity<crate::components::upcoming_deadlines_list::UpcomingDeadlinesList>,
     /// Consistency issues from the last resolve_profile_obligations_for_year call
@@ -418,12 +432,24 @@ impl DashboardView {
                     if !codes_set_for_filter.contains(&sum.form_code) {
                         continue;
                     }
-                    // Only Paid means the taxpayer has complied. Submitted and
-                    // Confirmed still need payment or explicit paid marking.
-                    if matches!(sum.status, bir_core::forms::FilingStatus::Paid) {
+                    // Paid is always done. Whether a Submitted or Confirmed
+                    // return still needs payment depends on the total it
+                    // computed for itself.
+                    if matches!(sum.status, FilingStatus::Paid) {
                         continue;
                     }
-                    self.actionable_forms.push((profile.full_name.clone(), sum));
+                    let amount_payable = if matches!(
+                        sum.status,
+                        FilingStatus::Submitted | FilingStatus::Confirmed
+                    ) {
+                        db.draft_amount_payable(sum.id).ok().flatten()
+                    } else {
+                        None
+                    };
+                    self.actionable_forms.push(CalendarReturn {
+                        summary: sum,
+                        amount_payable,
+                    });
                 }
             }
 
@@ -639,51 +665,125 @@ impl DashboardView {
             .find(|deadline| Self::deadline_matches_summary(deadline, summary))
     }
 
-    fn summary_is_overdue(
-        deadlines: &[ResolvedTaxDeadline],
-        summary: &bir_core::forms::FormDraftSummary,
-        today: NaiveDate,
-    ) -> bool {
-        Self::deadline_for_summary(deadlines, summary)
-            .and_then(ResolvedTaxDeadline::final_deadline_date)
-            .is_some_and(|deadline| deadline < today)
+    /// The saved state of a quarter/month tile as a filing status, `None`
+    /// when nothing is saved for that period.
+    fn filing_status_of(state: &QuarterState) -> Option<FilingStatus> {
+        match state {
+            QuarterState::NotStarted => None,
+            QuarterState::Draft => Some(FilingStatus::Draft),
+            QuarterState::Queued => Some(FilingStatus::Queued),
+            QuarterState::Submitted => Some(FilingStatus::Submitted),
+            QuarterState::Confirmed => Some(FilingStatus::Confirmed),
+            QuarterState::Paid => Some(FilingStatus::Paid),
+        }
     }
 
-    fn paid_state(state: &QuarterState) -> bool {
-        matches!(state, QuarterState::Paid)
-    }
-
-    fn deadline_is_satisfied(
+    /// The most advanced return saved for a deadline's period, `None` when
+    /// the user has not started one.
+    fn deadline_period_status(
         deadline: &ResolvedTaxDeadline,
         filing_progress: &std::collections::HashMap<
             String,
             std::collections::HashMap<u16, FormFilingProgress>,
         >,
-    ) -> bool {
-        let Some(progress_by_year) = filing_progress.get(&deadline.form_code) else {
-            return false;
-        };
-
-        match deadline.period {
+    ) -> Option<FilingStatus> {
+        let progress_by_year = filing_progress.get(&deadline.form_code)?;
+        let state = match deadline.period {
             DeadlinePeriod::Monthly {
                 taxable_year,
                 month,
             } => progress_by_year
-                .get(&(taxable_year as u16))
-                .and_then(|progress| progress.months.get(usize::from(month - 1)))
-                .is_some_and(Self::paid_state),
+                .get(&(taxable_year as u16))?
+                .months
+                .get(usize::from(month.checked_sub(1)?))?,
             DeadlinePeriod::Quarterly {
                 taxable_year,
                 quarter,
             } => progress_by_year
-                .get(&(taxable_year as u16))
-                .and_then(|progress| progress.quarters.get(usize::from(quarter - 1)))
-                .is_some_and(Self::paid_state),
-            DeadlinePeriod::Annual { taxable_year } => progress_by_year
-                .get(&(taxable_year as u16))
-                .is_some_and(|progress| Self::paid_state(&progress.annual_status)),
-            DeadlinePeriod::EventBased => false,
+                .get(&(taxable_year as u16))?
+                .quarters
+                .get(usize::from(quarter.checked_sub(1)?))?,
+            DeadlinePeriod::Annual { taxable_year } => {
+                &progress_by_year.get(&(taxable_year as u16))?.annual_status
+            }
+            DeadlinePeriod::EventBased => return None,
+        };
+        Self::filing_status_of(state)
+    }
+
+    /// Sort deadlines and saved returns into the Calendar columns.
+    ///
+    /// `matching_deadlines` and `matching_returns` are the ones the period
+    /// filter selects; `all_deadlines` and `all_returns` cover the whole year,
+    /// so a past-due draft from another month still shows as overdue.
+    fn split_calendar_columns(
+        matching_deadlines: &[ResolvedTaxDeadline],
+        matching_returns: &[&CalendarReturn],
+        all_deadlines: &[ResolvedTaxDeadline],
+        all_returns: &[CalendarReturn],
+        filing_progress: &std::collections::HashMap<
+            String,
+            std::collections::HashMap<u16, FormFilingProgress>,
+        >,
+        today: NaiveDate,
+    ) -> CalendarColumns {
+        let mut columns = CalendarColumns::default();
+
+        // A deadline card is only for a period with no return yet, or one
+        // still unfiled after its deadline. Drafts, queued returns and
+        // returns owing payment are listed by their own card instead.
+        for deadline in matching_deadlines {
+            let status = Self::deadline_period_status(deadline, filing_progress);
+            match calendar_placement(status.as_ref(), None, deadline.final_deadline_date(), today) {
+                CalendarPlacement::Upcoming => columns.upcoming.push(deadline.clone()),
+                CalendarPlacement::ActionRequired(ActionReason::Overdue) => {
+                    columns.overdue.push(deadline.clone())
+                }
+                CalendarPlacement::ActionRequired(_) | CalendarPlacement::Done => {}
+            }
         }
+
+        let placement_of = |item: &CalendarReturn| {
+            calendar_placement(
+                Some(&item.summary.status),
+                item.amount_payable,
+                Self::deadline_for_summary(all_deadlines, &item.summary)
+                    .and_then(ResolvedTaxDeadline::final_deadline_date),
+                today,
+            )
+        };
+
+        for item in matching_returns {
+            if matches!(
+                placement_of(item),
+                CalendarPlacement::ActionRequired(
+                    ActionReason::Draft | ActionReason::Queued | ActionReason::NeedsPayment
+                )
+            ) {
+                columns.action_required.push((*item).clone());
+            }
+        }
+
+        // A past-due unfiled return stays overdue even when the default view
+        // is focused on the current due month: list its exact deadline.
+        for item in all_returns {
+            if placement_of(item) != CalendarPlacement::ActionRequired(ActionReason::Overdue) {
+                continue;
+            }
+            let Some(deadline) = Self::deadline_for_summary(all_deadlines, &item.summary) else {
+                continue;
+            };
+            let already_present = columns.overdue.iter().any(|existing| {
+                existing.form_code == deadline.form_code && existing.period == deadline.period
+            });
+            if !already_present {
+                columns.overdue.push(deadline.clone());
+            }
+        }
+        columns
+            .overdue
+            .sort_by_key(ResolvedTaxDeadline::final_deadline_date);
+        columns
     }
 }
 
@@ -1426,29 +1526,17 @@ impl Render for DashboardView {
                     has_annual_filter,
                     has_period_filter,
                     current_month,
-                ) && !Self::deadline_is_satisfied(d, &self.filing_progress)
+                )
             })
-            .cloned()
-            .collect();
-
-        // Split into upcoming (today or future) and overdue (past)
-        let upcoming_deadlines: Vec<_> = all_matching_deadlines
-            .iter()
-            .filter(|d| d.final_deadline_date().is_some_and(|date| date >= today))
-            .cloned()
-            .collect();
-        let mut overdue_deadlines: Vec<_> = all_matching_deadlines
-            .iter()
-            .filter(|d| d.final_deadline_date().is_some_and(|date| date < today))
             .cloned()
             .collect();
 
         let period_matching_actionable_forms: Vec<_> = self
             .actionable_forms
             .iter()
-            .filter(|(_, summary)| {
+            .filter(|item| {
                 Self::summary_matches_period_filters(
-                    summary,
+                    &item.summary,
                     &active_months,
                     &active_quarters,
                     has_annual_filter,
@@ -1456,29 +1544,23 @@ impl Render for DashboardView {
                 )
             })
             .collect();
-        let matching_actionable_forms: Vec<_> = period_matching_actionable_forms
-            .into_iter()
-            .filter(|(_, summary)| !Self::summary_is_overdue(&self.deadlines, summary, today))
-            .collect();
 
-        // A past-due draft remains overdue even when the default calendar view
-        // is focused on the current due month. Include its exact deadline in
-        // the Overdue column and remove it from Action Required.
-        for (_, summary) in &self.actionable_forms {
-            if !Self::summary_is_overdue(&self.deadlines, summary, today) {
-                continue;
-            }
-            let Some(deadline) = Self::deadline_for_summary(&self.deadlines, summary) else {
-                continue;
-            };
-            let already_present = overdue_deadlines.iter().any(|existing| {
-                existing.form_code == deadline.form_code && existing.period == deadline.period
-            });
-            if !already_present {
-                overdue_deadlines.push(deadline.clone());
-            }
-        }
-        overdue_deadlines.sort_by_key(ResolvedTaxDeadline::final_deadline_date);
+        // Upcoming: untouched and not yet due. Action Required: drafts,
+        // queued returns and filed returns still owing tax. Overdue: past the
+        // deadline and not filed. A filed return with nothing to pay is in
+        // none of them.
+        let CalendarColumns {
+            upcoming: upcoming_deadlines,
+            action_required: matching_actionable_forms,
+            overdue: overdue_deadlines,
+        } = Self::split_calendar_columns(
+            &all_matching_deadlines,
+            &period_matching_actionable_forms,
+            &self.deadlines,
+            &self.actionable_forms,
+            &self.filing_progress,
+            today,
+        );
 
         let show_deadline_heading = deadline_heading_visible(
             upcoming_deadlines.len(),
@@ -1719,7 +1801,8 @@ impl Render for DashboardView {
                         </div>
                     });
                 } else {
-                    for (_p, f) in matching_actionable_forms {
+                    for item in matching_actionable_forms {
+                        let f = &item.summary;
                         let period_label = if let Some(q) = f.quarter {
                             format!("Q{}", q)
                         } else if let Some(m) = f.month {
@@ -1728,24 +1811,24 @@ impl Render for DashboardView {
                             "Annual".to_string()
                         };
 
-                        let status_color = match f.status {
-                            bir_core::forms::FilingStatus::Draft => gpui::hsla(0.13, 0.9, 0.5, 1.0),
-                            bir_core::forms::FilingStatus::Queued => {
-                                gpui::hsla(0.58, 0.7, 0.5, 1.0)
+                        // One chip: the next action, not the filing history.
+                        let needs_payment = bir_core::forms::calendar_status::payment_required(
+                            &f.status,
+                            item.amount_payable,
+                        );
+                        let status_label = bir_core::forms::calendar_status::status_chip_label(
+                            &f.status,
+                            item.amount_payable,
+                        );
+                        let status_color = if needs_payment {
+                            cx.theme().warning
+                        } else {
+                            match f.status {
+                                FilingStatus::Draft => gpui::hsla(0.13, 0.9, 0.5, 1.0),
+                                FilingStatus::Queued => gpui::hsla(0.58, 0.7, 0.5, 1.0),
+                                FilingStatus::Submitted => gpui::hsla(0.33, 0.7, 0.45, 1.0),
+                                _ => cx.theme().muted_foreground,
                             }
-                            bir_core::forms::FilingStatus::Submitted => {
-                                gpui::hsla(0.33, 0.7, 0.45, 1.0)
-                            }
-                            _ => cx.theme().muted_foreground,
-                        };
-
-                        // Action button label based on status
-                        let action_label = match f.status {
-                            bir_core::forms::FilingStatus::Draft => "Resume Draft",
-                            bir_core::forms::FilingStatus::Queued => "Review Queued",
-                            bir_core::forms::FilingStatus::Submitted => "View Submission",
-                            bir_core::forms::FilingStatus::Confirmed => "View Confirmed",
-                            bir_core::forms::FilingStatus::Paid => "View Paid",
                         };
 
                         // Look up the deadline date for this form
@@ -1800,33 +1883,18 @@ impl Render for DashboardView {
                         );
                         let btn_form_code = f.form_code.clone();
 
-                        // Status pill, plus "Needs payment" for Submitted and
-                        // Confirmed returns that stay here until paid.
-                        let status_pills = div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .px_2()
-                                    .py(px(2.))
-                                    .bg(status_color.opacity(0.15))
-                                    .text_color(crate::theme::hue_on_tint(cx.theme(), status_color))
-                                    .rounded(px(4.))
-                                    .child(format!("{:?}", f.status)),
-                            )
-                            .children(needs_payment_label(&f.status).map(|label| {
-                                let warning = cx.theme().warning;
-                                div()
-                                    .text_xs()
-                                    .px_2()
-                                    .py(px(2.))
-                                    .bg(warning.opacity(0.15))
-                                    .text_color(crate::theme::hue_on_tint(cx.theme(), warning))
-                                    .rounded(px(4.))
-                                    .child(label)
-                            }));
+                        // A single pill. "Mark as paid" opens the return,
+                        // where its own mark-paid action lives.
+                        let status_pills = div().flex().items_center().gap_2().child(
+                            div()
+                                .text_xs()
+                                .px_2()
+                                .py(px(2.))
+                                .bg(status_color.opacity(0.15))
+                                .text_color(crate::theme::hue_on_tint(cx.theme(), status_color))
+                                .rounded(px(4.))
+                                .child(status_label),
+                        );
 
                         action_inner = action_inner.child(rsx! {
                             <div
@@ -2350,7 +2418,7 @@ impl DashboardView {
 mod tests {
     use super::*;
     use bir_core::calendar_rules::{DeadlineKind, DeadlineStatus};
-    use bir_core::forms::{FilingStatus, FormDraftSummary};
+    use bir_core::forms::FormDraftSummary;
     use chrono::NaiveDate;
     use std::collections::HashMap;
 
@@ -2505,13 +2573,23 @@ mod tests {
             1,
             NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
         );
-        let january_draft = summary("0619E", None, Some(1));
+        let january_draft = calendar_return(summary("0619E", None, Some(1)), None);
+        let progress = progress_with_month("0619E", 1, QuarterState::Draft);
 
-        assert!(DashboardView::summary_is_overdue(
-            &[january_deadline],
-            &january_draft,
+        // The default view shows only this month's deadlines, but the
+        // past-due January draft still lands in Overdue.
+        let columns = DashboardView::split_calendar_columns(
+            &[],
+            &[&january_draft],
+            std::slice::from_ref(&january_deadline),
+            std::slice::from_ref(&january_draft),
+            &progress,
             NaiveDate::from_ymd_opt(2026, 6, 12).unwrap(),
-        ));
+        );
+        assert_eq!(columns.overdue.len(), 1);
+        assert_eq!(columns.overdue[0].period, january_deadline.period);
+        assert!(columns.action_required.is_empty());
+        assert!(columns.upcoming.is_empty());
     }
 
     #[::core::prelude::v1::test]
@@ -2524,50 +2602,229 @@ mod tests {
         );
         let january_draft = summary("0619E", None, Some(1));
 
-        assert!(!DashboardView::summary_is_overdue(
-            &[may_deadline],
-            &january_draft,
-            NaiveDate::from_ymd_opt(2026, 6, 12).unwrap(),
-        ));
+        assert!(DashboardView::deadline_for_summary(&[may_deadline], &january_draft).is_none());
     }
 
     #[::core::prelude::v1::test]
-    fn only_paid_quarterly_deadline_is_satisfied() {
+    fn deadline_period_status_reads_the_period_tile() {
         let deadline = quarterly_deadline(
             "2551Q",
             2026,
             1,
             NaiveDate::from_ymd_opt(2026, 4, 27).unwrap(),
         );
-        let mut progress = FormFilingProgress::new_empty("2551Q", 2026);
-        progress.quarters[0] = QuarterState::Paid;
-
-        let mut by_year = HashMap::new();
-        by_year.insert(2026, progress);
-        let mut progress_by_code = HashMap::new();
-        progress_by_code.insert("2551Q".to_string(), by_year);
-
-        assert!(DashboardView::deadline_is_satisfied(
-            &deadline,
-            &progress_by_code
-        ));
-
-        for state in [QuarterState::Submitted, QuarterState::Confirmed] {
+        assert_eq!(
+            DashboardView::deadline_period_status(&deadline, &HashMap::new()),
+            None
+        );
+        for (state, status) in [
+            (QuarterState::NotStarted, None),
+            (QuarterState::Draft, Some(FilingStatus::Draft)),
+            (QuarterState::Queued, Some(FilingStatus::Queued)),
+            (QuarterState::Submitted, Some(FilingStatus::Submitted)),
+            (QuarterState::Confirmed, Some(FilingStatus::Confirmed)),
+            (QuarterState::Paid, Some(FilingStatus::Paid)),
+        ] {
             let mut progress = FormFilingProgress::new_empty("2551Q", 2026);
             progress.quarters[0] = state;
-
-            let mut by_year = HashMap::new();
-            by_year.insert(2026, progress);
-            let mut progress_by_code = HashMap::new();
-            progress_by_code.insert("2551Q".to_string(), by_year);
-
-            assert!(!DashboardView::deadline_is_satisfied(
-                &deadline,
-                &progress_by_code
-            ));
+            let progress_by_code = progress_map(progress);
+            assert_eq!(
+                DashboardView::deadline_period_status(&deadline, &progress_by_code),
+                status
+            );
         }
     }
 
+    fn calendar_return(summary: FormDraftSummary, amount_payable: Option<f64>) -> CalendarReturn {
+        CalendarReturn {
+            summary,
+            amount_payable,
+        }
+    }
+
+    fn progress_map(
+        progress: FormFilingProgress,
+    ) -> HashMap<String, HashMap<u16, FormFilingProgress>> {
+        let mut by_year = HashMap::new();
+        by_year.insert(progress.taxable_year, progress.clone());
+        let mut by_code = HashMap::new();
+        by_code.insert(progress.form_code.clone(), by_year);
+        by_code
+    }
+
+    fn progress_with_month(
+        form_code: &str,
+        month: u8,
+        state: QuarterState,
+    ) -> HashMap<String, HashMap<u16, FormFilingProgress>> {
+        let mut progress = FormFilingProgress::new_empty(form_code, 2026);
+        progress.months[usize::from(month - 1)] = state;
+        progress_map(progress)
+    }
+
+    /// 1601-C for September 2026, due 10 October 2026.
+    fn september_1601c_deadline() -> ResolvedTaxDeadline {
+        monthly_deadline(
+            "1601C",
+            2026,
+            9,
+            NaiveDate::from_ymd_opt(2026, 10, 10).unwrap(),
+        )
+    }
+
+    fn before_september_1601c_deadline() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()
+    }
+
+    fn after_september_1601c_deadline() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 10, 12).unwrap()
+    }
+
+    /// The Calendar columns for the September 1601-C in one saved state.
+    fn september_1601c_columns(
+        status: Option<FilingStatus>,
+        amount_payable: Option<f64>,
+        today: NaiveDate,
+    ) -> CalendarColumns {
+        let deadline = september_1601c_deadline();
+        let state = match status {
+            None => QuarterState::NotStarted,
+            Some(FilingStatus::Draft) => QuarterState::Draft,
+            Some(FilingStatus::Queued) => QuarterState::Queued,
+            Some(FilingStatus::Submitted) => QuarterState::Submitted,
+            Some(FilingStatus::Confirmed) => QuarterState::Confirmed,
+            Some(FilingStatus::Paid) => QuarterState::Paid,
+        };
+        let progress = progress_with_month("1601C", 9, state);
+        // The dashboard never loads a Paid row as a Calendar return.
+        let returns: Vec<CalendarReturn> = status
+            .filter(|status| !matches!(status, FilingStatus::Paid))
+            .map(|status| {
+                let mut row = summary("1601C", None, Some(9));
+                row.tin = "111111114000".to_string();
+                row.status = status;
+                calendar_return(row, amount_payable)
+            })
+            .into_iter()
+            .collect();
+        let matching: Vec<&CalendarReturn> = returns.iter().collect();
+        DashboardView::split_calendar_columns(
+            std::slice::from_ref(&deadline),
+            &matching,
+            std::slice::from_ref(&deadline),
+            &returns,
+            &progress,
+            today,
+        )
+    }
+
+    fn column_counts(columns: &CalendarColumns) -> (usize, usize, usize) {
+        (
+            columns.upcoming.len(),
+            columns.action_required.len(),
+            columns.overdue.len(),
+        )
+    }
+
+    #[::core::prelude::v1::test]
+    fn submitted_zero_due_1601c_is_in_no_calendar_column() {
+        for status in [FilingStatus::Submitted, FilingStatus::Confirmed] {
+            for today in [
+                before_september_1601c_deadline(),
+                after_september_1601c_deadline(),
+            ] {
+                let columns = september_1601c_columns(Some(status.clone()), Some(0.0), today);
+                assert_eq!(
+                    column_counts(&columns),
+                    (0, 0, 0),
+                    "{status:?} with nothing to pay is done, not upcoming ({today})"
+                );
+            }
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn submitted_1601c_with_tax_due_is_only_in_action_required_as_mark_as_paid() {
+        for today in [
+            before_september_1601c_deadline(),
+            after_september_1601c_deadline(),
+        ] {
+            let columns =
+                september_1601c_columns(Some(FilingStatus::Submitted), Some(1_500.0), today);
+            assert_eq!(column_counts(&columns), (0, 1, 0), "{today}");
+            let item = &columns.action_required[0];
+            assert_eq!(
+                bir_core::forms::calendar_status::status_chip_label(
+                    &item.summary.status,
+                    item.amount_payable
+                ),
+                "Mark as paid"
+            );
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn draft_is_in_action_required_not_upcoming() {
+        let columns = september_1601c_columns(
+            Some(FilingStatus::Draft),
+            None,
+            before_september_1601c_deadline(),
+        );
+        assert_eq!(column_counts(&columns), (0, 1, 0));
+    }
+
+    #[::core::prelude::v1::test]
+    fn past_deadline_unfiled_period_is_overdue_only() {
+        for status in [None, Some(FilingStatus::Draft), Some(FilingStatus::Queued)] {
+            let columns =
+                september_1601c_columns(status.clone(), None, after_september_1601c_deadline());
+            assert_eq!(column_counts(&columns), (0, 0, 1), "{status:?}");
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn untouched_future_period_is_upcoming_only() {
+        let columns = september_1601c_columns(None, None, before_september_1601c_deadline());
+        assert_eq!(column_counts(&columns), (1, 0, 0));
+    }
+
+    #[::core::prelude::v1::test]
+    fn paid_period_is_in_no_calendar_column() {
+        for today in [
+            before_september_1601c_deadline(),
+            after_september_1601c_deadline(),
+        ] {
+            let columns = september_1601c_columns(Some(FilingStatus::Paid), Some(1_500.0), today);
+            assert_eq!(column_counts(&columns), (0, 0, 0), "{today}");
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn no_period_is_listed_in_two_calendar_columns() {
+        let statuses = [
+            None,
+            Some(FilingStatus::Draft),
+            Some(FilingStatus::Queued),
+            Some(FilingStatus::Submitted),
+            Some(FilingStatus::Confirmed),
+            Some(FilingStatus::Paid),
+        ];
+        for status in statuses {
+            for amount in [None, Some(0.0), Some(1_500.0), Some(-10.0)] {
+                for today in [
+                    before_september_1601c_deadline(),
+                    after_september_1601c_deadline(),
+                ] {
+                    let (upcoming, action, overdue) =
+                        column_counts(&september_1601c_columns(status.clone(), amount, today));
+                    assert!(
+                        upcoming + action + overdue <= 1,
+                        "{status:?} {amount:?} {today}: ({upcoming}, {action}, {overdue})"
+                    );
+                }
+            }
+        }
+    }
     #[::core::prelude::v1::test]
     fn dashboard_grid_uses_three_columns_when_content_is_wide() {
         // 1135 content + 280 sidebar + 64 padding = 1479 window.
@@ -2671,21 +2928,6 @@ mod tests {
         assert!(deadline_heading_visible(1, 0, 0));
         assert!(deadline_heading_visible(0, 1, 0));
         assert!(deadline_heading_visible(0, 0, 1));
-    }
-
-    #[::core::prelude::v1::test]
-    fn needs_payment_label_only_for_submitted_and_confirmed() {
-        assert_eq!(needs_payment_label(&FilingStatus::Draft), None);
-        assert_eq!(needs_payment_label(&FilingStatus::Queued), None);
-        assert_eq!(
-            needs_payment_label(&FilingStatus::Submitted),
-            Some("Needs payment")
-        );
-        assert_eq!(
-            needs_payment_label(&FilingStatus::Confirmed),
-            Some("Needs payment")
-        );
-        assert_eq!(needs_payment_label(&FilingStatus::Paid), None);
     }
 
     #[::core::prelude::v1::test]
