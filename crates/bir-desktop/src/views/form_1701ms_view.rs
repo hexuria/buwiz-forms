@@ -1951,16 +1951,14 @@ impl FormViewTrait for Form1701MsView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -2099,7 +2097,7 @@ impl Render for Form1701MsView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
+        let _issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -2167,13 +2165,6 @@ impl Render for Form1701MsView {
             .child(self.render_part_one(layout, cx))
             .child(self.render_schedules(layout, cx));
         body = body.child(self.render_totals(layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        } else {
-            let done = div().text_sm().child(VALIDATION_SUCCESS).into_any_element();
-            body = body.child(self.section("Needs review", vec![done], cx));
-        }
-
         div()
             .flex()
             .flex_col()
@@ -2271,12 +2262,12 @@ impl Form1701MsView {
             editor_safe: true,
             validated: self.validated,
             blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
             success_text: VALIDATION_SUCCESS,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

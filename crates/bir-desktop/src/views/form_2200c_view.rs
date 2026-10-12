@@ -1226,16 +1226,14 @@ impl FormViewTrait for Form2200CView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -1358,30 +1356,11 @@ impl Render for Form2200CView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
         self.sync_controls(window, cx);
-        let open_issues = self.validation_errors.len() + self.parse_errors.len();
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let mut issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .take(20)
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
-        if open_issues > 20 {
-            let more = format!("+{} more", open_issues - 20);
-            issues.push(
-                rsx! { <div text_sm text_color={cx.theme().danger}>{more}</div> }
-                    .into_any_element(),
-            );
-        }
-
         let phone = layout == Layout::Phone;
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
         let props = self.header_props();
@@ -1452,10 +1431,6 @@ impl Render for Form2200CView {
             crate::views::event_form_kit::PAYMENT_COLUMNS_2200,
             cx,
         ));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
-
         div()
             .flex()
             .flex_col()
@@ -1498,12 +1473,12 @@ impl Form2200CView {
             editor_safe: true,
             validated: self.validated,
             blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

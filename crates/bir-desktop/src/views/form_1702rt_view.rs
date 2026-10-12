@@ -2006,7 +2006,7 @@ impl FormViewTrait for Form1702RTView {
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
         // Save what parses; unreadable amounts keep their text in the box
-        // and stay listed under Needs review, which keeps Queue blocked.
+        // and keep Queue blocked.
         let unreadable = !self.parse_errors.is_empty();
         let result = match self.db.lock() {
             Ok(db) => db
@@ -2025,7 +2025,7 @@ impl FormViewTrait for Form1702RTView {
                 let (kind, message) = if unreadable {
                     (
                         notification::NotificationType::Warning,
-                        "1702-RT draft saved. Entries that are not amounts were not saved; fix them under Needs review.",
+                        "1702-RT draft saved. Entries that are not amounts were not saved; fix them inline.",
                     )
                 } else {
                     (
@@ -2069,16 +2069,14 @@ impl FormViewTrait for Form1702RTView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -2215,7 +2213,7 @@ impl Render for Form1702RTView {
             cx,
         );
         let error_count = self.parse_errors.len() + self.validation_errors.len();
-        let issues: Vec<AnyElement> = self
+        let _issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -2295,22 +2293,6 @@ impl Render for Form1702RTView {
             .child(self.render_part_four(layout, cx))
             .child(self.render_schedules_1_2(layout, cx))
             .child(self.render_schedules_3_to_5(layout, cx));
-        if !issues.is_empty() {
-            let mut issues = issues;
-            if error_count > issues.len() {
-                issues.push(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(format!(
-                            "Showing the first {} of {error_count} items.",
-                            issues.len()
-                        ))
-                        .into_any_element(),
-                );
-            }
-            body = body.child(self.section("Needs review", issues, cx));
-        }
 
         div()
             .flex()
@@ -2408,12 +2390,12 @@ impl Form1702RTView {
             editor_safe: true,
             validated: self.validated,
             blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

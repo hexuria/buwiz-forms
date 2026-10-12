@@ -3319,10 +3319,11 @@ impl Form2551QView {
             editor_safe: true,
             validated: self.is_validated,
             blocking_errors: self.validation_errors.len(),
-            first_error: self
+            errors: self
                 .validation_errors
-                .first()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .iter()
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

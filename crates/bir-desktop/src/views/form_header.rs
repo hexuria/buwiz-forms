@@ -11,7 +11,7 @@
 //! 2. Track "validated at the current entries" (a flag cleared on every
 //!    edit, set by the view's Validate).
 //! 3. Each render, build a [`FormHeaderProps`] (status, editor safety,
-//!    validated flag, blocking-error count, first error, the form's official
+//!    validated flag, blocking-error count, errors, the form's official
 //!    success text, plus any other status message the view has) and a
 //!    [`FormHeaderActions`] of plain `fn` callbacks.
 //! 4. Put [`render_header_buttons`] on the right of the toolbar (next to
@@ -69,6 +69,8 @@ pub fn is_queue_unavailable_message(text: &str) -> bool {
 
 /// Fallback when a form has no official success alert.
 pub const DEFAULT_SUCCESS_MESSAGE: &str = "Validation successful.";
+
+pub const FORM_CONTENT_MAX_W: Pixels = px(800.);
 
 // 0 = not loaded, 1 = off, 2 = on.
 static SEPARATE_VALIDATE: AtomicU8 = AtomicU8::new(0);
@@ -160,16 +162,15 @@ pub fn status_text(props: &FormHeaderProps<'_>, separate_validate: bool) -> Opti
         return None;
     }
     if props.blocking_errors > 0 {
-        let first = props
-            .first_error
-            .clone()
-            .unwrap_or_else(|| "This return needs review.".to_string());
-        let more = props.blocking_errors - 1;
-        return Some(if more > 0 {
-            format!("{first} (+{more} more under Needs review)")
+        let item = if props.blocking_errors == 1 {
+            "item"
         } else {
-            first
-        });
+            "items"
+        };
+        return Some(format!(
+            "Fix {} {item} marked below before submitting.",
+            props.blocking_errors
+        ));
     }
     if props.validated {
         return Some(props.success_text.to_string());
@@ -191,6 +192,7 @@ pub struct FormHeaderState {
     dismissed: Option<String>,
     show_sent: bool,
     show_why: bool,
+    show_errors: bool,
     sent: std::cell::OnceCell<Option<AmendmentSnapshot>>,
 }
 
@@ -308,7 +310,7 @@ pub struct FormHeaderProps<'a> {
     pub editor_safe: bool,
     pub validated: bool,
     pub blocking_errors: usize,
-    pub first_error: Option<String>,
+    pub errors: Vec<String>,
     /// The form's official success alert, or [`DEFAULT_SUCCESS_MESSAGE`].
     pub success_text: &'a str,
     /// Any other status message (save result, lock reason, revert note…).
@@ -553,7 +555,14 @@ pub fn render_status_box<V: 'static>(
         return None;
     }
     let is_error = props.message.is_none() && props.blocking_errors > 0;
-    let mut col = div().flex().flex_col().gap_2().w_full().min_w_0();
+    let mut col = div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .w_full()
+        .max_w(FORM_CONTENT_MAX_W)
+        .mx_auto()
+        .min_w_0();
     if let Some(text) = text {
         let dismissed_text = text.clone();
         col = col.child(
@@ -574,6 +583,7 @@ pub fn render_status_box<V: 'static>(
                 .child({
                     let why = is_queue_unavailable_message(&text);
                     let show_why = state.show_why;
+                    let show_errors = state.show_errors;
                     div()
                         .flex_1()
                         .min_w_0()
@@ -601,6 +611,39 @@ pub fn render_status_box<V: 'static>(
                                         .text_xs()
                                         .text_color(cx.theme().muted_foreground)
                                         .child(QUEUE_UNAVAILABLE_WHY),
+                                )
+                            })
+                        })
+                        .when(is_error, |d| {
+                            d.child(
+                                Button::new(id(props.slug, "status_errors"))
+                                    .label(if show_errors {
+                                        "Show all ▾"
+                                    } else {
+                                        "Show all ▸"
+                                    })
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click(cx.listener(move |this: &mut V, _, _, cx| {
+                                        let st = (actions.state)(this);
+                                        st.show_errors = !st.show_errors;
+                                        cx.notify();
+                                    })),
+                            )
+                            .when(show_errors, |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .children(
+                                            props
+                                                .errors
+                                                .iter()
+                                                .map(|error| div().child(format!("• {error}"))),
+                                        ),
                                 )
                             })
                         })
@@ -691,7 +734,7 @@ mod tests {
             editor_safe: true,
             validated: false,
             blocking_errors: 0,
-            first_error: None,
+            errors: Vec::new(),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: None,
             separate_validate: true,
@@ -788,13 +831,25 @@ mod tests {
             Some(DEFAULT_SUCCESS_MESSAGE)
         );
         p.blocking_errors = 3;
-        p.first_error = Some("Bad TIN.".into());
+        p.errors = vec![
+            "Bad TIN.".into(),
+            "Other error.".into(),
+            "Third error.".into(),
+        ];
+        p.blocking_errors = p.errors.len();
         assert_eq!(
             status_text(&p, true).as_deref(),
-            Some("Bad TIN. (+2 more under Needs review)")
+            Some("Fix 3 items marked below before submitting.")
         );
+        assert!(!status_text(&p, true).unwrap().contains("Bad TIN."));
+        assert!(!status_text(&p, true).unwrap().contains("Other error."));
+        assert!(!status_text(&p, true).unwrap().contains("Third error."));
         p.blocking_errors = 1;
-        assert_eq!(status_text(&p, true).as_deref(), Some("Bad TIN."));
+        p.errors = vec!["Bad TIN.".into()];
+        assert_eq!(
+            status_text(&p, true).as_deref(),
+            Some("Fix 1 item marked below before submitting.")
+        );
         p.message = Some(AMENDED_REVERT_MESSAGE.into());
         assert_eq!(
             status_text(&p, true).as_deref(),

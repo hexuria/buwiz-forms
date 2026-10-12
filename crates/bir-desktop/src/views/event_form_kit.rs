@@ -291,8 +291,7 @@ pub trait KitView:
     const SLUG: &'static str;
     /// Form code shown in messages, e.g. `"1707A"`.
     const CODE: &'static str;
-    /// The official "Validation successful" alert, shown under Needs review
-    /// while an editable draft has no messages. `None` shows nothing.
+    /// The official success message shown by the shared status banner.
     const VALIDATION_SUCCESS: Option<&'static str> = None;
 
     fn kit(&self) -> &EditorState;
@@ -484,7 +483,7 @@ pub fn queue<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Context<V>)
     sync(this, cx);
     if !this.kit().parse_errors.is_empty() || !this.kit().validation_errors.is_empty() {
         this.kit_mut().status_message =
-            Some("Fix the items listed under Needs review before submitting.".into());
+            Some("Fix the items marked below before submitting.".into());
         cx.notify();
         return;
     }
@@ -492,8 +491,7 @@ pub fn queue<V: KitView>(this: &mut V, window: &mut Window, cx: &mut Context<V>)
     if let Err(errors) = this.draft_mut().queue(QueueAuthSource::Gui) {
         let kit = this.kit_mut();
         kit.validation_errors = errors;
-        kit.status_message =
-            Some("Fix the items listed under Needs review before submitting.".into());
+        kit.status_message = Some("Fix the items marked below before submitting.".into());
         cx.notify();
         return;
     }
@@ -932,12 +930,11 @@ pub const PAYMENT_COLUMNS_2200: &[&str] = &[
 
 /// The printed declaration (muted text) followed by the read-only "Details
 /// of Payment" part. `part_title` is the printed heading (for example
-/// "Part IV – Details of Payment"), `rows` the printed row captions (for
+/// "Part IV - Details of Payment"), `rows` the printed row captions (for
 /// example "25 Cash/Bank Debit Memo") and `columns` the printed column
-/// headings after "Particulars". Every cell shows "—"; there are no inputs,
+/// headings after "Particulars". Every cell shows "-"; there are no inputs,
 /// field keys or upload data. The table scrolls sideways inside its own
-/// container, so it never exceeds the window. Append the result before
-/// "Needs review".
+/// container, so it never exceeds the window.
 pub fn declaration_and_payment<V: 'static>(
     phone: bool,
     part_title: &str,
@@ -1087,8 +1084,7 @@ pub fn yes_no<V: KitView>(
     )
 }
 
-/// The whole page: toolbar, header, status pipeline, sections and the
-/// "Needs review" list.
+/// The whole page: toolbar, header, status pipeline, and form sections.
 pub fn render_page<V: KitView>(
     this: &V,
     sections: Vec<AnyElement>,
@@ -1104,19 +1100,6 @@ pub fn render_page<V: KitView>(
         Layout::Tablet => px(20.),
         Layout::Desktop => px(32.),
     };
-    let issues: Vec<AnyElement> = kit
-        .parse_errors
-        .iter()
-        .chain(kit.validation_errors.iter())
-        .take(30)
-        .map(|(_, message)| {
-            div()
-                .text_sm()
-                .text_color(cx.theme().danger)
-                .child(message.clone())
-                .into_any_element()
-        })
-        .collect();
     kit.header.ensure_sent_snapshot(&this.db(), this.draft());
     let blocking = kit.parse_errors.len() + kit.validation_errors.len();
     let props = FormHeaderProps {
@@ -1125,12 +1108,12 @@ pub fn render_page<V: KitView>(
         editor_safe: true,
         validated: kit.validated(),
         blocking_errors: blocking,
-        first_error: kit
+        errors: kit
             .parse_errors
             .iter()
             .chain(kit.validation_errors.iter())
-            .next()
-            .map(|(_, message)| message.replace('\n', " ")),
+            .map(|(_, message)| message.replace('\n', " "))
+            .collect(),
         success_text: V::VALIDATION_SUCCESS.unwrap_or(DEFAULT_SUCCESS_MESSAGE),
         message: kit.status_message.clone(),
         separate_validate: separate_validate_button(&this.db()),
@@ -1195,10 +1178,6 @@ pub fn render_page<V: KitView>(
             )
         })
         .children(sections);
-    if !issues.is_empty() {
-        body = body.child(section("Needs review", issues, cx));
-    }
-
     div()
         .flex()
         .flex_col()

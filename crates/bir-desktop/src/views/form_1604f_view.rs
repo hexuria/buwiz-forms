@@ -919,16 +919,14 @@ impl FormViewTrait for Form1604fView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -1047,7 +1045,7 @@ impl Render for Form1604fView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
+        let _issues: Vec<AnyElement> = self
             .parse_errors
             .iter()
             .chain(self.validation_errors.iter())
@@ -1116,10 +1114,6 @@ impl Render for Form1604fView {
         for s in 0..FORM_1604F_SCHEDULES {
             body = body.child(self.render_schedule(s, layout, cx));
         }
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
-
         div()
             .flex()
             .flex_col()
@@ -1162,12 +1156,12 @@ impl Form1604fView {
             editor_safe: true,
             validated: self.validated,
             blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

@@ -2547,8 +2547,7 @@ impl FormViewTrait for Form2550QV2View {
         }
         self.sync_from_inputs(None, cx);
         if self.editor_state_error.is_some() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".to_string());
+            self.status_message = Some("Fix the items marked below before submitting.".to_string());
             cx.notify();
             return;
         }
@@ -2558,8 +2557,7 @@ impl FormViewTrait for Form2550QV2View {
             bir_core::filing_queue::QueueAuthSource::Gui,
         ) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".to_string());
+            self.status_message = Some("Fix the items marked below before submitting.".to_string());
             cx.notify();
             return;
         }
@@ -4061,10 +4059,11 @@ impl Form2550QV2View {
             editor_safe: self.editor_state_error.is_none(),
             validated: self.validated_at_current_revision,
             blocking_errors: self.validation_errors.len(),
-            first_error: self
+            errors: self
                 .validation_errors
-                .first()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .iter()
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),
