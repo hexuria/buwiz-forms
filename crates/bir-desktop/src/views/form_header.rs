@@ -104,6 +104,28 @@ pub fn header_visibility(status: &FilingStatus, editor_safe: bool) -> HeaderVisi
     }
 }
 
+/// Issue #87: a form whose capability record says it can't be queued
+/// never shows Submit (Validate stays). The code is the uppercased slug;
+/// unknown codes keep Submit as before.
+pub fn submit_hidden_for_slug(slug: &str) -> bool {
+    bir_core::forms::find_form_capability(&slug.to_ascii_uppercase())
+        .is_some_and(|record| !record.can_queue())
+}
+
+/// [`header_visibility`] for a form, with Submit hidden per
+/// [`submit_hidden_for_slug`].
+pub fn form_header_visibility(
+    slug: &str,
+    status: &FilingStatus,
+    editor_safe: bool,
+) -> HeaderVisibility {
+    let mut visible = header_visibility(status, editor_safe);
+    if submit_hidden_for_slug(slug) {
+        visible.submit = false;
+    }
+    visible
+}
+
 /// D2A: with a separate Validate button, Submit needs a passing Validate at
 /// the current entries; without it, Submit validates first itself.
 pub fn submit_enabled(separate_validate: bool, validated: bool, blocking_errors: usize) -> bool {
@@ -276,7 +298,7 @@ pub fn render_header_buttons<V: 'static>(
     phone: bool,
     cx: &mut Context<V>,
 ) -> AnyElement {
-    let visible = header_visibility(&props.status, props.editor_safe);
+    let visible = form_header_visibility(props.slug, &props.status, props.editor_safe);
     let state = (actions.state_ref)(this);
     let separate = props.separate_validate;
     let enabled = submit_enabled(separate, props.validated, props.blocking_errors);
@@ -545,7 +567,8 @@ pub fn render_status_box<V: 'static>(
 mod tests {
     use super::{
         AMENDED_REVERT_MESSAGE, CLICK_VALIDATE_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderProps,
-        HeaderVisibility, header_visibility, status_box_visible, status_text, submit_enabled,
+        HeaderVisibility, form_header_visibility, header_visibility, status_box_visible,
+        status_text, submit_enabled, submit_hidden_for_slug,
     };
     use bir_core::forms::FilingStatus;
 
@@ -611,6 +634,24 @@ mod tests {
     fn unsafe_editor_hides_validate_and_submit() {
         let v = header_visibility(&FilingStatus::Draft, false);
         assert!(!v.validate && !v.submit && v.save && v.print);
+    }
+
+    #[test]
+    fn unqueueable_forms_hide_submit_only() {
+        assert!(submit_hidden_for_slug("2200a"));
+        assert!(submit_hidden_for_slug("2200an"));
+        assert!(!submit_hidden_for_slug("2200c"));
+        assert!(!submit_hidden_for_slug("t"));
+        let a = form_header_visibility("2200a", &FilingStatus::Draft, true);
+        assert!(a.validate && !a.submit && a.save && a.print);
+        assert_eq!(
+            row(form_header_visibility("2200c", &FilingStatus::Draft, true)),
+            row(header_visibility(&FilingStatus::Draft, true))
+        );
+        assert_eq!(
+            row(form_header_visibility("t", &FilingStatus::Draft, true)),
+            row(header_visibility(&FilingStatus::Draft, true))
+        );
     }
 
     #[test]
