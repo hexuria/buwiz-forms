@@ -3400,6 +3400,10 @@ impl BirAgentHost {
             UiNode::scroll(ids::PRINT_PREVIEW_SCROLL, "Print preview scroll"),
             self.layout.preview_scroll,
         ));
+        window = window.with_child(
+            UiNode::new(ids::PRINT_PREVIEW_STATE, "status", "Print preview state")
+                .with_value(crate::views::frozen_html_preview::live_preview_state()),
+        );
 
         let mut page = UiNode::new(
             ids::page_root(self.active_view),

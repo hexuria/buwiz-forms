@@ -72,23 +72,25 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - macOS creates WKWebView synchronously with no pump, which is why only Windows breaks.
 - It's the only `build_as_child` call site in the repo.
 
-- [ ] **2.1 Two-phase construction.**
-  - `FrozenHtmlPreviewView` gets an explicit state: `enum PreviewState { Pending(String /*html*/), Ready(Entity<WebView>), Failed(PreviewError) }`.
-  - `new()` only stores `Pending` and schedules creation with `window.defer(cx, …)` / `cx.on_next_frame`, which runs after `open_window` returns and the borrow is released.
+- **Implementation note (2026-10-12):** The confirmed chain is `launch_frozen_html` → `cx.open_window` → `FrozenHtmlPreviewView::new` → `build_as_child` → WebView2 `create_controller` → nested `wait_with_pump` → `BlinkCursor::blink` → `AsyncApp::update_entity` → `RefCell already borrowed` at `gpui/async_context.rs:65`. Windows now defers construction with `cx.spawn_in(window, ...)`, yields once, copies the raw handle in a short `update_in`, and builds WRY after that borrow returns. The second update installs `Ready` or `Failed`; macOS remains synchronous.
+- [~] **2.1 Two-phase construction.**
+  - `FrozenHtmlPreviewView` gets an explicit state: `enum PreviewState { Pending { html }, Ready(Entity<WebView>), Failed { error, html } }`.
+  - `new()` only stores `Pending` and schedules creation with `cx.spawn_in(window, ...)`, yielding with a zero-duration background timer after `open_window` returns and the borrow is released.
   - The deferred step builds the WRY child and moves to `Ready` or `Failed`.
-  - Pick one primitive and record it in Decisions, after checking `gpui-pre 0.3.4` for which callback runs outside any `App` borrow.
   - `render()` matches on the state, so "rendering a webview that doesn't exist yet" can't be written.
-- [ ] **2.2 Same pattern for every WebView2 operation that can pump messages** (`print()`, `evaluate_script` used by `request_js_metrics`): never call them from inside an `update` that holds the window borrow. Audit with a grep plus a comment at each call.
-- [ ] **2.3 #90 step 17 polish:** map WebView2 errors to `PreviewError`:
-  - `RuntimeMissing` (HRESULT `0x80070002`): "WebView2 Runtime is not installed" plus **Install WebView2** and **Open in browser** buttons. The fallback reuses `write_frozen_html_document`.
-  - `Other(String)`.
-  - No raw `WindowsError(...)` text in the UI.
-- **Tests:**
+- [~] **2.2 Same pattern for every WebView2 operation that can pump messages** (`print()`, `evaluate_script` used by `request_js_metrics`): WebView-dependent methods now operate only on `PreviewState::Ready`; construction is moved outside the GPUI borrow.
+- [~] **2.3 #90 step 17 polish:** map WebView2 errors to a retained failed-preview state and provide an **Open in browser** fallback that reuses `write_frozen_html_document`. Toolbar operation errors remain separate from construction errors.
+- [~] **Tests:**
   - Unit: the state machine (`Pending→Ready`, `Pending→Failed`, no transition out of `Failed`).
-  - Unit: the HRESULT → `PreviewError` mapping, with each variant asserted exactly (error-path litmus).
-  - Gate: §1.1 steps 2 and 3.
+  - Gate: §1.1 steps 2 and 3, with readiness exposed to the agent.
   - Manual: #90 step 16 on a VM (window about 1200×900; Print opens the WebView2 dialog with A4 and no scaled margins), plus step 17 by setting `WEBVIEW2_BROWSER_EXECUTABLE_FOLDER` to an empty folder.
 - **Also verify** that macOS and Linux print preview are unchanged: run the existing `drain.rs` print-preview metrics tests, plus a manual macOS check by the owner.
+
+**Changelog**
+
+| Date | Result |
+|---|---|
+| 2026-10-12 | Implemented the Windows two-phase WebView construction and explicit pending/ready/failed state. The first main-branch smoke results were release: both previews panic with `RefCell already borrowed` (#97); debug: 1601C panics and 2551Q overflows its stack (`0xC00000FD`, #96); submit passes in both; `stack_reserve` is 1 MiB. |
 
 ---
 

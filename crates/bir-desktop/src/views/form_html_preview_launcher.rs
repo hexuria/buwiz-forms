@@ -172,7 +172,7 @@ fn launch_frozen_html<T: 'static>(
     }
 }
 
-fn write_frozen_html_document(html: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn write_frozen_html_document(html: &str) -> Result<std::path::PathBuf, String> {
     let dir = std::env::temp_dir().join(format!("buwiz-frozen-html-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("could not create frozen HTML temp dir: {error}"))?;
