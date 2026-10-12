@@ -68,7 +68,7 @@ tray-icon = "0.24.0"
 image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
-gpui-agent = { git = "https://github.com/hexuria/gpui-agent", rev = "1edec4dbf49755bf91ffbbc23359698ea5b867f4", optional = true }
+gpui-agent = { workspace = true, optional = true }
 # Same clap surface as gpui-agent `apps/todo-headless` (serve / status / shutdown / logs).
 clap = { version = "4", features = ["derive"], optional = true }
 
@@ -121,6 +121,10 @@ gio = "0.18.4"
 glib = "0.18.5"
 gtk = "0.18.2"
 webkit2gtk = "2.0.1"
+# cor_ocr stores the Gemini API key with keyring directly. Without a backend
+# feature keyring 3.x silently uses an in-memory mock on Linux, so name the
+# Secret Service store explicitly (same features as bir-core).
+keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] }
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }

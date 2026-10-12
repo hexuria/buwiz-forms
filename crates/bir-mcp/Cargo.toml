@@ -1,0 +1,24 @@
+[package]
+name = "bir-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Draft-only MCP (stdio or loopback Streamable HTTP) adapter that drives a running BIR app through gpui-agent."
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "bir-mcp"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+# Workspace pin shared with bir-desktop's `agent` feature.
+gpui-agent = { workspace = true }
+# `--http`: a small blocking HTTP/1.1 server; no TLS (loopback only).
+tiny_http = { version = "0.12", default-features = false }
+
+[dev-dependencies]
+tempfile = "3"
