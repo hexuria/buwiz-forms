@@ -32,8 +32,8 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::{AmendmentSnapshot, Database, DbError, RevertedForAmendment};
-use bir_core::forms::FilingStatus;
 use bir_core::forms::queueable::{QueueableForm, can_user_revert, period_column};
+use bir_core::forms::{FilingPeriod, FilingStatus};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
@@ -200,6 +200,38 @@ impl FormHeaderState {
         self.sent = std::cell::OnceCell::from(latest_snapshot(db, draft));
     }
 
+    /// [`Self::ensure_sent_snapshot`] for forms with their own storage
+    /// (1601C, 2551Q): the return is named by form code, TIN, year and period.
+    pub fn ensure_sent_snapshot_for(
+        &self,
+        db: &Arc<Mutex<Database>>,
+        form_code: &str,
+        tin: &str,
+        taxable_year: u16,
+        period: &FilingPeriod,
+    ) {
+        self.sent
+            .get_or_init(|| latest_snapshot_for(db, form_code, tin, taxable_year, period));
+    }
+
+    /// [`Self::load_sent_snapshot`] for forms with their own storage.
+    pub fn load_sent_snapshot_for(
+        &mut self,
+        db: &Arc<Mutex<Database>>,
+        form_code: &str,
+        tin: &str,
+        taxable_year: u16,
+        period: &FilingPeriod,
+    ) {
+        self.sent = std::cell::OnceCell::from(latest_snapshot_for(
+            db,
+            form_code,
+            tin,
+            taxable_year,
+            period,
+        ));
+    }
+
     pub fn has_sent_snapshot(&self) -> bool {
         self.sent.get().is_some_and(Option::is_some)
     }
@@ -209,9 +241,25 @@ fn latest_snapshot<F: QueueableForm>(
     db: &Arc<Mutex<Database>>,
     draft: &F,
 ) -> Option<AmendmentSnapshot> {
-    let period_key = draft.filing_period().to_period_key();
+    latest_snapshot_for(
+        db,
+        F::FORM_CODE,
+        draft.tin(),
+        draft.taxable_year(),
+        &draft.filing_period(),
+    )
+}
+
+fn latest_snapshot_for(
+    db: &Arc<Mutex<Database>>,
+    form_code: &str,
+    tin: &str,
+    taxable_year: u16,
+    period: &FilingPeriod,
+) -> Option<AmendmentSnapshot> {
+    let period_key = period.to_period_key();
     db.lock().ok().and_then(|db| {
-        db.list_amendment_snapshots(F::FORM_CODE, draft.tin(), draft.taxable_year(), &period_key)
+        db.list_amendment_snapshots(form_code, tin, taxable_year, &period_key)
             .ok()
             .and_then(|mut list| list.pop())
     })

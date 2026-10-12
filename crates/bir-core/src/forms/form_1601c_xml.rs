@@ -493,6 +493,7 @@ impl Form1601CDraft {
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
+            submitted_payload: None,
             queued_submission_fingerprint: None,
             queue_authorization: None,
             submission_claim_token: None,
