@@ -885,11 +885,22 @@ impl Form2551QView {
                 .save_queued_2551q_draft_and_election_with_post_commit_status(&self.draft)
                 .map(bir_core::db::PostCommitWrite::into_parts)
                 .map(|(_, refresh_status)| refresh_status)
-                .map_err(|_| "database_write"),
+                .map_err(|error| match error {
+                    bir_core::db::DbError::AmendedReturnRequired => "amended_return_required",
+                    _ => "database_write",
+                }),
             Err(_) => Err("database_lock"),
         };
         let refresh_warning = match persistence_result {
             Ok(refresh_status) => refresh_status.warning().map(ToOwned::to_owned),
+            Err("amended_return_required") => {
+                // save-009: the official alert, nothing queued.
+                self.draft = draft_before_queue;
+                self.status_message =
+                    Some(bir_core::forms::queueable::AMENDED_RETURN_ALERT.to_string());
+                cx.notify();
+                return;
+            }
             Err(error_category) => {
                 tracing::error!(error_category, "Failed to persist queued 2551Q draft");
                 self.draft = draft_before_queue;

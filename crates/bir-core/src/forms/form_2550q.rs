@@ -2666,6 +2666,9 @@ impl super::queueable::QueueableForm for Form2550QDraft {
         self.compute();
         true
     }
+    fn amended_return_answer(&self) -> Option<bool> {
+        Some(self.is_amended)
+    }
     fn draft_id(&self) -> Option<i64> {
         self.id
     }

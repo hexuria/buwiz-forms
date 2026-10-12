@@ -529,6 +529,17 @@ impl Database {
                 "Only a queued 2551Q draft can be saved through the submission path".to_string(),
             ));
         }
+        if !draft.is_amended
+            && self.has_filed_original(
+                &draft.tin,
+                "2551Q",
+                draft.taxable_year,
+                &FilingPeriod::Quarterly(draft.quarter).to_period_key(),
+                draft.id,
+            )?
+        {
+            return Err(DbError::AmendedReturnRequired);
+        }
         if draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some() {
             return Err(DbError::Other(
                 "A reviewed 2551Q queue snapshot cannot carry a network claim".to_string(),
@@ -1789,6 +1800,17 @@ impl Database {
             return Err(DbError::Other(
                 "Only a queued 1601C draft can be saved through the submission path".to_string(),
             ));
+        }
+        if !draft.is_amended
+            && self.has_filed_original(
+                &draft.tin,
+                "1601C",
+                draft.taxable_year,
+                &FilingPeriod::Monthly(draft.month).to_period_key(),
+                draft.id,
+            )?
+        {
+            return Err(DbError::AmendedReturnRequired);
         }
 
         let mut verified = draft.clone();

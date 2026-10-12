@@ -2573,8 +2573,9 @@ impl FormViewTrait for Form2550QV2View {
             Ok(id) => self.draft.id = Some(id),
             Err(error) => {
                 self.draft = before;
-                self.status_message = Some(format!(
-                    "Could not queue Form 2550Q. No submission was started: {error}"
+                self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                    "Form 2550Q",
+                    &error,
                 ));
                 cx.notify();
                 return;

@@ -1873,8 +1873,9 @@ impl FormViewTrait for Form1702ExView {
         };
         if let Err(error) = saved {
             self.draft = before;
-            self.status_message = Some(format!(
-                "Could not queue Form 1702EX. No submission was started: {error}"
+            self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                "Form 1702EX",
+                &error,
             ));
             cx.notify();
             return;

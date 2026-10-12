@@ -267,6 +267,9 @@ pub enum DbError {
     Zip(#[from] zip::result::ZipError),
     #[error("Other error: {0}")]
     Other(String),
+    /// save-009: Amended Return = No while a filed original exists.
+    #[error("{}", crate::forms::queueable::AMENDED_RETURN_ALERT)]
+    AmendedReturnRequired,
     #[error(
         "live database {} is already open (painted bir or bir-headless). \
          Single live-DB owner: quit the other process. There is no protocol Op::Yield.",

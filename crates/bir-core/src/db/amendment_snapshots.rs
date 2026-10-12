@@ -164,6 +164,41 @@ impl Database {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    /// save-009's "an original already exists": another return for this TIN,
+    /// form, year and period that is Submitted, Confirmed or Paid, or any
+    /// amendment snapshot of it. A Draft or Queued return is not an original,
+    /// and the row `exclude_draft_id` (the record being saved) never counts.
+    pub fn has_filed_original(
+        &self,
+        tin: &str,
+        form_code: &str,
+        taxable_year: u16,
+        period_key: &str,
+        exclude_draft_id: Option<i64>,
+    ) -> Result<bool, DbError> {
+        let year = i64::from(taxable_year);
+        let filed: bool = self.conn.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM form_drafts
+                 WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
+                   AND period_key = ?4
+                   AND status IN ('Submitted', 'Confirmed', 'Paid')
+                   AND (?5 IS NULL OR id <> ?5))",
+            params![tin, form_code, year, period_key, exclude_draft_id],
+            |row| row.get(0),
+        )?;
+        if filed {
+            return Ok(true);
+        }
+        Ok(self.conn.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM amendment_snapshots
+                 WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 AND period_key = ?4)",
+            params![tin, form_code, year, period_key],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn get_amendment_snapshot(&self, id: i64) -> Result<Option<AmendmentSnapshot>, DbError> {
         Ok(self
             .conn

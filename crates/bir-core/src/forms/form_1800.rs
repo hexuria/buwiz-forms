@@ -698,6 +698,9 @@ impl QueueableForm for Form1800Draft {
         self.set_amended(true);
         true
     }
+    fn amended_return_answer(&self) -> Option<bool> {
+        Some(self.is_amended)
+    }
     fn draft_id(&self) -> Option<i64> {
         self.id
     }
@@ -916,5 +919,119 @@ mod tests {
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.surcharge = 99.0;
         assert!(d.revalidate_queued_before_submission().is_err());
+    }
+
+    /// save-009 (BIR-Form1800v2018.hta saveXML L3222/L3249).
+    mod save_009 {
+        use super::*;
+        use crate::db::{Database, DbError};
+        use crate::filing_queue::QueueAuthSource;
+        use crate::forms::queueable::{AMENDED_RETURN_ALERT, queue_failure_message};
+
+        const ALERT: &str = "If your intention is to make an amended return, kindly tick Amended Return to 'Yes' before hitting 'Save' or 'Final Copy' or 'Submit'.";
+
+        /// An original BIR already has, imported under a legacy slot.
+        fn file_original(db: &Database, d: &Form1800Draft) {
+            db.conn
+                .execute(
+                    "INSERT INTO form_drafts
+                        (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                     VALUES (?1, '1800', ?2, 9001, ?3, 'Submitted', '{}')",
+                    rusqlite::params![
+                        d.tin,
+                        i64::from(d.filing_year),
+                        d.filing_period().to_period_key()
+                    ],
+                )
+                .unwrap();
+        }
+
+        /// Save the draft, then try to queue it the way Submit does.
+        fn submit(db: &Database, d: &Form1800Draft) -> Result<i64, DbError> {
+            let mut d = d.clone();
+            d.id = Some(db.save_queueable_draft(&d).unwrap());
+            d.queue(QueueAuthSource::Gui).unwrap();
+            db.save_queued_queueable(&d)
+        }
+
+        #[test]
+        fn amended_no_with_a_filed_original_is_refused_with_the_exact_text() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let d = sample();
+            file_original(&db, &d);
+            let error = submit(&db, &d).unwrap_err();
+            assert!(matches!(error, DbError::AmendedReturnRequired));
+            assert_eq!(AMENDED_RETURN_ALERT, ALERT);
+            assert_eq!(error.to_string(), ALERT);
+            assert_eq!(
+                queue_failure_message("Form 1800", &error.to_string()),
+                ALERT
+            );
+            let stored = db
+                .get_queueable_draft::<Form1800Draft>(&d.tin, 2025, 1)
+                .unwrap()
+                .unwrap();
+            assert!(stored.lifecycle.is_editable());
+        }
+
+        #[test]
+        fn amended_no_without_an_original_is_allowed() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            assert!(submit(&db, &sample()).is_ok());
+        }
+
+        #[test]
+        fn a_draft_or_queued_return_is_not_an_original() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let d = sample();
+            submit(&db, &d).unwrap();
+            assert!(
+                !db.has_filed_original(&d.tin, "1800", 2025, "O1", None)
+                    .unwrap()
+            );
+        }
+
+        #[test]
+        fn amended_yes_with_a_filed_original_is_allowed() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let mut d = sample();
+            file_original(&db, &d);
+            d.set_amended(true);
+            assert!(submit(&db, &d).is_ok());
+        }
+
+        #[test]
+        fn after_revert_as_amendment_yes_is_allowed_and_no_is_refused() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let d = sample();
+            let id = submit(&db, &d).unwrap();
+            let mut filed = db
+                .get_queueable_draft::<Form1800Draft>(&d.tin, 2025, 1)
+                .unwrap()
+                .unwrap();
+            let filename = filed.submission_filename();
+            filed.lifecycle.transition_to_submitted(filename);
+            db.conn
+                .execute(
+                    "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+                    rusqlite::params![serde_json::to_string(&filed).unwrap(), id],
+                )
+                .unwrap();
+            // The filed record itself is not its own original.
+            assert!(!db.amended_return_required(&filed).unwrap());
+
+            let reverted = db
+                .revert_queueable_for_amendment::<Form1800Draft>(&d.tin, 2025, 1)
+                .unwrap();
+            assert!(reverted.snapshot_id.is_some());
+            assert!(reverted.draft.is_amended);
+
+            let mut flipped = reverted.draft.clone();
+            flipped.set_amended(false);
+            let error = submit(&db, &flipped).unwrap_err();
+            assert_eq!(error.to_string(), ALERT);
+
+            assert!(submit(&db, &reverted.draft).is_ok());
+        }
     }
 }

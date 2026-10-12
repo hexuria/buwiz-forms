@@ -822,8 +822,9 @@ impl FormViewTrait for Form0619EView {
         };
         if let Err(error) = saved {
             self.draft = before;
-            self.status_message = Some(format!(
-                "Could not queue Form 0619-E. No submission was started: {error}"
+            self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                "Form 0619-E",
+                &error,
             ));
             cx.notify();
             return;

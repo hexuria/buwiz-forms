@@ -1551,15 +1551,27 @@ impl FormViewTrait for Form1702qView {
         let result = match self.db.lock() {
             Ok(db) => db
                 .save_queueable_draft(&self.draft)
+                .map(|id| {
+                    // save-009: saved anyway; the alert goes in the status box.
+                    let amended_required = db.amended_return_required(&self.draft).unwrap_or(false);
+                    (id, amended_required)
+                })
                 .map_err(|e| e.to_string()),
             Err(error) => Err(error.to_string()),
         };
         match result {
-            Ok(id) => {
+            Ok((id, amended_required)) => {
                 self.draft.id = Some(id);
                 let (kind, message) = save_notice(unreadable);
                 // The save never refuses; the warning stays in the status box.
-                self.status_message = unreadable.then(|| message.to_string());
+                let mut status: Vec<&str> = Vec::new();
+                if unreadable {
+                    status.push(message);
+                }
+                if amended_required {
+                    status.push(bir_core::forms::queueable::AMENDED_RETURN_ALERT);
+                }
+                self.status_message = (!status.is_empty()).then(|| status.join(" "));
                 self.notify(kind, message.into(), window, cx);
                 cx.emit(QueueableFormEvent::Saved);
                 cx.notify();
@@ -1608,8 +1620,9 @@ impl FormViewTrait for Form1702qView {
         };
         if let Err(error) = saved {
             self.draft = before;
-            self.status_message = Some(format!(
-                "Could not queue Form 1702Q. No submission was started: {error}"
+            self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                "Form 1702Q",
+                &error,
             ));
             cx.notify();
             return;
