@@ -500,7 +500,9 @@ Semantic invokes that do not need a GPU/window:
   `BIR_DATABASE_PATH` points outside the data dir). `bir-mcp` reads it to let
   the user choose between running BIR apps. Both hosts publish an upstream
   `gpui_agent::discovery` record (`GPUI_AGENT_RUNTIME_DIR`, named by
-  `GPUI_AGENT_CONNECT_ID`).
+  `GPUI_AGENT_CONNECT_ID`; `app` is `bir-desktop`). A bare `gpui-agent`
+  command goes to `GPUI_AGENT_ADDR` / `127.0.0.1:17421` and does not reuse
+  an earlier `--connect`; use `--connect last` for that.
 - Profiles: `profile.list` / `search` / `set` / `create` / `save` / `edit` / `tab`
 - Demo HTML: `profile.html`, `dues.html` (`calendar.html`)
 - Forms Set: `profile.forms_set.get`, `profile.forms_set` (confirm-gated write)
