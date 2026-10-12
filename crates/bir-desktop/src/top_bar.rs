@@ -53,6 +53,26 @@ pub(crate) fn drawer_next(open: bool, input: DrawerInput) -> bool {
     }
 }
 
+/// Drawer state after the app's page changes from `from` to `to`.
+///
+/// Any real page change (a different view, or the same view for another
+/// taxpayer) closes the drawer, whatever triggered it. Switching to the
+/// Notifications pseudo-view is how `open_notifications` callers ask for
+/// the drawer, so that one opens it.
+pub(crate) fn drawer_on_page_change(
+    open: bool,
+    from: (ActiveView, Option<&str>),
+    to: (ActiveView, Option<&str>),
+) -> bool {
+    if to.0 == ActiveView::Notifications {
+        true
+    } else if from != to {
+        false
+    } else {
+        open
+    }
+}
+
 /// Where a request to show a view lands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NavTarget {
@@ -87,6 +107,22 @@ impl AppState {
 
     /// Every way into notifications (alert toasts, deep links, the agent's
     /// "notifications" slug) comes through here.
+    /// Called once per frame, before the Notifications pseudo-view is turned
+    /// into the drawer: closes the drawer when the page changed since the
+    /// last frame, whichever route changed it.
+    pub(crate) fn close_drawer_on_page_change(&mut self) {
+        let to = (self.active_view, self.active_profile_tin.as_deref());
+        let from = (self.drawer_page.0, self.drawer_page.1.as_deref());
+        if to.0 != ActiveView::Notifications {
+            self.notifications_open = drawer_on_page_change(self.notifications_open, from, to);
+        }
+    }
+
+    /// Records the page this frame shows; the next frame compares against it.
+    pub(crate) fn note_drawer_page(&mut self) {
+        self.drawer_page = (self.active_view, self.active_profile_tin.clone());
+    }
+
     pub(crate) fn open_notifications(&mut self, cx: &mut Context<Self>) {
         self.drawer_input(DrawerInput::Open, cx);
     }
@@ -219,7 +255,10 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::{ActiveView, DrawerInput, NavTarget, badge_label, drawer_next, nav_target};
+    use super::{
+        ActiveView, DrawerInput, NavTarget, badge_label, drawer_next, drawer_on_page_change,
+        nav_target,
+    };
 
     #[test]
     fn badge_hides_at_zero_and_caps_at_nine() {
@@ -253,6 +292,44 @@ mod tests {
         // Clicking the bell while open: outside-press keeps it, toggle closes.
         let after_press = drawer_next(true, DrawerInput::OutsideClick { on_bell: true });
         assert!(!drawer_next(after_press, DrawerInput::Toggle));
+    }
+
+    #[test]
+    fn any_page_change_closes_the_drawer() {
+        let views = [
+            ActiveView::GlobalDashboard,
+            ActiveView::Dashboard,
+            ActiveView::ProfileManager,
+            ActiveView::CronTasks,
+            ActiveView::ImportExport,
+            ActiveView::Settings,
+            ActiveView::Form1601C,
+        ];
+        for from in views {
+            for to in views {
+                let moved = from != to;
+                assert_eq!(
+                    drawer_on_page_change(true, (from, None), (to, None)),
+                    !moved,
+                    "{from:?} -> {to:?}"
+                );
+                assert!(!drawer_on_page_change(false, (from, None), (to, None)));
+            }
+            // Same view, another taxpayer.
+            assert!(!drawer_on_page_change(
+                true,
+                (from, Some("111")),
+                (from, Some("222"))
+            ));
+            // Notifications itself opens it.
+            for open in [false, true] {
+                assert!(drawer_on_page_change(
+                    open,
+                    (from, None),
+                    (ActiveView::Notifications, None)
+                ));
+            }
+        }
     }
 
     #[test]

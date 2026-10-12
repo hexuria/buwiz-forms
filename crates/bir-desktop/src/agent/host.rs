@@ -169,6 +169,8 @@ pub struct BirAgentHost {
     /// baseline matches what the database now holds.
     saved_profile_tin: Option<String>,
     active_view: ActiveView,
+    /// Notifications drawer state, copied in from the app; the bell toggles it.
+    notifications_open: bool,
     pending_admin: Option<ActiveView>,
     pending_profile_auth: bool,
     selected_tin: Option<String>,
@@ -208,6 +210,7 @@ impl BirAgentHost {
             editor_touched: false,
             saved_profile_tin: None,
             active_view: ActiveView::GlobalDashboard,
+            notifications_open: false,
             pending_admin: None,
             pending_profile_auth: false,
             selected_tin: None,
@@ -302,6 +305,26 @@ impl BirAgentHost {
 
     pub fn active_view(&self) -> ActiveView {
         self.active_view
+    }
+
+    pub fn notifications_open(&self) -> bool {
+        self.notifications_open
+    }
+
+    pub fn set_notifications_open(&mut self, open: bool) {
+        self.notifications_open = open;
+    }
+
+    /// The bell, same as a mouse click on it: toggles the drawer.
+    fn toggle_notifications(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        self.notifications_open = crate::top_bar::drawer_next(
+            self.notifications_open,
+            crate::top_bar::DrawerInput::Toggle,
+        );
+        Ok(DispatchResult::json(
+            serde_json::json!({ "notifications_open": self.notifications_open }),
+        ))
     }
 
     pub fn selected_tin(&self) -> Option<&str> {
@@ -730,6 +753,12 @@ impl BirAgentHost {
         }
 
         self.pending_admin = None;
+        let tin = self.selected_tin.as_deref();
+        self.notifications_open = crate::top_bar::drawer_on_page_change(
+            self.notifications_open,
+            (self.active_view, tin),
+            (target, tin),
+        );
         self.active_view = target;
         if target == ActiveView::GlobalDashboard {
             self.selected_tin = None;
@@ -2627,7 +2656,7 @@ impl BirAgentHost {
             ids::NAV_GLOBAL_DASHBOARD => self.navigate(ActiveView::GlobalDashboard),
             ids::NAV_NEW_PROFILE => self.new_profile_editor(),
             ids::NAV_IMPORT_EXPORT => self.navigate(ActiveView::ImportExport),
-            ids::NAV_NOTIFICATIONS => self.navigate(ActiveView::Notifications),
+            ids::NAV_NOTIFICATIONS => self.toggle_notifications(),
             ids::NAV_CRON_TASKS => self.navigate(ActiveView::CronTasks),
             ids::NAV_ADMIN_CALENDAR => self.navigate(ActiveView::AdminCalendarDashboard),
             ids::NAV_SETTINGS => self.navigate(ActiveView::Settings),
@@ -5831,6 +5860,49 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    /// The bell toggles the drawer through the agent as with a mouse; a page
+    /// change closes it and `nav.go notifications` still opens it.
+    #[test]
+    fn bell_click_twice_opens_then_closes_the_drawer() {
+        let mut host = fixture_host();
+        let click = |host: &mut BirAgentHost| {
+            let resp = handle_request(
+                host,
+                req(Op::Click {
+                    target: ids::NAV_NOTIFICATIONS.into(),
+                    delivery: Default::default(),
+                }),
+                None,
+                None,
+            );
+            assert!(resp.ok, "{:?}", resp.error);
+        };
+        let view = host.active_view();
+        assert!(!host.notifications_open());
+        click(&mut host);
+        assert!(host.notifications_open(), "first click opens");
+        assert_eq!(host.active_view(), view, "the bell is not a page change");
+        click(&mut host);
+        assert!(!host.notifications_open(), "second click closes");
+
+        let go = |host: &mut BirAgentHost, page: &str| {
+            let resp = handle_request(
+                host,
+                req(Op::Invoke {
+                    name: "nav.go".into(),
+                    args: json!({ "page": page }),
+                }),
+                None,
+                None,
+            );
+            assert!(resp.ok, "{:?}", resp.error);
+        };
+        go(&mut host, "notifications");
+        assert!(host.notifications_open(), "nav.go notifications opens");
+        go(&mut host, "import-export");
+        assert!(!host.notifications_open(), "a page change closes");
     }
 
     /// The painted Background Tasks tabs are clickable through the host, and

@@ -174,6 +174,9 @@ pub struct AppState {
     pub(crate) layout_probe: crate::layout_probe::LayoutProbe,
     /// Notifications drawer is showing (see `top_bar`).
     pub(crate) notifications_open: bool,
+    /// Page (view, taxpayer) seen by the last frame, so a page change by any
+    /// route closes the drawer (see `close_drawer_on_page_change`).
+    pub(crate) drawer_page: (ActiveView, Option<String>),
     /// Painted bounds of the bell, so a press on it is not an outside click.
     pub(crate) bell_bounds: crate::layout_probe::BoundsCell,
     pub(crate) theme_preference: AppThemeMode,
@@ -900,6 +903,7 @@ impl AppState {
             is_sidebar_hidden: false,
             layout_probe: crate::layout_probe::LayoutProbe::default(),
             notifications_open: false,
+            drawer_page: (active_view, None),
             bell_bounds: Default::default(),
             theme_preference,
             focus_handle: cx.focus_handle(),
@@ -1927,12 +1931,16 @@ impl Render for AppState {
             );
         }
 
+        // Every page change, whatever triggered it, closes the drawer.
+        self.close_drawer_on_page_change();
+
         // Notifications are a drawer, not a page: anything that still sets
         // the old page view opens the drawer over the dashboard instead.
         if self.active_view == ActiveView::Notifications {
             self.active_view = ActiveView::GlobalDashboard;
             self.open_notifications(cx);
         }
+        self.note_drawer_page();
 
         let dashboard_visible = self.active_view == ActiveView::Dashboard;
         if dashboard_visible && !self.dashboard_was_visible {

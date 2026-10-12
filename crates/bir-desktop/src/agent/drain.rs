@@ -197,6 +197,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host.set_profile_pins(app.enable_profile_pins);
     host.set_hide_tax_profiles(app.hide_tax_profiles);
     host.restore_view(app.active_view, app.active_profile_tin.clone());
+    host.set_notifications_open(app.notifications_open);
     host.set_profile_tab(app.profile_manager.read(cx).agent_active_tab());
     host.set_cron_tab(app.cron_tasks_view.read(cx).agent_active_tab());
     host.replace_profiles(
@@ -293,6 +294,16 @@ fn apply_host(
 
     if host.active_view() != app.active_view {
         apply_navigation(host.active_view(), &host, app, window, cx);
+    }
+
+    // The bell toggles the drawer without changing the page.
+    if host.notifications_open() != app.notifications_open {
+        let input = if host.notifications_open() {
+            crate::top_bar::DrawerInput::Open
+        } else {
+            crate::top_bar::DrawerInput::Close
+        };
+        app.drawer_input(input, cx);
     }
 
     if let Some(tin) = host.selected_tin() {
