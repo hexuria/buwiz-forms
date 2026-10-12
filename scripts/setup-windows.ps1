@@ -8,6 +8,7 @@
       * OpenSSL (required by libsqlite3-sys bundled-sqlcipher)
       * just (task runner), Strawberry Perl + NASM (required by vendored
         openssl-src builds), PowerShell 7 (justfile windows-shell is pwsh)
+      * Inno Setup, 7-Zip and Python (Windows packaging)
       * Visual Studio 2022 Build Tools: MSVC C++ workload + Windows 11 SDK
       * Rust toolchain via rustup (stable; rust-toolchain.toml adds
         rustfmt + clippy components)
@@ -53,8 +54,8 @@ if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
 }
 
 # 2. System packages (choco install is idempotent)
-Write-Step "Installing packages: openssl, just, strawberryperl, nasm, powershell-core"
-choco install openssl just strawberryperl nasm powershell-core -y --no-progress
+Write-Step "Installing packages: openssl, just, strawberryperl, nasm, powershell-core, innosetup, 7zip, python"
+choco install openssl just strawberryperl nasm powershell-core innosetup 7zip python -y --no-progress
 if ($LASTEXITCODE -ne 0) { Write-Error "choco install failed"; exit $LASTEXITCODE }
 
 # 3. Visual Studio Build Tools (MSVC C++ workload + Windows 11 SDK)
@@ -102,24 +103,7 @@ if (-not (Test-Path "$cargoBin\cargo.exe") -and -not (Get-Command cargo -ErrorAc
     Write-Step "Rust already installed -  skipping"
 }
 
-# 5. gpui-agent CLI (client for the agent control plane; the app embeds its
-# own host, so only the CLI is needed -  todo-headless is the demo's daemon).
-# The CLI must match the rev bir-desktop pins in Cargo.toml: protocol skew
-# fails closed, so installing unpinned HEAD can break the handshake.
-$gpuiRev = Select-String -Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'crates\bir-desktop\Cargo.toml') `
-    -Pattern 'gpui-agent\s*=\s*\{[^}]*rev\s*=\s*"([0-9a-f]+)"' |
-    ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
-$env:Path = "$cargoBin;$env:Path"
-if ($gpuiRev) {
-    Write-Step "Installing gpui-agent CLI (pinned rev $gpuiRev, matches Cargo.toml)"
-    & "$cargoBin\cargo.exe" install --git https://github.com/hexuria/gpui-agent --rev $gpuiRev gpui-agent-cli
-} else {
-    Write-Step "Installing gpui-agent CLI (no rev pin found; using HEAD)"
-    & "$cargoBin\cargo.exe" install --git https://github.com/hexuria/gpui-agent gpui-agent-cli
-}
-if ($LASTEXITCODE -ne 0) { Write-Error "gpui-agent install failed"; exit $LASTEXITCODE }
-
-# 6. OPENSSL_DIR / OPENSSL_LIB_DIR (libsqlite3-sys bundled-sqlcipher fails without them)
+# 5. OPENSSL_DIR / OPENSSL_LIB_DIR (libsqlite3-sys bundled-sqlcipher fails without them)
 $opensslDir = $null
 foreach ($candidate in 'C:\Program Files\OpenSSL-Win64', 'C:\Program Files\OpenSSL') {
     if (Test-Path "$candidate\include") { $opensslDir = $candidate; break }
@@ -134,6 +118,8 @@ if (-not $libFile) { Write-Error "No *crypto*.lib found inside $opensslDir"; exi
 Write-Step "Setting user env: OPENSSL_DIR=$opensslDir, OPENSSL_LIB_DIR=$($libFile.DirectoryName)"
 [Environment]::SetEnvironmentVariable('OPENSSL_DIR', $opensslDir, 'User')
 [Environment]::SetEnvironmentVariable('OPENSSL_LIB_DIR', $libFile.DirectoryName, 'User')
+$env:OPENSSL_DIR = $opensslDir
+$env:OPENSSL_LIB_DIR = $libFile.DirectoryName
 
 # Strawberry Perl must precede Git Bash's MSYS perl on PATH for vendored
 # openssl-src builds. Persist it at the front of the machine PATH so new
@@ -146,9 +132,38 @@ $env:Path = "C:\Strawberry\perl\bin;C:\Strawberry\c\bin;C:\Program Files\NASM;$c
     [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
     [Environment]::GetEnvironmentVariable('Path','User')
 
+# 6. gpui-agent CLI (client for the agent control plane; the app embeds its
+# own host, so only the CLI is needed -  todo-headless is the demo's daemon).
+# The CLI must match the rev bir-desktop pins in the root Cargo.toml: protocol
+# skew fails closed, so installing unpinned HEAD can break the handshake.
+$gpuiRev = Select-String -Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'Cargo.toml') `
+    -Pattern 'gpui-agent\s*=\s*\{[^}]*rev\s*=\s*"([0-9a-f]+)"' |
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
+$env:Path = "$cargoBin;$env:Path"
+if (-not $gpuiRev) {
+    Write-Error "gpui-agent rev pin not found in Cargo.toml"
+    exit 1
+}
+Write-Step "Installing gpui-agent CLI (pinned rev $gpuiRev, matches Cargo.toml)"
+$previousRustflags = $env:RUSTFLAGS
+$gpuiInstallExit = 0
+try {
+    # Remove once the gpui-agent pin includes hexuria/gpui-agent's bcrypt link fix (#91).
+    $env:RUSTFLAGS = (($env:RUSTFLAGS, '-l bcrypt') -join ' ').Trim()
+    & "$cargoBin\cargo.exe" install --git https://github.com/hexuria/gpui-agent --rev $gpuiRev gpui-agent-cli
+    $gpuiInstallExit = $LASTEXITCODE
+} finally {
+    if ($null -eq $previousRustflags) {
+        Remove-Item Env:RUSTFLAGS -ErrorAction SilentlyContinue
+    } else {
+        $env:RUSTFLAGS = $previousRustflags
+    }
+}
+if ($gpuiInstallExit -ne 0) { Write-Error "gpui-agent install failed"; exit $gpuiInstallExit }
+
 Write-Step @"
 Done. Open a NEW PowerShell window, then:  cd <repo> ; just run
 Agent control plane: build --features agent, set GPUI_AGENT=1, drive with gpui-agent.
-NOTE: HMAC token auth currently fails closed on Windows (gpui-agent's nonce
-source is Unix-only); use GPUI_AGENT_INSECURE_NO_TOKEN=1 for local-only driving.
+NOTE: Token auth works on Windows at the current pin; set GPUI_AGENT_TOKEN for
+secure driving. GPUI_AGENT_INSECURE_NO_TOKEN=1 remains for local-only driving.
 "@

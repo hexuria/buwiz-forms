@@ -35,7 +35,7 @@ there, but nobody has run it on that platform.
 | Google Calendar credentials storage | untested | Credential Manager, through `keyring`. |
 | Keyboard shortcuts | untested | Ctrl based; also F11 and Win+M. |
 | Packaging | untested | `Setup.exe` and `.msi` from CI; MSIX with `just msix`. |
-| Agent control (gpui-agent) | ✗ | The token handshake fails closed at the current pin. Local use needs `GPUI_AGENT_INSECURE_NO_TOKEN=1`. |
+| Agent control (gpui-agent) | ✓ | Token-authenticated control works at the current pinned revision. |
 | Agent screenshots | ✗ | macOS only. |
 | Dev Mode panel (debug builds only) | untested |  |
 
@@ -106,10 +106,11 @@ there, but nobody has run it on that platform.
 
 ## Agent control
 
-- The gpui-agent token handshake fails closed on Windows at the current pin,
-  because the library reads its nonce from `/dev/urandom`. For local driving,
-  set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`. Never do
-  that on a shared machine.
+- The gpui-agent token handshake works on Windows at the current pinned
+  revision. Set `GPUI_AGENT_TOKEN` for secure driving. The CLI install needs
+  `scripts\setup-windows.ps1` or `-l bcrypt` until the #91 upstream fix is
+  pinned. `GPUI_AGENT_INSECURE_NO_TOKEN=1` remains for local-only driving; never
+  use it on a shared machine.
 - Agent screenshots are macOS only.
 
 ## Packaging

@@ -14,6 +14,7 @@ VERSION := if os_family() == "windows" {
 } else {
     `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
 }
+PYTHON := if os_family() == "windows" { "python" } else { "python3" }
 BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "26")
 
 # Default task: format, lint, and type check
@@ -129,7 +130,7 @@ test:
 # module's own docstring for what green/red mean and, just as importantly,
 # what this walk cannot see.
 tab-check slug="":
-    python3 tools/formgen/tab_check.py {{slug}}
+    {{PYTHON}} tools/formgen/tab_check.py {{slug}}
 
 # Clear tab_check's review artifacts. forms/review is tracked-tree-adjacent
 # but not gitignored, and the migration audit gate requires a clean tree, so
@@ -153,12 +154,12 @@ review-clean:
 # artifacts and forms/review/index.html without tabbing anything and without
 # a file:// path -- from a phone on the same network if need be.
 review-serve:
-    cd forms && python3 -m http.server 4190 --bind 127.0.0.1
+    cd forms && {{PYTHON}} -m http.server 4190 --bind 127.0.0.1
 
 # Confirm committed freeze HTML and write the non-promotional identity
 # copied into packaged assets/. Preview sheets are also embedded at compile time.
 build-frozen-html-identity:
-    python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$(git rev-parse HEAD)" --out assets/form-renderer-build-identity.json
+    {{PYTHON}} scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$(git rev-parse HEAD)" --out assets/form-renderer-build-identity.json
 
 # React native-evidence recipes were removed with the form-renderer.
 # Frozen HTML preview is the print path. These names stay so operators
@@ -225,7 +226,12 @@ install format="":
         "msix" {
             Write-Host "Installing MSIX package: $path" -ForegroundColor Cyan
             Write-Host "⚠️  MSIX must be signed before sideloading. Run 'just sign-dev' first if you haven't." -ForegroundColor Yellow
-            Add-AppxPackage -Path $path
+            # PowerShell 7 cannot load Appx on this Server host; use Windows PowerShell 5.1 (#93).
+            powershell.exe -NoProfile -NonInteractive -Command "Add-AppxPackage -Path '$path'"
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "MSIX installation failed (exit code $LASTEXITCODE)."
+                exit $LASTEXITCODE
+            }
             Write-Host "✅ MSIX installed successfully!"
         }
         "exe" {
@@ -338,6 +344,16 @@ app *args="":
 exe *args="": build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
+
+    $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    $missing = @()
+    if (-not (Test-Path $ISCC)) { $missing += "Inno Setup (ISCC.exe at $ISCC)" }
+    if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) { $missing += "7-Zip (7z.exe)" }
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) { $missing += "Python (python.exe)" }
+    if ($missing.Count -gt 0) {
+        Write-Error ("Missing packaging prerequisites: " + ($missing -join ", ") + ". Run scripts\setup-windows.ps1")
+        exit 1
+    }
     
     $features = @()
     foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
@@ -357,8 +373,7 @@ exe *args="": build-frozen-html-identity
     
     $VERSION = "{{VERSION}}"
     
-    $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-    if (Test-Path $ISCC) {
+    # ISCC is validated by the prerequisite gate above.
         Write-Host "Building installer with Inno Setup..."
         & $ISCC /DMyAppVersion=$VERSION installer.iss
         if ($LASTEXITCODE -ne 0) {
@@ -379,7 +394,7 @@ exe *args="": build-frozen-html-identity
                 Write-Error "❌ Could not extract the final Setup EXE for audit."
                 exit $LASTEXITCODE
             }
-            python scripts/audit_no_legacy.py --package-root $auditRoot
+            {{PYTHON}} scripts/audit_no_legacy.py --package-root $auditRoot
             if ($LASTEXITCODE -ne 0) {
                 Write-Error "❌ Final Setup EXE failed the HTML-only/no-legacy audit."
                 exit $LASTEXITCODE
@@ -387,11 +402,7 @@ exe *args="": build-frozen-html-identity
         } finally {
             Remove-Item $auditRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
-        Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
-    } else {
-        Write-Warning "⚠️ ISCC.exe not found at $ISCC. Please install Inno Setup 6 (https://jrsoftware.org/isinfo.php)."
-        exit 1
-    }
+    Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
 
 # Build a Store-only MSIX candidate (Windows only).
 # This artifact is intentionally excluded from public GitHub releases. Store
@@ -436,7 +447,7 @@ msix *args="": build-frozen-html-identity
     if (Test-Path $msvcp) { Copy-Item $msvcp "$MSIX_DIR\" }
 
     Copy-Item "assets" "$MSIX_DIR\assets" -Recurse
-    python scripts/audit_no_legacy.py --package-root $MSIX_DIR
+    {{PYTHON}} scripts/audit_no_legacy.py --package-root $MSIX_DIR
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
     # Use the shared BUILD_NUMBER from the justfile (synced with App Store Connect via bump-build).
