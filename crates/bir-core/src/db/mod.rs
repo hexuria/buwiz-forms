@@ -753,10 +753,21 @@ impl Database {
     }
 
     /// Linux/Windows: Use the `keyring` crate directly (no RunLoop deadlock risk).
+    ///
+    /// A valid `bir_key.txt` in the data dir wins: it only exists because an
+    /// earlier launch could not use the OS store, so it holds the key the
+    /// database was encrypted with. On a headless Linux box with no Secret
+    /// Service on D-Bus, `get_password` fails with `PlatformFailure`, which
+    /// routes to the file fallback instead of refusing to start.
     #[cfg(not(target_os = "macos"))]
     fn get_or_create_master_key_keyring() -> Result<String, DbError> {
         use keyring::Entry;
         use tracing::info;
+
+        if let Some(hex_key) = Self::read_fallback_key_file() {
+            info!("Loaded master key from fallback file");
+            return Ok(hex_key);
+        }
 
         let entry = match Entry::new("com.ebir.rust", "sqlcipher_master_key") {
             Ok(e) => e,
@@ -766,18 +777,14 @@ impl Database {
             }
         };
 
-        match entry.get_password() {
-            Ok(hex_key) => {
+        match classify_keyring_read(entry.get_password()) {
+            KeyringRead::Found(hex_key) => {
                 info!("Loaded existing master key from native keychain");
                 Ok(hex_key)
             }
             // Only NoEntry is a genuine miss: no key exists yet, so
-            // generating one is safe. Every other error means the store may
-            // still hold a live key we failed to read; generating a
-            // replacement in that case would make the existing database
-            // permanently undecryptable - the same failure mode the macOS
-            // keychain path in this file refuses to risk.
-            Err(keyring::Error::NoEntry) => {
+            // generating one is safe.
+            KeyringRead::Missing => {
                 info!("Generating new master key and storing in native keychain");
                 let key: [u8; 32] = rand::random();
                 let hex_key = hex::encode(key);
@@ -789,12 +796,32 @@ impl Database {
                 }
                 Ok(hex_key)
             }
-            Err(e) => Err(DbError::KeychainCli(format!(
+            // The credential store itself is unreachable (e.g. no Secret
+            // Service on the session bus), so it cannot be holding a key we
+            // created: use the file-based key instead.
+            KeyringRead::Unavailable(e) => {
+                tracing::warn!("OS keyring unavailable: {e}. Falling back to file-based key.");
+                Self::get_or_create_master_key_file_fallback()
+            }
+            // Locked/denied or anything unexpected: the store may still hold
+            // a live key we failed to read. Generating a replacement would
+            // make the existing database permanently undecryptable - the
+            // same failure mode the macOS keychain path refuses to risk.
+            KeyringRead::Refuse(e) => Err(DbError::KeychainCli(format!(
                 "Could not read the existing SQLCipher master key: {e}. \
                  Refusing to generate a replacement, because that would \
                  make the database permanently unreadable. Fix keyring \
                  access and retry."
             ))),
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn read_fallback_key_file() -> Option<String> {
+        let key_path = crate::platform::data_dir().join("bir_key.txt");
+        match std::fs::read_to_string(key_path) {
+            Ok(hex_key) if hex_key.len() == 64 => Some(hex_key),
+            _ => None,
         }
     }
 
@@ -1035,8 +1062,59 @@ mod keychain_miss_tests {
     }
 }
 
+/// Outcome of reading the SQLCipher master key from the OS credential store.
+#[cfg(not(target_os = "macos"))]
+#[derive(Debug, PartialEq, Eq)]
+enum KeyringRead {
+    Found(String),
+    Missing,
+    Unavailable(String),
+    Refuse(String),
+}
+
+#[cfg(not(target_os = "macos"))]
+fn classify_keyring_read(result: Result<String, keyring::Error>) -> KeyringRead {
+    match result {
+        Ok(hex_key) => KeyringRead::Found(hex_key),
+        Err(keyring::Error::NoEntry) => KeyringRead::Missing,
+        // keyring maps D-Bus connection/service errors to PlatformFailure;
+        // a locked collection or dismissed prompt is NoStorageAccess and
+        // must not be treated as "no store".
+        Err(e @ keyring::Error::PlatformFailure(_)) => KeyringRead::Unavailable(e.to_string()),
+        Err(e) => KeyringRead::Refuse(e.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn keyring_read_falls_back_only_when_store_is_unreachable() {
+        use super::{KeyringRead, classify_keyring_read};
+        let key = "ab".repeat(32);
+        assert_eq!(
+            classify_keyring_read(Ok(key.clone())),
+            KeyringRead::Found(key)
+        );
+        assert_eq!(
+            classify_keyring_read(Err(keyring::Error::NoEntry)),
+            KeyringRead::Missing
+        );
+        // No Secret Service on the bus surfaces as PlatformFailure.
+        let unreachable =
+            keyring::Error::PlatformFailure("org.freedesktop.DBus.Error.ServiceUnknown".into());
+        assert!(matches!(
+            classify_keyring_read(Err(unreachable)),
+            KeyringRead::Unavailable(_)
+        ));
+        // A locked collection may still hold the live key: never regenerate.
+        let locked = keyring::Error::NoStorageAccess("locked".into());
+        assert!(matches!(
+            classify_keyring_read(Err(locked)),
+            KeyringRead::Refuse(_)
+        ));
+    }
+
     use super::*;
     use crate::naming::Tin;
     use crate::profile::TaxpayerProfile;
