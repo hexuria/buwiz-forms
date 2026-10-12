@@ -8,7 +8,7 @@
       * OpenSSL (required by libsqlite3-sys bundled-sqlcipher)
       * just (task runner), Strawberry Perl + NASM (required by vendored
         openssl-src builds), PowerShell 7 (justfile windows-shell is pwsh)
-      * Inno Setup, 7-Zip and Python (Windows packaging)
+      * Inno Setup and Python (Windows packaging)
       * Visual Studio 2022 Build Tools: MSVC C++ workload + Windows 11 SDK
       * Rust toolchain via rustup (stable; rust-toolchain.toml adds
         rustfmt + clippy components)
@@ -54,8 +54,8 @@ if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
 }
 
 # 2. System packages (choco install is idempotent)
-Write-Step "Installing packages: openssl, just, strawberryperl, nasm, powershell-core, innosetup, 7zip, python"
-choco install openssl just strawberryperl nasm powershell-core innosetup 7zip python -y --no-progress
+Write-Step "Installing packages: openssl, just, strawberryperl, nasm, powershell-core, innosetup, python"
+choco install openssl just strawberryperl nasm powershell-core innosetup python -y --no-progress
 if ($LASTEXITCODE -ne 0) { Write-Error "choco install failed"; exit $LASTEXITCODE }
 
 # 3. Visual Studio Build Tools (MSVC C++ workload + Windows 11 SDK)

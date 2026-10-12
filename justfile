@@ -230,6 +230,7 @@ install format="":
             powershell.exe -NoProfile -NonInteractive -Command "Add-AppxPackage -Path '$path'"
             if ($LASTEXITCODE -ne 0) {
                 Write-Error "MSIX installation failed (exit code $LASTEXITCODE)."
+                Write-Host 'If a different build with the same version is already installed, remove it first: powershell.exe -NoProfile -Command "Get-AppxPackage GOLDCODERSCORP.ebirforms | Remove-AppxPackage"'
                 exit $LASTEXITCODE
             }
             Write-Host "✅ MSIX installed successfully!"
@@ -348,7 +349,6 @@ exe *args="": build-frozen-html-identity
     $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
     $missing = @()
     if (-not (Test-Path $ISCC)) { $missing += "Inno Setup (ISCC.exe at $ISCC)" }
-    if (-not (Get-Command 7z.exe -ErrorAction SilentlyContinue)) { $missing += "7-Zip (7z.exe)" }
     if (-not (Get-Command python -ErrorAction SilentlyContinue)) { $missing += "Python (python.exe)" }
     if ($missing.Count -gt 0) {
         Write-Error ("Missing packaging prerequisites: " + ($missing -join ", ") + ". Run scripts\setup-windows.ps1")
@@ -373,35 +373,48 @@ exe *args="": build-frozen-html-identity
     
     $VERSION = "{{VERSION}}"
     
-    # ISCC is validated by the prerequisite gate above.
-        Write-Host "Building installer with Inno Setup..."
-        & $ISCC /DMyAppVersion=$VERSION installer.iss
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "❌ Inno Setup failed (exit code $LASTEXITCODE)."
-            exit $LASTEXITCODE
-        }
+    $stageDir = "target\installer-stage"
+    if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+    Copy-Item "target\{{WIN_TARGET}}\release\bir.exe" "$stageDir\bir.exe"
+    Copy-Item "assets" "$stageDir\assets" -Recurse
 
-        # Audit the bytes that the final installer actually contains. Auditing
-        # only the pre-installer staging tree would allow installer-specific
-        # additions to bypass the HTML-only/no-legacy package gate.
-        $installer = Resolve-Path "target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
-        $sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
-        $auditRoot = Join-Path ([System.IO.Path]::GetTempPath()) "ebirforms-final-exe-$([guid]::NewGuid())"
-        try {
-            New-Item -ItemType Directory -Force -Path $auditRoot | Out-Null
-            & $sevenZip x -y "-o$auditRoot" $installer.Path | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "❌ Could not extract the final Setup EXE for audit."
-                exit $LASTEXITCODE
-            }
-            {{PYTHON}} scripts/audit_no_legacy.py --package-root $auditRoot
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "❌ Final Setup EXE failed the HTML-only/no-legacy audit."
-                exit $LASTEXITCODE
-            }
-        } finally {
-            Remove-Item $auditRoot -Recurse -Force -ErrorAction SilentlyContinue
+    {{PYTHON}} scripts/audit_no_legacy.py --package-root $stageDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "❌ Installer staging tree failed the HTML-only/no-legacy audit."
+        exit $LASTEXITCODE
+    }
+
+    # The installer can only ship files from the audited stage, because [Files] is gated to it.
+    $inFilesSection = $false
+    $sourceViolations = @()
+    $lineNumber = 0
+    foreach ($line in Get-Content "installer.iss") {
+        $lineNumber++
+        if ($line -match '^\s*\[Files\]\s*$') {
+            $inFilesSection = $true
+            continue
         }
+        if ($line -match '^\s*\[') {
+            $inFilesSection = $false
+        }
+        if ($inFilesSection -and $line -match '^\s*Source:\s*"([^"]+)"') {
+            if (-not $matches[1].StartsWith('{#StageDir}\', [StringComparison]::OrdinalIgnoreCase)) {
+                $sourceViolations += "installer.iss:$lineNumber $line"
+            }
+        }
+    }
+    if ($sourceViolations.Count -gt 0) {
+        Write-Error ("Installer [Files] source outside audited stage: " + ($sourceViolations -join "; "))
+        exit 1
+    }
+
+    Write-Host "Building installer with Inno Setup..."
+    & $ISCC /DMyAppVersion=$VERSION /DStageDir=$stageDir installer.iss
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "❌ Inno Setup failed (exit code $LASTEXITCODE)."
+        exit $LASTEXITCODE
+    }
     Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
 
 # Build a Store-only MSIX candidate (Windows only).

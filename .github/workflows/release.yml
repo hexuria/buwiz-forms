@@ -343,7 +343,7 @@ jobs:
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          choco install openssl innosetup 7zip -y
+          choco install openssl innosetup -y
           choco install wixtoolset --version=3.11.2 -y
           $openssl_dir = ""
           if (Test-Path "C:\Program Files\OpenSSL\include") {
@@ -444,6 +444,7 @@ jobs:
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
           $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          if (Test-Path $PKG) { Remove-Item $PKG -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $PKG
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$PKG/"
           Copy-Item -Recurse "assets" "$PKG/"
@@ -455,7 +456,8 @@ jobs:
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
           $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $ISCC /DMyAppVersion=$VERSION installer.iss
+          $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          & $ISCC /DMyAppVersion=$VERSION /DStageDir=$PKG installer.iss
 
       - name: Create MSI Installer
         shell: pwsh
@@ -501,18 +503,13 @@ jobs:
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
-          $setup = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}-Setup.exe").Path
           $msi = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi").Path
-          $extractRoot = Join-Path $env:RUNNER_TEMP "ebirforms-final-installers"
-          $setupRoot = Join-Path $extractRoot "setup"
-          $msiRoot = Join-Path $extractRoot "msi"
-          Remove-Item $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $setupRoot, $msiRoot | Out-Null
+          $pkg = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          $msiRoot = Join-Path $env:RUNNER_TEMP "ebirforms-final-installers\msi"
+          Remove-Item $msiRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $msiRoot | Out-Null
 
-          $sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
-          & $sevenZip x -y "-o$setupRoot" $setup
-          if ($LASTEXITCODE -ne 0) { throw "Could not extract final Inno Setup installer" }
-          python scripts/audit_no_legacy.py --package-root $setupRoot
+          python scripts/audit_no_legacy.py --package-root $pkg
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $msiProcess = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(

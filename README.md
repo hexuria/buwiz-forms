@@ -65,7 +65,7 @@ Windows is not yet verified. Treat it as untested until
 
 **Prerequisites (to build from source):** Visual Studio 2022 Build Tools with
 the C++ workload and Windows 11 SDK, Rust, OpenSSL, Strawberry Perl, NASM, Inno
-Setup, 7-Zip and Python.
+Setup and Python.
 One script installs them and sets the `OPENSSL_*` variables:
 
 ```powershell
