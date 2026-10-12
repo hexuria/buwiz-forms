@@ -2223,23 +2223,6 @@ impl Form2550QV2View {
             .into_any_element()
     }
 
-    fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
-            return div().into_any_element();
-        }
-        let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (_, message) in &self.validation_errors {
-            list = list.child(rsx! { <div text_xs>{message.clone()}</div> });
-        }
-        let root = rsx! {
-            <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
-                <div font_weight={FontWeight::BOLD}>{"Draft needs review"}</div>
-                {list}
-            </div>
-        };
-        root.into_any_element()
-    }
-
     fn render_validation_diagnostic(&self, cx: &Context<Self>) -> AnyElement {
         // "Validation successful." shows in the header's status box.
         let mut root = div().flex().flex_col().gap_4();
@@ -2888,7 +2871,6 @@ impl Render for Form2550QV2View {
         }
         content = content
             .child(self.render_validation_diagnostic(cx))
-            .child(self.render_error_summary(cx))
             .child(
                 section_card(cx, "FILING PERIOD AND BACKGROUND INFORMATION")
                     .child(div().text_sm().child(format!(

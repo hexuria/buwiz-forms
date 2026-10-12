@@ -182,6 +182,13 @@ pub fn status_box_visible(text: Option<&str>, showing_sent: bool) -> bool {
     showing_sent || text.is_some_and(|t| !t.trim().is_empty())
 }
 
+fn dismiss_key(text: &str, errors: &[String]) -> String {
+    std::iter::once(text)
+        .chain(errors.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Header state a view keeps: the ⋯ menu, the status box's dismiss state
 /// and the latest snapshot of what BIR received.
 #[derive(Default)]
@@ -537,7 +544,9 @@ pub fn render_status_box<V: 'static>(
 ) -> Option<AnyElement> {
     let state = (actions.state_ref)(this);
     let text = status_text(props, props.separate_validate)
-        .filter(|text| state.dismissed.as_deref() != Some(text.as_str()))
+        .filter(|text| {
+            state.dismissed.as_deref() != Some(dismiss_key(text, &props.errors).as_str())
+        })
         .filter(|text| status_box_visible(Some(text), false));
     let sent = state
         .show_sent
@@ -562,7 +571,7 @@ pub fn render_status_box<V: 'static>(
         .mx_auto()
         .min_w_0();
     if let Some(text) = text {
-        let dismissed_text = text.clone();
+        let dismissed_key = dismiss_key(&text, &props.errors);
         col = col.child(
             div()
                 .flex()
@@ -633,9 +642,12 @@ pub fn render_status_box<V: 'static>(
                             .when(show_errors, |d| {
                                 d.child(
                                     div()
+                                        .id(id(props.slug, "status_errors_list"))
                                         .flex()
                                         .flex_col()
                                         .gap_1()
+                                        .max_h(px(160.))
+                                        .overflow_y_scroll()
                                         .text_xs()
                                         .text_color(cx.theme().muted_foreground)
                                         .children(
@@ -654,7 +666,7 @@ pub fn render_status_box<V: 'static>(
                         .ghost()
                         .xsmall()
                         .on_click(cx.listener(move |this: &mut V, _, _, cx| {
-                            (actions.state)(this).dismissed = Some(dismissed_text.clone());
+                            (actions.state)(this).dismissed = Some(dismissed_key.clone());
                             cx.notify();
                         })),
                 ),
@@ -710,8 +722,8 @@ pub fn render_status_box<V: 'static>(
 mod tests {
     use super::{
         AMENDED_REVERT_MESSAGE, CLICK_VALIDATE_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderProps,
-        HeaderVisibility, form_header_visibility, header_visibility, status_box_visible,
-        status_text, submit_enabled, submit_hidden_for_slug,
+        HeaderVisibility, dismiss_key, form_header_visibility, header_visibility,
+        status_box_visible, status_text, submit_enabled, submit_hidden_for_slug,
     };
     use super::{is_queue_unavailable_message, queue_unavailable_message};
     use gpui::px;
@@ -864,5 +876,21 @@ mod tests {
         assert!(!status_box_visible(Some("   "), false));
         assert!(status_box_visible(Some("Validation successful."), false));
         assert!(status_box_visible(None, true));
+    }
+
+    #[test]
+    fn dismissal_key_tracks_error_contents() {
+        let first = vec!["First error.".to_string(), "Second error.".to_string()];
+        let same = vec!["First error.".to_string(), "Second error.".to_string()];
+        let changed = vec!["First error.".to_string(), "Different error.".to_string()];
+
+        assert_eq!(
+            dismiss_key("Fix 2 items.", &first),
+            dismiss_key("Fix 2 items.", &same)
+        );
+        assert_ne!(
+            dismiss_key("Fix 2 items.", &first),
+            dismiss_key("Fix 2 items.", &changed)
+        );
     }
 }
