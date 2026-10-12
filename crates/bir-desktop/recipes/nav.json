@@ -32,7 +32,7 @@
     {
       "id": "notifications",
       "op": "click",
-      "target": "notifications_sidebar_btn",
+      "target": "notifications_bell_btn",
       "needs": ["profile-seen"]
     },
     {

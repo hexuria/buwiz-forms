@@ -26,7 +26,7 @@
 # Usage:
 #   scripts/setup-linux.sh              # install everything
 #   scripts/setup-linux.sh --check      # verify only, install nothing
-#   scripts/setup-linux.sh --extras     # also install cargo-audit/outdated/machete + node
+#   scripts/setup-linux.sh --extras     # also install cargo-audit/outdated/machete
 #   scripts/setup-linux.sh --no-agent   # skip installing the gpui-agent CLI
 #
 set -euo pipefail
@@ -314,12 +314,6 @@ main() {
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
         cargo install cargo-audit cargo-outdated cargo-machete
-        case "$PM" in
-            apt-get) install_pkgs "nodejs npm" ;;
-            dnf)     install_pkgs "nodejs npm" ;;
-            pacman)  install_pkgs "nodejs npm" ;;
-            zypper)  install_pkgs "nodejs npm" ;;
-        esac
     fi
 
     # Freeze-inventory / stamp CI scripts expect Python 3.13; warn if older.
@@ -352,8 +346,8 @@ present stale frames — force the Gl backend by hiding the Vulkan ICD:
 Drive the app with gpui-agent (build the agent feature in, enable the host
 with GPUI_AGENT=1, then talk to it with the CLI):
 
-    cargo build --locked --bin bir --features dev-tools,agent
-    GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret ./target/debug/bir &
+    cargo build --locked --bin bir-desktop --features dev-tools,agent
+    GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret ./target/debug/bir-desktop &
     GPUI_AGENT_TOKEN=dev-secret gpui-agent hello
     GPUI_AGENT_TOKEN=dev-secret gpui-agent snapshot --pretty
 

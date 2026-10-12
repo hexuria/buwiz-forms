@@ -21,6 +21,7 @@ aes = { workspace = true }
 cbc = { workspace = true }
 sha2 = { workspace = true }
 flate2 = { workspace = true }
+libz-sys = { workspace = true }
 zeroize = { workspace = true }
 aes-gcm = { workspace = true }
 pbkdf2 = { workspace = true }
@@ -59,8 +60,21 @@ libc = "0.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { workspace = true, features = ["apple-native"] }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
-keyring = { workspace = true }
+# windows-native is required: keyring 3.x has no default credential store, so
+# a featureless build silently falls back to an in-memory mock. The SQLCipher
+# master key then never persists and every relaunch regenerates it, which
+# makes the existing database unreadable and gets it quarantined.
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"] }
+
+# sync-secret-service is required for the same reason as windows-native above:
+# without a backend feature keyring 3.x uses its in-memory mock and the master
+# key is lost on every relaunch. crypto-rust avoids an OpenSSL dependency; the
+# libdbus it links against ships with every desktop distro. On a headless box
+# with no Secret Service, get_password returns PlatformFailure and
+# db::get_or_create_master_key_keyring falls back to bir_key.txt.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] }
 
 [dev-dependencies]
 insta = "1"

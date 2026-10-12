@@ -19,6 +19,9 @@ struct Harness {
     db: PathBuf,
     log: PathBuf,
     pid: PathBuf,
+    /// `GPUI_AGENT_RUNTIME_DIR`: discovery records stay out of the user's
+    /// real per-user runtime directory.
+    runtime: PathBuf,
 }
 
 impl Harness {
@@ -30,6 +33,7 @@ impl Harness {
         let db = dir.path().join("bir_data.db");
         let log = dir.path().join("logs/bir-headless.log");
         let pid = dir.path().join("bir-headless.pid");
+        let runtime = dir.path().join("gpui-agent-runtime");
         Self {
             bin: PathBuf::from(env!("CARGO_BIN_EXE_bir-headless")),
             _dir: dir,
@@ -38,6 +42,7 @@ impl Harness {
             db,
             log,
             pid,
+            runtime,
         }
     }
 
@@ -52,6 +57,8 @@ impl Harness {
             .env("BIR_HEADLESS_LOG", &self.log)
             .env("BIR_HEADLESS_PID", &self.pid)
             .env("GPUI_AGENT_LOG_REQUESTS", "1")
+            .env("GPUI_AGENT_RUNTIME_DIR", &self.runtime)
+            .env_remove("GPUI_AGENT_CONNECT_ID")
             .env_remove("GPUI_AGENT_INSECURE_NO_TOKEN");
         cmd
     }

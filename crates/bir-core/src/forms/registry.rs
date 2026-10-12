@@ -282,9 +282,40 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         requires_employees: true,
         is_deprecated: false,
     },
+    // Since the January 2018 revision BIR files 1604-C and 1604-F separately.
+    FormDefinition {
+        code: "1604C",
+        title: "Annual Information Return of Income Taxes Withheld on Compensation",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1604F",
+        title: "Annual Information Return of Income Payments Subjected to Final Withholding Taxes",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::Annual,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    // Legacy pre-2018 combined code. Kept only so Forms Sets saved with
+    // `1604CF` still resolve; hidden from the picker (see `LEGACY_FORM_CODES`).
     FormDefinition {
         code: "1604CF",
-        title: "Annual Information Return of Income Taxes Withheld on Compensation",
+        title: "Annual Information Return of Income Taxes Withheld on Compensation and Final Withholding Taxes (pre-2018)",
         category: "Withholding Tax",
         frequency: FilingFrequency::Annual,
         taxpayer_types: &[
@@ -308,6 +339,20 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         ],
         requires_vat: None,
         requires_employees: true,
+        is_deprecated: false,
+    },
+    FormDefinition {
+        code: "1606",
+        title: "Withholding Tax Remittance Return for Onerous Transfer of Real Property Other Than Capital Asset (Including Taxable and Exempt)",
+        category: "Withholding Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
         is_deprecated: false,
     },
     FormDefinition {
@@ -669,7 +714,7 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
     },
     FormDefinition {
         code: "2200C",
-        title: "Excise Tax Return for Coal and Coke",
+        title: "Excise Tax Return for Cosmetic Procedures",
         category: "Excise Tax",
         frequency: FilingFrequency::Monthly,
         taxpayer_types: &[
@@ -751,6 +796,20 @@ pub const FORM_REGISTRY: &[FormDefinition] = &[
         is_deprecated: false,
     },
     FormDefinition {
+        code: "1707",
+        title: "Capital Gains Tax Return (For Onerous Transfer of Shares of Stock Not Traded Through the Local Stock Exchange)",
+        category: "Capital Gains Tax",
+        frequency: FilingFrequency::OpenEnded,
+        taxpayer_types: &[
+            TaxpayerType::Individual,
+            TaxpayerType::Corporation,
+            TaxpayerType::Partnership,
+        ],
+        requires_vat: None,
+        requires_employees: false,
+        is_deprecated: false,
+    },
+    FormDefinition {
         code: "1707A",
         title: "Annual Capital Gains Tax Return (Shares of Stock Not Traded)",
         category: "Capital Gains Tax",
@@ -813,6 +872,22 @@ pub fn forms_for_taxpayer(taxpayer_type: &TaxpayerType) -> Vec<&'static FormDefi
         .collect()
 }
 
+/// Registry codes kept only so previously saved Forms Sets still resolve.
+/// They are not offered in the Forms & Elections picker.
+pub const LEGACY_FORM_CODES: &[&str] = &["1604CF"];
+
+impl FormDefinition {
+    /// Whether the Forms & Elections picker should offer this form.
+    pub fn is_picker_selectable(&self) -> bool {
+        !LEGACY_FORM_CODES.contains(&self.code)
+    }
+}
+
+/// Forms offered by the Forms & Elections picker (registry minus legacy codes).
+pub fn picker_forms() -> impl Iterator<Item = &'static FormDefinition> {
+    FORM_REGISTRY.iter().filter(|f| f.is_picker_selectable())
+}
+
 /// Find a single form definition by code.
 pub fn find_form(code: &str) -> Option<&'static FormDefinition> {
     let canonical = canonical_form_code(code);
@@ -828,8 +903,6 @@ pub fn canonical_form_code(code: &str) -> String {
         .collect::<String>();
 
     match compact.as_str() {
-        "1604C" | "1604F" | "1604CF" => "1604CF".to_string(),
-        "1707" | "1707A" => "1707A".to_string(),
         other if FORM_REGISTRY.iter().any(|form| form.code == other) => other.to_string(),
         _ => normalized,
     }
@@ -868,8 +941,12 @@ mod tests {
 
     #[test]
     fn canonical_form_code_normalizes_cor_variants() {
-        assert_eq!(canonical_form_code("1604C"), "1604CF");
-        assert_eq!(canonical_form_code("1604-C"), "1604CF");
+        assert_eq!(canonical_form_code("1604C"), "1604C");
+        assert_eq!(canonical_form_code("1604-C"), "1604C");
+        assert_eq!(canonical_form_code("1604-F"), "1604F");
+        assert_eq!(canonical_form_code("1604CF"), "1604CF");
+        assert_eq!(canonical_form_code("1707"), "1707");
+        assert_eq!(canonical_form_code("1707-A"), "1707A");
         assert_eq!(canonical_form_code("0619-E"), "0619E");
         assert_eq!(canonical_form_code("1600-PT"), "1600PT");
         assert_eq!(canonical_form_code("1600-VT"), "1600VT");
@@ -881,7 +958,7 @@ mod tests {
 
     #[test]
     fn registry_keeps_the_five_official_variants_as_distinct_forms() {
-        assert_eq!(FORM_REGISTRY.len(), 51);
+        assert_eq!(FORM_REGISTRY.len(), 55);
 
         for code in ["1600PT", "1600VT", "1602Q", "1603Q", "2000OT"] {
             assert_eq!(
@@ -939,5 +1016,54 @@ mod tests {
                 TaxpayerType::Trust,
             ]
         );
+    }
+
+    #[test]
+    fn every_queueable_form_resolves_and_is_in_the_picker() {
+        use crate::forms::queueable::QueueableKind;
+        let picker: Vec<&str> = picker_forms().map(|f| f.code).collect();
+        for kind in QueueableKind::ALL {
+            let code = kind.form_code();
+            assert_eq!(
+                find_form(code).map(|f| f.code),
+                Some(code),
+                "{code} must resolve to its own FormDefinition"
+            );
+            assert!(picker.contains(&code), "{code} missing from picker");
+        }
+    }
+
+    #[test]
+    fn no_alias_maps_one_supported_form_onto_another() {
+        use crate::forms::queueable::QueueableKind;
+        let supported: Vec<&str> = QueueableKind::ALL.iter().map(|k| k.form_code()).collect();
+        for code in &supported {
+            assert_eq!(canonical_form_code(code), *code);
+        }
+        for form in FORM_REGISTRY {
+            assert_eq!(canonical_form_code(form.code), form.code);
+        }
+    }
+
+    #[test]
+    fn legacy_1604cf_stays_readable_but_hidden_from_picker() {
+        assert_eq!(find_form("1604CF").map(|f| f.code), Some("1604CF"));
+        assert!(picker_forms().all(|f| f.code != "1604CF"));
+    }
+
+    #[test]
+    fn per_transaction_forms_are_open_ended() {
+        for code in ["1606", "1707"] {
+            assert_eq!(
+                find_form(code).map(|f| &f.frequency),
+                Some(&FilingFrequency::OpenEnded)
+            );
+        }
+        for code in ["1604C", "1604F"] {
+            assert_eq!(
+                find_form(code).map(|f| &f.frequency),
+                Some(&FilingFrequency::Annual)
+            );
+        }
     }
 }

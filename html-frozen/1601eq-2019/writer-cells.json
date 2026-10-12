@@ -1,0 +1,470 @@
+{
+ "form_id": "1601eq-v2018",
+ "html_slug": "1601eq-2019",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Part II rows 13-18 print no row number, so row n takes the nth cell under the ATC/Tax Base/Tax Rate/Tax Withheld headers. Part II and III amounts follow the printed labels: the layout's txtTax24-30 match printed items 25-31 by label because this 2019 sheet adds 'Other Payments Made' at item 24. Peso comb + 2-slot cents pairs are money_joins. Radios and boxes take xbox_joins (box just left of the printed option).",
+ "joins": [
+  {
+   "writer_key": "frm1601EQ:txtYear",
+   "html_id": "p1c8",
+   "printed": "1 For the Year",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtNoSheets",
+   "html_id": "p1c9",
+   "printed": "5 (number of sheets; text layer prints only '5')",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTIN1",
+   "html_id": "p1c20",
+   "printed": "6 Taxpayer Identification Number (TIN), part 1",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTIN2",
+   "html_id": "p1c22",
+   "printed": "6 Taxpayer Identification Number (TIN), part 2",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTIN3",
+   "html_id": "p1c24",
+   "printed": "6 Taxpayer Identification Number (TIN), part 3",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtBranchCode",
+   "html_id": "p1c26",
+   "printed": "6 Taxpayer Identification Number (TIN), branch after the slash",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtRDOCode",
+   "html_id": "p1c28",
+   "printed": "7 RDO Code",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxpayerName",
+   "html_id": "p1c30",
+   "printed": "8 Withholding Agent's Name",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAddress",
+   "html_id": "p1c32",
+   "printed": "9 Registered Address",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtZipCode",
+   "html_id": "p1c35",
+   "printed": "9A ZIP Code",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTelNum",
+   "html_id": "p1c37",
+   "printed": "10 Contact Number",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "txtEmail",
+   "html_id": "p1c42",
+   "printed": "12 Email Address",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "txtTaxAgentNo",
+   "html_id": "p1c164",
+   "printed": "Tax Agent Accreditation No./ Attorney's Roll No.",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "txtDateIssue",
+   "html_id": "p1c166",
+   "printed": "Date of Issue",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "txtDateExpiry",
+   "html_id": "p1c168",
+   "printed": "Date of Expiry",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAtcCd1",
+   "html_id": "p1c49",
+   "printed": "ATC, Part II row 1 (item 13)",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxRate1",
+   "html_id": "p1c53",
+   "printed": "Tax Rate, Part II row 1",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAtcCd2",
+   "html_id": "p1c58",
+   "printed": "ATC, Part II row 2 (item 14)",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxRate2",
+   "html_id": "p1c62",
+   "printed": "Tax Rate, Part II row 2",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAtcCd3",
+   "html_id": "p1c67",
+   "printed": "ATC, Part II row 3 (item 15)",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxRate3",
+   "html_id": "p1c71",
+   "printed": "Tax Rate, Part II row 3",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAtcCd4",
+   "html_id": "p1c76",
+   "printed": "ATC, Part II row 4 (item 16)",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxRate4",
+   "html_id": "p1c80",
+   "printed": "Tax Rate, Part II row 4",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAtcCd5",
+   "html_id": "p1c85",
+   "printed": "ATC, Part II row 5 (item 17)",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxRate5",
+   "html_id": "p1c89",
+   "printed": "Tax Rate, Part II row 5",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAtcCd6",
+   "html_id": "p1c94",
+   "printed": "ATC, Part II row 6 (item 18)",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxRate6",
+   "html_id": "p1c98",
+   "printed": "Tax Rate, Part II row 6",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAgency34",
+   "html_id": "p1c185",
+   "printed": "33 Check, Particulars (drawee bank/agency)",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtNumber34",
+   "html_id": "p1c186",
+   "printed": "33 Check, Number",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtNumber35",
+   "html_id": "p1c194",
+   "printed": "34 Tax Debit Memo, Number",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtParticular36",
+   "html_id": "p1c202",
+   "printed": "35 Others (specify below), Particulars",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAgency36",
+   "html_id": "p1c203",
+   "printed": "35 Others, Particulars (drawee bank/agency)",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtNumber36",
+   "html_id": "p1c204",
+   "printed": "35 Others, Number",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  }
+ ],
+ "money_joins": [
+  {
+   "writer_key": "frm1601EQ:txtTaxBase1",
+   "peso_html_id": "p1c50",
+   "cent_html_id": "p1c52",
+   "printed": "Tax Base, Part II row 1",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxbeWithHeld1",
+   "peso_html_id": "p1c54",
+   "cent_html_id": "p1c56",
+   "printed": "Tax Withheld, Part II row 1",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxBase2",
+   "peso_html_id": "p1c59",
+   "cent_html_id": "p1c61",
+   "printed": "Tax Base, Part II row 2",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxbeWithHeld2",
+   "peso_html_id": "p1c63",
+   "cent_html_id": "p1c65",
+   "printed": "Tax Withheld, Part II row 2",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxBase3",
+   "peso_html_id": "p1c68",
+   "cent_html_id": "p1c70",
+   "printed": "Tax Base, Part II row 3",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxbeWithHeld3",
+   "peso_html_id": "p1c72",
+   "cent_html_id": "p1c74",
+   "printed": "Tax Withheld, Part II row 3",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxBase4",
+   "peso_html_id": "p1c77",
+   "cent_html_id": "p1c79",
+   "printed": "Tax Base, Part II row 4",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxbeWithHeld4",
+   "peso_html_id": "p1c81",
+   "cent_html_id": "p1c83",
+   "printed": "Tax Withheld, Part II row 4",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxBase5",
+   "peso_html_id": "p1c86",
+   "cent_html_id": "p1c88",
+   "printed": "Tax Base, Part II row 5",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxbeWithHeld5",
+   "peso_html_id": "p1c90",
+   "cent_html_id": "p1c92",
+   "printed": "Tax Withheld, Part II row 5",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxBase6",
+   "peso_html_id": "p1c95",
+   "cent_html_id": "p1c97",
+   "printed": "Tax Base, Part II row 6",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTaxbeWithHeld6",
+   "peso_html_id": "p1c99",
+   "cent_html_id": "p1c101",
+   "printed": "Tax Withheld, Part II row 6",
+   "reason": "printed row order under the column header (Part II rows carry no printed number)"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax19",
+   "peso_html_id": "p1c103",
+   "cent_html_id": "p1c105",
+   "printed": "19 Total Taxes Withheld for the Quarter",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax20",
+   "peso_html_id": "p1c107",
+   "cent_html_id": "p1c109",
+   "printed": "20 Less: Remittances Made, 1st Month of the Quarter",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax21",
+   "peso_html_id": "p1c111",
+   "cent_html_id": "p1c113",
+   "printed": "21 2nd Month of the Quarter",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax22",
+   "peso_html_id": "p1c115",
+   "cent_html_id": "p1c117",
+   "printed": "22 Tax Remitted in Return Previously Filed",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax23",
+   "peso_html_id": "p1c119",
+   "cent_html_id": "p1c121",
+   "printed": "23 Over-remittance from Previous Quarter of the same taxable year",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax24",
+   "peso_html_id": "p1c127",
+   "cent_html_id": "p1c129",
+   "printed": "25 Total Remittances Made (label match; see rule)",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax25",
+   "peso_html_id": "p1c131",
+   "cent_html_id": "p1c133",
+   "printed": "26 Tax Still Due/(Over-remittance)",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax26",
+   "peso_html_id": "p1c135",
+   "cent_html_id": "p1c137",
+   "printed": "27 Surcharge",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax27",
+   "peso_html_id": "p1c139",
+   "cent_html_id": "p1c141",
+   "printed": "28 Interest",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax28",
+   "peso_html_id": "p1c143",
+   "cent_html_id": "p1c145",
+   "printed": "29 Compromise",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax29",
+   "peso_html_id": "p1c147",
+   "cent_html_id": "p1c149",
+   "printed": "30 Total Penalties",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtTax30",
+   "peso_html_id": "p1c151",
+   "cent_html_id": "p1c153",
+   "printed": "31 TOTAL AMOUNT STILL DUE/(Over-remittance)",
+   "reason": "label match: printed caption text equals the field's label in rules/forms/1601eq-v2018/fields.json"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAmount34",
+   "peso_html_id": "p1c190",
+   "cent_html_id": "p1c192",
+   "printed": "33 Check, Amount",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAmount35",
+   "peso_html_id": "p1c198",
+   "cent_html_id": "p1c200",
+   "printed": "34 Tax Debit Memo, Amount",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "frm1601EQ:txtAmount36",
+   "peso_html_id": "p1c208",
+   "cent_html_id": "p1c210",
+   "printed": "35 Others, Amount",
+   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  }
+ ],
+ "xbox_joins": [
+  {
+   "writer_key": "frm1601EQ:optQuarter:1",
+   "html_id": "p1c10",
+   "printed": "2 Quarter: 1st",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optQuarter:2",
+   "html_id": "p1c11",
+   "printed": "2 Quarter: 2nd",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optQuarter:3",
+   "html_id": "p1c12",
+   "printed": "2 Quarter: 3rd",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optQuarter:4",
+   "html_id": "p1c13",
+   "printed": "2 Quarter: 4th",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optAmend:Y",
+   "html_id": "p1c14",
+   "printed": "3 Amended Return? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optAmend:N",
+   "html_id": "p1c15",
+   "printed": "3 Amended Return? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optWithheld:Y",
+   "html_id": "p1c16",
+   "printed": "4 Any Taxes Withheld? Yes",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optWithheld:N",
+   "html_id": "p1c17",
+   "printed": "4 Any Taxes Withheld? No",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optCategory:P",
+   "html_id": "p1c39",
+   "printed": "11 Category of Withholding Agent: Private",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:optCategory:G",
+   "html_id": "p1c40",
+   "printed": "11 Category of Withholding Agent: Government",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:ifRefund",
+   "html_id": "p1c156",
+   "printed": "If over-remittance: To be refunded",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1601EQ:ifIssueCert",
+   "html_id": "p1c157",
+   "printed": "If over-remittance: To be issued Tax Credit Certificate",
+   "reason": "box immediately left of the printed option; X when the writer value is true"
+  }
+ ]
+}

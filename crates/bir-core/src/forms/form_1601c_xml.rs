@@ -10,6 +10,9 @@ use super::FormValidator;
 use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use std::collections::BTreeMap;
 
+/// The official form id of this rule package and layout.
+pub const FORM_1601C_FORM_ID: &str = "1601c-v2018";
+
 impl Form1601CDraft {
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
@@ -28,7 +31,14 @@ impl Form1601CDraft {
         );
 
         insert_bool_1_2(&mut fields, "frm1601c:AmendedRtn", self.is_amended);
-        insert_bool_1_2(&mut fields, "frm1601c:TaxWithheld", self.any_taxes_withheld);
+        match self.taxes_withheld_answer() {
+            Some(value) => insert_bool_1_2(&mut fields, "frm1601c:TaxWithheld", value),
+            // Unanswered Item 3: both radios unchecked, as the page opens.
+            None => {
+                insert(&mut fields, "frm1601c:TaxWithheld_1", "false".to_string());
+                insert(&mut fields, "frm1601c:TaxWithheld_2", "false".to_string());
+            }
+        }
 
         insert(
             &mut fields,
@@ -41,27 +51,34 @@ impl Form1601CDraft {
         insert(&mut fields, "frm1601c:txtTIN1", tin1.clone());
         insert(&mut fields, "frm1601c:txtTIN2", tin2.clone());
         insert(&mut fields, "frm1601c:txtTIN3", tin3.clone());
+        // Page 1's `maxlength="3"` only limits typing: official fills both
+        // branch fields from the profile `tin4` (HTA L3779–3780), which
+        // `padZeros` pads to 5 digits, so both carry the same 5-wide value.
         insert(&mut fields, "frm1601c:txtBranchCode", branch.clone());
         insert(&mut fields, "frm1601c:txtRDOCode", self.rdo_code.clone());
 
         // Use encoded spaces if requested by original XML format, but text should be fine
+        // Name, address and line of business are uppercased to mirror the
+        // official `capital()` onblur handler. Profile: official-match. The
+        // email is not: the effective `capital()` (string-util.js L236) skips
+        // `txtEmail`, so it is submitted as entered and only printed in
+        // capitals by the renderer.
         insert(
             &mut fields,
             "frm1601c:txtTaxpayerName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
         insert(
             &mut fields,
             "frm1601c:txtAddress",
-            self.registered_address.clone(),
+            self.registered_address.to_uppercase(),
         );
-        if !self.registered_address_2.is_empty() {
-            insert(
-                &mut fields,
-                "frm1601c:txtAddress2",
-                self.registered_address_2.clone(),
-            );
-        }
+        // The upload writes the Address 2 control even when it is blank.
+        insert(
+            &mut fields,
+            "frm1601c:txtAddress2",
+            self.registered_address_2.to_uppercase(),
+        );
         insert(&mut fields, "frm1601c:txtZipCode", self.zip_code.clone());
         insert(
             &mut fields,
@@ -88,7 +105,11 @@ impl Form1601CDraft {
             &mut fields,
             "frm1601c:selTreaty",
             if self.tax_relief {
-                self.tax_relief_specification.clone()
+                // `validate` rejects unmapped values; if one reaches here
+                // anyway, keep it verbatim rather than emit "0" (no relief)
+                // under SpecialTax = Yes.
+                crate::validation::official_tax_relief_code(&self.tax_relief_specification, true)
+                    .unwrap_or_else(|| self.tax_relief_specification.trim().to_string())
             } else {
                 "0".to_string()
             },
@@ -136,10 +157,17 @@ impl Form1601CDraft {
             "frm1601c:txtTax27",
             self.tax_27_taxes_withheld_for_remittance,
         );
+        // `1601c-input-011`: on a non-amended return the official handler
+        // disables Item 28 and resets it to 0.00; the serialized field mirrors
+        // that even when validate() was bypassed. Profile: official-match.
         insert_money(
             &mut fields,
             "frm1601c:txtTax28",
-            self.tax_28_tax_remitted_previously,
+            if self.is_amended {
+                self.tax_28_tax_remitted_previously
+            } else {
+                0.0
+            },
         );
 
         insert(
@@ -196,7 +224,7 @@ impl Form1601CDraft {
         insert(
             &mut fields,
             "frm1601c:txtPg2TaxpayerName",
-            self.taxpayer_name.clone(),
+            self.taxpayer_name.to_uppercase(),
         );
 
         // Schedule I — the verified 1601-C payload exposes three rows.
@@ -252,14 +280,19 @@ impl Form1601CDraft {
         insert(
             &mut fields,
             "frm1601c:txtLineBus",
-            self.line_of_business.clone(),
+            self.line_of_business.to_uppercase(),
         );
 
         fields
     }
 
+    /// The official submit plaintext for this draft, byte for byte as the
+    /// official `saveXMLsubmit()` writes it (see [`crate::official_xml`]).
     pub fn to_bir_xml_payload(&self) -> String {
-        crate::bir_xml::generate_bir_xml(&self.to_bir_field_map())
+        let layout = crate::official_xml::layout(FORM_1601C_FORM_ID)
+            .expect("the 1601C official layout is packaged");
+        crate::official_xml::write(layout, &self.to_bir_field_map())
+            .expect("the 1601C field map holds only official controls")
     }
 
     /// Generate XML only when the draft satisfies the verified model and
@@ -268,7 +301,7 @@ impl Form1601CDraft {
     pub fn try_to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         let errors = self.validate();
         if errors.is_empty() {
-            Ok(crate::bir_xml::generate_bir_xml(&self.to_bir_field_map()))
+            Ok(self.to_bir_xml_payload())
         } else {
             Err(errors)
         }
@@ -294,7 +327,19 @@ impl Form1601CDraft {
         let month = parse_required::<u8>(fields, "frm1601c:txtMonth", &mut errors);
         let taxable_year = parse_required::<u16>(fields, "frm1601c:txtYear", &mut errors);
         let is_amended = parse_bool_pair(fields, "frm1601c:AmendedRtn", &mut errors);
-        let any_taxes_withheld = parse_bool_pair(fields, "frm1601c:TaxWithheld", &mut errors);
+        // Both Item 3 radios unchecked is the page's unanswered state.
+        let any_taxes_withheld_unanswered = matches!(
+            (
+                field(fields, "frm1601c:TaxWithheld_1"),
+                field(fields, "frm1601c:TaxWithheld_2"),
+            ),
+            ("false", "false")
+        );
+        let any_taxes_withheld = if any_taxes_withheld_unanswered {
+            Some(false)
+        } else {
+            parse_bool_pair(fields, "frm1601c:TaxWithheld", &mut errors)
+        };
         let tax_relief = parse_bool_pair(fields, "frm1601c:SpecialTax", &mut errors);
 
         let category_private = parse_bool(fields, "frm1601c:CatAgent_P", &mut errors);
@@ -302,6 +347,8 @@ impl Form1601CDraft {
         let category_of_agent = match (category_private, category_government) {
             (Some(true), Some(false)) => Some("P".to_string()),
             (Some(false), Some(true)) => Some("G".to_string()),
+            // Unanswered Item 11, as the page opens.
+            (Some(false), Some(false)) => Some(String::new()),
             (Some(_), Some(_)) => {
                 errors.push((
                     "category_of_agent".to_string(),
@@ -374,6 +421,7 @@ impl Form1601CDraft {
             month: month.unwrap_or_default(),
             is_amended: is_amended.unwrap_or(false),
             any_taxes_withheld: any_taxes_withheld.unwrap_or(false),
+            any_taxes_withheld_unanswered,
             number_of_sheets: parse_optional::<u32>(fields, "frm1601c:txtSheets", &mut errors),
             atc: field(fields, "frm1601c:txtATC").to_string(),
             rdo_code: field(fields, "frm1601c:txtRDOCode").to_string(),
@@ -445,6 +493,7 @@ impl Form1601CDraft {
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
+            submitted_payload: None,
             queued_submission_fingerprint: None,
             queue_authorization: None,
             submission_claim_token: None,
@@ -556,7 +605,17 @@ fn parse_optional_money(
     key: &str,
     errors: &mut Vec<(String, String)>,
 ) -> f64 {
-    let value = parse_optional::<f64>(fields, key, errors);
+    // Official amounts carry thousands separators: `1,234.50`.
+    let Some(value) = crate::official_xml::parse_official_amount(field(fields, key)) else {
+        errors.push((
+            key.to_string(),
+            format!(
+                "1601-C field {key} has invalid value {:?}",
+                field(fields, key)
+            ),
+        ));
+        return 0.0;
+    };
     if !value.is_finite() {
         errors.push((
             key.to_string(),
@@ -678,13 +737,14 @@ fn insert_bool_1_2(map: &mut BTreeMap<String, String>, key: &str, value: bool) {
     );
 }
 
+/// Official money text: `1,234.50` (see [`crate::official_xml::official_amount`]).
 fn insert_money(map: &mut BTreeMap<String, String>, key: &str, value: f64) {
-    insert(map, key, format!("{:.2}", value));
+    insert(map, key, crate::official_xml::official_amount(value));
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::form_1601c::EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT;
+    use super::super::form_1601c::EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT as EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT;
     use super::*;
     use crate::naming::Tin;
     use crate::profile::{TaxpayerProfile, TaxpayerType};
@@ -759,15 +819,16 @@ mod tests {
 
         let field_map = draft.to_bir_field_map();
 
-        assert_eq!(field_map["frm1601c:txtTax14"], "100000.00");
-        assert_eq!(field_map["frm1601c:txtTax17"], "20000.00");
-        assert_eq!(field_map["frm1601c:txtTax21"], "20000.00"); // 15 to 20 = 20k
-        assert_eq!(field_map["frm1601c:txtTax22"], "80000.00"); // 14 - 21 = 80k
-        assert_eq!(field_map["frm1601c:txtTax27"], "15000.00"); // Taxes withheld
-        assert_eq!(field_map["frm1601c:txtTax36"], "15000.00"); // Total payable
+        // Official amounts carry thousands separators (formatCurrency/round).
+        assert_eq!(field_map["frm1601c:txtTax14"], "100,000.00");
+        assert_eq!(field_map["frm1601c:txtTax17"], "20,000.00");
+        assert_eq!(field_map["frm1601c:txtTax21"], "20,000.00"); // 15 to 20 = 20k
+        assert_eq!(field_map["frm1601c:txtTax22"], "80,000.00"); // 14 - 21 = 80k
+        assert_eq!(field_map["frm1601c:txtTax27"], "15,000.00"); // Taxes withheld
+        assert_eq!(field_map["frm1601c:txtTax36"], "15,000.00"); // Total payable
 
         let xml = draft.to_bir_xml_payload();
-        assert!(xml.contains("<div>frm1601c:txtTax22=80000.00frm1601c:txtTax22=</div>"));
+        assert!(xml.contains("<div>frm1601c:txtTax22=80,000.00frm1601c:txtTax22=</div>"));
     }
 
     fn valid_schedule_row(index: usize) -> Form1601CSchedule1Row {
@@ -803,8 +864,11 @@ mod tests {
             .expect("generated 1601-C XML should parse back into typed state");
 
         assert!(parsed.tax_relief);
-        assert_eq!(parsed.tax_relief_specification, "International Tax Treaty");
-        assert_eq!(parsed.registered_address_2, "Second address line");
+        assert_eq!(parsed.tax_relief_specification, "2");
+        // The upload (saveEncryptedProfile) writes txtAddress and txtAddress2
+        // as separate controls, so both lines round-trip.
+        assert_eq!(parsed.registered_address, "FIRST ADDRESS LINE");
+        assert_eq!(parsed.registered_address_2, "SECOND ADDRESS LINE");
         assert_eq!(parsed.schedule_1, draft.schedule_1);
         assert_eq!(parsed.tax_26_adjustment, 150.0);
         assert_eq!(parsed.tax_27_taxes_withheld_for_remittance, 1_150.0);
@@ -998,19 +1062,23 @@ frm1601c:txtLineBus
             missing.is_empty(),
             "missing source sample keys: {missing:?}"
         );
-        assert_eq!(reviewed_keys.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
+        // The upload adds Address 2 to the reviewed editable-save keys.
+        assert_eq!(
+            reviewed_keys.len() + 1,
+            EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT
+        );
         assert_eq!(fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
-        assert!(!fields.contains_key("frm1601c:txtAddress2"));
+        assert_eq!(fields["frm1601c:txtAddress2"], "");
 
         draft.registered_address_2 = "Reviewed second address line".to_string();
         let fields_with_optional_address = draft.to_bir_field_map();
         assert_eq!(
             fields_with_optional_address.len(),
-            EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT + 1
+            EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT
         );
         assert_eq!(
             fields_with_optional_address["frm1601c:txtAddress2"],
-            "Reviewed second address line"
+            "REVIEWED SECOND ADDRESS LINE"
         );
     }
 

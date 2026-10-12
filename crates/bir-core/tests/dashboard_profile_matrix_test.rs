@@ -31,9 +31,11 @@ const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701A", "1701Q", "25
 const MIXED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
 const MIXED_NON_VAT_8_PERCENT: &[&str] = &["1701", "1701Q"];
 const MIXED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
-const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1601C", "1604CF", "2316"];
+const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1601C", "1604C", "2316"];
 const EXPANDED_WITHHOLDING: &[&str] = &["0619E", "1601EQ", "1604E"];
-const FINAL_WITHHOLDING: &[&str] = &["0619F", "1600WP", "1601F", "1601FQ", "1602", "1603"];
+const FINAL_WITHHOLDING: &[&str] = &[
+    "0619F", "1600WP", "1601F", "1601FQ", "1602", "1603", "1604F",
+];
 
 fn base_profile(
     taxpayer_type: TaxpayerType,
@@ -1341,4 +1343,30 @@ fn profile_version_validation_rejects_invalid_effective_date_range() {
             .message
             .contains("effective end date before its start date")
     }));
+}
+
+#[test]
+fn profile_tin_must_pass_the_official_check_digit() {
+    let mut profile = self_employed_profile(false, None, false);
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .all(|error| error.field != "tin")
+    );
+
+    // 010-558-055 fails chkt.exe's check digit.
+    profile.tin.segment3 = "055".into();
+    assert!(validate_profile(&profile).iter().any(|error| {
+        error.field == "tin" && error.message == "You have entered an incorrect TIN"
+    }));
+
+    // Dummy TINs are rejected even though chkt.exe accepts 000000000.
+    profile.tin.segment1 = "000".into();
+    profile.tin.segment2 = "000".into();
+    profile.tin.segment3 = "000".into();
+    assert!(
+        validate_profile(&profile)
+            .iter()
+            .any(|error| error.field == "tin")
+    );
 }

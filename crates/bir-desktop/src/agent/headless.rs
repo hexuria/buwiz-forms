@@ -374,7 +374,12 @@ fn abandon_deaf_listener(addr: SocketAddr, shutdown: &std::sync::atomic::AtomicB
 }
 
 fn serve(wait: bool) -> Result<(), ExitCode> {
-    let config = load_serve_config()?;
+    let mut config = load_serve_config()?;
+    // `--wait` exists to wait for the port (restart handoff), so it must not
+    // fall back to an ephemeral port while the old server still holds it.
+    if !wait {
+        config.addr = super::instance::resolve_addr(config.addr);
+    }
     let token_set = config.token.is_some();
 
     loop {
@@ -448,6 +453,13 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             eprintln!("pid file: {error}");
         }
         let _pid_guard = ServePidGuard;
+        let _discovery_guard = match super::instance::publish(addr) {
+            Ok(published) => Some(published),
+            Err(error) => {
+                eprintln!("gpui-agent discovery record not written: {error}");
+                None
+            }
+        };
 
         eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-desktop)");
         eprintln!(
@@ -512,13 +524,18 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
 }
 
 fn connect_running() -> Result<AgentClient, ExitCode> {
-    let addr = match std::env::var("GPUI_AGENT_ADDR") {
-        Ok(raw) => raw.parse::<SocketAddr>().map_err(|error| {
-            eprintln!("invalid GPUI_AGENT_ADDR: {error}");
-            ExitCode::from(2)
-        })?,
-        Err(_) => DEFAULT_ADDR_STR.parse().expect("default addr"),
-    };
+    let explicit = std::env::var(super::instance::ADDR_ENV).ok();
+    let connect_id = std::env::var(gpui_agent::discovery::CONNECT_ID_ENV).ok();
+    let addr = super::instance::client_addr(
+        &gpui_agent::discovery::runtime_root(),
+        explicit.as_deref(),
+        connect_id.as_deref(),
+        DEFAULT_ADDR_STR.parse().expect("default addr"),
+    )
+    .map_err(|error| {
+        eprintln!("{error}");
+        ExitCode::from(2)
+    })?;
     let token = std::env::var("GPUI_AGENT_TOKEN")
         .ok()
         .filter(|value| !value.is_empty());
@@ -815,6 +832,8 @@ mod tests {
         let directory = tempfile::tempdir().expect("temp dir");
         let path = directory.path().join("refuse.db");
         let path_s = path.to_str().expect("utf8 path").to_string();
+        let runtime = directory.path().join("runtime");
+        let runtime_s = runtime.to_str().expect("utf8 path").to_string();
         temp_env::with_vars(
             [
                 ("GPUI_AGENT", Some("1")),
@@ -822,6 +841,7 @@ mod tests {
                 ("GPUI_AGENT_ADDR", Some(addr_s.as_str())),
                 ("BIR_DATABASE_PATH", Some(path_s.as_str())),
                 ("EBIR_TEST_ENV", Some("1")),
+                ("GPUI_AGENT_RUNTIME_DIR", Some(runtime_s.as_str())),
             ],
             || {
                 let error = serve(false).expect_err("refuse busy bind");
@@ -867,6 +887,10 @@ mod tests {
         let addr_s = addr.to_string();
         let path_s = path.to_str().expect("utf8 path").to_string();
         let pid_s = pid_path.to_str().expect("utf8 path").to_string();
+        // `serve` publishes an upstream discovery record: keep it in a temp
+        // runtime directory, never the user's real one.
+        let runtime = directory.path().join("runtime");
+        let runtime_s = runtime.to_str().expect("utf8 path").to_string();
         let token = "wait-secret";
         temp_env::with_vars(
             [
@@ -876,6 +900,8 @@ mod tests {
                 ("BIR_DATABASE_PATH", Some(path_s.as_str())),
                 ("BIR_HEADLESS_PID", Some(pid_s.as_str())),
                 ("EBIR_TEST_ENV", Some("1")),
+                ("GPUI_AGENT_RUNTIME_DIR", Some(runtime_s.as_str())),
+                ("GPUI_AGENT_CONNECT_ID", Some("bir-headless-wait-test")),
             ],
             || {
                 let lock = db::try_acquire_live_owner_lock(&path).expect("hold owner lock");
@@ -932,6 +958,13 @@ mod tests {
                             client
                                 .invoke("profile.list", json!({}))
                                 .expect("profile.list after wait");
+                            let record = gpui_agent::discovery::resolve_id(
+                                &runtime,
+                                "bir-headless-wait-test",
+                            )
+                            .expect("serve published its record under the temp runtime dir");
+                            assert_eq!(record.addr, addr.to_string());
+                            assert_eq!(record.app, "bir-desktop");
                             client.expect_ok(Op::Shutdown).expect("shutdown");
                             ready = true;
                             break;
@@ -960,7 +993,7 @@ mod tests {
             ));
             {
                 let mut host = BirAgentHost::new(PlatformKind::Headless).with_database(db.clone());
-                fill_profile_editor(&mut host, "00000000000002", "Headless Live TIN");
+                fill_profile_editor(&mut host, "12345678800002", "Headless Live TIN");
                 let saved = handle_request(
                     &mut host,
                     req(Op::Invoke {
@@ -990,7 +1023,7 @@ mod tests {
                         .unwrap()
                         .iter()
                         .any(|row| {
-                            row["tin"] == "00000000000002" && row["name"] == "Headless Live TIN"
+                            row["tin"] == "12345678800002" && row["name"] == "Headless Live TIN"
                         }),
                     "{:?}",
                     listed.result
@@ -1008,7 +1041,7 @@ mod tests {
             assert!(
                 listed
                     .iter()
-                    .any(|profile| profile.tin.full() == "00000000000002"
+                    .any(|profile| profile.tin.full() == "12345678800002"
                         && profile.full_name == "Headless Live TIN"),
                 "{listed:?}"
             );
@@ -1019,61 +1052,69 @@ mod tests {
     fn headless_spawn_host_persists_profile_save_to_file_db() {
         let directory = tempfile::tempdir().expect("temp dir");
         let path = directory.path().join("bir_data.db");
-        temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
-            let db = Arc::new(Mutex::new(Database::open(&path).expect("file db")));
-            let host = Arc::new(Mutex::new(
-                BirAgentHost::new(PlatformKind::Headless).with_database(db.clone()),
-            ));
-            let (addr, shutdown) =
-                spawn_host("127.0.0.1:0".parse().unwrap(), None, host.clone()).expect("bind");
-            let mut client = AgentClient::connect(addr).with_timeout(Duration::from_secs(5));
-            client.wait_ready().expect("hello");
-            client
-                .invoke("profile.create", json!({}))
-                .expect("create editor");
-            for (target, value) in [
-                (ids::PROFILE_TIN, "00000000000002"),
-                (ids::PROFILE_NAME, "Headless Tcp TIN"),
-                (ids::PROFILE_RDO, "018"),
-                (ids::PROFILE_LOB, "Retail"),
-                (ids::PROFILE_ADDRESS, "Manila"),
-                (ids::PROFILE_ZIP, "1000"),
-                (ids::PROFILE_PHONE, "09170000000"),
-                (ids::PROFILE_EMAIL, "headless-tcp@example.com"),
-            ] {
+        let runtime = directory.path().join("runtime");
+        let runtime_s = runtime.to_str().expect("utf8 path").to_string();
+        temp_env::with_vars(
+            [
+                ("EBIR_TEST_ENV", Some("1")),
+                ("GPUI_AGENT_RUNTIME_DIR", Some(runtime_s.as_str())),
+            ],
+            || {
+                let db = Arc::new(Mutex::new(Database::open(&path).expect("file db")));
+                let host = Arc::new(Mutex::new(
+                    BirAgentHost::new(PlatformKind::Headless).with_database(db.clone()),
+                ));
+                let (addr, shutdown) =
+                    spawn_host("127.0.0.1:0".parse().unwrap(), None, host.clone()).expect("bind");
+                let mut client = AgentClient::connect(addr).with_timeout(Duration::from_secs(5));
+                client.wait_ready().expect("hello");
                 client
-                    .expect_ok(Op::SetValue {
-                        target: target.into(),
-                        value: value.into(),
-                    })
-                    .unwrap_or_else(|error| panic!("{target}: {error}"));
-            }
-            client
-                .invoke("profile.save", json!({}))
-                .expect("confirm-gated persist is explicit profile.save");
-            client.expect_ok(Op::Shutdown).unwrap();
-            let started = std::time::Instant::now();
-            while !shutdown.load(std::sync::atomic::Ordering::SeqCst)
-                || Arc::strong_count(&host) > 1
-            {
+                    .invoke("profile.create", json!({}))
+                    .expect("create editor");
+                for (target, value) in [
+                    (ids::PROFILE_TIN, "12345678800002"),
+                    (ids::PROFILE_NAME, "Headless Tcp TIN"),
+                    (ids::PROFILE_RDO, "018"),
+                    (ids::PROFILE_LOB, "Retail"),
+                    (ids::PROFILE_ADDRESS, "Manila"),
+                    (ids::PROFILE_ZIP, "1000"),
+                    (ids::PROFILE_PHONE, "09170000000"),
+                    (ids::PROFILE_EMAIL, "headless-tcp@example.com"),
+                ] {
+                    client
+                        .expect_ok(Op::SetValue {
+                            target: target.into(),
+                            value: value.into(),
+                        })
+                        .unwrap_or_else(|error| panic!("{target}: {error}"));
+                }
+                client
+                    .invoke("profile.save", json!({}))
+                    .expect("confirm-gated persist is explicit profile.save");
+                client.expect_ok(Op::Shutdown).unwrap();
+                let started = std::time::Instant::now();
+                while !shutdown.load(std::sync::atomic::Ordering::SeqCst)
+                    || Arc::strong_count(&host) > 1
+                {
+                    assert!(
+                        started.elapsed() < Duration::from_secs(2),
+                        "headless serve did not drop the host after shutdown"
+                    );
+                    thread::sleep(Duration::from_millis(10));
+                }
+                drop(host);
+                db.lock().expect("db").checkpoint().expect("wal checkpoint");
+                drop(db);
+                let reopened = Database::open(&path).expect("reopen");
+                let listed = reopened.list_profiles().expect("list");
                 assert!(
-                    started.elapsed() < Duration::from_secs(2),
-                    "headless serve did not drop the host after shutdown"
+                    listed
+                        .iter()
+                        .any(|profile| profile.tin.full() == "12345678800002"),
+                    "{listed:?}"
                 );
-                thread::sleep(Duration::from_millis(10));
-            }
-            drop(host);
-            db.lock().expect("db").checkpoint().expect("wal checkpoint");
-            drop(db);
-            let reopened = Database::open(&path).expect("reopen");
-            let listed = reopened.list_profiles().expect("list");
-            assert!(
-                listed
-                    .iter()
-                    .any(|profile| profile.tin.full() == "00000000000002"),
-                "{listed:?}"
-            );
-        });
+            },
+        );
     }
 
     #[test]

@@ -23,7 +23,7 @@
 # Usage:
 #   scripts/setup-macos.sh              # install everything
 #   scripts/setup-macos.sh --check      # verify only, install nothing
-#   scripts/setup-macos.sh --extras     # also install cargo-audit/outdated/machete + node
+#   scripts/setup-macos.sh --extras     # also install cargo-audit/outdated/machete
 #   scripts/setup-macos.sh --no-agent   # skip installing the gpui-agent CLI
 #
 set -euo pipefail
@@ -295,7 +295,6 @@ main() {
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
         cargo install cargo-audit cargo-outdated cargo-machete
-        brew list --versions node >/dev/null 2>&1 || brew install node
     fi
 
     log "Verifying toolchain"
@@ -317,9 +316,9 @@ OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
 To drive the app from the CLI (gpui-agent was installed at the Cargo.lock
 rev): build the host with the agent feature and launch with env vars —
 
-    cargo build --locked --bin bir --features agent
+    cargo build --locked --bin bir-desktop --features agent
     export GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret
-    ./target/debug/bir &        # then, another shell:
+    ./target/debug/bir-desktop &        # then, another shell:
     gpui-agent hello            # protocol, app, platform, ready
     gpui-agent keybindings      # {id, chord, scope, dangerous}
 
