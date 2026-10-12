@@ -845,7 +845,7 @@ mod tests {
             ));
             {
                 let mut host = BirAgentHost::new(PlatformKind::Headless).with_database(db.clone());
-                fill_profile_editor(&mut host, "11111111400000", "Headless Live TIN");
+                fill_profile_editor(&mut host, "12345678800002", "Headless Live TIN");
                 let saved = handle_request(
                     &mut host,
                     req(Op::Invoke {
@@ -875,7 +875,7 @@ mod tests {
                         .unwrap()
                         .iter()
                         .any(|row| {
-                            row["tin"] == "11111111400000" && row["name"] == "Headless Live TIN"
+                            row["tin"] == "12345678800002" && row["name"] == "Headless Live TIN"
                         }),
                     "{:?}",
                     listed.result
@@ -893,7 +893,7 @@ mod tests {
             assert!(
                 listed
                     .iter()
-                    .any(|profile| profile.tin.full() == "11111111400000"
+                    .any(|profile| profile.tin.full() == "12345678800002"
                         && profile.full_name == "Headless Live TIN"),
                 "{listed:?}"
             );
@@ -924,7 +924,7 @@ mod tests {
                     .invoke("profile.create", json!({}))
                     .expect("create editor");
                 for (target, value) in [
-                    (ids::PROFILE_TIN, "11111111400000"),
+                    (ids::PROFILE_TIN, "12345678800002"),
                     (ids::PROFILE_NAME, "Headless Tcp TIN"),
                     (ids::PROFILE_RDO, "018"),
                     (ids::PROFILE_LOB, "Retail"),
@@ -962,7 +962,7 @@ mod tests {
                 assert!(
                     listed
                         .iter()
-                        .any(|profile| profile.tin.full() == "11111111400000"),
+                        .any(|profile| profile.tin.full() == "12345678800002"),
                     "{listed:?}"
                 );
             },

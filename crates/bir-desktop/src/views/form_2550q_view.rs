@@ -1,9 +1,9 @@
 //! Evidence-safe editor for exact form `2550Qv2024`.
 //!
 //! The supplied official PDF and reviewed 160-field editable-save pair prove
-//! draft persistence and the form's arithmetic. They do not prove an online
-//! submission transport, so this view saves local drafts but never queues or
-//! submits them.
+//! draft persistence and the form's arithmetic. This view saves local drafts
+//! and, once a draft is ready, queues it for background submission through the
+//! generic queue.
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
@@ -16,11 +16,13 @@ use bir_core::form_rules::{
     prepare_form_2550q_live_row_identities,
 };
 use bir_core::forms::form_2550q::{
-    FORM_CODE, FORM_VERSION_LABEL, Form2550QAdvanceVatRow, Form2550QCapitalGoodRow,
-    Form2550QCreditableVatRow, Form2550QDate, Form2550QDraft, Form2550QFilingBasis,
-    Form2550QQuarter, Form2550QRowFamily, Form2550QTaxpayerClassification,
+    FORM_CODE, FORM_VERSION_LABEL, Form2550QAdditionalItemRow, Form2550QAdvanceVatRow,
+    Form2550QCapitalGoodRow, Form2550QCreditableVatRow, Form2550QDate, Form2550QDraft,
+    Form2550QFilingBasis, Form2550QQuarter, Form2550QRowFamily, Form2550QTaxpayerClassification,
+    specify_add_row_alert,
 };
 use bir_core::forms::{FilingPeriod, FilingStatus, FormValidator};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::StyledExt;
 use gpui_component::button::ButtonVariants;
@@ -30,6 +32,14 @@ use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 use crate::components::form_validation::SemanticFieldTargets;
+use crate::views::event_form_kit::Layout;
+use crate::views::form_controls::{messages_for, with_field_error};
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
+    separate_validate_button,
+};
+use bir_core::forms::queueable::can_user_revert;
 
 const YEAR_END_MONTH: &str = "year_end_month";
 const RAW_TAXABLE_YEAR: &str = "raw_taxable_year";
@@ -253,6 +263,135 @@ impl AdvanceVatInputs {
     }
 }
 
+/// One row of an item 19, 42, 47 or 56 "(Add more...)" popup.
+#[derive(Clone)]
+struct SpecifyRowInputs {
+    family: Form2550QRowFamily,
+    instance_id: StableInstanceId,
+    description: Entity<InputState>,
+    amount: Entity<InputState>,
+}
+
+impl SpecifyRowInputs {
+    fn bound_inputs(&self) -> Vec<(Entity<InputState>, RawControlBinding)> {
+        let (description, amount) = specify_members(self.family);
+        vec![
+            self.bound(&self.description, description),
+            self.bound(&self.amount, amount),
+        ]
+    }
+
+    fn bound(
+        &self,
+        input: &Entity<InputState>,
+        member_key: &'static str,
+    ) -> (Entity<InputState>, RawControlBinding) {
+        (
+            input.clone(),
+            RawControlBinding::Repeated {
+                family: self.family,
+                instance_id: self.instance_id.clone(),
+                member_key,
+            },
+        )
+    }
+}
+
+/// The four popup families, their official item number and the static
+/// line's controls (description, amount, and for item 47 the computed 47B).
+const SPECIFY_ITEMS: [(Form2550QRowFamily, u8, &str, &str); 4] = [
+    (
+        Form2550QRowFamily::Item19Additional,
+        19,
+        ITEM_19_DESCRIPTION,
+        ITEM_19,
+    ),
+    (
+        Form2550QRowFamily::Item42Additional,
+        42,
+        ITEM_42_DESCRIPTION,
+        ITEM_42B,
+    ),
+    (
+        Form2550QRowFamily::Item47Additional,
+        47,
+        ITEM_47_DESCRIPTION,
+        ITEM_47A,
+    ),
+    (
+        Form2550QRowFamily::Item56Additional,
+        56,
+        ITEM_56_DESCRIPTION,
+        ITEM_56B,
+    ),
+];
+
+/// The popup row controls `frm2550qv2024:totalTaxPayableNo<item>Description`
+/// and `...Amount` (the row index follows on the official page).
+fn specify_members(family: Form2550QRowFamily) -> (&'static str, &'static str) {
+    match family {
+        Form2550QRowFamily::Item42Additional => (
+            "frm2550qv2024:totalTaxPayableNo42Description",
+            "frm2550qv2024:totalTaxPayableNo42Amount",
+        ),
+        Form2550QRowFamily::Item47Additional => (
+            "frm2550qv2024:totalTaxPayableNo47Description",
+            "frm2550qv2024:totalTaxPayableNo47Amount",
+        ),
+        Form2550QRowFamily::Item56Additional => (
+            "frm2550qv2024:totalTaxPayableNo56Description",
+            "frm2550qv2024:totalTaxPayableNo56Amount",
+        ),
+        _ => (
+            "frm2550qv2024:totalTaxPayableNo19Description",
+            "frm2550qv2024:totalTaxPayableNo19Amount",
+        ),
+    }
+}
+
+fn specify_rows(
+    draft: &Form2550QDraft,
+    family: Form2550QRowFamily,
+) -> &[Form2550QAdditionalItemRow] {
+    match family {
+        Form2550QRowFamily::Item19Additional => &draft.item_19_additional_rows,
+        Form2550QRowFamily::Item42Additional => &draft.item_42_additional_rows,
+        Form2550QRowFamily::Item47Additional => &draft.item_47_additional_rows,
+        Form2550QRowFamily::Item56Additional => &draft.item_56_additional_rows,
+        _ => &[],
+    }
+}
+
+fn specify_rows_mut(
+    draft: &mut Form2550QDraft,
+    family: Form2550QRowFamily,
+) -> Option<&mut Vec<Form2550QAdditionalItemRow>> {
+    match family {
+        Form2550QRowFamily::Item19Additional => Some(&mut draft.item_19_additional_rows),
+        Form2550QRowFamily::Item42Additional => Some(&mut draft.item_42_additional_rows),
+        Form2550QRowFamily::Item47Additional => Some(&mut draft.item_47_additional_rows),
+        Form2550QRowFamily::Item56Additional => Some(&mut draft.item_56_additional_rows),
+        _ => None,
+    }
+}
+
+fn specify_row_inputs(
+    family: Form2550QRowFamily,
+    row: &Form2550QAdditionalItemRow,
+    window: &mut Window,
+    cx: &mut Context<Form2550QV2View>,
+) -> SpecifyRowInputs {
+    SpecifyRowInputs {
+        family,
+        instance_id: row
+            .instance_id
+            .clone()
+            .expect("validated popup row must retain its stable ID"),
+        description: text_input(cx, &row.description, "Description", window),
+        amount: money_input(cx, row.amount, window),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum RawControlBinding {
     Singleton {
@@ -308,6 +447,8 @@ pub struct Form2550QV2View {
     draft: Form2550QDraft,
     db: Arc<Mutex<Database>>,
     scroll_handle: ScrollHandle,
+    /// Width class captured at the start of each render so row helpers can stack on Phone.
+    layout: std::cell::Cell<Layout>,
     input_errors: Vec<(String, String)>,
     validation_errors: Vec<(String, String)>,
     editor_state_error: Option<String>,
@@ -318,11 +459,20 @@ pub struct Form2550QV2View {
     schedule_1_inputs: Vec<CapitalGoodInputs>,
     schedule_3_inputs: Vec<CreditableVatInputs>,
     schedule_4_inputs: Vec<AdvanceVatInputs>,
+    specify_inputs: Vec<SpecifyRowInputs>,
     validation_setup: Form2550QRepoDiagnosticSetupOutcome,
     validation_state: Form2550QDiagnosticState,
     validation_input_revision: InputRevision,
+    /// Set when Validate runs the form's official checks; cleared by any
+    /// input change. Queue requires it (the candidate diagnostic does not gate).
+    validated_at_current_revision: bool,
     semantic_field_targets: SemanticFieldTargets<Entity<InputState>>,
     semantic_focus_error: Option<String>,
+    /// The raw identity controls sit behind an "Advanced" toggle; they open
+    /// by themselves when the draft already carries raw text.
+    show_raw_identity: bool,
+    /// The shared header's menu, status-box and snapshot state.
+    header: FormHeaderState,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -613,6 +763,20 @@ impl Form2550QV2View {
             } else {
                 (Vec::new(), Vec::new(), Vec::new())
             };
+        let specify_inputs: Vec<SpecifyRowInputs> = if editor_state_error.is_none() {
+            SPECIFY_ITEMS
+                .iter()
+                .flat_map(|(family, ..)| {
+                    specify_rows(&draft, *family)
+                        .iter()
+                        .map(|row| (*family, row.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .map(|(family, row)| specify_row_inputs(family, &row, window, cx))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         if editor_state_error.is_none() {
             restore_singleton_raw_values(&fields, &draft.raw_editor_state, window, cx);
@@ -636,6 +800,14 @@ impl Form2550QV2View {
                 window,
                 cx,
             );
+            restore_bound_raw_values(
+                specify_inputs
+                    .iter()
+                    .flat_map(SpecifyRowInputs::bound_inputs),
+                &draft.raw_editor_state,
+                window,
+                cx,
+            );
         }
 
         let mut subscribed_inputs = if editor_state_error.is_none() {
@@ -652,6 +824,9 @@ impl Form2550QV2View {
             subscribed_inputs.extend(row.bound_inputs());
         }
         for row in &schedule_4_inputs {
+            subscribed_inputs.extend(row.bound_inputs());
+        }
+        for row in &specify_inputs {
             subscribed_inputs.extend(row.bound_inputs());
         }
 
@@ -676,16 +851,7 @@ impl Form2550QV2View {
 
         let mut subscriptions = Vec::new();
         for (input, binding) in subscribed_inputs {
-            subscriptions.push(cx.subscribe_in(
-                &input,
-                window,
-                move |this: &mut Self, _, event: &InputEvent, _, cx| {
-                    if let InputEvent::Change = event {
-                        this.raw_control_changed();
-                        this.sync_from_inputs(Some(std::slice::from_ref(&binding)), cx);
-                    }
-                },
-            ));
+            subscriptions.push(subscribe_bound_input(&input, binding, window, cx));
         }
 
         let validation_setup = Form2550QLiveValidationFacade::setup_repo_default_diagnostic();
@@ -696,13 +862,16 @@ impl Form2550QV2View {
                 "2550Q editor is locked because persisted control identity could not be validated. No positional fallback was used. {error}"
             )
         }).or_else(|| migrated_legacy_draft.then(|| {
-            "The scaffold-era 2550Q draft was migrated to the reviewed April 2024 model. Review any migration warnings before filing externally."
+            "The scaffold-era 2550Q draft was migrated to the reviewed April 2024 model. Review any migration warnings before queuing it for submission."
                 .to_string()
         }));
+        let show_raw_identity = draft.raw_editor_state
+            != bir_core::forms::form_2550q::Form2550QRawEditorState::default();
         let mut view = Self {
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
+            layout: std::cell::Cell::new(Layout::Desktop),
             input_errors: Vec::new(),
             validation_errors,
             editor_state_error,
@@ -713,17 +882,472 @@ impl Form2550QV2View {
             schedule_1_inputs,
             schedule_3_inputs,
             schedule_4_inputs,
+            specify_inputs,
             validation_setup,
             validation_state,
             validation_input_revision: InputRevision::default(),
+            validated_at_current_revision: false,
             semantic_field_targets,
             semantic_focus_error,
+            show_raw_identity,
+            header: FormHeaderState::new(),
             _subscriptions: subscriptions,
         };
         if view.editor_state_error.is_none() {
             view.sync_from_inputs(None, cx);
+            view.refresh_schedule_1_derived(window, cx);
+            view.refresh_specify_static_lines(window, cx);
         }
         view
+    }
+
+    /// `closeModalNo19/42/47/56`: an item with popup rows shows `VARIOUS` (or
+    /// the one row's description) and the rows' total on its static line,
+    /// which is then read-only; item 47B follows as 12% of 47A. Any captured
+    /// raw text of those controls follows too, so it stays coherent.
+    fn refresh_specify_static_lines(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let p2 = &self.draft.part_ii;
+        let p4 = &self.draft.part_iv;
+        let derived = [
+            (
+                Form2550QRowFamily::Item19Additional,
+                vec![
+                    (ITEM_19_DESCRIPTION, p2.item_19_description.clone()),
+                    (ITEM_19, money_text(p2.item_19_other_credit_or_payment)),
+                ],
+            ),
+            (
+                Form2550QRowFamily::Item42Additional,
+                vec![
+                    (ITEM_42_DESCRIPTION, p4.item_42_description.clone()),
+                    (ITEM_42B, money_text(p4.item_42b_other_input_tax)),
+                ],
+            ),
+            (
+                Form2550QRowFamily::Item47Additional,
+                vec![
+                    (ITEM_47_DESCRIPTION, p4.item_47_description.clone()),
+                    (ITEM_47A, money_text(p4.item_47a_other_purchases)),
+                    (ITEM_47B, money_text(p4.item_47b_other_input_tax)),
+                ],
+            ),
+            (
+                Form2550QRowFamily::Item56Additional,
+                vec![
+                    (ITEM_56_DESCRIPTION, p4.item_56_description.clone()),
+                    (ITEM_56B, money_text(p4.item_56b_other_deduction)),
+                ],
+            ),
+        ];
+        for (family, lines) in derived {
+            if specify_rows(&self.draft, family).is_empty() {
+                continue;
+            }
+            for (ui_key, text) in lines {
+                let input = field(&self.fields, ui_key).clone();
+                if input_text(&input, cx) != text {
+                    set_input_value(&input, &text, window, cx);
+                }
+                let raw_key = singleton_raw_key(ui_key);
+                if matches!(
+                    self.draft.raw_editor_state.singleton_value(raw_key),
+                    Some(RawValue::Text(_))
+                ) {
+                    self.draft
+                        .raw_editor_state
+                        .set_singleton(raw_key, RawValue::Text(text));
+                }
+            }
+        }
+        self.validation_errors = self.input_errors.clone();
+        self.validation_errors.extend(self.draft.validate());
+    }
+
+    /// The official `addColNo19/42/47/56` ("Add Row" in the popup): refused
+    /// with "Empty fields are not allowed" while a row is incomplete. The
+    /// first click turns the static line into row 1 and adds row 2.
+    fn add_specify_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        if let Some(alert) = specify_add_row_alert(specify_rows(&self.draft, family)) {
+            self.status_message = Some(alert.to_string());
+            cx.notify();
+            return;
+        }
+        let Some((_, _, description_key, amount_key)) = SPECIFY_ITEMS
+            .iter()
+            .copied()
+            .find(|(candidate, ..)| *candidate == family)
+        else {
+            return;
+        };
+        let seed =
+            specify_rows(&self.draft, family)
+                .is_empty()
+                .then(|| Form2550QAdditionalItemRow {
+                    instance_id: None,
+                    description: input_text(field(&self.fields, description_key), cx),
+                    amount: parse_optional_money(field(&self.fields, amount_key), amount_key, cx)
+                        .ok()
+                        .flatten(),
+                });
+        let Some(rows) = specify_rows_mut(&mut self.draft, family) else {
+            return;
+        };
+        let before = rows.len();
+        rows.extend(seed);
+        rows.push(Form2550QAdditionalItemRow::default());
+        if let Err(error) = prepare_form_2550q_live_row_identities(&mut self.draft) {
+            if let Some(rows) = specify_rows_mut(&mut self.draft, family) {
+                rows.truncate(before);
+            }
+            self.status_message = Some(format!(
+                "The new row could not get a stable identity: {error}"
+            ));
+            cx.notify();
+            return;
+        }
+        let added: Vec<Form2550QAdditionalItemRow> =
+            specify_rows(&self.draft, family)[before..].to_vec();
+        for row in &added {
+            let inputs = specify_row_inputs(family, row, window, cx);
+            for (input, binding) in inputs.bound_inputs() {
+                let subscription = subscribe_bound_input(&input, binding, window, cx);
+                self._subscriptions.push(subscription);
+            }
+            self.specify_inputs.push(inputs);
+        }
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+        self.refresh_specify_static_lines(window, cx);
+    }
+
+    /// The official `deleteRowNo19/42/47/56`. Removing the last row leaves
+    /// the static line empty, as `closeModalNo19/42/47/56` does.
+    fn remove_specify_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        instance_id: StableInstanceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        self.specify_inputs
+            .retain(|inputs| inputs.instance_id != instance_id);
+        let Some(rows) = specify_rows_mut(&mut self.draft, family) else {
+            return;
+        };
+        rows.retain(|row| row.instance_id.as_ref() != Some(&instance_id));
+        let now_empty = rows.is_empty();
+        self.draft
+            .raw_editor_state
+            .remove_repeated_row(family, &instance_id);
+        if now_empty
+            && let Some((_, _, description_key, amount_key)) = SPECIFY_ITEMS
+                .iter()
+                .copied()
+                .find(|(candidate, ..)| *candidate == family)
+        {
+            set_input_value(field(&self.fields, description_key), "", window, cx);
+            set_input_value(field(&self.fields, amount_key), "0.00", window, cx);
+        }
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+        self.refresh_specify_static_lines(window, cx);
+    }
+
+    /// One item's static line, then its popup rows and "Add Row".
+    fn render_specify_item(
+        &self,
+        family: Form2550QRowFamily,
+        lines: &[(&str, &'static str)],
+        cx: &Context<Self>,
+    ) -> Div {
+        let item = SPECIFY_ITEMS
+            .iter()
+            .find(|(candidate, ..)| *candidate == family)
+            .map_or(0, |(_, item, ..)| *item);
+        let has_rows = !specify_rows(&self.draft, family).is_empty();
+        let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let mut block = div().flex().flex_col().gap_1();
+        for (label, key) in lines {
+            let row =
+                pair_row(layout)
+                    .child(half(layout).text_sm().child((*label).to_string()))
+                    .child(half(layout).child(
+                        Input::new(field(&self.fields, key)).disabled(!editable || has_rows),
+                    ))
+                    .into_any_element();
+            block = block.child(with_field_error(row, self.input_error(key)));
+        }
+        let field_name = match family {
+            Form2550QRowFamily::Item19Additional => "item_19_additional_rows",
+            Form2550QRowFamily::Item42Additional => "item_42_additional_rows",
+            Form2550QRowFamily::Item47Additional => "item_47_additional_rows",
+            _ => "item_56_additional_rows",
+        };
+        let rows: Vec<&SpecifyRowInputs> = self
+            .specify_inputs
+            .iter()
+            .filter(|inputs| inputs.family == family)
+            .collect();
+        for (index, inputs) in rows.into_iter().enumerate() {
+            let instance_id = inputs.instance_id.clone();
+            let card = row_card(cx, &format!("{item}.{}", index + 1))
+                .child(input_pair(
+                    layout,
+                    "Description",
+                    &inputs.description,
+                    editable,
+                ))
+                .child(input_pair(layout, "Amount", &inputs.amount, editable))
+                .child(
+                    gpui_component::button::Button::new((
+                        SharedString::from(format!("2550q_specify_{item}_remove")),
+                        index,
+                    ))
+                    .label("Remove")
+                    .outline()
+                    .disabled(!editable)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.remove_specify_row(family, instance_id.clone(), window, cx);
+                    })),
+                );
+            block = block.child(with_field_error(
+                card.into_any_element(),
+                self.row_error(&format!("{field_name}[{index}]")),
+            ));
+        }
+        block.child(
+            gpui_component::button::Button::new(SharedString::from(format!(
+                "2550q_specify_{item}_add"
+            )))
+            .label(format!("Add item {item} row"))
+            .outline()
+            .disabled(!editable)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.add_specify_row(family, window, cx);
+            })),
+        )
+    }
+
+    /// Show Schedule 1's computed allowable input tax and balance (disabled
+    /// on the official page, filled by `computeSched1`).
+    fn refresh_schedule_1_derived(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let rows = self.schedule_1_inputs.clone();
+        for inputs in &rows {
+            let Some(row) = self
+                .draft
+                .schedule_1
+                .iter()
+                .find(|row| row.instance_id.as_ref() == Some(&inputs.instance_id))
+            else {
+                continue;
+            };
+            for (input, value) in [
+                (
+                    &inputs.allowable_input_tax,
+                    row.allowable_input_tax_for_period,
+                ),
+                (&inputs.balance_next_period, row.balance_to_next_period),
+            ] {
+                let text = value.map(|value| format!("{value:.2}")).unwrap_or_default();
+                if input_text(input, cx) != text {
+                    set_input_value(input, &text, window, cx);
+                }
+            }
+        }
+    }
+
+    fn rebuild_semantic_targets(&mut self) {
+        match semantic_targets_from_raw_controls(&self.bound_inputs()) {
+            Ok(targets) => {
+                self.semantic_field_targets = targets;
+                self.semantic_focus_error = None;
+            }
+            Err(error) => {
+                self.semantic_field_targets = SemanticFieldTargets::default();
+                self.semantic_focus_error = Some(format!(
+                    "Validation focus mapping is unavailable: {error}. No fallback field will be focused."
+                ));
+            }
+        }
+    }
+
+    /// The official `addlistSched1/3/4`: one more row, no limit.
+    fn add_schedule_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        match family {
+            Form2550QRowFamily::Schedule1 => self
+                .draft
+                .schedule_1
+                .push(Form2550QCapitalGoodRow::default()),
+            Form2550QRowFamily::Schedule3 => self
+                .draft
+                .schedule_3
+                .push(Form2550QCreditableVatRow::default()),
+            Form2550QRowFamily::Schedule4 => self
+                .draft
+                .schedule_4
+                .push(Form2550QAdvanceVatRow::default()),
+            _ => return,
+        }
+        if let Err(error) = prepare_form_2550q_live_row_identities(&mut self.draft) {
+            match family {
+                Form2550QRowFamily::Schedule1 => {
+                    self.draft.schedule_1.pop();
+                }
+                Form2550QRowFamily::Schedule3 => {
+                    self.draft.schedule_3.pop();
+                }
+                _ => {
+                    self.draft.schedule_4.pop();
+                }
+            }
+            self.status_message = Some(format!(
+                "The new row could not get a stable identity: {error}"
+            ));
+            cx.notify();
+            return;
+        }
+        let bound = match family {
+            Form2550QRowFamily::Schedule1 => {
+                let row = self
+                    .draft
+                    .schedule_1
+                    .last()
+                    .cloned()
+                    .expect("row just added");
+                let inputs = capital_good_inputs(&row, window, cx);
+                let bound = inputs.bound_inputs();
+                self.schedule_1_inputs.push(inputs);
+                bound
+            }
+            Form2550QRowFamily::Schedule3 => {
+                let row = self
+                    .draft
+                    .schedule_3
+                    .last()
+                    .cloned()
+                    .expect("row just added");
+                let inputs = creditable_vat_inputs(&row, window, cx);
+                let bound = inputs.bound_inputs();
+                self.schedule_3_inputs.push(inputs);
+                bound
+            }
+            _ => {
+                let row = self
+                    .draft
+                    .schedule_4
+                    .last()
+                    .cloned()
+                    .expect("row just added");
+                let inputs = advance_vat_inputs(&row, window, cx);
+                let bound = inputs.bound_inputs();
+                self.schedule_4_inputs.push(inputs);
+                bound
+            }
+        };
+        for (input, binding) in bound {
+            let subscription = subscribe_bound_input(&input, binding, window, cx);
+            self._subscriptions.push(subscription);
+        }
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+        self.refresh_schedule_1_derived(window, cx);
+    }
+
+    /// The official `deleteRowSched1` / `deleteRowSched3` / `deletelistSched4`.
+    fn remove_schedule_row(
+        &mut self,
+        family: Form2550QRowFamily,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.editor_is_editable() {
+            return;
+        }
+        let instance_id = match family {
+            Form2550QRowFamily::Schedule1 if index < self.schedule_1_inputs.len() => {
+                let inputs = self.schedule_1_inputs.remove(index);
+                self.draft
+                    .schedule_1
+                    .retain(|row| row.instance_id.as_ref() != Some(&inputs.instance_id));
+                inputs.instance_id
+            }
+            Form2550QRowFamily::Schedule3 if index < self.schedule_3_inputs.len() => {
+                let inputs = self.schedule_3_inputs.remove(index);
+                self.draft
+                    .schedule_3
+                    .retain(|row| row.instance_id.as_ref() != Some(&inputs.instance_id));
+                inputs.instance_id
+            }
+            Form2550QRowFamily::Schedule4 if index < self.schedule_4_inputs.len() => {
+                let inputs = self.schedule_4_inputs.remove(index);
+                self.draft
+                    .schedule_4
+                    .retain(|row| row.instance_id.as_ref() != Some(&inputs.instance_id));
+                inputs.instance_id
+            }
+            _ => return,
+        };
+        self.draft
+            .raw_editor_state
+            .remove_repeated_row(family, &instance_id);
+        self.rebuild_semantic_targets();
+        self.raw_control_changed();
+        self.sync_from_inputs(None, cx);
+    }
+
+    fn remove_row_button(
+        &self,
+        family: Form2550QRowFamily,
+        id: &'static str,
+        index: usize,
+        cx: &Context<Self>,
+    ) -> gpui_component::button::Button {
+        gpui_component::button::Button::new((id, index))
+            .label("Remove")
+            .outline()
+            .disabled(!self.editor_is_editable())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.remove_schedule_row(family, index, cx);
+            }))
+    }
+
+    fn add_row_button(
+        &self,
+        family: Form2550QRowFamily,
+        id: &'static str,
+        label: &'static str,
+        cx: &Context<Self>,
+    ) -> gpui_component::button::Button {
+        gpui_component::button::Button::new(id)
+            .label(label)
+            .outline()
+            .disabled(!self.editor_is_editable())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.add_schedule_row(family, window, cx);
+            }))
     }
 
     fn bound_inputs(&self) -> Vec<(Entity<InputState>, RawControlBinding)> {
@@ -737,6 +1361,9 @@ impl Form2550QV2View {
             inputs.extend(row.bound_inputs());
         }
         for row in &self.schedule_4_inputs {
+            inputs.extend(row.bound_inputs());
+        }
+        for row in &self.specify_inputs {
             inputs.extend(row.bound_inputs());
         }
         inputs
@@ -1134,6 +1761,37 @@ impl Form2550QV2View {
             }
         }
 
+        for inputs in &self.specify_inputs {
+            let (_, amount_member) = specify_members(inputs.family);
+            let path = Form2550QRawFieldKey::try_repeated(
+                inputs.family,
+                inputs.instance_id.clone(),
+                amount_member,
+            )
+            .map_or_else(
+                |_| format!("{}/{amount_member}", inputs.instance_id),
+                |key| key.stable_path(),
+            );
+            if let Some(row) = specify_rows_mut(&mut self.draft, inputs.family).and_then(|rows| {
+                rows.iter_mut()
+                    .find(|row| row.instance_id.as_ref() == Some(&inputs.instance_id))
+            }) {
+                row.description = input_text(&inputs.description, cx);
+                assign_money(
+                    &mut row.amount,
+                    &inputs.amount,
+                    &path,
+                    cx,
+                    &mut self.input_errors,
+                );
+            } else {
+                self.input_errors.push((
+                    format!("{:?}/{}", inputs.family, inputs.instance_id),
+                    "Persisted row identity disappeared while the editor was open".to_string(),
+                ));
+            }
+        }
+
         let local = &mut self.draft.local_print_fields;
         local.taxpayer_or_authorized_representative = input_text(field(fields, SIGNATORY), cx);
         local.representative_title = input_text(field(fields, SIGNATORY_TITLE), cx);
@@ -1212,6 +1870,7 @@ impl Form2550QV2View {
     }
 
     fn raw_control_changed(&mut self) {
+        self.validated_at_current_revision = false;
         match advance_input_revision(&mut self.validation_input_revision) {
             Ok(_) => {
                 self.validation_state = diagnostic_state_from_setup(&self.validation_setup);
@@ -1226,6 +1885,14 @@ impl Form2550QV2View {
     }
 
     fn run_validation_diagnostic(&mut self, cx: &mut Context<Self>) {
+        // The form's own official checks (ported HTA validation) gate Queue.
+        // Synchronization does not advance the user-edit revision.
+        if self.editor_state_error.is_none() && self.semantic_focus_error.is_none() {
+            self.sync_from_inputs(None, cx);
+            self.validated_at_current_revision = self.editor_state_error.is_none();
+        } else {
+            self.validated_at_current_revision = false;
+        }
         let setup = self.validation_setup.clone();
         match setup {
             Form2550QRepoDiagnosticSetupOutcome::Unavailable { reason } => {
@@ -1337,13 +2004,21 @@ impl Form2550QV2View {
                 cx.theme().primary.opacity(0.15)
             } else {
                 cx.theme().background
-            })
-            .cursor_pointer();
+            });
         if let Some(ui_key) = candidate_radio_ui_key(action) {
             choice =
                 choice.track_focus(&field(&self.candidate_choice_fields, ui_key).focus_handle(cx));
         }
+        if !self.editor_is_editable() {
+            // Locked draft: draw the choice as disabled and ignore clicks.
+            return choice
+                .opacity(0.5)
+                .text_color(cx.theme().muted_foreground)
+                .child(label)
+                .into_any_element();
+        }
         choice
+            .cursor_pointer()
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.apply_choice(action, window, cx);
             }))
@@ -1360,29 +2035,164 @@ impl Form2550QV2View {
         })
     }
 
+    /// The stored messages for any of `keys`. `validation_errors` already
+    /// holds the parse errors followed by the draft's validation.
+    fn error_for(&self, keys: &[&str]) -> Option<String> {
+        messages_for(self.validation_errors.iter(), keys)
+    }
+
+    /// The messages that belong to one input: its parse error (raw key), the
+    /// validator names mapped by [`model_error_keys`], and malformed-text notes.
+    fn input_error(&self, ui_key: &str) -> Option<String> {
+        let mut keys: Vec<String> = model_error_keys(ui_key)
+            .iter()
+            .map(|key| key.to_string())
+            .collect();
+        if let Some(raw) = singleton_raw_key_if_known(ui_key) {
+            keys.push(raw.to_string());
+            keys.push(format!("raw_editor.{raw}"));
+        }
+        let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        self.error_for(&refs)
+    }
+
+    /// Messages for one schedule row (`schedule_1[0]` and `schedule_1[0].x`).
+    fn row_error(&self, prefix: &str) -> Option<String> {
+        let dotted = format!("{prefix}.");
+        let keys: Vec<&str> = self
+            .validation_errors
+            .iter()
+            .map(|(field, _)| field.as_str())
+            .filter(|field| *field == prefix || field.starts_with(&dotted))
+            .collect();
+        self.error_for(&keys)
+    }
+
+    #[cfg(debug_assertions)]
+    fn simulate_bir_confirmation(&mut self, cx: &mut Context<Self>) {
+        use bir_core::forms::queueable::QueueableForm;
+        let filename = self.draft.lifecycle.submission_filename.clone();
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                let column = bir_core::forms::queueable::period_column(&self.draft.filing_period());
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form2550QDraft>(
+                        self.draft.tin(),
+                        self.draft.taxable_year(),
+                        column,
+                    )
+                {
+                    self.draft = current;
+                }
+                cx.emit(Form2550QV2Event::Confirmed);
+            }
+            Err(error) => cx.emit(Form2550QV2Event::PushNotification(
+                "error".into(),
+                "Simulated confirmation failed".into(),
+                error,
+            )),
+        }
+        cx.notify();
+    }
+
+    /// Advanced: the eleven raw identity controls, collapsed by default.
+    fn render_raw_identity_block(&self, cx: &mut Context<Self>) -> AnyElement {
+        // Exact-text replay for official samples only; filers never see it.
+        // Dev Mode "Developer diagnostics" (debug builds) or `dev-tools`.
+        if !crate::dev_mode::form_diagnostics() {
+            return div().into_any_element();
+        }
+        let open = self.show_raw_identity;
+        let toggle = gpui_component::button::Button::new("2550q_raw_identity_toggle")
+            .label(if open {
+                "Hide advanced raw identity controls"
+            } else {
+                "Show advanced raw identity controls"
+            })
+            .ghost()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.show_raw_identity = !this.show_raw_identity;
+                cx.notify();
+            }));
+        if !open {
+            return div().child(toggle).into_any_element();
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(toggle)
+                    .child(div().text_sm().child(
+                    "These controls are blank on profile-derived drafts; the return uses the profile values above unless exact text is entered here.",
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 TIN segment 1 (raw)",
+                    RAW_TIN_1,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 TIN segment 2 (raw)",
+                    RAW_TIN_2,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 TIN segment 3 (raw)",
+                    RAW_TIN_3,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 6 branch code (raw)",
+                    RAW_BRANCH_CODE,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 7 RDO code (raw)",
+                    RAW_RDO_CODE,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 8 taxpayer name (raw)",
+                    RAW_TAXPAYER_NAME,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 10 registered address (raw)",
+                    RAW_TAXPAYER_ADDRESS,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 10A ZIP code (raw)",
+                    RAW_TAXPAYER_ZIP,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 11 contact number (raw)",
+                    RAW_TAXPAYER_CONTACT_NUMBER,
+                ))
+                .child(self.render_candidate_raw_text_row(
+                    "Item 12 email address (raw)",
+                    RAW_TAXPAYER_EMAIL_ADDRESS,
+                ))
+                .child(self.render_input_row("Item 2 taxable year (raw)", RAW_TAXABLE_YEAR))
+            .into_any_element()
+    }
+
     fn render_input_row(&self, label: &str, key: &'static str) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>
-                    {Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable())}
-                </div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        let row =
+            pair_row(layout)
+                .child(half(layout).text_sm().child(label.to_string()))
+                .child(half(layout).child(
+                    Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable()),
+                ))
+                .into_any_element();
+        with_field_error(row, self.input_error(key))
     }
 
     fn render_candidate_raw_text_row(&self, label: &str, key: &'static str) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4>
-                <div w_1_2 text_sm>{label.to_string()}</div>
-                <div w_1_2>
-                    {Input::new(field(&self.candidate_raw_text_fields, key))
-                        .disabled(!self.editor_is_editable())}
-                </div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        let row = pair_row(layout)
+            .child(half(layout).text_sm().child(label.to_string()))
+            .child(
+                half(layout).child(
+                    Input::new(field(&self.candidate_raw_text_fields, key))
+                        .disabled(!self.editor_is_editable()),
+                ),
+            )
+            .into_any_element();
+        with_field_error(row, self.input_error(key))
     }
 
     fn render_computed_row(
@@ -1391,13 +2201,24 @@ impl Form2550QV2View {
         value: Option<f64>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        let root = rsx! {
-            <div flex items_center justify_between gap_4 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
-                <div text_sm font_weight={FontWeight::BOLD}>{label.to_string()}</div>
-                <div font_weight={FontWeight::BOLD}>{format_optional_money(value)}</div>
-            </div>
-        };
-        root.into_any_element()
+        let layout = self.layout.get();
+        pair_row(layout)
+            .p_2()
+            .rounded_md()
+            .bg(cx.theme().muted.opacity(0.5))
+            .child(
+                half(layout)
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .child(label.to_string()),
+            )
+            .child(
+                half(layout)
+                    .when(layout != Layout::Phone, |d| d.text_right())
+                    .font_weight(FontWeight::BOLD)
+                    .child(format_optional_money(value)),
+            )
+            .into_any_element()
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
@@ -1405,8 +2226,8 @@ impl Form2550QV2View {
             return div().into_any_element();
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (field, message) in &self.validation_errors {
-            list = list.child(rsx! { <div text_xs>{format!("{field}: {message}")}</div> });
+        for (_, message) in &self.validation_errors {
+            list = list.child(rsx! { <div text_xs>{message.clone()}</div> });
         }
         let root = rsx! {
             <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
@@ -1418,6 +2239,15 @@ impl Form2550QV2View {
     }
 
     fn render_validation_diagnostic(&self, cx: &Context<Self>) -> AnyElement {
+        // "Validation successful." shows in the header's status box.
+        let mut root = div().flex().flex_col().gap_4();
+        if crate::dev_mode::form_diagnostics() {
+            root = root.child(self.render_candidate_diagnostic_box(cx));
+        }
+        root.into_any_element()
+    }
+
+    fn render_candidate_diagnostic_box(&self, cx: &Context<Self>) -> AnyElement {
         let (title, message) = match &self.validation_state {
             Form2550QDiagnosticState::NotRun => (
                 "Validation not run",
@@ -1447,6 +2277,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 1 row {}", index + 1))}>
                 {input_pair("Purchase/import date", &row.date, editable)}
@@ -1473,18 +2307,27 @@ impl Form2550QV2View {
                     editable,
                 )}
                 {input_pair(
-                    "Allowable input tax this period (manual)",
+                    "Allowable input tax this period (computed)",
                     &row.allowable_input_tax,
-                    editable,
+                    false,
                 )}
                 {input_pair(
-                    "Balance to next period",
+                    "Balance to next period (computed)",
                     &row.balance_next_period,
-                    editable,
+                    false,
                 )}
             </div>
-        };
-        root.into_any_element()
+        }
+        .child(self.remove_row_button(
+            Form2550QRowFamily::Schedule1,
+            "2550q_s1_remove",
+            index,
+            cx,
+        ));
+        with_field_error(
+            root.into_any_element(),
+            self.row_error(&format!("schedule_1[{index}]")),
+        )
     }
 
     fn render_creditable_vat_row(
@@ -1494,6 +2337,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 3 row {}", index + 1))}>
                 {input_pair("Period from", &row.period_from, editable)}
@@ -1506,8 +2353,17 @@ impl Form2550QV2View {
                     editable,
                 )}
             </div>
-        };
-        root.into_any_element()
+        }
+        .child(self.remove_row_button(
+            Form2550QRowFamily::Schedule3,
+            "2550q_s3_remove",
+            index,
+            cx,
+        ));
+        with_field_error(
+            root.into_any_element(),
+            self.row_error(&format!("schedule_3[{index}]")),
+        )
     }
 
     fn render_advance_vat_row(
@@ -1517,6 +2373,10 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
+        let layout = self.layout.get();
+        let input_pair = |label: &str, input: &Entity<InputState>, editable: bool| {
+            input_pair(layout, label, input, editable)
+        };
         let root = rsx! {
             <div base={row_card(cx, &format!("Schedule 4 row {}", index + 1))}>
                 {input_pair("Period from", &row.period_from, editable)}
@@ -1530,8 +2390,17 @@ impl Form2550QV2View {
                 )}
                 {input_pair("Amount paid", &row.amount_paid, editable)}
             </div>
-        };
-        root.into_any_element()
+        }
+        .child(self.remove_row_button(
+            Form2550QRowFamily::Schedule4,
+            "2550q_s4_remove",
+            index,
+            cx,
+        ));
+        with_field_error(
+            root.into_any_element(),
+            self.row_error(&format!("schedule_4[{index}]")),
+        )
     }
 }
 
@@ -1549,15 +2418,15 @@ impl FormViewTrait for Form2550QV2View {
     }
 
     fn current_status(&self) -> FilingStatus {
-        self.draft.status.clone()
+        self.draft.lifecycle.status.clone()
     }
 
     fn submitted_at(&self) -> Option<&str> {
-        self.draft.submitted_at.as_deref()
+        self.draft.lifecycle.submitted_at.as_deref()
     }
 
     fn confirmed_at(&self) -> Option<&str> {
-        self.draft.confirmed_at.as_deref()
+        self.draft.lifecycle.confirmed_at.as_deref()
     }
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1607,7 +2476,7 @@ impl FormViewTrait for Form2550QV2View {
                     FORM_CODE,
                     self.draft.taxable_year,
                     &period,
-                    &self.draft.status,
+                    &self.draft.lifecycle.status,
                     &self.draft,
                 )
                 .map_err(|error| error.to_string())
@@ -1617,8 +2486,7 @@ impl FormViewTrait for Form2550QV2View {
             Ok(id) => {
                 self.draft.id = Some(id);
                 self.status_message = Some(if !has_unresolved_issues {
-                    "Draft saved locally for preservation. Filing and submission remain manual/external."
-                        .to_string()
+                    "Draft saved. Queue it for submission when ready.".to_string()
                 } else {
                     "Draft saved locally for preservation with unresolved issues, including any malformed visible text shown below. Filing and submission remain disabled."
                         .to_string()
@@ -1652,39 +2520,120 @@ impl FormViewTrait for Form2550QV2View {
         cx.notify();
     }
 
-    fn mark_submitted(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "2550Qv2024 has reviewed editable-save evidence only. Electronic queue/submission is not certified."
-                .to_string(),
+    /// Queue through the generic submission path, exactly as the generic
+    /// form pages do: the background worker uploads the official payload.
+    fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use bir_core::forms::queueable::QueueableForm;
+        if !bir_core::forms::support_level::can_queue_for_submission(FORM_CODE) {
+            self.status_message =
+                Some("2550Q is not enabled for in-app submission in this build.".to_string());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_editable() {
+            self.status_message = Some(
+                "This return is already queued or filed and cannot be queued again.".to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        if self.editor_state_error.is_some() {
+            self.status_message = Some(
+                "The return was not queued because the editor identity boundary is unsafe."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        }
+        self.sync_from_inputs(None, cx);
+        if self.editor_state_error.is_some() || !self.validation_errors.is_empty() {
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+        let before = self.draft.clone();
+        if let Err(errors) = QueueableForm::queue(
+            &mut self.draft,
+            bir_core::filing_queue::QueueAuthSource::Gui,
+        ) {
+            self.validation_errors = errors;
+            self.status_message =
+                Some("Fix the items listed under Needs review before submitting.".to_string());
+            cx.notify();
+            return;
+        }
+        let saved = match self.db.lock() {
+            Ok(db) => db
+                .save_queued_queueable(&self.draft)
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match saved {
+            Ok(id) => self.draft.id = Some(id),
+            Err(error) => {
+                self.draft = before;
+                self.status_message = Some(bir_core::forms::queueable::queue_failure_message(
+                    "Form 2550Q",
+                    &error,
+                ));
+                cx.notify();
+                return;
+            }
+        }
+        // D5C: the toast and the stepper are the only confirmation.
+        self.status_message = None;
+        self.notify(
+            window,
+            cx,
+            gpui_component::notification::NotificationType::Success,
+            "Form 2550Q queued.",
         );
-        cx.emit(Form2550QV2Event::PushNotification(
-            "warning".to_string(),
-            "Manual / External Filing".to_string(),
-            "This 2550Q draft cannot be queued or submitted by the app.".to_string(),
-        ));
+        cx.emit(Form2550QV2Event::Saved);
+        bir_core::background_cron::wake();
         cx.notify();
     }
 
     fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.status_message = Some(
-            "Payment status cannot advance automatically for a manual/external 2550Q filing."
-                .to_string(),
-        );
+        self.status_message =
+            Some("2550Q payment status needs a verified confirmation workflow.".to_string());
         cx.notify();
     }
 
+    /// D7A + D8A: Queued reverts plainly; Submitted/Confirmed keeps a
+    /// snapshot of what BIR received and marks the return amended.
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.draft.revert_to_draft() {
-            Ok(()) => self.save_draft(window, cx),
-            Err(error) => {
-                self.status_message = Some(error.clone());
+        if !can_user_revert(&self.draft.lifecycle.status) {
+            return;
+        }
+        match revert_for_amendment(&self.db, &self.draft) {
+            Ok(reverted) => {
+                self.draft = reverted.draft;
+                self.validated_at_current_revision = false;
+                if reverted.marked_amended {
+                    // Keep the Amended radio's raw text in step with the draft.
+                    self.apply_choice(ChoiceAction::Amended(true), window, cx);
+                }
+                self.status_message = reverted
+                    .snapshot_id
+                    .map(|_| AMENDED_REVERT_MESSAGE.to_string());
+                if reverted.snapshot_id.is_some() {
+                    self.header.load_sent_snapshot(&self.db, &self.draft);
+                }
                 self.notify(
                     window,
                     cx,
-                    gpui_component::notification::NotificationType::Error,
-                    error,
+                    gpui_component::notification::NotificationType::Success,
+                    "Form 2550Q reverted to Draft.",
                 );
+                cx.emit(Form2550QV2Event::Saved);
             }
+            Err(error) => self.notify(
+                window,
+                cx,
+                gpui_component::notification::NotificationType::Error,
+                format!("Could not revert to Draft: {error}"),
+            ),
         }
         cx.notify();
     }
@@ -1745,7 +2694,7 @@ impl FormViewTrait for Form2550QV2View {
         ) {
             Ok(launch_kind) => {
                 self.status_message = Some(format!(
-                    "{} Preview is available for review; filing remains manual/external.",
+                    "{} Preview is for review only; it does not queue or submit the return.",
                     launch_kind.status_message()
                 ));
                 launch_kind.observe_close(cx, |this, cx| {
@@ -1771,10 +2720,22 @@ impl FormViewTrait for Form2550QV2View {
 }
 
 impl Render for Form2550QV2View {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_draft = self.draft.is_editable();
-        let editor_is_editable = self.editor_is_editable();
-        let mut basis_choices = div().flex().gap_2();
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = Layout::for_width(window.viewport_size().width);
+        self.layout.set(layout);
+        let pad = match layout {
+            Layout::Phone => px(12.),
+            Layout::Tablet => px(20.),
+            Layout::Desktop => px(32.),
+        };
+        self.header.ensure_sent_snapshot(&self.db, &self.draft);
+        let props = self.header_props();
+        let header_buttons =
+            render_header_buttons(self, &props, HEADER_ACTIONS, layout == Layout::Phone, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx)
+            .map(|b| div().mt_3().child(b).into_any_element())
+            .unwrap_or_else(|| div().into_any_element());
+        let mut basis_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [
             ("Calendar", Form2550QFilingBasis::Calendar),
             ("Fiscal", Form2550QFilingBasis::Fiscal),
@@ -1789,7 +2750,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut quarter_choices = div().flex().gap_2();
+        let mut quarter_choices = div().flex().flex_wrap().gap_2();
         for value in Form2550QQuarter::ALL {
             let action = ChoiceAction::Quarter(value);
             quarter_choices = quarter_choices.child(self.render_choice(
@@ -1801,7 +2762,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut amended_choices = div().flex().gap_2();
+        let mut amended_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::Amended(value);
             amended_choices = amended_choices.child(self.render_choice(
@@ -1813,7 +2774,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut short_period_choices = div().flex().gap_2();
+        let mut short_period_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::ShortPeriod(value);
             short_period_choices = short_period_choices.child(self.render_choice(
@@ -1825,7 +2786,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut class_choices = div().flex().gap_2();
+        let mut class_choices = div().flex().flex_wrap().gap_2();
         for value in Form2550QTaxpayerClassification::ALL {
             let action = ChoiceAction::Classification(value);
             class_choices = class_choices.child(self.render_choice(
@@ -1837,7 +2798,7 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut relief_choices = div().flex().gap_2();
+        let mut relief_choices = div().flex().flex_wrap().gap_2();
         for (label, value) in [("Yes", true), ("No", false)] {
             let action = ChoiceAction::TaxRelief(value);
             relief_choices = relief_choices.child(self.render_choice(
@@ -1849,33 +2810,52 @@ impl Render for Form2550QV2View {
             ));
         }
 
-        let mut schedule_1 = section_card(cx, "SCHEDULE 1 — CAPITAL GOODS (2 reviewed rows)")
-            .child(div().text_sm().child(
-                "Allowable input tax is manual: the reviewed source does not contain the number-of-months-in-use input required to derive it safely. Additional sheets are not yet supported.",
-            ));
+        let mut schedule_1 = section_card(cx, "SCHEDULE 1 — CAPITAL GOODS").child(
+            div().text_sm().child(
+                "Allowable input tax is computed as on the official page: input tax ÷ recognized life × 3, for purchases on or before December 31, 2021; the balance is input tax less allowable.",
+            ),
+        );
         for (index, row) in self.schedule_1_inputs.iter().enumerate() {
             schedule_1 = schedule_1.child(self.render_capital_good_row(index, row, cx));
         }
+        schedule_1 = schedule_1.child(self.add_row_button(
+            Form2550QRowFamily::Schedule1,
+            "2550q_s1_add",
+            "Add Schedule 1 row",
+            cx,
+        ));
 
-        let mut schedule_3 =
-            section_card(cx, "SCHEDULE 3 — CREDITABLE VAT WITHHELD (2 reviewed rows)");
+        let mut schedule_3 = section_card(cx, "SCHEDULE 3 — CREDITABLE VAT WITHHELD");
         for (index, row) in self.schedule_3_inputs.iter().enumerate() {
             schedule_3 = schedule_3.child(self.render_creditable_vat_row(index, row, cx));
         }
+        schedule_3 = schedule_3.child(self.add_row_button(
+            Form2550QRowFamily::Schedule3,
+            "2550q_s3_add",
+            "Add Schedule 3 row",
+            cx,
+        ));
 
-        let mut schedule_4 =
-            section_card(cx, "SCHEDULE 4 — ADVANCE VAT PAYMENTS (2 reviewed rows)");
+        let mut schedule_4 = section_card(cx, "SCHEDULE 4 — ADVANCE VAT PAYMENTS");
         for (index, row) in self.schedule_4_inputs.iter().enumerate() {
             schedule_4 = schedule_4.child(self.render_advance_vat_row(index, row, cx));
         }
+        schedule_4 = schedule_4.child(self.add_row_button(
+            Form2550QRowFamily::Schedule4,
+            "2550q_s4_add",
+            "Add Schedule 4 row",
+            cx,
+        ));
 
         let mut content = div()
+            .w_full()
             .max_w(px(1100.0))
             .mx_auto()
             .flex()
             .flex_col()
-            .gap_6()
-            .child(
+            .gap_6();
+        if crate::dev_mode::form_diagnostics() {
+            content = content.child(
                 div()
                     .p_4()
                     .rounded_lg()
@@ -1884,9 +2864,10 @@ impl Render for Form2550QV2View {
                     .bg(cx.theme().warning.opacity(0.1))
                     .child(div().font_weight(FontWeight::BOLD).child("Evidence boundary"))
                     .child(div().mt_1().text_sm().child(
-                        "The April 2024 official form, guidelines, and two 160-field saves prove local draft/XML behavior. Queueing, submission transport, HTML parity, additional schedule sheets, and native PDF output remain disabled until separately certified.",
+                        "Dev tools: the candidate rules-engine diagnostic below is informational and does not gate Queue. Queue follows the form's own official checks after Validate.",
                     )),
             );
+        }
         if let Some(error) = &self.editor_state_error {
             content = content.child(
                 div()
@@ -1905,15 +2886,6 @@ impl Render for Form2550QV2View {
                     ))),
             );
         }
-        if let Some(message) = &self.status_message {
-            content = content.child(
-                div()
-                    .p_3()
-                    .rounded_md()
-                    .bg(cx.theme().muted.opacity(0.5))
-                    .child(message.clone()),
-            );
-        }
         content = content
             .child(self.render_validation_diagnostic(cx))
             .child(self.render_error_summary(cx))
@@ -1930,55 +2902,12 @@ impl Render for Form2550QV2View {
                         self.draft.contact_number,
                         self.draft.email
                     )))
-                    .child(div().text_sm().child(
-                        "Candidate raw identity/profile controls are blank on profile-derived drafts and restore only exact reviewed-import or explicitly captured text.",
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 TIN segment 1 (raw)",
-                        RAW_TIN_1,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 TIN segment 2 (raw)",
-                        RAW_TIN_2,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 TIN segment 3 (raw)",
-                        RAW_TIN_3,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 6 branch code (raw)",
-                        RAW_BRANCH_CODE,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 7 RDO code (raw)",
-                        RAW_RDO_CODE,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 8 taxpayer name (raw)",
-                        RAW_TAXPAYER_NAME,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 10 registered address (raw)",
-                        RAW_TAXPAYER_ADDRESS,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 10A ZIP code (raw)",
-                        RAW_TAXPAYER_ZIP,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 11 contact number (raw)",
-                        RAW_TAXPAYER_CONTACT_NUMBER,
-                    ))
-                    .child(self.render_candidate_raw_text_row(
-                        "Item 12 email address (raw)",
-                        RAW_TAXPAYER_EMAIL_ADDRESS,
-                    ))
+                    .child(self.render_raw_identity_block(cx))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Filing basis"))
                     .child(basis_choices)
                     .child(self.render_input_row("Year-end month", YEAR_END_MONTH))
-                    .child(self.render_input_row("Item 2 taxable year (raw)", RAW_TAXABLE_YEAR))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Quarter"))
-                    .child(quarter_choices)
+                    .child(with_field_error(quarter_choices.into_any_element(), self.error_for(&["quarter"])))
                     .child(self.render_input_row("Return period from", RETURN_PERIOD_FROM))
                     .child(self.render_input_row("Return period to", RETURN_PERIOD_TO))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Amended return"))
@@ -1986,7 +2915,7 @@ impl Render for Form2550QV2View {
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Short-period return"))
                     .child(short_period_choices)
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Item 13 taxpayer classification"))
-                    .child(class_choices)
+                    .child(with_field_error(class_choices.into_any_element(), self.error_for(&["taxpayer_classification"])))
                     .child(div().text_sm().font_weight(FontWeight::BOLD).child("Item 14 tax relief"))
                     .child(relief_choices)
                     .child(self.render_input_row("Item 14A special law / treaty", TAX_RELIEF_DETAILS)),
@@ -2006,8 +2935,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_computed_row("39B Deferred input tax from Schedule 1", self.draft.part_iv.item_39b_input_tax_deferred, cx))
                     .child(self.render_input_row("40B Transitional input tax", ITEM_40B))
                     .child(self.render_input_row("41B Presumptive input tax", ITEM_41B))
-                    .child(self.render_input_row("42 Specify other input tax", ITEM_42_DESCRIPTION))
-                    .child(self.render_input_row("42B Other input tax", ITEM_42B))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item42Additional, &[("42 Specify other input tax", ITEM_42_DESCRIPTION), ("42B Other input tax", ITEM_42B)], cx))
                     .child(self.render_computed_row("43B Total prior-period input tax", self.draft.part_iv.item_43b_total_prior_input_tax, cx)),
             )
             .child(
@@ -2018,9 +2946,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("45B Non-resident service input tax", ITEM_45B))
                     .child(self.render_input_row("46A Importations", ITEM_46A))
                     .child(self.render_input_row("46B Import input tax", ITEM_46B))
-                    .child(self.render_input_row("47 Specify other purchases", ITEM_47_DESCRIPTION))
-                    .child(self.render_input_row("47A Other purchases", ITEM_47A))
-                    .child(self.render_input_row("47B Other input tax", ITEM_47B))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item47Additional, &[("47 Specify other purchases", ITEM_47_DESCRIPTION), ("47A Other purchases", ITEM_47A), ("47B Other input tax", ITEM_47B)], cx))
                     .child(self.render_input_row("48A Domestic purchases without input tax", ITEM_48A))
                     .child(self.render_input_row("49A VAT-exempt importations", ITEM_49A))
                     .child(self.render_computed_row("50A Total current purchases", self.draft.part_iv.item_50a_total_current_purchases, cx))
@@ -2030,8 +2956,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_computed_row("53B Input tax attributable to exempt sales", self.draft.part_iv.item_53b_input_tax_attributable_to_exempt_sales, cx))
                     .child(self.render_input_row("54B VAT refund/TCC claimed", ITEM_54B))
                     .child(self.render_input_row("55B Input VAT on unpaid payables", ITEM_55B))
-                    .child(self.render_input_row("56 Specify other deduction", ITEM_56_DESCRIPTION))
-                    .child(self.render_input_row("56B Other deduction", ITEM_56B))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item56Additional, &[("56 Specify other deduction", ITEM_56_DESCRIPTION), ("56B Other deduction", ITEM_56B)], cx))
                     .child(self.render_computed_row("57B Total deductions", self.draft.part_iv.item_57b_total_deductions, cx))
                     .child(self.render_input_row("58B Input VAT on settled payables", ITEM_58B))
                     .child(self.render_computed_row("59B Adjusted deductions", self.draft.part_iv.item_59b_adjusted_deductions, cx))
@@ -2056,8 +2981,7 @@ impl Render for Form2550QV2View {
                     .child(self.render_computed_row("16 Creditable VAT withheld (Schedule 3)", self.draft.part_ii.item_16_creditable_vat_withheld, cx))
                     .child(self.render_computed_row("17 Advance VAT payments (Schedule 4)", self.draft.part_ii.item_17_advance_vat_payments, cx))
                     .child(self.render_input_row("18 Paid on previous return (amended only)", ITEM_18))
-                    .child(self.render_input_row("19 Specify other credit/payment", ITEM_19_DESCRIPTION))
-                    .child(self.render_input_row("19 Other credit/payment", ITEM_19))
+                    .child(self.render_specify_item(Form2550QRowFamily::Item19Additional, &[("19 Specify other credit/payment", ITEM_19_DESCRIPTION), ("19 Other credit/payment", ITEM_19)], cx))
                     .child(self.render_computed_row("20 Total credits/payments", self.draft.part_ii.item_20_total_credits_or_payments, cx))
                     .child(self.render_computed_row("21 Tax payable/(excess credits)", self.draft.part_ii.item_21_tax_payable_or_excess_credits, cx))
                     .child(self.render_input_row("22 Surcharge (manual)", ITEM_22))
@@ -2093,49 +3017,45 @@ impl Render for Form2550QV2View {
 
         rsx! {
             <div flex flex_col w_full h_full bg={cx.theme().background}>
-                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                <div flex items_center justify_between gap_2 px={pad} py_4 border_b_1 border_color={cx.theme().border}>
                     {gpui_component::button::Button::new("2550q_back")
                         .label("← Back")
                         .on_click(cx.listener(|_, _, _, cx| {
                             cx.emit(Form2550QV2Event::BackToDashboard);
                         }))}
-                    <div flex items_center gap_3>
-                        {gpui_component::button::Button::new("2550q_validate")
-                            .label("Validate")
-                            .outline()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.run_validation_diagnostic(cx);
-                            }))}
-                        {gpui_component::button::Button::new("2550q_save")
-                            .label("Save Draft")
-                            .outline()
-                            .disabled(!editor_is_editable)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.save_draft(window, cx);
-                            }))}
-                        {gpui_component::button::Button::new("2550q_revert")
-                            .label("Revert to Draft")
-                            .outline()
-                            .disabled(is_draft)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.revert_to_draft(window, cx);
-                            }))}
-                        {gpui_component::button::Button::new("2550q_manual")
-                            .label("Manual / External Filing")
-                            .primary()
-                            .disabled(true)}
-                    </div>
+                    {header_buttons}
                 </div>
-                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
-                    {self.render_header(cx)}
+                <div p={pad} border_b_1 border_color={cx.theme().border} bg={cx.theme().background}>
+                    {self.render_header_titles(cx)}
                     <div mt_6>{self.render_status_pipeline(cx)}</div>
+                    {status_box}
                 </div>
-                <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p_8>
+                <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p={pad}>
                     {content}
                 </div>
             </div>
         }
     }
+}
+
+fn subscribe_bound_input(
+    input: &Entity<InputState>,
+    binding: RawControlBinding,
+    window: &mut Window,
+    cx: &mut Context<Form2550QV2View>,
+) -> Subscription {
+    cx.subscribe_in(
+        input,
+        window,
+        move |this: &mut Form2550QV2View, _, event: &InputEvent, window, cx| {
+            if let InputEvent::Change = event {
+                this.raw_control_changed();
+                this.sync_from_inputs(Some(std::slice::from_ref(&binding)), cx);
+                this.refresh_schedule_1_derived(window, cx);
+                this.refresh_specify_static_lines(window, cx);
+            }
+        },
+    )
 }
 
 fn semantic_targets_from_raw_controls(
@@ -2188,14 +3108,33 @@ fn row_card(cx: &Context<Form2550QV2View>, title: &str) -> Div {
     }
 }
 
-fn input_pair(label: &str, input: &Entity<InputState>, editable: bool) -> AnyElement {
-    let root = rsx! {
-        <div flex items_center gap_3>
-            <div w_1_2 text_sm>{label.to_string()}</div>
-            <div w_1_2>{Input::new(input).disabled(!editable)}</div>
-        </div>
-    };
-    root.into_any_element()
+/// Label/control pair: side by side above Phone, stacked on Phone.
+fn pair_row(layout: Layout) -> Div {
+    if layout == Layout::Phone {
+        div().flex().flex_col().gap_1().w_full()
+    } else {
+        div().flex().justify_between().items_center().gap_4()
+    }
+}
+
+fn half(layout: Layout) -> Div {
+    if layout == Layout::Phone {
+        div().w_full().min_w_0()
+    } else {
+        div().w_1_2().min_w_0()
+    }
+}
+
+fn input_pair(
+    layout: Layout,
+    label: &str,
+    input: &Entity<InputState>,
+    editable: bool,
+) -> AnyElement {
+    pair_row(layout)
+        .child(half(layout).text_sm().child(label.to_string()))
+        .child(half(layout).child(Input::new(input).disabled(!editable)))
+        .into_any_element()
 }
 
 fn text_input(
@@ -2510,6 +3449,100 @@ fn restore_repeated_raw_values(
     }
 }
 
+fn restore_bound_raw_values(
+    bindings: impl Iterator<Item = (Entity<InputState>, RawControlBinding)>,
+    raw_state: &bir_core::forms::form_2550q::Form2550QRawEditorState,
+    window: &mut Window,
+    cx: &mut Context<Form2550QV2View>,
+) {
+    for (input, binding) in bindings {
+        let RawControlBinding::Repeated {
+            family,
+            instance_id,
+            member_key,
+        } = binding
+        else {
+            continue;
+        };
+        if let Some(value) =
+            raw_text_override(raw_state.repeated_value(family, &instance_id, member_key))
+        {
+            set_input_value(&input, value, window, cx);
+        }
+    }
+}
+
+/// An amount as the editor's money inputs show it (`1234.50`).
+fn money_text(value: Option<f64>) -> String {
+    value.map(|value| format!("{value:.2}")).unwrap_or_default()
+}
+
+/// The validator's field names that belong to one input, so its message can be
+/// shown directly under it. Parse errors use the input's raw key instead.
+fn model_error_keys(ui_key: &str) -> &'static [&'static str] {
+    match ui_key {
+        YEAR_END_MONTH => &["year_end_month"],
+        RAW_TAXABLE_YEAR => &["taxable_year"],
+        RETURN_PERIOD_FROM | RETURN_PERIOD_TO => &["return_period"],
+        TAX_RELIEF_DETAILS => &["tax_relief_details"],
+        RAW_TIN_1 | RAW_TIN_2 | RAW_TIN_3 | RAW_BRANCH_CODE => &["tin"],
+        RAW_RDO_CODE => &["rdo_code"],
+        RAW_TAXPAYER_NAME => &["taxpayer_name"],
+        RAW_TAXPAYER_ADDRESS => &["registered_address"],
+        RAW_TAXPAYER_ZIP => &["zip_code"],
+        RAW_TAXPAYER_CONTACT_NUMBER => &["contact_number"],
+        RAW_TAXPAYER_EMAIL_ADDRESS => &["email"],
+        ITEM_18 => &["item_18_paid_on_previous_return"],
+        ITEM_19_DESCRIPTION => &["item_19_description"],
+        ITEM_19 => &["item_19_other_credit_or_payment"],
+        ITEM_22 => &["item_22_surcharge"],
+        ITEM_23 => &["item_23_interest"],
+        ITEM_24 => &["item_24_compromise"],
+        ITEM_31A => &["item_31a_vatable_sales"],
+        ITEM_32A => &["item_32a_zero_rated_sales"],
+        ITEM_33A => &["item_33a_exempt_sales"],
+        ITEM_35B => &["item_35b_less_output_vat_uncollected"],
+        ITEM_36B => &["item_36b_add_output_vat_recovered"],
+        ITEM_38B => &["item_38b_input_tax_carried"],
+        ITEM_40B => &["item_40b_transitional_input_tax"],
+        ITEM_41B => &["item_41b_presumptive_input_tax"],
+        ITEM_42_DESCRIPTION => &["item_42_description"],
+        ITEM_42B => &["item_42b_other_input_tax"],
+        ITEM_44A => &["item_44a_domestic_purchases"],
+        ITEM_44B => &["item_44b_domestic_input_tax"],
+        ITEM_45A => &["item_45a_nonresident_services"],
+        ITEM_45B => &["item_45b_nonresident_service_input_tax"],
+        ITEM_46A => &["item_46a_importations"],
+        ITEM_46B => &["item_46b_import_input_tax"],
+        ITEM_47_DESCRIPTION => &["item_47_description"],
+        ITEM_47A => &["item_47a_other_purchases"],
+        ITEM_47B => &["item_47b_other_input_tax"],
+        ITEM_48A => &["item_48a_domestic_purchases_no_input_tax"],
+        ITEM_49A => &["item_49a_vat_exempt_importations"],
+        ITEM_54B => &["item_54b_vat_refund_or_tcc_claimed"],
+        ITEM_55B => &["item_55b_input_vat_on_unpaid_payables"],
+        ITEM_56_DESCRIPTION => &["item_56_description"],
+        ITEM_56B => &["item_56b_other_deduction"],
+        ITEM_58B => &["item_58b_input_vat_on_settled_payables"],
+        SCHEDULE_2_DIRECT => &["schedule_2.input_tax_directly_attributable"],
+        SCHEDULE_2_EXEMPT_SALES => &["schedule_2.vat_exempt_sales", "schedule_2.total_sales"],
+        SCHEDULE_2_NOT_DIRECT => &[
+            "schedule_2.input_tax_not_directly_attributable",
+            "schedule_2.total_sales",
+        ],
+        TAX_AGENT_ISSUE => &["local_print_fields.tax_agent_date_of_issue"],
+        TAX_AGENT_EXPIRY => &["local_print_fields.tax_agent_date_of_expiry"],
+        CASH_AMOUNT => &["local_print_fields.cash_or_bank_debit_advice_amount"],
+        CHECK_DATE => &["local_print_fields.check_date"],
+        CHECK_AMOUNT => &["local_print_fields.check_amount"],
+        TDM_DATE => &["local_print_fields.tax_debit_memo_date"],
+        TDM_AMOUNT => &["local_print_fields.tax_debit_memo_amount"],
+        OTHER_PAYMENT_DATE => &["local_print_fields.other_payment_date"],
+        OTHER_PAYMENT_AMOUNT => &["local_print_fields.other_payment_amount"],
+        _ => &[],
+    }
+}
+
 fn singleton_raw_key(ui_key: &str) -> &'static str {
     singleton_raw_key_if_known(ui_key)
         .unwrap_or_else(|| panic!("2550Q input {ui_key} has no reviewed raw-state binding"))
@@ -2669,6 +3702,10 @@ fn repeated_member_is_parsed(member_key: &str) -> bool {
         "txtNameOfMiller4",
         "txtNameOfTaxpayer4",
         "txtOfficialReceiptNumber4",
+        "frm2550qv2024:totalTaxPayableNo19Description",
+        "frm2550qv2024:totalTaxPayableNo42Description",
+        "frm2550qv2024:totalTaxPayableNo47Description",
+        "frm2550qv2024:totalTaxPayableNo56Description",
     ]
     .contains(&member_key)
 }
@@ -3006,8 +4043,59 @@ fn sync_advance_vat_row(
 }
 
 fn format_optional_money(value: Option<f64>) -> String {
-    value.map_or_else(|| "—".to_string(), |amount| format!("₱ {amount:.2}"))
+    // Displayed as the official `formatCurrency` shows it (thousands commas).
+    value.map_or_else(
+        || "—".to_string(),
+        |amount| format!("₱ {}", bir_core::official_xml::official_amount(amount)),
+    )
 }
+
+impl Form2550QV2View {
+    /// What the shared header shows. Submit keeps the 2550Q rule: an
+    /// editable, safe draft with no blocking errors after Validate ran at
+    /// the current input revision.
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        FormHeaderProps {
+            slug: "2550q",
+            status: self.draft.lifecycle.status.clone(),
+            editor_safe: self.editor_state_error.is_none(),
+            validated: self.validated_at_current_revision,
+            blocking_errors: self.validation_errors.len(),
+            first_error: self
+                .validation_errors
+                .first()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.status_message.clone(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.run_validation_diagnostic(cx);
+    }
+
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.simulate_bir_confirmation(cx);
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form2550QV2View> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.validation_errors.len(),
+    on_validate: Form2550QV2View::header_validate,
+    on_submit: Form2550QV2View::mark_submitted,
+    on_save: Form2550QV2View::save_draft,
+    on_print: Form2550QV2View::preview_pdf,
+    on_revert: Form2550QV2View::revert_to_draft,
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form2550QV2View::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
 
 #[cfg(test)]
 mod tests {
@@ -3027,6 +4115,26 @@ mod tests {
         raw_text_override, repeated_member_is_parsed, should_capture_raw, singleton_is_parsed,
         singleton_raw_key, stable_parse_path,
     };
+
+    #[test]
+    fn header_submit_runs_the_queue_action_and_keeps_the_validate_gate() {
+        use crate::views::form_header::{header_visibility, submit_enabled};
+        use bir_core::forms::FilingStatus;
+        let src = include_str!("form_2550q_view.rs");
+        assert!(!src.contains(concat!("Manual / External", " Filing")));
+        assert!(src.contains(concat!("on_submit: Form2550QV2View::mark_", "submitted")));
+        assert_eq!(src.matches(concat!(".evaluate", "(")).count(), 1);
+        // Separate Validate button: Submit needs Validate at the current
+        // revision and no blocking errors.
+        assert!(submit_enabled(true, true, 0));
+        assert!(!submit_enabled(true, false, 0));
+        assert!(!submit_enabled(true, true, 1));
+        // An unsafe editor hides Validate and Submit.
+        let locked = header_visibility(&FilingStatus::Draft, false);
+        assert!(!locked.validate && !locked.submit);
+        assert!(header_visibility(&FilingStatus::Submitted, true).revert);
+        assert!(!header_visibility(&FilingStatus::Paid, true).revert);
+    }
 
     #[test]
     fn raw_restore_distinguishes_missing_absent_blank_and_text() {

@@ -20,10 +20,10 @@ use bir_core::db::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database, ReceiptConfirmationOutcome,
 };
 use bir_core::forms::form_2551q::{
-    FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election, OverpaymentDisposition,
-    Schedule1Row, TaxPeriodBasis,
+    FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election,
+    OFFICIAL_YEAR_ENDED_MONTH_MESSAGE, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
 };
-use bir_core::forms::{ATC_TABLE_2551Q, FilingStatus, FormValidator};
+use bir_core::forms::{ATC_TABLE_2551Q, FilingPeriod, FilingStatus, FormValidator};
 use bir_core::parse_bir_receipt_email;
 use bir_core::validation::{validate_email, validate_ph_phone, validate_zip};
 
@@ -33,6 +33,11 @@ use crate::components::form_engine::FormViewTrait;
 use crate::components::tax_relief_select::{
     TaxReliefOption, TaxReliefSelectState, new_tax_relief_select, selected_tax_relief_code,
 };
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, separate_validate_button,
+};
+use bir_core::forms::queueable::can_user_revert;
 
 pub enum Form2551QEvent {
     BackToDashboard,
@@ -92,10 +97,10 @@ impl SelectItem for AtcOption {
     }
 }
 
-// Schedule rows are ATC aggregates, not business identities. Allow every
-// distinct code in the canonical registry while the domain keeps the verified
-// six-row XML submission boundary separate from saved/printable attachments.
-const MAX_EDITABLE_SCHEDULE_1_ROWS: usize = ATC_TABLE_2551Q.len();
+// Schedule rows are ATC aggregates, not business identities. The official
+// layout has six ATC slots, so new lines stop at six; older drafts holding
+// more still load, warn, and are blocked from queueing by the model.
+const MAX_EDITABLE_SCHEDULE_1_ROWS: usize = FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY;
 
 fn available_atc_options(rows: &[Schedule1Row]) -> SearchableVec<AtcOption> {
     let used_codes = rows
@@ -157,6 +162,9 @@ pub struct Form2551QView {
     is_email_tracking_active: bool,
     is_generating_pdf: bool,
     release_claim_confirm_open: bool,
+    /// Shared header: ⋯ menu and status box state.
+    header: FormHeaderState,
+
     /// Dismiss was pressed with unsaved changes: ask before discarding.
     dismiss_confirm_open: bool,
 
@@ -565,6 +573,7 @@ impl Form2551QView {
             is_email_tracking_active,
             is_generating_pdf: false,
             release_claim_confirm_open: false,
+            header: FormHeaderState::new(),
             dismiss_confirm_open: false,
             assist: AssistState::default(),
             known_values,
@@ -1041,11 +1050,22 @@ impl Form2551QView {
                 .save_queued_2551q_draft_and_election_with_post_commit_status(&self.draft)
                 .map(bir_core::db::PostCommitWrite::into_parts)
                 .map(|(_, refresh_status)| refresh_status)
-                .map_err(|_| "database_write"),
+                .map_err(|error| match error {
+                    bir_core::db::DbError::AmendedReturnRequired => "amended_return_required",
+                    _ => "database_write",
+                }),
             Err(_) => Err("database_lock"),
         };
         let refresh_warning = match persistence_result {
             Ok(refresh_status) => refresh_status.warning().map(ToOwned::to_owned),
+            Err("amended_return_required") => {
+                // save-009: the official alert, nothing queued.
+                self.draft = draft_before_queue;
+                self.status_message =
+                    Some(bir_core::forms::queueable::AMENDED_RETURN_ALERT.to_string());
+                cx.notify();
+                return;
+            }
             Err(error_category) => {
                 tracing::error!(error_category, "Failed to persist queued 2551Q draft");
                 self.draft = draft_before_queue;
@@ -1126,8 +1146,9 @@ impl Form2551QView {
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.draft.status, FilingStatus::Paid) {
-            return; // Guard: cannot revert a Paid form
+        // D7A: Queued, Submitted and Confirmed revert; Paid never does.
+        if !can_user_revert(&self.draft.status) {
+            return;
         }
         if self.draft.submission_claim_token.is_some() || self.draft.submission_claimed_at.is_some()
         {
@@ -1140,27 +1161,33 @@ impl Form2551QView {
             return;
         }
         let before_revert = self.draft.clone();
+        // D8A: a Submitted or Confirmed return keeps a read-only snapshot of
+        // what BIR received and becomes an amended Draft.
         let persistence_result = match self.db.lock() {
             Ok(db) => db
-                .cancel_queued_2551q_submission(&before_revert)
-                .and_then(|mut canceled| {
-                    if let Some(profile) = db.get_profile(&canceled.tin)? {
+                .revert_2551q_for_amendment(
+                    &before_revert.tin,
+                    before_revert.taxable_year,
+                    before_revert.quarter,
+                )
+                .and_then(|mut reverted| {
+                    if let Some(profile) = db.get_profile(&reverted.draft.tin)? {
                         // Reverting is the explicit consent boundary for
                         // replacing the reviewed snapshot with the current
                         // effective profile segment.
-                        let _ = canceled.reconcile_with_effective_profile(&profile);
-                        db.save_2551q_draft(&canceled)?;
+                        let _ = reverted.draft.reconcile_with_effective_profile(&profile);
+                        db.save_2551q_draft(&reverted.draft)?;
                     }
-                    Ok(canceled)
+                    Ok(reverted)
                 })
-                .map_err(|_| "database_write"),
-            Err(_) => Err("database_lock"),
+                .map_err(|error| error.to_string()),
+            Err(_) => Err("The form database is temporarily unavailable".to_string()),
         };
         use gpui_component::WindowExt;
-        let canceled = match persistence_result {
-            Ok(canceled) => canceled,
-            Err(error_category) => {
-                tracing::warn!(error_category, "2551Q queue cancellation was rejected");
+        let reverted = match persistence_result {
+            Ok(reverted) => reverted,
+            Err(error) => {
+                tracing::warn!("2551Q revert to Draft was rejected");
                 self.draft = match self.db.lock() {
                     Ok(db) => db
                         .get_2551q_draft(
@@ -1173,15 +1200,10 @@ impl Form2551QView {
                         .unwrap_or(before_revert),
                     Err(_) => before_revert,
                 };
-                self.status_message = Some(
-                    "Submission has already started and can no longer be canceled.".to_string(),
-                );
+                self.status_message = Some(format!("Could not revert to Draft: {error}"));
                 window.push_notification(
                     gpui_component::notification::Notification::new()
-                        .message(
-                            "Submission has already started. The queued return was not canceled."
-                                .to_string(),
-                        )
+                        .message(format!("Could not revert to Draft: {error}"))
                         .with_type(gpui_component::notification::NotificationType::Warning)
                         .autohide(true),
                     cx,
@@ -1190,13 +1212,31 @@ impl Form2551QView {
                 return;
             }
         };
-        self.draft = canceled;
+        let amended = reverted.snapshot_id.is_some();
+        let draft = reverted.draft;
+        // Refresh the editors so Amended Return shows Yes.
+        self.is_amended = draft.is_amended;
+        self.original_return_filed_and_paid_on_time = draft.original_return_filed_and_paid_on_time;
+        if amended {
+            self.header.load_sent_snapshot_for(
+                &self.db,
+                "2551Q",
+                &draft.tin,
+                draft.taxable_year,
+                &FilingPeriod::Quarterly(draft.quarter),
+            );
+        }
+        self.draft = draft;
         self.is_validated = false;
         self.validation_errors.clear();
-        self.status_message = None;
+        self.status_message = amended.then(|| AMENDED_REVERT_MESSAGE.to_string());
         window.push_notification(
             gpui_component::notification::Notification::new()
-                .message("Form reverted to Draft. You may edit and resubmit.".to_string())
+                .message(if amended {
+                    AMENDED_REVERT_MESSAGE.to_string()
+                } else {
+                    "Form reverted to Draft. You may edit and resubmit.".to_string()
+                })
                 .with_type(gpui_component::notification::NotificationType::Info)
                 .autohide(true),
             cx,
@@ -1385,7 +1425,7 @@ impl Form2551QView {
             {
                 errors.push((
                     "year_end_month".to_string(),
-                    "Fiscal year-end month must be a whole number from 1 to 12".to_string(),
+                    OFFICIAL_YEAR_ENDED_MONTH_MESSAGE.to_string(),
                 ));
             }
         }
@@ -1837,6 +1877,26 @@ impl Form2551QView {
         }
     }
 
+    /// Labelled choice button, as on the 2552 and 2550Q pages.
+    fn choice(
+        id: impl Into<ElementId>,
+        label: &str,
+        selected: bool,
+        disabled: bool,
+    ) -> gpui_component::button::Button {
+        let button = gpui_component::button::Button::new(id).label(if selected {
+            format!("✓ {label}")
+        } else {
+            label.to_string()
+        });
+        let button = if selected {
+            button.primary()
+        } else {
+            button.outline()
+        };
+        button.disabled(disabled).min_w_0().max_w_full()
+    }
+
     fn field_label(label: &str, cx: &Context<Self>) -> gpui::Div {
         crate::components::form_parts::field_label(label, cx)
     }
@@ -2033,13 +2093,8 @@ impl Render for Form2551QView {
             <div flex flex_col gap_2>
                 {Self::field_label("1. Taxable-period basis", cx)}
                 <div flex flex_wrap gap_5>
-                    <div
-                        id={"tax_period_calendar"}
-                        flex
-                        items_center
-                        gap_2
-                        when={(is_editable, |el| el.cursor_pointer())}
-                        on_click={cx.listener(|this, _, window, cx| {
+                    {Self::choice("tax_period_calendar", "Calendar", is_calendar, !is_editable)
+                        .on_click(cx.listener(|this, _, window, cx| {
                             if !this.is_editable() {
                                 return;
                             }
@@ -2050,51 +2105,16 @@ impl Render for Form2551QView {
                             });
                             this.is_validated = false;
                             this.sync_from_inputs(cx);
-                        })}
-                    >
-                        <div
-                            w_4
-                            h_4
-                            rounded_full
-                            border_1
-                            border_color={cx.theme().border}
-                            bg={if is_calendar {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().background
-                            }}
-                        />
-                        <div text_sm>{"Calendar"}</div>
-                    </div>
-                    <div
-                        id={"tax_period_fiscal"}
-                        flex
-                        items_center
-                        gap_2
-                        when={(is_editable, |el| el.cursor_pointer())}
-                        on_click={cx.listener(|this, _, _, cx| {
+                        }))}
+                    {Self::choice("tax_period_fiscal", "Fiscal", !is_calendar, !is_editable)
+                        .on_click(cx.listener(|this, _, _, cx| {
                             if !this.is_editable() {
                                 return;
                             }
                             this.draft.tax_period_basis = TaxPeriodBasis::Fiscal;
                             this.is_validated = false;
                             this.sync_from_inputs(cx);
-                        })}
-                    >
-                        <div
-                            w_4
-                            h_4
-                            rounded_full
-                            border_1
-                            border_color={cx.theme().border}
-                            bg={if !is_calendar {
-                                cx.theme().primary
-                            } else {
-                                cx.theme().background
-                            }}
-                        />
-                        <div text_sm>{"Fiscal"}</div>
-                    </div>
+                        }))}
                 </div>
             </div>
         };
@@ -2329,6 +2349,21 @@ impl Render for Form2551QView {
                     }),
             );
 
+        // Item 13 and the profile's annual election are validated together in
+        // the model; show their actual messages beside the control.
+        let mut item_13_messages = div().flex().flex_col().gap_1();
+        if !self.suppressed_sections.contains("filing_period") {
+            for (_, message) in self
+                .validation_errors
+                .iter()
+                .filter(|(f, _)| f == "item_13_election" || f == "annual_income_tax_election")
+            {
+                item_13_messages = item_13_messages.child(rsx! {
+                    <div text_xs text_color={cx.theme().danger}>{message.clone()}</div>
+                });
+            }
+        }
+
         let item_13_controls = rsx! {
             <div flex flex_col gap_2>
                 {Self::field_label("13. Income-tax-rate election", cx)}
@@ -2345,42 +2380,22 @@ impl Render for Form2551QView {
                     .into_iter()
                     .map(|(id, label, election)| {
                         let selected = item_13_election == election;
-                        rsx! {
-                            <div
-                                id={id}
-                                flex
-                                items_center
-                                gap_2
-                                when={(is_editable, |el| el.cursor_pointer())}
-                                on_click={cx.listener(move |this, _, _, cx| {
-                                    if !this.is_editable() {
-                                        return;
-                                    }
-                                    this.draft.item_13_election = election;
-                                    this.is_validated = false;
-                                    this.sync_from_inputs(cx);
-                                })}
-                            >
-                                <div
-                                    w_4
-                                    h_4
-                                    rounded_full
-                                    border_1
-                                    border_color={cx.theme().border}
-                                    bg={if selected {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    }}
-                                />
-                                <div text_sm>{label}</div>
-                            </div>
-                        }
+                        Self::choice(id, label, selected, !is_editable).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.item_13_election = election;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            },
+                        ))
                     })}
                 </div>
                 <div text_xs text_color={cx.theme().muted_foreground}>
                     {"This legal election is stored exactly as selected and is never inferred."}
                 </div>
+                {item_13_messages}
             </div>
         };
 
@@ -2437,7 +2452,16 @@ impl Render for Form2551QView {
                         cx,
                     )
                     .w(px(80.))}
-                    {tax_period_basis_controls}
+                    {div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(tax_period_basis_controls)
+                        .when_some(self.get_error("tax_period_basis").cloned(), |field, error| {
+                            field.child(rsx! {
+                                <div text_xs text_color={cx.theme().danger}>{error}</div>
+                            })
+                        })}
                     {year_end_month_field}
                     {attached_sheets_field}
                 </div>
@@ -2521,6 +2545,16 @@ impl Render for Form2551QView {
                     {"Use one line per distinct ATC. Combine businesses that share the same ATC; add another line when the ATC differs."}
                 </div>
             })
+            .when_some(
+                self.get_error("schedule_1")
+                    .filter(|_| !self.suppressed_sections.contains("schedule_1"))
+                    .cloned(),
+                |controls, error| {
+                    controls.child(rsx! {
+                        <div w_full text_xs text_color={cx.theme().danger}>{error}</div>
+                    })
+                },
+            )
             .when(
                 schedule_row_count > FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
                 |controls| {
@@ -2657,11 +2691,6 @@ impl Render for Form2551QView {
             })
             .child(Self::field_label("Item 24 overpayment disposition", cx))
             .child(rsx! {
-                <div text_xs text_color={cx.theme().muted_foreground}>
-                    {"Select exactly one disposition for this overpayment."}
-                </div>
-            })
-            .child(rsx! {
                 <div flex flex_wrap gap_5>
                     {...[
                         (
@@ -2678,37 +2707,16 @@ impl Render for Form2551QView {
                     .into_iter()
                     .map(|(id, label, disposition)| {
                         let selected = overpayment_disposition == disposition;
-                        rsx! {
-                            <div
-                                id={id}
-                                flex
-                                items_center
-                                gap_2
-                                when={(is_editable, |el| el.cursor_pointer())}
-                                on_click={cx.listener(move |this, _, _, cx| {
-                                    if !this.is_editable() {
-                                        return;
-                                    }
-                                    this.draft.overpayment_disposition = disposition;
-                                    this.is_validated = false;
-                                    this.sync_from_inputs(cx);
-                                })}
-                            >
-                                <div
-                                    w_4
-                                    h_4
-                                    rounded_full
-                                    border_1
-                                    border_color={cx.theme().border}
-                                    bg={if selected {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    }}
-                                />
-                                <div text_sm>{label}</div>
-                            </div>
-                        }
+                        Self::choice(id, label, selected, !is_editable).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                if !this.is_editable() {
+                                    return;
+                                }
+                                this.draft.overpayment_disposition = disposition;
+                                this.is_validated = false;
+                                this.sync_from_inputs(cx);
+                            },
+                        ))
                     })}
                 </div>
             })
@@ -2951,7 +2959,11 @@ impl Render for Form2551QView {
                 )}
                 {crate::components::form_parts::form_accordion(
                     "acc_background_info",
-                    "PART I — BACKGROUND INFORMATION (pre-filled from profile)",
+                    if is_mobile {
+                        "PART I — BACKGROUND INFORMATION"
+                    } else {
+                        "PART I — BACKGROUND INFORMATION (pre-filled from profile)"
+                    },
                     self.show_background_info,
                     is_background_info_valid,
                     self.has_section_error("background_info"),
@@ -2993,6 +3005,43 @@ impl Render for Form2551QView {
 
         let status_pipeline = <Self as FormViewTrait>::render_status_pipeline(self, cx);
 
+        let release_confirm = (matches!(self.draft.status, FilingStatus::Queued)
+            && submission_claim_active
+            && self.release_claim_confirm_open)
+            .then(|| {
+                div()
+                    .mt_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        gpui_component::button::Button::new("form-2551q-release-claim-confirm")
+                            .label("Confirm nothing reached BIR")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.confirm_release_abandoned_claim(window, cx);
+                            })),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("form-2551q-keep-queued")
+                            .label("Keep queued")
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.release_claim_confirm_open = false;
+                                cx.notify();
+                            })),
+                    )
+            });
+        self.header.ensure_sent_snapshot_for(
+            &self.db,
+            "2551Q",
+            &self.draft.tin,
+            self.draft.taxable_year,
+            &FilingPeriod::Quarterly(self.draft.quarter),
+        );
+        let props = self.header_props();
+        let header_buttons = render_header_buttons(self, &props, HEADER_ACTIONS, is_mobile, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx)
+            .map(|b| div().mt_3().w_full().max_w(px(900.)).child(b));
         let assist_panel = self
             .draft
             .is_editable()
@@ -3009,6 +3058,7 @@ impl Render for Form2551QView {
         let status_banner = rsx! {
             <div
                 flex
+                flex_col
                 items_center
                 justify_center
                 px_8
@@ -3018,6 +3068,8 @@ impl Render for Form2551QView {
                 border_color={cx.theme().border}
             >
                 {status_pipeline}
+                {div().children(status_box)}
+                {div().children(release_confirm)}
             </div>
         };
 
@@ -3086,95 +3138,9 @@ impl Render for Form2551QView {
                         }
 
                         match &self.draft.status {
-                            FilingStatus::Draft => {
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("save_btn")
-                                        .label("Save")
-                                        .outline()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.save(window, cx);
-                                        })),
-                                );
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("submit_btn")
-                                        .label("Submit")
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.sync_from_inputs(cx);
-                                            this.validation_errors = this.validate_for_submit(cx);
-                                            this.suppressed_sections.clear();
-                                            if this.validation_errors.is_empty() {
-                                                this.is_validated = true;
-                                                this.status_message = None;
-                                                this.mark_submitted(cx);
-                                            } else {
-                                                this.is_validated = false;
-                                                this.status_message = Some("Fix validation errors to continue.".to_string());
-                                                use gpui_component::WindowExt;
-                                                window.push_notification(
-                                                    gpui_component::notification::Notification::new()
-                                                        .message("Please check the form for missing or invalid entries before submitting.".to_string())
-                                                        .with_type(gpui_component::notification::NotificationType::Error)
-                                                        .autohide(true),
-                                                    cx,
-                                                );
-                                                cx.notify();
-                                            }
-                                        }))
-                                );
-                            }
-                            FilingStatus::Queued => {
-                                if submission_claim_active && self.release_claim_confirm_open {
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new(
-                                            "form-2551q-release-claim-confirm",
-                                        )
-                                        .label("Confirm nothing reached BIR")
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.confirm_release_abandoned_claim(window, cx);
-                                        })),
-                                    );
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new("form-2551q-keep-queued")
-                                            .label("Keep queued")
-                                            .ghost()
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.release_claim_confirm_open = false;
-                                                cx.notify();
-                                            })),
-                                    );
-                                } else if submission_claim_active {
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new(
-                                            "form-2551q-return-draft",
-                                        )
-                                        .label("Return to Draft")
-                                        .outline()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.revert_to_draft(window, cx);
-                                        })),
-                                    );
-                                } else {
-                                    toolbar = toolbar.child(
-                                        gpui_component::button::Button::new("cancel_queue_btn")
-                                            .label("Cancel Submission Queue")
-                                            .ghost()
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.revert_to_draft(window, cx);
-                                            })),
-                                    );
-                                }
-                            }
                             FilingStatus::Submitted => {
                                 let is_email_tracking_active = self.is_email_tracking_active;
 
-                                toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("revert_draft_btn")
-                                        .label("Revert Draft")
-                                        .ghost()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.revert_to_draft(window, cx);
-                                        }))
-                                );
 
                                 if is_email_tracking_active {
                                     toolbar = toolbar.child(
@@ -3232,14 +3198,6 @@ impl Render for Form2551QView {
                             }
                             FilingStatus::Confirmed => {
                                 toolbar = toolbar.child(
-                                    gpui_component::button::Button::new("revert_draft_btn")
-                                        .label("Revert Draft")
-                                        .ghost()
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.revert_to_draft(window, cx);
-                                        }))
-                                );
-                                toolbar = toolbar.child(
                                     gpui_component::button::Button::new("mark_paid_btn")
                                         .label("Mark as Paid")
                                         .on_click(cx.listener(|this, _, _, cx| {
@@ -3247,7 +3205,7 @@ impl Render for Form2551QView {
                                         }))
                                 );
                             }
-                            FilingStatus::Paid => {}
+                            FilingStatus::Draft | FilingStatus::Queued | FilingStatus::Paid => {}
                         }
 
                         // View Receipt — opens receipt file in system viewer (Preview.app).
@@ -3295,7 +3253,7 @@ impl Render for Form2551QView {
                             let errors_text = self
                                 .validation_errors
                                 .iter()
-                                .map(|(field, message)| format!("{field}: {message}"))
+                                .map(|(_, message)| message.clone())
                                 .collect::<Vec<_>>()
                                 .join("\n");
                             toolbar = toolbar.child(
@@ -3320,7 +3278,7 @@ impl Render for Form2551QView {
                             );
                         }
 
-                        toolbar
+                        toolbar.child(header_buttons)
                     }}
                 </div>
                 {status_banner}
@@ -3352,6 +3310,131 @@ impl Render for Form2551QView {
         }
     }
 }
+
+impl Form2551QView {
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        FormHeaderProps {
+            slug: "2551q",
+            status: self.draft.status.clone(),
+            editor_safe: true,
+            validated: self.is_validated,
+            blocking_errors: self.validation_errors.len(),
+            first_error: self
+                .validation_errors
+                .first()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.status_message.clone(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    /// The header's Validate: the same checks Submit runs.
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.sync_from_inputs(cx);
+        self.validation_errors = self.validate_for_submit(cx);
+        self.suppressed_sections.clear();
+        self.is_validated = true;
+        cx.notify();
+    }
+
+    /// The header's Submit: validate, then queue (the old Queue button).
+    fn header_submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_from_inputs(cx);
+        self.validation_errors = self.validate_for_submit(cx);
+        self.suppressed_sections.clear();
+        if self.validation_errors.is_empty() {
+            self.is_validated = true;
+            self.status_message = None;
+            self.mark_submitted(cx);
+        } else {
+            self.is_validated = false;
+            let total = self.validation_errors.len();
+            let item_13_count = self
+                .validation_errors
+                .iter()
+                .filter(|(f, _)| f == "item_13_election" || f == "annual_income_tax_election")
+                .count();
+            let pointer = if item_13_count > 0 {
+                format!(
+                    " {item_13_count} of them are shown under \"13. Income-tax-rate election\"."
+                )
+            } else {
+                " See the messages in the flagged sections.".to_string()
+            };
+            self.status_message = Some(format!(
+                "Fix {total} validation error(s) to continue.{pointer}"
+            ));
+            use gpui_component::WindowExt;
+            window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(
+                        "Please check the form for missing or invalid entries before submitting."
+                            .to_string(),
+                    )
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            );
+            cx.notify();
+        }
+    }
+
+    /// Dev Mode "Simulate BIR confirmation" (debug builds only).
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let filename = self.draft.submission_filename.clone();
+        use gpui_component::WindowExt;
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_2551q_draft(
+                        &self.draft.tin,
+                        self.draft.taxable_year,
+                        self.draft.quarter,
+                    )
+                {
+                    self.draft = current;
+                }
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(
+                            "2551Q marked Confirmed (simulated, nothing was sent to BIR)."
+                                .to_string(),
+                        )
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form2551QEvent::Confirmed);
+            }
+            Err(error) => window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(format!("Simulated confirmation failed: {error}"))
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form2551QView> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.validation_errors.len(),
+    on_validate: Form2551QView::header_validate,
+    on_submit: Form2551QView::header_submit,
+    on_save: |this, window, cx| this.save(window, cx),
+    on_print: |this, window, cx| this.preview_pdf(window, cx),
+    on_revert: |this, window, cx| this.revert_to_draft(window, cx),
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form2551QView::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
 
 /// Write `value` into a text input only when it differs (`set_value` emits a
 /// change event even for an identical value).
@@ -3386,5 +3469,18 @@ fn set_money_if_changed(
         input.update(cx, |input, cx| {
             input.set_value(format!("{value:.2}"), window, cx)
         });
+    }
+}
+
+#[cfg(test)]
+mod header_tests {
+    #[test]
+    fn header_uses_shared_buttons_and_status_box() {
+        let src = include_str!("form_2551q_view.rs");
+        assert!(src.contains(concat!("render_header_", "buttons(")));
+        assert!(src.contains(concat!("render_status_", "box(")));
+        assert!(src.contains(concat!("can_user_", "revert(&self.draft.status)")));
+        assert!(!src.contains(concat!("\"Queue for ", "submission\"")));
+        assert!(!src.contains(concat!("\"Cancel Submission ", "Queue\"")));
     }
 }

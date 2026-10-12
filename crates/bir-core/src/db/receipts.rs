@@ -294,6 +294,10 @@ impl Database {
             self.confirm_1601c_from_receipt(receipt)
         } else if is_audited_2551q_receipt_form_type(&receipt.form_type) {
             self.confirm_2551q_from_receipt(receipt)
+        } else if let Some(kind) =
+            crate::forms::queueable::QueueableKind::from_form_type(&receipt.form_type)
+        {
+            crate::with_queueable_kind!(kind, F => self.confirm_queueable_from_receipt::<F>(receipt))
         } else {
             Ok(ReceiptConfirmationOutcome::Ignored)
         }

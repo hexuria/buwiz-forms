@@ -281,7 +281,6 @@ impl Form0619EDraft {
             return Err(errors);
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
         let mut draft = Form0619EDraft {
             id: None,
             tin: format!(
@@ -348,16 +347,8 @@ impl Form0619EDraft {
                 .filter(|(key, _)| !is_modeled_xml_key(key))
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
-            status: super::FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
 
         if !errors.is_empty() {
@@ -401,7 +392,11 @@ impl Form0619EDraft {
             &mut errors,
         );
 
-        errors.extend(draft.validate());
+        // An imported save keeps its record even when its TIN fails the
+        // official check digit; that check still blocks queueing.
+        errors.extend(draft.validate().into_iter().filter(|(field, message)| {
+            !(field == "tin" && message == crate::validation::OFFICIAL_INVALID_TIN_MESSAGE)
+        }));
         if errors.is_empty() {
             Ok(draft)
         } else {
@@ -989,9 +984,11 @@ mod tests {
                 ["matches_locked_ciphertext"],
             false
         );
+        // Recorded before 0619-E moved to the generic queue (official
+        // layout replay + Encrypt.exe parity); the registry now owns the gate.
         assert_eq!(
             provenance["official_package_evidence"]["submission_boundary"]["queue_submission_supported"],
-            super::super::form_0619e::QUEUE_SUBMISSION_SUPPORTED
+            false
         );
         assert_eq!(
             super::super::form_0619e::OFFICIAL_PACKAGE_MANIFEST_RESOURCE_ID

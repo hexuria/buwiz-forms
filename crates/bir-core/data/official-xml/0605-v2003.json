@@ -254,7 +254,7 @@
       "parts": [
         {
           "source": "frm0605:txtLineBus",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -266,7 +266,7 @@
       "parts": [
         {
           "source": "frm0605:txtTaxPayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -290,7 +290,7 @@
       "parts": [
         {
           "source": "frm0605:txtAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

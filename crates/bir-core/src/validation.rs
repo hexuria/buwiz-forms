@@ -55,8 +55,9 @@ pub fn rdo_code_is_official_option(code: &str) -> bool {
 /// still apply. The flag is compiled out of release builds so a production
 /// binary can never relax a gate.
 pub fn relaxed_dev_mode() -> bool {
-    cfg!(debug_assertions)
-        && relaxed_dev_mode_enabled(std::env::var("EBIR_RELAXED_VALIDATION").ok().as_deref())
+    // Env var first, then the Dev Mode panel's saved value. Compiled out of
+    // release builds: `dev_mode::relaxed_tin` returns false there too.
+    cfg!(debug_assertions) && crate::dev_mode::relaxed_tin().value
 }
 
 /// Exact alert the official app shows when the TIN check fails
@@ -122,6 +123,7 @@ fn official_tin_check_digit(first_eight: &[u32]) -> u32 {
     (10 - total % 10) % 10
 }
 
+#[cfg(test)]
 fn relaxed_dev_mode_enabled(value: Option<&str>) -> bool {
     value.is_some_and(|v| {
         matches!(

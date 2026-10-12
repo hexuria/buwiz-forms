@@ -110,7 +110,7 @@
       "parts": [
         {
           "source": "frm1604e:txtWthhldngAgntsNme",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -122,11 +122,19 @@
       "parts": [
         {
           "source": "frm1604e:txtAddress",
-          "codec": "js-escape"
-        },
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm1604e:txtAddress2",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm1604e:txtAddress2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1481,10 +1489,11 @@
       "kind": "value",
       "parts": [
         {
-          "literal": "1"
+          "source": "frm1604e:txtCurrentPage",
+          "codec": "raw"
         }
       ],
-      "default": "1",
+      "default": "",
       "after": "    \n            "
     },
     {
@@ -1505,7 +1514,7 @@
       "parts": [
         {
           "source": "frm1604e:txtLineBus",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

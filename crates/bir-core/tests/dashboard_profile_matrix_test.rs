@@ -31,9 +31,11 @@ const SELF_EMPLOYED_VAT_MICRO_SMALL_8_PERCENT: &[&str] = &["1701A", "1701Q", "25
 const MIXED_NON_VAT: &[&str] = &["1701", "1701Q", "2551Q"];
 const MIXED_NON_VAT_8_PERCENT: &[&str] = &["1701", "1701Q"];
 const MIXED_VAT: &[&str] = &["1701", "1701Q", "2550Q"];
-const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1601C", "1604CF", "2316"];
+const COMPENSATION_WITHHOLDING: &[&str] = &["0620", "1601C", "1604C", "2316"];
 const EXPANDED_WITHHOLDING: &[&str] = &["0619E", "1601EQ", "1604E"];
-const FINAL_WITHHOLDING: &[&str] = &["0619F", "1600WP", "1601F", "1601FQ", "1602", "1603"];
+const FINAL_WITHHOLDING: &[&str] = &[
+    "0619F", "1600WP", "1601F", "1601FQ", "1602", "1603", "1604F",
+];
 
 fn base_profile(
     taxpayer_type: TaxpayerType,

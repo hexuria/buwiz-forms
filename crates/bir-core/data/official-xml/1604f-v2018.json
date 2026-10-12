@@ -110,7 +110,7 @@
       "parts": [
         {
           "source": "frm1604f:registeredName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

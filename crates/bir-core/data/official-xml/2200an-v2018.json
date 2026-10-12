@@ -134,7 +134,7 @@
       "parts": [
         {
           "source": "frm2200ANv2018:txtTaxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -146,7 +146,7 @@
       "parts": [
         {
           "source": "frm2200ANv2018:txtAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

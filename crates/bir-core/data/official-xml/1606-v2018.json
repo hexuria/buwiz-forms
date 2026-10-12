@@ -189,12 +189,24 @@
       "after": "\t\n            "
     },
     {
+      "key": "frm1606:txtRDOCodeS",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1606:txtRDOCodeS",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
+      "after": "\t\n            "
+    },
+    {
       "key": "frm1606:txtBuyerName",
       "kind": "value",
       "parts": [
         {
           "source": "frm1606:txtBuyerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -206,7 +218,7 @@
       "parts": [
         {
           "source": "frm1606:txtSellerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -218,7 +230,7 @@
       "parts": [
         {
           "source": "frm1606:txtBuyerAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -230,7 +242,7 @@
       "parts": [
         {
           "source": "frm1606:txtSellerAddress",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -348,6 +360,18 @@
         }
       ],
       "default": "",
+      "after": "\t\n            "
+    },
+    {
+      "key": "frm1606:txtRDOCode16A",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1606:txtRDOCode16A",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
       "after": "\t\n            "
     },
     {

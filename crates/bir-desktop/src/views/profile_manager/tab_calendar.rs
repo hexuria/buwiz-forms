@@ -198,7 +198,7 @@ impl ProfileManagerView {
                                 .ghost()
                                 .on_click(|_, _, _| {
                                     let _ =
-                                        open::that("https://calendar.google.com/calendar/u/0/r");
+                                        open::that_detached("https://calendar.google.com/calendar/u/0/r");
                                 }),
                         )
                         .child(

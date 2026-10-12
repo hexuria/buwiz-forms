@@ -195,7 +195,13 @@ pub struct BirAgentHost {
     /// drain writes the snapshot back only when the agent actually changed it.
     /// One-shot like `Form1601CState::saved`: the host is rebuilt per request.
     editor_touched: bool,
+    /// TIN written by `profile.save` in this request. One-shot: the drain
+    /// reloads that profile into the profile manager so its unsaved-changes
+    /// baseline matches what the database now holds.
+    saved_profile_tin: Option<String>,
     active_view: ActiveView,
+    /// Notifications drawer state, copied in from the app; the bell toggles it.
+    notifications_open: bool,
     pending_admin: Option<ActiveView>,
     pending_profile_auth: bool,
     selected_tin: Option<String>,
@@ -235,7 +241,9 @@ impl BirAgentHost {
             enable_profile_pins: false,
             unsaved_compliance: false,
             editor_touched: false,
+            saved_profile_tin: None,
             active_view: ActiveView::GlobalDashboard,
+            notifications_open: false,
             pending_admin: None,
             pending_profile_auth: false,
             selected_tin: None,
@@ -333,6 +341,26 @@ impl BirAgentHost {
         self.active_view
     }
 
+    pub fn notifications_open(&self) -> bool {
+        self.notifications_open
+    }
+
+    pub fn set_notifications_open(&mut self, open: bool) {
+        self.notifications_open = open;
+    }
+
+    /// The bell, same as a mouse click on it: toggles the drawer.
+    fn toggle_notifications(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        self.notifications_open = crate::top_bar::drawer_next(
+            self.notifications_open,
+            crate::top_bar::DrawerInput::Toggle,
+        );
+        Ok(DispatchResult::json(
+            serde_json::json!({ "notifications_open": self.notifications_open }),
+        ))
+    }
+
     pub fn selected_tin(&self) -> Option<&str> {
         self.selected_tin.as_deref()
     }
@@ -384,6 +412,11 @@ impl BirAgentHost {
     /// blank every field.
     pub fn editor_touched(&self) -> bool {
         self.editor_touched
+    }
+
+    /// The TIN `profile.save` persisted in this request, if any.
+    pub fn saved_profile_tin(&self) -> Option<&str> {
+        self.saved_profile_tin.as_deref()
     }
 
     pub fn replace_dues(&mut self, dues: Vec<(String, u16, u8, String, String)>) {
@@ -552,7 +585,7 @@ impl BirAgentHost {
     pub fn form_1601c_any_taxes_withheld(&self) -> Option<bool> {
         self.form_1601c
             .as_ref()
-            .map(|form| form.draft.any_taxes_withheld)
+            .and_then(|form| form.draft.taxes_withheld_answer())
     }
 
     pub(crate) fn form_1601c_category_of_agent(&self) -> Option<Agent1601CCategory> {
@@ -814,15 +847,9 @@ impl BirAgentHost {
             target,
             ActiveView::Dashboard
                 | ActiveView::Form2551Q
-                | ActiveView::Form1701Q
                 | ActiveView::Form1601C
-                | ActiveView::Form0619E
-                | ActiveView::Form0619F
-                | ActiveView::Form0605
                 | ActiveView::Form2550Q
-                | ActiveView::Form1701
-                | ActiveView::Form1702RT
-                | ActiveView::Form1702MX
+                | ActiveView::Queueable(_)
         ) && self.selected_tin.is_none()
             && target == ActiveView::Dashboard
         {
@@ -839,6 +866,12 @@ impl BirAgentHost {
         }
 
         self.pending_admin = None;
+        let tin = self.selected_tin.as_deref();
+        self.notifications_open = crate::top_bar::drawer_on_page_change(
+            self.notifications_open,
+            (self.active_view, tin),
+            (target, tin),
+        );
         self.active_view = target;
         if target == ActiveView::GlobalDashboard {
             self.selected_tin = None;
@@ -1672,7 +1705,8 @@ impl BirAgentHost {
                 if !form.draft.is_editable() {
                     return Err("this return is no longer a draft".into());
                 }
-                form.draft.any_taxes_withheld = parse_withheld_flag(&Value::String(value.into()))?;
+                form.draft
+                    .set_any_taxes_withheld(parse_withheld_flag(&Value::String(value.into()))?);
                 form.draft.compute();
                 form.validated = false;
             }
@@ -1755,7 +1789,7 @@ impl BirAgentHost {
             ids::FORM_1601C_WITHHELD => self
                 .form_1601c
                 .as_ref()
-                .map(|form| withheld_snapshot_value(form.draft.any_taxes_withheld))
+                .map(|form| withheld_snapshot_value(form.draft.taxes_withheld_answer()))
                 .unwrap_or_default(),
             ids::FORM_1601C_CATEGORY => self
                 .form_1601c
@@ -1803,6 +1837,7 @@ impl BirAgentHost {
         let tin = saved.tin.full();
         self.editor.save_message = Some("Profile saved.".into());
         self.editor.errors.clear();
+        self.saved_profile_tin = Some(tin.clone());
         self.selected_tin = Some(tin.clone());
         self.reload_from_db(&db);
         for item in &mut self.profiles {
@@ -1826,7 +1861,7 @@ impl BirAgentHost {
                     .ok_or("select a taxpayer profile before opening a form")?;
                 let profile = self.load_profile(&tin)?;
                 let now = chrono::Local::now().date_naive();
-                let mut draft = Form1601CDraft::new_from_profile(
+                let mut draft = Form1601CDraft::new_unanswered_from_profile(
                     &profile,
                     now.year() as u16,
                     now.month() as u8,
@@ -1902,7 +1937,7 @@ impl BirAgentHost {
                 .ok_or("select a taxpayer profile before opening a form")?;
             let profile = self.load_profile(&tin)?;
             let month = period.clamp(1, 12);
-            let mut draft = Form1601CDraft::new_from_profile(&profile, year, month);
+            let mut draft = Form1601CDraft::new_unanswered_from_profile(&profile, year, month);
             if let Some(db) = &self.db
                 && let Ok(guard) = db.lock()
                 && let Ok(Some(existing)) = guard.get_1601c_draft(&tin, year, month)
@@ -2293,14 +2328,16 @@ impl BirAgentHost {
         if !form.draft.is_editable() {
             return Err("this return is no longer a draft".into());
         }
-        form.draft.any_taxes_withheld = !form.draft.any_taxes_withheld;
+        // Unanswered Item 3 toggles to Yes, then flips Yes/No.
+        let next = !form.draft.taxes_withheld_answer().unwrap_or(false);
+        form.draft.set_any_taxes_withheld(next);
         form.draft.compute();
         form.validated = false;
         form.assist
             .note_user_edits(["any_taxes_withheld".to_string()]);
         Ok(DispatchResult::json(json!({
             "form": "1601C",
-            "any_taxes_withheld": form.draft.any_taxes_withheld,
+            "any_taxes_withheld": next,
             "queued": false,
             "filed": false,
         })))
@@ -2315,6 +2352,7 @@ impl BirAgentHost {
         if !form.draft.is_editable() {
             return Err("this return is no longer a draft".into());
         }
+        // Unanswered Item 11 toggles to Private, then flips P/G.
         form.draft.category_of_agent = if form.draft.category_of_agent == "P" {
             "G".to_string()
         } else {
@@ -3094,7 +3132,7 @@ impl BirAgentHost {
             ids::NAV_GLOBAL_DASHBOARD => self.navigate(ActiveView::GlobalDashboard),
             ids::NAV_NEW_PROFILE => self.new_profile_editor(),
             ids::NAV_IMPORT_EXPORT => self.navigate(ActiveView::ImportExport),
-            ids::NAV_NOTIFICATIONS => self.navigate(ActiveView::Notifications),
+            ids::NAV_NOTIFICATIONS => self.toggle_notifications(),
             ids::NAV_CRON_TASKS => self.navigate(ActiveView::CronTasks),
             ids::NAV_ADMIN_CALENDAR => self.navigate(ActiveView::AdminCalendarDashboard),
             ids::NAV_SETTINGS => self.navigate(ActiveView::Settings),
@@ -3568,8 +3606,8 @@ impl BirAgentHost {
             ));
             page = page.with_child(
                 UiNode::new(ids::FORM_1601C_WITHHELD, "checkbox", "Any Taxes Withheld")
-                    .with_checked(draft.any_taxes_withheld)
-                    .with_value(withheld_snapshot_value(draft.any_taxes_withheld))
+                    .with_checked(draft.taxes_withheld_answer() == Some(true))
+                    .with_value(withheld_snapshot_value(draft.taxes_withheld_answer()))
                     .with_enabled(draft.is_editable()),
             );
             page = page.with_child(
@@ -4210,7 +4248,7 @@ fn form_1601c_fields(draft: &Form1601CDraft) -> Vec<Value> {
         field_desc(
             "any_taxes_withheld",
             true,
-            &withheld_snapshot_value(draft.any_taxes_withheld),
+            &withheld_snapshot_value(draft.taxes_withheld_answer()),
             false,
             true,
         ),
@@ -4326,10 +4364,16 @@ fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, S
     Ok(fields)
 }
 
-fn withheld_snapshot_value(withheld: bool) -> String {
-    if withheld { "Yes".into() } else { "No".into() }
+/// Item 3 as the snapshot shows it: "Yes", "No", or "" while unanswered.
+fn withheld_snapshot_value(withheld: Option<bool>) -> String {
+    match withheld {
+        Some(true) => "Yes".into(),
+        Some(false) => "No".into(),
+        None => String::new(),
+    }
 }
 
+/// Item 11 as the snapshot shows it: "P", "G", or "" while unanswered.
 fn category_snapshot_value(category: &str) -> String {
     category.to_string()
 }
@@ -4547,17 +4591,15 @@ fn view_title(view: ActiveView) -> &'static str {
         ActiveView::Notifications => "Notifications",
         ActiveView::ImportExport => "Import Data",
         ActiveView::Settings => "Settings",
+        #[cfg(debug_assertions)]
+        ActiveView::DevMode => "Dev Mode",
         ActiveView::AdminCalendarDashboard => "Tax Calendars",
         ActiveView::Form2551Q => "Form 2551Q",
-        ActiveView::Form1701Q => "Form 1701Q",
         ActiveView::Form1601C => "Form 1601C",
-        ActiveView::Form0619E => "Form 0619E",
-        ActiveView::Form0619F => "Form 0619F",
-        ActiveView::Form0605 => "Form 0605",
         ActiveView::Form2550Q => "Form 2550Q",
-        ActiveView::Form1701 => "Form 1701",
-        ActiveView::Form1702RT => "Form 1702RT",
-        ActiveView::Form1702MX => "Form 1702MX",
+        ActiveView::Queueable(kind) => crate::views::queueable_forms::spec_for_kind(kind)
+            .map(|spec| spec.title)
+            .unwrap_or("Form"),
     }
 }
 
@@ -4608,8 +4650,8 @@ mod tests {
     #[test]
     fn navigation_asserts_every_active_view_page_root() {
         let mut host = fixture_host();
-        for view in ids::ALL_VIEWS {
-            let slug = ids::view_slug(*view);
+        for view in ids::all_views() {
+            let slug = ids::view_slug(view);
             handle_request(
                 &mut host,
                 req(Op::Invoke {
@@ -4623,7 +4665,7 @@ mod tests {
                 &mut host,
                 req(Op::Assert {
                     spec: AssertSpec {
-                        target: ids::page_root(*view).into(),
+                        target: ids::page_root(view).into(),
                         exists: Some(true),
                         ..Default::default()
                     },
@@ -4806,8 +4848,12 @@ mod tests {
             );
             assert!(resp.ok, "{id}: {:?}", resp.error);
         }
+        assert_eq!(host.saved_profile_tin(), None);
         let saved = handle_request(&mut host, req(Op::click(ids::PROFILE_SAVE)), None, None);
         assert!(saved.ok, "{:?}", saved.error);
+        // The drain rebaselines the profile manager from this TIN, so the
+        // window shows no unsaved-changes banner after an agent save.
+        assert_eq!(host.saved_profile_tin(), Some("98765432100000"));
         let row = ids::profile_row("98765432100000");
         let resp = handle_request(
             &mut host,
@@ -4860,6 +4906,21 @@ mod tests {
         assert!(!due.id.chars().all(|c| c.is_ascii_digit()));
     }
 
+    /// New 1601C returns open with Items 3 and 11 unanswered (as the
+    /// official page does); answer them Yes / Private explicitly.
+    fn answer_1601c_items_3_and_11(host: &mut BirAgentHost) {
+        let answered = handle_request(
+            host,
+            req(Op::Invoke {
+                name: "form.fill".into(),
+                args: json!({ "any_taxes_withheld": "Yes", "category_of_agent": "P" }),
+            }),
+            None,
+            None,
+        );
+        assert!(answered.ok, "{:?}", answered.error);
+    }
+
     #[test]
     fn form_1601c_queue_requires_confirm_then_queues() {
         let mut host = fixture_host();
@@ -4874,6 +4935,7 @@ mod tests {
             None,
         );
         assert!(opened.ok, "{:?}", opened.error);
+        answer_1601c_items_3_and_11(&mut host);
         handle_request(
             &mut host,
             req(Op::SetValue {
@@ -4980,6 +5042,7 @@ mod tests {
             None,
         );
         assert!(started.ok, "{:?}", started.error);
+        answer_1601c_items_3_and_11(&mut host);
         handle_request(
             &mut host,
             req(Op::SetValue {
@@ -5066,6 +5129,7 @@ mod tests {
             None,
         );
         assert!(started.ok, "{:?}", started.error);
+        answer_1601c_items_3_and_11(&mut host);
         handle_request(
             &mut host,
             req(Op::SetValue {
@@ -6206,6 +6270,49 @@ mod tests {
         );
     }
 
+    /// The bell toggles the drawer through the agent as with a mouse; a page
+    /// change closes it and `nav.go notifications` still opens it.
+    #[test]
+    fn bell_click_twice_opens_then_closes_the_drawer() {
+        let mut host = fixture_host();
+        let click = |host: &mut BirAgentHost| {
+            let resp = handle_request(
+                host,
+                req(Op::Click {
+                    target: ids::NAV_NOTIFICATIONS.into(),
+                    delivery: Default::default(),
+                }),
+                None,
+                None,
+            );
+            assert!(resp.ok, "{:?}", resp.error);
+        };
+        let view = host.active_view();
+        assert!(!host.notifications_open());
+        click(&mut host);
+        assert!(host.notifications_open(), "first click opens");
+        assert_eq!(host.active_view(), view, "the bell is not a page change");
+        click(&mut host);
+        assert!(!host.notifications_open(), "second click closes");
+
+        let go = |host: &mut BirAgentHost, page: &str| {
+            let resp = handle_request(
+                host,
+                req(Op::Invoke {
+                    name: "nav.go".into(),
+                    args: json!({ "page": page }),
+                }),
+                None,
+                None,
+            );
+            assert!(resp.ok, "{:?}", resp.error);
+        };
+        go(&mut host, "notifications");
+        assert!(host.notifications_open(), "nav.go notifications opens");
+        go(&mut host, "import-export");
+        assert!(!host.notifications_open(), "a page change closes");
+    }
+
     /// The painted Background Tasks tabs are clickable through the host, and
     /// only while that page is open.
     #[test]
@@ -6282,10 +6389,10 @@ mod tests {
         assert!(filled.ok, "{:?}", filled.error);
 
         let patch = host.form_1601c_host_patch();
-        let mut view_flag = true;
+        let mut view_flag = Some(true);
         let mut view_category = "P".to_string();
         let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
-        view_draft.any_taxes_withheld = true;
+        view_draft.set_any_taxes_withheld(true);
         view_draft.category_of_agent = "P".to_string();
 
         assert!(
@@ -6297,7 +6404,7 @@ mod tests {
             ),
             "first apply changes the view"
         );
-        assert!(!view_flag);
+        assert_eq!(view_flag, Some(false));
         assert_eq!(view_category, "G");
         assert!(
             !apply_1601c_host_header_patch(
@@ -6771,6 +6878,7 @@ mod tests {
             None,
         );
         assert!(opened.ok, "{:?}", opened.error);
+        answer_1601c_items_3_and_11(&mut host);
         let filled = handle_request(
             &mut host,
             req(Op::Invoke {
@@ -6819,8 +6927,9 @@ mod tests {
         assert!(!html.contains(FIXTURE_NAME));
         assert!(html.contains("OLONGAPO"));
         assert!(!html.contains("Olongapo"));
-        assert!(html.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
-        assert!(!html.contains(FIXTURE_EMAIL));
+        // Print previews keep the email as typed (owner decision 7A).
+        assert!(html.contains(FIXTURE_EMAIL));
+        assert!(!html.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
         assert!(html.contains("1,000.00"));
         assert!(html.contains("100.00"));
         assert!(
@@ -6899,8 +7008,8 @@ mod tests {
         assert!(!html_q.contains(FIXTURE_NAME));
         assert!(html_q.contains("OLONGAPO"));
         assert!(!html_q.contains("Olongapo"));
-        assert!(html_q.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
-        assert!(!html_q.contains(FIXTURE_EMAIL));
+        assert!(html_q.contains(FIXTURE_EMAIL));
+        assert!(!html_q.contains(&FIXTURE_EMAIL.to_ascii_uppercase()));
         assert!(html_q.contains("500.00"));
         assert!(html_q.contains(&year.to_string()));
         assert!(
@@ -6980,10 +7089,18 @@ mod tests {
             .find(ids::FORM_1601C_WITHHELD)
             .expect("withheld_btn in 1601-C tree");
         assert_eq!(withheld.role, "checkbox");
-        assert_eq!(withheld.checked, Some(true));
-        assert_eq!(withheld.value.as_deref(), Some("Yes"));
+        // A new return opens with Item 3 unanswered, like the official page.
+        assert_eq!(withheld.checked, Some(false));
+        assert_eq!(withheld.value.as_deref().unwrap_or_default(), "");
         assert!(withheld.enabled);
-        assert!(host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+        assert_eq!(
+            host.form_1601c
+                .as_ref()
+                .unwrap()
+                .draft
+                .taxes_withheld_answer(),
+            None
+        );
 
         let off = handle_request(
             &mut host,
@@ -6995,7 +7112,14 @@ mod tests {
             None,
         );
         assert!(off.ok, "{:?}", off.error);
-        assert!(!host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld);
+        assert_eq!(
+            host.form_1601c
+                .as_ref()
+                .unwrap()
+                .draft
+                .taxes_withheld_answer(),
+            Some(false)
+        );
         let tree = host.tree();
         let withheld = tree.find(ids::FORM_1601C_WITHHELD).unwrap();
         assert_eq!(withheld.checked, Some(false));
@@ -7071,7 +7195,8 @@ mod tests {
         assert!(opened.ok, "{:?}", opened.error);
 
         // Painted view still has Yes until apply_host runs (Mac regression).
-        let mut view_flag = true;
+        // New returns open unanswered, so the painted Yes is set explicitly.
+        let mut view_flag = Some(true);
         let mut view_category = host
             .form_1601c
             .as_ref()
@@ -7080,7 +7205,8 @@ mod tests {
             .category_of_agent
             .clone();
         let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
-        assert!(view_draft.any_taxes_withheld);
+        assert_eq!(view_draft.taxes_withheld_answer(), None);
+        view_draft.set_any_taxes_withheld(true);
 
         let filled = handle_request(
             &mut host,
@@ -7095,15 +7221,15 @@ mod tests {
         let patch = host.form_1601c_host_patch();
         assert_eq!(patch.any_taxes_withheld, Some(false));
         apply_1601c_host_header_patch(&patch, &mut view_flag, &mut view_category, &mut view_draft);
-        assert!(!view_flag);
-        assert!(!view_draft.any_taxes_withheld);
+        assert_eq!(view_flag, Some(false));
+        assert_eq!(view_draft.taxes_withheld_answer(), Some(false));
         assert!(!apply_1601c_host_header_patch(
             &Agent1601CHostPatch::default(),
             &mut view_flag,
             &mut view_category,
             &mut view_draft
         ));
-        assert!(!view_flag);
+        assert_eq!(view_flag, Some(false));
 
         // Next request: snapshot_host reloads from the view/draft validate reads.
         host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
@@ -7171,12 +7297,13 @@ mod tests {
             .find(ids::FORM_1601C_CATEGORY)
             .expect("category_btn in 1601-C tree");
         assert_eq!(category.role, "checkbox");
-        assert_eq!(category.checked, Some(true));
-        assert_eq!(category.value.as_deref(), Some("P"));
+        // A new return opens with Item 11 unanswered, like the official page.
+        assert_eq!(category.checked, Some(false));
+        assert_eq!(category.value.as_deref().unwrap_or_default(), "");
         assert!(category.enabled);
         assert_eq!(
             host.form_1601c.as_ref().unwrap().draft.category_of_agent,
-            "P"
+            ""
         );
 
         let listed = handle_request(
@@ -7197,7 +7324,7 @@ mod tests {
             .expect("category_of_agent field");
         assert_eq!(category_field["fillable"], true);
         assert_eq!(category_field["required"], true);
-        assert_eq!(category_field["value"], "P");
+        assert_eq!(category_field["value"], "");
 
         let government = handle_request(
             &mut host,
@@ -7286,10 +7413,16 @@ mod tests {
         );
         assert!(opened.ok, "{:?}", opened.error);
 
-        let mut view_flag = host.form_1601c.as_ref().unwrap().draft.any_taxes_withheld;
-        let mut view_category = "P".to_string();
+        let mut view_flag = host
+            .form_1601c
+            .as_ref()
+            .unwrap()
+            .draft
+            .taxes_withheld_answer();
+        // New returns open with Item 11 unanswered, as the official page does.
+        let mut view_category = String::new();
         let mut view_draft = host.form_1601c.as_ref().unwrap().draft.clone();
-        assert_eq!(view_draft.category_of_agent, "P");
+        assert_eq!(view_draft.category_of_agent, "");
 
         let filled = handle_request(
             &mut host,
@@ -7336,7 +7469,7 @@ mod tests {
             .expect("category_of_agent field");
         assert_eq!(category_field["value"], "G");
 
-        view_draft.any_taxes_withheld = false;
+        view_draft.set_any_taxes_withheld(false);
         view_draft.compute();
         host.replace_form_1601c_state(view_draft.clone(), false, false, Vec::new());
         let validated = handle_request(
@@ -8454,7 +8587,14 @@ mod tests {
             json!({ "code": "1601C", "year": year, "period": 12 }),
         );
         assert!(opened.ok, "{:?}", opened.error);
-        // Taxes withheld = Yes: Items 14 and 25 must be greater than zero.
+        // A new 1601C leaves Item 3 unanswered (#82); answer Yes, and then
+        // Items 14 and 25 must be greater than zero.
+        let answered = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "any_taxes_withheld": true }, "source": "ai" }),
+        );
+        assert!(answered.ok, "{:?}", answered.error);
         let boxes = fields_of(&mut host);
         for field in [
             "tax_14_total_compensation",

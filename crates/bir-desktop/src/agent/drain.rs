@@ -70,6 +70,29 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
             cx.notify();
             continue;
         }
+        if let Op::Invoke { name, args } = &posted.request.op
+            && name == "dashboard.tab"
+        {
+            let response = match parse_dashboard_tab(args) {
+                Ok(_) if app.active_view != ActiveView::Dashboard => Response::err(
+                    &posted.request.id,
+                    "dashboard.tab needs the profile dashboard open (nav.go dashboard)",
+                ),
+                Ok(tab) => {
+                    let slug = dashboard_tab_slug(&tab);
+                    app.dashboard_view
+                        .update(cx, |view, cx| view.agent_set_tab(tab, cx));
+                    let mut resp = Response::ok(&posted.request.id);
+                    resp.result = Some(serde_json::json!({ "tab": slug }));
+                    resp
+                }
+                Err(error) => Response::err(&posted.request.id, error),
+            };
+            crate::agent::request_log::emit_request_log(&posted.request, &response);
+            posted.reply(response);
+            cx.notify();
+            continue;
+        }
         if matches!(posted.request.op, Op::Keybinding { .. }) {
             if app.start_keybinding_fire(posted, window, cx) {
                 break;
@@ -125,6 +148,34 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
     }
 }
 
+/// `dashboard.tab` args: `{"tab": "calendar" | "forms" | "library"}`.
+///
+/// Painted app only: the tab lives in `DashboardView`, not in the semantic
+/// host, so `bir-headless` does not answer it.
+fn parse_dashboard_tab(
+    args: &serde_json::Value,
+) -> Result<crate::views::dashboard::ProfileTab, String> {
+    use crate::views::dashboard::ProfileTab;
+    let slug = args
+        .get("tab")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("dashboard.tab requires args.tab")?;
+    match slug.trim().to_ascii_lowercase().as_str() {
+        "calendar" => Ok(ProfileTab::Calendar),
+        "forms" | "library" | "tax-form-library" => Ok(ProfileTab::Forms),
+        other => Err(format!(
+            "unknown dashboard tab `{other}` (expected calendar or forms)"
+        )),
+    }
+}
+
+fn dashboard_tab_slug(tab: &crate::views::dashboard::ProfileTab) -> &'static str {
+    match tab {
+        crate::views::dashboard::ProfileTab::Calendar => "calendar",
+        crate::views::dashboard::ProfileTab::Forms => "forms",
+    }
+}
+
 fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     let admin_lock_enabled = if let Ok(db) = app.db.lock() {
         let pin = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
@@ -146,6 +197,7 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host.set_profile_pins(app.enable_profile_pins);
     host.set_hide_tax_profiles(app.hide_tax_profiles);
     host.restore_view(app.active_view, app.active_profile_tin.clone());
+    host.set_notifications_open(app.notifications_open);
     host.set_profile_tab(app.profile_manager.read(cx).agent_active_tab());
     host.set_cron_tab(app.cron_tasks_view.read(cx).agent_active_tab());
     host.replace_profiles(
@@ -231,6 +283,17 @@ fn apply_host(
         app.profiles = list;
     }
 
+    // `profile.save` writes the database directly. The profile manager still
+    // holds the agent's field edits as unsaved changes, and that dirty state
+    // blocks `select_profile` below, so the editor would never be reloaded
+    // and the "Unsaved profile changes" banner would block every later
+    // navigation. Load the saved row into the editor, which rebaselines it.
+    if let Some(profile) = saved_profile_to_load(host.saved_profile_tin(), &app.profiles) {
+        app.profile_manager.update(cx, |view, cx| {
+            view.edit_profile(profile, window, cx);
+        });
+    }
+
     // `form.dismiss` closed a form: drop its view so the next request does
     // not rebuild the host state from it.
     match host.take_dismissed_form() {
@@ -241,6 +304,16 @@ fn apply_host(
 
     if host.active_view() != app.active_view {
         apply_navigation(host.active_view(), &host, app, window, cx);
+    }
+
+    // The bell toggles the drawer without changing the page.
+    if host.notifications_open() != app.notifications_open {
+        let input = if host.notifications_open() {
+            crate::top_bar::DrawerInput::Open
+        } else {
+            crate::top_bar::DrawerInput::Close
+        };
+        app.drawer_input(input, cx);
     }
 
     if let Some(tin) = host.selected_tin() {
@@ -354,6 +427,19 @@ fn apply_host(
     }
 }
 
+/// The freshly saved profile the profile manager must reload, if the agent
+/// saved one in this request.
+fn saved_profile_to_load(
+    saved_tin: Option<&str>,
+    profiles: &[bir_core::profile::TaxpayerProfile],
+) -> Option<bir_core::profile::TaxpayerProfile> {
+    let tin = saved_tin?;
+    profiles
+        .iter()
+        .find(|profile| profile.tin.full() == tin)
+        .cloned()
+}
+
 /// The taxpayer the app must adopt before `target` can be rendered.
 ///
 /// A form view reads `AppState::active_profile_tin`, not the agent host's
@@ -387,6 +473,8 @@ fn apply_navigation(
         ActiveView::Settings | ActiveView::CronTasks | ActiveView::AdminCalendarDashboard => {
             app.request_admin_access(target, window, cx);
         }
+        #[cfg(debug_assertions)]
+        ActiveView::DevMode => app.open_dev_mode(window, cx),
         ActiveView::GlobalDashboard => {
             if app.block_unsaved_compliance_navigation(window, cx) {
                 return;
@@ -428,17 +516,8 @@ fn apply_navigation(
                 cx.notify();
             }
         }
-        ActiveView::Notifications => {
-            if app.block_unsaved_compliance_navigation(window, cx) {
-                return;
-            }
-            let tin = app.active_session_tin.clone();
-            app.notifications_view.update(cx, |view, cx| {
-                view.set_active_session_tin(tin, cx);
-            });
-            app.active_view = ActiveView::Notifications;
-            cx.notify();
-        }
+        // A drawer over the current page, so no unsaved-changes gate.
+        ActiveView::Notifications => app.open_notifications(cx),
         ActiveView::ImportExport => {
             if app.block_unsaved_compliance_navigation(window, cx) {
                 return;
@@ -1294,9 +1373,39 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::{ActiveView, profile_to_adopt};
+    use super::{ActiveView, profile_to_adopt, saved_profile_to_load};
+
+    #[test]
+    fn agent_save_reloads_the_saved_profile_into_the_manager() {
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": 7, "full_name": "Saved", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "", "registered_address": "", "zip_code": "",
+                "phone": "", "email": "", "default_form_type": "1601Cv2018",
+                "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let profiles = vec![profile];
+        let loaded = saved_profile_to_load(Some("12345678800000"), &profiles)
+            .expect("a saved profile must be reloaded so the dirty baseline is refreshed");
+        assert_eq!(loaded.full_name, "Saved");
+        assert!(saved_profile_to_load(None, &profiles).is_none());
+        assert!(saved_profile_to_load(Some("99999999900000"), &profiles).is_none());
+    }
 
     const TIN: &str = "00000000000000";
+
+    #[test]
+    fn dashboard_tab_accepts_calendar_and_library_slugs() {
+        use super::{dashboard_tab_slug, parse_dashboard_tab};
+        let slug = |v: serde_json::Value| parse_dashboard_tab(&v).map(|t| dashboard_tab_slug(&t));
+        assert_eq!(slug(serde_json::json!({"tab": "calendar"})), Ok("calendar"));
+        assert_eq!(slug(serde_json::json!({"tab": "Forms"})), Ok("forms"));
+        assert_eq!(slug(serde_json::json!({"tab": "library"})), Ok("forms"));
+        assert!(slug(serde_json::json!({"tab": "jobs"})).is_err());
+        assert!(slug(serde_json::json!({})).is_err());
+    }
 
     #[test]
     fn a_form_navigation_adopts_the_hosts_taxpayer_once() {

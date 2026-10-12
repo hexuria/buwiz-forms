@@ -128,7 +128,7 @@
       "parts": [
         {
           "source": "frm2000OT:txtTaxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -140,11 +140,19 @@
       "parts": [
         {
           "source": "frm2000OT:txtAddress",
-          "codec": "js-escape"
-        },
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm2000OT:txtAddress2",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm2000OT:txtAddress2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -204,11 +212,19 @@
       "parts": [
         {
           "source": "frm2000OT:txtOtherName",
-          "codec": "js-escape"
-        },
+          "codec": "raw"
+        }
+      ],
+      "default": "",
+      "after": "    \n            "
+    },
+    {
+      "key": "frm2000OT:txtOtherName2",
+      "kind": "value",
+      "parts": [
         {
           "source": "frm2000OT:txtOtherName2",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -1323,10 +1339,11 @@
       "kind": "value",
       "parts": [
         {
-          "literal": "1"
+          "source": "frm2000OT:txtCurrentPage",
+          "codec": "raw"
         }
       ],
-      "default": "1",
+      "default": "",
       "after": "    \n            "
     },
     {
@@ -1347,7 +1364,7 @@
       "parts": [
         {
           "source": "frm2000OT:txtLineBus",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",

@@ -6,7 +6,20 @@
   "official_hta_sha256": "7288b63d63c98e0beabe43793c3549ae310317661ec6cc4d98c985e95c398a2d",
   "header": "<?xml version='1.0'?>",
   "lead": "    \n                ",
-  "value_rules": [],
+  "value_rules": [
+    {
+      "probe": "1,234.50",
+      "key": "frm1700:txtPg1I8AZipCode",
+      "expected": "1,234.50",
+      "official": "1234.50"
+    },
+    {
+      "probe": "(5.00)",
+      "key": "frm1700:txtPg1I8AZipCode",
+      "expected": "(5.00)",
+      "official": "-5.00"
+    }
+  ],
   "entries": [
     {
       "key": "frm1700:txtPg1I1Year",
@@ -122,7 +135,7 @@
       "parts": [
         {
           "source": "frm1700:txtPg1I7TaxpayerName",
-          "codec": "js-escape"
+          "codec": "raw"
         }
       ],
       "default": "",
@@ -330,6 +343,18 @@
         }
       ],
       "default": "00000",
+      "after": "    \n                "
+    },
+    {
+      "key": "frm1700:txtSpouseRDOCode",
+      "kind": "value",
+      "parts": [
+        {
+          "source": "frm1700:txtSpouseRDOCode",
+          "codec": "raw"
+        }
+      ],
+      "default": "000",
       "after": "    \n                "
     },
     {

@@ -41,30 +41,7 @@ where
 #[cfg(feature = "dev-tools")]
 fn export_live_database_for_diagnostics(destination: &std::path::Path) -> Result<(), String> {
     let source = bir_core::db::default_database_path();
-
-    let file_name = destination
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| "Destination must have a valid UTF-8 file name".to_string())?;
-    let temporary = destination.with_file_name(format!(
-        ".{file_name}.{}.tmp",
-        uuid::Uuid::new_v4().simple()
-    ));
-
-    if let Err(error) = bir_core::export_existing_database_zip(&source, &temporary) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(format!("Could not export database: {error}"));
-    }
-
-    if let Err(error) = std::fs::rename(&temporary, destination) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(format!(
-            "Could not atomically install {}: {error}",
-            destination.display()
-        ));
-    }
-
-    Ok(())
+    crate::dev_mode::export_database_copy(&source, destination)
 }
 
 #[cfg(feature = "dev-tools")]
@@ -197,10 +174,13 @@ pub fn run_gui() {
     ipc::prevent_multiple_instances();
     platform::enforce_single_instance();
 
+    // `DEVELOPER_MODE=true` (any build), or the Dev Mode "Verbose logs"
+    // switch (debug builds; read here, so it takes effect on next start).
     let developer_mode = std::env::var("DEVELOPER_MODE")
         .unwrap_or_else(|_| "false".to_string())
         .to_lowercase()
-        == "true";
+        == "true"
+        || bir_core::dev_mode::verbose_logs().value;
 
     // Initialize structured logging. The native-output diagnostic intentionally
     // remains stdout-only because its external driver captures that stream and
@@ -272,8 +252,15 @@ pub fn run_gui() {
         #[cfg(target_os = "macos")]
         let macos_quit_router = platform::install_app_menu(cx);
 
-        let bounds =
-            gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx);
+        // About 90% of the primary display on first start, then the last
+        // size and position, clamped to the display (`window_geometry`).
+        let bounds = match cx.primary_display() {
+            Some(display) => crate::window_geometry::to_bounds(crate::window_geometry::initial(
+                crate::window_geometry::from_bounds(display.bounds()),
+                crate::window_geometry::load(),
+            )),
+            None => gpui::Bounds::centered(None, gpui::size(gpui::px(1024.0), gpui::px(768.0)), cx),
+        };
 
         cx.spawn(async move |cx| {
             let (db, profiles) = cx
@@ -293,6 +280,9 @@ pub fn run_gui() {
                             std::process::exit(1);
                         }
                     };
+                    // Dev Mode values (debug builds) before anything resolves them.
+                    bir_core::dev_mode::load_saved(&db);
+                    crate::dev_mode::set_opened_database_path(db_path.clone());
                     if let Some(backup_path) = recovered_backup {
                         eprintln!(
                             "Recovered unreadable database at {} by moving it to {}",
@@ -379,20 +369,15 @@ pub fn run_gui() {
                     title: Some("e-BIRForms".into()),
                     ..Default::default()
                 }),
-                window_bounds: Some(WindowBounds::Maximized(bounds)),
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
+                // X11 WM_CLASS / Wayland app_id; must match StartupWMClass in
+                // assets/linux/ebirforms.desktop so docks group the window.
+                app_id: Some("ebirforms".into()),
                 ..Default::default()
             };
 
             let _ = cx.open_window(options, move |window, cx| {
-                window.on_window_should_close(cx, |_, _cx| {
-                    // Hide is not quit: bind + live-DB owner lock stay held until
-                    // tray Quit / `gpui-agent shutdown` (request_application_quit); Cmd+Q
-                    // and the menu's Quit also hide.
-                    platform::hide_from_dock();
-                    false // Prevent window destruction
-                });
-
                 let view = cx.new(|cx| {
                     let mut state = app::AppState::new(db, profiles, window, cx);
                     #[cfg(feature = "agent")]
@@ -406,6 +391,14 @@ pub fn run_gui() {
                         state.agent_discovery = session.discovery;
                     }
                     state
+                });
+                // Remember the size and position for the next start.
+                view.update(cx, |_, cx| {
+                    cx.observe_window_bounds(window, |_, window, _| {
+                        let bounds = window.window_bounds().get_bounds();
+                        crate::window_geometry::save(crate::window_geometry::from_bounds(bounds));
+                    })
+                    .detach();
                 });
                 cx.on_action({
                     let entity = view.downgrade();
@@ -423,6 +416,43 @@ pub fn run_gui() {
                         cx,
                     );
                 }
+                // Shared so both the tray Quit item and the Linux close button
+                // can drop the tray icon before quitting.
+                let tray = std::rc::Rc::new(std::cell::RefCell::new(tray));
+                if platform::close_button_quits() {
+                    // Linux: there is often no StatusNotifier tray host (GNOME,
+                    // fluxbox) and no reliable way to hide a window (xdotool is
+                    // optional and X11-only), so the close button quits through
+                    // the same guarded path as tray Quit. The window stays open
+                    // only when unsaved Profile compliance changes block quitting.
+                    let entity = view.downgrade();
+                    let close_tray = tray.clone();
+                    // Ctrl+Q / Alt+F4 (QuitApplication) take the same path.
+                    let hook_tray = tray.clone();
+                    view.update(cx, |state, _| {
+                        state.quit_hook = Some(std::rc::Rc::new(move || {
+                            drop(hook_tray.borrow_mut().take());
+                        }));
+                    });
+                    window.on_window_should_close(cx, move |window, cx| {
+                        entity
+                            .update(cx, |state, cx| {
+                                state.request_application_quit(window, cx, || {
+                                    drop(close_tray.borrow_mut().take());
+                                })
+                            })
+                            .unwrap_or(false)
+                    });
+                } else {
+                    window.on_window_should_close(cx, |_, _cx| {
+                        // macOS/Windows: hide is not quit. Bind + live-DB owner lock
+                        // stay held until tray Quit / `gpui-agent shutdown`
+                        // (request_application_quit). Cmd+Q / the menu's Quit (macOS)
+                        // and Alt+F4 (Windows) also hide rather than quit.
+                        platform::hide_from_dock();
+                        false // Prevent window destruction
+                    });
+                }
                 let main_window = window.window_handle();
                 let tray_app_state = view.clone();
                 #[cfg(target_os = "macos")]
@@ -439,7 +469,7 @@ pub fn run_gui() {
                 let tray_channel = tray_icon::TrayIconEvent::receiver();
 
                 cx.spawn(async move |cx| {
-                    let mut tray = tray;
+                    let tray = tray;
 
                     // Own the global hotkey manager here so it stays alive for
                     // the app's lifetime (dropping it unregisters the hotkey).
@@ -475,7 +505,7 @@ pub fn run_gui() {
                                     match main_window.update(cx, |_, window, cx| {
                                         tray_app_state.update(cx, |state, cx| {
                                             state.request_application_quit(window, cx, || {
-                                                drop(tray.take());
+                                                drop(tray.borrow_mut().take());
                                             })
                                         })
                                     }) {
@@ -577,5 +607,26 @@ mod startup_tests {
     #[::core::prelude::v1::test]
     fn persistent_log_appender_writes_under_the_app_data_dir() {
         assert!(persistent_log_appender().is_some());
+    }
+
+    #[::core::prelude::v1::test]
+    fn linux_desktop_entry_has_required_keys_and_is_packaged() {
+        let entry = include_str!("../../../assets/linux/ebirforms.desktop");
+        let mut lines = entry.lines();
+        assert_eq!(lines.next(), Some("[Desktop Entry]"));
+        let keys: std::collections::HashMap<&str, &str> =
+            lines.filter_map(|l| l.split_once('=')).collect();
+        assert_eq!(keys.get("Type"), Some(&"Application"));
+        assert_eq!(keys.get("Name"), Some(&"eBIRForms"));
+        assert_eq!(keys.get("Exec"), Some(&"ebirforms"));
+        assert_eq!(keys.get("Icon"), Some(&"ebirforms"));
+        assert_eq!(keys.get("StartupWMClass"), Some(&"ebirforms"));
+        assert!(keys.get("Categories").is_some_and(|c| c.ends_with(';')));
+
+        let cargo = include_str!("../Cargo.toml");
+        assert!(cargo.contains(
+            r#"["../../assets/linux/ebirforms.desktop", "usr/share/applications/ebirforms.desktop", "644"]"#
+        ));
+        assert!(cargo.contains("usr/share/icons/hicolor/"));
     }
 }

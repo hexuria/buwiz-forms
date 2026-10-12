@@ -13,7 +13,9 @@
 //! - `notices` — BIR notices, announcements, deadlines, penalties
 
 mod alerts;
+mod amendment_snapshots;
 pub use alerts::{AlertAction, AlertRecordOutcome, AlertSeverity, AppAlert, kinds as alert_kinds};
+pub use amendment_snapshots::{AmendmentSnapshot, SnapshotPayloadSource};
 mod drafts;
 pub use drafts::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Claim1601CSubmissionResult,
@@ -25,11 +27,14 @@ mod forms_set;
 mod google_calendar;
 mod inbox_oauth;
 mod jobs;
+mod legacy_amendment;
 mod migrations;
 mod notices;
 mod profiles;
 mod providers;
+mod queueable;
 mod receipts;
+pub use queueable::{ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
@@ -262,6 +267,9 @@ pub enum DbError {
     Zip(#[from] zip::result::ZipError),
     #[error("Other error: {0}")]
     Other(String),
+    /// save-009: Amended Return = No while a filed original exists.
+    #[error("{}", crate::forms::queueable::AMENDED_RETURN_ALERT)]
+    AmendedReturnRequired,
     #[error(
         "live database {} is already open (painted bir or bir-headless). \
          Single live-DB owner: quit the other process. There is no protocol Op::Yield.",
@@ -289,10 +297,13 @@ pub fn default_database_path() -> std::path::PathBuf {
 ///
 /// `BIR_DATABASE_PATH` overrides for tests / CI. Empty or unset uses
 /// [`default_database_path`] (`platform::data_dir()/bir_data.db`).
+///
+/// Debug builds: the Dev Mode "Use a separate dev database" switch picks
+/// `bir_data.dev.db` through this same function (env still wins).
 pub fn app_database_path() -> PathBuf {
     match std::env::var_os("BIR_DATABASE_PATH") {
         Some(path) if !path.is_empty() => PathBuf::from(path),
-        _ => default_database_path(),
+        _ => crate::dev_mode::dev_database_path().unwrap_or_else(default_database_path),
     }
 }
 

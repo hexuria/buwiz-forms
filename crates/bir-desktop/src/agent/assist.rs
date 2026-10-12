@@ -586,7 +586,12 @@ pub fn apply_1601c(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Resu
     } else {
         coerce(kind, key, value)?
     };
-    set_top_level(draft, key, value)
+    set_top_level(draft, key, value)?;
+    if key == "any_taxes_withheld" {
+        // Answering Item 3 clears the "unanswered" marker.
+        draft.set_any_taxes_withheld(draft.any_taxes_withheld);
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------- needs you

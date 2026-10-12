@@ -1476,7 +1476,6 @@ impl Form1702RTDraft {
             None
         };
 
-        let now = chrono::Utc::now().to_rfc3339();
         let draft = Form1702RTDraft {
             id: None,
             tin,
@@ -1516,6 +1515,7 @@ impl Form1702RTDraft {
             schedule_3: parse_schedule_3(fields, &mut errors),
             schedule_4: parse_schedule_4(fields, &mut errors),
             schedule_5: parse_schedule_5(fields, &mut errors),
+            more_rows: Default::default(),
             president_signature: field(fields, "frm1702RT:txtSignaturePresident").to_string(),
             treasurer_signature: field(fields, "frm1702RT:txtSignatureTreasurer").to_string(),
             president_signatory_title: field(fields, "frm1702RT:txtPg1Pt2Signatory1").to_string(),
@@ -1526,16 +1526,8 @@ impl Form1702RTDraft {
             xml_final_flag: field(fields, "txtFinalFlag").to_string(),
             preserved_transport_fields: fields.clone(),
             calculation_issues: Vec::new(),
-            status: super::FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
             last_error: None,
+            lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
         if errors.is_empty() {
             Ok(draft)

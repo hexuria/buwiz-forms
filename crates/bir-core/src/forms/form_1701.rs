@@ -12,9 +12,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use super::form_2551q::{AnnualIncomeTaxElection, annual_income_tax_election};
-use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use super::queueable::SubmissionLifecycle;
+use super::{FilingPeriod, FormValidator, TypedBirForm};
 use crate::profile::{IncomeTaxElection, TaxClassification, TaxpayerProfile, TaxpayerType};
-use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 
 pub const FORM_CODE: &str = "1701";
 pub const FORM_REVISION: &str = "2018";
@@ -408,22 +408,32 @@ pub struct Form1701Draft {
     pub preserved_xml_fields: BTreeMap<String, String>,
     pub has_exact_xml_snapshot: bool,
 
-    // Local lifecycle only. Electronic queue/submission is not certified.
-    pub status: FilingStatus,
-    pub created_at: String,
-    pub updated_at: String,
-    pub submitted_at: Option<String>,
-    pub confirmed_at: Option<String>,
-    pub submission_filename: Option<String>,
-    pub receipt_id: Option<i64>,
-    pub submission_attempts: u32,
-    pub next_retry_at: Option<String>,
+    /// Item 6 is a set of checkboxes: a Single Proprietor or Professional
+    /// with compensation income also ticks Compensation Earner (mixed
+    /// income, ATC II013/II016).
+    pub taxpayer_also_compensation_earner: bool,
+    /// The same second Item 3 tick for the spouse (page 2).
+    pub spouse_also_compensation_earner: bool,
+    /// Line of business from the taxpayer profile (`txtLineBus`, filled by
+    /// the official page from the background information).
+    pub line_of_business: String,
+    /// Spouse RDO (`txtPg2I2SpouseRDOCode`); blank keeps the page's `000`.
+    /// Kept outside `Form1701Spouse` so earlier stored JSON keeps loading.
+    pub spouse_rdo_code: String,
+
+    /// Pre-queue builds stored their own error text here. Kept so old JSON
+    /// round-trips; the generic lifecycle reports `submission_error`.
     pub last_error: Option<String>,
+
+    /// Status, queue authorization and retry state. Flattened so stored JSON
+    /// keeps the keys earlier builds wrote inline (`status`, `created_at`,
+    /// `submission_attempts`, ...).
+    #[serde(flatten)]
+    pub lifecycle: SubmissionLifecycle,
 }
 
 impl Default for Form1701Draft {
     fn default() -> Self {
-        let now = chrono::Utc::now().to_rfc3339();
         Self {
             id: None,
             tin: String::new(),
@@ -459,16 +469,12 @@ impl Default for Form1701Draft {
             machine_validation_or_receipt_details: String::new(),
             preserved_xml_fields: BTreeMap::new(),
             has_exact_xml_snapshot: false,
-            status: FilingStatus::Draft,
-            created_at: now.clone(),
-            updated_at: now,
-            submitted_at: None,
-            confirmed_at: None,
-            submission_filename: None,
-            receipt_id: None,
-            submission_attempts: 0,
-            next_retry_at: None,
+            taxpayer_also_compensation_earner: false,
+            spouse_also_compensation_earner: false,
+            line_of_business: String::new(),
+            spouse_rdo_code: String::new(),
             last_error: None,
+            lifecycle: SubmissionLifecycle::default(),
         }
     }
 }
@@ -489,6 +495,7 @@ impl Form1701Draft {
                 .unwrap_or_default(),
             email: profile.email.clone(),
             contact_number: profile.phone.clone(),
+            line_of_business: profile.line_of_business.clone(),
             ..Self::default()
         };
 
@@ -526,7 +533,7 @@ impl Form1701Draft {
     }
 
     pub fn is_editable(&self) -> bool {
-        matches!(self.status, FilingStatus::Draft)
+        self.lifecycle.is_editable()
     }
 
     pub const fn can_queue_for_submission(&self) -> bool {
@@ -606,326 +613,9 @@ impl Form1701Draft {
         }
     }
 
-    /// Recompute only arithmetic explicitly printed on the January 2018 form.
-    /// Blank inputs remain blank until enough upstream evidence exists.
+    /// The official compute chain (see `form_1701_official`).
     pub fn recompute(&mut self) {
-        self.recompute_employer_totals();
-        self.recompute_schedule_4_and_5();
-        self.recompute_nolco();
-        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
-            self.recompute_party(party);
-        }
-        self.computations.part_ii_item_32_aggregate = sum_present([
-            self.amount(Form1701AmountSection::PartIi, 31, Form1701Party::Taxpayer),
-            self.amount(Form1701AmountSection::PartIi, 31, Form1701Party::Spouse),
-        ]);
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-    }
-
-    fn recompute_employer_totals(&mut self) {
-        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
-            let compensation =
-                sum_present(self.employers.iter().filter_map(|row| {
-                    (row.owner == Some(party)).then_some(row.compensation_income)
-                }));
-            let withheld = sum_present(
-                self.employers
-                    .iter()
-                    .filter_map(|row| (row.owner == Some(party)).then_some(row.tax_withheld)),
-            );
-            self.set_amount(Form1701AmountSection::Schedule2, 4, party, compensation);
-            self.set_amount(Form1701AmountSection::PartVii, 5, party, withheld);
-        }
-    }
-
-    fn recompute_schedule_4_and_5(&mut self) {
-        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
-            let ordinary = sum_present(
-                (1..=16)
-                    .map(|item| self.amount(Form1701AmountSection::Schedule4, item, party))
-                    .chain(
-                        self.computations
-                            .schedule_4_item_17
-                            .iter()
-                            .map(|pair| pair.value(party)),
-                    ),
-            );
-            self.set_amount(Form1701AmountSection::Schedule4, 18, party, ordinary);
-        }
-        self.computations.schedule_5_total_taxpayer = sum_present(
-            self.computations
-                .schedule_5_taxpayer
-                .iter()
-                .map(|row| row.amount),
-        );
-        self.computations.schedule_5_total_spouse = sum_present(
-            self.computations
-                .schedule_5_spouse
-                .iter()
-                .map(|row| row.amount),
-        );
-    }
-
-    fn recompute_nolco(&mut self) {
-        for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
-            let item_3 = subtract_optional(
-                self.amount(Form1701AmountSection::Schedule6, 1, party),
-                self.amount(Form1701AmountSection::Schedule6, 2, party),
-            );
-            self.set_amount(Form1701AmountSection::Schedule6, 3, party, item_3);
-        }
-        for row in self
-            .computations
-            .schedule_6_taxpayer_nolco
-            .iter_mut()
-            .chain(self.computations.schedule_6_spouse_nolco.iter_mut())
-        {
-            row.unapplied = subtract_many_optional(
-                row.amount,
-                [
-                    row.applied_previous_years,
-                    row.expired,
-                    row.applied_current_year,
-                ],
-            );
-        }
-        self.computations.schedule_6_total_taxpayer = sum_present(
-            self.computations
-                .schedule_6_taxpayer_nolco
-                .iter()
-                .map(|row| row.applied_current_year),
-        );
-        self.computations.schedule_6_total_spouse = sum_present(
-            self.computations
-                .schedule_6_spouse_nolco
-                .iter()
-                .map(|row| row.applied_current_year),
-        );
-    }
-
-    fn recompute_party(&mut self, party: Form1701Party) {
-        let rate = self.party_tax_rate(party);
-        let deduction = self.party_deduction_method(party);
-        let atc = self.party_atc(party);
-
-        let item_4 = self.amount(Form1701AmountSection::Schedule2, 4, party);
-        let item_5 = self.amount(Form1701AmountSection::Schedule2, 5, party);
-        let item_6 = subtract_optional(item_4, item_5);
-        let item_7 =
-            item_6.map(|income| round_peso(graduated_income_tax(self.taxable_year, income)));
-        self.set_amount(Form1701AmountSection::Schedule2, 6, party, item_6);
-        self.set_amount(Form1701AmountSection::Schedule2, 7, party, item_7);
-
-        if rate == Some(Form1701TaxRate::Graduated) {
-            let item_10 = subtract_optional(
-                self.amount(Form1701AmountSection::Schedule3, 8, party),
-                self.amount(Form1701AmountSection::Schedule3, 9, party),
-            );
-            let item_12 = subtract_optional(
-                item_10,
-                self.amount(Form1701AmountSection::Schedule3, 11, party),
-            );
-            let item_16 = sum_present([
-                self.amount(Form1701AmountSection::Schedule3, 13, party),
-                self.amount(Form1701AmountSection::Schedule3, 14, party),
-                self.amount(Form1701AmountSection::Schedule3, 15, party),
-            ]);
-            let item_17 = item_10.map(|value| round_peso(value * 0.40));
-            let item_18 = match deduction {
-                Some(Form1701DeductionMethod::Itemized) => subtract_optional(item_12, item_16),
-                Some(Form1701DeductionMethod::Osd) => subtract_optional(item_10, item_17),
-                None => None,
-            };
-            let item_22 = sum_present([
-                self.amount(Form1701AmountSection::Schedule3, 19, party),
-                self.amount(Form1701AmountSection::Schedule3, 20, party),
-                self.amount(Form1701AmountSection::Schedule3, 21, party),
-            ]);
-            let item_23 = add_optional(item_18, item_22);
-            let item_24 = add_optional(item_6, item_23);
-            let item_25 =
-                item_24.map(|income| round_peso(graduated_income_tax(self.taxable_year, income)));
-            for (item, value) in [
-                (10, item_10),
-                (12, item_12),
-                (16, item_16),
-                (17, item_17),
-                (18, item_18),
-                (22, item_22),
-                (23, item_23),
-                (24, item_24),
-                (25, item_25),
-            ] {
-                self.set_amount(Form1701AmountSection::Schedule3, item, party, value);
-            }
-        } else if rate == Some(Form1701TaxRate::EightPercent) {
-            let item_28 = add_optional(
-                self.amount(Form1701AmountSection::Schedule3, 26, party),
-                self.amount(Form1701AmountSection::Schedule3, 27, party),
-            );
-            let item_29 = item_28.map(|_| {
-                if atc.is_some_and(Form1701Atc::gets_eight_percent_reduction) {
-                    250_000.0
-                } else {
-                    0.0
-                }
-            });
-            let item_30 = subtract_optional(item_28, item_29);
-            let item_31 = item_30.map(|income| round_peso(income.max(0.0) * 0.08));
-            let item_32 = add_optional(item_7, item_31);
-            for (item, value) in [
-                (28, item_28),
-                (29, item_29),
-                (30, item_30),
-                (31, item_31),
-                (32, item_32),
-            ] {
-                self.set_amount(Form1701AmountSection::Schedule3, item, party, value);
-            }
-        }
-
-        let regular_tax_due = match (atc, rate) {
-            (Some(Form1701Atc::Ii011), _) => item_7,
-            (_, Some(Form1701TaxRate::Graduated)) => {
-                self.amount(Form1701AmountSection::Schedule3, 25, party)
-            }
-            (_, Some(Form1701TaxRate::EightPercent)) => {
-                self.amount(Form1701AmountSection::Schedule3, 32, party)
-            }
-            _ => None,
-        };
-        self.set_amount(Form1701AmountSection::PartVi, 1, party, regular_tax_due);
-        let part_vi_4 = subtract_optional(
-            self.amount(Form1701AmountSection::PartVi, 2, party),
-            self.amount(Form1701AmountSection::PartVi, 3, party),
-        );
-        let part_vi_5 = add_optional(regular_tax_due, part_vi_4);
-        self.set_amount(Form1701AmountSection::PartVi, 4, party, part_vi_4);
-        self.set_amount(Form1701AmountSection::PartVi, 5, party, part_vi_5);
-
-        let credits = sum_present(
-            (1..=9).map(|item| self.amount(Form1701AmountSection::PartVii, item, party)),
-        );
-        self.set_amount(Form1701AmountSection::PartVii, 10, party, credits);
-
-        let relief_3 = add_optional(
-            self.amount(Form1701AmountSection::PartViii, 1, party),
-            self.amount(Form1701AmountSection::PartViii, 2, party),
-        );
-        let relief_5 = subtract_optional(
-            relief_3,
-            self.amount(Form1701AmountSection::PartViii, 4, party),
-        );
-        let relief_7 = add_optional(
-            relief_5,
-            self.amount(Form1701AmountSection::PartViii, 6, party),
-        );
-        let relief_10 = add_optional(
-            self.amount(Form1701AmountSection::PartViii, 8, party),
-            self.amount(Form1701AmountSection::PartViii, 9, party),
-        );
-        for (item, value) in [(3, relief_3), (5, relief_5), (7, relief_7), (10, relief_10)] {
-            self.set_amount(Form1701AmountSection::PartViii, item, party, value);
-        }
-
-        let reconciliation_5 = sum_present(
-            (1..=4).map(|item| self.amount(Form1701AmountSection::PartIx, item, party)),
-        );
-        let reconciliation_10 = sum_present(
-            (6..=9).map(|item| self.amount(Form1701AmountSection::PartIx, item, party)),
-        );
-        let reconciliation_11 = subtract_optional(reconciliation_5, reconciliation_10);
-        for (item, value) in [
-            (5, reconciliation_5),
-            (10, reconciliation_10),
-            (11, reconciliation_11),
-        ] {
-            self.set_amount(Form1701AmountSection::PartIx, item, party, value);
-        }
-
-        self.set_amount(Form1701AmountSection::PartIi, 22, party, part_vi_5);
-        self.set_amount(Form1701AmountSection::PartIi, 23, party, credits);
-        let item_24 = subtract_optional(part_vi_5, credits);
-        self.set_amount(Form1701AmountSection::PartIi, 24, party, item_24);
-        let item_26 = subtract_optional(
-            item_24,
-            self.amount(Form1701AmountSection::PartIi, 25, party),
-        );
-        self.set_amount(Form1701AmountSection::PartIi, 26, party, item_26);
-        let penalties = sum_present([
-            self.amount(Form1701AmountSection::PartIi, 27, party),
-            self.amount(Form1701AmountSection::PartIi, 28, party),
-            self.amount(Form1701AmountSection::PartIi, 29, party),
-        ]);
-        self.set_amount(Form1701AmountSection::PartIi, 30, party, penalties);
-        self.set_amount(
-            Form1701AmountSection::PartIi,
-            31,
-            party,
-            add_optional(item_26, penalties),
-        );
-    }
-
-    fn party_atc(&self, party: Form1701Party) -> Option<Form1701Atc> {
-        match party {
-            Form1701Party::Taxpayer => self.atc,
-            Form1701Party::Spouse => self.spouse.enabled.then_some(self.spouse.atc).flatten(),
-        }
-    }
-
-    fn party_tax_rate(&self, party: Form1701Party) -> Option<Form1701TaxRate> {
-        match party {
-            Form1701Party::Taxpayer => self.tax_rate,
-            Form1701Party::Spouse => self
-                .spouse
-                .enabled
-                .then_some(self.spouse.tax_rate)
-                .flatten(),
-        }
-    }
-
-    fn party_deduction_method(&self, party: Form1701Party) -> Option<Form1701DeductionMethod> {
-        match party {
-            Form1701Party::Taxpayer => self.deduction_method,
-            Form1701Party::Spouse => self
-                .spouse
-                .enabled
-                .then_some(self.spouse.deduction_method)
-                .flatten(),
-        }
-    }
-
-    pub fn transition_to_queued(&mut self) -> Result<(), Vec<(String, String)>> {
-        let mut errors = self.validate();
-        errors.push((
-            "submission".to_string(),
-            "1701v2018 is manual/external because electronic queue and final-flag semantics are not certified"
-                .to_string(),
-        ));
-        Err(errors)
-    }
-
-    pub fn transition_to_submitted(&mut self, _filename: String) -> Result<(), String> {
-        Err(
-            "1701v2018 cannot transition to Submitted because electronic transport is not certified"
-                .to_string(),
-        )
-    }
-
-    pub fn revert_to_draft(&mut self) -> Result<(), String> {
-        if matches!(self.status, FilingStatus::Paid) {
-            return Err("A paid 1701 return cannot be reverted directly to Draft".to_string());
-        }
-        self.status = FilingStatus::Draft;
-        self.submitted_at = None;
-        self.confirmed_at = None;
-        self.submission_filename = None;
-        self.receipt_id = None;
-        self.submission_attempts = 0;
-        self.next_retry_at = None;
-        self.last_error = None;
-        self.updated_at = chrono::Utc::now().to_rfc3339();
-        Ok(())
+        self.official_recompute();
     }
 }
 
@@ -943,14 +633,9 @@ pub enum Form1701AmountSection {
 }
 
 impl FormValidator for Form1701Draft {
+    /// The official `validate()` port; see `form_1701_official`.
     fn validate(&self) -> Vec<(String, String)> {
-        let mut errors = Vec::new();
-        validate_identity(self, &mut errors);
-        validate_choices(self, &mut errors);
-        validate_amounts(self, &mut errors);
-        validate_payments(self, &mut errors);
-        validate_computed_values(self, &mut errors);
-        errors
+        self.official_errors()
     }
 }
 
@@ -973,505 +658,6 @@ impl TypedBirForm for Form1701Draft {
 
     fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         Form1701Draft::to_bir_field_map(self)
-    }
-}
-
-fn validate_identity(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
-    let tin_digits = digits(&draft.tin);
-    if !(12..=14).contains(&tin_digits.len()) {
-        errors.push((
-            "tin".to_string(),
-            "TIN must contain 12 to 14 digits, with optional separators".to_string(),
-        ));
-    }
-    if !(2018..=9999).contains(&draft.taxable_year) {
-        errors.push((
-            "taxable_year".to_string(),
-            "January 2018 Form 1701 supports taxable years 2018 onward".to_string(),
-        ));
-    }
-    if !(1..=12).contains(&draft.period_end_month) {
-        errors.push((
-            "period_end_month".to_string(),
-            "Period-end month must be between 1 and 12".to_string(),
-        ));
-    } else if !draft.is_short_period && draft.period_end_month != 12 {
-        errors.push((
-            "period_end_month".to_string(),
-            "A non-short-period annual return must end in December".to_string(),
-        ));
-    }
-    for (field, label, value) in [
-        ("rdo_code", "RDO code", draft.rdo_code.as_str()),
-        (
-            "taxpayer_name",
-            "Taxpayer/filer name",
-            draft.taxpayer_name.as_str(),
-        ),
-        (
-            "registered_address",
-            "Registered address",
-            draft.registered_address.as_str(),
-        ),
-        ("zip_code", "ZIP code", draft.zip_code.as_str()),
-        ("email", "Email address", draft.email.as_str()),
-    ] {
-        if value.trim().is_empty() {
-            errors.push((field.to_string(), format!("{label} is required")));
-        }
-    }
-    if !draft.rdo_code.trim().is_empty()
-        && (draft.rdo_code.len() != 3 || !draft.rdo_code.chars().all(|ch| ch.is_ascii_digit()))
-    {
-        errors.push((
-            "rdo_code".to_string(),
-            "RDO code must be 3 digits".to_string(),
-        ));
-    }
-    if !draft.zip_code.trim().is_empty() && !validate_zip(draft.zip_code.trim()) {
-        errors.push((
-            "zip_code".to_string(),
-            "ZIP code must be 4 digits".to_string(),
-        ));
-    }
-    if !draft.email.trim().is_empty() && !validate_email(&draft.email) {
-        errors.push(("email".to_string(), "Email address is invalid".to_string()));
-    }
-    if !draft.contact_number.trim().is_empty() && !validate_ph_phone(&draft.contact_number) {
-        errors.push((
-            "contact_number".to_string(),
-            "Contact number must be a valid Philippine landline or mobile number".to_string(),
-        ));
-    }
-    validate_optional_date("date_of_birth", &draft.date_of_birth, errors);
-    if draft.number_of_attachments.is_some_and(|value| value > 99) {
-        errors.push((
-            "number_of_attachments".to_string(),
-            "Item 33 supports at most two digits".to_string(),
-        ));
-    }
-}
-
-fn validate_choices(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
-    if draft.taxpayer_type.is_none() {
-        errors.push((
-            "taxpayer_type".to_string(),
-            "Select Item 6 taxpayer type".to_string(),
-        ));
-    }
-    if draft.atc.is_none() {
-        errors.push(("atc".to_string(), "Select Item 7 ATC".to_string()));
-    }
-    validate_rate_choice(
-        "taxpayer",
-        draft.atc,
-        draft.tax_rate,
-        draft.deduction_method,
-        errors,
-    );
-    for (field, item, choice) in [
-        (
-            "claims_foreign_tax_credits",
-            13,
-            draft.claims_foreign_tax_credits,
-        ),
-        ("has_exempt_income", 19, draft.has_exempt_income),
-        ("has_special_rate_income", 20, draft.has_special_rate_income),
-    ] {
-        if choice.is_none() {
-            errors.push((field.to_string(), format!("Answer Item {item} Yes or No")));
-        }
-    }
-    if draft.claims_foreign_tax_credits == Some(true) && draft.foreign_tax_number.trim().is_empty()
-    {
-        errors.push((
-            "foreign_tax_number".to_string(),
-            "Item 14 is required when Item 13 is Yes".to_string(),
-        ));
-    }
-    if draft.has_exempt_income == Some(true) || draft.has_special_rate_income == Some(true) {
-        errors.push((
-            "part_x".to_string(),
-            "This return requires Part X/attachment schedules, which are preserved on import but are not yet modeled for safe editing"
-                .to_string(),
-        ));
-    }
-    if draft.civil_status == Some(Form1701CivilStatus::Married) {
-        if draft.spouse_has_income.is_none() {
-            errors.push((
-                "spouse_has_income".to_string(),
-                "Answer Item 17 for a married filer".to_string(),
-            ));
-        }
-        if draft.spouse_has_income == Some(true) && draft.joint_filing_status.is_none() {
-            errors.push((
-                "joint_filing_status".to_string(),
-                "Select Joint or Separate filing in Item 18".to_string(),
-            ));
-        }
-    }
-    if draft.spouse.enabled {
-        let spouse_digits = digits(&draft.spouse.tin);
-        if !(12..=14).contains(&spouse_digits.len()) {
-            errors.push((
-                "spouse_tin".to_string(),
-                "Spouse TIN must contain 12 to 14 digits".to_string(),
-            ));
-        }
-        if draft.spouse.name.trim().is_empty() {
-            errors.push((
-                "spouse_name".to_string(),
-                "Spouse name is required".to_string(),
-            ));
-        }
-        if draft.spouse.filer_type.is_none() {
-            errors.push(("spouse_type".to_string(), "Select spouse type".to_string()));
-        }
-        if draft.spouse.atc.is_none() {
-            errors.push(("spouse_atc".to_string(), "Select spouse ATC".to_string()));
-        }
-        validate_rate_choice(
-            "spouse",
-            draft.spouse.atc,
-            draft.spouse.tax_rate,
-            draft.spouse.deduction_method,
-            errors,
-        );
-        if draft.spouse.claims_foreign_tax_credits.is_none() {
-            errors.push((
-                "spouse_claims_foreign_tax_credits".to_string(),
-                "Answer spouse Item 8 Yes or No".to_string(),
-            ));
-        }
-        if draft.spouse.has_exempt_income == Some(true)
-            || draft.spouse.has_special_rate_income == Some(true)
-        {
-            errors.push((
-                "spouse_part_x".to_string(),
-                "Spouse exempt/special-rate income requires the unsupported Part X attachment editor"
-                    .to_string(),
-            ));
-        }
-    }
-}
-
-fn validate_rate_choice(
-    prefix: &str,
-    atc: Option<Form1701Atc>,
-    rate: Option<Form1701TaxRate>,
-    deduction: Option<Form1701DeductionMethod>,
-    errors: &mut Vec<(String, String)>,
-) {
-    if atc == Some(Form1701Atc::Ii011) {
-        if rate.is_some() || deduction.is_some() {
-            errors.push((
-                format!("{prefix}_tax_rate"),
-                "II011 compensation income does not use the business-rate/deduction choices"
-                    .to_string(),
-            ));
-        }
-        return;
-    }
-    if rate.is_none() {
-        errors.push((
-            format!("{prefix}_tax_rate"),
-            "Select the income tax rate".to_string(),
-        ));
-    }
-    if let (Some(atc), Some(rate)) = (atc, rate)
-        && atc.tax_rate().is_some_and(|expected| expected != rate)
-    {
-        errors.push((
-            format!("{prefix}_atc"),
-            format!("ATC {} does not match {}", atc.code(), rate.label()),
-        ));
-    }
-    match rate {
-        Some(Form1701TaxRate::Graduated) if deduction.is_none() => errors.push((
-            format!("{prefix}_deduction_method"),
-            "Graduated rates require Itemized or OSD".to_string(),
-        )),
-        Some(Form1701TaxRate::EightPercent) if deduction.is_some() => errors.push((
-            format!("{prefix}_deduction_method"),
-            "The deduction-method choice does not apply to the 8% rate".to_string(),
-        )),
-        _ => {}
-    }
-}
-
-fn validate_amounts(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
-    for (section_name, table) in [
-        ("part_ii", &draft.computations.part_ii),
-        ("schedule_2", &draft.computations.schedule_2),
-        ("schedule_3", &draft.computations.schedule_3),
-        ("schedule_4", &draft.computations.schedule_4),
-        ("schedule_6", &draft.computations.schedule_6_summary),
-        ("part_vi", &draft.computations.part_vi),
-        ("part_vii", &draft.computations.part_vii),
-        ("part_viii", &draft.computations.part_viii),
-        ("part_ix", &draft.computations.part_ix),
-    ] {
-        for (item, pair) in table {
-            validate_pair(section_name, *item, pair, errors);
-        }
-    }
-    for (index, pair) in draft.computations.schedule_4_item_17.iter().enumerate() {
-        validate_pair("schedule_4_item_17", (index + 1) as u8, pair, errors);
-    }
-    for (party_name, rows) in [
-        ("taxpayer", &draft.computations.schedule_5_taxpayer),
-        ("spouse", &draft.computations.schedule_5_spouse),
-    ] {
-        for (index, row) in rows.iter().enumerate() {
-            validate_optional_whole_peso(
-                format!("schedule_5_{party_name}_{}", index + 1),
-                row.amount,
-                errors,
-            );
-        }
-    }
-    for (party_name, rows) in [
-        ("taxpayer", &draft.computations.schedule_6_taxpayer_nolco),
-        ("spouse", &draft.computations.schedule_6_spouse_nolco),
-    ] {
-        for (index, row) in rows.iter().enumerate() {
-            for (column, value) in [
-                ("amount", row.amount),
-                ("previous", row.applied_previous_years),
-                ("expired", row.expired),
-                ("current", row.applied_current_year),
-                ("unapplied", row.unapplied),
-            ] {
-                validate_optional_whole_peso(
-                    format!("nolco_{party_name}_{}_{}", index + 1, column),
-                    value,
-                    errors,
-                );
-            }
-        }
-    }
-    for (index, employer) in draft.employers.iter().enumerate() {
-        validate_optional_whole_peso(
-            format!("employer_{}_compensation", index + 1),
-            employer.compensation_income,
-            errors,
-        );
-        validate_optional_whole_peso(
-            format!("employer_{}_withheld", index + 1),
-            employer.tax_withheld,
-            errors,
-        );
-        if employer.owner.is_some()
-            && (employer.employer_name.trim().is_empty()
-                || digits(&employer.employer_tin).is_empty())
-        {
-            errors.push((
-                format!("employer_{}", index + 1),
-                "Selected employer rows require both employer name and TIN".to_string(),
-            ));
-        }
-    }
-
-    for (party, rate) in [
-        (Form1701Party::Taxpayer, draft.tax_rate),
-        (
-            Form1701Party::Spouse,
-            draft
-                .spouse
-                .enabled
-                .then_some(draft.spouse.tax_rate)
-                .flatten(),
-        ),
-    ] {
-        match rate {
-            Some(Form1701TaxRate::Graduated) => {
-                for item in [26, 27] {
-                    if draft
-                        .amount(Form1701AmountSection::Schedule3, item, party)
-                        .is_some_and(|value| value != 0.0)
-                    {
-                        errors.push((
-                            format!("schedule_3_{item}_{party:?}"),
-                            "8% schedule inputs must be blank for a graduated-rate filer"
-                                .to_string(),
-                        ));
-                    }
-                }
-            }
-            Some(Form1701TaxRate::EightPercent) => {
-                for item in [8, 9, 11, 13, 14, 15, 19, 20, 21] {
-                    if draft
-                        .amount(Form1701AmountSection::Schedule3, item, party)
-                        .is_some_and(|value| value != 0.0)
-                    {
-                        errors.push((
-                            format!("schedule_3_{item}_{party:?}"),
-                            "Graduated-rate schedule inputs must be blank for an 8% filer"
-                                .to_string(),
-                        ));
-                    }
-                }
-            }
-            None => {}
-        }
-    }
-
-    for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
-        if let (Some(installment), Some(tax_due)) = (
-            draft.amount(Form1701AmountSection::PartIi, 25, party),
-            draft.amount(Form1701AmountSection::PartIi, 22, party),
-        ) && installment > tax_due.max(0.0) * 0.5
-        {
-            errors.push((
-                format!("item_25_{party:?}"),
-                "Item 25 cannot exceed 50% of Item 22".to_string(),
-            ));
-        }
-    }
-
-    let aggregate = draft.computations.part_ii_item_32_aggregate;
-    validate_optional_whole_peso("part_ii_item_32".to_string(), aggregate, errors);
-    if aggregate.is_some_and(|value| value < 0.0)
-        && draft.overpayment_disposition == Form1701OverpaymentDisposition::None
-    {
-        errors.push((
-            "overpayment_disposition".to_string(),
-            "Choose one irrevocable overpayment disposition when Item 32 is negative".to_string(),
-        ));
-    } else if aggregate.is_some_and(|value| value >= 0.0)
-        && draft.overpayment_disposition != Form1701OverpaymentDisposition::None
-    {
-        errors.push((
-            "overpayment_disposition".to_string(),
-            "Overpayment disposition must be blank when Item 32 is not an overpayment".to_string(),
-        ));
-    }
-}
-
-fn validate_pair(
-    section: &str,
-    item: u8,
-    pair: &Form1701AmountPair,
-    errors: &mut Vec<(String, String)>,
-) {
-    validate_optional_whole_peso(format!("{section}_{item}_taxpayer"), pair.taxpayer, errors);
-    validate_optional_whole_peso(format!("{section}_{item}_spouse"), pair.spouse, errors);
-}
-
-fn validate_optional_whole_peso(
-    field: String,
-    value: Option<f64>,
-    errors: &mut Vec<(String, String)>,
-) {
-    let Some(value) = value else {
-        return;
-    };
-    if !value.is_finite() {
-        errors.push((field, "Amount must be finite".to_string()));
-    } else if (value - value.round()).abs() > 0.000_001 {
-        errors.push((
-            field,
-            "Form 1701 requires whole-peso amounts; do not enter centavos".to_string(),
-        ));
-    }
-}
-
-fn validate_payments(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
-    for (item, row) in [
-        (34, &draft.payment_details.item_34_cash_or_bank_debit_memo),
-        (35, &draft.payment_details.item_35_check),
-        (36, &draft.payment_details.item_36_tax_debit_memo),
-        (37, &draft.payment_details.item_37_others),
-    ] {
-        validate_optional_whole_peso(format!("payment_{item}_amount"), row.amount, errors);
-        validate_optional_date(&format!("payment_{item}_date"), &row.date, errors);
-    }
-    if !draft
-        .payment_details
-        .item_36_tax_debit_memo
-        .drawee_bank_or_agency
-        .trim()
-        .is_empty()
-    {
-        errors.push((
-            "payment_36_agency".to_string(),
-            "The reviewed 1701 XML schema has no drawee-bank/agency field for Item 36".to_string(),
-        ));
-    }
-    if draft.payment_details.item_37_others.amount.is_some()
-        && draft
-            .payment_details
-            .item_37_others_description
-            .trim()
-            .is_empty()
-    {
-        errors.push((
-            "payment_37_description".to_string(),
-            "Specify the Item 37 other payment type".to_string(),
-        ));
-    }
-}
-
-fn validate_computed_values(draft: &Form1701Draft, errors: &mut Vec<(String, String)>) {
-    let mut expected = draft.clone();
-    expected.recompute();
-    for (section, items) in [
-        (Form1701AmountSection::PartIi, &[22, 23, 24, 26, 30, 31][..]),
-        (Form1701AmountSection::Schedule2, &[4, 6, 7][..]),
-        (
-            Form1701AmountSection::Schedule3,
-            &[10, 12, 16, 17, 18, 22, 23, 24, 25, 28, 29, 30, 31, 32][..],
-        ),
-        (Form1701AmountSection::Schedule4, &[18][..]),
-        (Form1701AmountSection::Schedule6, &[3][..]),
-        (Form1701AmountSection::PartVi, &[1, 4, 5][..]),
-        (Form1701AmountSection::PartVii, &[5, 10][..]),
-        (Form1701AmountSection::PartViii, &[3, 5, 7, 10][..]),
-        (Form1701AmountSection::PartIx, &[5, 10, 11][..]),
-    ] {
-        for item in items {
-            for party in [Form1701Party::Taxpayer, Form1701Party::Spouse] {
-                if !amounts_equal(
-                    draft.amount(section, *item, party),
-                    expected.amount(section, *item, party),
-                ) {
-                    errors.push((
-                        format!("computed_{section:?}_{item}_{party:?}"),
-                        "Stored computed value does not match the printed-form arithmetic"
-                            .to_string(),
-                    ));
-                }
-            }
-        }
-    }
-    if !amounts_equal(
-        draft.computations.part_ii_item_32_aggregate,
-        expected.computations.part_ii_item_32_aggregate,
-    ) {
-        errors.push((
-            "computed_part_ii_32".to_string(),
-            "Stored Item 32 does not equal Items 31A plus 31B".to_string(),
-        ));
-    }
-}
-
-fn amounts_equal(left: Option<f64>, right: Option<f64>) -> bool {
-    match (left, right) {
-        (None, None) => true,
-        (Some(left), Some(right)) => (left - right).abs() < 0.005,
-        // The reviewed eBIRForms save materializes some computed blank cells
-        // as 0.00. Treat that transport placeholder as arithmetically
-        // equivalent while retaining None versus Some(0) in the model and XML.
-        (None, Some(value)) | (Some(value), None) => value.abs() < 0.005,
-    }
-}
-
-fn validate_optional_date(field: &str, value: &str, errors: &mut Vec<(String, String)>) {
-    if value.trim().is_empty() {
-        return;
-    }
-    if chrono::NaiveDate::parse_from_str(value.trim(), "%m/%d/%Y").is_err() {
-        errors.push((field.to_string(), "Date must use MM/DD/YYYY".to_string()));
     }
 }
 
@@ -1501,41 +687,6 @@ fn profile_taxpayer_type(
         },
         TaxpayerType::Corporation | TaxpayerType::Partnership | TaxpayerType::Cooperative => None,
     }
-}
-
-fn digits(value: &str) -> String {
-    value.chars().filter(|ch| ch.is_ascii_digit()).collect()
-}
-
-fn round_peso(value: f64) -> f64 {
-    value.round()
-}
-
-fn sum_present(values: impl IntoIterator<Item = Option<f64>>) -> Option<f64> {
-    let mut any = false;
-    let sum = values.into_iter().flatten().fold(0.0, |sum, value| {
-        any = true;
-        sum + value
-    });
-    any.then(|| round_peso(sum))
-}
-
-fn add_optional(left: Option<f64>, right: Option<f64>) -> Option<f64> {
-    match (left, right) {
-        (None, None) => None,
-        (left, right) => Some(round_peso(left.unwrap_or(0.0) + right.unwrap_or(0.0))),
-    }
-}
-
-fn subtract_optional(left: Option<f64>, right: Option<f64>) -> Option<f64> {
-    left.map(|left| round_peso(left - right.unwrap_or(0.0)))
-}
-
-fn subtract_many_optional(
-    left: Option<f64>,
-    rights: impl IntoIterator<Item = Option<f64>>,
-) -> Option<f64> {
-    left.map(|left| round_peso(left - rights.into_iter().flatten().sum::<f64>()))
 }
 
 /// Printed January 2018 Form 1701 Tables 1 and 2.
@@ -1647,14 +798,5 @@ mod tests {
             draft.amount(Form1701AmountSection::PartVii, 1, Form1701Party::Taxpayer),
             Some(0.0)
         );
-    }
-
-    #[test]
-    fn queue_boundary_fails_closed() {
-        let mut draft = Form1701Draft::default();
-        let errors = draft
-            .transition_to_queued()
-            .expect_err("queueing must be disabled");
-        assert!(errors.iter().any(|(field, _)| field == "submission"));
     }
 }

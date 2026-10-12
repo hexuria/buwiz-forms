@@ -1,13 +1,6 @@
 use crate::views::cron_tasks::CronTasksView;
 use crate::views::dashboard::{DashboardEvent, DashboardView};
-use crate::views::form_0605_view::{Form0605Event, Form0605View};
-use crate::views::form_0619e_view::{Form0619EEvent, Form0619EView};
-use crate::views::form_0619f_view::{Form0619FEvent, Form0619FView};
 use crate::views::form_1601c_view::{Form1601CEvent, Form1601CView};
-use crate::views::form_1701_view::{Form1701Event, Form1701View};
-use crate::views::form_1701q_view::{Form1701QEvent, Form1701QView};
-use crate::views::form_1702mx_view::{Form1702MXEvent, Form1702MXView};
-use crate::views::form_1702rt_view::{Form1702RTEvent, Form1702RTView};
 use crate::views::form_2550q_view::{Form2550QV2Event, Form2550QV2View};
 use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
@@ -52,21 +45,19 @@ pub enum ActiveView {
     GlobalDashboard,
     Dashboard,
     Form2551Q,
-    Form1701Q,
     Form1601C,
-    Form0619E,
-    Form0619F,
-    Form0605,
     Form2550Q,
-    Form1701,
-    Form1702RT,
-    Form1702MX,
+    /// A form on the generic submission path (`views::queueable_forms`).
+    Queueable(bir_core::forms::queueable::QueueableKind),
     ProfileManager,
     CronTasks,
     Notifications,
     ImportExport,
     Settings,
     AdminCalendarDashboard,
+    /// Dev Mode page. Compiled out of release builds.
+    #[cfg(debug_assertions)]
+    DevMode,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -140,6 +131,9 @@ impl ProfileLifecycleAction {
 }
 
 pub struct AppState {
+    /// Linux: run before a keyboard-initiated quit (Ctrl+Q / Alt+F4) so the
+    /// tray icon is removed, matching the tray Quit and close-button paths.
+    pub(crate) quit_hook: Option<std::rc::Rc<dyn Fn()>>,
     pub(crate) active_view: ActiveView,
     pub(crate) profile_manager: Entity<ProfileManagerView>,
     pub(crate) dashboard_view: Entity<DashboardView>,
@@ -152,24 +146,14 @@ pub struct AppState {
         Entity<crate::views::admin_calendar_dashboard::AdminCalendarDashboard>,
     pub(crate) form_2551q_view: Option<Entity<Form2551QView>>,
     pub(crate) pending_form_draft: Option<Form2551QDraft>,
-    pub(crate) form_1701q_view: Option<Entity<Form1701QView>>,
-    pub(crate) pending_form_1701q_draft: Option<bir_core::forms::form_1701q::Form1701QDraft>,
     pub(crate) form_1601c_view: Option<Entity<Form1601CView>>,
     pub(crate) pending_form_1601c_draft: Option<bir_core::forms::form_1601c::Form1601CDraft>,
-    pub(crate) form_0619e_view: Option<Entity<Form0619EView>>,
-    pub(crate) pending_form_0619e_draft: Option<bir_core::forms::form_0619e::Form0619EDraft>,
-    pub(crate) form_0619f_view: Option<Entity<Form0619FView>>,
-    pub(crate) pending_form_0619f_draft: Option<bir_core::forms::form_0619f::Form0619FDraft>,
-    pub(crate) form_0605_view: Option<Entity<Form0605View>>,
-    pub(crate) pending_form_0605_draft: Option<bir_core::forms::form_0605::Form0605Draft>,
     pub(crate) form_2550q_view: Option<Entity<Form2550QV2View>>,
     pub(crate) pending_form_2550q_draft: Option<bir_core::forms::form_2550q::Form2550QDraft>,
-    pub(crate) form_1701_view: Option<Entity<Form1701View>>,
-    pub(crate) pending_form_1701_draft: Option<bir_core::forms::form_1701::Form1701Draft>,
-    pub(crate) form_1702rt_view: Option<Entity<Form1702RTView>>,
-    pub(crate) pending_form_1702rt_draft: Option<bir_core::forms::form_1702rt::Form1702RTDraft>,
-    pub(crate) form_1702mx_view: Option<Entity<Form1702MXView>>,
-    pub(crate) pending_form_1702mx_draft: Option<bir_core::forms::form_1702mx::Form1702MXDraft>,
+    /// Editor of the open generic-queue form.
+    pub(crate) queueable_view: Option<AnyView>,
+    /// (form, year, period) to open on the next render, which has a `Window`.
+    pub(crate) pending_queueable: Option<(bir_core::forms::queueable::QueueableKind, u16, u8)>,
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
@@ -179,10 +163,22 @@ pub struct AppState {
     pub(crate) _subscriptions: Vec<Subscription>,
     /// Whether the window-aware subscription for global dashboard notifications has been set up.
     pub(crate) global_dashboard_notif_subscribed: bool,
+    /// Whether the Tax Form Library was the active view on the last render.
+    /// A form view or the background worker can change a return's status
+    /// while the library is hidden, so it reloads its tiles each time it
+    /// becomes visible again.
+    pub(crate) dashboard_was_visible: bool,
     pub(crate) is_mini_sidebar: bool,
     pub(crate) is_sidebar_hidden: bool,
     /// Painted bounds of the sidebar and the content column, for the agent tree.
     pub(crate) layout_probe: crate::layout_probe::LayoutProbe,
+    /// Notifications drawer is showing (see `top_bar`).
+    pub(crate) notifications_open: bool,
+    /// Page (view, taxpayer) seen by the last frame, so a page change by any
+    /// route closes the drawer (see `close_drawer_on_page_change`).
+    pub(crate) drawer_page: (ActiveView, Option<String>),
+    /// Painted bounds of the bell, so a press on it is not an outside click.
+    pub(crate) bell_bounds: crate::layout_probe::BoundsCell,
     pub(crate) theme_preference: AppThemeMode,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) is_command_palette_open: bool,
@@ -226,6 +222,10 @@ pub struct AppState {
     pub(crate) admin_os_auth_triggered: bool,
     /// The TIN of the currently active/unlocked profile session (only meaningful when hide_tax_profiles is enabled)
     pub(crate) active_session_tin: Option<String>,
+    /// Dev Mode page entity, created the first time `ActiveView::DevMode`
+    /// is opened (debug builds only).
+    #[cfg(debug_assertions)]
+    pub(crate) dev_mode_view: Option<Entity<crate::views::dev_mode_view::DevModeView>>,
     #[cfg(feature = "agent")]
     pub(crate) agent_mailbox: Option<gpui_agent::mailbox::AgentMailbox>,
     /// Configured `GPUI_AGENT_TOKEN` from `from_env`. Never log this value.
@@ -544,9 +544,11 @@ impl AppState {
                     NotificationsEvent::ReconnectGoogleAccount
                     | NotificationsEvent::OpenProfileManager => {
                         this.active_view = ActiveView::ProfileManager;
+                        this.drawer_input(crate::top_bar::DrawerInput::Close, cx);
                     }
-                    NotificationsEvent::Open => {
-                        this.active_view = ActiveView::Notifications;
+                    NotificationsEvent::Open => this.open_notifications(cx),
+                    NotificationsEvent::Close => {
+                        this.drawer_input(crate::top_bar::DrawerInput::Close, cx);
                     }
                 }
                 cx.notify();
@@ -876,6 +878,7 @@ impl AppState {
         .detach();
 
         Self {
+            quit_hook: None,
             active_view,
             profile_manager,
             dashboard_view,
@@ -885,24 +888,12 @@ impl AppState {
             import_export_view,
             form_2551q_view: None,
             pending_form_draft: None,
-            form_1701q_view: None,
-            pending_form_1701q_draft: None,
             form_1601c_view: None,
             pending_form_1601c_draft: None,
-            form_0619e_view: None,
-            pending_form_0619e_draft: None,
-            form_0619f_view: None,
-            pending_form_0619f_draft: None,
-            form_0605_view: None,
-            pending_form_0605_draft: None,
             form_2550q_view: None,
             pending_form_2550q_draft: None,
-            form_1701_view: None,
-            pending_form_1701_draft: None,
-            form_1702rt_view: None,
-            pending_form_1702rt_draft: None,
-            form_1702mx_view: None,
-            pending_form_1702mx_draft: None,
+            queueable_view: None,
+            pending_queueable: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -911,9 +902,13 @@ impl AppState {
             show_archived: false,
             _subscriptions: vec![profile_sub, filter_sub],
             global_dashboard_notif_subscribed: false,
+            dashboard_was_visible: false,
             is_mini_sidebar: false,
             is_sidebar_hidden: false,
             layout_probe: crate::layout_probe::LayoutProbe::default(),
+            notifications_open: false,
+            drawer_page: (active_view, None),
+            bell_bounds: Default::default(),
             theme_preference,
             focus_handle: cx.focus_handle(),
             is_command_palette_open: false,
@@ -943,6 +938,8 @@ impl AppState {
             admin_auth_error: None,
             admin_os_auth_triggered: false,
             active_session_tin: None,
+            #[cfg(debug_assertions)]
+            dev_mode_view: None,
             #[cfg(feature = "agent")]
             agent_mailbox: None,
             #[cfg(feature = "agent")]
@@ -1129,7 +1126,7 @@ impl AppState {
             }
         };
 
-        if let Err(error) = open::that(&path) {
+        if let Err(error) = open::that_detached(&path) {
             // The file is still on disk and importable by hand, so say where.
             push_notification(
                 "error",
@@ -1532,14 +1529,54 @@ impl AppState {
 
     // NOTE: render_sidebar() is implemented in sidebar.rs
 
+    /// Navigate to the Dev Mode page (debug builds only).
+    #[cfg(debug_assertions)]
+    pub(crate) fn open_dev_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::views::dev_mode_view::{DevModeEvent, DevModeView};
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
+        if self.dev_mode_view.is_none() {
+            let db = Arc::clone(&self.db);
+            let view = cx.new(|cx| DevModeView::new(db, window, cx));
+            cx.subscribe(&view, |this: &mut Self, _view, event: &DevModeEvent, cx| {
+                match event {
+                    DevModeEvent::Changed => {}
+                    DevModeEvent::AlertsSeeded => {
+                        this.notifications_view.update(cx, |view, cx| {
+                            view.reload();
+                            cx.notify();
+                        });
+                    }
+                }
+                this.dashboard_view.update(cx, |_, cx| cx.notify());
+                cx.notify();
+            })
+            .detach();
+            self.dev_mode_view = Some(view);
+        }
+        self.active_view = ActiveView::DevMode;
+        cx.notify();
+    }
+
     fn render_active_view(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         let page = match self.active_view {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
-            ActiveView::Notifications => self.notifications_view.clone().into_any_element(),
+            // Never painted as a page; `render` turns it into the drawer.
+            ActiveView::Notifications => div().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
+            #[cfg(debug_assertions)]
+            ActiveView::DevMode => match &self.dev_mode_view {
+                Some(view) => div()
+                    .id("dev_mode_page")
+                    .size_full()
+                    .child(view.clone())
+                    .into_any_element(),
+                None => div().into_any_element(),
+            },
             ActiveView::AdminCalendarDashboard => self
                 .admin_calendar_dashboard_view
                 .clone()
@@ -1547,14 +1584,6 @@ impl AppState {
             ActiveView::Dashboard => self.dashboard_view.clone().into_any_element(),
             ActiveView::Form2551Q => {
                 if let Some(view) = &self.form_2551q_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1701Q => {
-                if let Some(view) = &self.form_1701q_view {
                     view.clone().into_any_element()
                 } else {
                     let root = rsx! { <div>{"No form loaded"}</div> };
@@ -1569,30 +1598,6 @@ impl AppState {
                     root.into_any_element()
                 }
             }
-            ActiveView::Form0619E => {
-                if let Some(view) = &self.form_0619e_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form0619F => {
-                if let Some(view) = &self.form_0619f_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form0605 => {
-                if let Some(view) = &self.form_0605_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
             ActiveView::Form2550Q => {
                 if let Some(view) = &self.form_2550q_view {
                     view.clone().into_any_element()
@@ -1601,24 +1606,8 @@ impl AppState {
                     root.into_any_element()
                 }
             }
-            ActiveView::Form1701 => {
-                if let Some(view) = &self.form_1701_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1702RT => {
-                if let Some(view) = &self.form_1702rt_view {
-                    view.clone().into_any_element()
-                } else {
-                    let root = rsx! { <div>{"No form loaded"}</div> };
-                    root.into_any_element()
-                }
-            }
-            ActiveView::Form1702MX => {
-                if let Some(view) = &self.form_1702mx_view {
+            ActiveView::Queueable(_) => {
+                if let Some(view) = &self.queueable_view {
                     view.clone().into_any_element()
                 } else {
                     let root = rsx! { <div>{"No form loaded"}</div> };
@@ -1711,7 +1700,7 @@ impl AppState {
         // may additionally open a semantically complete HTML draft while its
         // platform/package release evidence is still being collected.
         let support = bir_core::forms::form_support_level(form_code);
-        let is_certification_build = cfg!(any(debug_assertions, feature = "dev-tools"));
+        let is_certification_build = crate::dev_mode::show_uncertified_forms();
         let can_open = support.is_fileable_in_app()
             || (is_certification_build && bir_core::forms::can_open_certification_draft(form_code));
         if !can_open {
@@ -1797,42 +1786,6 @@ impl AppState {
             self.pending_form_draft = Some(draft);
             self.active_view = ActiveView::Form2551Q;
             cx.notify();
-        } else if form_code == "1701Q"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let load_result = self
-                .db
-                .lock()
-                .map_err(|_| "1701Q draft database lock is unavailable".to_string())
-                .and_then(|db| {
-                    db.get_form_draft::<bir_core::forms::form_1701q::Form1701QDraft>(
-                        tin,
-                        "1701Q",
-                        year,
-                        Some(quarter),
-                    )
-                    .map_err(|error| error.to_string())
-                });
-            let draft = match load_result {
-                Ok(Some(draft)) => draft,
-                Ok(None) => bir_core::forms::form_1701q::Form1701QDraft::new_from_profile(
-                    profile, year, quarter,
-                ),
-                Err(error) => {
-                    tracing::error!(
-                        %error,
-                        tin,
-                        year,
-                        quarter,
-                        "Refusing to replace an unreadable 1701Q draft"
-                    );
-                    return;
-                }
-            };
-            self.pending_form_1701q_draft = Some(draft);
-            self.active_view = ActiveView::Form1701Q;
-            cx.notify();
         } else if form_code == "1601C"
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
@@ -1853,7 +1806,7 @@ impl AppState {
                     }
                     Ok(None) => {
                         tracing::info!(tin = %tin, year, month, "Creating new 1601C draft from profile");
-                        bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+                        bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
                             profile, year, month,
                         )
                     }
@@ -1868,88 +1821,12 @@ impl AppState {
                         return;
                     }
                 },
-                Err(_) => bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+                Err(_) => bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
                     profile, year, month,
                 ),
             };
             self.pending_form_1601c_draft = Some(draft);
             self.active_view = ActiveView::Form1601C;
-            cx.notify();
-        } else if form_code == "0619E"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_0619e::Form0619EDraft>(
-                    tin,
-                    "0619E",
-                    year,
-                    Some(quarter),
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_0619e::Form0619EDraft::new_from_profile(
-                        profile, year, quarter,
-                    )
-                })
-            } else {
-                bir_core::forms::form_0619e::Form0619EDraft::new_from_profile(
-                    profile, year, quarter,
-                )
-            };
-            self.pending_form_0619e_draft = Some(draft);
-            self.active_view = ActiveView::Form0619E;
-            cx.notify();
-        } else if form_code == "0619F"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_0619f::Form0619FDraft>(
-                    tin,
-                    "0619F",
-                    year,
-                    Some(quarter),
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_0619f::Form0619FDraft::new_from_profile(
-                        profile, year, quarter,
-                    )
-                })
-            } else {
-                bir_core::forms::form_0619f::Form0619FDraft::new_from_profile(
-                    profile, year, quarter,
-                )
-            };
-            self.pending_form_0619f_draft = Some(draft);
-            self.active_view = ActiveView::Form0619F;
-            cx.notify();
-        } else if form_code == "0605"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_0605::Form0605Draft>(
-                    tin,
-                    "0605",
-                    year,
-                    Some(quarter),
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_0605::Form0605Draft::new_from_profile(
-                        profile, year, quarter,
-                    )
-                })
-            } else {
-                bir_core::forms::form_0605::Form0605Draft::new_from_profile(profile, year, quarter)
-            };
-            self.pending_form_0605_draft = Some(draft);
-            self.active_view = ActiveView::Form0605;
             cx.notify();
         } else if form_code == "2550Q"
             && let Some(tin) = &self.active_profile_tin
@@ -2023,71 +1900,25 @@ impl AppState {
             self.pending_form_2550q_draft = Some(draft);
             self.active_view = ActiveView::Form2550Q;
             cx.notify();
-        } else if form_code == "1701"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+        } else if let Some(spec) = crate::views::queueable_forms::spec_for_code(form_code)
+            && self.active_profile_tin.is_some()
         {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_1701::Form1701Draft>(
-                    tin, "1701", year, None,
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, 1)
-                })
-            } else {
-                bir_core::forms::form_1701::Form1701Draft::new_from_profile(profile, year, 1)
-            };
-            self.pending_form_1701_draft = Some(draft);
-            self.active_view = ActiveView::Form1701;
-            cx.notify();
-        } else if form_code == "1702RT"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_1702rt::Form1702RTDraft>(
-                    tin, "1702RT", year, None,
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(
-                        profile, year, 1,
-                    )
-                })
-            } else {
-                bir_core::forms::form_1702rt::Form1702RTDraft::new_from_profile(profile, year, 1)
-            };
-            self.pending_form_1702rt_draft = Some(draft);
-            self.active_view = ActiveView::Form1702RT;
-            cx.notify();
-        } else if form_code == "1702MX"
-            && let Some(tin) = &self.active_profile_tin
-            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
-        {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_1702mx::Form1702MXDraft>(
-                    tin, "1702MX", year, None,
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_1702mx::Form1702MXDraft::new_from_profile(profile, year)
-                })
-            } else {
-                bir_core::forms::form_1702mx::Form1702MXDraft::new_from_profile(profile, year)
-            };
-            self.pending_form_1702mx_draft = Some(draft);
-            self.active_view = ActiveView::Form1702MX;
+            self.pending_queueable = Some((spec.kind, year, quarter));
+            self.queueable_view = None;
+            self.active_view = ActiveView::Queueable(spec.kind);
             cx.notify();
         }
     }
 }
 
 /// Push a typed notification to the GPUI window overlay.
-fn push_notification(level: &str, title: &str, message: &str, window: &mut Window, cx: &mut App) {
+pub(crate) fn push_notification(
+    level: &str,
+    title: &str,
+    message: &str,
+    window: &mut Window,
+    cx: &mut App,
+) {
     use gpui_component::WindowExt;
     use gpui_component::notification::Notification;
     let notification = match level {
@@ -2129,6 +1960,24 @@ impl Render for AppState {
                 cx,
             );
         }
+
+        // Every page change, whatever triggered it, closes the drawer.
+        self.close_drawer_on_page_change();
+
+        // Notifications are a drawer, not a page: anything that still sets
+        // the old page view opens the drawer over the dashboard instead.
+        if self.active_view == ActiveView::Notifications {
+            self.active_view = ActiveView::GlobalDashboard;
+            self.open_notifications(cx);
+        }
+        self.note_drawer_page();
+
+        let dashboard_visible = self.active_view == ActiveView::Dashboard;
+        if dashboard_visible && !self.dashboard_was_visible {
+            self.dashboard_view
+                .update(cx, |view, cx| view.refresh_filing_progress(cx));
+        }
+        self.dashboard_was_visible = dashboard_visible;
 
         // Set up window-aware subscription for global dashboard notifications (once)
         if !self.global_dashboard_notif_subscribed {
@@ -2185,39 +2034,6 @@ impl Render for AppState {
             self.form_2551q_view = Some(form_view);
         }
 
-        if let Some(draft) = self.pending_form_1701q_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form1701QView::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form1701QEvent, window, cx| match event {
-                    Form1701QEvent::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form1701QEvent::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form1701QEvent::Saved => cx.notify(),
-                    Form1701QEvent::OfficialSaveImported(draft) => {
-                        this.pending_form_1701q_draft = Some(draft.as_ref().clone());
-                        this.active_view = ActiveView::Form1701Q;
-                        push_notification(
-                            "success",
-                            "Official Save imported",
-                            "Imported as a local 1701Q draft. Queue and submit stay disabled.",
-                            window,
-                            cx,
-                        );
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-            self.form_1701q_view = Some(form_view);
-        }
-
         if let Some(draft) = self.pending_form_1601c_draft.take() {
             let db_for_view = Arc::clone(&self.db);
             let form_view = cx.new(|cx| Form1601CView::new(draft, db_for_view, window, cx));
@@ -2248,85 +2064,6 @@ impl Render for AppState {
             self.form_1601c_view = Some(form_view);
         }
 
-        if let Some(draft) = self.pending_form_0619e_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form0619EView::new(draft, db_for_view, window, cx));
-
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form0619EEvent, window, cx| match event {
-                    Form0619EEvent::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form0619EEvent::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form0619EEvent::Saved
-                    | Form0619EEvent::Submitted
-                    | Form0619EEvent::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-
-            self.form_0619e_view = Some(form_view);
-        }
-
-        if let Some(draft) = self.pending_form_0619f_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form0619FView::new(draft, db_for_view, window, cx));
-
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form0619FEvent, window, cx| match event {
-                    Form0619FEvent::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form0619FEvent::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form0619FEvent::Saved
-                    | Form0619FEvent::Submitted
-                    | Form0619FEvent::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-
-            self.form_0619f_view = Some(form_view);
-        }
-
-        if let Some(draft) = self.pending_form_0605_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form0605View::new(draft, db_for_view, window, cx));
-
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form0605Event, window, cx| match event {
-                    Form0605Event::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form0605Event::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form0605Event::Saved | Form0605Event::Submitted | Form0605Event::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-
-            self.form_0605_view = Some(form_view);
-        }
-
         if let Some(draft) = self.pending_form_2550q_draft.take() {
             let db_for_view = Arc::clone(&self.db);
             let form_view = cx.new(|cx| Form2550QV2View::new(draft, db_for_view, window, cx));
@@ -2352,77 +2089,13 @@ impl Render for AppState {
             self.form_2550q_view = Some(form_view);
         }
 
-        if let Some(draft) = self.pending_form_1701_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form1701View::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form1701Event, window, cx| match event {
-                    Form1701Event::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form1701Event::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form1701Event::Saved | Form1701Event::Submitted | Form1701Event::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-            self.form_1701_view = Some(form_view);
-        }
-
-        if let Some(draft) = self.pending_form_1702rt_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form1702RTView::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form1702RTEvent, window, cx| match event {
-                    Form1702RTEvent::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form1702RTEvent::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form1702RTEvent::Saved
-                    | Form1702RTEvent::Submitted
-                    | Form1702RTEvent::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-            self.form_1702rt_view = Some(form_view);
-        }
-
-        if let Some(draft) = self.pending_form_1702mx_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form1702MXView::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form1702MXEvent, window, cx| match event {
-                    Form1702MXEvent::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form1702MXEvent::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form1702MXEvent::Saved
-                    | Form1702MXEvent::Submitted
-                    | Form1702MXEvent::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-            self.form_1702mx_view = Some(form_view);
+        if let Some((kind, year, period)) = self.pending_queueable.take()
+            && let Some(spec) = crate::views::queueable_forms::spec_for_kind(kind)
+            && let Some(tin) = self.active_profile_tin.clone()
+            && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == tin).cloned()
+        {
+            let db = Arc::clone(&self.db);
+            self.queueable_view = Some((spec.open)(&profile, year, period, db, window, cx));
         }
 
         if let Some((profile, action)) = self.unlocked_profile.take() {
@@ -2462,6 +2135,11 @@ impl Render for AppState {
             .on_action(cx.listener(Self::handle_minimize_window))
             .on_action(cx.listener(Self::handle_zoom_window))
             .on_action(cx.listener(Self::handle_toggle_fullscreen))
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _window, cx| {
+                if this.notifications_open && ev.keystroke.key == "escape" {
+                    this.drawer_input(crate::top_bar::DrawerInput::Escape, cx);
+                }
+            }))
             .child(rsx! {
                 <div
                     flex
@@ -2483,7 +2161,11 @@ impl Render for AppState {
                 >
                     <div flex_1 flex flex_col h_full overflow_hidden relative>
                         {crate::layout_probe::bounds_probe(self.layout_probe.page.clone())}
-                        {self.render_active_view(cx)}
+                        {self.render_top_bar(cx)}
+                        <div flex_1 min_h_0 w_full>
+                            {self.render_active_view(cx)}
+                        </div>
+                        {...self.render_notifications_drawer(cx)}
                     </div>
                 </div>
             })
