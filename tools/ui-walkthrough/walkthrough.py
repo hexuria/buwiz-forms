@@ -364,6 +364,25 @@ class Walkthrough:
         self.screenshot(title, note)
         return tree
 
+    def notifications_drawer(self):
+        """Notifications is a drawer over the current page, not a page.
+
+        The agent tree has no node for the overlay, so open it through
+        navigation, give it a moment to slide in, screenshot it, then close it
+        with Escape so later pages aren't covered.
+        """
+        self.client.invoke("nav.go", page="notifications")
+        self.check_alive()
+        time.sleep(1.5)
+        tree = self.client.snapshot()
+        if not find_node(tree, "notifications_bell_btn"):
+            raise Unreachable("`notifications_bell_btn` (top strip) never appeared")
+        self.screenshot("Notifications", "drawer over the current page")
+        subprocess.run(self.xdotool + ["key", "Escape"], env=self.xdo_env(),
+                       capture_output=True, timeout=30, check=False)
+        time.sleep(0.5)
+        return tree
+
     def check_seed(self):
         """Fail when the app could not read the seeded DB and quarantined it."""
         if not self.args.data_from:
@@ -430,7 +449,7 @@ class Walkthrough:
             log("no profile: skipping profile dashboard and forms")
 
         self.step("Import Data", lambda: self.nav("import-export", "page-import-export", "Import Data"))
-        self.step("Notifications", lambda: self.nav("notifications", "page-notifications", "Notifications"))
+        self.step("Notifications", self.notifications_drawer)
 
         def cron(tab_id, title):
             c.invoke("nav.go", page="cron-tasks")
