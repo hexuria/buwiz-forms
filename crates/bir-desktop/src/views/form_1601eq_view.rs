@@ -13,7 +13,7 @@ use bir_core::forms::form_1601eq::{
     FORM_1601EQ_ATC_OPTIONS, FORM_1601EQ_FIRST_ITEM, FORM_1601EQ_MAIN_ROWS, Form1601EqCategory,
     Form1601EqDraft, Form1601EqOverRemittance, form_1601eq_atc_option,
 };
-use bir_core::forms::queueable::{QueueableForm, period_column};
+use bir_core::forms::queueable::{QueueableForm, can_user_revert, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
 use bir_core::official_xml::official_amount;
 use gpui::prelude::FluentBuilder;
@@ -28,6 +28,11 @@ use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::form_controls::{
     self, MultiChange, messages_for, multi_select_field, with_field_error,
+};
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
+    separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
@@ -173,6 +178,10 @@ pub struct Form1601EqView {
     release_claim_confirm_open: bool,
     /// The official submit confirm is open (OK queues, Cancel changes nothing).
     submit_confirm_open: bool,
+    /// Validate ran at the current entries; every edit clears it.
+    validated: bool,
+    /// Shared header: ⋯ menu, status box and "View what was sent".
+    header: FormHeaderState,
     /// Searchable multi-select for the Part II ATCs (values are ATC codes).
     atc_select: Entity<ComboboxState>,
     _subscriptions: Vec<Subscription>,
@@ -239,6 +248,7 @@ impl Form1601EqView {
             window,
             move |this: &mut Self, _, event: &InputEvent, _, cx| {
                 if matches!(event, InputEvent::Change) {
+                    this.validated = false;
                     this.sync_from_inputs(cx);
                 }
             },
@@ -310,6 +320,7 @@ impl Form1601EqView {
             return;
         }
         change(&mut self.draft);
+        self.validated = false;
         self.draft.recompute();
         self.validation_errors = self.draft.validate();
         self.status_message = None;
@@ -408,6 +419,7 @@ impl Form1601EqView {
         match draft.add_atc(code) {
             Ok(()) => {
                 self.draft = draft;
+                self.validated = false;
                 self.ensure_input(base_key(code), "0.00", window, cx);
                 self.status_message = None;
                 self.sync_from_inputs(cx);
@@ -421,6 +433,7 @@ impl Form1601EqView {
 
     fn remove_atc(&mut self, code: String, window: &mut Window, cx: &mut Context<Self>) {
         self.draft.remove_atc(&code);
+        self.validated = false;
         if let Some(input) = self.inputs.get(&base_key(&code)) {
             input.update(cx, |state, cx| state.set_value("", window, cx));
         }
@@ -1079,6 +1092,8 @@ impl QueueableFormView for Form1601EqView {
             status_message: None,
             release_claim_confirm_open: false,
             submit_confirm_open: false,
+            validated: false,
+            header: FormHeaderState::new(),
             pending_wipe: None,
             atc_select,
             _subscriptions: vec![atc_subscription],
@@ -1224,10 +1239,8 @@ impl FormViewTrait for Form1601EqView {
             cx.notify();
             return;
         }
-        self.status_message = Some(format!(
-            "Queued for background submission as {}.",
-            self.draft.submission_filename()
-        ));
+        // D5C: the toast and the stepper are the only confirmation.
+        self.status_message = None;
         self.notify(
             notification::NotificationType::Success,
             "Form 1601-EQ queued.".into(),
@@ -1245,14 +1258,15 @@ impl FormViewTrait for Form1601EqView {
         cx.notify();
     }
 
+    /// D7A + D8A: a claimed queue keeps the "nothing reached BIR" release;
+    /// otherwise the generic revert (Submitted/Confirmed keep a snapshot of
+    /// what BIR received and mark the return amended).
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !matches!(self.draft.lifecycle.status, FilingStatus::Queued) {
-            self.status_message =
-                Some("This return cannot be reverted after submission has started.".into());
-            cx.notify();
+        let status = self.draft.lifecycle.status.clone();
+        if !can_user_revert(&status) {
             return;
         }
-        if !self.draft.lifecycle.is_unclaimed() {
+        if matches!(status, FilingStatus::Queued) && !self.draft.lifecycle.is_unclaimed() {
             self.release_claim_confirm_open = true;
             self.status_message = Some(
                 "Submission was claimed. Confirm nothing reached BIR to return it to an editable Draft. This does not file.".into(),
@@ -1260,33 +1274,39 @@ impl FormViewTrait for Form1601EqView {
             cx.notify();
             return;
         }
-        let queued = self.draft.clone();
-        let canceled = match self.db.lock() {
-            Ok(db) => db
-                .cancel_queued_queueable(&queued)
-                .map_err(|e| e.to_string()),
-            Err(error) => Err(error.to_string()),
-        };
-        match canceled {
-            Ok(draft) => {
-                self.draft = draft;
-                self.status_message = None;
+        match revert_for_amendment(&self.db, &self.draft) {
+            Ok(reverted) => {
+                self.draft = reverted.draft;
+                self.validated = false;
                 self.validation_errors = self.draft.validate();
+                self.parse_errors.clear();
+                self.status_message = reverted
+                    .snapshot_id
+                    .map(|_| AMENDED_REVERT_MESSAGE.to_string());
+                if reverted.snapshot_id.is_some() {
+                    self.header.load_sent_snapshot(&self.db, &self.draft);
+                }
+                self.notify(
+                    notification::NotificationType::Success,
+                    "Form 1601-EQ reverted to Draft.".into(),
+                    window,
+                    cx,
+                );
                 cx.emit(QueueableFormEvent::Saved);
             }
             Err(error) => {
                 if let Ok(db) = self.db.lock()
                     && let Ok(Some(current)) = db.get_queueable_draft::<Form1601EqDraft>(
-                        &queued.tin,
-                        queued.taxable_year,
-                        period_column(&queued.filing_period()),
+                        &self.draft.tin,
+                        self.draft.taxable_year,
+                        period_column(&self.draft.filing_period()),
                     )
                 {
                     self.draft = current;
                 }
                 self.notify(
-                    notification::NotificationType::Warning,
-                    format!("The queued return was not canceled: {error}"),
+                    notification::NotificationType::Error,
+                    format!("Could not revert to Draft: {error}"),
                     window,
                     cx,
                 );
@@ -1358,6 +1378,98 @@ impl Form1601EqView {
     }
 }
 
+impl Form1601EqView {
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        FormHeaderProps {
+            slug: "1601eq",
+            status: self.draft.lifecycle.status.clone(),
+            editor_safe: true,
+            validated: self.validated,
+            blocking_errors: self.parse_errors.len() + self.validation_errors.len(),
+            first_error: self
+                .parse_errors
+                .iter()
+                .chain(self.validation_errors.iter())
+                .next()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.status_message.clone(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.sync_from_inputs(cx);
+        self.validated = self.draft.lifecycle.is_editable();
+        cx.notify();
+    }
+
+    /// Submit opens the official final-copy confirm; OK queues.
+    fn header_submit(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.request_submit(cx);
+    }
+
+    fn header_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.save_draft(window, cx);
+    }
+
+    fn header_print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_pdf(window, cx);
+    }
+
+    fn header_revert(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.revert_to_draft(window, cx);
+    }
+
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let filename = self.draft.lifecycle.submission_filename.clone();
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form1601EqDraft>(
+                        &self.draft.tin,
+                        self.draft.taxable_year,
+                        period_column(&self.draft.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
+                self.notify(
+                    notification::NotificationType::Success,
+                    "1601EQ marked Confirmed (simulated, nothing was sent to BIR).".into(),
+                    window,
+                    cx,
+                );
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => self.notify(
+                notification::NotificationType::Error,
+                format!("Simulated confirmation failed: {error}"),
+                window,
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form1601EqView> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.parse_errors.len() + this.validation_errors.len(),
+    on_validate: Form1601EqView::header_validate,
+    on_submit: Form1601EqView::header_submit,
+    on_save: Form1601EqView::header_save,
+    on_print: Form1601EqView::header_print,
+    on_revert: Form1601EqView::header_revert,
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form1601EqView::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
+
 /// The official submit prompt (rule 1601eq-final-001, `openAlertEmail`), verbatim.
 const SUBMIT_CONFIRM_TEXT: &str = "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?";
 
@@ -1372,9 +1484,7 @@ impl Render for Form1601EqView {
             window,
             cx,
         );
-        let error_count = self.parse_errors.len() + self.validation_errors.len();
         let is_draft = self.draft.lifecycle.is_editable();
-        let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1390,6 +1500,11 @@ impl Render for Form1601EqView {
             })
             .collect();
 
+        self.header.ensure_sent_snapshot(&self.db, &self.draft);
+        let props = self.header_props();
+        let header_buttons =
+            render_header_buttons(self, &props, HEADER_ACTIONS, layout == Layout::Phone, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx);
         let toolbar =
             div()
                 .flex()
@@ -1404,56 +1519,7 @@ impl Render for Form1601EqView {
                 .child(Button::new("1601eq_back").label("← Back").on_click(
                     cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
                 ))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            Button::new("1601eq_preview")
-                                .label("Print preview")
-                                .outline()
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                                ),
-                        )
-                        .child(
-                            Button::new("1601eq_save")
-                                .label("Save draft")
-                                .outline()
-                                .disabled(!is_draft)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                                ),
-                        )
-                        .when(is_queued, |row| {
-                            row.child(
-                                Button::new("1601eq_cancel")
-                                    .label("Cancel queue")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.revert_to_draft(window, cx)
-                                    })),
-                            )
-                        })
-                        .when(is_draft && error_count > 0, |row| {
-                            row.child(div().text_xs().text_color(cx.theme().danger).child(format!(
-                                "Fix {error_count} item(s) under Needs review to queue."
-                            )))
-                        })
-                        .child(
-                            Button::new("1601eq_submit")
-                                .label("Queue for submission")
-                                .primary()
-                                .disabled(
-                                    !is_draft
-                                        || !self.validation_errors.is_empty()
-                                        || !self.parse_errors.is_empty(),
-                                )
-                                .on_click(cx.listener(|this, _, _, cx| this.request_submit(cx))),
-                        ),
-                );
+                .child(header_buttons);
 
         let schedule = self.render_schedule(layout, cx);
         let mut body = div()
@@ -1463,16 +1529,6 @@ impl Render for Form1601EqView {
             .flex()
             .flex_col()
             .gap_5()
-            .when_some(self.status_message.clone(), |col, message| {
-                col.child(
-                    div()
-                        .p_3()
-                        .rounded_md()
-                        .bg(cx.theme().muted)
-                        .text_sm()
-                        .child(message),
-                )
-            })
             .when(self.release_claim_confirm_open, |col| {
                 col.child(
                     div()
@@ -1558,7 +1614,8 @@ impl Render for Form1601EqView {
                     .child(self.render_header(cx))
                     .when(layout != Layout::Phone, |d| {
                         d.child(div().mt_4().child(self.render_status_pipeline(cx)))
-                    }),
+                    })
+                    .when_some(status_box, |d, b| d.child(div().mt_3().child(b))),
             )
             .child(
                 div()

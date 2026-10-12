@@ -25,6 +25,11 @@ use crate::views::event_form_kit::Layout;
 use crate::views::form_controls::{
     self, field_error, messages_for, select_field, with_field_error,
 };
+use crate::views::form_header::{
+    DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps, FormHeaderState,
+    render_header_buttons, render_status_box, separate_validate_button,
+};
+use bir_core::forms::queueable::can_user_revert;
 use gpui_component::select::{Select, SelectEvent};
 
 pub enum Form1601CEvent {
@@ -139,8 +144,8 @@ pub struct Form1601CView {
     is_validated: bool,
     validation_errors: Vec<(String, String)>,
     status_message: Option<String>,
-    /// A submission error the user closed; it stays hidden until it changes.
-    dismissed_submission_error: Option<String>,
+    /// Shared header: ⋯ menu and status box state.
+    header: FormHeaderState,
     release_claim_confirm_open: bool,
 
     // Header Inputs
@@ -419,7 +424,7 @@ impl Form1601CView {
             is_validated: false,
             validation_errors: Vec::new(),
             status_message: None,
-            dismissed_submission_error: None,
+            header: FormHeaderState::new(),
             release_claim_confirm_open: false,
 
             number_of_sheets,
@@ -989,7 +994,16 @@ impl FormViewTrait for Form1601CView {
             return;
         }
 
-        self.status_message = Some("Form queued for background submission.".to_string());
+        // D5C: the toast and the stepper are the only confirmation.
+        self.status_message = None;
+        use gpui_component::WindowExt;
+        window.push_notification(
+            gpui_component::notification::Notification::new()
+                .message("Form 1601-C queued.".to_string())
+                .with_type(gpui_component::notification::NotificationType::Success)
+                .autohide(true),
+            cx,
+        );
         cx.emit(Form1601CEvent::Saved);
         bir_core::background_cron::wake();
         cx.notify();
@@ -1004,6 +1018,11 @@ impl FormViewTrait for Form1601CView {
     }
 
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // 1601-C keeps its own cancel/release path (not the generic
+        // amendment revert), gated like every other form (D7A).
+        if !can_user_revert(&self.draft.status) {
+            return;
+        }
         let claimed = self.draft.submission_claim_token.is_some()
             || self.draft.submission_claimed_at.is_some();
         if claimed && matches!(self.draft.status, FilingStatus::Queued) {
@@ -1112,39 +1131,6 @@ impl FormViewTrait for Form1601CView {
     }
 }
 
-/// How the status banner is coloured. The banner carries one line from
-/// many sources (queueing, validation, the preview launcher, the cron
-/// submitter), so the tone is read off the text rather than threaded
-/// through every site.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StatusTone {
-    Info,
-    Warning,
-    Danger,
-}
-
-fn status_tone(message: &str, is_submission_error: bool) -> StatusTone {
-    if is_submission_error {
-        return StatusTone::Danger;
-    }
-    let lower = message.to_ascii_lowercase();
-    const DANGER: [&str; 6] = [
-        "could not",
-        "cannot",
-        "fix validation",
-        "failed",
-        "error",
-        "no 1601-c row",
-    ];
-    if DANGER.iter().any(|needle| lower.contains(needle)) {
-        StatusTone::Danger
-    } else if lower.contains("unavailable") || lower.contains("stale") {
-        StatusTone::Warning
-    } else {
-        StatusTone::Info
-    }
-}
-
 /// Error keys that have no input on this page; they come from the taxpayer profile.
 const PROFILE_SOURCED_FIELDS: [&str; 4] = [
     "email_address",
@@ -1155,14 +1141,6 @@ const PROFILE_SOURCED_FIELDS: [&str; 4] = [
 
 fn is_profile_sourced(field: &str) -> bool {
     PROFILE_SOURCED_FIELDS.contains(&field)
-}
-
-fn submit_blocked_reason(error_count: usize) -> String {
-    if error_count == 1 {
-        "Fix 1 problem listed under Needs review".to_string()
-    } else {
-        format!("Fix {error_count} problems listed under Needs review")
-    }
 }
 
 impl Form1601CView {
@@ -1224,50 +1202,6 @@ impl Form1601CView {
         }
         Some(list.into_any_element())
     }
-
-    /// One line above the form, as wide as the form's own content column,
-    /// with a close button when the message is dismissible.
-    fn render_status_banner(
-        &self,
-        message: String,
-        tone: StatusTone,
-        dismissible: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = cx.theme();
-        let (hue, text) = match tone {
-            StatusTone::Info => (theme.info, crate::theme::hue_on_tint(theme, theme.info)),
-            StatusTone::Warning => (theme.warning, crate::theme::warning_on_tint(theme)),
-            StatusTone::Danger => (theme.danger, crate::theme::danger_on_tint(theme)),
-        };
-        let close = dismissible.then(|| {
-            gpui_component::button::Button::new("form-1601c-dismiss-status")
-                .icon(IconName::Close)
-                .ghost()
-                .xsmall()
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.dismissed_submission_error = this.draft.submission_error.clone();
-                    this.status_message = None;
-                    cx.notify();
-                }))
-        });
-        rsx! {
-            <div id={crate::agent::ids::FORM_1601C_STATUS_BANNER} px_8 pt_6>
-                <div max_w={px(800.)} mx_auto
-                    flex items_center gap_3
-                    pl_4 pr_2 py_2
-                    rounded_lg
-                    border_1
-                    bg={hue.opacity(0.12)}
-                    border_color={hue.opacity(0.4)}
-                    text_sm
-                    text_color={text}>
-                    <div flex_1 text_center>{message}</div>
-                    <div flex_none>{div().children(close)}</div>
-                </div>
-            </div>
-        }
-    }
 }
 
 impl Render for Form1601CView {
@@ -1282,58 +1216,36 @@ impl Render for Form1601CView {
         let is_queued = matches!(self.draft.status, FilingStatus::Queued);
         let claim_active = self.draft.submission_claim_token.is_some()
             || self.draft.submission_claimed_at.is_some();
-        let release_confirm = self.release_claim_confirm_open;
-        let queue_supported = matches!(submission_disposition(), SubmissionDisposition::QueueInApp);
-        let queue_actions = if is_queued && claim_active && release_confirm {
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    gpui_component::button::Button::new("form-1601c-release-claim-confirm")
-                        .label("Confirm nothing reached BIR")
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.confirm_release_abandoned_claim(window, cx);
-                        })),
-                )
-                .child(
-                    gpui_component::button::Button::new("form-1601c-keep-queued")
-                        .label("Keep queued")
-                        .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.release_claim_confirm_open = false;
-                            cx.notify();
-                        })),
-                )
-                .into_any_element()
-        } else if is_queued && claim_active {
-            gpui_component::button::Button::new("form-1601c-return-draft")
-                .label("Return to Draft")
-                .outline()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.revert_to_draft(window, cx);
-                }))
-                .into_any_element()
-        } else if is_queued {
-            gpui_component::button::Button::new("cancel_queue_btn")
-                .label("Cancel Queue")
-                .ghost()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.revert_to_draft(window, cx);
-                }))
-                .into_any_element()
-        } else {
-            div().into_any_element()
-        };
-
-        let submit_hint =
-            (queue_supported && is_draft && !self.validation_errors.is_empty()).then(|| {
+        let release_confirm =
+            (is_queued && claim_active && self.release_claim_confirm_open).then(|| {
                 div()
-                    .id("form-1601c-submit-blocked-reason")
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(submit_blocked_reason(self.validation_errors.len()))
+                    .mt_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        gpui_component::button::Button::new("form-1601c-release-claim-confirm")
+                            .label("Confirm nothing reached BIR")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.confirm_release_abandoned_claim(window, cx);
+                            })),
+                    )
+                    .child(
+                        gpui_component::button::Button::new("form-1601c-keep-queued")
+                            .label("Keep queued")
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.release_claim_confirm_open = false;
+                                cx.notify();
+                            })),
+                    )
             });
+        let props = self.header_props();
+        let header_buttons =
+            render_header_buttons(self, &props, HEADER_ACTIONS, layout == Layout::Phone, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx)
+            .map(|b| div().mt_3().child(b).into_any_element())
+            .unwrap_or_else(|| div().into_any_element());
         let needs_review = self.render_needs_review(cx);
         let atc_field = self.render_atc_select(window, cx);
         let profile_errors = self.render_profile_errors();
@@ -1355,43 +1267,7 @@ impl Render for Form1601CView {
                         .on_click(cx.listener(|_, _, _, cx| {
                             cx.emit(Form1601CEvent::BackToDashboard);
                         }))}
-                    <div flex items_center flex_wrap gap_3>
-                        {gpui_component::button::Button::new("save_draft_btn")
-                            .label("Save Draft")
-                            .outline()
-                            .disabled(!is_draft)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.save_draft(window, cx);
-                            }))}
-                        {gpui_component::button::Button::new("form-1601c-validate")
-                            .label("Validate")
-                            .outline()
-                            .disabled(!is_draft)
-                            .on_click(cx.listener(|this, _, _window, cx| {
-                                this.sync_from_inputs(cx);
-                                this.draft.compute();
-                                this.validation_errors = this.draft.validate();
-                                this.is_validated = true;
-                                cx.notify();
-                            }))}
-                        {gpui_component::button::Button::new("submit_btn")
-                            .label(if queue_supported {
-                                "Generate XML & Submit"
-                            } else {
-                                "Manual / external filing"
-                            })
-                            .primary()
-                            .disabled(
-                                !queue_supported
-                                    || !is_draft
-                                    || !self.validation_errors.is_empty(),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.mark_submitted(window, cx);
-                            }))}
-                        {div().children(submit_hint)}
-                        {queue_actions}
-                    </div>
+                    {header_buttons}
                 </div>
             })
             .child(rsx! {
@@ -1400,30 +1276,9 @@ impl Render for Form1601CView {
                     bg={cx.theme().background}>
                     {self.render_header_with_preview(cx)}
                     <div id={crate::agent::ids::FORM_1601C_STATUS} mt_6>{self.render_status_pipeline(cx)}</div>
+                    {status_box}
+                    {div().children(release_confirm)}
                 </div>
-            })
-            .when(!queue_supported, |view| {
-                let message = self
-                    .status_message
-                    .clone()
-                    .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string());
-                let tone = status_tone(&message, false);
-                view.child(self.render_status_banner(message, tone, false, cx))
-            })
-            .when(queue_supported, |view| {
-                let error = self
-                    .draft
-                    .submission_error
-                    .clone()
-                    .filter(|error| self.dismissed_submission_error.as_ref() != Some(error));
-                let banner = match error {
-                    Some(error) => Some((error, true)),
-                    None => self.status_message.clone().map(|message| (message, false)),
-                };
-                view.when_some(banner, |view, (message, is_error)| {
-                    let tone = status_tone(&message, is_error);
-                    view.child(self.render_status_banner(message, tone, true, cx))
-                })
             })
             .child(rsx! {
                 <div id={crate::agent::ids::FORM_1601C_SCROLL} flex_1 w_full overflow_y_scroll
@@ -2189,3 +2044,116 @@ impl Form1601CView {
             .child(label)
     }
 }
+
+impl Form1601CView {
+    /// The status box carries the cron submitter's error, then any page
+    /// message; without in-app queueing, the scaffold notice.
+    fn header_message(&self) -> Option<String> {
+        if !matches!(submission_disposition(), SubmissionDisposition::QueueInApp) {
+            return Some(
+                self.status_message
+                    .clone()
+                    .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string()),
+            );
+        }
+        self.draft
+            .submission_error
+            .clone()
+            .or_else(|| self.status_message.clone())
+    }
+
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        FormHeaderProps {
+            slug: "1601c",
+            status: self.draft.status.clone(),
+            editor_safe: true,
+            validated: self.is_validated,
+            blocking_errors: self.validation_errors.len(),
+            first_error: self
+                .validation_errors
+                .first()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self.header_message(),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.sync_from_inputs(cx);
+        self.draft.compute();
+        self.validation_errors = self.draft.validate();
+        self.is_validated = true;
+        cx.notify();
+    }
+
+    fn header_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.save_draft(window, cx);
+    }
+
+    fn header_submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.mark_submitted(window, cx);
+    }
+
+    fn header_print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_pdf(window, cx);
+    }
+
+    fn header_revert(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.revert_to_draft(window, cx);
+    }
+
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let filename = self.draft.submission_filename.clone();
+        use gpui_component::WindowExt;
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_1601c_draft(
+                        &self.draft.tin,
+                        self.draft.taxable_year,
+                        self.draft.month,
+                    )
+                {
+                    self.draft = current;
+                }
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(
+                            "1601C marked Confirmed (simulated, nothing was sent to BIR)."
+                                .to_string(),
+                        )
+                        .with_type(gpui_component::notification::NotificationType::Success)
+                        .autohide(true),
+                    cx,
+                );
+                cx.emit(Form1601CEvent::Confirmed);
+            }
+            Err(error) => window.push_notification(
+                gpui_component::notification::Notification::new()
+                    .message(format!("Simulated confirmation failed: {error}"))
+                    .with_type(gpui_component::notification::NotificationType::Error)
+                    .autohide(true),
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form1601CView> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: |this| this.validation_errors.len(),
+    on_validate: Form1601CView::header_validate,
+    on_submit: Form1601CView::header_submit,
+    on_save: Form1601CView::header_save,
+    on_print: Form1601CView::header_print,
+    on_revert: Form1601CView::header_revert,
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form1601CView::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
