@@ -280,6 +280,17 @@ fn apply_host(
         app.profiles = list;
     }
 
+    // `profile.save` writes the database directly. The profile manager still
+    // holds the agent's field edits as unsaved changes, and that dirty state
+    // blocks `select_profile` below, so the editor would never be reloaded
+    // and the "Unsaved profile changes" banner would block every later
+    // navigation. Load the saved row into the editor, which rebaselines it.
+    if let Some(profile) = saved_profile_to_load(host.saved_profile_tin(), &app.profiles) {
+        app.profile_manager.update(cx, |view, cx| {
+            view.edit_profile(profile, window, cx);
+        });
+    }
+
     if host.active_view() != app.active_view {
         apply_navigation(host.active_view(), &host, app, window, cx);
     }
@@ -379,6 +390,19 @@ fn apply_host(
     if host.wants_palette() && !app.is_command_palette_open {
         app.handle_open_command_palette(&OpenCommandPalette, window, cx);
     }
+}
+
+/// The freshly saved profile the profile manager must reload, if the agent
+/// saved one in this request.
+fn saved_profile_to_load(
+    saved_tin: Option<&str>,
+    profiles: &[bir_core::profile::TaxpayerProfile],
+) -> Option<bir_core::profile::TaxpayerProfile> {
+    let tin = saved_tin?;
+    profiles
+        .iter()
+        .find(|profile| profile.tin.full() == tin)
+        .cloned()
 }
 
 /// The taxpayer the app must adopt before `target` can be rendered.
@@ -1314,7 +1338,26 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::{ActiveView, profile_to_adopt};
+    use super::{ActiveView, profile_to_adopt, saved_profile_to_load};
+
+    #[test]
+    fn agent_save_reloads_the_saved_profile_into_the_manager() {
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": 7, "full_name": "Saved", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "", "registered_address": "", "zip_code": "",
+                "phone": "", "email": "", "default_form_type": "1601Cv2018",
+                "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let profiles = vec![profile];
+        let loaded = saved_profile_to_load(Some("12345678800000"), &profiles)
+            .expect("a saved profile must be reloaded so the dirty baseline is refreshed");
+        assert_eq!(loaded.full_name, "Saved");
+        assert!(saved_profile_to_load(None, &profiles).is_none());
+        assert!(saved_profile_to_load(Some("99999999900000"), &profiles).is_none());
+    }
 
     const TIN: &str = "00000000000000";
 

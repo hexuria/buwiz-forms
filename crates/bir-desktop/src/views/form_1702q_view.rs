@@ -668,6 +668,66 @@ fn all_money() -> impl Iterator<Item = &'static Money> {
         .chain(PART_II)
 }
 
+/// Read every amount editor into the draft. An entry that is not an amount
+/// keeps the draft's previous value and is returned as a parse error, so a
+/// save stores everything that parses and never turns bad text into zero.
+fn apply_amount_texts(
+    draft: &mut Draft,
+    text_of: impl Fn(&str) -> String,
+) -> Vec<(String, String)> {
+    let mut parse_errors = Vec::new();
+    for money in all_money() {
+        let text = text_of(money.key);
+        match parse_amount(&text) {
+            Some(value) => (money.set)(draft, value),
+            None => parse_errors.push((
+                money.key.to_string(),
+                format!("{}: \"{text}\" is not a number.", money.label),
+            )),
+        }
+    }
+    let mut rows = Vec::new();
+    for row in 0..FORM_1702Q_OTHER_CREDIT_ROWS {
+        let description = text_of(&other_desc_key(row));
+        let text = text_of(&other_amount_key(row));
+        let previous = draft.other_credits.get(row).map_or(0.0, |c| c.amount);
+        let amount = match parse_amount(&text) {
+            Some(value) => value,
+            None => {
+                parse_errors.push((
+                    other_amount_key(row),
+                    format!(
+                        "Schedule 4 other credit {}: \"{text}\" is not a number.",
+                        row + 1
+                    ),
+                ));
+                previous
+            }
+        };
+        rows.push(Form1702qOtherCredit {
+            description,
+            amount,
+        });
+    }
+    draft.other_credits = rows;
+    parse_errors
+}
+
+/// The save confirmation: a warning while entries could not be read.
+fn save_notice(unreadable: bool) -> (notification::NotificationType, &'static str) {
+    if unreadable {
+        (
+            notification::NotificationType::Warning,
+            "1702Q draft saved. Entries that are not amounts were not saved; fix them under Needs review.",
+        )
+    } else {
+        (
+            notification::NotificationType::Success,
+            "1702Q draft saved.",
+        )
+    }
+}
+
 pub struct Form1702qView {
     draft: Form1702qDraft,
     db: Arc<Mutex<Database>>,
@@ -747,39 +807,20 @@ impl Form1702qView {
         for text in TEXTS.iter().filter(|t| t.key != "year" && t.key != "lob") {
             (text.set)(&mut draft, self.input_text(text.key, cx));
         }
-        for money in all_money() {
-            let text = self.input_text(money.key, cx);
-            match parse_amount(&text) {
-                Some(value) => (money.set)(&mut draft, value),
-                None => parse_errors.push((
-                    money.key.to_string(),
-                    format!("{}: \"{text}\" is not a number.", money.label),
-                )),
-            }
-        }
-        let mut rows = Vec::new();
-        for row in 0..FORM_1702Q_OTHER_CREDIT_ROWS {
-            let description = self.input_text(&other_desc_key(row), cx);
-            let text = self.input_text(&other_amount_key(row), cx);
-            let amount = match parse_amount(&text) {
-                Some(value) => value,
-                None => {
-                    parse_errors.push((
-                        other_amount_key(row),
-                        format!(
-                            "Schedule 4 other credit {}: \"{text}\" is not a number.",
-                            row + 1
-                        ),
-                    ));
-                    0.0
-                }
-            };
-            rows.push(Form1702qOtherCredit {
-                description,
-                amount,
-            });
-        }
-        draft.other_credits = rows;
+        let texts: BTreeMap<String, String> = all_money()
+            .map(|m| m.key.to_string())
+            .chain(
+                (0..FORM_1702Q_OTHER_CREDIT_ROWS)
+                    .flat_map(|r| [other_desc_key(r), other_amount_key(r)]),
+            )
+            .map(|key| {
+                let text = self.input_text(&key, cx);
+                (key, text)
+            })
+            .collect();
+        parse_errors.extend(apply_amount_texts(&mut draft, |key| {
+            texts.get(key).cloned().unwrap_or_default()
+        }));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -1504,15 +1545,9 @@ impl FormViewTrait for Form1702qView {
 
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_from_inputs(cx);
-        if !self.parse_errors.is_empty() {
-            self.notify(
-                notification::NotificationType::Error,
-                "Fix the highlighted numbers before saving.".into(),
-                window,
-                cx,
-            );
-            return;
-        }
+        // Save what parses; unreadable amounts keep their text in the box
+        // and stay listed under Needs review, which keeps Queue blocked.
+        let unreadable = !self.parse_errors.is_empty();
         let result = match self.db.lock() {
             Ok(db) => db
                 .save_queueable_draft(&self.draft)
@@ -1522,13 +1557,12 @@ impl FormViewTrait for Form1702qView {
         match result {
             Ok(id) => {
                 self.draft.id = Some(id);
-                self.notify(
-                    notification::NotificationType::Success,
-                    "1702Q draft saved.".into(),
-                    window,
-                    cx,
-                );
+                let (kind, message) = save_notice(unreadable);
+                // The save never refuses; the warning stays in the status box.
+                self.status_message = unreadable.then(|| message.to_string());
+                self.notify(kind, message.into(), window, cx);
                 cx.emit(QueueableFormEvent::Saved);
+                cx.notify();
             }
             Err(error) => cx.emit(QueueableFormEvent::PushNotification(
                 "error".into(),
@@ -1982,8 +2016,8 @@ const HEADER_ACTIONS: FormHeaderActions<Form1702qView> = FormHeaderActions {
 #[cfg(test)]
 mod tests {
     use super::{
-        Form1702qView, Layout, MONTH_OPTIONS, atc_options, format_tin, model_keys, parse_amount,
-        whole_pesos,
+        Draft, Form1702qView, Layout, MONTH_OPTIONS, apply_amount_texts, atc_options, format_tin,
+        model_keys, other_amount_key, parse_amount, save_notice, whole_pesos,
     };
     use bir_core::forms::form_1702q::FORM_1702Q_ATC_OPTIONS;
     use gpui::px;
@@ -2041,5 +2075,45 @@ mod tests {
         let keys = Form1702qView::all_keys();
         let unique: std::collections::BTreeSet<_> = keys.iter().map(|(k, _)| k.clone()).collect();
         assert_eq!(unique.len(), keys.len());
+    }
+
+    #[test]
+    fn save_keeps_what_parses_and_warns_about_the_rest() {
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample", "tin": {"segment1": "123",
+                "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+                "line_of_business": "", "registered_address": "", "zip_code": "",
+                "phone": "", "email": "", "default_form_type": "1702Q",
+                "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Draft::new_from_profile(&profile, 2025, 1);
+        draft.exempt.sales = 7.0;
+        draft.other_credits.push(super::Form1702qOtherCredit {
+            description: "Prior".into(),
+            amount: 5.0,
+        });
+        let bad_credit = other_amount_key(0);
+        let errors = apply_amount_texts(&mut draft, |key| match key {
+            "s2_sales" => "1,234.50".into(),
+            "s1a_sales" => "12a".into(),
+            k if k == bad_credit => "x".into(),
+            _ => String::new(),
+        });
+        // Parsed entries are saved; unreadable ones keep the previous value.
+        assert_eq!(draft.sales, 1234.5);
+        assert_eq!(draft.exempt.sales, 7.0);
+        assert_eq!(draft.other_credits[0].amount, 5.0);
+        let keys: Vec<_> = errors.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["s1a_sales", bad_credit.as_str()]);
+        // Whole-peso display rule (3A): 49 down, 50 up.
+        assert_eq!(whole_pesos(1234.49), "1,234");
+        assert_eq!(whole_pesos(1234.5), "1,235");
+        assert_eq!(
+            save_notice(true).1,
+            "1702Q draft saved. Entries that are not amounts were not saved; fix them under Needs review."
+        );
+        assert_eq!(save_notice(false).1, "1702Q draft saved.");
     }
 }

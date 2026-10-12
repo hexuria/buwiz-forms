@@ -92,7 +92,7 @@ Without a profile, pages 2, 3, 11 and 12 are skipped and the run fails.
 | Event-kit forms (1800) | `form.open` does not know them, so the script calls `profile.set` and then `nav.go 1800` |
 | Scrolling | **xdotool** mouse wheel over the centre of the page. The agent has no scroll operation for these pages, and its scrolled screenshots only work on macOS. |
 | Screenshots | **ImageMagick `import`**, because the agent's `screenshot` op returns `screenshot_unavailable` on Linux |
-| Demo profile only | After `profile.save`, the painted editor still reports "Unsaved profile changes", and that blocks all navigation. The banner's Discard button is not in the agent tree, so the script clicks it **by coordinates** (window width minus 303, y = 218). This is the only coordinate click. |
+| Demo profile | `profile.create`, `set_value` on each field, then `profile.save`. The save reloads the profile into the editor, so no "Unsaved profile changes" banner is left and navigation continues without any coordinate click. |
 
 ## Environment variables
 
@@ -150,7 +150,7 @@ exit code.
   empty. The script detects this and fails with a message. Use
   `--demo-profile` until Linux has a persistent key store or reads
   `bir_key.txt` first.
-- The opt-in demo profile depends on the coordinate click described above.
-  The first screenshot after it can still show the "profile was cleared" toast.
+- The first screenshot after the opt-in demo profile can still show the
+  "profile was cleared" toast.
 - Dashboard tabs need the painted app. `bir-headless` does not answer
   `dashboard.tab`.

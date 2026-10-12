@@ -164,6 +164,10 @@ pub struct BirAgentHost {
     /// drain writes the snapshot back only when the agent actually changed it.
     /// One-shot like `Form1601CState::saved`: the host is rebuilt per request.
     editor_touched: bool,
+    /// TIN written by `profile.save` in this request. One-shot: the drain
+    /// reloads that profile into the profile manager so its unsaved-changes
+    /// baseline matches what the database now holds.
+    saved_profile_tin: Option<String>,
     active_view: ActiveView,
     pending_admin: Option<ActiveView>,
     pending_profile_auth: bool,
@@ -202,6 +206,7 @@ impl BirAgentHost {
             enable_profile_pins: false,
             unsaved_compliance: false,
             editor_touched: false,
+            saved_profile_tin: None,
             active_view: ActiveView::GlobalDashboard,
             pending_admin: None,
             pending_profile_auth: false,
@@ -350,6 +355,11 @@ impl BirAgentHost {
     /// blank every field.
     pub fn editor_touched(&self) -> bool {
         self.editor_touched
+    }
+
+    /// The TIN `profile.save` persisted in this request, if any.
+    pub fn saved_profile_tin(&self) -> Option<&str> {
+        self.saved_profile_tin.as_deref()
     }
 
     pub fn replace_dues(&mut self, dues: Vec<(String, u16, u8, String, String)>) {
@@ -1656,6 +1666,7 @@ impl BirAgentHost {
         let tin = saved.tin.full();
         self.editor.save_message = Some("Profile saved.".into());
         self.editor.errors.clear();
+        self.saved_profile_tin = Some(tin.clone());
         self.selected_tin = Some(tin.clone());
         self.reload_from_db(&db);
         for item in &mut self.profiles {
@@ -4411,8 +4422,12 @@ mod tests {
             );
             assert!(resp.ok, "{id}: {:?}", resp.error);
         }
+        assert_eq!(host.saved_profile_tin(), None);
         let saved = handle_request(&mut host, req(Op::click(ids::PROFILE_SAVE)), None, None);
         assert!(saved.ok, "{:?}", saved.error);
+        // The drain rebaselines the profile manager from this TIN, so the
+        // window shows no unsaved-changes banner after an agent save.
+        assert_eq!(host.saved_profile_tin(), Some("98765432100000"));
         let row = ids::profile_row("98765432100000");
         let resp = handle_request(
             &mut host,

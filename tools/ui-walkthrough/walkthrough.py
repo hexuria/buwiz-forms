@@ -391,20 +391,11 @@ class Walkthrough:
                 raise Unreachable(f"demo profile {target}: {resp.get('error')}")
         c.invoke("profile.save")
         log(f"created demo profile {DEMO_PROFILE[0][1]}")
-        # The agent's profile.save writes the DB but leaves the painted editor
-        # flagged "Unsaved profile changes", which blocks every navigation.
-        # The banner's Discard button is not in the agent tree, so click it by
-        # coordinates (right edge of the content column, banner row).
+        # profile.save reloads the saved row into the editor, so no
+        # unsaved-changes banner is left to block navigation.
         resp = c.request("invoke", name="nav.go", args={"page": "global-dashboard"})
-        if not resp.get("ok") and "unsaved" in str(resp.get("error")):
-            x = int(self.width) - 303
-            subprocess.run(self.xdotool + ["mousemove", str(x), "218", "sleep", "0.3", "click", "1"],
-                           env=self.xdo_env(), capture_output=True, timeout=30)
-            time.sleep(1.0)
-            resp = c.request("invoke", name="nav.go", args={"page": "global-dashboard"})
-            if not resp.get("ok"):
-                raise Unreachable(f"demo profile saved but the editor stays dirty: {resp.get('error')}")
-            log("  discarded the stale editor state (xdotool click on Discard)")
+        if not resp.get("ok"):
+            raise Unreachable(f"demo profile saved but navigation is blocked: {resp.get('error')}")
 
     def pick_profile(self):
         if self.args.tin:
