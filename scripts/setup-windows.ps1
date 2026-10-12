@@ -145,21 +145,8 @@ if (-not $gpuiRev) {
     exit 1
 }
 Write-Step "Installing gpui-agent CLI (pinned rev $gpuiRev, matches Cargo.toml)"
-$previousRustflags = $env:RUSTFLAGS
-$gpuiInstallExit = 0
-try {
-    # Remove once the gpui-agent pin includes hexuria/gpui-agent's bcrypt link fix (#91).
-    $env:RUSTFLAGS = (($env:RUSTFLAGS, '-l bcrypt') -join ' ').Trim()
-    & "$cargoBin\cargo.exe" install --git https://github.com/hexuria/gpui-agent --rev $gpuiRev gpui-agent-cli
-    $gpuiInstallExit = $LASTEXITCODE
-} finally {
-    if ($null -eq $previousRustflags) {
-        Remove-Item Env:RUSTFLAGS -ErrorAction SilentlyContinue
-    } else {
-        $env:RUSTFLAGS = $previousRustflags
-    }
-}
-if ($gpuiInstallExit -ne 0) { Write-Error "gpui-agent install failed"; exit $gpuiInstallExit }
+& "$cargoBin\cargo.exe" install --git https://github.com/hexuria/gpui-agent --rev $gpuiRev gpui-agent-cli
+if ($LASTEXITCODE -ne 0) { Write-Error "gpui-agent install failed"; exit $LASTEXITCODE }
 
 Write-Step @"
 Done. Open a NEW PowerShell window, then:  cd <repo> ; just run

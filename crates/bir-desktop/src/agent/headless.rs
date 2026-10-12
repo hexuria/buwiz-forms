@@ -23,7 +23,7 @@ use gpui_agent::client::AgentClient;
 use gpui_agent::mailbox::AgentMailbox;
 use gpui_agent::protocol::{Op, PlatformKind};
 use gpui_agent::security::from_env;
-use gpui_agent::server::{spawn_host, spawn_mailbox};
+use gpui_agent::server::{spawn_host, spawn_mailbox_named};
 
 use super::host::BirAgentHost;
 use super::request_log;
@@ -403,11 +403,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         let db = Arc::new(Mutex::new(opened));
         let host = Arc::new(Mutex::new(host_for_database(db.clone())));
         let mailbox = AgentMailbox::new();
-        let (addr, shutdown) = match spawn_mailbox(
+        let (addr, shutdown) = match spawn_mailbox_named(
             config.addr,
             config.token.clone(),
             mailbox.clone(),
             Duration::from_secs(8),
+            "bir-desktop",
         ) {
             Ok(started) => started,
             Err(error) if wait && error.kind() == ErrorKind::AddrInUse => {

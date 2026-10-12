@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use gpui_agent::mailbox::AgentMailbox;
 use gpui_agent::security::from_env;
-use gpui_agent::server::spawn_mailbox;
+use gpui_agent::server::spawn_mailbox_named;
 
 fn auth_banner(token_set: bool) -> &'static str {
     if token_set {
@@ -48,11 +48,12 @@ pub fn maybe_start() -> Option<StartedAgent> {
             let mailbox = AgentMailbox::new();
             let token = config.token.clone();
             let auth = auth_banner(token.is_some());
-            match spawn_mailbox(
+            match spawn_mailbox_named(
                 super::instance::resolve_addr(config.addr),
                 config.token,
                 mailbox.clone(),
                 Duration::from_secs(8),
+                "bir-desktop",
             ) {
                 Ok((addr, shutdown)) => {
                     tracing::info!(

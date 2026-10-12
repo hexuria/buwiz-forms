@@ -71,8 +71,6 @@ and is installed automatically by every setup script — `setup-windows.ps1`,
 (`crates/bir-desktop/Cargo.toml` / `Cargo.lock`) so driver and host can never
 drift on protocol version. Manually:
 `cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
-On Windows, use `scripts\setup-windows.ps1`, or add `-l bcrypt` to
-`RUSTFLAGS`, until the #91 upstream fix is pinned.
 
 **Windows note:** the HMAC token handshake works at the current pinned
 revision. Set `GPUI_AGENT_TOKEN` for secure driving. For local-only driving,

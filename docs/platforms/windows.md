@@ -107,10 +107,10 @@ there, but nobody has run it on that platform.
 ## Agent control
 
 - The gpui-agent token handshake works on Windows at the current pinned
-  revision. Set `GPUI_AGENT_TOKEN` for secure driving. The CLI install needs
-  `scripts\setup-windows.ps1` or `-l bcrypt` until the #91 upstream fix is
-  pinned. `GPUI_AGENT_INSECURE_NO_TOKEN=1` remains for local-only driving; never
-  use it on a shared machine.
+  revision. Set `GPUI_AGENT_TOKEN` for secure driving.
+  `gpui-agent --connect bir-desktop` finds a running app, and bare commands go
+  to the default address. `GPUI_AGENT_INSECURE_NO_TOKEN=1` remains for
+  local-only driving; never use it on a shared machine.
 - Agent screenshots are macOS only.
 
 ## Packaging
