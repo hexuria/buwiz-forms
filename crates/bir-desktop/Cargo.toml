@@ -150,9 +150,10 @@ tracking, and PDF generation for BIR Form 2551Q and related forms."""
 assets = [
     ["target/release/bir", "usr/bin/ebirforms", "755"],
     ["../../assets/**/*", "usr/share/ebirforms/assets/", "644"],
-    ["../../assets/linux/ebirforms.desktop", "usr/share/applications/ebirforms.desktop", "644"],
-    # Source PNG is 512x512 (the "targetsize" variants are 512px too), so it goes in hicolor/512x512.
-    ["../../assets/icon.png", "usr/share/icons/hicolor/512x512/apps/ebirforms.png", "644"],
+    # Launcher + icon theme entries. The file name, Icon= and StartupWMClass=
+    # all equal the app id the windows set (src/window_identity.rs).
+    ["../../assets/linux/dev.goldcoders.bir.desktop", "usr/share/applications/", "644"],
+    ["../../assets/linux/icons/hicolor/**/*", "usr/share/icons/hicolor/", "644"],
 ]
 
 [package.metadata.bundle]

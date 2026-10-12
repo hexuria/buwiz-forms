@@ -364,18 +364,15 @@ pub fn run_gui() {
                 None => (None, None, None, None),
             };
 
-            let options = WindowOptions {
+            let options = crate::window_identity::identified(WindowOptions {
                 titlebar: Some(TitlebarOptions {
                     title: Some("e-BIRForms".into()),
                     ..Default::default()
                 }),
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(gpui::size(gpui::px(620.0), gpui::px(500.0))),
-                // X11 WM_CLASS / Wayland app_id; must match StartupWMClass in
-                // assets/linux/ebirforms.desktop so docks group the window.
-                app_id: Some("ebirforms".into()),
                 ..Default::default()
-            };
+            });
 
             let _ = cx.open_window(options, move |window, cx| {
                 let view = cx.new(|cx| {
@@ -611,22 +608,62 @@ mod startup_tests {
 
     #[::core::prelude::v1::test]
     fn linux_desktop_entry_has_required_keys_and_is_packaged() {
-        let entry = include_str!("../../../assets/linux/ebirforms.desktop");
+        let entry = include_str!("../../../assets/linux/dev.goldcoders.bir.desktop");
         let mut lines = entry.lines();
         assert_eq!(lines.next(), Some("[Desktop Entry]"));
         let keys: std::collections::HashMap<&str, &str> =
             lines.filter_map(|l| l.split_once('=')).collect();
+        let app_id = crate::window_identity::APP_ID;
         assert_eq!(keys.get("Type"), Some(&"Application"));
         assert_eq!(keys.get("Name"), Some(&"eBIRForms"));
         assert_eq!(keys.get("Exec"), Some(&"ebirforms"));
-        assert_eq!(keys.get("Icon"), Some(&"ebirforms"));
-        assert_eq!(keys.get("StartupWMClass"), Some(&"ebirforms"));
+        assert_eq!(keys.get("Icon"), Some(&app_id));
+        assert_eq!(keys.get("StartupWMClass"), Some(&app_id));
         assert!(keys.get("Categories").is_some_and(|c| c.ends_with(';')));
 
         let cargo = include_str!("../Cargo.toml");
         assert!(cargo.contains(
-            r#"["../../assets/linux/ebirforms.desktop", "usr/share/applications/ebirforms.desktop", "644"]"#
+            r#"["../../assets/linux/dev.goldcoders.bir.desktop", "usr/share/applications/", "644"]"#
         ));
-        assert!(cargo.contains("usr/share/icons/hicolor/"));
+        assert!(cargo.contains(
+            r#"["../../assets/linux/icons/hicolor/**/*", "usr/share/icons/hicolor/", "644"]"#
+        ));
+        assert!(!cargo.contains("ebirforms.desktop"));
+    }
+
+    /// Every window must go through `identified()` so docks see one app id.
+    #[::core::prelude::v1::test]
+    fn every_open_window_uses_identified_options() {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        walk(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut files,
+        );
+        for f in files {
+            let src = std::fs::read_to_string(&f).unwrap();
+            let opens = src.matches(concat!(".open_", "window(")).count();
+            if opens > 0 {
+                assert!(
+                    src.contains("window_identity::identified("),
+                    "{} opens a window without identified()",
+                    f.display()
+                );
+            }
+            assert!(
+                !src.contains(concat!("app_id: Some(\"ebirforms", "\"")),
+                "{} sets a stray app id",
+                f.display()
+            );
+        }
     }
 }
