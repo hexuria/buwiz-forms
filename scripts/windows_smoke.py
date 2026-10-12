@@ -25,6 +25,11 @@ from file_tax_smoke import AgentClient, SmokeError
 PHASES = ("preview-1601c", "preview-2551q", "tray", "submit")
 SMOKE_TIN = "12345678800000"
 PANIC_MARKERS = ("panicked at", "overflowed its stack")
+TRAY_NOTE = (
+    "Showing the window again and graceful exit while hidden are not "
+    "agent-reachable because the agent mailbox drains in AppState::render; "
+    "cover those as manual VM steps (#98)."
+)
 
 
 def read_stack_reserve(path: str | Path) -> int:
@@ -219,6 +224,8 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
         "stdout": str(stdout_path),
         "stderr": str(stderr_path),
     }
+    if phase == "tray":
+        result["note"] = TRAY_NOTE
     if existing_bir():
         result["reason"] = "close the running app first (single-instance)"
         return result
@@ -276,15 +283,24 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
                 raise SmokeError(f"hello after preview failed: {hello}")
             result["step_reached"] = "preview held and hello answered"
         elif phase == "tray":
-            for _ in range(2):
-                reply = client.request({"op": "keybinding", "binding": "app.toggle_visibility", "scope": "global"})
-                if not reply.get("ok"):
-                    raise SmokeError(f"app.toggle_visibility failed: {reply}")
-            hello = client.request({"op": "hello"})
-            if not hello.get("ok"):
-                raise SmokeError(f"hello after tray toggle failed: {hello}")
-            response_tree(client.request({"op": "snapshot"}))
-            result["step_reached"] = "visibility toggled twice; hello and snapshot answered"
+            reply = client.request({"op": "keybinding", "binding": "app.toggle_visibility", "scope": "global"})
+            if not reply.get("ok"):
+                raise SmokeError(f"app.toggle_visibility failed: {reply}")
+            result["step_reached"] = "visibility hidden"
+            time.sleep(3)
+            if proc.poll() is not None:
+                raise SmokeError(f"process died while hidden: {classify_exit(proc.returncode)}")
+            marker = scan_logs(read_text(stdout_path), read_text(stderr_path))
+            if marker:
+                raise SmokeError(marker)
+            result["step_reached"] = "visibility hidden; process alive after 3s"
+            client.close()
+            client = None
+            proc.kill()
+            proc.wait(timeout=5)
+            result["exit_code"] = proc.returncode
+            result["status"] = "pass"
+            return result
         elif phase == "submit":
             invoke(client, "filing.start", {"code": "1601C", "year": year, "period": 1, "tin": SMOKE_TIN})
             invoke(client, "form.fill", {"any_taxes_withheld": "Yes", "category_of_agent": "P"})
@@ -322,7 +338,8 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
     finally:
         if client is not None:
             try:
-                client.request({"op": "shutdown"})
+                if phase != "tray":
+                    client.request({"op": "shutdown"})
             except Exception:
                 pass
             client.close()

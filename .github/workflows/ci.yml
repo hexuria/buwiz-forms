@@ -375,7 +375,6 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: 1.99.0
-        components: clippy, rustfmt
 
     # Reader only. `check` is the sole writer of workspace-${{ runner.os }};
     # see the cache ownership comment in that job.
