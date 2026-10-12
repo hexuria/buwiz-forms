@@ -13,6 +13,7 @@ MAC_ARM_TARGET := "aarch64-apple-darwin"
 MAC_X86_TARGET := "x86_64-apple-darwin"
 WIN_TARGET := "x86_64-pc-windows-msvc"
 LINUX_TARGET := "x86_64-unknown-linux-gnu"
+PYTHON := if os_family() == "windows" { "python" } else { "python3" }
 RELEASE_DIR := "target/release-artifacts"
 MAC_APP := RELEASE_DIR + "/" + APP_NAME + ".app"
 VERSION := if os_family() == "windows" {
@@ -70,6 +71,31 @@ check:
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     cargo clippy --locked --workspace -- -D warnings
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# Build and run the painted Windows runtime smoke gate in isolated phases.
+[windows]
+smoke-windows profile="release":
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    $profileName = "{{profile}}"
+    if ($profileName -notin @("debug", "release")) {
+        throw "profile must be debug or release"
+    }
+    $cargoArgs = @("build", "--locked", "-p", "bir-desktop", "--bin", "bir-desktop", "--features", "dev-tools,agent")
+    if ($profileName -eq "release") { $cargoArgs += "--release" }
+    & cargo @cargoArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $targetDir = if ($profileName -eq "release") { "target\release" } else { "target\debug" }
+    & {{PYTHON}} scripts/alias_desktop_bin.py $targetDir
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $binary = if ($profileName -eq "release") {
+        "target\release\bir.exe"
+    } else {
+        "target\debug\bir.exe"
+    }
+    $work = "target\windows-smoke\$profileName"
+    & {{PYTHON}} scripts/windows_smoke.py --bin $binary --work $work --json-out "$work\results.json"
+    exit $LASTEXITCODE
 
 # Check for vulnerability advisories (requires: cargo install cargo-audit)
 [unix]

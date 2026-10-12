@@ -38,22 +38,27 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - None of the Windows failures in #90 is a unit-test failure. They are runtime failures: nested message loops, stack depth, foreground rules and packaging.
 - They need an owner that actually *runs the app*.
 
-- [ ] **1.1 `windows-smoke` job** in `ci.yml` (windows-latest), driven by the agent control plane we already ship. In #90 step 29 it was verified working on Windows: `hello` and `snapshot` both work.
-  - Build `bir-desktop --features dev-tools,agent`. Launch with:
-    - `GPUI_AGENT=1`, `GPUI_AGENT_INSECURE_NO_TOKEN=1` (loopback only);
-    - `BIR_DATABASE_PATH=$RUNNER_TEMP\smoke.db`;
-    - `BIR_SFTP_DRY_RUN=1`.
-  - Script (`scripts/windows-smoke.ps1`, also runnable locally):
-    1. `hello`, then create profile 123-456-788-00000 and add a manual COR with 1601C plus one 2200 form.
-    2. Open 1601C and use **Print Preview**. Assert the preview window exists, `print-preview-scroll` is present, and the app process is still alive.
-    3. Close the preview, then open 2200M preview: same asserts.
-    4. Hide to tray, then show: assert the process is alive and no panic is in stderr.
-    5. Validate and Submit 1601C in dry run: assert status `Submitted` and the log line `SFTP dry-run PUT (no network)`.
-  - Fail the job on any `panicked at`, `overflowed its stack`, or non-zero exit in the captured stderr.
-  - Runs the **debug** build (where #96 bites) and the **release** build (what users get).
-  - **Rollout:** lands first with `continue-on-error: true` (report-only, expected red on `main` because of #97). Flip it to required when §2 and §3 merge.
-- [ ] **1.2 PE header check:** a CI step reads the `bir.exe` stack reserve (`dumpbin /headers`, or a tiny Rust test using the `object` crate). Fail if it's below the value chosen in §3.
-- [ ] **1.3** Add `zizmor --persona=auditor` on `.github/workflows/**`. The repo has three workflows, and smoke jobs add secrets surface. This is the skill's CI-shape item 8.
+- [ ] **1.1 `windows-smoke` job** in `ci.yml` (windows-latest), driven by
+  `scripts/windows_smoke.py`. The Python runner reuses
+  `scripts/file_tax_smoke.py`'s `AgentClient`; Python was chosen over `.ps1`
+  so the repository has one protocol client. Each phase runs in a fresh
+  process with a fresh database and seeded profile, so a crash cannot hide a
+  later result. It previews 1601C and 2551Q; 2200M has no agent print path.
+  - Build `bir-desktop --features dev-tools,agent` with token-authenticated
+    `GPUI_AGENT`, an explicit loopback address, a per-run connect id, and
+    `BIR_SFTP_DRY_RUN=1`.
+  - The phases cover both previews, hide/show, and the 1601C dry-run submit
+    path. They fail on process death, panic/stack-overflow markers, or a
+    non-zero exit, while preserving stdout/stderr and JSON results.
+  - Runs the **debug** build (where #96 bites) and the **release** build (what
+    users get).
+  - **Rollout:** lands first with `continue-on-error: true` (report-only,
+    expected red on `main` because of #97). Flip it to required when §2 and
+    §3 merge.
+- [ ] **1.2 PE header check:** `scripts/windows_smoke.py` prints the PE32+
+  `stack_reserve` from `bir.exe`'s optional header in report-only mode; its
+  value never gates the job.
+- [ ] **1.3** `zizmor --persona=auditor` is deferred to its own PR.
 
 **Oracle:** the user-visible behaviour in #90 (process alive, window present). The agent snapshot is the observation channel.
 **Blind spots, written down:**
@@ -331,3 +336,4 @@ Each PR ends with the #90 steps it touches re-run on Windows. After PR 5, a full
 
 ## 14. Changelog
 - Plan created from the #90/#89 Windows verification. Corrected the #99 assessment: diffs 2 and 3 come from different official save paths.
+- **2026-10-12** — Added the Python Windows smoke design and report-only `stack_reserve` measurement.

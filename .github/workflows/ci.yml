@@ -344,3 +344,106 @@ jobs:
     # The targeted steps above are NOT duplicates and stay: they are `cargo run`
     # subcommands plus the exact-name corpus census, none of which `cargo test
     # --workspace` performs.
+
+  # Rust CI was green while normal Windows use still crashed (#90). This
+  # report-only runtime owner launches the painted app and exercises the
+  # agent-observable preview, tray, and dry-run submit paths. It remains
+  # continue-on-error until the §2/#97 WebView fix and §3/#96 stack fix merge;
+  # then flip it to required. Hosted runners use WARP, do not exercise real
+  # foreground-window rules, and 2200M is not agent-reachable.
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [debug, release]
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+        components: clippy, rustfmt
+
+    # Reader only. `check` is the sole writer of workspace-${{ runner.os }};
+    # see the cache ownership comment in that job.
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: workspace-${{ runner.os }}
+        save-if: false
+
+    - name: Cache OpenSSL
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: openssl-${{ runner.os }}-choco-v1
+
+    - name: Install Windows Dependencies
+      shell: pwsh
+      run: |
+        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
+            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
+            Write-Host "OpenSSL restored from cache; skipping choco install"
+        } else {
+            choco install openssl -y
+        }
+        $openssl_dir = ""
+        if (Test-Path "C:\Program Files\OpenSSL\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL"
+        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
+        } else {
+            Write-Error "OpenSSL include directory not found!"
+            exit 1
+        }
+        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+        if ($lib_file) {
+            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+            if ($lib_file.Name -ne "libcrypto.lib") {
+                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+            }
+        } else {
+            Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+        }
+
+    - name: Build bir
+      shell: pwsh
+      run: |
+        $cargo_args = @("build", "--locked", "-p", "bir-desktop", "--bin", "bir-desktop", "--features", "dev-tools,agent")
+        if ("${{ matrix.profile }}" -eq "release") { $cargo_args += "--release" }
+        cargo @cargo_args
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $target_dir = if ("${{ matrix.profile }}" -eq "release") { "target\release" } else { "target\debug" }
+        python scripts/alias_desktop_bin.py $target_dir
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Run Windows smoke
+      shell: pwsh
+      run: |
+        $binary = if ("${{ matrix.profile }}" -eq "release") { "target\release\bir.exe" } else { "target\debug\bir.exe" }
+        $work = "windows-smoke\${{ matrix.profile }}"
+        python scripts/windows_smoke.py --bin $binary --work $work --json-out "$work\results.json"
+
+    - name: Upload Windows smoke evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-smoke-${{ matrix.profile }}
+        path: windows-smoke/${{ matrix.profile }}
+        retention-days: 7
