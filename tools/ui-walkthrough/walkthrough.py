@@ -369,7 +369,7 @@ class Walkthrough:
 
         The agent tree has no node for the overlay, so open it through
         navigation, give it a moment to slide in, screenshot it, then close it
-        with Escape so later pages aren't covered.
+        by toggling the bell so later pages aren't covered.
         """
         self.client.invoke("nav.go", page="notifications")
         self.check_alive()
@@ -378,8 +378,9 @@ class Walkthrough:
         if not find_node(tree, "notifications_bell_btn"):
             raise Unreachable("`notifications_bell_btn` (top strip) never appeared")
         self.screenshot("Notifications", "drawer over the current page")
-        subprocess.run(self.xdotool + ["key", "Escape"], env=self.xdo_env(),
-                       capture_output=True, timeout=30, check=False)
+        # Close it by toggling the bell through the agent (a key press can miss
+        # the window on a bare Xvfb display with no window manager to focus it).
+        self.client.click("notifications_bell_btn")
         time.sleep(0.5)
         return tree
 
