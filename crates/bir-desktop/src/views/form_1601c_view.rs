@@ -19,8 +19,13 @@ use crate::components::tax_relief_select::{
 };
 use gpui_component::select::{Select, SelectEvent};
 
+use crate::agent::assist::{self, AssistState};
+
 pub enum Form1601CEvent {
     BackToDashboard,
+    /// Close this form without saving (the Dismiss button, after confirming
+    /// when there are unsaved changes).
+    Dismissed,
     Saved,
     Submitted,
     Confirmed,
@@ -164,6 +169,17 @@ pub struct Form1601CView {
     tax_32_surcharge: Entity<InputState>,
     tax_33_interest: Entity<InputState>,
     tax_34_compromise: Entity<InputState>,
+
+    /// Dismiss was pressed with unsaved changes: ask before discarding.
+    dismiss_confirm_open: bool,
+    /// Per-box sources, unsaved-edit flags and the one-form lock (shared
+    /// with the agent host through the drain).
+    assist: AssistState,
+    /// Fillable box values as last seen, so a change found by
+    /// `sync_from_inputs` can be attributed to the user.
+    known_values: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Set while the agent's draft is being written into the inputs.
+    applying_agent_draft: bool,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -372,6 +388,7 @@ impl Form1601CView {
                         && updated.status == FilingStatus::Submitted;
                     this.status_message = updated.submission_error.clone();
                     this.draft = updated;
+                    this.known_values = assist::fillable_values_1601c(&this.draft);
                     this.release_claim_confirm_open = false;
                     if became_submitted {
                         cx.emit(Form1601CEvent::Submitted);
@@ -385,6 +402,10 @@ impl Form1601CView {
             is_amended: draft.is_amended,
             any_taxes_withheld: draft.any_taxes_withheld,
             category_of_agent: draft.category_of_agent.clone(),
+            known_values: assist::fillable_values_1601c(&draft),
+            dismiss_confirm_open: false,
+            assist: AssistState::default(),
+            applying_agent_draft: false,
             draft,
             db,
             scroll_handle: ScrollHandle::new(),
@@ -584,11 +605,190 @@ impl Form1601CView {
         );
 
         self.draft.compute();
+        self.note_box_changes();
 
         use bir_core::forms::FormValidator;
         input_errors.extend(self.draft.validate());
         self.validation_errors = input_errors;
         cx.notify();
+    }
+
+    /// Attribute every fillable box that changed since last seen to the user,
+    /// unless the change is the agent's draft being written in.
+    fn note_box_changes(&mut self) {
+        let now = assist::fillable_values_1601c(&self.draft);
+        if !self.applying_agent_draft && self.draft.is_editable() {
+            let changed = assist::changed_keys(&self.known_values, &now);
+            if !changed.is_empty() {
+                self.assist.note_user_edits(changed);
+                self.dismiss_confirm_open = false;
+            }
+        }
+        self.known_values = now;
+    }
+
+    /// Forget box changes made by a reload (status refresh): they are not the
+    /// user's typing.
+    fn rebase_known_values(&mut self) {
+        self.known_values = assist::fillable_values_1601c(&self.draft);
+    }
+
+    pub(crate) fn agent_assist(&self) -> &AssistState {
+        &self.assist
+    }
+
+    pub(crate) fn agent_set_assist(&mut self, assist: AssistState, cx: &mut Context<Self>) {
+        if self.assist != assist {
+            self.assist = assist;
+            cx.notify();
+        }
+    }
+
+    /// Write the agent host's draft into the form when its fillable boxes
+    /// differ from what the form shows (a `form.fill` of any box).
+    pub(crate) fn agent_apply_draft(
+        &mut self,
+        draft: &Form1601CDraft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.draft.is_editable()
+            || !draft.is_editable()
+            || assist::fillable_values_1601c(&self.draft) == assist::fillable_values_1601c(draft)
+        {
+            return;
+        }
+        self.draft = draft.clone();
+        self.is_amended = draft.is_amended;
+        self.any_taxes_withheld = draft.any_taxes_withheld;
+        self.category_of_agent = draft.category_of_agent.clone();
+        self.tax_relief = draft.tax_relief;
+        Self::set_input_if_changed(
+            &self.number_of_sheets,
+            &draft.number_of_sheets.to_string(),
+            window,
+            cx,
+        );
+        Self::set_input_if_changed(&self.atc, &draft.atc, window, cx);
+        let relief =
+            bir_core::validation::official_tax_relief_code(&draft.tax_relief_specification, true);
+        if selected_tax_relief_code(&self.tax_relief_specification, cx)
+            != relief.clone().unwrap_or_default()
+        {
+            self.tax_relief_specification
+                .update(cx, |select, cx| match &relief {
+                    Some(code) => select.set_selected_value(code, window, cx),
+                    None => select.set_selected_index(None, window, cx),
+                });
+        }
+        if self.schedule_row_inputs.len() != draft.schedule_1.len() {
+            self.schedule_row_inputs = draft
+                .schedule_1
+                .iter()
+                .map(|row| Self::new_schedule_row_inputs(row, window, cx))
+                .collect();
+        } else {
+            for (row, inputs) in draft.schedule_1.iter().zip(&self.schedule_row_inputs) {
+                Self::set_input_if_changed(&inputs.previous_month, &row.previous_month, window, cx);
+                Self::set_input_if_changed(&inputs.date_paid, &row.date_paid, window, cx);
+                Self::set_input_if_changed(
+                    &inputs.drawee_bank_code_or_agency,
+                    &row.drawee_bank_code_or_agency,
+                    window,
+                    cx,
+                );
+                Self::set_input_if_changed(&inputs.payment_number, &row.payment_number, window, cx);
+                Self::set_money_if_changed(&inputs.tax_paid, row.tax_paid, window, cx);
+                Self::set_money_if_changed(
+                    &inputs.should_be_tax_due,
+                    row.should_be_tax_due,
+                    window,
+                    cx,
+                );
+            }
+        }
+        for (input, value) in [
+            (
+                &self.tax_14_total_compensation,
+                draft.tax_14_total_compensation,
+            ),
+            (
+                &self.tax_15_statutory_minimum_wage,
+                draft.tax_15_statutory_minimum_wage,
+            ),
+            (&self.tax_16_holiday_pay, draft.tax_16_holiday_pay),
+            (&self.tax_17_13th_month_pay, draft.tax_17_13th_month_pay),
+            (&self.tax_18_de_minimis, draft.tax_18_de_minimis),
+            (&self.tax_19_sss_gsis, draft.tax_19_sss_gsis),
+            (&self.tax_20_other_amount, draft.tax_20_other_amount),
+            (&self.tax_23_not_subject, draft.tax_23_not_subject),
+            (
+                &self.tax_25_total_taxes_withheld,
+                draft.tax_25_total_taxes_withheld,
+            ),
+            (
+                &self.tax_28_tax_remitted_previously,
+                draft.tax_28_tax_remitted_previously,
+            ),
+            (
+                &self.tax_29_other_remittances_amount,
+                draft.tax_29_other_remittances_amount,
+            ),
+            (&self.tax_32_surcharge, draft.tax_32_surcharge),
+            (&self.tax_33_interest, draft.tax_33_interest),
+            (&self.tax_34_compromise, draft.tax_34_compromise),
+        ] {
+            Self::set_money_if_changed(input, value, window, cx);
+        }
+        Self::set_input_if_changed(
+            &self.tax_20_other_name,
+            &draft.tax_20_other_name,
+            window,
+            cx,
+        );
+        Self::set_input_if_changed(
+            &self.tax_29_other_remittances_name,
+            &draft.tax_29_other_remittances_name,
+            window,
+            cx,
+        );
+        self.is_validated = false;
+        self.applying_agent_draft = true;
+        self.sync_from_inputs(cx);
+        self.applying_agent_draft = false;
+    }
+
+    /// Write an amount only when the parsed input differs, keeping the user's
+    /// own formatting of an equal amount.
+    fn set_money_if_changed(
+        input: &Entity<InputState>,
+        value: f64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current = input.read(cx).value().trim().replace(',', "");
+        let current = if current.is_empty() {
+            Some(0.0)
+        } else {
+            current.parse::<f64>().ok()
+        };
+        if current != Some(value) {
+            input.update(cx, |input, cx| {
+                input.set_value(format!("{value:.2}"), window, cx);
+            });
+        }
+    }
+
+    /// The Dismiss button: close without saving, asking first when there are
+    /// unsaved changes (the user's or the agent's).
+    fn request_dismiss(&mut self, cx: &mut Context<Self>) {
+        if self.assist.unsaved_changes && self.draft.is_editable() {
+            self.dismiss_confirm_open = true;
+            cx.notify();
+        } else {
+            self.dismiss_confirm_open = false;
+            cx.emit(Form1601CEvent::Dismissed);
+        }
     }
 
     fn add_schedule_row(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -742,6 +942,7 @@ impl Form1601CView {
         self.any_taxes_withheld = draft.any_taxes_withheld;
         self.category_of_agent = draft.category_of_agent.clone();
         self.draft = draft.clone();
+        self.rebase_known_values();
         self.is_validated = false;
         self.validation_errors.clear();
         self.release_claim_confirm_open = false;
@@ -883,6 +1084,8 @@ impl FormViewTrait for Form1601CView {
         use gpui_component::WindowExt;
         match save_result {
             Ok(_) => {
+                self.assist.note_saved();
+                self.dismiss_confirm_open = false;
                 window.push_notification(
                     gpui_component::notification::Notification::new()
                         .message("Form saved.".to_string())
@@ -1201,6 +1404,56 @@ impl Render for Form1601CView {
         } else {
             div().into_any_element()
         };
+        let assist_panel = self
+            .draft
+            .is_editable()
+            .then(|| {
+                crate::components::assist_panel::assist_panel(
+                    "form-1601c-assist",
+                    &self.assist.agent_filled(),
+                    &assist::needs_you_1601c(&self.draft),
+                    cx,
+                )
+            })
+            .flatten();
+        let dismiss_actions = if self.dismiss_confirm_open {
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Discard unsaved changes?"),
+                )
+                .child(
+                    gpui_component::button::Button::new("form-1601c-dismiss-confirm")
+                        .label("Discard and close")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.dismiss_confirm_open = false;
+                            cx.emit(Form1601CEvent::Dismissed);
+                        })),
+                )
+                .child(
+                    gpui_component::button::Button::new("form-1601c-dismiss-keep")
+                        .label("Keep editing")
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.dismiss_confirm_open = false;
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        } else {
+            gpui_component::button::Button::new("form-1601c-dismiss")
+                .label("Dismiss")
+                .ghost()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.request_dismiss(cx);
+                }))
+                .into_any_element()
+        };
 
         div()
             .flex()
@@ -1219,6 +1472,7 @@ impl Render for Form1601CView {
                             cx.emit(Form1601CEvent::BackToDashboard);
                         }))}
                     <div flex items_center gap_3>
+                        {dismiss_actions}
                         {gpui_component::button::Button::new("save_draft_btn")
                             .label("Save Draft")
                             .outline()
@@ -1256,6 +1510,7 @@ impl Render for Form1601CView {
                     </div>
                 </div>
             })
+            .when_some(assist_panel, |view, panel| view.child(panel))
             .child(rsx! {
                 <div p_6 border_b_1
                     border_color={cx.theme().border}
