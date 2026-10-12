@@ -643,8 +643,8 @@ impl Render for FrozenHtmlPreviewView {
 #[cfg(test)]
 mod tests {
     use super::{
-        PAPER_HEIGHT_PT, PAPER_WIDTH_PT, css_color, document_sheet_size, fit_css, fit_scale,
-        PreviewSlot, PreviewStateKind, update_preview_slot_state, with_fit_style,
+        PAPER_HEIGHT_PT, PAPER_WIDTH_PT, PreviewSlot, PreviewStateKind, css_color,
+        document_sheet_size, fit_css, fit_scale, update_preview_slot_state, with_fit_style,
         with_screen_canvas, with_sheets,
     };
 
