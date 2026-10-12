@@ -180,19 +180,34 @@ def node_value(client: AgentClient, node_id: str) -> dict | None:
     return find_node(response_tree(client.request({"op": "snapshot"})), node_id)
 
 
-def wait_preview(client: AgentClient, proc: subprocess.Popen, node_id: str, timeout: float = 30) -> None:
+def wait_preview(client: AgentClient, proc: subprocess.Popen, timeout: float = 30) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            raise SmokeError(f"process exited while waiting for {node_id}: {classify_exit(proc.returncode)}")
+            raise SmokeError(
+                "process exited while waiting for print-preview-state: "
+                f"{classify_exit(proc.returncode)}"
+            )
         try:
-            node = node_value(client, node_id)
-            if node and node_has_area(node):
+            tree = response_tree(client.request({"op": "snapshot"}))
+            node = find_node(tree, "print-preview-state")
+            value = str(node.get("value", "")).lower() if node else ""
+            if value == "ready":
                 return
-        except (OSError, SmokeError, ValueError, json.JSONDecodeError):
+            if value == "failed":
+                toolbar_text = ""
+                if node:
+                    toolbar_text = str(
+                        node.get("toolbar_text") or node.get("text") or ""
+                    ).strip()
+                detail = toolbar_text or "the preview reported a construction failure"
+                raise SmokeError(f"preview failed: {detail}")
+        except (OSError, ValueError, json.JSONDecodeError):
             pass
         time.sleep(0.5)
-    raise SmokeError(f"{node_id} never appeared with non-empty bounds within {timeout}s")
+    raise SmokeError(
+        f"print-preview-state never reached ready within {timeout}s"
+    )
 
 
 def wait_status(client: AgentClient, proc: subprocess.Popen, timeout: float = 90) -> None:
@@ -275,7 +290,7 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
                 set_value(client, "form-1601c-tax-25", "100.00")
             invoke(client, "form.print")
             result["step_reached"] = f"requested {code} preview"
-            wait_preview(client, proc, "print-preview-scroll")
+            wait_preview(client, proc)
             result["step_reached"] = "preview painted"
             time.sleep(5)
             hello = client.request({"op": "hello"})
