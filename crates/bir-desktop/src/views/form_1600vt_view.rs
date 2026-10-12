@@ -160,6 +160,8 @@ fn format_tin(tin: &str) -> String {
     )
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form1600VtView {
     draft: Form1600VtDraft,
     db: Arc<Mutex<Database>>,
@@ -1372,7 +1374,7 @@ impl Render for Form1600VtView {
 
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -1457,10 +1459,10 @@ impl Form1600VtView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.parse_errors.len() + self.validation_errors.len(),
             errors: errors
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

@@ -70,8 +70,6 @@ pub fn is_queue_unavailable_message(text: &str) -> bool {
 /// Fallback when a form has no official success alert.
 pub const DEFAULT_SUCCESS_MESSAGE: &str = "Validation successful.";
 
-pub const FORM_CONTENT_MAX_W: Pixels = px(800.);
-
 // 0 = not loaded, 1 = off, 2 = on.
 static SEPARATE_VALIDATE: AtomicU8 = AtomicU8::new(0);
 
@@ -161,15 +159,15 @@ pub fn status_text(props: &FormHeaderProps<'_>, separate_validate: bool) -> Opti
     if !header_visibility(&props.status, props.editor_safe).submit {
         return None;
     }
-    if props.blocking_errors > 0 {
-        let item = if props.blocking_errors == 1 {
+    if !props.errors.is_empty() {
+        let item = if props.errors.len() == 1 {
             "item"
         } else {
             "items"
         };
         return Some(format!(
             "Fix {} {item} marked below before submitting.",
-            props.blocking_errors
+            props.errors.len()
         ));
     }
     if props.validated {
@@ -309,8 +307,8 @@ pub struct FormHeaderProps<'a> {
     /// False for a locked or unsafe editor.
     pub editor_safe: bool,
     pub validated: bool,
-    pub blocking_errors: usize,
     pub errors: Vec<String>,
+    pub content_max_w: Pixels,
     /// The form's official success alert, or [`DEFAULT_SUCCESS_MESSAGE`].
     pub success_text: &'a str,
     /// Any other status message (save result, lock reason, revert note…).
@@ -370,7 +368,7 @@ pub fn render_header_buttons<V: 'static>(
     let visible = form_header_visibility(props.slug, &props.status, props.editor_safe);
     let state = (actions.state_ref)(this);
     let separate = props.separate_validate;
-    let enabled = submit_enabled(separate, props.validated, props.blocking_errors);
+    let enabled = submit_enabled(separate, props.validated, props.errors.len());
     let simulate = actions
         .on_simulate
         .filter(|_| matches!(props.status, FilingStatus::Submitted));
@@ -554,13 +552,13 @@ pub fn render_status_box<V: 'static>(
     if !status_box_visible(text.as_deref(), sent.is_some()) {
         return None;
     }
-    let is_error = props.message.is_none() && props.blocking_errors > 0;
+    let is_error = props.message.is_none() && !props.errors.is_empty();
     let mut col = div()
         .flex()
         .flex_col()
         .gap_2()
         .w_full()
-        .max_w(FORM_CONTENT_MAX_W)
+        .max_w(props.content_max_w)
         .mx_auto()
         .min_w_0();
     if let Some(text) = text {
@@ -593,7 +591,7 @@ pub fn render_status_box<V: 'static>(
                         .child(text.clone())
                         .when(why, |d| {
                             d.child(
-                                div().child(
+                                div().flex().flex_none().child(
                                     Button::new(id(props.slug, "status_why"))
                                         .label(if show_why { "Why? ▾" } else { "Why? ▸" })
                                         .ghost()
@@ -616,19 +614,21 @@ pub fn render_status_box<V: 'static>(
                         })
                         .when(is_error, |d| {
                             d.child(
-                                Button::new(id(props.slug, "status_errors"))
-                                    .label(if show_errors {
-                                        "Show all ▾"
-                                    } else {
-                                        "Show all ▸"
-                                    })
-                                    .ghost()
-                                    .xsmall()
-                                    .on_click(cx.listener(move |this: &mut V, _, _, cx| {
-                                        let st = (actions.state)(this);
-                                        st.show_errors = !st.show_errors;
-                                        cx.notify();
-                                    })),
+                                div().flex().flex_none().child(
+                                    Button::new(id(props.slug, "status_errors"))
+                                        .label(if show_errors {
+                                            "Show all ▾"
+                                        } else {
+                                            "Show all ▸"
+                                        })
+                                        .ghost()
+                                        .xsmall()
+                                        .on_click(cx.listener(move |this: &mut V, _, _, cx| {
+                                            let st = (actions.state)(this);
+                                            st.show_errors = !st.show_errors;
+                                            cx.notify();
+                                        })),
+                                ),
                             )
                             .when(show_errors, |d| {
                                 d.child(
@@ -714,6 +714,7 @@ mod tests {
         status_text, submit_enabled, submit_hidden_for_slug,
     };
     use super::{is_queue_unavailable_message, queue_unavailable_message};
+    use gpui::px;
 
     #[test]
     fn queue_unavailable_text_names_the_form_and_next_step() {
@@ -733,8 +734,8 @@ mod tests {
             status,
             editor_safe: true,
             validated: false,
-            blocking_errors: 0,
             errors: Vec::new(),
+            content_max_w: px(800.),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: None,
             separate_validate: true,
@@ -830,13 +831,11 @@ mod tests {
             status_text(&p, true).as_deref(),
             Some(DEFAULT_SUCCESS_MESSAGE)
         );
-        p.blocking_errors = 3;
         p.errors = vec![
             "Bad TIN.".into(),
             "Other error.".into(),
             "Third error.".into(),
         ];
-        p.blocking_errors = p.errors.len();
         assert_eq!(
             status_text(&p, true).as_deref(),
             Some("Fix 3 items marked below before submitting.")
@@ -844,7 +843,6 @@ mod tests {
         assert!(!status_text(&p, true).unwrap().contains("Bad TIN."));
         assert!(!status_text(&p, true).unwrap().contains("Other error."));
         assert!(!status_text(&p, true).unwrap().contains("Third error."));
-        p.blocking_errors = 1;
         p.errors = vec!["Bad TIN.".into()];
         assert_eq!(
             status_text(&p, true).as_deref(),

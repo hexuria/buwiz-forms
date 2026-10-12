@@ -196,6 +196,8 @@ const WITHHELD_NO_QUESTION: &str = "You are about to change the value to 'No'. D
 const RELIEF_NO_QUESTION: &str =
     "Warning: pressing OK will clear all values in Schedule 1.\nPress OK to do so.";
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form1601FqView {
     draft: Form1601FqDraft,
     /// Item 13 "No" waiting for the user's answer (Schedule 1 would be cleared).
@@ -1732,13 +1734,13 @@ impl Form1601FqView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.parse_errors.len() + self.validation_errors.len(),
             errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),
@@ -1862,15 +1864,6 @@ impl Render for Form1601FqView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let _issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
 
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
         let props = self.header_props();
@@ -1896,7 +1889,7 @@ impl Render for Form1601FqView {
         let schedule = self.render_schedule(layout, cx);
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()

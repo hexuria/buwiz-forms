@@ -786,6 +786,8 @@ fn row_into_item(draft: &mut Form1701ADraft, part_b: bool, row: Form1701AMoreRow
 /// The official processShortPeriod alert (BIR-Form1701A.hta:3372).
 const SHORT_PERIOD_NOTICE: &str = "Choosing 'YES' means you are filing for a short period return. You are required to change the Month field to correspond with your Last Return Period.";
 
+const CONTENT_MAX_W: Pixels = px(1280.);
+
 pub struct Form1701AView {
     draft: Form1701ADraft,
     db: Arc<Mutex<Database>>,
@@ -2283,16 +2285,6 @@ impl Render for Form1701AView {
             cx,
         );
         let error_count = self.parse_errors.len() + self.validation_errors.len();
-        let _issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .take(20)
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
 
         let phone = layout == Layout::Phone;
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
@@ -2327,7 +2319,7 @@ impl Render for Form1701AView {
 
         let mut body = div()
             .w_full()
-            .max_w(px(1280.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -2461,13 +2453,13 @@ impl Form1701AView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.blocking_errors(),
             errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

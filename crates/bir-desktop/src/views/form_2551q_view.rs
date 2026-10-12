@@ -120,6 +120,8 @@ fn available_atc_options(rows: &[Schedule1Row]) -> SearchableVec<AtcOption> {
     )
 }
 
+const CONTENT_MAX_W: Pixels = px(900.);
+
 pub struct Form2551QView {
     draft: Form2551QDraft,
     db: Arc<Mutex<Database>>,
@@ -2938,7 +2940,7 @@ impl Render for Form2551QView {
         };
 
         let form_content = rsx! {
-            <div w_full max_w={px(900.)} mx_auto px_8 py_10 flex flex_col gap_8>
+            <div w_full max_w={CONTENT_MAX_W} mx_auto px_8 py_10 flex flex_col gap_8>
                 {title_block}
                 {carry_banner}
                 {submission_claim_banner}
@@ -3041,7 +3043,7 @@ impl Render for Form2551QView {
         let props = self.header_props();
         let header_buttons = render_header_buttons(self, &props, HEADER_ACTIONS, is_mobile, cx);
         let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx)
-            .map(|b| div().mt_3().w_full().max_w(px(900.)).child(b));
+            .map(|b| div().mt_3().w_full().max_w(CONTENT_MAX_W).child(b));
         let assist_panel = self
             .draft
             .is_editable()
@@ -3318,12 +3320,12 @@ impl Form2551QView {
             status: self.draft.status.clone(),
             editor_safe: true,
             validated: self.is_validated,
-            blocking_errors: self.validation_errors.len(),
             errors: self
                 .validation_errors
                 .iter()
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

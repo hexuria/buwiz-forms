@@ -27,6 +27,8 @@ use crate::views::form_header::{
 };
 use crate::views::queueable_forms::QueueableFormEvent;
 
+pub const CONTENT_MAX_W: Pixels = px(1180.);
+
 /// Width classes the page lays out for.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Layout {
@@ -930,9 +932,9 @@ pub const PAYMENT_COLUMNS_2200: &[&str] = &[
 
 /// The printed declaration (muted text) followed by the read-only "Details
 /// of Payment" part. `part_title` is the printed heading (for example
-/// "Part IV - Details of Payment"), `rows` the printed row captions (for
+/// "Part IV – Details of Payment"), `rows` the printed row captions (for
 /// example "25 Cash/Bank Debit Memo") and `columns` the printed column
-/// headings after "Particulars". Every cell shows "-"; there are no inputs,
+/// headings after "Particulars". Every cell shows "—"; there are no inputs,
 /// field keys or upload data. The table scrolls sideways inside its own
 /// container, so it never exceeds the window.
 pub fn declaration_and_payment<V: 'static>(
@@ -1101,19 +1103,18 @@ pub fn render_page<V: KitView>(
         Layout::Desktop => px(32.),
     };
     kit.header.ensure_sent_snapshot(&this.db(), this.draft());
-    let blocking = kit.parse_errors.len() + kit.validation_errors.len();
     let props = FormHeaderProps {
         slug,
         status: this.draft().lifecycle().status.clone(),
         editor_safe: true,
         validated: kit.validated(),
-        blocking_errors: blocking,
         errors: kit
             .parse_errors
             .iter()
             .chain(kit.validation_errors.iter())
             .map(|(_, message)| message.replace('\n', " "))
             .collect(),
+        content_max_w: CONTENT_MAX_W,
         success_text: V::VALIDATION_SUCCESS.unwrap_or(DEFAULT_SUCCESS_MESSAGE),
         message: kit.status_message.clone(),
         separate_validate: separate_validate_button(&this.db()),
@@ -1147,7 +1148,7 @@ pub fn render_page<V: KitView>(
 
     let mut body = div()
         .w_full()
-        .max_w(px(1180.))
+        .max_w(CONTENT_MAX_W)
         .mx_auto()
         .flex()
         .flex_col()

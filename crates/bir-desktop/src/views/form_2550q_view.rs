@@ -443,6 +443,8 @@ enum Form2550QDiagnosticState {
     Incomplete(String),
 }
 
+const CONTENT_MAX_W: Pixels = px(1100.);
+
 pub struct Form2550QV2View {
     draft: Form2550QDraft,
     db: Arc<Mutex<Database>>,
@@ -2847,7 +2849,7 @@ impl Render for Form2550QV2View {
 
         let mut content = div()
             .w_full()
-            .max_w(px(1100.0))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -4058,12 +4060,12 @@ impl Form2550QV2View {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: self.editor_state_error.is_none(),
             validated: self.validated_at_current_revision,
-            blocking_errors: self.validation_errors.len(),
             errors: self
                 .validation_errors
                 .iter()
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

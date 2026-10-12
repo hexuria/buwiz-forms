@@ -26,9 +26,8 @@ use crate::views::form_controls::{
     self, field_error, messages_for, select_field, with_field_error,
 };
 use crate::views::form_header::{
-    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FORM_CONTENT_MAX_W, FormHeaderActions,
-    FormHeaderProps, FormHeaderState, render_header_buttons, render_status_box,
-    separate_validate_button,
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, separate_validate_button,
 };
 use bir_core::forms::queueable::can_user_revert;
 use gpui_component::select::{Select, SelectEvent};
@@ -141,6 +140,8 @@ struct ScheduleRowInputs {
     should_be_tax_due: Entity<InputState>,
     _subscriptions: Vec<Subscription>,
 }
+
+const CONTENT_MAX_W: Pixels = px(800.);
 
 pub struct Form1601CView {
     draft: Form1601CDraft,
@@ -1497,7 +1498,7 @@ impl Render for Form1601CView {
                 <div id={crate::agent::ids::FORM_1601C_SCROLL} flex_1 w_full overflow_y_scroll
                     track_scroll={&self.scroll_handle}
                     p={pad}>
-                    <div max_w={FORM_CONTENT_MAX_W} w_full mx_auto flex flex_col gap_6>
+                    <div max_w={CONTENT_MAX_W} w_full mx_auto flex flex_col gap_6>
                         <div bg={cx.theme().background}
                             border_1
                             border_color={cx.theme().border}
@@ -2290,12 +2291,12 @@ impl Form1601CView {
             status: self.draft.status.clone(),
             editor_safe: true,
             validated: self.is_validated,
-            blocking_errors: self.validation_errors.len(),
             errors: self
                 .validation_errors
                 .iter()
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.header_message(),
             separate_validate: separate_validate_button(&self.db),

@@ -165,6 +165,8 @@ impl PendingWipe {
     }
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form1601EqView {
     draft: Form1601EqDraft,
     /// Change waiting for the user's answer in the inline confirmation.
@@ -1383,13 +1385,13 @@ impl Form1601EqView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.parse_errors.len() + self.validation_errors.len(),
             errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),
@@ -1488,15 +1490,6 @@ impl Render for Form1601EqView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let _issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
 
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
         let props = self.header_props();
@@ -1522,7 +1515,7 @@ impl Render for Form1601EqView {
         let schedule = self.render_schedule(layout, cx);
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()

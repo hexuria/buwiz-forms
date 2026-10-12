@@ -239,6 +239,8 @@ enum GeoLevel {
     City,
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form2200AView {
     draft: Form2200ADraft,
     db: Arc<Mutex<Database>>,
@@ -1566,15 +1568,6 @@ impl Render for Form2200AView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let _issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
 
         let phone = layout == Layout::Phone;
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
@@ -1599,7 +1592,7 @@ impl Render for Form2200AView {
 
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -1687,13 +1680,13 @@ impl Form2200AView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.blocking_errors(),
             errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
                 .map(|(_, message)| message.replace('\n', " "))
                 .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone().or(unavailable),
             separate_validate: separate_validate_button(&self.db),
