@@ -1,3 +1,4 @@
+pub mod assist_panel;
 pub mod auth_gate;
 pub mod combobox;
 pub mod command_palette;

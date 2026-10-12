@@ -233,6 +233,10 @@ pub struct AppState {
     pub(crate) agent_token: Option<String>,
     #[cfg(feature = "agent")]
     pub(crate) agent_shutdown: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Keeps this window's gpui-agent discovery record on disk; dropping it
+    /// deletes the record, so it must live as long as the window.
+    #[cfg(feature = "agent")]
+    pub(crate) agent_discovery: Option<std::sync::Arc<gpui_agent::discovery::PublishedHost>>,
     #[cfg(feature = "agent")]
     pub(crate) agent_refresh: Option<Task<()>>,
     /// Semantic submit reached the existing confirmation gate without queuing.
@@ -943,6 +947,8 @@ impl AppState {
             #[cfg(feature = "agent")]
             agent_shutdown: None,
             #[cfg(feature = "agent")]
+            agent_discovery: None,
+            #[cfg(feature = "agent")]
             agent_refresh: None,
             #[cfg(feature = "agent")]
             agent_submit_confirmation_visible: false,
@@ -1416,6 +1422,30 @@ impl AppState {
             }
         })
         .detach();
+    }
+
+    /// Close a 2551Q/1601C form without saving (its Dismiss button or the
+    /// agent's `form.dismiss`) and return to the taxpayer's dashboard.
+    pub(crate) fn dismiss_form_view(&mut self, view: ActiveView, cx: &mut Context<Self>) {
+        match view {
+            ActiveView::Form2551Q => self.form_2551q_view = None,
+            ActiveView::Form1601C => self.form_1601c_view = None,
+            _ => return,
+        }
+        if self.active_view == view {
+            if let Some(tin) = &self.active_profile_tin
+                && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
+            {
+                let profile = profile.clone();
+                self.dashboard_view.update(cx, |dashboard, cx| {
+                    dashboard.set_profile(profile, cx);
+                });
+                self.active_view = ActiveView::Dashboard;
+            } else {
+                self.active_view = ActiveView::GlobalDashboard;
+            }
+        }
+        cx.notify();
     }
 
     pub(crate) fn open_named_form(
@@ -1986,6 +2016,9 @@ impl Render for AppState {
                         }
                         cx.notify();
                     }
+                    Form2551QEvent::Dismissed => {
+                        this.dismiss_form_view(ActiveView::Form2551Q, cx);
+                    }
                     Form2551QEvent::PushNotification(level, title, message) => {
                         push_notification(level, title, message, window, cx);
                     }
@@ -2012,6 +2045,9 @@ impl Render for AppState {
                     Form1601CEvent::BackToDashboard => {
                         this.active_view = ActiveView::Dashboard;
                         cx.notify();
+                    }
+                    Form1601CEvent::Dismissed => {
+                        this.dismiss_form_view(ActiveView::Form1601C, cx);
                     }
                     Form1601CEvent::PushNotification(level, title, message) => {
                         push_notification(level, title, message, window, cx);

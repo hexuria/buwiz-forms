@@ -29,6 +29,9 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::agent::ProfileEditor;
+use crate::agent::assist::{
+    self, AssistState, BoxSource, parse_category_of_agent, parse_withheld_flag,
+};
 use crate::agent::html_demo::{self, DueRow, ProfileCard};
 use crate::agent::ids;
 use crate::agent::search::{self, ProfileHit};
@@ -118,6 +121,20 @@ struct Form1601CState {
     validation_errors: Vec<(String, String)>,
     validated: bool,
     saved: bool,
+    /// Per-box sources, unsaved-edit flags and the one-form lock.
+    assist: AssistState,
+}
+
+impl Form1601CState {
+    fn fresh(draft: Form1601CDraft) -> Self {
+        Self {
+            draft,
+            validation_errors: Vec::new(),
+            validated: false,
+            saved: false,
+            assist: AssistState::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +143,20 @@ struct Form2551QState {
     validation_errors: Vec<(String, String)>,
     validated: bool,
     saved: bool,
+    /// Per-box sources, unsaved-edit flags and the one-form lock.
+    assist: AssistState,
+}
+
+impl Form2551QState {
+    fn fresh(draft: Form2551QDraft) -> Self {
+        Self {
+            draft,
+            validation_errors: Vec::new(),
+            validated: false,
+            saved: false,
+            assist: AssistState::default(),
+        }
+    }
 }
 
 /// Painted bounds (logical px, window coordinates) of the tree's landmarks.
@@ -179,6 +210,8 @@ pub struct BirAgentHost {
     dues: Vec<DueItem>,
     form_1601c: Option<Form1601CState>,
     form_2551q: Option<Form2551QState>,
+    /// Set by `form.dismiss` so the desktop drain closes the matching view.
+    dismissed_form: Option<&'static str>,
     submit_confirmation_visible: bool,
     form_loaded: bool,
     db: Option<Arc<Mutex<Database>>>,
@@ -219,6 +252,7 @@ impl BirAgentHost {
             dues: Vec::new(),
             form_1601c: None,
             form_2551q: None,
+            dismissed_form: None,
             submit_confirmation_visible: false,
             form_loaded: false,
             db: None,
@@ -489,6 +523,7 @@ impl BirAgentHost {
             validation_errors,
             validated,
             saved,
+            assist: AssistState::default(),
         });
     }
 
@@ -505,6 +540,7 @@ impl BirAgentHost {
             validation_errors,
             validated,
             saved,
+            assist: AssistState::default(),
         });
     }
 
@@ -659,6 +695,83 @@ impl BirAgentHost {
 
     pub fn form_2551q_draft(&self) -> Option<&Form2551QDraft> {
         self.form_2551q.as_ref().map(|form| &form.draft)
+    }
+
+    pub fn form_1601c_assist(&self) -> Option<&AssistState> {
+        self.form_1601c.as_ref().map(|form| &form.assist)
+    }
+
+    pub fn form_2551q_assist(&self) -> Option<&AssistState> {
+        self.form_2551q.as_ref().map(|form| &form.assist)
+    }
+
+    /// Copy the view's per-box sources and unsaved-edit flags in (desktop drain).
+    pub fn set_form_1601c_assist(&mut self, assist: AssistState) {
+        if let Some(form) = self.form_1601c.as_mut() {
+            form.assist = assist;
+        }
+    }
+
+    pub fn set_form_2551q_assist(&mut self, assist: AssistState) {
+        if let Some(form) = self.form_2551q.as_mut() {
+            form.assist = assist;
+        }
+    }
+
+    /// The form `form.dismiss` closed in this request (one-shot).
+    pub fn take_dismissed_form(&mut self) -> Option<&'static str> {
+        self.dismissed_form.take()
+    }
+
+    /// The open form holding the one-form lock: `(code, year, period, tin)`.
+    /// A form saved with nothing changed since does not hold it.
+    fn form_lock_holder(&self) -> Option<(&'static str, u16, u8, &str)> {
+        if let Some(form) = &self.form_1601c
+            && !form.assist.lock_released
+        {
+            return Some((
+                "1601C",
+                form.draft.taxable_year,
+                form.draft.month,
+                &form.draft.tin,
+            ));
+        }
+        if let Some(form) = &self.form_2551q
+            && !form.assist.lock_released
+        {
+            return Some((
+                "2551Q",
+                form.draft.taxable_year,
+                form.draft.quarter,
+                &form.draft.tin,
+            ));
+        }
+        None
+    }
+
+    /// One form at a time. `Ok(true)` when the requested return is the very
+    /// one already open (re-opening it keeps its unsaved state).
+    fn gate_form_lock(
+        &self,
+        code: &str,
+        year: u16,
+        period: u8,
+        tin: Option<&str>,
+    ) -> Result<bool, String> {
+        let Some((open_code, open_year, open_period, open_tin)) = self.form_lock_holder() else {
+            return Ok(false);
+        };
+        let tin = tin.or(self.selected_tin.as_deref());
+        if open_code.eq_ignore_ascii_case(code)
+            && open_year == year
+            && open_period == clamp_form_period(open_code, period)
+            && tin.is_none_or(|tin| tin == open_tin)
+        {
+            return Ok(true);
+        }
+        Err(format!(
+            "form already open: {open_code} {open_year} period {open_period}; save it (form.save_draft) or dismiss it (form.dismiss) before opening another form"
+        ))
     }
 
     fn reload_from_db(&mut self, db: &Arc<Mutex<Database>>) {
@@ -875,6 +988,24 @@ impl BirAgentHost {
                 "unknown view `{other}` (expected dashboard or profile-manager)"
             )),
         }
+    }
+
+    /// Read-only identity for a client choosing between running BIR apps:
+    /// which kind of host this is, whether its database is a test one, and
+    /// whose taxpayers it holds.
+    fn app_info(&self) -> DispatchResult {
+        let profiles: Vec<Value> = self
+            .profiles
+            .iter()
+            .filter(|profile| !profile.archived)
+            .map(|profile| json!({ "tin": profile.tin, "name": profile.name }))
+            .collect();
+        DispatchResult::json(json!({
+            "app": crate::agent::instance::APP,
+            "mode": self.platform.as_str(),
+            "database": crate::agent::instance::database_kind(),
+            "profiles": profiles,
+        }))
     }
 
     fn profile_list(&self) -> Result<DispatchResult, String> {
@@ -1616,6 +1747,17 @@ impl BirAgentHost {
             }
             _ => return Err(format!("`{target}` is not editable")),
         }
+        // A UI-level edit of a form box is the user typing: mark it `user`
+        // so agent fills skip it and `form.dismiss` cannot discard it.
+        if let Some(key) = assist::canonical_1601c_key(target)
+            && let Some(form) = self.form_1601c.as_mut()
+        {
+            form.assist.note_user_edits([key]);
+        } else if let Some(key) = assist::canonical_2551q_key(target)
+            && let Some(form) = self.form_2551q.as_mut()
+        {
+            form.assist.note_user_edits([key]);
+        }
         Ok(DispatchResult::json(serde_json::json!({ "value": value })))
     }
 
@@ -1731,12 +1873,7 @@ impl BirAgentHost {
                 {
                     draft = existing;
                 }
-                self.form_1601c = Some(Form1601CState {
-                    draft,
-                    validation_errors: Vec::new(),
-                    validated: false,
-                    saved: false,
-                });
+                self.form_1601c = Some(Form1601CState::fresh(draft));
                 self.form_2551q = None;
             }
             "2551Q" => {
@@ -1766,12 +1903,7 @@ impl BirAgentHost {
         {
             draft = existing;
         }
-        self.form_2551q = Some(Form2551QState {
-            draft,
-            validation_errors: Vec::new(),
-            validated: false,
-            saved: false,
-        });
+        self.form_2551q = Some(Form2551QState::fresh(draft));
         self.form_1601c = None;
         Ok(())
     }
@@ -1785,6 +1917,19 @@ impl BirAgentHost {
             return Err(format!("unknown form `{code}`"));
         };
         self.gate_dirty(chrome.view)?;
+        if self.gate_form_lock(chrome.code, year, period, None)? {
+            // The return already open: show it, keep its unsaved state.
+            self.form_loaded = true;
+            self.submit_confirmation_visible = false;
+            self.active_view = chrome.view;
+            return Ok(DispatchResult::json(serde_json::json!({
+                "form": chrome.code,
+                "page": ids::page_root(chrome.view),
+                "year": year,
+                "period": period,
+                "already_open": true,
+            })));
+        }
         if chrome.code == "1601C" {
             let tin = self
                 .selected_tin
@@ -1799,12 +1944,7 @@ impl BirAgentHost {
             {
                 draft = existing;
             }
-            self.form_1601c = Some(Form1601CState {
-                draft,
-                validation_errors: Vec::new(),
-                validated: false,
-                saved: false,
-            });
+            self.form_1601c = Some(Form1601CState::fresh(draft));
             self.form_2551q = None;
         } else if chrome.code == "2551Q" {
             self.open_2551q_draft(Some(year), Some(period.clamp(1, 4)))?;
@@ -1834,6 +1974,7 @@ impl BirAgentHost {
             return Ok(DispatchResult::json(json!({
                 "ok": form.validation_errors.is_empty(),
                 "errors": form.validation_errors.len(),
+                "field_errors": field_errors_json(&form.validation_errors),
                 "form": "1601C",
             })));
         }
@@ -1846,6 +1987,7 @@ impl BirAgentHost {
             return Ok(DispatchResult::json(json!({
                 "ok": form.validation_errors.is_empty(),
                 "errors": form.validation_errors.len(),
+                "field_errors": field_errors_json(&form.validation_errors),
                 "form": "2551Q",
             })));
         }
@@ -1869,6 +2011,7 @@ impl BirAgentHost {
                         .map_err(|err| err.to_string())?;
                 }
                 form.saved = true;
+                form.assist.note_saved();
                 Ok(DispatchResult::json(json!({
                     "status": format!("{:?}", form.draft.status),
                     "saved": true,
@@ -1889,6 +2032,7 @@ impl BirAgentHost {
                         .map_err(|err| err.to_string())?;
                 }
                 form.saved = true;
+                form.assist.note_saved();
                 Ok(DispatchResult::json(json!({
                     "status": format!("{:?}", form.draft.status),
                     "saved": true,
@@ -1900,6 +2044,66 @@ impl BirAgentHost {
                 ids::view_slug(other)
             )),
         }
+    }
+
+    /// `form.dismiss`: close the open form without saving. Refused while the
+    /// user has unsaved edits in it — only the user may discard those, with
+    /// the Dismiss button (which asks first).
+    fn form_dismiss(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        let open_1601c = self
+            .form_1601c
+            .as_ref()
+            .map(|form| !form.assist.lock_released);
+        let open_2551q = self
+            .form_2551q
+            .as_ref()
+            .map(|form| !form.assist.lock_released);
+        let code = match (self.active_view, open_1601c, open_2551q) {
+            (ActiveView::Form1601C, Some(_), _) => "1601C",
+            (ActiveView::Form2551Q, _, Some(_)) => "2551Q",
+            (_, Some(true), _) => "1601C",
+            (_, _, Some(true)) => "2551Q",
+            (_, Some(false), _) => "1601C",
+            (_, _, Some(false)) => "2551Q",
+            _ => return Err("no form is open to dismiss".into()),
+        };
+        let user_edits = match code {
+            "1601C" => self
+                .form_1601c
+                .as_ref()
+                .is_some_and(|form| form.assist.unsaved_user_edits),
+            _ => self
+                .form_2551q
+                .as_ref()
+                .is_some_and(|form| form.assist.unsaved_user_edits),
+        };
+        if user_edits {
+            return Err(format!(
+                "form {code} has unsaved edits the user typed; the agent cannot discard them. Ask the user to press Dismiss in the form (it confirms first) or save the draft"
+            ));
+        }
+        let view = if code == "1601C" {
+            self.form_1601c = None;
+            ActiveView::Form1601C
+        } else {
+            self.form_2551q = None;
+            ActiveView::Form2551Q
+        };
+        self.dismissed_form = Some(code);
+        self.submit_confirmation_visible = false;
+        if self.active_view == view {
+            self.form_loaded = false;
+            self.active_view = if self.selected_tin.is_some() {
+                ActiveView::Dashboard
+            } else {
+                ActiveView::GlobalDashboard
+            };
+        }
+        Ok(DispatchResult::json(json!({
+            "dismissed": true,
+            "form": code,
+        })))
     }
 
     fn request_submit_confirm(&mut self) -> Result<DispatchResult, String> {
@@ -2060,6 +2264,7 @@ impl BirAgentHost {
             ));
         }
         form.saved = true;
+        form.assist.note_saved();
         self.submit_confirmation_visible = false;
         bir_core::background_cron::wake();
         Ok(DispatchResult::json(json!({
@@ -2102,6 +2307,7 @@ impl BirAgentHost {
             ));
         }
         form.saved = true;
+        form.assist.note_saved();
         self.submit_confirmation_visible = false;
         bir_core::background_cron::wake();
         Ok(DispatchResult::json(json!({
@@ -2127,6 +2333,8 @@ impl BirAgentHost {
         form.draft.set_any_taxes_withheld(next);
         form.draft.compute();
         form.validated = false;
+        form.assist
+            .note_user_edits(["any_taxes_withheld".to_string()]);
         Ok(DispatchResult::json(json!({
             "form": "1601C",
             "any_taxes_withheld": next,
@@ -2152,6 +2360,8 @@ impl BirAgentHost {
         };
         form.draft.compute();
         form.validated = false;
+        form.assist
+            .note_user_edits(["category_of_agent".to_string()]);
         Ok(DispatchResult::json(json!({
             "form": "1601C",
             "category_of_agent": category_snapshot_value(&form.draft.category_of_agent),
@@ -2173,6 +2383,7 @@ impl BirAgentHost {
                 "claimed": claimed,
                 "id": form.draft.id,
                 "fields": form_1601c_fields(&form.draft),
+                "boxes": fillable_boxes(assist::fillable_values_1601c(&form.draft), &form.assist),
             })));
         }
         if let Some(form) = &self.form_2551q
@@ -2186,55 +2397,302 @@ impl BirAgentHost {
                 "claimed": claimed,
                 "id": form.draft.id,
                 "fields": form_2551q_fields(&form.draft),
+                "boxes": fillable_boxes(assist::fillable_values_2551q(&form.draft), &form.assist),
             })));
         }
         Err("open form 1601C or 2551Q first".into())
     }
 
+    /// `form.fill`: write boxes by key with a source. A box the user typed
+    /// is never overwritten (`kept_user_boxes`). All-or-nothing on errors.
     fn form_fill(&mut self, args: &Value) -> Result<DispatchResult, String> {
         self.gate_locked()?;
         self.reconcile_open_forms_from_db();
         let fields = collect_fill_fields(args)?;
+        let source = BoxSource::parse_fill(args.get("source").and_then(Value::as_str))?;
         if self.active_view == ActiveView::Form1601C {
             let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            for key in fields.keys() {
-                if !is_1601c_fillable(key) {
-                    return Err(format!("unknown or read-only 1601C field `{key}`"));
+            let keyed = fields
+                .iter()
+                .map(|(key, value)| {
+                    assist::canonical_1601c_key(key)
+                        .map(|canonical| (canonical, value))
+                        .ok_or_else(|| format!("unknown or read-only 1601C field `{key}`"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut draft = form.draft.clone();
+            let (mut filled, mut kept) = (Vec::new(), Vec::new());
+            for (key, value) in keyed {
+                if form.assist.is_user_box(&key) {
+                    kept.push(key);
+                    continue;
                 }
+                assist::apply_1601c(&mut draft, &key, value)?;
+                filled.push(key);
             }
-            let applied: Vec<String> = fields.keys().cloned().collect();
-            for (key, value) in &fields {
-                apply_1601c_fill(&mut form.draft, key, value)?;
+            draft.compute();
+            form.draft = draft;
+            for key in &filled {
+                form.assist.note_agent_fill(key, source);
             }
-            form.draft.compute();
-            form.validated = false;
-            return Ok(DispatchResult::json(json!({
-                "form": "1601C",
-                "applied": applied,
-            })));
+            if !filled.is_empty() {
+                form.validated = false;
+            }
+            return Ok(fill_result("1601C", source, filled, kept));
         }
         if self.active_view == ActiveView::Form2551Q {
             let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            for key in fields.keys() {
-                if !is_2551q_fillable(key) {
-                    return Err(format!("unknown or read-only 2551Q field `{key}`"));
+            let keyed = fields
+                .iter()
+                .map(|(key, value)| {
+                    assist::canonical_2551q_key(key)
+                        .map(|canonical| (canonical, value))
+                        .ok_or_else(|| format!("unknown or read-only 2551Q field `{key}`"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut draft = form.draft.clone();
+            let (mut filled, mut kept) = (Vec::new(), Vec::new());
+            for (key, value) in keyed {
+                if form.assist.is_user_box(&key) {
+                    kept.push(key);
+                    continue;
+                }
+                assist::apply_2551q(&mut draft, &key, value)?;
+                filled.push(key);
+            }
+            draft.recompute(None);
+            form.draft = draft;
+            for key in &filled {
+                form.assist.note_agent_fill(key, source);
+            }
+            if !filled.is_empty() {
+                form.validated = false;
+            }
+            return Ok(fill_result("2551Q", source, filled, kept));
+        }
+        Err("open form 1601C or 2551Q first".into())
+    }
+
+    /// `form.context`: what the agent may fill from — the taxpayer's COR
+    /// facts, the income-tax elections exactly as stored (never inferred),
+    /// past returns for the TIN, and uploaded-document OCR for the period.
+    /// No PINs, TOTP secrets, mail credentials or tokens.
+    fn form_context(&mut self) -> Result<DispatchResult, String> {
+        self.gate_locked()?;
+        self.reconcile_open_forms_from_db();
+        let open = match self.active_view {
+            ActiveView::Form1601C => self.form_1601c.as_ref().map(|form| {
+                let draft = &form.draft;
+                (
+                    "1601C",
+                    draft.tin.clone(),
+                    draft.taxable_year,
+                    draft.month,
+                    month_bounds(draft.taxable_year, draft.month),
+                )
+            }),
+            ActiveView::Form2551Q => self.form_2551q.as_ref().map(|form| {
+                let draft = &form.draft;
+                (
+                    "2551Q",
+                    draft.tin.clone(),
+                    draft.taxable_year,
+                    draft.quarter,
+                    draft.filing_period_bounds(),
+                )
+            }),
+            _ => None,
+        };
+        let tin = match &open {
+            Some((_, tin, ..)) => tin.clone(),
+            None => self
+                .selected_tin
+                .clone()
+                .ok_or("open a form or select a taxpayer profile first")?,
+        };
+        let profile = self.load_profile(&tin)?;
+        let bounds = open.as_ref().and_then(|(.., bounds)| *bounds);
+        let overlaps = |version: &bir_core::profile::TaxProfileVersion| match bounds {
+            None => true,
+            Some((start, end)) => {
+                version.effective_from.is_none_or(|from| from <= end)
+                    && version.effective_until.is_none_or(|until| until >= start)
+            }
+        };
+        let period_versions: Vec<_> = profile
+            .profile_versions
+            .iter()
+            .filter(|version| overlaps(version))
+            .collect();
+        let trade_name = period_versions
+            .iter()
+            .find(|version| version.status == bir_core::profile::TaxProfileVersionStatus::Confirmed)
+            .or(period_versions.first())
+            .and_then(|version| version.cor.trade_name.clone());
+        let cor_versions: Vec<Value> = profile
+            .profile_versions
+            .iter()
+            .map(|version| {
+                json!({
+                    "label": version.label,
+                    "status": version.status,
+                    "source": version.source,
+                    "effective_from": version.effective_from,
+                    "effective_until": version.effective_until,
+                    "covers_period": overlaps(version),
+                    "cor": version.cor,
+                    "registered_tax_types": version.registered_tax_types,
+                })
+            })
+            .collect();
+        let profile_json = json!({
+            "tin": profile.tin.full(),
+            "registered_name": profile.full_name,
+            "trade_name": trade_name,
+            "registered_address": profile.registered_address,
+            "zip_code": profile.zip_code,
+            "rdo_code": profile.rdo_code,
+            "line_of_business": profile.line_of_business,
+            "taxpayer_type": profile.taxpayer_type,
+            "tax_classification": profile.tax_classification,
+            "is_vat_registered": profile.is_vat_registered,
+            "eopt_tier": profile.eopt_tier,
+            "business_start_date": profile.business_start_date,
+            "contact_number": profile.phone,
+            "email": profile.email,
+            "cor_versions": cor_versions,
+        });
+        let elections: Vec<Value> = profile
+            .tax_elections
+            .iter()
+            .map(|election| {
+                json!({
+                    "taxable_year": election.taxable_year,
+                    "election": election.election,
+                    "elected_at": election.elected_at,
+                    "source_form": election.source_form,
+                })
+            })
+            .collect();
+        let documents: Vec<Value> = period_versions
+            .iter()
+            .flat_map(|version| {
+                version.evidence.iter().map(move |document| {
+                    json!({
+                        "profile_version": version.label,
+                        "file_name": document.file_name,
+                        "document_type": document.document_type,
+                        "uploaded_at": document.uploaded_at,
+                        "extracted_form_codes": document.extracted_form_codes,
+                        "ocr_text": document.ocr_text,
+                        "ocr_confidence": document.ocr_confidence,
+                    })
+                })
+            })
+            .collect();
+
+        let db = self.db.as_ref().ok_or("agent host has no database")?;
+        let guard = db.lock().map_err(|err| err.to_string())?;
+        let mut past_returns: Vec<Value> = guard
+            .list_submissions_for_tin(&tin)
+            .map_err(|err| err.to_string())?
+            .into_iter()
+            .map(|submission| {
+                json!({
+                    "kind": "submission",
+                    "form": submission.form_type,
+                    "period": submission.period,
+                    "status": submission.status,
+                    "submitted_at": submission.submitted_at,
+                    "values": submission.form_data,
+                })
+            })
+            .collect();
+        // Other saved returns of the open form, this year and last.
+        if let Some((code, _, year, period, _)) = &open {
+            for y in year.saturating_sub(1)..=*year {
+                let periods: u8 = if *code == "1601C" { 12 } else { 4 };
+                for p in 1..=periods {
+                    if y == *year && p == *period {
+                        continue;
+                    }
+                    let saved = if *code == "1601C" {
+                        guard
+                            .get_1601c_draft(&tin, y, p)
+                            .ok()
+                            .flatten()
+                            .map(|draft| {
+                                (
+                                    format!("{:?}", draft.status),
+                                    assist::fillable_values_1601c(&draft),
+                                )
+                            })
+                    } else {
+                        guard
+                            .get_2551q_draft(&tin, y, p)
+                            .ok()
+                            .flatten()
+                            .map(|draft| {
+                                (
+                                    format!("{:?}", draft.status),
+                                    assist::fillable_values_2551q(&draft),
+                                )
+                            })
+                    };
+                    if let Some((status, values)) = saved {
+                        past_returns.push(json!({
+                            "kind": "saved_return",
+                            "form": code,
+                            "year": y,
+                            "period": p,
+                            "status": status,
+                            "values": values,
+                        }));
+                    }
                 }
             }
-            let applied: Vec<String> = fields.keys().cloned().collect();
-            for (key, value) in &fields {
-                apply_2551q_fill(&mut form.draft, key, value)?;
-            }
-            form.draft.recompute(None);
-            form.validated = false;
+        }
+        drop(guard);
+
+        Ok(DispatchResult::json(json!({
+            "form": open.as_ref().map(|(code, ..)| *code),
+            "period": open.as_ref().map(|(_, _, year, period, bounds)| json!({
+                "year": year,
+                "period": period,
+                "start": bounds.map(|(start, _)| start),
+                "end": bounds.map(|(_, end)| end),
+            })),
+            "profile": profile_json,
+            "elections": elections,
+            "past_returns": past_returns,
+            "documents": documents,
+        })))
+    }
+
+    /// `form.needs_you`: required boxes (rules/forms/<form>/fields.json) that
+    /// are still empty.
+    fn form_needs_you(&mut self) -> Result<DispatchResult, String> {
+        self.reconcile_open_forms_from_db();
+        if let Some(form) = &self.form_1601c
+            && self.active_view == ActiveView::Form1601C
+        {
+            return Ok(DispatchResult::json(json!({
+                "form": "1601C",
+                "boxes": assist::needs_you_1601c(&form.draft),
+            })));
+        }
+        if let Some(form) = &self.form_2551q
+            && self.active_view == ActiveView::Form2551Q
+        {
             return Ok(DispatchResult::json(json!({
                 "form": "2551Q",
-                "applied": applied,
+                "boxes": assist::needs_you_2551q(&form.draft),
             })));
         }
         Err("open form 1601C or 2551Q first".into())
@@ -2340,7 +2798,7 @@ impl BirAgentHost {
                         |draft| draft.status.clone(),
                     )
                 };
-                let _ = self.open_form("1601C", year, period)?;
+                let _ = self.reload_open_form("1601C", year, period)?;
                 return Ok(DispatchResult::json(payload));
             }
             let db = self.db.as_ref().ok_or("agent host has no database")?;
@@ -2391,7 +2849,7 @@ impl BirAgentHost {
                         |draft| draft.status.clone(),
                     )
                 };
-                let _ = self.open_form("2551Q", year, period)?;
+                let _ = self.reload_open_form("2551Q", year, period)?;
                 return Ok(DispatchResult::json(payload));
             }
             let db = self.db.as_ref().ok_or("agent host has no database")?;
@@ -2428,6 +2886,8 @@ impl BirAgentHost {
         let tin = self.selected_tin.clone().ok_or(
             "form.release_abandoned_claim requires args.tin or args.q, or a selected profile",
         )?;
+        // Refuse before touching the database when another form is open.
+        self.gate_form_lock(form, year, period, Some(&tin))?;
         let payload = {
             let db = self.db.as_ref().ok_or("agent host has no database")?;
             let guard = db.lock().map_err(|err| err.to_string())?;
@@ -2465,8 +2925,24 @@ impl BirAgentHost {
                 )
             }
         };
-        let _ = self.open_form(form, year, period)?;
+        let _ = self.reload_open_form(form, year, period)?;
         Ok(DispatchResult::json(payload))
+    }
+
+    /// Re-read `code` from the database after a status change, replacing the
+    /// open copy of that same return (the one-form lock only guards others).
+    fn reload_open_form(
+        &mut self,
+        code: &str,
+        year: u16,
+        period: u8,
+    ) -> Result<DispatchResult, String> {
+        if code.eq_ignore_ascii_case("1601C") {
+            self.form_1601c = None;
+        } else if code.eq_ignore_ascii_case("2551Q") {
+            self.form_2551q = None;
+        }
+        self.open_form(code, year, period)
     }
 
     /// Returns Some(not_found/ambiguous JSON) when tin/q does not uniquely
@@ -2784,6 +3260,7 @@ impl BirAgentHost {
             }
             "profile.create" | "profile.new" => self.new_profile_editor(),
             "profile.save" => self.save_profile(),
+            "app.info" => Ok(self.app_info()),
             "profile.list" => self.profile_list(),
             "profile.search" => self.profile_search(args),
             "profile.set" => self.profile_set(args),
@@ -2805,6 +3282,8 @@ impl BirAgentHost {
             "dashboard.filter" => self.dashboard_filter(args),
             "form.fields" => self.form_fields(),
             "form.fill" => self.form_fill(args),
+            "form.needs_you" => self.form_needs_you(),
+            "form.context" => self.form_context(),
             "form.pdf" | "form.preview_pdf" => self.form_pdf(),
             "form.print" => self.form_print(args),
             "form.revert_draft" | "draft.revert" => self.form_revert_draft(args),
@@ -2830,8 +3309,8 @@ impl BirAgentHost {
                     .get("period")
                     .and_then(|value| value.as_u64())
                     .unwrap_or(1) as u8;
-                match self.resolve_tin_or_q(args)? {
-                    TinQuery::Missing => {}
+                let tin = match self.resolve_tin_or_q(args)? {
+                    TinQuery::Missing => None,
                     TinQuery::NotFound { query } => {
                         return Err(format!("filing.start taxpayer not found for {query}"));
                     }
@@ -2840,14 +3319,22 @@ impl BirAgentHost {
                             "filing.start taxpayer {query} is ambiguous; use args.tin as 14 digits"
                         ));
                     }
-                    TinQuery::One { tin, .. } => {
-                        self.select_profile_view(&tin, ActiveView::Dashboard)?;
-                    }
+                    TinQuery::One { tin, .. } => Some(tin),
+                };
+                // Refuse before selecting the taxpayer: selecting one closes
+                // the open form, which is exactly what the lock prevents.
+                self.gate_locked()?;
+                let already_open = self.gate_form_lock(code, year, period, tin.as_deref())?;
+                if let Some(tin) = tin
+                    && !already_open
+                {
+                    self.select_profile_view(&tin, ActiveView::Dashboard)?;
                 }
                 self.open_form(code, year, period)
             }
             "filing.validate" | "form.validate" => self.validate_form(),
             "form.save_draft" => self.save_form_draft(),
+            "form.dismiss" => self.form_dismiss(),
             "filing.submit" => self.request_submit_confirm(),
             "form.queue" | "filing.queue" | "form.submit" => self.queue_open_return(args, name),
             "form.file" | "form.submit_external" | "filing.file" => Err(format!(
@@ -3285,6 +3772,10 @@ impl AgentHost for BirAgentHost {
             // and the TCP mailbox path stamp it via
             // `HelloAuth::from_token_configured`.
             auth: Default::default(),
+            // Filled from this process (executable, bundle id or
+            // `GPUI_AGENT_CONNECT_ID`) by upstream `fill_hello_identity`.
+            bundle_id: None,
+            executable: None,
         }
     }
 
@@ -3514,6 +4005,36 @@ fn parse_dashboard_forms(raw: Option<&Value>) -> Result<Option<Vec<String>>, Str
         _ => Err(
             "dashboard.set_forms forms must be \"all\", a comma list, or an array of codes".into(),
         ),
+    }
+}
+
+/// `[{field, message}]`, one per validation error, in the draft's order.
+fn field_errors_json(errors: &[(String, String)]) -> Vec<Value> {
+    errors
+        .iter()
+        .map(|(field, message)| json!({ "field": field, "message": message }))
+        .collect()
+}
+
+/// First and last day of a 1601C month.
+fn month_bounds(year: u16, month: u8) -> Option<(NaiveDate, NaiveDate)> {
+    let start = NaiveDate::from_ymd_opt(i32::from(year), u32::from(month), 1)?;
+    let next = if month == 12 {
+        NaiveDate::from_ymd_opt(i32::from(year) + 1, 1, 1)?
+    } else {
+        NaiveDate::from_ymd_opt(i32::from(year), u32::from(month) + 1, 1)?
+    };
+    Some((start, next.pred_opt()?))
+}
+
+/// The period `form.open` actually opens for `code` (1601C months, 2551Q quarters).
+fn clamp_form_period(code: &str, period: u8) -> u8 {
+    if code.eq_ignore_ascii_case("1601C") {
+        period.clamp(1, 12)
+    } else if code.eq_ignore_ascii_case("2551Q") {
+        period.clamp(1, 4)
+    } else {
+        period
     }
 }
 
@@ -3795,89 +4316,30 @@ fn field_desc(
     })
 }
 
-fn is_1601c_fillable(key: &str) -> bool {
-    matches!(
-        key,
-        "tax_14"
-            | "tax_25"
-            | "sheets"
-            | "any_taxes_withheld"
-            | "category_of_agent"
-            | ids::FORM_1601C_TAX_14
-            | ids::FORM_1601C_TAX_25
-            | ids::FORM_1601C_SHEETS
-            | ids::FORM_1601C_WITHHELD
-            | "form-1601c-withheld"
-            | ids::FORM_1601C_CATEGORY
-            | "form-1601c-category"
-    )
+fn fill_result(
+    form: &str,
+    source: BoxSource,
+    filled: Vec<String>,
+    kept_user_boxes: Vec<String>,
+) -> DispatchResult {
+    DispatchResult::json(json!({
+        "form": form,
+        "source": source.as_str(),
+        "applied": filled,
+        "filled": filled,
+        "kept_user_boxes": kept_user_boxes,
+    }))
 }
 
-fn apply_1601c_fill(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Result<(), String> {
-    match key {
-        "any_taxes_withheld" | ids::FORM_1601C_WITHHELD | "form-1601c-withheld" => {
-            draft.set_any_taxes_withheld(parse_withheld_flag(value)?);
-            return Ok(());
-        }
-        "category_of_agent" | ids::FORM_1601C_CATEGORY | "form-1601c-category" => {
-            draft.category_of_agent = parse_category_of_agent(value)?;
-            return Ok(());
-        }
-        _ => {}
-    }
-    let text = value_as_text(value)?;
-    match key {
-        "tax_14" | ids::FORM_1601C_TAX_14 => {
-            draft.tax_14_total_compensation = parse_money(&text)?;
-        }
-        "tax_25" | ids::FORM_1601C_TAX_25 => {
-            draft.tax_25_total_taxes_withheld = parse_money(&text)?;
-        }
-        "sheets" | ids::FORM_1601C_SHEETS => {
-            draft.number_of_sheets = text
-                .trim()
-                .parse()
-                .map_err(|_| format!("invalid sheets `{text}`"))?;
-        }
-        _ => return Err(format!("unknown 1601C field `{key}`")),
-    }
-    Ok(())
-}
-
-fn is_2551q_fillable(key: &str) -> bool {
-    matches!(
-        key,
-        "creditable_tax_withheld"
-            | "other_tax_credit"
-            | "taxable_amount"
-            | "schedule_1.0.taxable_amount"
-            | ids::FORM_2551Q_CREDITABLE
-            | ids::FORM_2551Q_OTHER_CREDIT
-            | ids::FORM_2551Q_TAXABLE_0
-    )
-}
-
-fn apply_2551q_fill(draft: &mut Form2551QDraft, key: &str, value: &Value) -> Result<(), String> {
-    let text = value_as_text(value)?;
-    match key {
-        "creditable_tax_withheld" | ids::FORM_2551Q_CREDITABLE => {
-            draft.creditable_tax_withheld = parse_money(&text)?;
-        }
-        "other_tax_credit" | ids::FORM_2551Q_OTHER_CREDIT => {
-            draft.other_tax_credit = parse_money(&text)?;
-        }
-        "taxable_amount" | "schedule_1.0.taxable_amount" | ids::FORM_2551Q_TAXABLE_0 => {
-            let amount = parse_money(&text)?;
-            if let Some(row) = draft.schedule_1.first_mut() {
-                row.taxable_amount = amount;
-                row.recompute();
-            } else {
-                return Err("2551Q schedule 1 has no rows".into());
-            }
-        }
-        _ => return Err(format!("unknown 2551Q field `{key}`")),
-    }
-    Ok(())
+/// Every fillable box with its value and source, for `form.fields`.
+fn fillable_boxes(values: BTreeMap<String, Value>, assist: &AssistState) -> Vec<Value> {
+    values
+        .into_iter()
+        .map(|(key, value)| {
+            let source = assist.sources.get(&key).map(|source| source.as_str());
+            json!({ "key": key, "value": value, "source": source })
+        })
+        .collect()
 }
 
 fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, String> {
@@ -3889,7 +4351,7 @@ fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, S
     }
     if let Some(object) = args.as_object() {
         for (key, value) in object {
-            if key != "fields" {
+            if key != "fields" && key != "source" {
                 fields.insert(key.clone(), value.clone());
             }
         }
@@ -3914,71 +4376,6 @@ fn withheld_snapshot_value(withheld: Option<bool>) -> String {
 /// Item 11 as the snapshot shows it: "P", "G", or "" while unanswered.
 fn category_snapshot_value(category: &str) -> String {
     category.to_string()
-}
-
-fn parse_withheld_flag(value: &Value) -> Result<bool, String> {
-    match value {
-        Value::Bool(flag) => Ok(*flag),
-        Value::Number(number) => match number.as_i64() {
-            Some(1) => Ok(true),
-            Some(0) => Ok(false),
-            _ => Err(
-                "any_taxes_withheld must be boolean true/false or Yes/No, not a non-0/1 number"
-                    .into(),
-            ),
-        },
-        Value::String(text) => parse_withheld_text(text),
-        _ => Err("any_taxes_withheld must be boolean true/false or Yes/No".into()),
-    }
-}
-
-fn parse_withheld_text(text: &str) -> Result<bool, String> {
-    match text.trim().to_ascii_lowercase().as_str() {
-        "true" | "yes" | "1" => Ok(true),
-        "false" | "no" | "0" => Ok(false),
-        other => Err(format!(
-            "any_taxes_withheld must be boolean true/false or Yes/No, not `{other}`"
-        )),
-    }
-}
-
-fn parse_category_of_agent(value: &Value) -> Result<String, String> {
-    match value {
-        Value::Bool(true) => Ok("P".into()),
-        Value::Bool(false) => Ok("G".into()),
-        Value::Number(number) => match number.as_i64() {
-            Some(1) => Ok("P".into()),
-            Some(0) => Ok("G".into()),
-            _ => Err(
-                "category_of_agent must be P or G (private/government); boolean true/false maps to P/G, not a non-0/1 number"
-                    .into(),
-            ),
-        },
-        Value::String(text) => parse_category_of_agent_text(text),
-        _ => Err(
-            "category_of_agent must be P or G (private/government), or boolean true/false for P/G"
-                .into(),
-        ),
-    }
-}
-
-fn parse_category_of_agent_text(text: &str) -> Result<String, String> {
-    match text.trim().to_ascii_lowercase().as_str() {
-        "p" | "private" | "true" | "yes" | "1" => Ok("P".into()),
-        "g" | "government" | "false" | "no" | "0" => Ok("G".into()),
-        other => Err(format!(
-            "category_of_agent must be P or G (private/government), not `{other}`"
-        )),
-    }
-}
-
-fn value_as_text(value: &Value) -> Result<String, String> {
-    match value {
-        Value::String(text) => Ok(text.clone()),
-        Value::Number(number) => Ok(number.to_string()),
-        Value::Bool(flag) => Ok(flag.to_string()),
-        _ => Err("field values must be strings or numbers".into()),
-    }
 }
 
 fn editor_from_profile(profile: &TaxpayerProfile) -> ProfileEditor {
@@ -5103,6 +5500,17 @@ mod tests {
 
     #[test]
     fn headless_tcp_host_serves_hello_and_nav() {
+        // `spawn_host` publishes a discovery record; keep it out of the
+        // user's real runtime directory.
+        let runtime = tempfile::tempdir().expect("runtime dir");
+        temp_env::with_var(
+            gpui_agent::discovery::RUNTIME_DIR_ENV,
+            Some(runtime.path()),
+            headless_tcp_host_serves_hello_and_nav_body,
+        );
+    }
+
+    fn headless_tcp_host_serves_hello_and_nav_body() {
         use std::sync::{Arc, Mutex};
         use std::time::Duration;
 
@@ -6220,6 +6628,56 @@ mod tests {
     }
 
     #[test]
+    fn app_info_reports_mode_test_database_and_taxpayers() {
+        temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
+            let mut host = fixture_host();
+            let info = handle_request(
+                &mut host,
+                req(Op::Invoke {
+                    name: "app.info".into(),
+                    args: json!({}),
+                }),
+                None,
+                None,
+            );
+            assert!(info.ok, "{:?}", info.error);
+            let info = info.result.unwrap();
+            assert_eq!(info["app"], "bir-desktop");
+            assert_eq!(info["mode"], "headless");
+            assert_eq!(info["database"], "test");
+            let profiles = info["profiles"].as_array().unwrap();
+            assert_eq!(profiles.len(), 1, "{info}");
+            assert_eq!(profiles[0]["name"], FIXTURE_NAME);
+            assert!(
+                profiles[0]["tin"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("123456789"),
+                "{info}"
+            );
+            assert_eq!(
+                profiles[0].as_object().unwrap().len(),
+                2,
+                "only tin and name: {info}"
+            );
+
+            let mut desktop = BirAgentHost::new(PlatformKind::Desktop);
+            let info = handle_request(
+                &mut desktop,
+                req(Op::Invoke {
+                    name: "app.info".into(),
+                    args: json!({}),
+                }),
+                None,
+                None,
+            );
+            assert!(info.ok, "{:?}", info.error);
+            assert_eq!(info.result.as_ref().unwrap()["mode"], "desktop");
+            assert_eq!(info.result.as_ref().unwrap()["profiles"], json!([]));
+        });
+    }
+
+    #[test]
     fn invoke_aliases_share_handlers() {
         let mut host = fixture_host();
         let year = chrono::Local::now().year() as u16;
@@ -6498,6 +6956,18 @@ mod tests {
             None,
         );
         assert!(!print.ok);
+
+        // One form at a time: the 1601C must be closed before 2551Q opens.
+        let dismissed = handle_request(
+            &mut host,
+            req(Op::Invoke {
+                name: "form.dismiss".into(),
+                args: json!({}),
+            }),
+            None,
+            None,
+        );
+        assert!(dismissed.ok, "{:?}", dismissed.error);
 
         let opened_q = handle_request(
             &mut host,
@@ -7614,6 +8084,761 @@ mod tests {
                 .is_some_and(|e| e.contains("token must not be sent on the wire")),
             "{:?}",
             raw.error
+        );
+    }
+
+    // ------------------------------------------------------------ /file-tax
+
+    /// Dummy test taxpayer: TIN 111111114 (passes the official check digit),
+    /// branch 00000. Saved straight to an ephemeral DB, so a test can leave a
+    /// profile box empty on purpose.
+    const FILE_TAX_TIN: &str = "11111111400000";
+
+    fn file_tax_host(edit: impl FnOnce(&mut TaxpayerProfile)) -> BirAgentHost {
+        let db = Database::open_ephemeral().expect("ephemeral db");
+        let mut profile = fixture_profile();
+        profile.tin = parse_tin(FILE_TAX_TIN).expect("test TIN");
+        profile.full_name = "File Tax Test Taxpayer".into();
+        edit(&mut profile);
+        db.save_profile(profile).expect("test profile");
+        let mut host =
+            BirAgentHost::new(PlatformKind::Headless).with_database(Arc::new(Mutex::new(db)));
+        host.select_profile(FILE_TAX_TIN)
+            .expect("select test taxpayer");
+        host
+    }
+
+    fn call(host: &mut BirAgentHost, name: &str, args: Value) -> gpui_agent::protocol::Response {
+        handle_request(
+            host,
+            req(Op::Invoke {
+                name: name.into(),
+                args,
+            }),
+            None,
+            None,
+        )
+    }
+
+    /// A quarter/month of last year: always a period that has started.
+    fn last_year() -> u16 {
+        chrono::Local::now().year() as u16 - 1
+    }
+
+    #[test]
+    fn one_form_lock_refuses_second_open() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        for (name, args) in [
+            (
+                "form.open",
+                json!({ "code": "1601C", "year": year, "period": 12 }),
+            ),
+            (
+                "filing.start",
+                json!({ "code": "1601C", "year": year, "period": 12, "tin": FILE_TAX_TIN }),
+            ),
+            (
+                "form.open",
+                json!({ "code": "2551Q", "year": year, "period": 3 }),
+            ),
+        ] {
+            let refused = call(&mut host, name, args.clone());
+            assert!(!refused.ok, "{name} {args} must be refused");
+            assert!(
+                refused
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("form already open")),
+                "{:?}",
+                refused.error
+            );
+        }
+        // The refusal left the open form exactly where it was.
+        assert_eq!(host.active_view(), ActiveView::Form2551Q);
+        assert_eq!(host.form_2551q_draft().map(|draft| draft.quarter), Some(4));
+
+        // Re-opening the very same return is not a second form.
+        let again = call(
+            &mut host,
+            "filing.start",
+            json!({ "code": "2551Q", "year": year, "period": 4, "tin": FILE_TAX_TIN }),
+        );
+        assert!(again.ok, "{:?}", again.error);
+        assert_eq!(again.result.as_ref().unwrap()["already_open"], true);
+
+        // Saving releases the lock.
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let next = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(next.ok, "{:?}", next.error);
+        assert_eq!(next.result.as_ref().unwrap()["form"], "1601C");
+
+        // An edit after saving takes the lock back.
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_14": "1000" } }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_25": "100" } }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let refused = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(!refused.ok);
+    }
+
+    #[test]
+    fn dismiss_clean_form_closes_it() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let none = call(&mut host, "form.dismiss", json!({}));
+        assert!(!none.ok, "nothing open to dismiss");
+
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        assert_eq!(
+            dismissed.result.as_ref().unwrap(),
+            &json!({ "dismissed": true, "form": "2551Q" })
+        );
+        assert!(host.form_2551q_draft().is_none());
+        assert_eq!(host.active_view(), ActiveView::Dashboard);
+        assert_eq!(host.take_dismissed_form(), Some("2551Q"));
+        assert!(!call(&mut host, "form.fields", json!({})).ok);
+
+        // The agent's own unsaved fills are its to discard.
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_14": "1000" }, "source": "document" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        assert_eq!(dismissed.result.as_ref().unwrap()["form"], "1601C");
+        // Nothing was saved.
+        let stored = host
+            .db
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .get_1601c_draft(FILE_TAX_TIN, year, 12)
+            .unwrap();
+        assert!(stored.is_none(), "dismiss must not save");
+
+        let reopened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(reopened.ok, "{:?}", reopened.error);
+    }
+
+    #[test]
+    fn agent_dismiss_with_unsaved_edits_is_refused() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        // The user types into a box (UI-level input, not form.fill).
+        let typed = handle_request(
+            &mut host,
+            req(Op::SetValue {
+                target: ids::FORM_2551Q_CREDITABLE.into(),
+                value: "250.00".into(),
+            }),
+            None,
+            None,
+        );
+        assert!(typed.ok, "{:?}", typed.error);
+
+        let refused = call(&mut host, "form.dismiss", json!({}));
+        assert!(!refused.ok);
+        let error = refused.error.unwrap_or_default();
+        assert!(error.contains("unsaved edits"), "{error}");
+        assert!(error.contains("Dismiss"), "{error}");
+        assert_eq!(host.form_2551q_creditable(), Some(250.0));
+        assert_eq!(host.active_view(), ActiveView::Form2551Q);
+        assert_eq!(host.take_dismissed_form(), None);
+
+        // Once saved there is nothing of the user's left to lose.
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+    }
+
+    /// The desktop drain rebuilds the host from the views each request; the
+    /// view's flags must drive the lock and the dismiss refusal.
+    #[test]
+    fn view_assist_state_drives_lock_and_dismiss() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let draft = host.form_2551q_draft().unwrap().clone();
+
+        // As snapshot_host does: the view says the user typed into a box.
+        host.replace_form_2551q_state(draft.clone(), false, false, Vec::new());
+        let mut typed = AssistState::default();
+        typed.note_user_edits(["creditable_tax_withheld".to_string()]);
+        host.set_form_2551q_assist(typed);
+        let refused = call(&mut host, "form.dismiss", json!({}));
+        assert!(
+            refused
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("unsaved edits")),
+            "{:?}",
+            refused.error
+        );
+
+        // The view saved: the lock is released and nothing blocks dismiss.
+        let mut saved = AssistState::default();
+        saved.note_saved();
+        host.replace_form_2551q_state(draft, false, false, Vec::new());
+        host.set_form_2551q_assist(saved);
+        let other = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(other.ok, "{:?}", other.error);
+    }
+
+    #[test]
+    fn fill_records_source_and_never_overwrites_user_box() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4, "tin": FILE_TAX_TIN }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+
+        // Exactly the bir-mcp shape: {fields, source}; `source` is not a box.
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "schedule_1.0.taxable_amount": "120,000.00",
+                    "creditable_tax_withheld": 300,
+                    "other_tax_credit_description": "Advance payment",
+                    "schedule_1.1.atc": "PT010",
+                },
+                "source": "document",
+            }),
+        );
+        assert!(!filled.ok, "a duplicate ATC fails the whole fill");
+        assert_eq!(
+            host.form_2551q_creditable(),
+            Some(0.0),
+            "nothing applied on error"
+        );
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "schedule_1.0.taxable_amount": "120,000.00",
+                    "creditable_tax_withheld": 300,
+                    "other_tax_credit_description": "Advance payment",
+                },
+                "source": "document",
+            }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let body = filled.result.unwrap();
+        let mut keys: Vec<&str> = body["filled"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|key| key.as_str().unwrap())
+            .collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                "creditable_tax_withheld",
+                "other_tax_credit_description",
+                "schedule_1.0.taxable_amount",
+            ]
+        );
+        assert_eq!(body["kept_user_boxes"], json!([]));
+        let draft = host.form_2551q_draft().unwrap();
+        assert_eq!(draft.schedule_1[0].taxable_amount, 120_000.0);
+        assert_eq!(draft.creditable_tax_withheld, 300.0);
+        assert_eq!(draft.other_tax_credit_description, "Advance payment");
+        assert!(draft.total_tax_due > 0.0, "fill recomputes");
+        let assist = host.form_2551q_assist().unwrap();
+        assert_eq!(
+            assist.sources.get("schedule_1.0.taxable_amount"),
+            Some(&BoxSource::Document)
+        );
+
+        // Computed, profile-owned and election boxes are not fillable; nor
+        // is a made-up source.
+        for (fields, source) in [
+            (json!({ "total_tax_due": 1 }), "ai"),
+            (json!({ "taxpayer_name": "Someone Else" }), "ai"),
+            (json!({ "item_13_election": "eight_percent" }), "ai"),
+            (json!({ "other_tax_credit": 1 }), "user"),
+            (json!({ "other_tax_credit": 1 }), "guess"),
+        ] {
+            let refused = call(
+                &mut host,
+                "form.fill",
+                json!({ "fields": fields, "source": source }),
+            );
+            assert!(!refused.ok, "{fields} / {source} must be refused");
+        }
+
+        // The user types a box; the agent's next fill skips it.
+        let typed = handle_request(
+            &mut host,
+            req(Op::SetValue {
+                target: ids::FORM_2551Q_CREDITABLE.into(),
+                value: "450.00".into(),
+            }),
+            None,
+            None,
+        );
+        assert!(typed.ok, "{:?}", typed.error);
+        let again = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": { "creditable_tax_withheld": "999", "other_tax_credit": "10" },
+                "source": "past_return",
+            }),
+        );
+        assert!(again.ok, "{:?}", again.error);
+        let body = again.result.unwrap();
+        assert_eq!(body["filled"], json!(["other_tax_credit"]));
+        assert_eq!(body["kept_user_boxes"], json!(["creditable_tax_withheld"]));
+        assert_eq!(host.form_2551q_creditable(), Some(450.0));
+        let assist = host.form_2551q_assist().unwrap();
+        assert_eq!(
+            assist.sources.get("creditable_tax_withheld"),
+            Some(&BoxSource::User)
+        );
+        assert_eq!(
+            assist.sources.get("other_tax_credit"),
+            Some(&BoxSource::PastReturn)
+        );
+
+        // form.fields reports every fillable box with its source.
+        let fields = call(&mut host, "form.fields", json!({}));
+        assert!(fields.ok, "{:?}", fields.error);
+        let boxes = fields.result.unwrap()["boxes"].clone();
+        assert!(
+            boxes.as_array().unwrap().iter().any(|item| {
+                item["key"] == "creditable_tax_withheld" && item["source"] == "user"
+            })
+        );
+
+        // 1601C: schedule rows by `schedule_1.<i>.<field>`, default source ai.
+        let saved = call(&mut host, "form.save_draft", json!({}));
+        assert!(saved.ok, "{:?}", saved.error);
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12, "tin": FILE_TAX_TIN }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "tax_14_total_compensation": "50000",
+                    "tax_16_holiday_pay": "1,000.50",
+                    "schedule_1.0.previous_month": "11/2025",
+                    "schedule_1.0.tax_paid": "100",
+                    "schedule_1.0.should_be_tax_due": "150",
+                    "category_of_agent": "private",
+                    "tax_relief": true,
+                    "tax_relief_specification": "Special Rate",
+                },
+            }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let draft = host.form_1601c_draft().unwrap();
+        assert_eq!(draft.tax_14_total_compensation, 50_000.0);
+        assert_eq!(draft.tax_16_holiday_pay, 1000.5);
+        assert_eq!(draft.schedule_1.len(), 1);
+        assert_eq!(draft.schedule_1[0].adjustment, 50.0);
+        assert_eq!(draft.tax_26_adjustment, 50.0, "fill recomputes");
+        assert_eq!(draft.tax_relief_specification, "1");
+        assert_eq!(
+            host.form_1601c_assist()
+                .unwrap()
+                .sources
+                .get("schedule_1.0.tax_paid"),
+            Some(&BoxSource::Ai)
+        );
+        let gap = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "schedule_1.5.tax_paid": "1" } }),
+        );
+        assert!(!gap.ok, "rows are added one at a time");
+    }
+
+    #[test]
+    fn needs_you_lists_required_empty_boxes() {
+        // The profile has no telephone number on file.
+        let mut host = file_tax_host(|profile| profile.phone = String::new());
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let fields_of = |host: &mut BirAgentHost| -> Vec<String> {
+            let needs = call(host, "form.needs_you", json!({}));
+            assert!(needs.ok, "{:?}", needs.error);
+            let body = needs.result.unwrap();
+            body["boxes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| {
+                    assert!(!item["label"].as_str().unwrap().is_empty());
+                    item["field"].as_str().unwrap().to_string()
+                })
+                .collect()
+        };
+        let needs = call(&mut host, "form.needs_you", json!({}));
+        assert_eq!(needs.result.as_ref().unwrap()["form"], "2551Q");
+        let boxes = fields_of(&mut host);
+        assert!(boxes.contains(&"contact_number".to_string()), "{boxes:?}");
+        // Never inferred: Item 13 waits for the user.
+        assert!(boxes.contains(&"item_13_election".to_string()), "{boxes:?}");
+        // Filled from the profile: not listed.
+        assert!(!boxes.contains(&"taxpayer_name".to_string()), "{boxes:?}");
+        assert!(!boxes.contains(&"tax_relief_specification".to_string()));
+
+        // A conditional box appears only once its condition holds.
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_relief": true }, "source": "ai" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        assert!(fields_of(&mut host).contains(&"tax_relief_specification".to_string()));
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_relief_specification": "2" }, "source": "document" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        assert!(!fields_of(&mut host).contains(&"tax_relief_specification".to_string()));
+
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        // A new 1601C leaves Item 3 unanswered (#82); answer Yes, and then
+        // Items 14 and 25 must be greater than zero.
+        let answered = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "any_taxes_withheld": true }, "source": "ai" }),
+        );
+        assert!(answered.ok, "{:?}", answered.error);
+        let boxes = fields_of(&mut host);
+        for field in [
+            "tax_14_total_compensation",
+            "tax_25_total_taxes_withheld",
+            "contact_number",
+        ] {
+            assert!(boxes.contains(&field.to_string()), "{field}: {boxes:?}");
+        }
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({
+                "fields": {
+                    "tax_14_total_compensation": "50000",
+                    "schedule_1.0.tax_paid": "100",
+                },
+                "source": "past_return",
+            }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let boxes = fields_of(&mut host);
+        assert!(!boxes.contains(&"tax_14_total_compensation".to_string()));
+        assert!(boxes.contains(&"tax_25_total_taxes_withheld".to_string()));
+        // A Schedule I row that exists needs its month, date, bank, number.
+        assert!(
+            boxes.contains(&"schedule_1.0.previous_month".to_string()),
+            "{boxes:?}"
+        );
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "any_taxes_withheld": false }, "source": "ai" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        assert!(!fields_of(&mut host).contains(&"tax_25_total_taxes_withheld".to_string()));
+    }
+
+    #[test]
+    fn form_context_exposes_profile_and_past_returns() {
+        let year = last_year();
+        let mut host = file_tax_host(|profile| {
+            profile.tax_elections = vec![
+                serde_json::from_value(json!({
+                    "taxable_year": year,
+                    "election": "EightPercent",
+                    "elected_at": format!("{year}-04-10T09:00:00"),
+                    "source_form": "1701Q",
+                }))
+                .expect("stored election"),
+            ];
+            profile.profile_pin_hash = Some("pin-hash-must-not-leak".into());
+            profile.imap_app_password = Some("imap-secret-must-not-leak".into());
+            profile.profile_versions = vec![
+                serde_json::from_value(json!({
+                    "id": "cor-1",
+                    "label": "COR 2020",
+                    "status": "Draft",
+                    "source": "OcrCor",
+                    "effective_from": "2020-01-01",
+                    "cor": {
+                        "registered_name": "File Tax Test Taxpayer",
+                        "trade_name": "Test Sari-Sari Store",
+                        "registered_address": "Olongapo",
+                        "rdo_code": "018",
+                        "line_of_business_description": "Retail",
+                    },
+                    "registered_tax_types": ["IncomeTax", "PercentageTax"],
+                    "taxpayer_type": "Individual",
+                    "evidence": [{
+                        "id": "doc-1",
+                        "file_name": "cor.pdf",
+                        "stored_path": "/nonexistent/cor.pdf",
+                        "document_type": "COR",
+                        "extracted_form_codes": ["2551Q", "1701Q"],
+                        "ocr_text": "CERTIFICATE OF REGISTRATION ... PERCENTAGE TAX",
+                    }],
+                }))
+                .expect("COR version"),
+            ];
+        });
+        {
+            let db = host.db.as_ref().unwrap().lock().unwrap();
+            let profile = db.get_profile(FILE_TAX_TIN).unwrap().unwrap();
+            let mut q3 = Form2551QDraft::new_from_profile(&profile, year, 3);
+            q3.schedule_1[0].taxable_amount = 90_000.0;
+            q3.recompute(None);
+            db.save_2551q_draft(&q3).expect("Q3 return");
+            db.save_submission(bir_core::db::Submission {
+                id: None,
+                tin: FILE_TAX_TIN.into(),
+                form_type: "2551Q".into(),
+                period: format!("Q2 {year}"),
+                status: "Confirmed".into(),
+                form_data: [("txt14".to_string(), "2,400.00".to_string())]
+                    .into_iter()
+                    .collect(),
+                submitted_at: Some(format!("{year}-07-20")),
+                filename: None,
+                created_at: None,
+                updated_at: None,
+            })
+            .expect("past submission");
+        }
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let context = call(&mut host, "form.context", json!({}));
+        assert!(context.ok, "{:?}", context.error);
+        let body = context.result.unwrap();
+
+        let profile = &body["profile"];
+        assert_eq!(profile["tin"], FILE_TAX_TIN);
+        assert_eq!(profile["registered_name"], "File Tax Test Taxpayer");
+        assert_eq!(profile["trade_name"], "Test Sari-Sari Store");
+        assert_eq!(profile["rdo_code"], "018");
+        assert_eq!(profile["registered_address"], "Olongapo");
+        assert_eq!(profile["cor_versions"][0]["covers_period"], true);
+        let text = body.to_string();
+        assert!(!text.contains("must-not-leak"), "secrets leaked: {text}");
+
+        // Elections exactly as stored.
+        assert_eq!(
+            body["elections"],
+            json!([{
+                "taxable_year": year,
+                "election": "EightPercent",
+                "elected_at": format!("{year}-04-10T09:00:00"),
+                "source_form": "1701Q",
+            }])
+        );
+
+        let past = body["past_returns"].as_array().unwrap();
+        assert!(
+            past.iter().any(|item| item["kind"] == "submission"
+                && item["period"] == format!("Q2 {year}")
+                && item["values"]["txt14"] == "2,400.00"),
+            "{past:?}"
+        );
+        assert!(
+            past.iter().any(|item| item["kind"] == "saved_return"
+                && item["period"] == 3
+                && item["values"]["schedule_1.0.taxable_amount"] == 90_000.0),
+            "{past:?}"
+        );
+        assert!(
+            !past
+                .iter()
+                .any(|item| item["kind"] == "saved_return" && item["period"] == 4),
+            "the open return is not a past return"
+        );
+
+        let documents = body["documents"].as_array().unwrap();
+        assert_eq!(documents.len(), 1, "{documents:?}");
+        assert!(
+            documents[0]["ocr_text"]
+                .as_str()
+                .unwrap()
+                .contains("PERCENTAGE TAX")
+        );
+        assert_eq!(
+            documents[0]["extracted_form_codes"],
+            json!(["2551Q", "1701Q"])
+        );
+
+        // No stored election: none is made up.
+        let mut bare = file_tax_host(|_| {});
+        let opened = call(
+            &mut bare,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let context = call(&mut bare, "form.context", json!({}));
+        assert!(context.ok, "{:?}", context.error);
+        assert_eq!(context.result.unwrap()["elections"], json!([]));
+    }
+
+    #[test]
+    fn validate_returns_field_errors() {
+        let mut host = file_tax_host(|_| {});
+        let year = last_year();
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "2551Q", "year": year, "period": 4 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let validated = call(&mut host, "form.validate", json!({}));
+        assert!(validated.ok, "{:?}", validated.error);
+        let body = validated.result.unwrap();
+        assert_eq!(body["form"], "2551Q");
+        assert_eq!(body["ok"], false);
+        let errors = body["field_errors"].as_array().unwrap();
+        assert!(!errors.is_empty());
+        assert_eq!(body["errors"], errors.len());
+        for error in errors {
+            assert!(!error["field"].as_str().unwrap().is_empty(), "{error}");
+            assert!(!error["message"].as_str().unwrap().is_empty(), "{error}");
+        }
+        assert!(
+            errors
+                .iter()
+                .any(|error| error["field"] == "item_13_election"),
+            "{errors:?}"
+        );
+
+        // The same errors the draft reports, box by box.
+        let draft = host.form_2551q_draft().unwrap();
+        let expected: Vec<Value> = draft
+            .validate()
+            .into_iter()
+            .map(|(field, message)| json!({ "field": field, "message": message }))
+            .collect();
+        assert_eq!(errors, &expected);
+
+        let dismissed = call(&mut host, "form.dismiss", json!({}));
+        assert!(dismissed.ok, "{:?}", dismissed.error);
+        let opened = call(
+            &mut host,
+            "form.open",
+            json!({ "code": "1601C", "year": year, "period": 12 }),
+        );
+        assert!(opened.ok, "{:?}", opened.error);
+        let filled = call(
+            &mut host,
+            "form.fill",
+            json!({ "fields": { "tax_14_total_compensation": "-5" }, "source": "ai" }),
+        );
+        assert!(filled.ok, "{:?}", filled.error);
+        let validated = call(&mut host, "filing.validate", json!({}));
+        assert!(validated.ok, "{:?}", validated.error);
+        let body = validated.result.unwrap();
+        assert_eq!(body["form"], "1601C");
+        assert_eq!(body["ok"], false);
+        let errors = body["field_errors"].as_array().unwrap();
+        assert_eq!(body["errors"], errors.len());
+        assert!(
+            errors
+                .iter()
+                .any(|error| error["field"] == "tax_14_total_compensation"),
+            "{errors:?}"
         );
     }
 }
