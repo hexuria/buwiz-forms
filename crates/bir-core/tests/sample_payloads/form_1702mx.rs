@@ -220,3 +220,12 @@ fn form_1702mx_schedule_6_rows_sample_payload_is_current() {
         "f20652d58465bd2ca969ed947c33e5a9e801e1a165374605b9664372827aba72",
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_1702mx()).expect("sample serializes"),
+        serde_json::to_value(sample_1702mx_fiscal()).expect("sample serializes"),
+        serde_json::to_value(sample_1702mx_schedule_6_rows()).expect("sample serializes"),
+    ]
+}

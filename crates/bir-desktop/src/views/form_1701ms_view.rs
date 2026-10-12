@@ -1786,6 +1786,20 @@ impl Form1701MsView {
 impl QueueableFormView for Form1701MsView {
     type Draft = Form1701MsDraft;
 
+    const PRINT_SLUG: &'static str = "1701ms-2024";
+
+    fn print_fields(draft: &Form1701MsDraft) -> std::collections::BTreeMap<String, String> {
+        draft.to_print_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form1701MsDraft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        HEADER_ACTIONS
+    }
+
     fn new(
         draft: Form1701MsDraft,
         db: Arc<Mutex<Database>>,
@@ -2055,9 +2069,9 @@ impl FormViewTrait for Form1701MsView {
             ));
             return;
         }
-        let fields = self.draft.to_print_field_map();
+        let fields = Self::print_fields(&self.draft);
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "1701ms-2024",
+            Self::PRINT_SLUG,
             &fields,
             "1701MS — Print Preview",
             cx,

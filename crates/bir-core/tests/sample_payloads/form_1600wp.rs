@@ -101,3 +101,12 @@ fn form_1600wp_no_atc_sample_payload_is_current() {
         "ac0764b857e205d728a7177184badb6b0cd26c955599265fa8d5099740a9f1da",
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_two_atcs()).expect("sample serializes"),
+        serde_json::to_value(sample_one_atc()).expect("sample serializes"),
+        serde_json::to_value(sample_no_atc()).expect("sample serializes"),
+    ]
+}

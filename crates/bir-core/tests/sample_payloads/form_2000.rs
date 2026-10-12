@@ -144,3 +144,8 @@ pub(crate) fn check_sample_with_layout(
     assert_eq!(std::fs::read_to_string(&plain_path).unwrap(), plaintext);
     assert_eq!(std::fs::read(&iaf_path).unwrap(), encrypted);
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![serde_json::to_value(sample_2000()).expect("sample serializes")]
+}

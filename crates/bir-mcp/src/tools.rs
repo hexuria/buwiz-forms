@@ -4,6 +4,8 @@
 //!
 //! Draft-only by construction: there is no submit, queue, file or payment
 //! tool, and `tools_list_has_no_submit_queue_file_or_pay_tool` keeps it that way.
+//! `bir_form_review` only brings a validated draft up in BIR with its Submit
+//! button highlighted; the user's own click is what files it.
 use serde_json::{Map, Value, json};
 
 /// What a tool reaches on a BIR host.
@@ -81,10 +83,13 @@ impl Tool {
     }
 }
 
-pub const FORM_CODES: [&str; 2] = ["2551Q", "1601C"];
 /// Sources the agent may claim. `user` is deliberately absent: only a person
-/// typing in BIR produces a `user` box.
+/// typing in BIR produces a `user` box, or the user's own answer on the chat
+/// form card (`from_card`, see [`USER_SOURCE`]).
 pub const FILL_SOURCES: [&str; 4] = ["profile", "past_return", "document", "ai"];
+/// Allowed only with `from_card: true`, for the user's own answers to a
+/// `bir_form_card` card; BIR also checks each box is on that card.
+pub const USER_SOURCE: &str = "user";
 
 pub static TOOLS: &[Tool] = &[
     Tool {
@@ -125,14 +130,14 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         name: "bir_form_open",
         action: Action::Host(HostCall::Invoke("form.open")),
-        description: "Open a draft return in BIR for one taxpayer and period. Supported forms: 2551Q (quarterly percentage tax; period = quarter 1-4) and 1601C (monthly withholding on compensation; period = month 1-12). Loads the existing draft if one was saved. Only one form can be open at a time: if BIR answers \"form already open\", do NOT retry; ask the user to save the open draft (bir_form_save_draft) or dismiss it (bir_form_dismiss) first.",
+        description: "Open a draft return in BIR for one taxpayer and period, exactly as the form's page in BIR opens it (prefilled from the taxpayer profile; the saved draft if there is one). Any of BIR's 43 forms, by code (e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT). `period`: month 1-12 for monthly forms, quarter 1-4 for quarterly forms, 0 (or omitted) for annual returns, the return number for as-needed forms (0605, 1707). Only one form can be open at a time: if BIR answers \"form already open\", do NOT retry; ask the user to save the open draft (bir_form_save_draft) or dismiss it (bir_form_dismiss) first.",
         schema: open_schema,
         build_args: open_args,
     },
     Tool {
         name: "bir_form_fields",
         action: Action::Host(HostCall::Invoke("form.fields")),
-        description: "Read every box of the open form: key, label, current value, whether it is computed, and where each value came from (profile, past_return, document, user, ai). Use the keys returned here when calling bir_form_fill.",
+        description: "Read every box of the open form that you may fill, from the form's official definition: official key, item number, label (as printed on the form), kind (text, radio, checkbox, select), options, current value and where it came from (profile, past_return, document, user, ai). A radio item is one box (its group key, e.g. frm0619E:optWithheld) whose options are its choices and whose value is the chosen option. Computed boxes, hidden controls and boxes owned by the profile or the period are left out (counted in `read_only`). Use these keys with bir_form_fill. 1601C and 2551Q also list their older short keys under `boxes`.",
         schema: empty_schema,
         build_args: no_args,
     },
@@ -146,21 +151,42 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         name: "bir_form_fill",
         action: Action::Host(HostCall::Invoke("form.fill")),
-        description: "Fill boxes of the open form. `fields` maps box keys (from bir_form_fields) to values. `source` says where the values came from: profile, past_return, document, or ai (default; use ai only for values you derived yourself). Call once per source. Boxes the user typed are never overwritten: they come back in `kept_user_boxes`. Never fill a tax election (such as the 8% option) unless bir_form_context shows it stored. Computed boxes cannot be filled.",
+        description: "Fill boxes of the open form. `fields` maps official box keys (from bir_form_fields) to values: amounts like \"1234.50\", dates as MM/DD/YYYY, a radio item by its group key with one option value or label (e.g. {\"frm0619E:optWithheld\": \"Y\"}), checkboxes as true/false, selects as one of their options. BIR recomputes the form after each fill. `source` says where the values came from: profile, past_return, document, or ai (default; use ai only for values you derived yourself). Call once per source. When the user answered a bir_form_card card, send their answers with `source: \"user\"` and `from_card: true`. Boxes the user typed are never overwritten: they come back in `kept_user_boxes`. Boxes the form does not show yet (an item must be answered first) come back in `not_shown`. Never fill a tax election (such as the 8% option) unless bir_form_context shows it stored. Computed boxes cannot be filled.",
         schema: fill_schema,
         build_args: fill_args,
     },
     Tool {
         name: "bir_form_needs_you",
         action: Action::Host(HostCall::Invoke("form.needs_you")),
-        description: "List the required boxes of the open form that are still empty (\"needs you\"). Ask the user for each one in chat, or let them type it directly in BIR.",
+        description: "List the boxes of the open form that still need an answer (\"needs you\"): every fillable box BIR's own validation names (with its message) and, while the form does not validate, the required fillable boxes still empty. A form that validates needs nothing. Errors on boxes nobody can fill here come back in `other_errors`. Ask the user for each one in chat (bir_form_card shows them as a form), or let them type it directly in BIR.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_form_validate",
         action: Action::Host(HostCall::Invoke("form.validate")),
-        description: "Validate the open form with BIR's rules. Returns `ok`, an error count, and `field_errors`: a list of {field, message} per box. Explain each field error to the user in plain words.",
+        description: "Validate the open form exactly as its page's Validate button does (BIR's official rules for that form, after recomputing). Returns `ok`, an error count, and `field_errors`: a list of {field, message} per box. Explain each field error to the user in plain words.",
+        schema: empty_schema,
+        build_args: no_args,
+    },
+    Tool {
+        name: "bir_form_preview",
+        action: Action::Host(HostCall::Invoke("form.preview")),
+        description: "Render the open draft on BIR's official printed sheet, filled, as a local HTML file (offline; no PDF is made). In the BIR desktop app it also opens in the browser the way the page's Print preview does; headless, only `path` comes back. Show the user the path so they can look before anything is filed. It changes nothing.",
+        schema: empty_schema,
+        build_args: no_args,
+    },
+    Tool {
+        name: "bir_form_card",
+        action: Action::Host(HostCall::Invoke("form.card")),
+        description: "Get the open form's open questions as structured data for a chat form card (AG-UI request_user_form): the needs-you boxes and every box with a validation error, each with key, item number, label, kind, options, current value and error text. Render it as a form for the user; send their answers back with bir_form_fill using `source: \"user\"` and `from_card: true`.",
+        schema: empty_schema,
+        build_args: no_args,
+    },
+    Tool {
+        name: "bir_form_review",
+        action: Action::Host(HostCall::Invoke("form.review_in_app")),
+        description: "Hand a finished draft to the user in the BIR desktop app: only when bir_form_validate shows no errors. BIR saves the draft, brings its window to that form's page (still a Draft), runs the page's Validate, highlights the Submit button and shows \"Prepared by the assistant. Review every box, then click Submit yourself.\" It never files anything: the user reviews and clicks Submit in BIR themselves. Refused by a headless BIR app.",
         schema: empty_schema,
         build_args: no_args,
     },
@@ -236,8 +262,7 @@ fn open_schema() -> Value {
         "properties": {
             "code": {
                 "type": "string",
-                "enum": FORM_CODES,
-                "description": "BIR form code."
+                "description": "BIR form code, e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT (any of the 43 forms BIR has)."
             },
             "year": {
                 "type": "integer",
@@ -247,16 +272,16 @@ fn open_schema() -> Value {
             },
             "period": {
                 "type": "integer",
-                "minimum": 1,
-                "maximum": 12,
-                "description": "2551Q: quarter 1-4. 1601C: month 1-12."
+                "minimum": 0,
+                "maximum": 999,
+                "description": "Monthly forms: month 1-12. Quarterly forms: quarter 1-4. Annual returns: 0 (or omit). As-needed forms: the return number (1 for the first)."
             },
             "tin": {
                 "type": "string",
                 "description": "Taxpayer TIN exactly as returned by bir_profiles_list."
             }
         },
-        "required": ["code", "year", "period", "tin"],
+        "required": ["code", "year", "tin"],
         "additionalProperties": false
     })
 }
@@ -267,15 +292,20 @@ fn fill_schema() -> Value {
         "properties": {
             "fields": {
                 "type": "object",
-                "description": "Box key -> value. Keys come from bir_form_fields. Amounts as plain numbers or strings like \"1234.50\".",
+                "description": "Official box key -> value. Keys come from bir_form_fields. Amounts as plain numbers or strings like \"1234.50\".",
                 "additionalProperties": { "type": ["string", "number", "boolean"] },
                 "minProperties": 1
             },
             "source": {
                 "type": "string",
-                "enum": FILL_SOURCES,
+                "enum": ["profile", "past_return", "document", "ai", "user"],
                 "default": "ai",
-                "description": "Where these values came from: profile (COR facts), past_return, document (uploaded OCR), or ai (your own derivation)."
+                "description": "Where these values came from: profile (COR facts), past_return, document (uploaded OCR), or ai (your own derivation). `user` only with from_card: true, for the user's own answers to bir_form_card."
+            },
+            "from_card": {
+                "type": "boolean",
+                "default": false,
+                "description": "True when these are the user's answers to a bir_form_card card (then source is `user`)."
             }
         },
         "required": ["fields"],
@@ -361,28 +391,33 @@ fn integer(args: &Map<String, Value>, key: &str) -> Result<u64, String> {
     parsed.ok_or_else(|| format!("`{key}` must be a whole number (got {value})"))
 }
 
+/// `1601-C`, `form 1601c` -> `1601C`. BIR checks the code is one of its forms.
+fn form_code(raw: &str) -> Option<String> {
+    let upper = raw.trim().to_ascii_uppercase();
+    let upper = upper.strip_prefix("FORM").unwrap_or(&upper);
+    let code: String = upper.chars().filter(char::is_ascii_alphanumeric).collect();
+    let digits = code.chars().take_while(char::is_ascii_digit).count();
+    (digits == 4 && code.len() <= 7).then_some(code)
+}
+
 fn open_args(args: &Map<String, Value>) -> Result<Value, String> {
     reject_unknown(args, &["code", "year", "period", "tin"])?;
-    let code = args
+    let raw = args
         .get("code")
         .and_then(Value::as_str)
-        .map(|c| c.trim().to_ascii_uppercase())
-        .ok_or("`code` is required (2551Q or 1601C)")?;
-    if !FORM_CODES.contains(&code.as_str()) {
-        return Err(format!(
-            "form `{code}` is not supported here; use 2551Q or 1601C"
-        ));
-    }
+        .ok_or("`code` is required (a BIR form code such as 1601C or 2550Q)")?;
+    let code = form_code(raw)
+        .ok_or_else(|| format!("`{raw}` is not a BIR form code (e.g. 1601C, 2550Q)"))?;
     let year = integer(args, "year")?;
     if !(2000..=2100).contains(&year) {
         return Err(format!("`year` {year} is out of range"));
     }
-    let period = integer(args, "period")?;
-    let max_period = if code == "2551Q" { 4 } else { 12 };
-    if !(1..=max_period).contains(&period) {
-        return Err(format!(
-            "`period` for {code} must be 1-{max_period} (got {period})"
-        ));
+    let period = match args.get("period") {
+        None | Some(Value::Null) => 0,
+        Some(_) => integer(args, "period")?,
+    };
+    if period > 999 {
+        return Err(format!("`period` {period} is out of range"));
     }
     let tin = args
         .get("tin")
@@ -394,7 +429,7 @@ fn open_args(args: &Map<String, Value>) -> Result<Value, String> {
 }
 
 fn fill_args(args: &Map<String, Value>) -> Result<Value, String> {
-    reject_unknown(args, &["fields", "source"])?;
+    reject_unknown(args, &["fields", "source", "from_card"])?;
     let fields = match args.get("fields") {
         Some(Value::Object(fields)) if !fields.is_empty() => fields,
         Some(Value::Object(_)) => return Err("`fields` is empty; nothing to fill".into()),
@@ -405,6 +440,20 @@ fn fill_args(args: &Map<String, Value>) -> Result<Value, String> {
         .find(|(_, value)| !matches!(value, Value::String(_) | Value::Number(_) | Value::Bool(_)))
     {
         return Err(format!("field `{key}` must be a string, number or boolean"));
+    }
+    let from_card = match args.get("from_card") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(flag)) => *flag,
+        Some(other) => return Err(format!("`from_card` must be true or false (got {other})")),
+    };
+    if from_card {
+        // The user's own answers to a chat form card, and nothing else.
+        return match args.get("source").and_then(Value::as_str) {
+            Some(USER_SOURCE) => {
+                Ok(json!({ "fields": fields, "source": USER_SOURCE, "from_card": true }))
+            }
+            _ => Err("answers from a form card are sent with `source: \"user\"`".into()),
+        };
     }
     let source = optional_enum(args, "source", &FILL_SOURCES)?.unwrap_or_else(|| "ai".into());
     Ok(json!({ "fields": fields, "source": source }))
@@ -417,7 +466,7 @@ mod tests {
 
     /// Op names this adapter may ever reach. Changing this list is a
     /// deliberate, reviewed act.
-    const ALLOWED_OPS: [&str; 12] = [
+    const ALLOWED_OPS: [&str; 15] = [
         "hello",
         "app.info",
         "profile.list",
@@ -428,6 +477,9 @@ mod tests {
         "form.fill",
         "form.needs_you",
         "form.validate",
+        "form.preview",
+        "form.card",
+        "form.review_in_app",
         "form.save_draft",
         "form.dismiss",
     ];
@@ -533,10 +585,18 @@ mod tests {
             .unwrap(),
             json!({"code": "2551Q", "year": 2026, "period": 2, "tin": "111111114000"})
         );
+        // Any of the 43 forms by code; BIR checks the code and the period.
+        assert_eq!(
+            open.host_args(&obj(
+                json!({"code": "form 1702-rt", "year": 2025, "tin": "1"})
+            ))
+            .unwrap(),
+            json!({"code": "1702RT", "year": 2025, "period": 0, "tin": "1"})
+        );
         for bad in [
-            json!({"code": "1701", "year": 2026, "period": 1, "tin": "1"}),
-            json!({"code": "2551Q", "year": 2026, "period": 5, "tin": "1"}),
-            json!({"code": "1601C", "year": 2026, "period": 13, "tin": "1"}),
+            json!({"code": "17O1", "year": 2026, "period": 1, "tin": "1"}),
+            json!({"code": "2551Q", "year": 2026, "period": 1000, "tin": "1"}),
+            json!({"code": "1601C", "year": 1999, "period": 12, "tin": "1"}),
             json!({"code": "1601C", "year": 2026, "period": 1}),
             json!({"code": "1601C", "year": 2026, "period": 1, "tin": "1", "confirm": true}),
         ] {
@@ -591,5 +651,35 @@ mod tests {
             fill.host_args(&obj(json!({"fields": {"a": 1}, "confirm": true})))
                 .is_err()
         );
+        // `user` only for the user's answers to a form card.
+        assert_eq!(
+            fill.host_args(&obj(
+                json!({"fields": {"a": "1"}, "source": "user", "from_card": true})
+            ))
+            .unwrap(),
+            json!({"fields": {"a": "1"}, "source": "user", "from_card": true})
+        );
+        assert!(
+            fill.host_args(&obj(
+                json!({"fields": {"a": 1}, "source": "ai", "from_card": true})
+            ))
+            .is_err()
+        );
+        assert!(
+            fill.host_args(&obj(json!({"fields": {"a": 1}, "from_card": "yes"})))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn review_tool_hands_over_and_never_files() {
+        let review = find("bir_form_review").unwrap();
+        assert_eq!(review.action.ops(), vec!["form.review_in_app"]);
+        assert_eq!(banned(review.name), None);
+        assert!(review.description.contains("click Submit"));
+        assert!(review.host_args(&obj(json!({"confirm": true}))).is_err());
+        for name in ["bir_form_preview", "bir_form_card"] {
+            assert!(find(name).is_some(), "{name}");
+        }
     }
 }

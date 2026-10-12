@@ -1261,6 +1261,20 @@ impl Form2200AView {
 impl QueueableFormView for Form2200AView {
     type Draft = Form2200ADraft;
 
+    const PRINT_SLUG: &'static str = "2200a-2020";
+
+    fn print_fields(draft: &Form2200ADraft) -> std::collections::BTreeMap<String, String> {
+        draft.to_print_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form2200ADraft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        HEADER_ACTIONS
+    }
+
     fn new(
         draft: Form2200ADraft,
         db: Arc<Mutex<Database>>,
@@ -1533,9 +1547,9 @@ impl FormViewTrait for Form2200AView {
             ));
             return;
         }
-        let fields = self.draft.to_print_field_map();
+        let fields = Self::print_fields(&self.draft);
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "2200a-2020",
+            Self::PRINT_SLUG,
             &fields,
             "2200-A — Print Preview",
             cx,

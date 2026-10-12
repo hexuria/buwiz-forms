@@ -860,6 +860,20 @@ impl Form1604cView {
 impl QueueableFormView for Form1604cView {
     type Draft = Form1604cDraft;
 
+    const PRINT_SLUG: &'static str = "1604c-2018";
+
+    fn print_fields(draft: &Form1604cDraft) -> std::collections::BTreeMap<String, String> {
+        draft.to_print_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form1604cDraft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        HEADER_ACTIONS
+    }
+
     fn new(
         draft: Form1604cDraft,
         db: Arc<Mutex<Database>>,
@@ -1137,9 +1151,9 @@ impl FormViewTrait for Form1604cView {
             ));
             return;
         }
-        let fields = self.draft.to_print_field_map();
+        let fields = Self::print_fields(&self.draft);
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "1604c-2018",
+            Self::PRINT_SLUG,
             &fields,
             "1604-C — Print Preview",
             cx,

@@ -1,5 +1,6 @@
 //! BIR form data models, ATC tables, form registry, and typed form traits.
 
+pub mod agent;
 pub mod atc;
 pub mod excise_places;
 pub mod form_0605;

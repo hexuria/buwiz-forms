@@ -476,6 +476,16 @@ pub struct Form2550QV2View {
     _subscriptions: Vec<Subscription>,
 }
 
+/// Frozen print sheet the 2550Q Print preview fills (shared with the agent).
+pub(crate) const PRINT_SLUG: &str = "2550q-2024";
+
+/// The field map the 2550Q Print preview fills [`PRINT_SLUG`] with.
+pub(crate) fn print_fields(
+    draft: &bir_core::forms::form_2550q::Form2550QDraft,
+) -> std::collections::BTreeMap<String, String> {
+    draft.to_bir_field_map()
+}
+
 impl Form2550QV2View {
     pub fn new(
         mut draft: Form2550QDraft,
@@ -2687,8 +2697,8 @@ impl FormViewTrait for Form2550QV2View {
 
         let render_draft = self.draft.clone();
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "2550q-2024",
-            &render_draft.to_bir_field_map(),
+            PRINT_SLUG,
+            &print_fields(&render_draft),
             "2550Q — Print Preview",
             cx,
         ) {
@@ -4051,6 +4061,19 @@ fn format_optional_money(value: Option<f64>) -> String {
 }
 
 impl Form2550QV2View {
+    /// The draft as the page holds it, for the assistant.
+    #[cfg(feature = "agent")]
+    pub(crate) fn agent_draft(&self) -> &bir_core::forms::form_2550q::Form2550QDraft {
+        &self.draft
+    }
+
+    /// `form.review_in_app`: the page's own Validate, then the header's
+    /// "prepared by the assistant" note and highlighted Submit.
+    #[cfg(feature = "agent")]
+    pub(crate) fn agent_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::views::form_header::agent_review(self, HEADER_ACTIONS, window, cx);
+    }
+
     /// What the shared header shows. Submit keeps the 2550Q rule: an
     /// editable, safe draft with no blocking errors after Validate ran at
     /// the current input revision.

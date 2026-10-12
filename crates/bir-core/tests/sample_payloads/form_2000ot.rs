@@ -110,3 +110,11 @@ fn form_2000ot_shares_sample_with_added_rows_is_current() {
         "22986716d723a37071db3f4143f6a1f30587c8c4ed03edf367fb764701af432d",
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_2000ot()).expect("sample serializes"),
+        serde_json::to_value(sample_2000ot_shares()).expect("sample serializes"),
+    ]
+}

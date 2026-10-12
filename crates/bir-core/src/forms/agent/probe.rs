@@ -1,0 +1,1584 @@
+//! Derive how each official box is written into a draft, by probing.
+//!
+//! For every leaf of a sample draft (a string, amount, whole number, flag or
+//! enum), set a recognisable value, recompute, and diff the official field
+//! map. A box whose value now shows the probe ("echoes" it) is bound to that
+//! leaf; a radio, checkbox or select that changes with a flag or an enum is
+//! bound to the leaf values that produce each of its official values. Rows
+//! past a sample's last row are probed by repeating its last row.
+//!
+//! Locks are derived the same way: a leaf that changes the draft's TIN, year
+//! or period is the return's identity, a string that holds a taxpayer
+//! profile value is the profile's, and a field named `*election*` is an
+//! income-tax election.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use serde_json::Value;
+
+use super::{
+    AgentFormDef, AgentFormKind, Binding, BoundBox, BoxDef, BoxOption, ChoiceOption, DateFormat,
+    Lock, parse_amount, parse_error, probe_eval, probe_identity,
+};
+
+/// Project `fields.json` onto the boxes the assistant needs.
+pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
+    let doc: Value = serde_json::from_str(fields_json).map_err(|error| error.to_string())?;
+    let fields = doc["fields"]
+        .as_array()
+        .ok_or("fields.json has no fields array")?;
+    let text = |field: &Value, key: &str| field[key].as_str().unwrap_or_default().to_string();
+    Ok(fields
+        .iter()
+        .map(|field| {
+            let values = field["enum_values"].as_array().cloned().unwrap_or_default();
+            // A radio's own meaning: `[[{stored_value: "true", choice_meaning, control_value}]]`.
+            let chosen = values
+                .iter()
+                .filter_map(Value::as_array)
+                .flatten()
+                .find(|meaning| meaning["stored_value"] == "true");
+            BoxDef {
+                key: text(field, "field_key"),
+                label: text(field, "label"),
+                item: text(field, "item_number"),
+                kind: text(field, "control_kind"),
+                computed: field["computed"].as_bool().unwrap_or(false),
+                required: text(field, "required"),
+                options: values
+                    .iter()
+                    .filter_map(|value| match value {
+                        Value::String(value) => Some(BoxOption {
+                            value: value.clone(),
+                            label: String::new(),
+                        }),
+                        Value::Object(_) => Some(BoxOption {
+                            value: value["value"].as_str()?.to_string(),
+                            label: value["label"].as_str().unwrap_or_default().to_string(),
+                        }),
+                        _ => None,
+                    })
+                    .collect(),
+                layout_only: false,
+                group: None,
+                radio_group: false,
+                members: Vec::new(),
+                choice: chosen
+                    .map(|c| text(c, "choice_meaning"))
+                    .unwrap_or_default(),
+                choice_value: chosen.map(|c| text(c, "control_value")).unwrap_or_default(),
+            }
+        })
+        .collect())
+}
+
+/// Draft fields that are bookkeeping, never boxes: the submission
+/// lifecycle (flattened into every draft), the row id, and the 2550Q
+/// editor's raw capture.
+fn skipped(top: &str) -> bool {
+    static KEYS: std::sync::OnceLock<BTreeSet<String>> = std::sync::OnceLock::new();
+    KEYS.get_or_init(|| {
+        let lifecycle = serde_json::to_value(super::super::queueable::SubmissionLifecycle {
+            submitted_at: Some(String::new()),
+            confirmed_at: Some(String::new()),
+            submission_filename: Some(String::new()),
+            receipt_id: Some(0),
+            submitted_payload: Some(String::new()),
+            queued_submission_fingerprint: Some(String::new()),
+            submission_claim_token: Some(String::new()),
+            submission_claimed_at: Some(String::new()),
+            submission_claim_lease_until: Some(String::new()),
+            submission_put_started_at: Some(String::new()),
+            submission_error: Some(String::new()),
+            next_retry_at: Some(String::new()),
+            ..Default::default()
+        })
+        .expect("lifecycle serializes");
+        lifecycle
+            .as_object()
+            .map(|object| object.keys().cloned().collect::<BTreeSet<_>>())
+            .unwrap_or_default()
+            .into_iter()
+            .chain(
+                ["id", "queue_authorization", "raw_editor_state"]
+                    .into_iter()
+                    .map(String::from),
+            )
+            .collect()
+    })
+    .contains(top)
+}
+
+const TEXT_PROBES: [&str; 2] = ["QZ7X", "7193"];
+const AMOUNT_PROBE: f64 = 4321.17;
+const WHOLE_PROBES: [i64; 3] = [7, 3, 97];
+/// Rows a probed list is grown to, so boxes of later rows are reached too
+/// (`extend_rows` carries the pattern to the rest).
+const PROBE_ROWS: usize = 12;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ValueKind {
+    Text(Option<DateFormatKey>),
+    Amount,
+    Whole,
+}
+
+/// [`DateFormat`] with an order, for sets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum DateFormatKey {
+    Iso,
+    Mdy,
+    MonthYear,
+}
+
+impl DateFormatKey {
+    fn of(text: &str) -> Option<Self> {
+        let bytes = text.as_bytes();
+        let digits = |range: std::ops::Range<usize>| bytes[range].iter().all(u8::is_ascii_digit);
+        match bytes.len() {
+            10 if bytes[4] == b'-' && bytes[7] == b'-' && digits(0..4) => Some(Self::Iso),
+            10 if bytes[2] == b'/' && bytes[5] == b'/' && digits(6..10) => Some(Self::Mdy),
+            7 if bytes[2] == b'/' && digits(3..7) => Some(Self::MonthYear),
+            _ => None,
+        }
+    }
+
+    fn probe(self) -> &'static str {
+        match self {
+            Self::Iso => "2031-07-19",
+            Self::Mdy => "07/19/2031",
+            Self::MonthYear => "07/2031",
+        }
+    }
+
+    fn echoed_by(self, official: &str) -> bool {
+        let digits: String = official.chars().filter(char::is_ascii_digit).collect();
+        match self {
+            Self::Iso | Self::Mdy => digits == "07192031" || digits == "20310719",
+            Self::MonthYear => digits == "072031" || digits == "203107",
+        }
+    }
+
+    fn format(self) -> DateFormat {
+        match self {
+            Self::Iso => DateFormat::Iso,
+            Self::Mdy => DateFormat::Mdy,
+            Self::MonthYear => DateFormat::MonthYear,
+        }
+    }
+}
+
+enum Candidate {
+    /// Echo probe: (kind, nullable, value).
+    Value(ValueKind, bool, Value),
+    /// A flag or enum value.
+    Choice(Value),
+}
+
+fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
+    match kind {
+        ValueKind::Text(Some(date)) => date.echoed_by(official),
+        ValueKind::Text(None) => probe
+            .as_str()
+            .is_some_and(|probe| official.to_ascii_uppercase().contains(probe)),
+        ValueKind::Amount => parse_amount(official).is_some_and(|value| {
+            (value - AMOUNT_PROBE).abs() < 0.005
+                || value == AMOUNT_PROBE.round()
+                || (value - (AMOUNT_PROBE * 10.0).round() / 10.0).abs() < 0.005
+        }),
+        ValueKind::Whole => official.trim().parse::<i64>().ok() == probe.as_i64(),
+    }
+}
+
+/// Every leaf of a draft: JSON pointer -> value.
+fn leaves(value: &Value, path: &str, depth: usize, out: &mut Vec<(String, Value)>) {
+    match value {
+        Value::Object(object) => {
+            for (key, child) in object {
+                if depth == 0 && skipped(key) {
+                    continue;
+                }
+                leaves(child, &format!("{path}/{key}"), depth + 1, out);
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                leaves(child, &format!("{path}/{index}"), depth + 1, out);
+            }
+        }
+        leaf => out.push((path.to_string(), leaf.clone())),
+    }
+}
+
+fn pointer_set(root: &mut Value, path: &str, leaf: Value) {
+    if let Some(slot) = root.pointer_mut(path) {
+        *slot = leaf;
+    }
+}
+
+/// The variants serde lists for an unknown enum value.
+fn variants(error: &str) -> Vec<String> {
+    let Some(at) = error.find("expected") else {
+        return Vec::new();
+    };
+    error[at..]
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect()
+}
+
+fn parses(kind: AgentFormKind, base: &Value, path: &str, leaf: &Value) -> Result<(), String> {
+    let mut draft = base.clone();
+    pointer_set(&mut draft, path, leaf.clone());
+    match parse_error(kind, &draft) {
+        None => Ok(()),
+        Some(error) => Err(error),
+    }
+}
+
+fn candidates(kind: AgentFormKind, base: &Value, path: &str, leaf: &Value) -> Vec<Candidate> {
+    let fits = |probe: &Value| parses(kind, base, path, probe).is_ok();
+    let enum_values = |current: &Value| -> Vec<Candidate> {
+        match parses(kind, base, path, &Value::from(TEXT_PROBES[0])) {
+            Err(error) if error.contains("unknown variant") => variants(&error)
+                .into_iter()
+                .map(Value::String)
+                .filter(|variant| variant != current && fits(variant))
+                .map(Candidate::Choice)
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+    match leaf {
+        Value::Bool(flag) => vec![Candidate::Choice(Value::Bool(!flag))],
+        Value::Number(number) if number.is_f64() => {
+            let probe = Value::from(AMOUNT_PROBE);
+            if fits(&probe) {
+                vec![Candidate::Value(ValueKind::Amount, false, probe)]
+            } else {
+                Vec::new()
+            }
+        }
+        Value::Number(number) => WHOLE_PROBES
+            .iter()
+            .map(|probe| Value::from(*probe))
+            .find(|probe| number.as_i64() != probe.as_i64() && fits(probe))
+            .map(|probe| vec![Candidate::Value(ValueKind::Whole, false, probe)])
+            .unwrap_or_default(),
+        Value::String(text) => {
+            if let Some(date) = DateFormatKey::of(text) {
+                let probe = Value::from(date.probe());
+                if fits(&probe) {
+                    return vec![Candidate::Value(ValueKind::Text(Some(date)), false, probe)];
+                }
+            }
+            let mut out: Vec<Candidate> = TEXT_PROBES
+                .iter()
+                .map(|probe| Value::from(*probe))
+                .filter(|probe| fits(probe))
+                .map(|probe| Candidate::Value(ValueKind::Text(None), false, probe))
+                .collect();
+            if out.is_empty() {
+                out = enum_values(leaf);
+            }
+            out
+        }
+        Value::Null => {
+            let amount = Value::from(AMOUNT_PROBE);
+            if fits(&amount) {
+                return vec![Candidate::Value(ValueKind::Amount, true, amount)];
+            }
+            let whole = Value::from(WHOLE_PROBES[0]);
+            if fits(&whole) {
+                return vec![Candidate::Value(ValueKind::Whole, true, whole)];
+            }
+            for date in [
+                DateFormatKey::Iso,
+                DateFormatKey::Mdy,
+                DateFormatKey::MonthYear,
+            ] {
+                let probe = Value::from(date.probe());
+                if parses(kind, base, path, &Value::from(TEXT_PROBES[0])).is_err() && fits(&probe) {
+                    return vec![Candidate::Value(ValueKind::Text(Some(date)), true, probe)];
+                }
+            }
+            let texts: Vec<Candidate> = TEXT_PROBES
+                .iter()
+                .map(|probe| Value::from(*probe))
+                .filter(|probe| fits(probe))
+                .map(|probe| Candidate::Value(ValueKind::Text(None), true, probe))
+                .collect();
+            if !texts.is_empty() {
+                return texts;
+            }
+            if fits(&Value::Bool(true)) {
+                return vec![Candidate::Choice(Value::Bool(true))];
+            }
+            enum_values(leaf)
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// One way a choice box took an official value.
+#[derive(Debug, Clone)]
+struct ChoiceObs {
+    seed: usize,
+    /// The probed leaf, or `None` for the seed itself.
+    change: Option<(String, Value)>,
+    official: String,
+    answered: bool,
+}
+
+#[derive(Default)]
+struct Evidence {
+    /// key -> (path, kind, nullable)
+    echoes: BTreeMap<String, BTreeSet<(String, ValueKind, bool)>>,
+    choices: BTreeMap<String, Vec<ChoiceObs>>,
+    /// key -> paths whose probe changed it
+    touched: BTreeMap<String, BTreeSet<String>>,
+    /// path -> how many keys its probe echoed
+    echo_count: BTreeMap<String, usize>,
+    /// (key, path) echoes seen on a real sample, not only on one whose
+    /// lists were grown (a grown list can spill into other boxes).
+    real_echoes: BTreeSet<(String, String)>,
+    /// (key, path) where a probe of the path changed the box without
+    /// showing the probe: the box is a sum or a copy with a twist.
+    misses: BTreeSet<(String, String)>,
+    identity_paths: BTreeSet<String>,
+    /// keys any probe or seed wrote
+    present: BTreeSet<String>,
+    /// Per seed: path -> base value.
+    seed_leaves: BTreeMap<usize, BTreeMap<String, Value>>,
+    /// path -> base string values seen
+    strings: BTreeMap<String, BTreeSet<String>>,
+    /// Flag or option path -> keys its choice probes changed.
+    gates: BTreeMap<String, BTreeSet<String>>,
+}
+
+/// Grow every non-empty list to [`PROBE_ROWS`] by repeating its last row.
+fn grow_rows(value: &mut Value) {
+    match value {
+        Value::Array(items) => {
+            for item in items.iter_mut() {
+                grow_rows(item);
+            }
+            if let Some(last) = items.last().cloned() {
+                while items.len() < PROBE_ROWS {
+                    items.push(last.clone());
+                }
+            }
+        }
+        Value::Object(object) => {
+            for (key, child) in object.iter_mut() {
+                if !skipped(key) {
+                    grow_rows(child);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn blank(value: &Value) -> Value {
+    match value {
+        Value::String(_) => Value::String(String::new()),
+        Value::Number(number) if number.is_f64() => Value::from(0.0),
+        Value::Number(_) => Value::from(0),
+        Value::Bool(_) => Value::Bool(false),
+        Value::Array(_) => Value::Array(Vec::new()),
+        Value::Object(object) => Value::Object(
+            object
+                .iter()
+                .map(|(key, child)| (key.clone(), blank(child)))
+                .collect(),
+        ),
+        Value::Null => Value::Null,
+    }
+}
+
+/// A blank row for every list of `seed`, keyed by its pattern: each leaf
+/// of the last row blanked where the draft still parses with it (an enum
+/// keeps the sample's variant).
+fn row_templates(kind: AgentFormKind, seed: &Value, out: &mut BTreeMap<String, Value>) {
+    let mut lists = Vec::new();
+    collect_lists(seed, "", 0, &mut lists);
+    for (path, pattern) in lists {
+        if out.contains_key(&pattern) {
+            continue;
+        }
+        let Some(Value::Array(items)) = seed.pointer(&path) else {
+            continue;
+        };
+        let Some(last) = items.last() else {
+            continue;
+        };
+        let with_row = |row: &Value| {
+            let mut draft = seed.clone();
+            if let Some(Value::Array(items)) = draft.pointer_mut(&path) {
+                items.push(row.clone());
+            }
+            parse_error(kind, &draft).is_none()
+        };
+        let candidate = blank(last);
+        let template = if with_row(&candidate) {
+            candidate
+        } else {
+            let mut row = last.clone();
+            let mut row_leaves = Vec::new();
+            leaves(last, "", 1, &mut row_leaves);
+            for (leaf_path, leaf) in row_leaves {
+                let mut trial = row.clone();
+                pointer_set(&mut trial, &leaf_path, blank(&leaf));
+                if with_row(&trial) {
+                    row = trial;
+                }
+            }
+            row
+        };
+        out.insert(pattern, template);
+    }
+}
+
+fn collect_lists(value: &Value, path: &str, depth: usize, out: &mut Vec<(String, String)>) {
+    match value {
+        Value::Array(items) => {
+            if !items.is_empty() {
+                let segments: Vec<&str> = path.split('/').skip(1).collect();
+                out.push((path.to_string(), super::row_pattern(&segments)));
+            }
+            for (index, item) in items.iter().enumerate() {
+                collect_lists(item, &format!("{path}/{index}"), depth + 1, out);
+            }
+        }
+        Value::Object(object) => {
+            for (key, child) in object {
+                if depth == 0 && skipped(key) {
+                    continue;
+                }
+                collect_lists(child, &format!("{path}/{key}"), depth + 1, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn radio_answered(
+    boxes: &BTreeMap<String, &BoxDef>,
+    def: &AgentFormDef,
+    key: &str,
+    map: &BTreeMap<String, String>,
+) -> bool {
+    if boxes.get(key).is_none_or(|entry| !entry.is_radio()) {
+        return true;
+    }
+    family_radios(def, key)
+        .iter()
+        .filter(|radio| map.get(&radio.key).is_some_and(|value| value == "true"))
+        .count()
+        == 1
+}
+
+/// `frm1601c:AmendedRtn_1` -> `frm1601c:AmendedRtn`: a first guess at the
+/// radios of one item while probing (the pinned groups come from the
+/// bindings, see [`group_radios`]).
+fn radio_family(key: &str) -> &str {
+    match key.rfind('_') {
+        Some(at) if at > 0 && key.len() - at <= 4 => &key[..at],
+        _ => key.trim_end_matches(|c: char| c.is_ascii_digit()),
+    }
+}
+
+fn family_radios<'a>(def: &'a AgentFormDef, key: &str) -> Vec<&'a BoxDef> {
+    let Some(entry) = def.box_def(key).filter(|entry| entry.is_radio()) else {
+        return Vec::new();
+    };
+    let family = radio_family(&entry.key);
+    def.boxes
+        .iter()
+        .filter(|other| {
+            other.is_radio() && other.item == entry.item && radio_family(&other.key) == family
+        })
+        .collect()
+}
+
+/// Suffixes and option values a code-like string field may take, read off
+/// the choice boxes its probe changed: `CatAgent_P` -> `P`, a select's
+/// option values.
+fn code_candidates(shell: &AgentFormDef, keys: &[String]) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for key in keys {
+        let Some(entry) = shell.box_def(key) else {
+            continue;
+        };
+        if entry.is_radio() || entry.kind.contains("checkbox") {
+            for radio in family_radios(shell, key).into_iter().chain([entry]) {
+                if let Some((_, suffix)) = radio.key.rsplit_once(['_', ':'])
+                    && (1..=3).contains(&suffix.len())
+                {
+                    out.insert(suffix.to_string());
+                }
+            }
+        }
+        if entry.kind.contains("select") {
+            out.extend(
+                entry
+                    .options
+                    .iter()
+                    .map(|option| option.value.clone())
+                    .filter(|value| !value.is_empty()),
+            );
+        }
+    }
+    out
+}
+
+fn is_choice_box(entry: &BoxDef) -> bool {
+    ["radio", "checkbox", "select"]
+        .iter()
+        .any(|kind| entry.kind.contains(kind))
+}
+
+fn probe_seed(
+    kind: AgentFormKind,
+    seed_index: usize,
+    (seed, grown): (&Value, bool),
+    shell: &AgentFormDef,
+    evidence: &mut Evidence,
+) {
+    let Some((base, base_map)) = probe_eval(kind, seed) else {
+        return;
+    };
+    let by_key: BTreeMap<String, &BoxDef> = shell
+        .boxes
+        .iter()
+        .map(|entry| (entry.key.clone(), entry))
+        .collect();
+    let base_identity = probe_identity(kind, &base);
+    let mut base_leaves = Vec::new();
+    leaves(&base, "", 0, &mut base_leaves);
+    evidence.present.extend(base_map.keys().cloned());
+    for (key, official) in &base_map {
+        evidence
+            .choices
+            .entry(key.clone())
+            .or_default()
+            .push(ChoiceObs {
+                seed: seed_index,
+                change: None,
+                official: official.clone(),
+                answered: radio_answered(&by_key, shell, key, &base_map),
+            });
+    }
+    for (path, leaf) in &base_leaves {
+        if let Value::String(text) = leaf {
+            evidence
+                .strings
+                .entry(path.clone())
+                .or_default()
+                .insert(text.clone());
+        }
+    }
+    evidence
+        .seed_leaves
+        .insert(seed_index, base_leaves.iter().cloned().collect());
+    // Probe one candidate; returns the keys it changed without echoing.
+    let run = |path: &String, candidate: &Candidate, evidence: &mut Evidence| -> Vec<String> {
+        let probe_value = match candidate {
+            Candidate::Value(_, _, value) | Candidate::Choice(value) => value.clone(),
+        };
+        let mut draft = base.clone();
+        pointer_set(&mut draft, path, probe_value);
+        let Some((probed, map)) = probe_eval(kind, &draft) else {
+            return Vec::new();
+        };
+        if probe_identity(kind, &probed) != base_identity {
+            evidence.identity_paths.insert(path.clone());
+        }
+        evidence.present.extend(map.keys().cloned());
+        let changed: BTreeSet<&String> = map
+            .keys()
+            .chain(base_map.keys())
+            .filter(|key| map.get(*key) != base_map.get(*key))
+            .collect();
+        let mut silent = Vec::new();
+        for key in changed {
+            evidence
+                .touched
+                .entry(key.clone())
+                .or_default()
+                .insert(path.clone());
+            let official = map.get(key).cloned().unwrap_or_default();
+            match candidate {
+                Candidate::Value(value_kind, nullable, probe) => {
+                    if echoes(*value_kind, probe, &official) {
+                        evidence.echoes.entry(key.clone()).or_default().insert((
+                            path.clone(),
+                            *value_kind,
+                            *nullable,
+                        ));
+                        *evidence.echo_count.entry(path.clone()).or_default() += 1;
+                        if !grown {
+                            evidence.real_echoes.insert((key.clone(), path.clone()));
+                        }
+                    } else {
+                        evidence.misses.insert((key.clone(), path.clone()));
+                        silent.push(key.clone());
+                    }
+                }
+                Candidate::Choice(value) => {
+                    evidence
+                        .gates
+                        .entry(path.clone())
+                        .or_default()
+                        .insert(key.clone());
+                    evidence
+                        .choices
+                        .entry(key.clone())
+                        .or_default()
+                        .push(ChoiceObs {
+                            seed: seed_index,
+                            change: Some((path.clone(), value.clone())),
+                            official,
+                            answered: radio_answered(&by_key, shell, key, &map),
+                        });
+                }
+            }
+        }
+        silent
+    };
+    for (path, leaf) in &base_leaves {
+        let mut silent = Vec::new();
+        for candidate in candidates(kind, &base, path, leaf) {
+            silent.extend(run(path, &candidate, evidence));
+        }
+        // A code kept in a plain string (`"P"`/`"G"`, an option code):
+        // try the codes the choice boxes it moved can show.
+        if leaf.is_string() {
+            let choice_keys: Vec<String> = silent
+                .into_iter()
+                .filter(|key| by_key.get(key).is_some_and(|entry| is_choice_box(entry)))
+                .collect();
+            for code in code_candidates(shell, &choice_keys)
+                .into_iter()
+                .take(MAX_CODES)
+            {
+                if leaf.as_str() == Some(code.as_str())
+                    || parses(kind, &base, path, &Value::from(code.as_str())).is_err()
+                {
+                    continue;
+                }
+                run(path, &Candidate::Choice(Value::from(code)), evidence);
+            }
+        }
+    }
+}
+
+fn is_election(path: &str) -> bool {
+    path.to_ascii_lowercase().contains("election")
+}
+
+/// Gates opened per form in the second pass, and variants per gate.
+const MAX_GATES: usize = 12;
+const MAX_GATE_VALUES: usize = 4;
+/// Codes tried per string field (a long select such as the RDO list is
+/// sampled, not walked).
+const MAX_CODES: usize = 24;
+
+/// Derive the bindings of `kind`'s boxes from sample drafts.
+///
+/// `profile_values` are the sample taxpayer profile's strings (name,
+/// address, ...): a string field holding one of them is the profile's.
+///
+/// A first pass probes every leaf of each sample (and of the sample with
+/// its lists grown). Boxes still unbound are often shown only behind a flag
+/// (Amended Return, Tax Relief): a second pass flips each flag or option
+/// that moved one of them and probes again.
+pub fn derive(
+    kind: AgentFormKind,
+    seeds: &[Value],
+    profile_values: &[String],
+    boxes: Vec<BoxDef>,
+) -> AgentFormDef {
+    let mut def = AgentFormDef {
+        package: kind.package().to_string(),
+        form_code: kind.form_code().to_string(),
+        boxes,
+        bindings: BTreeMap::new(),
+        rows: BTreeMap::new(),
+        unmapped: BTreeMap::new(),
+    };
+    let mut evidence = Evidence::default();
+    let mut probed_seeds = Vec::new();
+    for seed in seeds {
+        if let Some((computed, _)) = probe_eval(kind, seed) {
+            row_templates(kind, &computed, &mut def.rows);
+            let mut grown = computed.clone();
+            grow_rows(&mut grown);
+            let was_grown = grown != computed;
+            probed_seeds.push((computed, false));
+            if was_grown {
+                probed_seeds.push((grown, true));
+            }
+        }
+    }
+    for (index, (seed, grown)) in probed_seeds.iter().enumerate() {
+        probe_seed(kind, index, (seed, *grown), &def, &mut evidence);
+    }
+    let profile: BTreeSet<String> = profile_values
+        .iter()
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .collect();
+    let user_keys: Vec<String> = def
+        .boxes
+        .iter()
+        .filter(|entry| entry.is_user_box())
+        .map(|entry| entry.key.clone())
+        .collect();
+
+    // Second pass: open the gates of the boxes still unbound (or bound only
+    // through a grown list), then the busiest other flags.
+    let unresolved: BTreeSet<&String> = user_keys
+        .iter()
+        .filter(|key| match decide(&def, &evidence, &profile, key) {
+            Err(_) => true,
+            Ok(_) => evidence.echoes.get(*key).is_some_and(|echoes| {
+                echoes.iter().all(|(path, _, _)| {
+                    !evidence
+                        .real_echoes
+                        .contains(&((*key).clone(), path.clone()))
+                })
+            }),
+        })
+        .collect();
+    let mut gates: Vec<((usize, usize), &String)> = evidence
+        .gates
+        .iter()
+        .map(|(path, keys)| {
+            let open = keys.iter().filter(|key| unresolved.contains(key)).count();
+            ((open, keys.len()), path)
+        })
+        .collect();
+    gates.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(b.1)));
+    let mut variants = Vec::new();
+    for ((open, _), path) in gates.into_iter().take(MAX_GATES) {
+        // A flag that moved a box still unbound is opened on every real
+        // sample; a merely busy one on the first sample that has it.
+        let reals = probed_seeds
+            .iter()
+            .filter(|(seed, grown)| !grown && seed.pointer(path).is_some())
+            .take(if open > 0 { usize::MAX } else { 1 });
+        for (seed, _) in reals {
+            let leaf = seed.pointer(path).expect("filtered above");
+            for candidate in candidates(kind, seed, path, leaf)
+                .into_iter()
+                .take(if open > 0 { MAX_GATE_VALUES } else { 1 })
+            {
+                if let Candidate::Choice(value) = candidate {
+                    let mut variant = seed.clone();
+                    pointer_set(&mut variant, path, value);
+                    variants.push((variant, false));
+                }
+            }
+        }
+    }
+    let first = probed_seeds.len();
+    for (offset, (variant, grown)) in variants.iter().enumerate() {
+        probe_seed(kind, first + offset, (variant, *grown), &def, &mut evidence);
+    }
+
+    for key in &user_keys {
+        match decide(&def, &evidence, &profile, key) {
+            Ok(bound) => {
+                def.bindings.insert(key.clone(), bound);
+            }
+            Err(reason) => {
+                def.unmapped.insert(key.clone(), reason);
+            }
+        }
+    }
+    extend_rows(&mut def);
+    let real: Vec<&Value> = probed_seeds
+        .iter()
+        .filter(|(_, grown)| !grown)
+        .map(|(seed, _)| seed)
+        .collect();
+    verify(kind, &mut def, &real);
+    group_radios(&mut def);
+    def
+}
+
+/// `(item number, draft fields its radios set)`.
+type RadioItem = (String, Vec<String>);
+
+/// Radio keys with the draft fields each sets when checked.
+type Radios = Vec<(String, BTreeMap<String, Value>)>;
+
+/// One box per radio item. Radios (and checkboxes acting as radios) whose
+/// bindings set the same draft fields, each to a different value when
+/// checked, answer one question: they get a group box keyed by their common
+/// key prefix (`frm0619E:optWithheld:Y` + `:N` -> `frm0619E:optWithheld`),
+/// labelled by their common caption, with one option per radio (its key
+/// suffix as the value, the rest of its caption as the label). The group is
+/// filled with an option value; each radio stays fillable by its own key.
+pub fn group_radios(def: &mut AgentFormDef) {
+    let mut items: BTreeMap<RadioItem, Radios> = BTreeMap::new();
+    for entry in def.boxes.iter().filter(|entry| {
+        entry.is_user_box() && (entry.is_radio() || entry.kind.contains("checkbox"))
+    }) {
+        let Some(BoundBox {
+            binding: Binding::Choice { options },
+            ..
+        }) = def.bindings.get(&entry.key)
+        else {
+            continue;
+        };
+        let Some(checked) = options.iter().find(|option| option.value == "true") else {
+            continue;
+        };
+        let fields: Vec<String> = options
+            .iter()
+            .flat_map(|option| option.set.keys().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        items
+            .entry((entry.item.clone(), fields))
+            .or_default()
+            .push((entry.key.clone(), checked.set.clone()));
+    }
+    // Radios of one item whose keys share a stem (`optATC_1`..`optATC_6`) are
+    // one question even when they set different fields (8% vs graduated).
+    let mut merged: BTreeMap<(String, String), Radios> = BTreeMap::new();
+    for ((item, _), radios) in items {
+        let keys: Vec<&str> = radios.iter().map(|(key, _)| key.as_str()).collect();
+        let stem = match keys.as_slice() {
+            // A lone radio: its key without the option suffix (`..._2`).
+            [key] => option_stem(key),
+            _ => common_prefix(&keys),
+        }
+        .trim_end_matches([':', '_', '-', '.'])
+        .to_string();
+        merged.entry((item, stem)).or_default().extend(radios);
+    }
+    for ((item, _), radios) in merged {
+        let distinct: BTreeSet<String> = radios
+            .iter()
+            .map(|(_, set)| serde_json::to_string(set).unwrap_or_default())
+            .collect();
+        if radios.len() < 2 || distinct.len() != radios.len() {
+            continue;
+        }
+        let keys: Vec<&str> = radios.iter().map(|(key, _)| key.as_str()).collect();
+        let prefix = common_prefix(&keys);
+        let mut group = prefix.trim_end_matches([':', '_', '-', '.']).to_string();
+        // Keys that share only the form prefix (`frm2550qv2024:calendarNo1`
+        // and `:fiscalNo1`) are named by their item.
+        let radios_def: Vec<&BoxDef> = keys.iter().filter_map(|key| def.box_def(key)).collect();
+        let labels: Vec<String> = radios_def.iter().map(|entry| entry.label.clone()).collect();
+        let number = if item.is_empty() {
+            labels[0]
+                .split_whitespace()
+                .next()
+                .filter(|word| word.chars().next().is_some_and(|c| c.is_ascii_digit()))
+                .unwrap_or("")
+                .to_string()
+        } else {
+            item.clone()
+        };
+        if keys.iter().all(|key| key.contains(':')) && !group.contains(':') && !number.is_empty() {
+            group = format!("{group}:item{number}");
+        }
+        if group.is_empty() || def.box_def(&group).is_some() {
+            group = format!("{prefix}group");
+        }
+        let distinct_labels = labels.iter().collect::<BTreeSet<_>>().len() == labels.len();
+        let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
+        let shared = if distinct_labels {
+            word_prefix(&common_prefix(&label_refs))
+        } else {
+            String::new()
+        };
+        // A yes/no item: one flag, set true by one radio and false by the other.
+        let yes_no: Option<Vec<&str>> = {
+            let flags: Vec<Option<bool>> = radios
+                .iter()
+                .map(
+                    |(_, set)| match set.values().collect::<Vec<_>>().as_slice() {
+                        [Value::Bool(flag)] if set.len() == 1 => Some(*flag),
+                        _ => None,
+                    },
+                )
+                .collect();
+            (flags.len() == 2 && flags[0].is_some() && flags[1].is_some() && flags[0] != flags[1])
+                .then(|| {
+                    flags
+                        .iter()
+                        .map(|flag| if *flag == Some(true) { "Yes" } else { "No" })
+                        .collect()
+                })
+        };
+        let codes: Vec<String> = radios_def
+            .iter()
+            .map(|entry| entry.choice_value.clone())
+            .collect();
+        let use_codes = codes.iter().all(|code| !code.is_empty())
+            && codes.iter().collect::<BTreeSet<_>>().len() == codes.len();
+        let options: Vec<BoxOption> = keys
+            .iter()
+            .zip(&radios_def)
+            .enumerate()
+            .map(|(at, (key, entry))| {
+                let value = if use_codes {
+                    codes[at].clone()
+                } else {
+                    key[prefix.len()..]
+                        .trim_start_matches([':', '_', '-', '.'])
+                        .to_string()
+                };
+                let rest = entry.label[shared.len().min(entry.label.len())..]
+                    .trim()
+                    .to_string();
+                let label = if !entry.choice.is_empty() {
+                    entry.choice.clone()
+                } else if distinct_labels && !rest.is_empty() {
+                    rest
+                } else if let Some(yes_no) = &yes_no {
+                    yes_no[at].to_string()
+                } else {
+                    value.clone()
+                };
+                BoxOption { label, value }
+            })
+            .collect();
+        if options.iter().any(|option| option.value.is_empty())
+            || options
+                .iter()
+                .map(|option| &option.value)
+                .collect::<BTreeSet<_>>()
+                .len()
+                != options.len()
+        {
+            continue;
+        }
+        let group_label = if !distinct_labels {
+            labels[0].clone()
+        } else if shared.trim().chars().all(|c| c.is_ascii_alphanumeric())
+            && !shared.trim().is_empty()
+            && shared
+                .trim()
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_digit())
+        {
+            // Only the item number is shared (`13 Micro`, `13 Small`).
+            format!("Item {}", shared.trim())
+        } else {
+            let trimmed = shared.trim().trim_end_matches([':', '-', '?', ' ']).trim();
+            if trimmed.is_empty() {
+                labels[0].clone()
+            } else if shared.trim().ends_with('?') {
+                format!("{trimmed}?")
+            } else {
+                trimmed.to_string()
+            }
+        };
+        let members = &radios_def;
+        let required = if members.iter().any(|entry| entry.required == "required") {
+            "required"
+        } else if members.iter().any(|entry| entry.required == "conditional") {
+            "conditional"
+        } else {
+            "optional"
+        };
+        let lock = keys
+            .iter()
+            .find_map(|key| def.bindings.get(*key).and_then(|bound| bound.lock));
+        let group_box = BoxDef {
+            key: group.clone(),
+            label: group_label,
+            item: item.clone(),
+            kind: "radio".to_string(),
+            computed: false,
+            required: required.to_string(),
+            options: options.clone(),
+            layout_only: false,
+            group: None,
+            radio_group: true,
+            members: keys.iter().map(|key| key.to_string()).collect(),
+            choice: String::new(),
+            choice_value: String::new(),
+        };
+        let binding = Binding::Choice {
+            options: options
+                .iter()
+                .zip(&radios)
+                .map(|(option, (_, set))| ChoiceOption {
+                    value: option.value.clone(),
+                    set: set.clone(),
+                })
+                .collect(),
+        };
+        for entry in def.boxes.iter_mut() {
+            if keys.contains(&entry.key.as_str()) {
+                entry.group = Some(group.clone());
+            }
+        }
+        let at = def
+            .boxes
+            .iter()
+            .position(|entry| entry.key == keys[0])
+            .unwrap_or(def.boxes.len());
+        def.boxes.insert(at, group_box);
+        def.bindings
+            .insert(group.clone(), BoundBox { binding, lock });
+    }
+}
+
+/// `frm1701q:optMethodOfDeduction:_2` -> `frm1701q:optMethodOfDeduction:`,
+/// `frm1701q:optType_3` -> `frm1701q:optType_`.
+fn option_stem(key: &str) -> String {
+    match key.rfind([':', '_', '-']) {
+        Some(at) if key.len() - at <= 5 => key[..=at].to_string(),
+        _ => key
+            .trim_end_matches(|c: char| c.is_ascii_digit())
+            .to_string(),
+    }
+}
+
+fn common_prefix(texts: &[&str]) -> String {
+    let Some(first) = texts.first() else {
+        return String::new();
+    };
+    let mut end = first.len();
+    for text in &texts[1..] {
+        end = first
+            .char_indices()
+            .zip(text.chars())
+            .take_while(|((_, a), b)| a == b)
+            .last()
+            .map_or(0, |((at, c), _)| at + c.len_utf8())
+            .min(end);
+    }
+    first[..end].to_string()
+}
+
+/// Cut a shared caption back to a whole word (`"3 Amended Form? Ye"` ->
+/// `"3 Amended Form? "`).
+fn word_prefix(prefix: &str) -> String {
+    match prefix.rfind(|c: char| c.is_whitespace() || matches!(c, ':' | '-' | '(' | '/')) {
+        Some(at) => prefix[..=at].to_string(),
+        None => String::new(),
+    }
+}
+
+/// Labels a user can read. `fields.json` names many boxes only by their
+/// key; for those take the caption printed beside the box on the official
+/// sheet (`captions`: writer key -> printed text, from
+/// `html-frozen/<sheet>/writer-cells.json`), else `Item N`, else the words of
+/// the key itself (`txtPSIC` -> `PSIC`). Boxes added from
+/// the app's field map take the printed caption first.
+pub fn apply_labels(boxes: &mut [BoxDef], captions: &BTreeMap<String, String>) {
+    // A radio whose label its siblings share ("Amended Return" twice) says
+    // more with its printed caption ("3 Amended Return? Yes").
+    let mut shared: BTreeMap<(String, String), usize> = BTreeMap::new();
+    for entry in boxes.iter().filter(|entry| entry.is_radio()) {
+        *shared
+            .entry((entry.item.clone(), entry.label.clone()))
+            .or_default() += 1;
+    }
+    for entry in boxes.iter_mut() {
+        let raw = entry.label.trim().is_empty() || entry.label == entry.key;
+        let ambiguous = entry.is_radio()
+            && shared
+                .get(&(entry.item.clone(), entry.label.clone()))
+                .is_some_and(|count| *count > 1);
+        if !raw && !entry.layout_only && !ambiguous {
+            continue;
+        }
+        if let Some(caption) = captions.get(&entry.key) {
+            entry.label = caption.clone();
+        } else if raw && !entry.item.is_empty() {
+            entry.label = format!("Item {}", entry.item);
+        } else if raw {
+            // Nothing printed and no item: the key's own words.
+            let control = entry.key.rsplit(':').next().unwrap_or(&entry.key);
+            let label = label_from_key(control);
+            if !label.is_empty() {
+                entry.label = label;
+            }
+        }
+    }
+}
+
+/// Fill every binding into each real sample the way `agent::fill` does and
+/// keep it only when the box then shows the value (or, behind an unanswered
+/// item, keeps its old one). Rows a form re-sorts or merges fail here.
+fn verify(kind: AgentFormKind, def: &mut AgentFormDef, seeds: &[&Value]) {
+    let mut rejected = Vec::new();
+    for (key, bound) in &def.bindings {
+        let trials: Vec<(BTreeMap<String, Value>, String)> = match &bound.binding {
+            Binding::Text { path, date, .. } => {
+                let probes: Vec<&str> = match date {
+                    Some(DateFormat::Iso) => vec!["2031-07-19"],
+                    Some(DateFormat::Mdy) => vec!["07/19/2031"],
+                    Some(DateFormat::MonthYear) => vec!["07/2031"],
+                    None => TEXT_PROBES.to_vec(),
+                };
+                probes
+                    .into_iter()
+                    .map(|probe| {
+                        (
+                            BTreeMap::from([(path.clone(), Value::from(probe))]),
+                            probe.to_string(),
+                        )
+                    })
+                    .collect()
+            }
+            Binding::Amount { path, .. } => vec![(
+                BTreeMap::from([(path.clone(), Value::from(AMOUNT_PROBE))]),
+                AMOUNT_PROBE.to_string(),
+            )],
+            Binding::Whole { path, .. } => vec![(
+                BTreeMap::from([(path.clone(), Value::from(WHOLE_PROBES[0]))]),
+                WHOLE_PROBES[0].to_string(),
+            )],
+            Binding::Choice { options } => options
+                .iter()
+                .map(|option| (option.set.clone(), option.value.clone()))
+                .collect(),
+        };
+        let mut shown_once = false;
+        let mut wrong = None;
+        for seed in seeds {
+            let Some((_, base_map)) = probe_eval(kind, seed) else {
+                continue;
+            };
+            if !base_map.contains_key(key) {
+                continue;
+            }
+            for (set, expected) in &trials {
+                let mut draft = (*seed).clone();
+                if set.iter().any(|(path, leaf)| {
+                    super::set_path(&mut draft, path, leaf.clone(), &def.rows).is_err()
+                }) {
+                    continue;
+                }
+                let Some((_, map)) = probe_eval(kind, &draft) else {
+                    continue;
+                };
+                let shown = map.get(key).cloned().unwrap_or_default();
+                let ok = match &bound.binding {
+                    Binding::Text { date: Some(_), .. } => DateFormatKey::Mdy.echoed_by(&shown),
+                    Binding::Text { .. } => shown.to_ascii_uppercase().contains(expected.as_str()),
+                    Binding::Amount { .. } => echoes(ValueKind::Amount, &Value::Null, &shown),
+                    Binding::Whole { .. } => {
+                        shown.trim().parse::<i64>().ok() == Some(WHOLE_PROBES[0])
+                    }
+                    Binding::Choice { .. } => shown == *expected,
+                };
+                if ok {
+                    shown_once = true;
+                } else if map.get(key) != base_map.get(key) {
+                    wrong = Some(shown);
+                }
+            }
+        }
+        if let Some(shown) = wrong.filter(|_| !shown_once) {
+            rejected.push((
+                key.clone(),
+                format!(
+                    "derived by the app: filling it shows `{shown}` (the form re-sorts, merges or recomputes it)"
+                ),
+            ));
+        }
+    }
+    for (key, reason) in rejected {
+        def.bindings.remove(&key);
+        def.unmapped.insert(key, reason);
+    }
+}
+
+/// `frm1601EQ:txtTaxBase7` -> (`frm1601EQ:txtTaxBase`, 7, ``): the last
+/// digit run of a key.
+fn split_index(key: &str) -> Option<(&str, usize, &str)> {
+    let end = key.rfind(|c: char| c.is_ascii_digit())? + 1;
+    let start = key[..end]
+        .rfind(|c: char| !c.is_ascii_digit())
+        .map_or(0, |at| at + 1);
+    Some((&key[..start], key[start..end].parse().ok()?, &key[end..]))
+}
+
+/// The one row index in a binding's paths, with the pointer split around it.
+fn row_of(binding: &Binding) -> Option<(usize, Vec<(String, String)>)> {
+    let paths: Vec<&String> = match binding {
+        Binding::Text { path, .. } | Binding::Amount { path, .. } | Binding::Whole { path, .. } => {
+            vec![path]
+        }
+        Binding::Choice { .. } => return None,
+    };
+    let mut row = None;
+    let mut parts = Vec::new();
+    for path in paths {
+        let segments: Vec<&str> = path.split('/').collect();
+        let indices: Vec<usize> = segments
+            .iter()
+            .enumerate()
+            .filter(|(_, segment)| segment.parse::<usize>().is_ok())
+            .map(|(at, _)| at)
+            .collect();
+        let [at] = indices.as_slice() else {
+            return None;
+        };
+        let index: usize = segments[*at].parse().ok()?;
+        if row.is_some_and(|row| row != index) {
+            return None;
+        }
+        row = Some(index);
+        parts.push((segments[..*at].join("/"), segments[at + 1..].join("/")));
+    }
+    Some((row?, parts))
+}
+
+/// `(key prefix, key suffix, number - row, list pointer, field in the row)`.
+type RowPattern = (String, String, isize, String, String);
+
+/// Bind the numbered boxes of rows past the probed ones: when at least two
+/// probed rows bind `<prefix><n><suffix>` to `<list>/<n - offset>/<field>`
+/// with the same offset, every unbound `<prefix><m><suffix>` box of the form
+/// is row `m - offset` of that list.
+fn extend_rows(def: &mut AgentFormDef) {
+    let mut patterns: BTreeMap<RowPattern, (usize, BoundBox)> = BTreeMap::new();
+    for (key, bound) in &def.bindings {
+        let (Some((prefix, number, suffix)), Some((row, parts))) =
+            (split_index(key), row_of(&bound.binding))
+        else {
+            continue;
+        };
+        let [(list, field)] = parts.as_slice() else {
+            continue;
+        };
+        let offset = number as isize - row as isize;
+        patterns
+            .entry((
+                prefix.to_string(),
+                suffix.to_string(),
+                offset,
+                list.clone(),
+                field.clone(),
+            ))
+            .and_modify(|entry| entry.0 += 1)
+            .or_insert((1, bound.clone()));
+    }
+    // Only boxes no probed row reached; a box a probe moved has its reason.
+    let unbound: Vec<String> = def
+        .unmapped
+        .iter()
+        .filter(|(key, reason)| !key.contains('{') && reason.starts_with("not written"))
+        .map(|(key, _)| key.clone())
+        .collect();
+    for key in unbound {
+        let Some((prefix, number, suffix)) = split_index(&key) else {
+            continue;
+        };
+        let found = patterns.iter().find(|((p, s, offset, _, _), (seen, _))| {
+            p == prefix && s == suffix && *seen >= 2 && number as isize >= *offset
+        });
+        let Some(((_, _, offset, list, field), (_, template))) = found else {
+            continue;
+        };
+        let row = (number as isize - offset) as usize;
+        let path = format!("{list}/{row}/{field}");
+        let binding = match &template.binding {
+            Binding::Text { nullable, date, .. } => Binding::Text {
+                path,
+                nullable: *nullable,
+                date: *date,
+            },
+            Binding::Amount { nullable, .. } => Binding::Amount {
+                path,
+                nullable: *nullable,
+            },
+            Binding::Whole { nullable, .. } => Binding::Whole {
+                path,
+                nullable: *nullable,
+            },
+            Binding::Choice { .. } => continue,
+        };
+        def.unmapped.remove(&key);
+        def.bindings.insert(
+            key,
+            BoundBox {
+                binding,
+                lock: template.lock,
+            },
+        );
+    }
+}
+
+/// Bind `key` from the evidence, or say why it cannot be.
+fn decide(
+    def: &AgentFormDef,
+    evidence: &Evidence,
+    profile: &BTreeSet<String>,
+    key: &str,
+) -> Result<BoundBox, String> {
+    let lock_for = |paths: &[&str]| -> Option<Lock> {
+        if paths
+            .iter()
+            .any(|path| evidence.identity_paths.contains(*path))
+        {
+            Some(Lock::Identity)
+        } else if paths.iter().any(|path| is_election(path)) {
+            Some(Lock::Election)
+        } else if paths.iter().any(|path| {
+            evidence
+                .strings
+                .get(*path)
+                .is_some_and(|values| values.iter().any(|value| profile.contains(value)))
+        }) {
+            Some(Lock::Profile)
+        } else {
+            None
+        }
+    };
+    let echoes: Option<Vec<&(String, ValueKind, bool)>> = evidence.echoes.get(key).map(|echoes| {
+        echoes
+            .iter()
+            .filter(|(path, _, _)| !evidence.misses.contains(&(key.to_string(), path.clone())))
+            .collect()
+    });
+    if let Some(echoes) = echoes.filter(|echoes| !echoes.is_empty()) {
+        let (path, value_kind, nullable) = echoes
+            .into_iter()
+            .min_by_key(|(path, _, _)| {
+                (
+                    !evidence
+                        .real_echoes
+                        .contains(&(key.to_string(), path.clone())),
+                    evidence.echo_count.get(path).copied(),
+                    path.clone(),
+                )
+            })
+            .cloned()
+            .expect("non-empty echo set");
+        // Another field's amount or text also moves this box: it is a sum
+        // or a combination (Total Remitted = Tax + Penalty), not an entry.
+        if let Some((_, other)) = evidence
+            .misses
+            .iter()
+            .find(|(missed, other)| missed == key && *other != path)
+        {
+            return Err(format!(
+                "derived by the app: shows {path} combined with {other}"
+            ));
+        }
+        let lock = lock_for(&[path.as_str()]);
+        let binding = match value_kind {
+            ValueKind::Text(date) => Binding::Text {
+                path,
+                nullable,
+                date: date.map(DateFormatKey::format),
+            },
+            ValueKind::Amount => Binding::Amount { path, nullable },
+            ValueKind::Whole => Binding::Whole { path, nullable },
+        };
+        return Ok(BoundBox { binding, lock });
+    }
+    let choice_box = def.box_def(key).is_some_and(is_choice_box);
+    if let Some(options) = choice_binding(evidence, key, choice_box)? {
+        let paths: BTreeSet<&str> = options
+            .iter()
+            .flat_map(|option| option.set.keys().map(String::as_str))
+            .collect();
+        let paths: Vec<&str> = paths.into_iter().collect();
+        return Ok(BoundBox {
+            lock: lock_for(&paths),
+            binding: Binding::Choice { options },
+        });
+    }
+    if key.contains("{N") {
+        return Err(
+            "a row family pattern, not a box: each row is its own numbered key".to_string(),
+        );
+    }
+    Err(if !evidence.present.contains(key) {
+        "not written by this app's field map for any sample draft".to_string()
+    } else if let Some(paths) = evidence.touched.get(key) {
+        let named: Vec<&str> = paths.iter().take(3).map(String::as_str).collect();
+        format!(
+            "derived by the app: changes with {}{} but never shows one field's value",
+            named.join(", "),
+            if paths.len() > 3 { ", ..." } else { "" }
+        )
+    } else {
+        "written by the app without a draft field (a constant or the period)".to_string()
+    })
+}
+
+/// Boxes the app's field map writes that `fields.json` does not list, when
+/// the package describes another revision than the one the app serializes
+/// (fewer than half of the written keys are in it). Labels come from the
+/// key (`frm1700:txtPg1I1Year` -> `Page 1 Item 1 Year`).
+pub fn supplement_from_field_map(
+    kind: AgentFormKind,
+    seeds: &[Value],
+    boxes: &[BoxDef],
+) -> Vec<BoxDef> {
+    let mut written: BTreeMap<String, String> = BTreeMap::new();
+    for seed in seeds {
+        if let Some((_, map)) = probe_eval(kind, seed) {
+            written.extend(map);
+        }
+    }
+    let listed: BTreeSet<&str> = boxes.iter().map(|entry| entry.key.as_str()).collect();
+    let known = written
+        .keys()
+        .filter(|key| listed.contains(key.as_str()))
+        .count();
+    if written.is_empty() || known * 2 >= written.len() {
+        return Vec::new();
+    }
+    written
+        .into_iter()
+        .filter(|(key, _)| !listed.contains(key.as_str()))
+        .map(|(key, value)| {
+            let control = key.rsplit(':').next().unwrap_or(&key).to_string();
+            let flag = value == "true" || value == "false";
+            BoxDef {
+                label: label_from_key(&control),
+                item: String::new(),
+                kind: if !flag {
+                    "text".to_string()
+                } else if control.starts_with("rdo") {
+                    "radio".to_string()
+                } else {
+                    "checkbox".to_string()
+                },
+                computed: false,
+                required: "optional".to_string(),
+                options: Vec::new(),
+                layout_only: true,
+                group: None,
+                radio_group: false,
+                members: Vec::new(),
+                choice: String::new(),
+                choice_value: String::new(),
+                key,
+            }
+        })
+        .collect()
+}
+
+fn label_from_key(control: &str) -> String {
+    let body = control.trim_start_matches(|c: char| c.is_ascii_lowercase());
+    let mut words: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut previous: Option<char> = None;
+    for c in body.chars() {
+        let boundary = match previous {
+            Some(p) => {
+                (c.is_ascii_uppercase() && !p.is_ascii_uppercase())
+                    || (c.is_ascii_digit() != p.is_ascii_digit())
+                    || c == '_'
+            }
+            None => false,
+        };
+        if boundary && !current.is_empty() {
+            words.push(std::mem::take(&mut current));
+        }
+        if c != '_' {
+            current.push(c);
+        }
+        previous = Some(c);
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut iter = words.into_iter().peekable();
+    while let Some(word) = iter.next() {
+        let number = iter
+            .peek()
+            .filter(|next| next.chars().all(|c| c.is_ascii_digit()));
+        match (word.as_str(), number) {
+            ("Pg", Some(_)) => out.push("Page".to_string()),
+            ("I", Some(_)) => out.push("Item".to_string()),
+            ("Pt", Some(_)) => out.push("Part".to_string()),
+            _ => out.push(word),
+        }
+    }
+    out.join(" ")
+}
+
+/// Options of a choice box, or why it has none.
+fn choice_binding(
+    evidence: &Evidence,
+    key: &str,
+    choice_box: bool,
+) -> Result<Option<Vec<ChoiceOption>>, String> {
+    let Some(observations) = evidence.choices.get(key) else {
+        return Ok(None);
+    };
+    // A text box that only appears with a flag is not that flag's answer.
+    if !choice_box
+        && observations
+            .iter()
+            .any(|obs| !matches!(obs.official.as_str(), "true" | "false"))
+    {
+        return Ok(None);
+    }
+    let paths: BTreeSet<&String> = observations
+        .iter()
+        .filter_map(|obs| obs.change.as_ref().map(|(path, _)| path))
+        .collect();
+    if paths.is_empty() {
+        return Ok(None);
+    }
+    if paths.len() > 6 {
+        return Err(format!(
+            "derived by the app from {} flags or options, not one answer",
+            paths.len()
+        ));
+    }
+    let mut best: BTreeMap<&str, (&ChoiceObs, (bool, usize, usize))> = BTreeMap::new();
+    for obs in observations {
+        let changes = usize::from(obs.change.is_some());
+        let score = (!obs.answered, changes, obs.seed);
+        best.entry(obs.official.as_str())
+            .and_modify(|current| {
+                if score < current.1 {
+                    *current = (obs, score);
+                }
+            })
+            .or_insert((obs, score));
+    }
+    if best.len() < 2 {
+        return Ok(None);
+    }
+    let options = best
+        .into_iter()
+        .map(|(official, (obs, _))| {
+            let empty = BTreeMap::new();
+            let seed = evidence.seed_leaves.get(&obs.seed).unwrap_or(&empty);
+            let mut set: BTreeMap<String, Value> = paths
+                .iter()
+                .filter_map(|path| {
+                    seed.get(*path)
+                        .map(|value| ((*path).clone(), value.clone()))
+                })
+                .collect();
+            if let Some((path, value)) = &obs.change {
+                set.insert(path.clone(), value.clone());
+            }
+            ChoiceOption {
+                value: official.to_string(),
+                set,
+            }
+        })
+        .collect();
+    Ok(Some(options))
+}

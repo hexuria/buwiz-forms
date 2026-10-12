@@ -154,6 +154,9 @@ pub struct AppState {
     pub(crate) queueable_view: Option<AnyView>,
     /// (form, year, period) to open on the next render, which has a `Window`.
     pub(crate) pending_queueable: Option<(bir_core::forms::queueable::QueueableKind, u16, u8)>,
+    /// The assistant's per-box state for the open generic-queue form (the
+    /// views of those forms keep none of their own).
+    pub(crate) agent_generic: Option<crate::agent::assist::GenericAssistMemo>,
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
@@ -894,6 +897,7 @@ impl AppState {
             pending_form_2550q_draft: None,
             queueable_view: None,
             pending_queueable: None,
+            agent_generic: None,
             db,
             profiles,
             active_profile_tin: None,
@@ -1430,6 +1434,14 @@ impl AppState {
         match view {
             ActiveView::Form2551Q => self.form_2551q_view = None,
             ActiveView::Form1601C => self.form_1601c_view = None,
+            ActiveView::Form2550Q => {
+                self.form_2550q_view = None;
+                self.agent_generic = None;
+            }
+            ActiveView::Queueable(_) => {
+                self.queueable_view = None;
+                self.agent_generic = None;
+            }
             _ => return,
         }
         if self.active_view == view {
@@ -1465,6 +1477,105 @@ impl AppState {
             window,
             cx,
         );
+    }
+
+    /// Build the 2550Q page around `draft` (a dashboard open or the
+    /// assistant's edits).
+    pub(crate) fn mount_form_2550q_view(
+        &mut self,
+        draft: bir_core::forms::form_2550q::Form2550QDraft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let db_for_view = Arc::clone(&self.db);
+        let form_view = cx.new(|cx| Form2550QV2View::new(draft, db_for_view, window, cx));
+        cx.subscribe_in(
+            &form_view,
+            window,
+            |this: &mut Self, _entity, event: &Form2550QV2Event, window, cx| match event {
+                Form2550QV2Event::BackToDashboard => {
+                    this.active_view = ActiveView::Dashboard;
+                    cx.notify();
+                }
+                Form2550QV2Event::PushNotification(level, title, message) => {
+                    push_notification(level, title, message, window, cx);
+                }
+                Form2550QV2Event::Saved
+                | Form2550QV2Event::Submitted
+                | Form2550QV2Event::Confirmed => {
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
+        self.form_2550q_view = Some(form_view);
+    }
+
+    /// Show the assistant's draft of a generic-queue form: rebuild its page
+    /// around `draft` now, replacing any pending open of the same form.
+    #[cfg(feature = "agent")]
+    pub(crate) fn mount_agent_form(
+        &mut self,
+        kind: bir_core::forms::queueable::QueueableKind,
+        draft: &serde_json::Value,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        use bir_core::forms::queueable::QueueableKind;
+        if kind == QueueableKind::Form2550Q {
+            let typed = serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+            self.pending_form_2550q_draft = None;
+            self.mount_form_2550q_view(typed, window, cx);
+            self.active_view = ActiveView::Form2550Q;
+        } else {
+            let spec = crate::views::queueable_forms::spec_for_kind(kind)
+                .ok_or("this form has no page")?;
+            self.pending_queueable = None;
+            self.queueable_view = Some((spec.open_with)(draft, Arc::clone(&self.db), window, cx)?);
+            self.active_view = ActiveView::Queueable(kind);
+        }
+        cx.notify();
+        Ok(())
+    }
+
+    /// `form.review_in_app` on the painted page: its own Validate, the
+    /// assistant's note and a highlighted Submit, and the window to the front.
+    #[cfg(feature = "agent")]
+    pub(crate) fn review_agent_form(
+        &mut self,
+        kind: bir_core::forms::agent::AgentFormKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use bir_core::forms::agent::AgentFormKind;
+        use bir_core::forms::queueable::QueueableKind;
+        match kind {
+            AgentFormKind::Form1601C => {
+                if let Some(view) = &self.form_1601c_view {
+                    view.update(cx, |form, cx| form.agent_review(window, cx));
+                }
+            }
+            AgentFormKind::Form2551Q => {
+                if let Some(view) = &self.form_2551q_view {
+                    view.update(cx, |form, cx| form.agent_review(window, cx));
+                }
+            }
+            AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
+                if let Some(view) = &self.form_2550q_view {
+                    view.update(cx, |form, cx| form.agent_review(window, cx));
+                }
+            }
+            AgentFormKind::Queueable(kind) => {
+                if let (Some(view), Some(spec)) = (
+                    self.queueable_view.clone(),
+                    crate::views::queueable_forms::spec_for_kind(kind),
+                ) {
+                    (spec.review)(&view, window, cx);
+                }
+            }
+        }
+        window.activate_window();
+        cx.notify();
     }
 
     pub(crate) fn request_admin_access(
@@ -2065,28 +2176,7 @@ impl Render for AppState {
         }
 
         if let Some(draft) = self.pending_form_2550q_draft.take() {
-            let db_for_view = Arc::clone(&self.db);
-            let form_view = cx.new(|cx| Form2550QV2View::new(draft, db_for_view, window, cx));
-            cx.subscribe_in(
-                &form_view,
-                window,
-                |this: &mut Self, _entity, event: &Form2550QV2Event, window, cx| match event {
-                    Form2550QV2Event::BackToDashboard => {
-                        this.active_view = ActiveView::Dashboard;
-                        cx.notify();
-                    }
-                    Form2550QV2Event::PushNotification(level, title, message) => {
-                        push_notification(level, title, message, window, cx);
-                    }
-                    Form2550QV2Event::Saved
-                    | Form2550QV2Event::Submitted
-                    | Form2550QV2Event::Confirmed => {
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
-            self.form_2550q_view = Some(form_view);
+            self.mount_form_2550q_view(draft, window, cx);
         }
 
         if let Some((kind, year, period)) = self.pending_queueable.take()
