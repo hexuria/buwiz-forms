@@ -1358,7 +1358,7 @@ impl FormViewTrait for Form2200ANView {
 
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !can_queue_for_submission(Form2200ANDraft::FORM_CODE) {
-            self.status_message = Some(QUEUE_UNAVAILABLE.into());
+            self.status_message = Some(queue_unavailable());
             cx.notify();
             return;
         }
@@ -1499,7 +1499,9 @@ impl FormViewTrait for Form2200ANView {
 
 /// Why Queue for submission is off: the registry leaves 2200-AN unqueueable
 /// (the official PROD SFTP map has no 2200ANv2018 folder).
-const QUEUE_UNAVAILABLE: &str = "In-app submission isn't available for 2200-AN in this build.";
+fn queue_unavailable() -> String {
+    super::form_header::queue_unavailable_message("2200-AN")
+}
 
 impl Render for Form2200ANView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1628,7 +1630,7 @@ impl Form2200ANView {
         let unavailable = (self.draft.lifecycle.is_editable()
             && !self.validated
             && !can_queue_for_submission(Form2200ANDraft::FORM_CODE))
-        .then(|| QUEUE_UNAVAILABLE.to_string());
+        .then(queue_unavailable);
         FormHeaderProps {
             slug: "2200an",
             status: self.draft.lifecycle.status.clone(),

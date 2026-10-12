@@ -383,8 +383,10 @@ impl Form2200CDraft {
         };
         put(
             "contact_email",
-            super::excise_places::shared_comb_line(
-                &[(0, self.contact_number.trim()), (13, self.email.trim())],
+            super::excise_places::contact_email_comb_line(
+                &self.contact_number,
+                &self.email,
+                13,
                 40,
             ),
         );

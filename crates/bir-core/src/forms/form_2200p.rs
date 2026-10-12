@@ -543,8 +543,10 @@ impl Form2200PDraft {
         };
         put(
             "contact_email",
-            super::excise_places::shared_comb_line(
-                &[(0, self.contact_number.trim()), (12, self.email.trim())],
+            super::excise_places::contact_email_comb_line(
+                &self.contact_number,
+                &self.email,
+                12,
                 40,
             ),
         );

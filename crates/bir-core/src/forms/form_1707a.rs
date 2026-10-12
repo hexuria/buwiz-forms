@@ -529,19 +529,12 @@ impl Form1707ADraft {
         const EMAIL_SLOT: usize = 12;
         const WIDTH: usize = 40;
         let mut fields = self.to_bir_field_map();
-        let email = self.email.trim();
-        let line = if EMAIL_SLOT + email.chars().count() > WIDTH {
-            let lead = super::excise_places::shared_comb_line(
-                &[(0, self.contact_number.trim()), (EMAIL_SLOT, "")],
-                EMAIL_SLOT,
-            );
-            format!("{lead:<width$}{email}", width = EMAIL_SLOT)
-        } else {
-            super::excise_places::shared_comb_line(
-                &[(0, self.contact_number.trim()), (EMAIL_SLOT, email)],
-                WIDTH,
-            )
-        };
+        let line = super::excise_places::contact_email_comb_line(
+            &self.contact_number,
+            &self.email,
+            EMAIL_SLOT,
+            WIDTH,
+        );
         if !line.trim().is_empty() {
             fields.insert("derived:contact_email".to_string(), line);
         }

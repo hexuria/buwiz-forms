@@ -49,6 +49,24 @@ pub const AMENDED_REVERT_MESSAGE: &str =
 /// Shown while Submit waits for Validate (separate Validate button on).
 pub const CLICK_VALIDATE_MESSAGE: &str = "Click Validate to check this return before submitting.";
 
+/// Status box text for a form that can't be queued (issue #87), e.g.
+/// `queue_unavailable_message("2200-A")`. Shared by the 2200-A/AN/M/P views.
+pub fn queue_unavailable_message(form_label: &str) -> String {
+    format!(
+        "In-app submission isn't available for {form_label} in this build. \
+         Print this return and file it through eFPS or your RDO."
+    )
+}
+
+/// The "Why?" disclosure under [`queue_unavailable_message`].
+pub const QUEUE_UNAVAILABLE_WHY: &str = "BIR's own eBIRForms 7.9.6.2.1 has no upload folder for this form version, so returns can't be sent from this app yet.";
+
+/// True when `text` came from [`queue_unavailable_message`].
+pub fn is_queue_unavailable_message(text: &str) -> bool {
+    text.starts_with("In-app submission isn't available for ")
+        && text.ends_with(" in this build. Print this return and file it through eFPS or your RDO.")
+}
+
 /// Fallback when a form has no official success alert.
 pub const DEFAULT_SUCCESS_MESSAGE: &str = "Validation successful.";
 
@@ -172,6 +190,7 @@ pub struct FormHeaderState {
     menu_open: bool,
     dismissed: Option<String>,
     show_sent: bool,
+    show_why: bool,
     sent: std::cell::OnceCell<Option<AmendmentSnapshot>>,
 }
 
@@ -552,7 +571,40 @@ pub fn render_status_box<V: 'static>(
                         .bg(cx.theme().danger.opacity(0.08))
                 })
                 .when(!is_error, |d| d.bg(cx.theme().muted.opacity(0.6)))
-                .child(div().flex_1().min_w_0().child(text))
+                .child({
+                    let why = is_queue_unavailable_message(&text);
+                    let show_why = state.show_why;
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(text.clone())
+                        .when(why, |d| {
+                            d.child(
+                                div().child(
+                                    Button::new(id(props.slug, "status_why"))
+                                        .label(if show_why { "Why? ▾" } else { "Why? ▸" })
+                                        .ghost()
+                                        .xsmall()
+                                        .on_click(cx.listener(move |this: &mut V, _, _, cx| {
+                                            let st = (actions.state)(this);
+                                            st.show_why = !st.show_why;
+                                            cx.notify();
+                                        })),
+                                ),
+                            )
+                            .when(show_why, |d| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(QUEUE_UNAVAILABLE_WHY),
+                                )
+                            })
+                        })
+                })
                 .child(
                     Button::new(id(props.slug, "status_dismiss"))
                         .label("×")
@@ -618,6 +670,18 @@ mod tests {
         HeaderVisibility, form_header_visibility, header_visibility, status_box_visible,
         status_text, submit_enabled, submit_hidden_for_slug,
     };
+    use super::{is_queue_unavailable_message, queue_unavailable_message};
+
+    #[test]
+    fn queue_unavailable_text_names_the_form_and_next_step() {
+        let text = queue_unavailable_message("2200-AN");
+        assert_eq!(
+            text,
+            "In-app submission isn't available for 2200-AN in this build. Print this return and file it through eFPS or your RDO."
+        );
+        assert!(is_queue_unavailable_message(&text));
+        assert!(!is_queue_unavailable_message("Saved."));
+    }
     use bir_core::forms::FilingStatus;
 
     fn props(status: FilingStatus) -> FormHeaderProps<'static> {
