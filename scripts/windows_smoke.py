@@ -285,9 +285,30 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
             period = 12 if code == "1601C" else 4
             invoke(client, "filing.start", {"code": code, "year": year, "period": period, "tin": SMOKE_TIN})
             if code == "1601C":
-                invoke(client, "form.fill", {"any_taxes_withheld": "Yes", "category_of_agent": "P"})
+                invoke(
+                    client,
+                    "form.fill",
+                    {
+                        "any_taxes_withheld": "Yes",
+                        "category_of_agent": "P",
+                        "tax_15_statutory_minimum_wage": "250.00",
+                        "tax_16_holiday_pay": "300.00",
+                        "tax_17_13th_month_pay": "400.00",
+                        "tax_18_de_minimis": "50.00",
+                        "tax_19_sss_gsis": "100.00",
+                    },
+                )
                 set_value(client, "form-1601c-tax-14", "1000.00")
                 set_value(client, "form-1601c-tax-25", "100.00")
+            else:
+                invoke(
+                    client,
+                    "form.fill",
+                    {
+                        "schedule_1.0.atc": "PT010",
+                        "schedule_1.0.taxable_amount": "2000.00",
+                    },
+                )
             invoke(client, "form.print")
             result["step_reached"] = f"requested {code} preview"
             wait_preview(client, proc)
