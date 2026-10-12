@@ -23,7 +23,7 @@ your running app or your data. It replaces the slow manual walkthrough.
 The binary must include the agent. Debug builds also include Dev Mode:
 
 ```sh
-cargo build -p bir-desktop --bin bir --features dev-tools,agent
+cargo build -p bir-desktop --bin bir-desktop --features dev-tools,agent
 ```
 
 ## Run
@@ -39,7 +39,7 @@ Then open `<out>/index.html` in a browser. Each card links to the full-size PNG.
 | Option | Default | Meaning |
 |---|---|---|
 | `--out DIR` | `target/ui-walkthrough` | output folder |
-| `--bin PATH` | `$CARGO_TARGET_DIR/debug/bir` | app binary built with `--features agent` |
+| `--bin PATH` | `$CARGO_TARGET_DIR/debug/bir-desktop` | app binary built with `--features agent` |
 | `--data-from DIR` | none | copies `bir_data.db` (+ `-wal`, `-shm`) and `bir_key.txt` into `<HOME>/.taxman-ebir`. The source is never opened or modified. |
 | `--demo-profile` | off | if the database has no active profile, creates "Walkthrough Demo Taxpayer" (TIN 123-456-788-00002) through the agent |
 | `--tin TIN` | first active profile | taxpayer for the dashboard and form pages |
@@ -101,7 +101,7 @@ ImageMagick installed. Override them for unusual setups:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `WALK_BIN` | `$CARGO_TARGET_DIR/debug/bir` | same as `--bin` |
+| `WALK_BIN` | `$CARGO_TARGET_DIR/debug/bir-desktop` | same as `--bin` |
 | `WALK_OUT` | `target/ui-walkthrough` | same as `--out` |
 | `WALK_XVFB` | `Xvfb` | Xvfb executable |
 | `WALK_IMPORT` | `import` | ImageMagick `import` |
@@ -122,7 +122,7 @@ S=<session scratchpad>; RL=$HOME/.cache/rtroot/usr/lib/aarch64-linux-gnu
 WALK_XDOTOOL=$HOME/.cache/rtroot/usr/bin/xdotool WALK_XDOTOOL_LD_LIBRARY_PATH=$RL \
 WALK_APP_LD_LIBRARY_PATH=$RL:$S/sysroot/usr/lib/aarch64-linux-gnu \
 WALK_APP_LD_PRELOAD=$S/vnc/libnosve.so WALK_VK_ICD_FILENAMES=$S/vnc/lvp_icd.json \
-WALK_BIN=$HOME/.cache/buwiz-target/debug/bir WALK_TMPDIR=$S \
+WALK_BIN=$HOME/.cache/buwiz-target/debug/bir-desktop WALK_TMPDIR=$S \
 python3 tools/ui-walkthrough/walkthrough.py --out $S/ui-walk --demo-profile
 ```
 

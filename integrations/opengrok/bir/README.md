@@ -45,7 +45,7 @@ port and publishes it in its discovery record:
 ```sh
 EBIR_TEST_ENV=1 BIR_DATABASE_PATH=/tmp/bir-demo/bir_data.db \
 GPUI_AGENT=1 GPUI_AGENT_TOKEN='<demo agent token>' GPUI_AGENT_CONNECT_ID=bir-demo \
-  target/debug/bir
+  target/debug/bir-desktop
 ```
 
 ## Agent tokens: `BIR_MCP_TOKENS`

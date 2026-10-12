@@ -83,8 +83,9 @@ jobs:
             mesa-vulkan-drivers
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.0
           components: clippy, rustfmt
 
       - name: Rust cache
@@ -140,8 +141,9 @@ jobs:
           done
 
       - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Rust Cache
@@ -173,6 +175,8 @@ jobs:
 
       - name: Create Universal Binary
         run: |
+          python3 scripts/alias_desktop_bin.py target/aarch64-apple-darwin/release
+          python3 scripts/alias_desktop_bin.py target/x86_64-apple-darwin/release
           mkdir -p target/release-artifacts
           lipo -create \
             target/aarch64-apple-darwin/release/bir \
@@ -392,8 +396,9 @@ jobs:
           "WINDOWS_SIGNTOOL=$signtool" >> $env:GITHUB_ENV
 
       - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.0
           targets: x86_64-pc-windows-msvc
 
       - name: Rust Cache
@@ -419,6 +424,10 @@ jobs:
 
       - name: Build
         run: cargo build --locked --release --target x86_64-pc-windows-msvc
+
+      - name: Stage desktop executable name
+        shell: pwsh
+        run: python scripts/alias_desktop_bin.py target/x86_64-pc-windows-msvc/release
 
       - name: Sign and verify Windows executable payloads
         shell: pwsh
@@ -569,8 +578,9 @@ jobs:
             mesa-vulkan-drivers
 
       - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.0
           targets: x86_64-unknown-linux-gnu
 
       - name: Rust Cache
@@ -596,6 +606,9 @@ jobs:
 
       - name: Build
         run: cargo build --locked --release --target x86_64-unknown-linux-gnu
+
+      - name: Stage desktop executable name
+        run: python3 scripts/alias_desktop_bin.py target/x86_64-unknown-linux-gnu/release
 
       - name: Install cargo-deb
         run: cargo install --locked cargo-deb --version 3.7.0

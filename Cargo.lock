@@ -813,6 +813,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bir"
+version = "0.1.0"
+dependencies = [
+ "bir-desktop",
+]
+
+[[package]]
 name = "bir-core"
 version = "0.1.0"
 dependencies = [
@@ -911,6 +918,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "smol",
+ "socket2",
  "temp-env",
  "tempfile",
  "thiserror 2.0.20",
