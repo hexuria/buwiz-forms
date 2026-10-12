@@ -12,7 +12,7 @@ use bir_core::forms::form_2200m::{
     FORM_2200M_FIRST_OTHER_ROW, FORM_2200M_FIXED_ROWS, FORM_2200M_MAX_ROWS, FORM_2200M_OTHER_ATC,
     FORM_2200M_SCHEDULE_ROWS, Form2200MDraft, Form2200MPayment, Form2200MPlace, Form2200MRow,
 };
-use bir_core::forms::queueable::{QueueableForm, period_column};
+use bir_core::forms::queueable::{QueueableForm, can_user_revert, period_column};
 use bir_core::forms::{FilingStatus, can_queue_for_submission};
 use bir_core::official_xml::official_amount;
 use gpui::prelude::FluentBuilder;
@@ -26,6 +26,11 @@ use gpui_rsx::rsx;
 use super::event_form_kit as kit;
 use crate::components::form_engine::FormViewTrait;
 use crate::views::form_controls::{messages_for, with_field_error};
+use crate::views::form_header::{
+    AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
+    FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
+    separate_validate_button,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
 use bir_core::profile::TaxpayerProfile;
 
@@ -274,6 +279,10 @@ pub struct Form2200MView {
     parse_errors: Vec<(String, String)>,
     status_message: Option<String>,
     release_claim_confirm_open: bool,
+    /// Shared header state (⋯ menu, status box, sent snapshot).
+    header: FormHeaderState,
+    /// Validate ran at the current entries; every edit clears it.
+    validated: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -414,7 +423,14 @@ impl Form2200MView {
         draft.tax_relief_specify = self.input_text("relief", cx);
         draft.other_scheme_description = self.input_text("other", cx);
         draft.recompute();
-        draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
+        draft.lifecycle.updated_at = self.draft.lifecycle.updated_at.clone();
+        let changed = draft != self.draft;
+        if changed {
+            draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
+        }
+        if changed || parse_errors != self.parse_errors {
+            self.validated = false;
+        }
         self.validation_errors = draft.validate();
         self.parse_errors = parse_errors;
         self.draft = draft;
@@ -492,6 +508,9 @@ impl Form2200MView {
         }
         self.sync_from_inputs(cx);
         self.status_message = None;
+        // Adding or removing a row is an edit even when the rebuilt draft
+        // compares equal to the already-changed one.
+        self.validated = false;
     }
 
     fn add_row(&mut self) {
@@ -523,6 +542,7 @@ impl Form2200MView {
         self.draft.recompute();
         self.validation_errors = self.draft.validate();
         self.status_message = None;
+        self.validated = false;
         cx.notify();
     }
 
@@ -653,6 +673,57 @@ impl Form2200MView {
         );
     }
 
+    /// Cancel a Queued return (claimed: ask to release the claim first).
+    fn cancel_queue(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.draft.lifecycle.status, FilingStatus::Queued) {
+            self.status_message =
+                Some("This return cannot be reverted after submission has started.".into());
+            cx.notify();
+            return;
+        }
+        if !self.draft.lifecycle.is_unclaimed() {
+            self.release_claim_confirm_open = true;
+            self.status_message = Some(
+                "Submission was claimed. Confirm nothing reached BIR to return it to an editable Draft. This does not file.".into(),
+            );
+            cx.notify();
+            return;
+        }
+        let queued = self.draft.clone();
+        let canceled = match self.db.lock() {
+            Ok(db) => db
+                .cancel_queued_queueable(&queued)
+                .map_err(|e| e.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match canceled {
+            Ok(draft) => {
+                self.draft = draft;
+                self.status_message = None;
+                self.validation_errors = self.draft.validate();
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form2200MDraft>(
+                        &queued.tin,
+                        queued.year,
+                        period_column(&queued.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
+                self.notify(
+                    notification::NotificationType::Warning,
+                    format!("The queued return was not canceled: {error}"),
+                    window,
+                    cx,
+                );
+            }
+        }
+        cx.notify();
+    }
+
     fn release_claim(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let draft = &self.draft;
         let result = match self.db.lock() {
@@ -667,6 +738,7 @@ impl Form2200MView {
             Err(error) => Err(error.to_string()),
         };
         self.release_claim_confirm_open = false;
+        self.validated = false;
         match result {
             Ok(AbandonedClaimRelease::Released { draft, .. }) => {
                 self.draft = draft;
@@ -1281,6 +1353,8 @@ impl QueueableFormView for Form2200MView {
             parse_errors: Vec::new(),
             status_message: None,
             release_claim_confirm_open: false,
+            header: FormHeaderState::new(),
+            validated: false,
             _subscriptions: subscriptions,
         }
     }
@@ -1402,10 +1476,7 @@ impl FormViewTrait for Form2200MView {
             cx.notify();
             return;
         }
-        self.status_message = Some(format!(
-            "Queued for background submission as {}.",
-            self.draft.submission_filename()
-        ));
+        self.status_message = None;
         self.notify(
             notification::NotificationType::Success,
             "Form 2200M queued.".into(),
@@ -1423,51 +1494,52 @@ impl FormViewTrait for Form2200MView {
         cx.notify();
     }
 
+    /// D7A + D8A: a claimed Queued return keeps the release-claim
+    /// confirmation; everything else goes through
+    /// `Database::revert_queueable_for_amendment`.
     fn revert_to_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !matches!(self.draft.lifecycle.status, FilingStatus::Queued) {
-            self.status_message =
-                Some("This return cannot be reverted after submission has started.".into());
-            cx.notify();
+        if !can_user_revert(&self.draft.lifecycle.status) {
             return;
         }
-        if !self.draft.lifecycle.is_unclaimed() {
-            self.release_claim_confirm_open = true;
-            self.status_message = Some(
-                "Submission was claimed. Confirm nothing reached BIR to return it to an editable Draft. This does not file.".into(),
-            );
-            cx.notify();
+        if matches!(self.draft.lifecycle.status, FilingStatus::Queued)
+            && !self.draft.lifecycle.is_unclaimed()
+        {
+            self.cancel_queue(window, cx);
             return;
         }
-        let queued = self.draft.clone();
-        let canceled = match self.db.lock() {
-            Ok(db) => db
-                .cancel_queued_queueable(&queued)
-                .map_err(|e| e.to_string()),
-            Err(error) => Err(error.to_string()),
-        };
-        match canceled {
-            Ok(draft) => {
-                self.draft = draft;
-                self.status_message = None;
+        match revert_for_amendment(&self.db, &self.draft) {
+            Ok(reverted) => {
+                self.draft = reverted.draft;
+                self.validated = false;
+                self.parse_errors.clear();
                 self.validation_errors = self.draft.validate();
-                cx.emit(QueueableFormEvent::Saved);
-            }
-            Err(error) => {
-                if let Ok(db) = self.db.lock()
-                    && let Ok(Some(current)) = db.get_queueable_draft::<Form2200MDraft>(
-                        &queued.tin,
-                        queued.year,
-                        period_column(&queued.filing_period()),
-                    )
-                {
-                    self.draft = current;
+                self.status_message = reverted
+                    .snapshot_id
+                    .map(|_| AMENDED_REVERT_MESSAGE.to_string());
+                if reverted.snapshot_id.is_some() {
+                    self.header.load_sent_snapshot(&self.db, &self.draft);
                 }
                 self.notify(
-                    notification::NotificationType::Warning,
-                    format!("The queued return was not canceled: {error}"),
+                    notification::NotificationType::Success,
+                    "Form 2200-M reverted to Draft.".into(),
                     window,
                     cx,
                 );
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => self.notify(
+                notification::NotificationType::Error,
+                format!("Could not revert to Draft: {error}"),
+                window,
+                cx,
+            ),
+        }
+        // Reload the editors from the reverted draft.
+        let keys: Vec<String> = self.inputs.keys().cloned().collect();
+        for key in keys {
+            let value = Self::initial(&self.draft, &key);
+            if let Some(input) = self.inputs.get(&key) {
+                input.update(cx, |state, cx| state.set_value(value, window, cx));
             }
         }
         cx.notify();
@@ -1511,16 +1583,6 @@ const QUEUE_UNAVAILABLE: &str = "In-app submission isn't available for 2200-M in
 impl Render for Form2200MView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
-        let is_draft = self.draft.lifecycle.is_editable();
-        let is_queued = matches!(self.draft.lifecycle.status, FilingStatus::Queued);
-        let open_issues = self.validation_errors.len() + self.parse_errors.len();
-        let queue_supported = can_queue_for_submission(Form2200MDraft::FORM_CODE);
-        let first_issue = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .next()
-            .map(|(_, message)| message.replace('\n', " "));
         let pad = match layout {
             Layout::Phone => px(12.),
             Layout::Tablet => px(20.),
@@ -1537,10 +1599,15 @@ impl Render for Form2200MView {
             })
             .collect();
 
+        let phone = layout == Layout::Phone;
+        self.header.ensure_sent_snapshot(&self.db, &self.draft);
+        let props = self.header_props();
+        let header_buttons = render_header_buttons(self, &props, HEADER_ACTIONS, phone, cx);
+        let status_box = render_status_box(self, &props, HEADER_ACTIONS, cx);
+
         let toolbar =
             div()
                 .flex()
-                .flex_wrap()
                 .items_center()
                 .justify_between()
                 .gap_2()
@@ -1551,78 +1618,7 @@ impl Render for Form2200MView {
                 .child(Button::new("2200m_back").label("← Back").on_click(
                     cx.listener(|_, _, _, cx| cx.emit(QueueableFormEvent::BackToDashboard)),
                 ))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            Button::new("2200m_preview")
-                                .label("Print preview")
-                                .outline()
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.preview_pdf(window, cx)),
-                                ),
-                        )
-                        .child(
-                            Button::new("2200m_save")
-                                .label("Save draft")
-                                .outline()
-                                .disabled(!is_draft)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.save_draft(window, cx)),
-                                ),
-                        )
-                        .when(is_queued, |row| {
-                            row.child(
-                                Button::new("2200m_cancel")
-                                    .label("Cancel queue")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.revert_to_draft(window, cx)
-                                    })),
-                            )
-                        })
-                        .when(is_draft && !queue_supported, |row| {
-                            row.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(QUEUE_UNAVAILABLE),
-                            )
-                        })
-                        .when_some(
-                            first_issue.filter(|_| is_draft && queue_supported),
-                            |row, first| {
-                                row.child(
-                                    div()
-                                        .max_w(px(420.))
-                                        .text_xs()
-                                        .text_color(cx.theme().danger)
-                                        .child(if open_issues == 1 {
-                                            first
-                                        } else {
-                                            format!(
-                                                "{first} (+{} more under Needs review)",
-                                                open_issues - 1
-                                            )
-                                        }),
-                                )
-                            },
-                        )
-                        .child(
-                            Button::new("2200m_submit")
-                                .label("Queue for submission")
-                                .primary()
-                                // Stays clickable while queueing is supported: with
-                                // open items the click explains why instead of queueing.
-                                .disabled(!is_draft || !queue_supported)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.mark_submitted(window, cx)
-                                })),
-                        ),
-                );
+                .child(header_buttons);
 
         let mut body = div()
             .w_full()
@@ -1631,16 +1627,6 @@ impl Render for Form2200MView {
             .flex()
             .flex_col()
             .gap_5()
-            .when_some(self.status_message.clone(), |col, message| {
-                col.child(
-                    div()
-                        .p_3()
-                        .rounded_md()
-                        .bg(cx.theme().muted)
-                        .text_sm()
-                        .child(message),
-                )
-            })
             .when(self.release_claim_confirm_open, |col| {
                 col.child(
                     div()
@@ -1700,9 +1686,11 @@ impl Render for Form2200MView {
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(self.render_header(cx))
-                    .when(layout != Layout::Phone, |d| {
+                    .when(!phone, |d| {
                         d.child(div().mt_4().child(self.render_status_pipeline(cx)))
-                    }),
+                    })
+                    // Phone has no stepper; the box sits under the titles.
+                    .children(status_box.map(|b| div().mt_3().child(b))),
             )
             .child(
                 div()
@@ -1717,10 +1705,113 @@ impl Render for Form2200MView {
     }
 }
 
+impl Form2200MView {
+    /// What the shared header shows. 2200-M can't be queued (issue #87):
+    /// the header hides Submit for it, and a Draft with no open items shows
+    /// why in the status box.
+    fn header_props(&self) -> FormHeaderProps<'static> {
+        let blocking_errors = self.blocking_errors();
+        let unavailable = matches!(self.draft.lifecycle.status, FilingStatus::Draft)
+            && blocking_errors == 0
+            && !can_queue_for_submission(Form2200MDraft::FORM_CODE);
+        FormHeaderProps {
+            slug: "2200m",
+            status: self.draft.lifecycle.status.clone(),
+            editor_safe: true,
+            validated: self.validated,
+            blocking_errors,
+            first_error: self
+                .parse_errors
+                .iter()
+                .chain(self.validation_errors.iter())
+                .next()
+                .map(|(_, message)| message.replace('\n', " ")),
+            success_text: DEFAULT_SUCCESS_MESSAGE,
+            message: self
+                .status_message
+                .clone()
+                .or_else(|| unavailable.then(|| QUEUE_UNAVAILABLE.to_string())),
+            separate_validate: separate_validate_button(&self.db),
+        }
+    }
+
+    fn blocking_errors(&self) -> usize {
+        self.parse_errors.len() + self.validation_errors.len()
+    }
+
+    /// The header's Validate: read the editors, run the official checks
+    /// and record that they ran at the current entries.
+    fn header_validate(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.status_message = None;
+        self.sync_from_inputs(cx);
+        self.validated = true;
+        cx.notify();
+    }
+
+    /// Dev Mode "Simulate BIR confirmation" (debug builds only).
+    #[cfg(debug_assertions)]
+    fn header_simulate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let filename = self.draft.lifecycle.submission_filename.clone();
+        match crate::dev_mode::simulate_confirmation(&self.db, filename.as_deref()) {
+            Ok(()) => {
+                if let Ok(db) = self.db.lock()
+                    && let Ok(Some(current)) = db.get_queueable_draft::<Form2200MDraft>(
+                        &self.draft.tin,
+                        self.draft.year,
+                        period_column(&self.draft.filing_period()),
+                    )
+                {
+                    self.draft = current;
+                }
+                self.notify(
+                    notification::NotificationType::Success,
+                    "2200-M marked Confirmed (simulated, nothing was sent to BIR).".into(),
+                    window,
+                    cx,
+                );
+                cx.emit(QueueableFormEvent::Saved);
+            }
+            Err(error) => self.notify(
+                notification::NotificationType::Error,
+                format!("Simulated confirmation failed: {error}"),
+                window,
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+}
+
+const HEADER_ACTIONS: FormHeaderActions<Form2200MView> = FormHeaderActions {
+    state: |this| &mut this.header,
+    state_ref: |this| &this.header,
+    blocking_errors: Form2200MView::blocking_errors,
+    on_validate: Form2200MView::header_validate,
+    on_submit: |this, window, cx| this.mark_submitted(window, cx),
+    on_save: |this, window, cx| this.save_draft(window, cx),
+    on_print: |this, window, cx| this.preview_pdf(window, cx),
+    on_revert: |this, window, cx| this.revert_to_draft(window, cx),
+    #[cfg(debug_assertions)]
+    on_simulate: Some(Form2200MView::header_simulate),
+    #[cfg(not(debug_assertions))]
+    on_simulate: None,
+};
+
 #[cfg(test)]
 mod tests {
     use super::{Layout, column_exists, format_tin, parse_amount, parse_cell};
     use gpui::px;
+
+    #[test]
+    fn header_uses_shared_buttons_and_status_box() {
+        let src = include_str!("form_2200m_view.rs");
+        assert!(src.contains(concat!("render_header_", "buttons(")));
+        assert!(src.contains(concat!("render_status_", "box(")));
+        assert!(src.contains(concat!("revert_for_", "amendment(")));
+        assert!(src.contains("QUEUE_UNAVAILABLE.to_string()"));
+        assert!(!src.contains(concat!("Queued for background ", "submission")));
+        assert!(!src.contains(concat!("\"Queue for ", "submission\"")));
+    }
 
     #[test]
     fn layout_breakpoints() {
