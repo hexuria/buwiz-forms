@@ -106,8 +106,8 @@ sudo apt install ./eBIRForms-Linux-x64-<version>.deb
 
 The package installs `/usr/bin/ebirforms`, the assets in
 `/usr/share/ebirforms/assets`, a desktop entry
-(`/usr/share/applications/ebirforms.desktop`) and an icon
-(`/usr/share/icons/hicolor/512x512/apps/ebirforms.png`). After install,
+(`/usr/share/applications/dev.goldcoders.bir.desktop`) and hicolor icons
+(48, 64, 128, 256 and 512 px, `/usr/share/icons/hicolor/<size>/apps/dev.goldcoders.bir.png`). After install,
 eBIRForms appears in your application menu under Office. You can also run
 `ebirforms` from a terminal. It needs GTK 3, WebKitGTK 4.1, Vulkan,
 xkbcommon, Wayland client, fontconfig and freetype. `apt` pulls them in. Noto

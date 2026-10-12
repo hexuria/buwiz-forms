@@ -33,6 +33,7 @@ mod theme;
 mod top_bar;
 mod views;
 mod window_geometry;
+mod window_identity;
 
 pub mod global_actions {
     gpui_kit::actions!(
