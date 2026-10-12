@@ -470,7 +470,7 @@ impl Form2200ANDraft {
     }
 
     /// The field map plus the print-only `derived:line:` values the printed
-    /// sheet needs (`html-frozen/2200an-2018/writer-cells.json`): the Item 10
+    /// sheet needs (`crates/bir-print/html-frozen/2200an-2018/writer-cells.json`): the Item 10
     /// and 11 region, province and city names (the upload carries codes).
     /// A region prints its short name (`REGION IV-A`, `NCR`). Never submitted.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {

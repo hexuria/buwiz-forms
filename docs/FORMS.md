@@ -35,7 +35,7 @@ Columns:
   The form type is the official `formType` and PROD SFTP folder name.
 - **Queue** is the registry's `queue_submission` flag. "no" means the form
   cannot be queued (see below).
-- **Printed sheet** is the folder under `html-frozen/` that print preview fills.
+- **Printed sheet** is the folder under `crates/bir-print/html-frozen/` that print preview fills.
 
 | Code | Name | Revision | Form type | Queue | Official samples | Printed sheet |
 |---|---|---|---|---|---|---|
@@ -130,9 +130,9 @@ commit `fe86f57d`).
 
 ## Frozen HTML preview
 
-Print preview uses the committed freeze sheets in `html-frozen/`. There is one
+Print preview uses the committed freeze sheets in `crates/bir-print/html-frozen/`. There is one
 folder per form, with `index.html`, `form.css`, `guide.html`, `provenance.json`
-and `writer-cells.json`. `html-frozen/inventory.json` lists the 43 bundles.
+and `writer-cells.json`. `crates/bir-print/html-frozen/inventory.json` lists the 43 bundles.
 
 - The app fills catalog-stamped TIN and branch `name=` inputs from
   `to_bir_field_map()`.

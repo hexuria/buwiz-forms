@@ -48,7 +48,7 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 
 **Frozen HTML:**
 - Product CI checks out `hexuria/buwiz-forms-html` and runs `freeze_html.py --verify` plus `stamp_frozen_names.py --check-all`.
-- `just build-frozen-html-identity` — Hash `html-frozen/` into the non-promotional packaging identity.
+- `just build-frozen-html-identity` — Hash `crates/bir-print/html-frozen/` into the non-promotional packaging identity.
 
 **Dependency Management:**
 - `just audit` — Check for security vulnerabilities in dependencies using the RustSec database.
@@ -145,9 +145,36 @@ after `cargo build --release` and before `cargo deb --no-build`.
 - `cargo binstall bir` reads `[package.metadata.binstall]` in
   `crates/bir/Cargo.toml`: it fetches
   `bir-v<version>/bir-<target>.tgz`, with the `bir` binary at the archive root.
-- Publishing needs the `CARGO_REGISTRY_TOKEN` Actions secret and
-  `gpui-agent` 0.1.0 on crates.io. Local builds use the git rev pinned in the
-  workspace `Cargo.toml`; the `version` next to it is what crates.io uses.
+- Every crate in the publish chain (`bir-rules`, `bir-core`, `bir-print`,
+  `bir-desktop`, `bir`) packages from its own crate root, so nothing outside
+  `crates/<name>/` is needed to build the published crate:
+  - `crates/bir-print/html-frozen/` is the canonical frozen HTML tree
+    (`build.rs` and `frozen_html.rs` include it relative to the crate). The
+    freeze gate, `stamp_frozen_names.py` and `write_frozen_html_identity.py`
+    steps in the workflows point at that path.
+  - `crates/bir-desktop/embedded/` holds `theme.css` (canonical) and copies of
+    `assets/images/e_logo.png`, the 128px launcher icon and the two
+    `rules/forms/*/fields.json` files the agent assist reads. The originals
+    stay where the installers and codegen use them; the unit test
+    `embedded_copies_match_repo_originals` fails if a copy drifts (copy the
+    original over it). The Arimo fonts come from `bir_print::frozen_html`.
+  - `.crate` sizes (compressed, limit 10 MB): bir-rules 0.17 MB, bir-core
+    1.8 MB, bir-print 3.7 MB, bir-desktop 1.2 MB, bir 0.08 MB.
+  - `ci.yml` job `crate-packaging` runs `cargo package --no-verify` for all
+    five, checks each `.crate` is under 10 MB and that the moved data is in the
+    package lists. It resolves the unpublished `gpui-agent` from the pinned git
+    rev with `--config patch.crates-io...` (nothing is written to the repo);
+    remove those flags once gpui-agent 0.1.0 is on crates.io.
+- Owner steps before the first `bir-v*` tag, in order (CI cannot do these):
+  1. Publish `gpui-agent` 0.1.0 to crates.io from `hexuria/gpui-agent`.
+  2. Add the `CARGO_REGISTRY_TOKEN` Actions secret on `hexuria/buwiz-forms`.
+  3. Run `just publish-bir` (tags and pushes `bir-vX.Y.Z`). The workflow then
+     publishes the five crates in dependency order.
+  The `publish` job stops with a clear message if the secret is unset or
+  gpui-agent 0.1.0 is not on crates.io. Local builds use the git rev pinned in
+  the workspace `Cargo.toml`; the `version` next to it is what crates.io uses.
+- `cargo install bir` then runs `bir serve` (the default subcommand) with
+  `GPUI_AGENT=1` and `GPUI_AGENT_TOKEN`; it needs no repo files at runtime.
 - The toolchain is pinned to Rust 1.99.0.
 - `scripts/test_publish_bir.py` tests the publish script.
 
@@ -253,7 +280,7 @@ The **macOS** release job codesigns and notarizes the DMG. Configure these Repos
 - `crates/bir-print/`: Frozen HTML fill/print, native output coordination, PDF validation, and PDF merging.
 - `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
 - `packages/form-specs/`: Paper/pagination specifications plus migration and release-evidence manifests.
-- `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill through `writer-cells.json`. Letter combs ASCII-uppercase on the fill path only.
+- `crates/bir-print/html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill through `writer-cells.json`. Letter combs ASCII-uppercase on the fill path only.
 
 ### Form Engine
 
@@ -261,7 +288,7 @@ Adding a new BIR tax form now crosses two separately gated tracks:
 
 1. **Filing support** — authoritative source evidence, typed domain model,
    formulas, validation, XML, persistence, queue submission, and desktop UI.
-2. **Print presentation** — frozen HTML in `html-frozen/`, catalog TIN `name=`
+2. **Print presentation** — frozen HTML in `crates/bir-print/html-frozen/`, catalog TIN `name=`
    stamps, `writer-cells.json` identity and money fills, and `fill_by_name` from
    `to_bir_field_map()`.
 3. **Promotion evidence** — filing support changes only after the in-app gates

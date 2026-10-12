@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 description = "eBIRForms desktop application library. The shipped app executable is still named bir; the cargo target is bir-desktop so it does not collide with the bir CLI."
 repository = "https://github.com/hexuria/buwiz-forms"
+readme = "README.md"
 default-run = "bir-desktop"
 
 [lib]

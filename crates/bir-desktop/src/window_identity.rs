@@ -28,9 +28,7 @@ fn window_icon() -> Option<std::sync::Arc<image::RgbaImage>> {
 
     static ICON: OnceLock<Option<Arc<image::RgbaImage>>> = OnceLock::new();
     ICON.get_or_init(|| {
-        let png = include_bytes!(
-            "../../../assets/linux/icons/hicolor/128x128/apps/dev.goldcoders.bir.png"
-        );
+        let png = include_bytes!("../embedded/dev.goldcoders.bir-128.png");
         match image::load_from_memory(png) {
             Ok(img) => Some(Arc::new(img.into_rgba8())),
             Err(error) => {
@@ -51,20 +49,60 @@ fn window_icon() -> Option<std::sync::Arc<image::RgbaImage>> {
 mod tests {
     use super::*;
 
-    const DESKTOP_ENTRY: &str = include_str!("../../../assets/linux/dev.goldcoders.bir.desktop");
-
-    fn entry(key: &str) -> Option<&'static str> {
-        DESKTOP_ENTRY
-            .lines()
-            .find_map(|line| line.strip_prefix(key)?.strip_prefix('='))
+    /// The repo's launcher file, or `None` in a packaged crate (assets/ is not shipped).
+    fn desktop_entry() -> Option<String> {
+        std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../assets/linux/dev.goldcoders.bir.desktop"),
+        )
+        .ok()
     }
 
     #[test]
     fn desktop_entry_matches_app_id() {
+        let Some(text) = desktop_entry() else {
+            return;
+        };
+        let entry = |key: &str| {
+            text.lines()
+                .find_map(|line| line.strip_prefix(key)?.strip_prefix('='))
+        };
         assert_eq!(entry("Icon"), Some(APP_ID));
         assert_eq!(entry("StartupWMClass"), Some(APP_ID));
         // The .deb installs the binary as /usr/bin/ebirforms.
         assert_eq!(entry("Exec"), Some("ebirforms"));
+    }
+
+    /// The crate-local copies embedded in the binary must match the repo
+    /// originals that the installers ship (checked only inside the repo).
+    #[test]
+    fn embedded_copies_match_repo_originals() {
+        let crate_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let repo = crate_dir.join("../..");
+        if !repo.join("assets").is_dir() {
+            return;
+        }
+        for (embedded, original) in [
+            ("embedded/e_logo.png", "assets/images/e_logo.png"),
+            (
+                "embedded/dev.goldcoders.bir-128.png",
+                "assets/linux/icons/hicolor/128x128/apps/dev.goldcoders.bir.png",
+            ),
+            (
+                "embedded/rules/2551q-v2018-fields.json",
+                "rules/forms/2551q-v2018/fields.json",
+            ),
+            (
+                "embedded/rules/1601c-v2018-fields.json",
+                "rules/forms/1601c-v2018/fields.json",
+            ),
+        ] {
+            assert_eq!(
+                std::fs::read(crate_dir.join(embedded)).unwrap(),
+                std::fs::read(repo.join(original)).unwrap(),
+                "{embedded} drifted from {original}; copy the original over it"
+            );
+        }
     }
 
     #[test]

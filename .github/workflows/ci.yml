@@ -218,12 +218,60 @@ jobs:
     # and bash `\` continuations are a parse error there.
     - name: Frozen HTML inventory and TIN name stamps
       run: |
-        python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+        python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
         python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
-        python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+        python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
 
     - name: Test
       run: cargo test --locked --workspace
+
+  # crates.io packaging for the `bir` chain. Metadata, include paths and the
+  # 10 MB .crate cap regress silently otherwise; the bir.yml publish job only
+  # finds out on a release tag. `--no-verify` keeps this cheap (no compile).
+  # gpui-agent is not on crates.io yet, so the two crates that depend on it
+  # resolve it from the same git rev the workspace pins, via --config (nothing
+  # is written to the repo). Drop the two --config flags once gpui-agent 0.1.0
+  # is published. Full verification (`cargo package` without --no-verify)
+  # happens in bir.yml on a bir-v* tag.
+  crate-packaging:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+
+    - name: Package the bir chain (no verify) and check size and contents
+      shell: bash
+      run: |
+        set -euo pipefail
+        rev="$(sed -n 's/^gpui-agent = .*rev = "\([0-9a-f]*\)".*/\1/p' Cargo.toml)"
+        test -n "${rev}"
+        patch=(
+          --config 'patch.crates-io.gpui-agent.git="https://github.com/hexuria/gpui-agent"'
+          --config "patch.crates-io.gpui-agent.rev=\"${rev}\""
+        )
+        pkgs=(bir-rules bir-core bir-print bir-desktop bir)
+        args=()
+        for pkg in "${pkgs[@]}"; do args+=(-p "${pkg}"); done
+        cargo package --locked --no-verify "${args[@]}" "${patch[@]}"
+        for pkg in "${pkgs[@]}"; do
+          cargo package --locked --no-verify --list -p "${pkg}" "${patch[@]}" > "${RUNNER_TEMP}/${pkg}.list"
+          size="$(stat -c %s "${CARGO_TARGET_DIR:-target}/package/${pkg}-"[0-9]*.crate)"
+          echo "${pkg}: ${size} bytes"
+          if [ "${size}" -ge 10485760 ]; then
+            echo "${pkg}.crate is over the crates.io 10 MB limit" >&2
+            exit 1
+          fi
+        done
+        # Data that used to live outside the crate roots must ship inside them.
+        grep -qx 'html-frozen/base.css' "${RUNNER_TEMP}/bir-print.list"
+        grep -qx 'html-frozen/2551q-2018/index.html' "${RUNNER_TEMP}/bir-print.list"
+        grep -qx 'embedded/e_logo.png' "${RUNNER_TEMP}/bir-desktop.list"
+        grep -qx 'embedded/theme.css' "${RUNNER_TEMP}/bir-desktop.list"
 
   # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
   # PowerShell job, which is exactly why three separate Windows-path defects in

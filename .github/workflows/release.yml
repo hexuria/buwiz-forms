@@ -112,9 +112,9 @@ jobs:
 
       - name: Verify frozen HTML inventory and TIN name stamps
         run: |
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
           python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
           python3 scripts/audit_no_legacy.py
 
   # ── macOS Universal ───────────────────────────────────────────────────────
@@ -163,9 +163,9 @@ jobs:
 
       - name: Verify frozen HTML
         run: |
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
-          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
       - name: Build ARM64
         run: cargo build --locked --release --target aarch64-apple-darwin
@@ -418,9 +418,9 @@ jobs:
 
       - name: Verify frozen HTML
         run: |
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
-          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
       - name: Build
         run: cargo build --locked --release --target x86_64-pc-windows-msvc
@@ -600,9 +600,9 @@ jobs:
 
       - name: Verify frozen HTML
         run: |
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
-          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
       - name: Build
         run: cargo build --locked --release --target x86_64-unknown-linux-gnu

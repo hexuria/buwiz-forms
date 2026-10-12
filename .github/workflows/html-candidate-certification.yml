@@ -58,9 +58,9 @@ jobs:
 
       - name: Verify non-promotional candidate gates
         run: |
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
           python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
           python3 scripts/audit_no_legacy.py
           python3 -m unittest scripts.tests.test_html_release_gate_policy scripts.tests.test_write_html_candidate_manifest scripts.tests.test_macos_candidate_collector scripts.tests.test_windows_candidate_collector scripts.tests.test_linux_candidate_collector -v
 
@@ -119,9 +119,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           python3 scripts/audit_no_legacy.py
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
-          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
 
       - name: Build exact non-dev universal binary
         run: |
@@ -305,9 +305,9 @@ jobs:
           if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw "candidate SHA mismatch" }
           if (git status --porcelain=v1 --untracked-files=all) { throw "candidate source is dirty" }
           python scripts/audit_no_legacy.py
-          python .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-          python .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
-          python scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision $env:GITHUB_SHA --out assets/form-renderer-build-identity.json
+          python .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
+          python .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision $env:GITHUB_SHA --out assets/form-renderer-build-identity.json
 
       - name: Build exact non-dev Windows binary
         run: cargo build --locked --release --target x86_64-pc-windows-msvc
@@ -388,9 +388,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           python3 scripts/audit_no_legacy.py
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
-          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root crates/bir-print/html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
 
       - name: Build exact non-dev Linux binary
         run: cargo build --locked --release --target x86_64-unknown-linux-gnu

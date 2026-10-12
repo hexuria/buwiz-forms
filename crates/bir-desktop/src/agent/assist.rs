@@ -620,18 +620,14 @@ fn requirement_index(raw: &str) -> BTreeMap<String, (String, String)> {
 fn rules_2551q() -> &'static BTreeMap<String, (String, String)> {
     static INDEX: OnceLock<BTreeMap<String, (String, String)>> = OnceLock::new();
     INDEX.get_or_init(|| {
-        requirement_index(include_str!(
-            "../../../../rules/forms/2551q-v2018/fields.json"
-        ))
+        requirement_index(include_str!("../../embedded/rules/2551q-v2018-fields.json"))
     })
 }
 
 fn rules_1601c() -> &'static BTreeMap<String, (String, String)> {
     static INDEX: OnceLock<BTreeMap<String, (String, String)>> = OnceLock::new();
     INDEX.get_or_init(|| {
-        requirement_index(include_str!(
-            "../../../../rules/forms/1601c-v2018/fields.json"
-        ))
+        requirement_index(include_str!("../../embedded/rules/1601c-v2018-fields.json"))
     })
 }
 

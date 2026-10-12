@@ -20,11 +20,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 include!(concat!(env!("OUT_DIR"), "/frozen_bundles.rs"));
 
-const BASE_CSS: &str = include_str!("../../../html-frozen/base.css");
-const FONT_ARIMO_NORMAL: &[u8] =
-    include_bytes!("../../../html-frozen/fonts/arimo-latin-wght-normal.woff2");
-const FONT_ARIMO_ITALIC: &[u8] =
-    include_bytes!("../../../html-frozen/fonts/arimo-latin-wght-italic.woff2");
+const BASE_CSS: &str = include_str!("../html-frozen/base.css");
+/// Arimo variable font bytes, shared with the desktop demo-HTML bundle.
+pub const FONT_ARIMO_NORMAL: &[u8] =
+    include_bytes!("../html-frozen/fonts/arimo-latin-wght-normal.woff2");
+pub const FONT_ARIMO_ITALIC: &[u8] =
+    include_bytes!("../html-frozen/fonts/arimo-latin-wght-italic.woff2");
 
 const STAMPED_TIN_NAMES: [&str; 4] = [
     "frm2551Qv2018:txtTIN1",
@@ -143,135 +144,63 @@ fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>)
 
 fn writer_cells_json(slug: &str) -> Option<&'static str> {
     match slug {
-        "0605-1999" => Some(include_str!(
-            "../../../html-frozen/0605-1999/writer-cells.json"
-        )),
-        "0619e-2018" => Some(include_str!(
-            "../../../html-frozen/0619e-2018/writer-cells.json"
-        )),
-        "0619f-2018" => Some(include_str!(
-            "../../../html-frozen/0619f-2018/writer-cells.json"
-        )),
+        "0605-1999" => Some(include_str!("../html-frozen/0605-1999/writer-cells.json")),
+        "0619e-2018" => Some(include_str!("../html-frozen/0619e-2018/writer-cells.json")),
+        "0619f-2018" => Some(include_str!("../html-frozen/0619f-2018/writer-cells.json")),
         "1600-pt-2018" => Some(include_str!(
-            "../../../html-frozen/1600-pt-2018/writer-cells.json"
+            "../html-frozen/1600-pt-2018/writer-cells.json"
         )),
         "1600-vt-2018" => Some(include_str!(
-            "../../../html-frozen/1600-vt-2018/writer-cells.json"
+            "../html-frozen/1600-vt-2018/writer-cells.json"
         )),
-        "1600wp-2010" => Some(include_str!(
-            "../../../html-frozen/1600wp-2010/writer-cells.json"
-        )),
+        "1600wp-2010" => Some(include_str!("../html-frozen/1600wp-2010/writer-cells.json")),
         "1601-fq-2020" => Some(include_str!(
-            "../../../html-frozen/1601-fq-2020/writer-cells.json"
+            "../html-frozen/1601-fq-2020/writer-cells.json"
         )),
-        "1601c-2018" => Some(include_str!(
-            "../../../html-frozen/1601c-2018/writer-cells.json"
-        )),
-        "1601eq-2019" => Some(include_str!(
-            "../../../html-frozen/1601eq-2019/writer-cells.json"
-        )),
-        "1602q-2019" => Some(include_str!(
-            "../../../html-frozen/1602q-2019/writer-cells.json"
-        )),
-        "1603q-2018" => Some(include_str!(
-            "../../../html-frozen/1603q-2018/writer-cells.json"
-        )),
-        "1604c-2018" => Some(include_str!(
-            "../../../html-frozen/1604c-2018/writer-cells.json"
-        )),
-        "1604e-2018" => Some(include_str!(
-            "../../../html-frozen/1604e-2018/writer-cells.json"
-        )),
-        "1604f-2018" => Some(include_str!(
-            "../../../html-frozen/1604f-2018/writer-cells.json"
-        )),
-        "1606-2018" => Some(include_str!(
-            "../../../html-frozen/1606-2018/writer-cells.json"
-        )),
-        "1700-2018" => Some(include_str!(
-            "../../../html-frozen/1700-2018/writer-cells.json"
-        )),
-        "1701-2018" => Some(include_str!(
-            "../../../html-frozen/1701-2018/writer-cells.json"
-        )),
-        "1701a-2018" => Some(include_str!(
-            "../../../html-frozen/1701a-2018/writer-cells.json"
-        )),
-        "1701ms-2024" => Some(include_str!(
-            "../../../html-frozen/1701ms-2024/writer-cells.json"
-        )),
-        "1701q-2018" => Some(include_str!(
-            "../../../html-frozen/1701q-2018/writer-cells.json"
-        )),
-        "1702ex-2018" => Some(include_str!(
-            "../../../html-frozen/1702ex-2018/writer-cells.json"
-        )),
+        "1601c-2018" => Some(include_str!("../html-frozen/1601c-2018/writer-cells.json")),
+        "1601eq-2019" => Some(include_str!("../html-frozen/1601eq-2019/writer-cells.json")),
+        "1602q-2019" => Some(include_str!("../html-frozen/1602q-2019/writer-cells.json")),
+        "1603q-2018" => Some(include_str!("../html-frozen/1603q-2018/writer-cells.json")),
+        "1604c-2018" => Some(include_str!("../html-frozen/1604c-2018/writer-cells.json")),
+        "1604e-2018" => Some(include_str!("../html-frozen/1604e-2018/writer-cells.json")),
+        "1604f-2018" => Some(include_str!("../html-frozen/1604f-2018/writer-cells.json")),
+        "1606-2018" => Some(include_str!("../html-frozen/1606-2018/writer-cells.json")),
+        "1700-2018" => Some(include_str!("../html-frozen/1700-2018/writer-cells.json")),
+        "1701-2018" => Some(include_str!("../html-frozen/1701-2018/writer-cells.json")),
+        "1701a-2018" => Some(include_str!("../html-frozen/1701a-2018/writer-cells.json")),
+        "1701ms-2024" => Some(include_str!("../html-frozen/1701ms-2024/writer-cells.json")),
+        "1701q-2018" => Some(include_str!("../html-frozen/1701q-2018/writer-cells.json")),
+        "1702ex-2018" => Some(include_str!("../html-frozen/1702ex-2018/writer-cells.json")),
         "1702mx-2018c" => Some(include_str!(
-            "../../../html-frozen/1702mx-2018c/writer-cells.json"
+            "../html-frozen/1702mx-2018c/writer-cells.json"
         )),
-        "1702q-2018" => Some(include_str!(
-            "../../../html-frozen/1702q-2018/writer-cells.json"
-        )),
+        "1702q-2018" => Some(include_str!("../html-frozen/1702q-2018/writer-cells.json")),
         "1702rt-2018c" => Some(include_str!(
-            "../../../html-frozen/1702rt-2018c/writer-cells.json"
+            "../html-frozen/1702rt-2018c/writer-cells.json"
         )),
-        "1706-2018" => Some(include_str!(
-            "../../../html-frozen/1706-2018/writer-cells.json"
-        )),
-        "1707-2021" => Some(include_str!(
-            "../../../html-frozen/1707-2021/writer-cells.json"
-        )),
-        "1707a-2021" => Some(include_str!(
-            "../../../html-frozen/1707a-2021/writer-cells.json"
-        )),
-        "1800-2018" => Some(include_str!(
-            "../../../html-frozen/1800-2018/writer-cells.json"
-        )),
-        "1801-2018" => Some(include_str!(
-            "../../../html-frozen/1801-2018/writer-cells.json"
-        )),
+        "1706-2018" => Some(include_str!("../html-frozen/1706-2018/writer-cells.json")),
+        "1707-2021" => Some(include_str!("../html-frozen/1707-2021/writer-cells.json")),
+        "1707a-2021" => Some(include_str!("../html-frozen/1707a-2021/writer-cells.json")),
+        "1800-2018" => Some(include_str!("../html-frozen/1800-2018/writer-cells.json")),
+        "1801-2018" => Some(include_str!("../html-frozen/1801-2018/writer-cells.json")),
         "2000-dst-2018" => Some(include_str!(
-            "../../../html-frozen/2000-dst-2018/writer-cells.json"
+            "../html-frozen/2000-dst-2018/writer-cells.json"
         )),
         "2000-ot-2018" => Some(include_str!(
-            "../../../html-frozen/2000-ot-2018/writer-cells.json"
+            "../html-frozen/2000-ot-2018/writer-cells.json"
         )),
-        "2200a-2020" => Some(include_str!(
-            "../../../html-frozen/2200a-2020/writer-cells.json"
-        )),
-        "2200an-2018" => Some(include_str!(
-            "../../../html-frozen/2200an-2018/writer-cells.json"
-        )),
-        "2200c-2018" => Some(include_str!(
-            "../../../html-frozen/2200c-2018/writer-cells.json"
-        )),
-        "2200m-2018" => Some(include_str!(
-            "../../../html-frozen/2200m-2018/writer-cells.json"
-        )),
-        "2200p-2020" => Some(include_str!(
-            "../../../html-frozen/2200p-2020/writer-cells.json"
-        )),
-        "2200s-2018" => Some(include_str!(
-            "../../../html-frozen/2200s-2018/writer-cells.json"
-        )),
-        "2200t-2022" => Some(include_str!(
-            "../../../html-frozen/2200t-2022/writer-cells.json"
-        )),
-        "2550m-2007" => Some(include_str!(
-            "../../../html-frozen/2550m-2007/writer-cells.json"
-        )),
-        "2550q-2024" => Some(include_str!(
-            "../../../html-frozen/2550q-2024/writer-cells.json"
-        )),
-        "2551q-2018" => Some(include_str!(
-            "../../../html-frozen/2551q-2018/writer-cells.json"
-        )),
-        "2552-2018" => Some(include_str!(
-            "../../../html-frozen/2552-2018/writer-cells.json"
-        )),
-        "2553-1999" => Some(include_str!(
-            "../../../html-frozen/2553-1999/writer-cells.json"
-        )),
+        "2200a-2020" => Some(include_str!("../html-frozen/2200a-2020/writer-cells.json")),
+        "2200an-2018" => Some(include_str!("../html-frozen/2200an-2018/writer-cells.json")),
+        "2200c-2018" => Some(include_str!("../html-frozen/2200c-2018/writer-cells.json")),
+        "2200m-2018" => Some(include_str!("../html-frozen/2200m-2018/writer-cells.json")),
+        "2200p-2020" => Some(include_str!("../html-frozen/2200p-2020/writer-cells.json")),
+        "2200s-2018" => Some(include_str!("../html-frozen/2200s-2018/writer-cells.json")),
+        "2200t-2022" => Some(include_str!("../html-frozen/2200t-2022/writer-cells.json")),
+        "2550m-2007" => Some(include_str!("../html-frozen/2550m-2007/writer-cells.json")),
+        "2550q-2024" => Some(include_str!("../html-frozen/2550q-2024/writer-cells.json")),
+        "2551q-2018" => Some(include_str!("../html-frozen/2551q-2018/writer-cells.json")),
+        "2552-2018" => Some(include_str!("../html-frozen/2552-2018/writer-cells.json")),
+        "2553-1999" => Some(include_str!("../html-frozen/2553-1999/writer-cells.json")),
         _ => None,
     }
 }
@@ -1214,7 +1143,7 @@ mod tests {
     #[test]
     fn every_print_map_is_registered_and_fills_its_sheet() {
         use std::collections::BTreeMap;
-        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/html-frozen");
         let mut checked = 0;
         for entry in std::fs::read_dir(root).unwrap() {
             let dir = entry.unwrap().path();
@@ -1489,9 +1418,14 @@ mod tests {
 
     #[test]
     fn frozen_2551q_stamps_only_catalog_tin_names_from_fields_json() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rules/forms/2551q-v2018/fields.json");
+        if !path.parent().is_some_and(|dir| dir.is_dir()) {
+            // Packaged crate: the repo's rules/ tree is not shipped.
+            return;
+        }
         let fields: serde_json::Value =
-            serde_json::from_str(include_str!("../../../rules/forms/2551q-v2018/fields.json"))
-                .unwrap();
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         let allowed: std::collections::BTreeSet<String> = fields["fields"]
             .as_array()
             .unwrap()

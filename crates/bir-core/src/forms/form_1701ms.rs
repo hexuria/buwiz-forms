@@ -1418,7 +1418,7 @@ impl Form1701MsDraft {
     }
 
     /// The field map plus the `derived:` values the printed 1701-MS sheet
-    /// shows (`html-frozen/1701ms-2024/writer-cells.json`): identity, Items
+    /// shows (`crates/bir-print/html-frozen/1701ms-2024/writer-cells.json`): identity, Items
     /// 13–18, every Part II, IV, V and VI amount in both columns and the
     /// Item 31 amounts. Print only; none of the `derived:` keys is submitted.
     ///

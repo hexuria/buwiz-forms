@@ -1635,10 +1635,14 @@ impl Render for Form1601EqView {
 mod tests {
     #[test]
     fn submit_confirm_is_the_official_text() {
-        let rules: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../rules/forms/1601eq-v2018/validations.json"
-        ))
-        .expect("rules json");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rules/forms/1601eq-v2018/validations.json");
+        if !path.parent().is_some_and(|dir| dir.is_dir()) {
+            // Packaged crate: the repo's rules/ and assets/ trees are not shipped.
+            return;
+        }
+        let raw = std::fs::read_to_string(&path).expect("repo rules file");
+        let rules: serde_json::Value = serde_json::from_str(&raw).expect("rules json");
         let rules = rules
             .as_array()
             .or_else(|| rules.get("rules").and_then(|r| r.as_array()))

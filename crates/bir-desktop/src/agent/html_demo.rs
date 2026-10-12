@@ -7,18 +7,9 @@
 
 use std::path::PathBuf;
 
-const THEME_CSS: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../html-demo/theme.css"
-));
-const FONT_ARIMO_NORMAL: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../html-frozen/fonts/arimo-latin-wght-normal.woff2"
-));
-const FONT_ARIMO_ITALIC: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../html-frozen/fonts/arimo-latin-wght-italic.woff2"
-));
+const THEME_CSS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/embedded/theme.css"));
+const FONT_ARIMO_NORMAL: &[u8] = bir_print::frozen_html::FONT_ARIMO_NORMAL;
+const FONT_ARIMO_ITALIC: &[u8] = bir_print::frozen_html::FONT_ARIMO_ITALIC;
 
 const HTML_NOTE: &str =
     "Host-written demo HTML. Not a BIR print form. PIN, TOTP, and secrets are omitted.";

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 description = "BIR form field rules used by eBIRForms."
 repository = "https://github.com/hexuria/buwiz-forms"
+readme = "README.md"
 
 [dependencies]
 num-bigint = "0.4"

@@ -429,7 +429,7 @@ gpui-agent invoke profile.set --arg q=acme --arg view=dashboard
 before `profile.save`. Do **not** run `recipes/profile-create.json` against a
 Mac app-group DB.
 
-Read-only identity card (host-written demo HTML, **not** `html-frozen/` print
+Read-only identity card (host-written demo HTML, **not** `crates/bir-print/html-frozen/` print
 geometry). `tin` and/or `q` resolve like `profile.set`; omit both to use the
 selected profile. Optional `year` shows that year's Forms Set codes.
 Result is `{path, kind:"html"}` — an **absolute** temp `index.html` (plus
@@ -440,8 +440,8 @@ gpui-agent invoke profile.html --arg tin=00000000000002
 gpui-agent invoke profile.html --arg q='Headless Live TIN' --arg year=2026
 ```
 
-Theme tokens live in repo `html-demo/theme.css` and are copied next to the
-temp `index.html`. `form.pdf` still uses `html-frozen/` cell geometry
+Theme tokens live in `crates/bir-desktop/embedded/theme.css` and are copied next to the
+temp `index.html`. `form.pdf` still uses `crates/bir-print/html-frozen/` cell geometry
 (`kind: "frozen-html"`). Do not mix the two pipelines.
 
 ### Forms Set
@@ -520,7 +520,7 @@ Semantic invokes that do not need a GPU/window:
 - UI-only navigation/chrome may be thinner than painted (semantic tree, not
   pixels).
 - Demo HTML (`profile.html` / `dues.html`) is a host-written temp bundle using
-  `html-demo/theme.css`. It is **not** `form.pdf` / `html-frozen/` print
+  `embedded/theme.css`. It is **not** `form.pdf` / `crates/bir-print/html-frozen/` print
   geometry and does not put file bytes on the invoke result.
 
 ### Linux / box demo DB

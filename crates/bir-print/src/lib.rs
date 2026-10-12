@@ -2,7 +2,7 @@
 
 //! Frozen HTML fill/print and validated native PDF output.
 //!
-//! Rust owns printable values. Frozen HTML in `html-frozen/` is the print
+//! Rust owns printable values. Frozen HTML in `crates/bir-print/html-frozen/` is the print
 //! surface. Platform WebViews create print/PDF output, validated through
 //! [`html_output`].
 

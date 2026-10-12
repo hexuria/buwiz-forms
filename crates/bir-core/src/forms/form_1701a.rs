@@ -1253,7 +1253,7 @@ impl Form1701ADraft {
     }
 
     /// The field map plus the `derived:` values the printed January 2018
-    /// sheet needs (`html-frozen/1701a-2018/writer-cells.json`). Print only;
+    /// sheet needs (`crates/bir-print/html-frozen/1701a-2018/writer-cells.json`). Print only;
     /// never submitted.
     ///
     /// - `derived:amount_<item><A|B>` / `derived:amount_30`: the submitted

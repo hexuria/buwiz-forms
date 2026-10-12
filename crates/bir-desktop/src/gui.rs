@@ -129,7 +129,7 @@ fn try_create_tray() -> Option<TrayUi> {
             ])
             .map_err(|error| error.to_string())?;
 
-        let icon_data = include_bytes!("../../../assets/images/e_logo.png");
+        let icon_data = include_bytes!("../embedded/e_logo.png");
         let img = image::load_from_memory(icon_data)
             .map_err(|error| error.to_string())?
             .into_rgba8();
@@ -608,7 +608,13 @@ mod startup_tests {
 
     #[::core::prelude::v1::test]
     fn linux_desktop_entry_has_required_keys_and_is_packaged() {
-        let entry = include_str!("../../../assets/linux/dev.goldcoders.bir.desktop");
+        let desktop = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/linux/dev.goldcoders.bir.desktop");
+        if !desktop.is_file() {
+            // Packaged crate: the repo's assets/ tree is not shipped.
+            return;
+        }
+        let entry = std::fs::read_to_string(&desktop).unwrap();
         let mut lines = entry.lines();
         assert_eq!(lines.next(), Some("[Desktop Entry]"));
         let keys: std::collections::HashMap<&str, &str> =

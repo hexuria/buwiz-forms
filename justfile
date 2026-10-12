@@ -164,7 +164,7 @@ review-serve:
 # Confirm committed freeze HTML and write the non-promotional identity
 # copied into packaged assets/. Preview sheets are also embedded at compile time.
 build-frozen-html-identity:
-    python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$(git rev-parse HEAD)" --out assets/form-renderer-build-identity.json
+    python3 scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision "$(git rev-parse HEAD)" --out assets/form-renderer-build-identity.json
 
 # React native-evidence recipes were removed with the form-renderer.
 # Frozen HTML preview is the print path. These names stay so operators

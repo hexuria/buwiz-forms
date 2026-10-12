@@ -1824,10 +1824,14 @@ mod tests {
 
     #[test]
     fn submit_confirm_is_the_official_final_copy_prompt() {
-        let rules: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../rules/forms/2200t-v2020/validations.json"
-        ))
-        .unwrap();
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rules/forms/2200t-v2020/validations.json");
+        if !path.parent().is_some_and(|dir| dir.is_dir()) {
+            // Packaged crate: the repo's rules/ and assets/ trees are not shipped.
+            return;
+        }
+        let raw = std::fs::read_to_string(&path).expect("repo rules file");
+        let rules: serde_json::Value = serde_json::from_str(&raw).unwrap();
         let rules = rules
             .as_array()
             .or_else(|| rules.get("rules").and_then(|r| r.as_array()))

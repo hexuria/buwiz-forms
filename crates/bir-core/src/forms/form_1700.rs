@@ -974,7 +974,7 @@ impl Form1700Draft {
     }
 
     /// The field map plus the `derived:` values the printed January 2018
-    /// sheet needs (`html-frozen/1700-2018/writer-cells.json`). Print only;
+    /// sheet needs (`crates/bir-print/html-frozen/1700-2018/writer-cells.json`). Print only;
     /// never submitted.
     ///
     /// - `derived:amount_<item><A|B>` / `derived:amount_36` /

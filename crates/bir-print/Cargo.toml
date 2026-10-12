@@ -1,10 +1,11 @@
 [package]
 name = "bir-print"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 license.workspace = true
 description = "eBIRForms print and frozen-HTML rendering."
 repository = "https://github.com/hexuria/buwiz-forms"
+readme = "README.md"
 
 [features]
 default = []

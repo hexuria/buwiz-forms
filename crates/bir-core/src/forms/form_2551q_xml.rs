@@ -449,10 +449,15 @@ mod tests {
 
     #[test]
     fn writer_frm_keys_are_in_fields_json() {
-        let inventory: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../rules/forms/2551q-v2018/fields.json"
-        ))
-        .expect("2551Q fields inventory");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rules/forms/2551q-v2018/fields.json");
+        if !path.parent().is_some_and(|dir| dir.is_dir()) {
+            // Packaged crate: the repo's rules/ and assets/ trees are not shipped.
+            return;
+        }
+        let raw = std::fs::read_to_string(&path).expect("repo rules file");
+        let inventory: serde_json::Value =
+            serde_json::from_str(&raw).expect("2551Q fields inventory");
         let serialized: std::collections::BTreeSet<String> = inventory["fields"]
             .as_array()
             .expect("fields array")

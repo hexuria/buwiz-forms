@@ -5,10 +5,17 @@
 #
 # Does not run on desktop v* tags and does not upload the CLI into those releases.
 # gpui-agent is not published from this repo.
-# Publish also needs gpui-agent 0.1.0 already on crates.io (this repo only
-# [patch]es that crate for builds). bir-print and bir-desktop still include
-# files outside their crate roots (html-frozen, assets); cargo publish
-# verification of those two crates fails until that is fixed.
+#
+# Every crate in the chain (bir-rules, bir-core, bir-print, bir-desktop, bir)
+# packages and verifies from its own crate root: the frozen HTML lives in
+# crates/bir-print/html-frozen, and bir-desktop embeds crates/bir-desktop/embedded.
+# ci.yml (crate-packaging) checks that on every PR.
+#
+# Owner steps before the first bir-v* tag (this workflow does none of them):
+#   1. Publish gpui-agent 0.1.0 to crates.io from hexuria/gpui-agent.
+#   2. Add the CARGO_REGISTRY_TOKEN Actions secret on hexuria/buwiz-forms.
+#   3. Run `just publish-bir` (tags and pushes bir-vX.Y.Z).
+# The publish job refuses to run without step 1 or 2 and prints which is missing.
 name: bir
 
 on:
