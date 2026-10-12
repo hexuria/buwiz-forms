@@ -102,6 +102,12 @@ gpui-agent invoke filing.start --arg code=1601C --arg year=2026 --arg period=9
 gpui-agent screenshot --out form.png --mode scrolled --target form-1601c-scroll
 ```
 
+A bare `gpui-agent` command (no `--addr`, no `--connect`) talks to
+`GPUI_AGENT_ADDR`, else `127.0.0.1:17421`; it never reuses an earlier
+`--connect` choice. Pass `--connect last` to reuse the saved choice, or
+`--connect <app|connect-id|pid>` to pick a host from the discovery list
+(painted and headless hosts are both listed under `bir-desktop`).
+
 Before driving a host, check who owns the port — `lsof -nP -iTCP:17421
 -sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show `bir-desktop` (`bir` in a packaged install) or
 `bir-headless`. Another process there (an editor forwarding a remote machine,

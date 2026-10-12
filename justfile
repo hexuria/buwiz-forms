@@ -785,6 +785,20 @@ _package-mac-appstore args="": build-frozen-html-identity
 
 # NOTE: _package-win was removed — use 'just exe' or 'just msix' instead.
 
+# Fails the Linux package when the app-menu launcher or its icons are missing,
+# so docks can match windows (app id dev.goldcoders.bir) to the installed entry.
+_check-linux-launcher apps_dir icons_dir:
+    #!/usr/bin/env bash
+    set -e
+    ENTRY="{{apps_dir}}/{{BUNDLE_ID}}.desktop"
+    test -f "$ENTRY" || { echo "❌ missing launcher: $ENTRY"; exit 1; }
+    for n in 48 64 128 256 512; do
+        ICON="{{icons_dir}}/${n}x${n}/apps/{{BUNDLE_ID}}.png"
+        test -f "$ICON" || { echo "❌ missing icon: $ICON"; exit 1; }
+    done
+    if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate "$ENTRY"; fi
+    echo "✅ Linux launcher + icons present"
+
 _package-linux args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
@@ -806,6 +820,7 @@ _package-linux args="": build-frozen-html-identity
         trap 'rm -rf "$AUDIT_ROOT"' EXIT
         dpkg-deb --extract "$DEB" "$AUDIT_ROOT"
         python3 scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
+        {{just_executable()}} _check-linux-launcher "$AUDIT_ROOT/usr/share/applications" "$AUDIT_ROOT/usr/share/icons/hicolor"
         rm -rf "$AUDIT_ROOT"
         trap - EXIT
         echo "✅ .deb: $DEB"
@@ -816,6 +831,7 @@ _package-linux args="": build-frozen-html-identity
         mkdir -p "$PKG"
         cp target/{{LINUX_TARGET}}/release/bir "$PKG/"
         cp -R assets "$PKG/"
+        cp assets/linux/install-desktop-entry.sh "$PKG/"
         python3 scripts/audit_no_legacy.py --package-root "$PKG"
         if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then
             echo "DEVELOPER_MODE=true" > "$PKG/.env"
@@ -825,6 +841,9 @@ _package-linux args="": build-frozen-html-identity
         trap 'rm -rf "$AUDIT_ROOT"' EXIT
         tar xzf "$TARBALL" -C "$AUDIT_ROOT"
         python3 scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
+        PKG_ROOT="$AUDIT_ROOT/{{APP_NAME}}-Linux-{{VERSION}}"
+        test -x "$PKG_ROOT/install-desktop-entry.sh" || { echo "❌ tarball is missing install-desktop-entry.sh"; exit 1; }
+        {{just_executable()}} _check-linux-launcher "$PKG_ROOT/assets/linux" "$PKG_ROOT/assets/linux/icons/hicolor"
         rm -rf "$AUDIT_ROOT"
         trap - EXIT
         echo "✅ Tarball: $TARBALL"

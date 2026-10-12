@@ -51,13 +51,16 @@ The package ships (see `[package.metadata.deb]` in
 |---|---|
 | The `bir` binary | `/usr/bin/ebirforms` |
 | App assets | `/usr/share/ebirforms/assets/` |
-| [`assets/linux/ebirforms.desktop`](../../assets/linux/ebirforms.desktop) | `/usr/share/applications/ebirforms.desktop` |
-| `assets/icon.png` (512 by 512) | `/usr/share/icons/hicolor/512x512/apps/ebirforms.png` |
+| [`assets/linux/dev.goldcoders.bir.desktop`](../../assets/linux/dev.goldcoders.bir.desktop) | `/usr/share/applications/dev.goldcoders.bir.desktop` |
+| `assets/linux/icons/hicolor/<size>/apps/dev.goldcoders.bir.png` (48, 64, 128, 256, 512) | `/usr/share/icons/hicolor/<size>/apps/dev.goldcoders.bir.png` |
 
-The desktop entry has `Exec=ebirforms`, `Icon=ebirforms`, the categories
-`Office;Finance;` and `StartupWMClass=ebirforms`. The window sets its
-application id to `ebirforms`, so docks group the window under the entry.
-Launch it from the application menu or run `ebirforms`.
+The desktop entry has `Exec=ebirforms`, `Icon=dev.goldcoders.bir`, the
+categories `Office;Finance;` and `StartupWMClass=dev.goldcoders.bir`. Every
+window (main, previews, cron tasks) goes through `window_identity::identified()`,
+which sets the application id to `dev.goldcoders.bir` and a 128 px window icon,
+so docks group the windows under the entry. Launch it from the application menu
+or run `ebirforms`. From the tarball, run `assets/linux/install-desktop-entry.sh`
+to add the same entry for the current user (`--remove` undoes it).
 
 Runtime packages (the `.deb` `depends`): `libgtk-3-0`, `libwebkit2gtk-4.1-0`,
 `libvulkan1`, `libxkbcommon0`, `libwayland-client0`, `fontconfig`,

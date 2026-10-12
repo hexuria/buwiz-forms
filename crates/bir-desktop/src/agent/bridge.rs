@@ -53,7 +53,7 @@ pub fn maybe_start() -> Option<StartedAgent> {
                 config.token,
                 mailbox.clone(),
                 Duration::from_secs(8),
-                "bir-desktop",
+                super::instance::APP,
             ) {
                 Ok((addr, shutdown)) => {
                     tracing::info!(

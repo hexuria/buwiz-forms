@@ -408,7 +408,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             config.token.clone(),
             mailbox.clone(),
             Duration::from_secs(8),
-            "bir-desktop",
+            super::instance::APP,
         ) {
             Ok(started) => started,
             Err(error) if wait && error.kind() == ErrorKind::AddrInUse => {

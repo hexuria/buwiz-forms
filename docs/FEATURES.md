@@ -16,6 +16,7 @@ there, but nobody has run it on that platform.
 | Database key storage | ✓ | untested | partial |
 | Close button (X) and quit shortcut | ✓ | untested | ✓ |
 | System tray icon | ✓ | untested | partial |
+| App menu launcher, icons and dock grouping (app id `dev.goldcoders.bir`) | n/a | n/a | ✓ |
 | Global show/hide hotkey | ✓ | untested | partial |
 | Single-instance guard | ✓ | untested | ✓ |
 | Window size and position memory | ✓ | untested | ✓ |
