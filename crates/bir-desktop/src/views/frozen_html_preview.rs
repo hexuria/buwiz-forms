@@ -15,30 +15,43 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_rsx::rsx;
 use gpui_wry::WebView;
 use raw_window_handle::HasWindowHandle;
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+#[cfg(target_os = "windows")]
 use std::time::Duration;
 #[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows;
 #[cfg(target_os = "macos")]
 use wry::WebViewExtMacOS;
 
-struct LivePreview {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PreviewSlot {
     generation: u64,
+    state: PreviewStateKind,
+}
+
+struct LivePreview {
+    slot: PreviewSlot,
     handle: WindowHandle<FrozenHtmlPreviewView>,
 }
 
 static LIVE_PREVIEW: OnceLock<Mutex<Option<LivePreview>>> = OnceLock::new();
 static PREVIEW_GENERATION: AtomicU64 = AtomicU64::new(1);
-static PREVIEW_STATE: AtomicU8 = AtomicU8::new(0);
 
 fn live_preview_slot() -> &'static Mutex<Option<LivePreview>> {
     LIVE_PREVIEW.get_or_init(|| Mutex::new(None))
 }
 
-pub(crate) fn register_live_preview(handle: WindowHandle<FrozenHtmlPreviewView>, generation: u64) {
+pub(crate) fn register_live_preview(
+    handle: WindowHandle<FrozenHtmlPreviewView>,
+    generation: u64,
+    state: PreviewStateKind,
+) {
     if let Ok(mut slot) = live_preview_slot().lock() {
-        *slot = Some(LivePreview { generation, handle });
+        *slot = Some(LivePreview {
+            slot: PreviewSlot { generation, state },
+            handle,
+        });
     }
 }
 
@@ -50,22 +63,29 @@ pub(crate) fn live_preview_window() -> Option<WindowHandle<FrozenHtmlPreviewView
 }
 
 pub(crate) fn live_preview_state() -> &'static str {
-    match PREVIEW_STATE.load(Ordering::SeqCst) {
-        1 => "ready",
-        2 => "failed",
-        _ => "pending",
+    live_preview_slot()
+        .lock()
+        .ok()
+        .and_then(|slot| slot.as_ref().map(|live| live.slot.state.label()))
+        .unwrap_or("none")
+}
+
+fn update_preview_slot_state(
+    slot: Option<&mut PreviewSlot>,
+    generation: u64,
+    state: PreviewStateKind,
+) {
+    if let Some(slot) = slot
+        && slot.generation == generation
+    {
+        slot.state = state;
     }
 }
 
-fn set_preview_state(state: &PreviewState) {
-    PREVIEW_STATE.store(
-        match state {
-            PreviewState::Pending { .. } => 0,
-            PreviewState::Ready(_) => 1,
-            PreviewState::Failed { .. } => 2,
-        },
-        Ordering::SeqCst,
-    );
+fn set_preview_state(generation: u64, state: PreviewStateKind) {
+    if let Ok(mut slot) = live_preview_slot().lock() {
+        update_preview_slot_state(slot.as_mut().map(|live| &mut live.slot), generation, state);
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -102,7 +122,7 @@ enum PreviewState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PreviewStateKind {
+pub(crate) enum PreviewStateKind {
     Pending,
     Ready,
     Failed,
@@ -119,6 +139,14 @@ impl PreviewStateKind {
 }
 
 impl PreviewState {
+    fn kind(&self) -> PreviewStateKind {
+        match self {
+            Self::Pending { .. } => PreviewStateKind::Pending,
+            Self::Ready(_) => PreviewStateKind::Ready,
+            Self::Failed { .. } => PreviewStateKind::Failed,
+        }
+    }
+
     fn can_print(&self) -> bool {
         matches!(self, Self::Ready(_))
     }
@@ -263,7 +291,7 @@ impl FrozenHtmlPreviewView {
         let preview_state = {
             let task_html = html.clone();
             let preview_state = PreviewState::Pending { html };
-            set_preview_state(&preview_state);
+            set_preview_state(generation, preview_state.kind());
             cx.spawn_in(window, async move |this, cx| {
                 cx.background_executor().timer(Duration::ZERO).await;
                 let raw_window_handle = this
@@ -286,7 +314,7 @@ impl FrozenHtmlPreviewView {
                         Ok(webview) => {
                             let state =
                                 PreviewState::Ready(cx.new(|cx| WebView::new(webview, window, cx)));
-                            set_preview_state(&state);
+                            set_preview_state(generation, state.kind());
                             state
                         }
                         Err(error) => {
@@ -294,7 +322,7 @@ impl FrozenHtmlPreviewView {
                                 error: format!("Print preview failed: {error}"),
                                 html: task_html,
                             };
-                            set_preview_state(&state);
+                            set_preview_state(generation, state.kind());
                             state
                         }
                     };
@@ -305,7 +333,7 @@ impl FrozenHtmlPreviewView {
             .detach();
             preview_state
         };
-        #[cfg(target_os = "macos")]
+        #[cfg(not(target_os = "windows"))]
         let preview_state = {
             let result = window
                 .window_handle()
@@ -314,7 +342,7 @@ impl FrozenHtmlPreviewView {
             match result {
                 Ok(webview) => {
                     let state = PreviewState::Ready(cx.new(|cx| WebView::new(webview, window, cx)));
-                    set_preview_state(&state);
+                    set_preview_state(generation, state.kind());
                     state
                 }
                 Err(error) => {
@@ -322,7 +350,7 @@ impl FrozenHtmlPreviewView {
                         error: format!("Print preview failed: {error}"),
                         html,
                     };
-                    set_preview_state(&state);
+                    set_preview_state(generation, state.kind());
                     state
                 }
             }
@@ -341,6 +369,10 @@ impl FrozenHtmlPreviewView {
 
     pub(crate) fn generation(&self) -> u64 {
         self.generation
+    }
+
+    pub(crate) fn preview_state_kind(&self) -> PreviewStateKind {
+        self.preview_state.kind()
     }
 
     pub(crate) fn scroll_handle(&self) -> &ScrollHandle {
@@ -487,7 +519,7 @@ impl Drop for FrozenHtmlPreviewView {
         if let Ok(mut slot) = live_preview_slot().lock()
             && slot
                 .as_ref()
-                .is_some_and(|live| live.generation == self.generation)
+                .is_some_and(|live| live.slot.generation == self.generation)
         {
             *slot = None;
         }
@@ -612,7 +644,8 @@ impl Render for FrozenHtmlPreviewView {
 mod tests {
     use super::{
         PAPER_HEIGHT_PT, PAPER_WIDTH_PT, css_color, document_sheet_size, fit_css, fit_scale,
-        with_fit_style, with_screen_canvas, with_sheets,
+        PreviewSlot, PreviewStateKind, update_preview_slot_state, with_fit_style,
+        with_screen_canvas, with_sheets,
     };
 
     #[test]
@@ -655,6 +688,31 @@ mod tests {
                 html: String::new(),
             }
             .can_print()
+        );
+    }
+
+    #[test]
+    fn preview_slot_updates_only_for_current_generation_and_clears_to_none() {
+        let mut slot = Some(PreviewSlot {
+            generation: 7,
+            state: PreviewStateKind::Pending,
+        });
+        update_preview_slot_state(Some(slot.as_mut().unwrap()), 8, PreviewStateKind::Ready);
+        assert_eq!(slot.unwrap().state, PreviewStateKind::Pending);
+
+        let mut slot = Some(PreviewSlot {
+            generation: 7,
+            state: PreviewStateKind::Pending,
+        });
+        update_preview_slot_state(Some(slot.as_mut().unwrap()), 7, PreviewStateKind::Ready);
+        assert_eq!(slot.unwrap().state, PreviewStateKind::Ready);
+
+        let slot: Option<PreviewSlot> = None;
+        assert_eq!(
+            slot.as_ref()
+                .map(|slot| slot.state.label())
+                .unwrap_or("none"),
+            "none"
         );
     }
 
