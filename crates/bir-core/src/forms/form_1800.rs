@@ -251,6 +251,15 @@ impl Form1800Draft {
         self.recompute();
     }
 
+    /// Tax due (Item 38) is zero or less because of Items 28-32 or the
+    /// P250,000 exemption: the case that needs an in-app confirm before
+    /// Submit. Recompute first.
+    pub fn zero_tax_due_needs_confirm(&self) -> bool {
+        let has_deductions = self.deductions.iter().any(|row| row.amount != 0.0);
+        let within_exemption = self.total_net_gifts <= FORM_1800_EXEMPT_GIFT;
+        self.tax_due <= 0.0 && (has_deductions || within_exemption)
+    }
+
     /// The official compute chain, run as if every changed field was blurred.
     pub fn recompute(&mut self) {
         if !self.is_amended {
@@ -572,28 +581,12 @@ impl Form1800Draft {
             );
         }
 
-        // Official defects, refused rather than filed. Both reproduce on the
-        // page itself (re-checked with the runtime that serves taxRate.xml),
-        // independent of the oracle:
-        // - Items 28-32: `compute33()` reads `frm1800v2018:DeductionAmt1..5`,
-        //   which the page does not have (its controls are
-        //   `txtDeductionAmount28..32`), so it throws `TypeError` on the first
-        //   one; Item 33 stays 0.00 and the deduction is never subtracted.
-        // - Item 38: `compute38()` subtracts the P250,000 exemption without a
-        //   floor, so net gifts within the exemption give a negative Item 14
-        //   and a negative tax due (e.g. P100,000 of gifts -> -9,000.00).
-        if self.deductions.iter().any(|row| row.amount != 0.0) {
-            err(
-                "deductions",
-                "The official 1800 page does not carry Items 28 to 32 into Item 33; file deductions manually with the RDO.",
-            );
-        }
-        if self.net_gifts_subject_to_tax < 0.0 {
-            err(
-                "net_gifts_subject_to_tax",
-                "Total net gifts are within the P250,000 exemption; the official page would report a negative tax due (Item 38).",
-            );
-        }
+        // Items 28-32 and net gifts within the P250,000 exemption are not
+        // refused: the official page validates and files them (no alert in
+        // `validateForm()`/`saveXML()`), with Item 33 left at 0.00 because
+        // `compute33()` throws on controls the page lacks, and Item 38 not
+        // floored, so tax due can be zero or negative. The desktop view asks
+        // for confirmation first (`zero_tax_due_needs_confirm`).
 
         if self.donees.iter().all(|d| d.name.trim().is_empty()) {
             err("donees", "Enter at least one donee on Item 12.");
@@ -837,20 +830,22 @@ mod tests {
     }
 
     #[test]
-    fn official_defects_are_refused() {
+    fn deductions_and_exemption_are_filed_like_the_official_page() {
         let mut d = sample();
+        assert!(!d.zero_tax_due_needs_confirm());
         d.deductions = vec![Form1800Deduction {
             title: "Dowry".into(),
             amount: 10_000.0,
         }];
         d.recompute();
         assert_eq!(d.total_deductions, 0.0);
-        assert!(messages(&d).iter().any(|m| m.contains("Items 28 to 32")));
+        assert!(messages(&d).is_empty(), "{:?}", messages(&d));
         let mut d = sample();
         d.personal_properties[0].fair_market_value = 100_000.0;
         d.recompute();
         assert_eq!(d.tax_due, -9_000.0);
-        assert!(messages(&d).iter().any(|m| m.contains("Item 38")));
+        assert!(messages(&d).is_empty(), "{:?}", messages(&d));
+        assert!(d.zero_tax_due_needs_confirm());
     }
 
     #[test]

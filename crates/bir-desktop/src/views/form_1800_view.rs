@@ -14,7 +14,7 @@ use bir_core::forms::form_1800::{
 };
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
-use gpui_component::button::Button;
+use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::{ActiveTheme, Disableable};
 
 use super::event_form_kit::{
@@ -131,6 +131,9 @@ pub struct Form1800View {
     /// draft holds ("Add" on the official page has no limit).
     personal_rows: usize,
     real_rows: usize,
+    /// Submit was pressed with tax due of zero or less from Items 28-32 or
+    /// the exemption; the confirm is open and nothing is queued yet.
+    zero_tax_confirm_open: bool,
 }
 
 impl EventEmitter<QueueableFormEvent> for Form1800View {}
@@ -636,6 +639,49 @@ impl Form1800View {
     }
 }
 
+impl Form1800View {
+    fn render_zero_tax_confirm(&self, cx: &Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(cx.theme().border)
+            .child(div().text_sm().child(ZERO_TAX_CONFIRM_TEXT))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(
+                        Button::new("1800_zero_tax_submit")
+                            .label("Submit anyway")
+                            .primary()
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.zero_tax_confirm_open = false;
+                                kit::queue(this, window, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("1800_zero_tax_cancel")
+                            .label("Cancel")
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.zero_tax_confirm_open = false;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+}
+
+/// Owner-set confirm before Submit when tax due is zero or less because of
+/// Items 28-32 or the exemption (not an official alert).
+const ZERO_TAX_CONFIRM_TEXT: &str = "Tax due is ₱0 or less because of Items 28–32 / the ₱250,000 exemption. Check with your RDO before filing.";
+
 /// Shown before any figure is typed: the official page cannot carry
 /// Items 28-32 into Item 33, so such a return is filed with the RDO.
 const DEDUCTIONS_NOTE: &str = "Items 28 to 32 are not carried into Item 33 by the official 1800 page. If you claim a deduction, file this return with your RDO.";
@@ -832,6 +878,7 @@ impl QueueableFormView for Form1800View {
             kit,
             personal_rows,
             real_rows,
+            zero_tax_confirm_open: false,
         }
     }
 
@@ -881,7 +928,21 @@ impl FormViewTrait for Form1800View {
     fn save_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         kit::save(self, window, cx);
     }
+    /// Submit: when tax due is zero or less because of Items 28-32 or the
+    /// exemption, ask first; otherwise queue as the official page files it.
     fn mark_submitted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.zero_tax_confirm_open = false;
+        if self.draft.lifecycle.is_editable() {
+            kit::sync(self, cx);
+            if self.kit.parse_errors.is_empty()
+                && self.kit.validation_errors.is_empty()
+                && self.draft.zero_tax_due_needs_confirm()
+            {
+                self.zero_tax_confirm_open = true;
+                cx.notify();
+                return;
+            }
+        }
         kit::queue(self, window, cx);
     }
     fn mark_paid(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -900,7 +961,11 @@ impl FormViewTrait for Form1800View {
 impl Render for Form1800View {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layout = Layout::for_width(window.viewport_size().width);
-        let mut sections = vec![self.render_part_one(layout, cx)];
+        let mut sections = Vec::new();
+        if self.zero_tax_confirm_open && self.draft.lifecycle.is_editable() {
+            sections.push(self.render_zero_tax_confirm(cx));
+        }
+        sections.push(self.render_part_one(layout, cx));
         sections.extend(self.render_computation(layout, cx));
         sections.push(self.render_schedules(layout, cx));
         kit::render_page(self, sections, window, cx)
