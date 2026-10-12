@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+from ctypes import wintypes
 import json
 import os
 from pathlib import Path
@@ -30,6 +32,212 @@ TRAY_NOTE = (
     "agent-reachable because the agent mailbox drains in AppState::render; "
     "cover those as manual VM steps (#98)."
 )
+PAINT_THRESHOLD = 0.02
+
+
+class PaintCaptureError(RuntimeError):
+    """The desktop or preview child could not be captured."""
+
+
+def dark_pixel_ratio(pixels: bytes) -> float:
+    """Return the dark-pixel fraction of a BGRA DIB buffer."""
+    if len(pixels) % 4:
+        raise ValueError("BGRA buffer length must be a multiple of four")
+    pixel_count = len(pixels) // 4
+    if not pixel_count:
+        return 0.0
+    dark = sum(
+        max(pixels[offset], pixels[offset + 1], pixels[offset + 2]) < 0xF0
+        for offset in range(0, len(pixels), 4)
+    )
+    return dark / pixel_count
+
+
+def _capture_preview_dark_ratio(pid: int) -> float:
+    """Capture the WRY child HWND belonging to the preview window."""
+    if os.name != "nt":
+        raise PaintCaptureError("desktop capture is only available on Windows")
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    wt = wintypes
+
+    class Rect(ctypes.Structure):
+        _fields_ = [
+            ("left", wt.LONG),
+            ("top", wt.LONG),
+            ("right", wt.LONG),
+            ("bottom", wt.LONG),
+        ]
+
+    class BitmapInfoHeader(ctypes.Structure):
+        _fields_ = [
+            ("biSize", wt.DWORD),
+            ("biWidth", wt.LONG),
+            ("biHeight", wt.LONG),
+            ("biPlanes", wt.WORD),
+            ("biBitCount", wt.WORD),
+            ("biCompression", wt.DWORD),
+            ("biSizeImage", wt.DWORD),
+            ("biXPelsPerMeter", wt.LONG),
+            ("biYPelsPerMeter", wt.LONG),
+            ("biClrUsed", wt.DWORD),
+            ("biClrImportant", wt.DWORD),
+        ]
+
+    class BitmapInfo(ctypes.Structure):
+        _fields_ = [
+            ("bmiHeader", BitmapInfoHeader),
+            ("bmiColors", wt.DWORD * 3),
+        ]
+
+    user32.GetWindowThreadProcessId.argtypes = [wt.HWND, ctypes.POINTER(wt.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wt.DWORD
+    user32.GetWindowTextLengthW.argtypes = [wt.HWND]
+    user32.GetWindowTextLengthW.restype = ctypes.c_int
+    user32.GetWindowTextW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.restype = ctypes.c_int
+    user32.GetClassNameW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
+    user32.GetClassNameW.restype = ctypes.c_int
+    user32.GetWindowRect.argtypes = [wt.HWND, ctypes.POINTER(Rect)]
+    user32.GetWindowRect.restype = wt.BOOL
+    user32.EnumWindows.argtypes = [ctypes.c_void_p, wt.LPARAM]
+    user32.EnumWindows.restype = wt.BOOL
+    user32.EnumChildWindows.argtypes = [wt.HWND, ctypes.c_void_p, wt.LPARAM]
+    user32.EnumChildWindows.restype = wt.BOOL
+    user32.GetDC.argtypes = [wt.HWND]
+    user32.GetDC.restype = wt.HDC
+    user32.ReleaseDC.argtypes = [wt.HWND, wt.HDC]
+    user32.ReleaseDC.restype = ctypes.c_int
+    gdi32.CreateCompatibleDC.argtypes = [wt.HDC]
+    gdi32.CreateCompatibleDC.restype = wt.HDC
+    gdi32.DeleteDC.argtypes = [wt.HDC]
+    gdi32.DeleteDC.restype = wt.BOOL
+    gdi32.CreateDIBSection.argtypes = [
+        wt.HDC,
+        ctypes.POINTER(BitmapInfo),
+        wt.UINT,
+        ctypes.POINTER(ctypes.c_void_p),
+        wt.HANDLE,
+        wt.DWORD,
+    ]
+    gdi32.CreateDIBSection.restype = wt.HBITMAP
+    gdi32.SelectObject.argtypes = [wt.HDC, wt.HGDIOBJ]
+    gdi32.SelectObject.restype = wt.HGDIOBJ
+    gdi32.DeleteObject.argtypes = [wt.HGDIOBJ]
+    gdi32.DeleteObject.restype = wt.BOOL
+    gdi32.BitBlt.argtypes = [
+        wt.HDC,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        wt.HDC,
+        ctypes.c_int,
+        ctypes.c_int,
+        wt.DWORD,
+    ]
+    gdi32.BitBlt.restype = wt.BOOL
+    kernel32.RtlMoveMemory.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
+    kernel32.RtlMoveMemory.restype = None
+
+    preview_hwnd: list[int] = []
+    child_rect: list[Rect] = []
+    WindowCallback = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+
+    def title(hwnd: int) -> str:
+        length = user32.GetWindowTextLengthW(hwnd)
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buffer, len(buffer))
+        return buffer.value
+
+    def enum_windows(hwnd: int, _lparam: int) -> int:
+        window_pid = wt.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(window_pid))
+        if window_pid.value == pid and title(hwnd).endswith("— Print Preview"):
+            preview_hwnd.append(hwnd)
+            return 0
+        return 1
+
+    user32.EnumWindows(WindowCallback(enum_windows), 0)
+    if not preview_hwnd:
+        raise PaintCaptureError("print-preview top-level window was not found")
+
+    def enum_children(hwnd: int, _lparam: int) -> int:
+        class_name = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, class_name, len(class_name))
+        if class_name.value == "WRY_WEBVIEW":
+            rect = Rect()
+            if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                raise PaintCaptureError("GetWindowRect failed for WRY_WEBVIEW")
+            child_rect.append(rect)
+            return 0
+        return 1
+
+    user32.EnumChildWindows(preview_hwnd[0], WindowCallback(enum_children), 0)
+    if not child_rect:
+        raise PaintCaptureError("WRY_WEBVIEW child window was not found")
+    rect = child_rect[0]
+    width, height = rect.right - rect.left, rect.bottom - rect.top
+    if width <= 0 or height <= 0:
+        raise PaintCaptureError("WRY_WEBVIEW child window has empty bounds")
+
+    screen_dc = user32.GetDC(None)
+    if not screen_dc:
+        raise PaintCaptureError("GetDC failed; no desktop is available")
+    memory_dc = gdi32.CreateCompatibleDC(screen_dc)
+    if not memory_dc:
+        user32.ReleaseDC(None, screen_dc)
+        raise PaintCaptureError("CreateCompatibleDC failed; no desktop is available")
+    bits = ctypes.c_void_p()
+    bitmap_info = BitmapInfo()
+    bitmap_info.bmiHeader = BitmapInfoHeader(
+        ctypes.sizeof(BitmapInfoHeader),
+        width,
+        -height,
+        1,
+        32,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    )
+    bitmap = gdi32.CreateDIBSection(
+        screen_dc,
+        ctypes.byref(bitmap_info),
+        0,
+        ctypes.byref(bits),
+        None,
+        0,
+    )
+    if not bitmap or not bits.value:
+        gdi32.DeleteDC(memory_dc)
+        user32.ReleaseDC(None, screen_dc)
+        raise PaintCaptureError("CreateDIBSection failed; no desktop is available")
+    previous = gdi32.SelectObject(memory_dc, bitmap)
+    try:
+        if not gdi32.BitBlt(
+            memory_dc,
+            0,
+            0,
+            width,
+            height,
+            screen_dc,
+            rect.left,
+            rect.top,
+            0x00CC0020,
+        ):
+            raise PaintCaptureError("BitBlt failed; no desktop is available")
+        buffer = ctypes.string_at(bits.value, width * height * 4)
+        return dark_pixel_ratio(buffer)
+    finally:
+        gdi32.SelectObject(memory_dc, previous)
+        gdi32.DeleteObject(bitmap)
+        gdi32.DeleteDC(memory_dc)
+        user32.ReleaseDC(None, screen_dc)
 
 
 def read_stack_reserve(path: str | Path) -> int:
@@ -180,6 +388,11 @@ def node_value(client: AgentClient, node_id: str) -> dict | None:
     return find_node(response_tree(client.request({"op": "snapshot"})), node_id)
 
 
+def append_note(result: dict[str, Any], note: str) -> None:
+    existing = result.get("note")
+    result["note"] = f"{existing} {note}".strip() if existing else note
+
+
 def wait_preview(client: AgentClient, proc: subprocess.Popen, timeout: float = 30) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -236,6 +449,7 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
         "step_reached": "before launch",
         "reason": None,
         "exit_code": None,
+        "paint_check": "not-run",
         "stdout": str(stdout_path),
         "stderr": str(stderr_path),
     }
@@ -312,8 +526,22 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
             invoke(client, "form.print")
             result["step_reached"] = f"requested {code} preview"
             wait_preview(client, proc)
+            result["step_reached"] = "preview ready"
+            time.sleep(3)
+            try:
+                ratio = _capture_preview_dark_ratio(proc.pid)
+            except PaintCaptureError as exc:
+                result["paint_check"] = "skipped"
+                append_note(result, f"paint check skipped: {exc}")
+            else:
+                result["paint_ratio"] = ratio
+                if ratio < PAINT_THRESHOLD:
+                    result["paint_check"] = "failed"
+                    raise SmokeError(
+                        f"preview area blank (dark-pixel ratio {ratio:.6f})"
+                    )
+                result["paint_check"] = "passed"
             result["step_reached"] = "preview painted"
-            time.sleep(5)
             hello = client.request({"op": "hello"})
             if not hello.get("ok"):
                 raise SmokeError(f"hello after preview failed: {hello}")
@@ -408,10 +636,15 @@ def write_summary(results: list[dict[str, Any]]) -> None:
     if not summary:
         return
     with open(summary, "a", encoding="utf-8") as handle:
-        handle.write("\n### Windows smoke\n\n| Phase | Status | Step | Reason |\n|---|---|---|---|\n")
+        handle.write(
+            "\n### Windows smoke\n\n"
+            "| Phase | Status | Paint check | Dark-pixel ratio | Step | Reason |\n"
+            "|---|---|---|---:|---|---|\n"
+        )
         for item in results:
             handle.write(
-                f"| {item['phase']} | {item['status']} | {item['step_reached']} | "
+                f"| {item['phase']} | {item['status']} | {item.get('paint_check', '')} | "
+                f"{item.get('paint_ratio', '')} | {item['step_reached']} | "
                 f"{item.get('reason') or ''} |\n"
             )
 

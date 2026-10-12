@@ -41,6 +41,13 @@ class WindowsSmokeTests(unittest.TestCase):
         self.assertIn("access violation", windows_smoke.classify_exit(-1073741819))
         self.assertIn("non-zero exit", windows_smoke.classify_exit(7))
 
+    def test_dark_pixel_ratio_all_white(self):
+        self.assertEqual(windows_smoke.dark_pixel_ratio(bytes([0xFF, 0xFF, 0xFF, 0x00]) * 8), 0.0)
+
+    def test_dark_pixel_ratio_half_black(self):
+        pixels = bytes([0x00, 0x00, 0x00, 0x00]) * 4 + bytes([0xFF, 0xFF, 0xFF, 0x00]) * 4
+        self.assertEqual(windows_smoke.dark_pixel_ratio(pixels), 0.5)
+
     def test_smoke_env_strips_sftp(self):
         with tempfile.TemporaryDirectory() as directory:
             env = windows_smoke.smoke_env(
