@@ -43,7 +43,9 @@ fn profile_values() -> Vec<String> {
 
 /// One entry per line, so a change shows as a one-line diff.
 fn pinned_text(def: &AgentFormDef) -> String {
-    let value = serde_json::to_value(def).expect("definition serializes");
+    let mut value = serde_json::to_value(def).expect("definition serializes");
+    // Workspace dependencies can enable serde_json's preserve_order feature.
+    value.sort_all_objects();
     let line = |value: &Value| serde_json::to_string(value).expect("json");
     let mut out = String::from("{\n");
     let object = value.as_object().expect("object");
@@ -71,6 +73,14 @@ fn pinned_text(def: &AgentFormDef) -> String {
     out.push_str(&fields.join(",\n"));
     out.push_str("\n}\n");
     out
+}
+
+#[test]
+fn pinned_agent_form_serialization_is_canonical() {
+    for kind in AgentFormKind::all() {
+        let pinned = std::fs::read_to_string(data_path(kind.package())).expect("pinned form reads");
+        assert_eq!(pinned_text(kind.definition()), pinned, "{}", kind.package());
+    }
 }
 
 fn derived(kind: AgentFormKind, seeds: &[Value]) -> AgentFormDef {
