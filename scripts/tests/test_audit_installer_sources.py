@@ -62,6 +62,35 @@ class InstallerSourcePolicyTests(unittest.TestCase):
             'Source: "{#StageDir}\\assets\\*"'
         )
 
+    def test_inline_ispp_expressions_outside_files_are_rejected(self) -> None:
+        for expression in (
+            '{#StageDir = "C:\\evil", ""}',
+            '{#Define("StageDir", "C:\\evil")}',
+            "{#OtherVariable}",
+            "{# StageDir}",
+            "{#StageDir",
+        ):
+            with self.subTest(expression=expression):
+                script = self.write_script(
+                    f"[Setup]\nAppName=eBIRForms{expression}\n"
+                    "[Files]\n"
+                    'Source: "{#StageDir}\\bir.exe"; DestDir: "{app}"\n'
+                )
+                with self.assertRaises(InstallerSourceError) as raised:
+                    validate_installer_sources(script, self.root)
+                self.assertEqual(
+                    str(raised.exception),
+                    "line 2: unsupported inline ISPP expression",
+                )
+
+    def test_only_exact_inline_ispp_tokens_are_allowed(self) -> None:
+        script = self.write_script(
+            "[Setup]\nAppVersion={#MyAppVersion}\n"
+            "[Files]\n"
+            'Source: "{#StageDir}\\bir.exe"; DestDir: "{app}"\n'
+        )
+        self.assertEqual(validate_installer_sources(script, self.root), 1)
+
     def test_reordered_source_traversal_is_rejected(self) -> None:
         script = self.add_script(
             'DestDir: "{app}"; Source: "{#StageDir}\\..\\outside"; Flags: ignoreversion'
@@ -231,7 +260,7 @@ class InstallerSourcePolicyTests(unittest.TestCase):
                 "DestDir must be anchored at",
             ),
             (
-                'Source: "{#StageDir}\\bir.exe"; DestDir: "{app}\\{#OtherDir}"',
+                'Source: "{#StageDir}\\bir.exe"; DestDir: "{app}\\{#StageDir}"',
                 "unsupported DestDir path",
             ),
             (

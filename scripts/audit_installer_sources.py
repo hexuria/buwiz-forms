@@ -144,6 +144,10 @@ def _validate_ispp_directives(text: str) -> None:
     first_section_line: int | None = None
 
     for line_number, raw_line in enumerate(text.splitlines(), 1):
+        if re.search(r"\{#(?!(?:MyAppVersion|StageDir)\})", raw_line):
+            raise InstallerSourceError(
+                f"line {line_number}: unsupported inline ISPP expression"
+            )
         stripped = raw_line.strip()
         if not stripped or stripped.startswith(";"):
             continue
