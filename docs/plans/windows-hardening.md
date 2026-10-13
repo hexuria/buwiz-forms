@@ -262,7 +262,7 @@ execution was safely refused because a real installation is registered.
 - [ ] **8.2** If existing diagnostics are insufficient, add an opt-in early startup breadcrumb before DB/UI initialization. Log only startup stage/error category, never taxpayer fields, DB contents or credentials. A panic hook alone cannot diagnose a loader failure before Rust starts; preserve loader/activation evidence from 8.1.
 - [ ] **8.3** If (a): depend on the `Microsoft.VCLibs.140.00.UWPDesktop` framework in `assets/windows/AppxManifest.xml` instead of copying DLLs. If (b): fix the startup path.
 - **Acceptance remains open:** packaged activation on Windows 11 with UAC enabled, using `smoke_msix.ps1 -RequireActivation`. The UAC-disabled host's registration and unpacked-layout checks do not close #94.
-- **Progress:** User-provided Server 2022 evidence shows the unpacked layout paints and persists while packaged activation produces no process. The revised smoke gates registration and layout execution, skipping activation only when `EnableLUA=0`; Windows 11 UAC-on activation remains unverified.
+- **Progress:** A Server 2022 VM diagnostic (2026-10-13) showed the unpacked layout paints and persists while packaged activation produces no process. The revised smoke gates registration and layout execution, skipping activation only when `EnableLUA=0`; Windows 11 UAC-on activation remains unverified.
 
 ---
 
