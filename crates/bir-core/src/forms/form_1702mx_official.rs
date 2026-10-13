@@ -13,6 +13,7 @@
 //! activity) and the other "add more" modals are cloned into the official
 //! form at run time, so a return that needs them does not validate here.
 
+use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_1702mx::{
@@ -559,6 +560,9 @@ impl Form1702MXDraft {
         p2.item_15_total_tax_credits = WholePeso(v(&credits.total));
         let item16 = v(&item19.total) - v(&credits.total);
         p2.item_16_net_tax_payable_or_overpayment = WholePeso(item16);
+        // Items 17-19 file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
+        let p2 = &mut self.part_ii;
         let penalties =
             v(&p2.item_17_surcharge) + v(&p2.item_18_interest) + v(&p2.item_19_compromise);
         set(&mut p2.item_20_total_penalties, penalties);
@@ -1615,7 +1619,41 @@ impl Form1702MXDraft {
     }
 }
 
+impl Form1702MXDraft {
+    /// Items 17-19 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                part_ii.item_17_surcharge: "17 Surcharge",
+                part_ii.item_18_interest: "18 Interest",
+                part_ii.item_19_compromise: "19 Compromise",
+            ],
+            controls: [
+                "frm1702MX:txtPg1Pt2I17",
+                "frm1702MX:txtPg1Pt2I18",
+                "frm1702MX:txtPg1Pt2I19",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 16", |d| d.part_ii.item_16_net_tax_payable_or_overpayment.0 as f64,
+            rounding: super::penalty_items::PenaltyRounding::WholePesos,
+            // The calendar's annual deadline is for a full calendar year.
+            deadline_period: |d: &Self| {
+                (d.filing_basis == Form1702MXFilingBasis::Calendar
+                    && !d.is_short_period
+                    && d.month == 12)
+                    .then(|| super::penalty_items::calendar_period(d))
+                    .flatten()
+            },
+        )
+    }
+}
+
 impl QueueableForm for Form1702MXDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1702MX";
     const FORM_TYPE: &'static str = FORM_1702MX_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1702MX_LAYOUT_ID;
@@ -1825,6 +1863,7 @@ mod tests {
         d.schedule_4.items[0].special = peso(30_000);
         d.schedule_4.items[1].exempt = peso(1_000);
         d.part_ii.item_17_surcharge = peso(1_000);
+        d.keep_entered_penalties();
         d.schedule_10.items[0].exempt = peso(845_000);
         d.schedule_10.items[0].special = peso(1_400_000);
         d.schedule_10.items[0].regular = peso(2_144_500);
@@ -2062,6 +2101,7 @@ mod tests {
         assert_eq!(d.lifecycle.status, FilingStatus::Queued);
         assert!(d.clone().revalidate_queued_before_submission().is_ok());
         d.part_ii.item_17_surcharge = peso(9);
+        d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
         assert_eq!(d.lifecycle.status, FilingStatus::Draft);
     }

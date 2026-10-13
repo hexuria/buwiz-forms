@@ -1476,7 +1476,8 @@ impl Form1702RTDraft {
             None
         };
 
-        let draft = Form1702RTDraft {
+        let mut draft = Form1702RTDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::imported(),
             id: None,
             tin,
             taxable_year: parse_taxable_year(fields, "frm1702RT:txtPg1I2Year", &mut errors),
@@ -1529,6 +1530,9 @@ impl Form1702RTDraft {
             last_error: None,
             lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
+        // An imported return carries the penalties it was prepared with:
+        // keep each one as an override so the source amounts round-trip.
+        Form1702RTDraft::penalty_declaration().adopt_imported(&mut draft);
         if errors.is_empty() {
             Ok(draft)
         } else {
@@ -1581,6 +1585,7 @@ mod tests {
         draft.part_ii.item_17_surcharge = WholePeso(1_000);
         draft.part_ii.item_18_interest = WholePeso(1_000);
         draft.part_ii.item_19_compromise = WholePeso(1_000);
+        crate::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         draft.recompute();
         draft
     }
@@ -1680,5 +1685,26 @@ mod tests {
             hex::encode(Sha256::digest(&pdf)),
             super::super::form_1702rt::OFFICIAL_FORM_SHA256
         );
+    }
+
+    #[test]
+    fn imported_penalties_are_kept_as_overrides() {
+        // The return was prepared for a period now long past its deadline:
+        // the imported penalty items are kept as overrides, so recomputing
+        // today files exactly what the source carried.
+        let mut draft = Form1702RTDraft::from_bir_field_map(&contract_draft().to_bir_field_map())
+            .expect("source shape imports");
+        let fields = draft.to_bir_field_map();
+        let items = Form1702RTDraft::penalty_declaration();
+        let state = &draft.penalty.penalty_overrides;
+        assert_eq!(
+            [state.surcharge, state.interest, state.compromise],
+            items.filed(&draft).map(Some)
+        );
+        crate::forms::penalty_items::with_clock(
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 13).unwrap(),
+            || draft.recompute(),
+        );
+        assert_eq!(draft.to_bir_field_map(), fields);
     }
 }

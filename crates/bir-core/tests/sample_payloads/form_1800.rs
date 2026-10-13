@@ -1,7 +1,9 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1800::{
     Form1800Donee, Form1800Draft, Form1800PersonalProperty, Form1800RealProperty,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1800() -> Form1800Draft {
     let mut draft = Form1800Draft::new_from_profile(&dummy_profile("1800", "Individual"), 2025, 1);
@@ -44,6 +46,7 @@ fn sample_1800() -> Form1800Draft {
     draft.prior_gift_payments = 1_000.0;
     draft.surcharge = 25.5;
     draft.interest = 10.005;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -107,6 +110,17 @@ fn form_1800_sample_with_many_rows_is_current() {
         &layout,
         &payload,
         "aa28d62fa9873c7a6522e44e7717bd76ff5141878f4347b5469d43646fdd16d4",
+    );
+}
+
+/// Event-based: the calendar has no 1800 deadline.
+#[test]
+fn form_1800_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_1800,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 

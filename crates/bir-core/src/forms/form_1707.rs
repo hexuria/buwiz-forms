@@ -15,6 +15,8 @@
 //! "OTHERS" with the pop-up subtotal, and the pop-up rows are written where
 //! the page keeps them (see [`Form1707Draft::official_layout`]).
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use chrono::Datelike;
@@ -237,6 +239,10 @@ pub struct Form1707Draft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// 19.
@@ -252,6 +258,7 @@ impl Form1707Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             filing_year: year,
             open_ended_key,
@@ -446,6 +453,8 @@ impl Form1707Draft {
         } else {
             format_fixed(self.tax_due - self.tax_paid_previous)
         };
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -1219,7 +1228,32 @@ impl FormValidator for Form1707Draft {
     }
 }
 
+impl Form1707Draft {
+    /// Items 18A-18C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "18A Surcharge",
+                interest: "18B Interest",
+                compromise: "18C Compromise",
+            ],
+            controls: [
+                "frm1707:txtPg1P2I17Surcharge",
+                "frm1707:txtPg1P2I17Interest",
+                "frm1707:txtPg1P2I17Compromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 17", |d| d.tax_payable,
+        )
+    }
+}
+
 impl QueueableForm for Form1707Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1707";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1707v2021']`).
     const FORM_TYPE: &'static str = "1707v2021";
@@ -1306,6 +1340,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form1707Draft {
         let mut draft = Form1707Draft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             filing_year: 2025,
             open_ended_key: 1,
@@ -1418,6 +1453,7 @@ mod tests {
         draft.set_amended(true);
         draft.tax_paid_previous = 70_000.0;
         draft.surcharge = 100.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         assert_eq!(draft.tax_payable, -10_000.0);
         assert_eq!(draft.total_amount_payable, 100.0);
@@ -1550,6 +1586,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

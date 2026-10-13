@@ -22,7 +22,11 @@ use super::event_form_kit::{
 };
 use super::form_controls::{messages_for, with_field_error};
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 /// Plain inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
@@ -181,6 +185,9 @@ pub struct Form1801View {
     draft: Form1801Draft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
+    _penalty_subscription: Subscription,
     /// Rows on screen per Part V table ([`SCHEDULES`] order): never fewer
     /// than two or than the draft holds.
     rows: [usize; 6],
@@ -307,9 +314,11 @@ impl Form1801View {
             "foreign" => money_text(d.foreign_estate_tax),
             "prev" => money_text(d.tax_paid_previous),
             "installment" => money_text(d.installment_portion),
-            "surcharge" => money_text(d.surcharge),
-            "interest" => money_text(d.interest),
-            "compromise" => money_text(d.compromise),
+            "surcharge" => penalty_section::override_text(&d.penalty, PenaltyComponent::Surcharge),
+            "interest" => penalty_section::override_text(&d.penalty, PenaltyComponent::Interest),
+            "compromise" => {
+                penalty_section::override_text(&d.penalty, PenaltyComponent::Compromise)
+            }
             _ => Self::row_texts(d, Self::stored_rows(d))
                 .into_iter()
                 .find(|(key2, _)| key2 == key)
@@ -810,9 +819,18 @@ impl Form1801View {
             self.f("installment", layout, false),
             self.f("inst_year", layout, false),
             kit::computed_text("22 — Tax payable (1st installment)", shown(first), cx),
-            self.f("surcharge", layout, false),
-            self.f("interest", layout, false),
-            self.f("compromise", layout, false),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .kit
+                    .validation_errors
+                    .iter()
+                    .chain(&self.kit.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             computed("23D — Total penalties", d.total_penalties, cx),
             kit::computed_text("24 — Total amount payable", shown(total), cx),
         ];
@@ -1057,7 +1075,15 @@ impl KitView for Form1801View {
                 _ => o.others = value,
             }
         }
-        r.errors
+        let mut errors = r.errors;
+        // An empty penalty box means "use computed"; any amount overrides it.
+        errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &<Form1801Draft as bir_core::forms::queueable::QueueableForm>::penalty_items(),
+            &mut self.draft,
+            cx,
+        ));
+        errors
     }
 }
 
@@ -1088,10 +1114,24 @@ impl QueueableFormView for Form1801View {
         let rows = Self::shown_rows(&draft);
         let mut kit = EditorState::new(Self::input_specs(&draft, rows), errors, window, cx);
         kit.error_keys = Some(error_keys);
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs =
+            vec![["surcharge", "interest", "compromise"].map(|key| kit.inputs[key].clone())];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        let _penalty_subscription = cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                super::event_form_kit::sync(this, cx);
+            },
+        );
         Self {
             draft,
             db,
             kit,
+            penalty,
+            _penalty_subscription,
             rows,
         }
     }

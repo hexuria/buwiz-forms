@@ -1,8 +1,11 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
+// The samples enter their penalties by hand (`keep_entered_penalties`).
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1701ms::{
     Form1701MsCivilStatus, Form1701MsColumn, Form1701MsDeduction, Form1701MsDraft,
     Form1701MsFiling, Form1701MsSource, Form1701MsSpouseInfo, Form1701MsTaxOption,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 /// Married, filing jointly. Taxpayer: mixed income, graduated rates, OSD.
 /// Spouse: compensation income only.
@@ -37,6 +40,7 @@ fn sample_1701ms() -> Form1701MsDraft {
         ..Form1701MsColumn::default()
     };
     draft.perjury_agreed = true;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -82,6 +86,7 @@ fn sample_1701ms_special() -> Form1701MsDraft {
     draft.to_be_refunded = true;
     draft.refund_amount = 26_000.0;
     draft.perjury_agreed = true;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -99,6 +104,12 @@ fn form_1701ms_special_rate_sample_payload_is_current() {
         &payload,
         "2a6afbae648ac467879b2165988d642b371e5560ae93e8e9b4188c6386604e05",
     );
+}
+
+/// Joint calendar year 2025: due 15 April 2026.
+#[test]
+fn form_1701ms_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1701ms, Deadline::Calendar(day(2026, 4, 15)));
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
