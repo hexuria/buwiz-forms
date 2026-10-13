@@ -122,7 +122,8 @@ scroll semantics, and the AI-agent playbook — is in
 
 ## Publishing the `bir` CLI
 
-The headless agent is the crates.io package `bir` (`crates/bir`, binary `bir`).
+The headless agent is the package `bir` (`crates/bir`, binary `bir`). Users install it
+from git: `cargo install --git https://github.com/hexuria/buwiz-forms bir --locked`.
 The desktop GUI is the cargo target `bir-desktop` in `crates/bir-desktop`, so
 the two binaries never collide. Packaging renames the desktop build output:
 `scripts/alias_desktop_bin.py <target dir>` copies `bir-desktop` to `bir`
@@ -143,9 +144,12 @@ after `cargo build --release` and before `cargo deb --no-build`.
 - `cargo binstall bir` reads `[package.metadata.binstall]` in
   `crates/bir/Cargo.toml`: it fetches
   `bir-v<version>/bir-<target>.tgz`, with the `bir` binary at the archive root.
-- Publishing needs the `CARGO_REGISTRY_TOKEN` Actions secret and
-  `gpui-agent` 0.1.0 on crates.io. Local builds use the git rev pinned in the
-  workspace `Cargo.toml`; the `version` next to it is what crates.io uses.
+- crates.io publishing is not set up (#65 was met by the git install
+  instead). The `cargo publish` job fails until three things exist:
+  `gpui-agent` 0.1.0 on crates.io, the `CARGO_REGISTRY_TOKEN` Actions secret,
+  and crates that package from their own roots. The last one is the unmerged
+  branch `feat/publish65` (closed PR #106), which moves `html-frozen/` into
+  `crates/bir-print/`. The release archives upload before that job runs.
 - The toolchain is pinned to Rust 1.99.0.
 - `scripts/test_publish_bir.py` tests the publish script.
 
