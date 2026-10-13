@@ -522,13 +522,18 @@ impl Form1800Draft {
     }
 
     /// The field map for the print preview: the upload's map, except the
-    /// e-mail is printed as typed (the upload keeps it in capitals).
+    /// e-mail is printed as typed (the upload keeps it in capitals), plus
+    /// `derived:tin_digits`, the nine TIN digits of the page 2 header.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         fields.insert(
             "frm1800v2018:txtEmail".to_string(),
             self.email.trim().to_string(),
         );
+        // The page 2 header comb has nine inputs (the branch is preprinted).
+        let mut tin_digits = super::print_map::tin_digits(&self.tin);
+        tin_digits.truncate(9);
+        fields.insert("derived:tin_digits".to_string(), tin_digits);
         fields
     }
 

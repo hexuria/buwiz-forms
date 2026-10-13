@@ -646,7 +646,35 @@
    "reason": "box immediately left of the printed option"
   }
  ],
- "left_out": [
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm2000OT:txtTIN1",
+    "frm2000OT:txtTIN2",
+    "frm2000OT:txtTIN3",
+    "frm2000OT:txtBranchCode"
+   ],
+   "reason": "item 6 TIN is one 14-slot comb; it prints from derived:tin, built from these keys"
+  },
+  {
+   "writer_keys": [
+    "frm2000OT:txtPg2TIN1",
+    "frm2000OT:txtPg2TIN2",
+    "frm2000OT:txtPg2TIN3",
+    "frm2000OT:txtPg2BranchCode"
+   ],
+   "reason": "page 2 TIN is one 14-slot comb (p2c5); it prints from derived:pg2_tin"
+  },
+  {
+   "writer_key": "frm2000OT:txtLineBus",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm2000OT:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c37",
    "reason": "second row beside the item 11B TIN with no printed caption; cannot confirm it is the txtOtherName2 line"

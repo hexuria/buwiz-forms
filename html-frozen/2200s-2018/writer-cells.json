@@ -1,7 +1,7 @@
 {
  "form_id": "2200s-v2018",
  "html_slug": "2200s-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow the printed option order). Item 1 date takes three combs (MM, DD, YYYY) in order. Part III rows 27-30 print with those numbers while the layout keys are numbered 33-36; the keys are matched to the printed rows in order (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) by their Drawee Bank/Number/Amount captions. Part III amounts pair a peso comb with the 2-slot centavo comb directly right (money_joins). Part III dates are three combs per row and stay blank. The product rows and Schedule 1 rows on page 2 have no column captions in the text layer and stay blank. Layout keys for the Part II region/province codes, the Part III tax computations 16-24 (except Item 18, the page 2 grand total), and the page 2 TIN have no fillable cells.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow the printed option order). Item 1 date takes three combs (MM, DD, YYYY) in order. Part III rows 27-30 print with those numbers while the layout keys are numbered 33-36; the keys are matched to the printed rows in order (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) by their Drawee Bank/Number/Amount captions. Part III amounts pair a peso comb with the 2-slot centavo comb directly right (money_joins). The product rows and Schedule 1 rows on page 2 have no column captions in the text layer and stay blank. Since #113: the Part III computation keys txtTax16-24 are printed items 18-26 (the layout numbers them two lower; the model names each one) and print in the 14-slot combs with the decimal point inside (money_joins decimal_html_id with point_slot: pesos right-aligned, the narrow point slot blank, two centavo slots); the page 2 grand total is totalTaxDue. Items 7 (both lines), 8-10, 12, 13 and 14A and the page 2 TIN print from derived: keys of Form2200SDraft::to_print_field_map. Every other value has a box or a reviewed not_joined reason. date_joins split each payment-row date (MM/DD/YYYY) across the MM, DD and YYYY combs of the row whose Agency/Number/Amount joins share its suffix.",
  "joins": [
   {
    "writer_key": "frm2200S:txtMonth1",
@@ -62,12 +62,6 @@
    "html_id": "p1c25",
    "printed": "6 Taxpayer's Name",
    "reason": "row 6 caption above the 36-slot comb"
-  },
-  {
-   "writer_key": "frm2200S:txtAddress",
-   "html_id": "p1c27",
-   "printed": "7 Registered Address",
-   "reason": "row 7 caption above the 36-slot comb"
   },
   {
    "writer_key": "txtEmail",
@@ -148,16 +142,64 @@
    "reason": "row 30 Number column, 6-slot comb"
   },
   {
-   "writer_key": "frm2200S:txtTax18",
-   "html_id": "p2c115",
-   "printed": "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
-   "reason": "grand total printed to Item 18 of Part III"
+   "writer_key": "derived:address_line1",
+   "html_id": "p1c27",
+   "printed": "7 Registered Address, line 1",
+   "reason": "36-slot comb under the item 7 caption; the print map breaks the address at the last space that fits"
   },
   {
-   "writer_key": "frm2200S:txtSched1TaxpayerName",
+   "writer_key": "derived:line:address_line2",
+   "html_id": "p1c28",
+   "printed": "7 Registered Address, line 2",
+   "reason": "28-slot comb left of 7A ZIP Code: the rest of the address; a longer line prints whole in smaller type"
+  },
+  {
+   "writer_key": "frm2200S:txtZipCode",
+   "html_id": "p1c29",
+   "printed": "7A ZIP Code",
+   "reason": "the 4-slot comb under the 7A ZIP Code caption, right of the second address line"
+  },
+  {
+   "writer_key": "derived:contact_line",
+   "html_id": "p1c33",
+   "printed": "8 Contact Number / 9 Main Line of Business / 10 PSIC",
+   "reason": "one 36-slot comb under the three captions: the number from slot 0, the line of business from slot 12 (caption 9 at x=215) and the PSIC from slot 31 (caption 10 at x=499)"
+  },
+  {
+   "writer_key": "derived:place_of_production",
+   "html_id": "p1c40",
+   "printed": "12 Place of Production: Region / Province / City",
+   "reason": "one 36-slot comb under the Region, Province and City captions (slots 1, 5 and 23); names instead of the PSGC codes"
+  },
+  {
+   "writer_key": "derived:place_of_removal",
+   "html_id": "p1c45",
+   "printed": "13 Place of Removal: Region / Province / City",
+   "reason": "one 36-slot comb under the Region, Province and City captions (slots 1, 5 and 23); names instead of the PSGC codes"
+  },
+  {
+   "writer_key": "derived:line:tax_relief_specify",
+   "html_id": "p1c50",
+   "printed": "14A If yes, specify",
+   "reason": "21-slot comb under the 14A caption; the relief named on a Yes (the upload carries the lstTaxTreaty code)"
+  },
+  {
+   "writer_key": "frm2200S:totalTaxDue",
+   "html_id": "p2c115",
+   "printed": "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
+   "reason": "the grand total cell at the foot of Schedule 1 (the model: schedule_total, which Item 18 carries)"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "printed": "Page 2 TIN",
+   "reason": "the 14-slot comb under the page 2 TIN caption: the draft TIN then branch (the upload copies it into the header only when Schedule 1 is opened)"
+  },
+  {
+   "writer_key": "derived:page2_name",
    "html_id": "p2c6",
-   "printed": "Taxpayer's Name (page 2 header)",
-   "reason": "caption above the 26-slot comb"
+   "printed": "Page 2 Taxpayer's Name",
+   "reason": "the 26-slot comb under the page 2 name caption: the taxpayer name, whether or not Schedule 1 is opened"
   }
  ],
  "money_joins": [
@@ -188,6 +230,118 @@
    "cent_html_id": "p1c151",
    "printed": "30 Others, Amount",
    "reason": "peso comb with the 2-slot centavo comb directly right"
+  },
+  {
+   "writer_key": "frm2200S:txtTax16",
+   "decimal_html_id": "p1c60",
+   "point_slot": true,
+   "printed": "18 Excise Tax Due (from Part V - Schedule 1)",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax17A",
+   "decimal_html_id": "p1c62",
+   "point_slot": true,
+   "printed": "19A Balance Carried Over from Previous Return",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax17B",
+   "decimal_html_id": "p1c64",
+   "point_slot": true,
+   "printed": "19B Creditable Excise Tax, if applicable",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax17C",
+   "decimal_html_id": "p1c66",
+   "point_slot": true,
+   "printed": "19C Total (Sum of Items 19A & 19B)",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax18",
+   "decimal_html_id": "p1c68",
+   "point_slot": true,
+   "printed": "20 Net Tax Due/(Overpayment)",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax19",
+   "decimal_html_id": "p1c70",
+   "point_slot": true,
+   "printed": "21 Less: Payment on Returns Previously Filed",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax20",
+   "decimal_html_id": "p1c72",
+   "point_slot": true,
+   "printed": "22 Tax Still Due/(Overpayment)",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax21A",
+   "decimal_html_id": "p1c74",
+   "point_slot": true,
+   "printed": "23A Surcharge",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax21B",
+   "decimal_html_id": "p1c76",
+   "point_slot": true,
+   "printed": "23B Interest",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax21C",
+   "decimal_html_id": "p1c78",
+   "point_slot": true,
+   "printed": "23C Compromise",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax21D",
+   "decimal_html_id": "p1c80",
+   "point_slot": true,
+   "printed": "23D Total Penalties",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax22",
+   "decimal_html_id": "p1c82",
+   "point_slot": true,
+   "printed": "24 Amount Payable/(Overpayment)",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax23A",
+   "decimal_html_id": "p1c84",
+   "point_slot": true,
+   "printed": "25A Tax Payment/Deposit",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax23B",
+   "decimal_html_id": "p1c86",
+   "point_slot": true,
+   "printed": "25B Penalties (from Item 23D)",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax23C",
+   "decimal_html_id": "p1c88",
+   "point_slot": true,
+   "printed": "25C Total Payment Made Today",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
+  },
+  {
+   "writer_key": "frm2200S:txtTax24",
+   "decimal_html_id": "p1c90",
+   "point_slot": true,
+   "printed": "26 Balance to be Carried Over to Next Return",
+   "reason": "the 14-slot amount comb on the printed item row (11 peso slots, the printed decimal point, 2 centavo slots); the layout numbers Part III two below the print (txtTax16 is item 18, per the model: excise_tax_due, credits, net tax due, penalties, payable, payments, balance)"
   }
  ],
  "xbox_joins": [
@@ -234,27 +388,92 @@
    "reason": "box immediately left of the printed option"
   }
  ],
- "left_out": [
+ "date_joins": [
   {
-   "html_id": "p1c28",
-   "reason": "second address line with no layout key on 2200S (txtAddress only)"
+   "writer_key": "frm2200S:txtDate33",
+   "mm_html_id": "p1c111",
+   "dd_html_id": "p1c113",
+   "yyyy_html_id": "p1c115",
+   "printed": "27 Cash/Bank Debit Memo: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 27 row, between its Number and Amount cells (the row txtAmount33 fills); one writer date split across the three"
   },
   {
-   "html_id": "p1c33",
-   "reason": "one 36-slot comb under both the Contact Number and Main Line of Business captions; cannot tell which item it carries, so txtTelNum and txtLineBus stay blank"
+   "writer_key": "frm2200S:txtDate34",
+   "mm_html_id": "p1c122",
+   "dd_html_id": "p1c124",
+   "yyyy_html_id": "p1c126",
+   "printed": "28 Check: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 28 row, between its Number and Amount cells (the row txtAmount34 fills); one writer date split across the three"
   },
   {
-   "html_id": "p1c40",
-   "reason": "Region / Province comb with the region, province and city code keys (frm2200SoptRegion/Province/City) and no separate cell per code; left blank"
+   "writer_key": "frm2200S:txtDate35",
+   "mm_html_id": "p1c132",
+   "dd_html_id": "p1c134",
+   "yyyy_html_id": "p1c136",
+   "printed": "29 Tax Debit Memo: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 29 row, between its Number and Amount cells (the row txtAmount35 fills); one writer date split across the three"
   },
   {
-   "html_id": "p1c45",
-   "reason": "Region / Province comb with the region, province and city code keys (frm2200SoptRegion1/Province1/City1) and no separate cell per code; left blank"
+   "writer_key": "frm2200S:txtDate36",
+   "mm_html_id": "p1c144",
+   "dd_html_id": "p1c146",
+   "yyyy_html_id": "p1c148",
+   "printed": "30 Others: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 30 row, between its Number and Amount cells (the row txtAmount36 fills); one writer date split across the three"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm2200S:txtAddress",
+   "reason": "prints from derived:address_line1 / derived:line:address_line2 (the print map shapes the address over both item 7 combs for the sheet)"
   },
   {
-   "html_id": "p1c50",
-   "reason": "14A \"If yes, specify\" holds the treaty option code (lstTaxTreaty), not printable text; left blank as on the 2553 sheet"
+   "writer_keys": [
+    "frm2200S:txtTelNum",
+    "frm2200S:txtLineBus",
+    "frm2200S:txtPSIC"
+   ],
+   "reason": "prints from derived:contact_line (the print map shapes Items 8-10, one shared 36-slot comb for the sheet)"
   },
+  {
+   "writer_keys": [
+    "frm2200SoptRegion",
+    "frm2200SoptProvince",
+    "frm2200SoptCity"
+   ],
+   "reason": "prints from derived:place_of_production (the print map shapes Item 12 as place names for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm2200SoptRegion1",
+    "frm2200SoptProvince1",
+    "frm2200SoptCity1"
+   ],
+   "reason": "prints from derived:place_of_removal (the print map shapes Item 13 as place names for the sheet)"
+  },
+  {
+   "writer_key": "frm2200S:lstTaxTreaty",
+   "reason": "dropdown code (0 none, 1 special law, 2 treaty); item 14A prints the relief name from derived:line:tax_relief_specify"
+  },
+  {
+   "writer_key": "frm2200S:PayPenalties",
+   "reason": "page flag that item 25B is paid; the amount prints in 25B, the paper has no box for the flag"
+  },
+  {
+   "writer_keys": [
+    "frm2200S:txtSched1TIN1",
+    "frm2200S:txtSched1TIN2",
+    "frm2200S:txtSched1TIN3",
+    "frm2200S:txtSched1BranchCode"
+   ],
+   "reason": "prints from derived:tin_digits (the print map shapes the page 2 header TIN, also when Schedule 1 is closed for the sheet)"
+  },
+  {
+   "writer_key": "frm2200S:txtSched1TaxpayerName",
+   "reason": "prints from derived:page2_name (the print map shapes the page 2 header name, also when Schedule 1 is closed for the sheet)"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c92",
    "reason": "declaration text cell with no layout key; left blank"
@@ -262,58 +481,6 @@
   {
    "html_id": "p1c93",
    "reason": "declaration text cell with no layout key; left blank"
-  },
-  {
-   "html_id": "p1c111",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c113",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c115",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c122",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c124",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c126",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c132",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c134",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c136",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c144",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c146",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c148",
-   "reason": "Part III payment date is three combs (MM/DD/YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c5",
-   "reason": "one 14-slot comb under the page 2 TIN caption; the TIN parts (txtSched1TIN1-3, txtSched1BranchCode) have no separate cells, so left blank"
   },
   {
    "html_id": "p2c27",

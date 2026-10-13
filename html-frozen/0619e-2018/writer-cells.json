@@ -1,7 +1,7 @@
 {
  "form_id": "0619e-v2018",
  "html_slug": "0619e-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) names the item; same-row captions and column headers used for Part III. Amounts pair the 11-slot peso comb with the 2-slot centavo comb directly right (money_joins). Part III date combs stay blank (three combs per row, one key). Keys with no printed cell: txtAtc and txtTaxTypeCode (preprinted WME10 and WE), txtLineBus (not printed), txtDate19-22 (multi-comb), txtAgency21 (no cell on row 21), txtFinalFlag, txtEnroll, ebirOnline*, driveSelectTPExport. The four TIN combs (p1c28, p1c30, p1c32, p1c34) are catalog-stamped by name-gaps.json and take no writer join.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) names the item; same-row captions and column headers used for Part III. Amounts pair the 11-slot peso comb with the 2-slot centavo comb directly right (money_joins). Part III date combs stay blank (three combs per row, one key). Keys with no printed cell: txtAtc and txtTaxTypeCode (preprinted WME10 and WE), txtLineBus (not printed), txtDate19-22 (multi-comb), txtAgency21 (no cell on row 21), txtFinalFlag, txtEnroll, ebirOnline*, driveSelectTPExport. The four TIN combs (p1c28, p1c30, p1c32, p1c34) are catalog-stamped by name-gaps.json and take no writer join. Since #113: Part III dates print through date_joins (one writer date split across the MM, DD and YYYY combs of its payment row); every other value has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm0619E:txtMonth",
@@ -266,54 +266,59 @@
    "reason": "box immediately left of \"Government\""
   }
  ],
- "left_out": [
+ "date_joins": [
   {
-   "html_id": "p1c106",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
+   "writer_key": "txtDate19",
+   "mm_html_id": "p1c106",
+   "dd_html_id": "p1c107",
+   "yyyy_html_id": "p1c108",
+   "printed": "Payment row 19, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs left of the Amount combs on the same Part III payment row (the row whose amount this key family fills); one writer date split across the three"
   },
   {
-   "html_id": "p1c107",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
+   "writer_key": "txtDate20",
+   "mm_html_id": "p1c115",
+   "dd_html_id": "p1c116",
+   "yyyy_html_id": "p1c117",
+   "printed": "Payment row 20, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs left of the Amount combs on the same Part III payment row (the row whose amount this key family fills); one writer date split across the three"
   },
   {
-   "html_id": "p1c108",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
+   "writer_key": "txtDate21",
+   "mm_html_id": "p1c123",
+   "dd_html_id": "p1c124",
+   "yyyy_html_id": "p1c125",
+   "printed": "Payment row 21, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs left of the Amount combs on the same Part III payment row (the row whose amount this key family fills); one writer date split across the three"
   },
   {
-   "html_id": "p1c115",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
+   "writer_key": "txtDate22",
+   "mm_html_id": "p1c133",
+   "dd_html_id": "p1c134",
+   "yyyy_html_id": "p1c135",
+   "printed": "Payment row 22, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs left of the Amount combs on the same Part III payment row (the row whose amount this key family fills); one writer date split across the three"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm0619E:txtAtc",
+   "reason": "item 5 ATC is preprinted WME10 on the sheet; there is no box to fill"
   },
   {
-   "html_id": "p1c116",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
+   "writer_key": "frm0619E:txtTaxTypeCode",
+   "reason": "item 6 Tax Type Code is preprinted WE on the sheet; there is no box to fill"
   },
   {
-   "html_id": "p1c117",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
+   "writer_key": "frm0619E:txtLineBus",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
   },
   {
-   "html_id": "p1c123",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
-  },
-  {
-   "html_id": "p1c124",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
-  },
-  {
-   "html_id": "p1c125",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
-  },
-  {
-   "html_id": "p1c133",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
-  },
-  {
-   "html_id": "p1c134",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
-  },
-  {
-   "html_id": "p1c135",
-   "reason": "Part III date: three MM/DD/YYYY combs under one date key; multi-comb dates stay blank"
+   "writer_keys": [
+    "txtEnroll",
+    "txtFinalFlag"
+   ],
+   "reason": "eBIRForms system field (enrolment flag, final flag, export drive, online-filing credentials), not on the paper form"
   }
  ]
 }

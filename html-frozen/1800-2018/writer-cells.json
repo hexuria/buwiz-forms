@@ -1,7 +1,7 @@
 {
  "form_id": "1800-v2018",
  "html_slug": "1800-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. Schedule rows are matched by the printed column header and row order; layout index 0-4 is printed rows 1-5. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb, or one text cell where the sheet has no comb pair. Booleans fill X in the box left of the printed option, with the Yes box before No by reading order. Left out: the TIN branch (mixed cell with preprinted zeros), the 8A ZIP cell (caption overlaps), item 13A specify (option code), item 14 cents (text box), the MM/DD/YYYY date combs, and rows with no layout key.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. Schedule rows are matched by the printed column header and row order; layout index 0-4 is printed rows 1-5. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb, or one text cell where the sheet has no comb pair. Booleans fill X in the box left of the printed option, with the Yes box before No by reading order. Left out: the TIN branch (mixed cell with preprinted zeros), the 8A ZIP cell (caption overlaps), item 13A specify (option code), item 14 cents (text box), and rows with no layout key. Since #113 the page 2 TIN prints from derived:tin_digits (Form1800Draft::to_print_field_map); date_joins split each Part III payment date (MM/DD/YYYY) across its MM, DD and YYYY combs; every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm1800v2018:txtMonth",
@@ -602,6 +602,12 @@
    "html_id": "p2c201",
    "printed": "Schedule B continuation row 5 FMV (whichever is higher)",
    "reason": "whichever-is-higher column, Schedule B continuation row 5"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "printed": "Page 2 TIN",
+   "reason": "the mixed TIN comb under the page 2 TIN caption: its nine inputs take the TIN digits (the branch slots are preprinted)"
   }
  ],
  "money_joins": [
@@ -828,6 +834,40 @@
    "reason": "box immediately left of the printed option; X when the writer value is true"
   }
  ],
+ "date_joins": [
+  {
+   "writer_key": "frm1800v2018:txtDate20",
+   "mm_html_id": "p1c136",
+   "dd_html_id": "p1c137",
+   "yyyy_html_id": "p1c138",
+   "printed": "21 Cash/Bank Debit Memo: Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Date column on the item 21 row, left of its Amount combs; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1800v2018:txtDate21",
+   "mm_html_id": "p1c145",
+   "dd_html_id": "p1c146",
+   "yyyy_html_id": "p1c147",
+   "printed": "22 Check: Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Date column on the item 22 row, left of its Amount combs; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1800v2018:txtDate22",
+   "mm_html_id": "p1c153",
+   "dd_html_id": "p1c154",
+   "yyyy_html_id": "p1c155",
+   "printed": "23 Tax Debit Memo: Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Date column on the item 23 row, left of its Amount combs; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1800v2018:txtDate23",
+   "mm_html_id": "p1c163",
+   "dd_html_id": "p1c164",
+   "yyyy_html_id": "p1c165",
+   "printed": "24 Others: Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Date column on the item 24 row, left of its Amount combs; one writer date split across the three"
+  }
+ ],
  "not_joined": [
   {
    "writer_key": "frm1800v2018:txtATC",
@@ -850,36 +890,8 @@
    "reason": "item 14 cents cell p1c64 is a plain text box, not a 2-slot comb; no peso + cents pair"
   },
   {
-   "writer_key": "frm1800v2018:txtDate20",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1800v2018:txtDate21",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
    "writer_key": "frm1800v2018:txtAgency22",
    "reason": "the item 23 Tax Debit Memo row has no Agency cell on the sheet"
-  },
-  {
-   "writer_key": "frm1800v2018:txtDate22",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1800v2018:txtDate23",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1800v2018:txtPg2TIN1",
-   "reason": "page 2 TIN is one 14-slot comb (p2c5) for TIN parts and branch; not split"
-  },
-  {
-   "writer_key": "frm1800v2018:txtPg2TIN2",
-   "reason": "page 2 TIN is one 14-slot comb (p2c5) for TIN parts and branch; not split"
-  },
-  {
-   "writer_key": "frm1800v2018:txtPg2TIN3",
-   "reason": "page 2 TIN is one 14-slot comb (p2c5) for TIN parts and branch; not split"
   },
   {
    "writer_key": "frm1800v2018:txtPg2BranchCode",
@@ -972,6 +984,14 @@
   {
    "writer_key": "frm1800v2018:txtLineBus",
    "reason": "no fillable cell on the frozen sheet for this key"
+  },
+  {
+   "writer_keys": [
+    "frm1800v2018:txtPg2TIN1",
+    "frm1800v2018:txtPg2TIN2",
+    "frm1800v2018:txtPg2TIN3"
+   ],
+   "reason": "prints from derived:tin_digits (the print map shapes the nine TIN digits of the page 2 header for the sheet)"
   }
  ],
  "not_joined_cells": [
@@ -1002,58 +1022,6 @@
   {
    "html_id": "p1c68",
    "reason": "item 15 Applicable Donor Tax Rate cell (2 slots, preprinted 6 %): no layout key"
-  },
-  {
-   "html_id": "p1c136",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c137",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c138",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c145",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c146",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c147",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c153",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c154",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c155",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c163",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c164",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p1c165",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (payment row date)"
-  },
-  {
-   "html_id": "p2c5",
-   "reason": "page 2 TIN: one 14-slot comb for the TIN parts and branch; not split"
   },
   {
    "html_id": "p2c63",

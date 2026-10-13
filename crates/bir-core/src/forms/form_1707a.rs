@@ -533,7 +533,10 @@ impl Form1707ADraft {
     /// sheet prints in one 40-slot comb (p1c39): the contact number from
     /// slot 0 and the email, as typed, from slot 12 under its caption. An
     /// email longer than the rest of the comb is kept whole so the filler
-    /// prints the line in full instead of cutting it.
+    /// prints the line in full instead of cutting it. `derived:tin_digits`
+    /// is the page 2 header TIN (one 14-digit comb) and
+    /// `derived:address_line1` / `derived:line:address_line2` put Item 9
+    /// over both its lines.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         const EMAIL_SLOT: usize = 12;
         const WIDTH: usize = 40;
@@ -546,6 +549,15 @@ impl Form1707ADraft {
         );
         if !line.trim().is_empty() {
             fields.insert("derived:contact_email".to_string(), line);
+        }
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        for (key, value) in [
+            ("tin_digits", super::print_map::tin_digits(&self.tin)),
+            ("address_line1", line1),
+            ("line:address_line2", line2),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
         }
         fields
     }

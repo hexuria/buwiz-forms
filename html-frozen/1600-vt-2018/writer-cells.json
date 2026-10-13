@@ -1,7 +1,7 @@
 {
  "form_id": "1600vt-v2018",
  "html_slug": "1600-vt-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Part II amounts split into the peso comb and the 2-slot cents comb; Schedule 1 cells print the writer's official text. The 2-slot rate cells print the rate without its decimal (derived: keys of to_print_field_map, never submitted); page 2's TIN comb takes the 14-digit TIN the same way. Unexposed items stay blank on print; the submitted XML always carries them.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Part II amounts split into the peso comb and the 2-slot cents comb; Schedule 1 cells print the writer's official text. The 2-slot rate cells print the rate without its decimal (derived: keys of to_print_field_map, never submitted); page 2's TIN comb takes the 14-digit TIN the same way. Unexposed items stay blank on print; the submitted XML always carries them. Since #113 every value the print map carries has a box or a reviewed not_joined reason (the sixth ATC onward belongs on an attached sheet).",
  "joins": [
   {
    "writer_key": "frm1600VT:txtPg1I1Month",
@@ -542,6 +542,80 @@
    "html_id": "p1c43",
    "printed": "12 Tax relief? No",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1600VT:txtAtcCd6",
+    "frm1600VT:txtPg1P2TaxBase6",
+    "frm1600VT:txtPg1P2TaxRate6",
+    "frm1600VT:txtPg1P2TaxWithheld6",
+    "frm1600VT:txtAtcCd7",
+    "frm1600VT:txtPg1P2TaxBase7",
+    "frm1600VT:txtPg1P2TaxRate7",
+    "frm1600VT:txtPg1P2TaxWithheld7",
+    "frm1600VT:txtAtcCd8",
+    "frm1600VT:txtPg1P2TaxBase8",
+    "frm1600VT:txtPg1P2TaxRate8",
+    "frm1600VT:txtPg1P2TaxWithheld8",
+    "frm1600VT:txtAtcCd9",
+    "frm1600VT:txtPg1P2TaxBase9",
+    "frm1600VT:txtPg1P2TaxRate9",
+    "frm1600VT:txtPg1P2TaxWithheld9",
+    "frm1600VT:txtAtcCd10",
+    "frm1600VT:txtPg1P2TaxBase10",
+    "frm1600VT:txtPg1P2TaxRate10",
+    "frm1600VT:txtPg1P2TaxWithheld10",
+    "frm1600VT:txtAtcCd11",
+    "frm1600VT:txtPg1P2TaxBase11",
+    "frm1600VT:txtPg1P2TaxRate11",
+    "frm1600VT:txtPg1P2TaxWithheld11",
+    "frm1600VT:txtAtcCd12",
+    "frm1600VT:txtPg1P2TaxBase12",
+    "frm1600VT:txtPg1P2TaxRate12",
+    "frm1600VT:txtPg1P2TaxWithheld12",
+    "frm1600VT:txtAtcCd13",
+    "frm1600VT:txtPg1P2TaxBase13",
+    "frm1600VT:txtPg1P2TaxRate13",
+    "frm1600VT:txtPg1P2TaxWithheld13"
+   ],
+   "reason": "Other Selected ATC rows (the sixth ATC onward): Part II prints five ATC rows (items 13-17); the rest belong on an attached sheet, and their tax withheld reaches Item 18 through txtTotalOtherTax"
+  },
+  {
+   "writer_key": "frm1600VT:txtTotalOtherTax",
+   "reason": "sum of the Other Selected ATC rows (sixth onward); the sheet has no box for it, Item 18 Total Taxes Withheld includes it"
+  },
+  {
+   "writer_keys": [
+    "frm1600VT:txtPg1P2TaxRate1",
+    "frm1600VT:txtPg1P2TaxRate2",
+    "frm1600VT:txtPg1P2TaxRate3",
+    "frm1600VT:txtPg1P2TaxRate4",
+    "frm1600VT:txtPg1P2TaxRate5"
+   ],
+   "reason": "prints from derived:rate1..5 (the print map shapes the rate without its decimal for the 2-slot Tax Rate comb for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1600VT:txtPg2TinC1",
+    "frm1600VT:txtPg2TinC2",
+    "frm1600VT:txtPg2TinC3",
+    "frm1600VT:txtPg2TinC4"
+   ],
+   "reason": "page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits"
+  },
+  {
+   "writer_key": "frm1600VT:rdoPg1Pt1I6RDO",
+   "reason": "duplicate of frm1600VT:txtPg1I6RDO (same RDO), which prints in item 6"
+  },
+  {
+   "writer_key": "frm1600VT:txtLOB",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm1600VT:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
   }
  ]
 }

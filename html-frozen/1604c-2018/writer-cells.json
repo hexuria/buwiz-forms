@@ -692,5 +692,23 @@
    "printed": "11 Refunds released? No",
    "reason": "box immediately left of the printed option; X when the writer value is true"
   }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm1604c:registeredAddress",
+   "reason": "prints from derived:line:address1 / derived:line:address2 (the print map shapes the address over both item 7 lines for the sheet)"
+  },
+  {
+   "writer_key": "frm1604c:txtRefMonth",
+   "reason": "prints from derived:refund_mm / derived:refund_dd / derived:refund_yyyy (the print map shapes Item 11A, blank on a No for the sheet)"
+  },
+  {
+   "writer_key": "frm1604c:txt12",
+   "reason": "prints from derived:overremittance (the print map shapes Item 12, blank on a No for the sheet)"
+  },
+  {
+   "writer_key": "frm1604c:select13",
+   "reason": "prints from derived:crediting_month (the print map shapes Item 13, blank on a No for the sheet)"
+  }
  ]
 }

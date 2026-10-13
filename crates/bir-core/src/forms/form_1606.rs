@@ -855,7 +855,9 @@ impl Form1606Draft {
 
     /// The field map plus print-only values the frozen 2018 sheet needs
     /// (`derived:` keys, never submitted): whole TINs, the ATC box for the
-    /// seller type and rate, the rate digits and Schedule 3 Item 1A.
+    /// seller type and rate, the rate digits, Schedule 3 Item 1A, the
+    /// Schedule 1 lot/improvement rows (kind, higher FMV, total) and Item 11
+    /// "If yes, specify".
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         let dashed = |tin: &str| {
@@ -900,6 +902,38 @@ impl Form1606Draft {
             } else {
                 official_amount(self.gross_selling_price)
             },
+        );
+        // Schedule 1 continuation: the lot on row 1, the improvement on row
+        // 2, each with the higher of its two FMVs, and the total (Item 1B).
+        let higher = |a: Option<f64>, b: Option<f64>| match (a, b) {
+            (None, None) => String::new(),
+            (a, b) => official_amount(a.unwrap_or(0.0).max(b.unwrap_or(0.0))),
+        };
+        let land = (self.fmv_land_tax_declaration, self.fmv_land_zonal);
+        let improvement = (
+            self.fmv_improvements_tax_declaration,
+            self.fmv_improvements_bir,
+        );
+        for (row, kind, (a, b)) in [(1, "LOT", land), (2, "IMPROVEMENT", improvement)] {
+            let shown = a.is_some() || b.is_some();
+            put(
+                &format!("sched1_kind{row}"),
+                if shown { kind } else { "" }.to_string(),
+            );
+            put(&format!("sched1_fmv{row}"), higher(a, b));
+        }
+        put(
+            "sched1_total",
+            official_amount(self.fmv_land_and_improvement),
+        );
+        put(
+            "line:tax_relief_specify",
+            match self.tax_relief {
+                Form1606TaxRelief::InternationalTaxTreaty => "INTERNATIONAL TAX TREATY",
+                Form1606TaxRelief::SpecialLaw => "SPECIAL LAW",
+                Form1606TaxRelief::No | Form1606TaxRelief::YesUnspecified => "",
+            }
+            .to_string(),
         );
         fields
     }

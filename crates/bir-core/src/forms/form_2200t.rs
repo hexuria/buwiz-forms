@@ -846,6 +846,48 @@ impl Form2200TDraft {
         self.balance_to_carry_over = cents(self.amount_payable - self.total_payment);
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the page 2 and 3 header TIN, one 14-digit
+    ///   comb each.
+    /// - `derived:address_line1` / `derived:line:address_line2`: Item 7
+    ///   over its 40-slot first line, broken at a space, and the second.
+    /// - `derived:line:item{10,11}_{region,province,city}`: Items 10 and 11
+    ///   as place names (the upload carries the PSGC codes); a name longer
+    ///   than its comb prints whole in smaller type.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm2200Tv2020:tinA_2",
+                "frm2200Tv2020:tinB_2",
+                "frm2200Tv2020:tinC_2",
+                "frm2200Tv2020:branchCode_2",
+            ],
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        for (key, value) in [
+            ("tin_digits", tin_digits),
+            ("address_line1", line1),
+            ("line:address_line2", line2),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        for (item, place) in [
+            (10, &self.place_of_production),
+            (11, &self.place_of_removal),
+        ] {
+            let names = super::print_map::place_names(&place.region, &place.province, &place.city);
+            for (level, name) in ["region", "province", "city"].into_iter().zip(names) {
+                fields.insert(format!("derived:line:item{item}_{level}"), name);
+            }
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();

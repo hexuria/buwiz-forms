@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
+use bir_core::forms::agent::AgentFormKind;
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
@@ -260,6 +261,39 @@ pub fn print_draft_json<V: QueueableFormView>(
 ) -> Result<(&'static str, BTreeMap<String, String>), String> {
     let typed: V::Draft = serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
     Ok((V::PRINT_SLUG, V::print_fields(&typed)))
+}
+
+/// The sheet slug and filled field map a form page's Print preview uses,
+/// for every form the assistant can open: the 1601C and 2551Q pages, the
+/// bespoke 2550Q page and each [`FORM_VIEW_SPECS`] page.
+pub(crate) fn print_sheet(
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<(&'static str, BTreeMap<String, String>), String> {
+    match kind {
+        AgentFormKind::Form1601C => {
+            let typed: bir_core::forms::form_1601c::Form1601CDraft =
+                serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+            Ok(("1601c-2018", typed.to_print_field_map()))
+        }
+        AgentFormKind::Form2551Q => {
+            let typed: bir_core::forms::form_2551q::Form2551QDraft =
+                serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+            Ok(("2551q-2018", typed.to_print_field_map()))
+        }
+        AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
+            let typed: bir_core::forms::form_2550q::Form2550QDraft =
+                serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+            Ok((
+                crate::views::form_2550q_view::PRINT_SLUG,
+                crate::views::form_2550q_view::print_fields(&typed),
+            ))
+        }
+        AgentFormKind::Queueable(queueable) => {
+            let spec = spec_for_kind(queueable).ok_or("this form has no page")?;
+            (spec.print)(draft)
+        }
+    }
 }
 
 pub fn open_form_view_with<V: QueueableFormView>(

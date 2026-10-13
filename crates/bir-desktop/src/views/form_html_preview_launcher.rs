@@ -78,7 +78,7 @@ pub(crate) fn launch_frozen_2551q_preview<T: 'static>(
 ) -> Result<HtmlPreviewLaunchKind, String> {
     launch_frozen_form_preview_with_receipt(
         "2551q-2018",
-        &draft.to_bir_field_map(),
+        &draft.to_print_field_map(),
         receipt,
         "2551Q — Print Preview",
         cx,

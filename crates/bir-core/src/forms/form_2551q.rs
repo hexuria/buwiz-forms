@@ -1352,6 +1352,67 @@ impl Form2551QEntries {
 }
 
 impl Form2551QDraft {
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the page-2 header TIN, one 14-digit comb
+    ///   (TIN then branch).
+    /// - `derived:address_line1` / `derived:line:address_line2`: Item 9 over
+    ///   its 40-slot first line, broken at a space, and the 31-slot second.
+    /// - `derived:line:tax_relief_specify`: Item 12A, the relief named on a Yes.
+    /// - `derived:sched1_atc{n}` / `derived:sched1_rate{n}`: Schedule 1 row
+    ///   `n`'s ATC code and its rate in percent (`3`, `.5`); the upload
+    ///   carries the dropdown position instead. Rows past the schedule print
+    ///   blank, not `0.00`.
+    pub fn to_print_field_map(&self) -> std::collections::BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm2551Qv2018:txtPg2TIN1",
+                "frm2551Qv2018:txtPg2TIN2",
+                "frm2551Qv2018:txtPg2TIN3",
+                "frm2551Qv2018:txtPg2BranchCode",
+            ],
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        let specify = if self.tax_relief {
+            self.tax_relief_specification.trim().to_string()
+        } else {
+            String::new()
+        };
+        let mut derived = vec![
+            ("tin_digits".to_string(), tin_digits),
+            ("address_line1".to_string(), line1),
+            ("line:address_line2".to_string(), line2),
+            ("line:tax_relief_specify".to_string(), specify),
+        ];
+        for n in 1..=6 {
+            let Some(row) = self.schedule_1.get(n - 1) else {
+                for key in ["txtATCAmt", "txtATCRate", "txtATCDue"] {
+                    fields.insert(format!("{key}{n}"), String::new());
+                }
+                continue;
+            };
+            let rate = fields
+                .get(&format!("txtATCRate{n}"))
+                .and_then(|rate| rate.parse::<f64>().ok())
+                .filter(|rate| *rate > 0.0)
+                .map(|rate| {
+                    let text = format!("{rate}");
+                    text.strip_prefix('0').unwrap_or(&text).to_string()
+                })
+                .unwrap_or_default();
+            derived.push((format!("sched1_atc{n}"), row.atc.trim().to_uppercase()));
+            derived.push((format!("sched1_rate{n}"), rate));
+        }
+        for (key, value) in derived {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     /// The page's checks on its entries, run after [`FormValidator::validate`]
     /// (whose errors are passed in so a month error is not repeated).
     pub fn entry_errors(

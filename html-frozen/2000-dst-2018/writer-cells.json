@@ -1,7 +1,7 @@
 {
  "form_id": "2000-v2018",
  "html_slug": "2000-dst-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow the printed option order). Amount rows on Schedules 1-4 pair a peso comb with the 2-slot centavo comb directly right (money_joins). Schedule rows 2 and 3 print no row number, so they take the column header above row 1. The Schedule totals (sched1:txtTotalDue1, sched2/sched3:txtTotalPayment1, sched4:txtTotalRemittance1) print on the same cell as the Item 14/15B/15C/19 keys, so the item keys carry the join. Items 14-19 print with dot leaders on page 1 and have no fillable cell there, except through the page 2 totals. Multi-comb MM/DD/YYYY dates stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow the printed option order). Amount rows on Schedules 1-4 pair a peso comb with the 2-slot centavo comb directly right (money_joins). Schedule rows 2 and 3 print no row number, so they take the column header above row 1. The Schedule totals (sched1:txtTotalDue1, sched2/sched3:txtTotalPayment1, sched4:txtTotalRemittance1) print on the same cell as the Item 14/15B/15C/19 keys, so the item keys carry the join. Items 14-19 print on page 1 in 14-slot combs whose last two slots are the centavos (money_joins decimal_html_id), and items 14, 15B, 15C and 19 also in the page 2 schedule total pairs (one key, several cells). The schedule dates print through date_joins; Items 8-9 and the page 2 header print from derived: keys of Form2000Draft::to_print_field_map. Since #113 every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm2000:txtMonth",
@@ -302,6 +302,18 @@
    "html_id": "p2c146",
    "printed": "To (Schedule 4 row 3)",
    "reason": "Schedule 4 row 3, same column as row 1"
+  },
+  {
+   "writer_key": "derived:contact_email",
+   "html_id": "p1c31",
+   "printed": "8 Contact Number / 9 Email Address",
+   "reason": "one 40-slot comb under both captions: the number from slot 0, the email as typed from slot 13 (caption 9 at x=198)"
+  },
+  {
+   "writer_key": "derived:page_header",
+   "html_id": "p2c5",
+   "printed": "Page 2 header: TIN / Taxpayer's Name",
+   "reason": "one 40-slot comb under both the page 2 TIN and Taxpayer's Name captions: the 14 TIN digits, then the name from slot 14"
   }
  ],
  "money_joins": [
@@ -348,13 +360,6 @@
    "reason": "Schedule 1 row 3, same column"
   },
   {
-   "writer_key": "frm2000:txtTax14",
-   "peso_html_id": "p2c36",
-   "cent_html_id": "p2c38",
-   "printed": "TOTAL TAX DUE (To Item 14)",
-   "reason": "peso comb with the 2-slot centavo comb directly right"
-  },
-  {
    "writer_key": "frm2000:sched2:txtAmountPaid0",
    "peso_html_id": "p2c49",
    "cent_html_id": "p2c51",
@@ -374,13 +379,6 @@
    "cent_html_id": "p2c69",
    "printed": "Amount Paid (Schedule 2 row 3)",
    "reason": "Schedule 2 row 3, same column"
-  },
-  {
-   "writer_key": "frm2000:txtTax15B",
-   "peso_html_id": "p2c71",
-   "cent_html_id": "p2c73",
-   "printed": "TOTAL PAYMENT/S (To Item 15B)",
-   "reason": "peso comb with the 2-slot centavo comb directly right"
   },
   {
    "writer_key": "frm2000:sched3:txtAmountPaid0",
@@ -404,13 +402,6 @@
    "reason": "Schedule 3 row 3, same column"
   },
   {
-   "writer_key": "frm2000:txtTax15C",
-   "peso_html_id": "p2c106",
-   "cent_html_id": "p2c108",
-   "printed": "TOTAL PAYMENT/S (To Item 15C)",
-   "reason": "peso comb with the 2-slot centavo comb directly right"
-  },
-  {
    "writer_key": "frm2000:sched4:txtAmountRemitted0",
    "peso_html_id": "p2c122",
    "cent_html_id": "p2c124",
@@ -432,11 +423,84 @@
    "reason": "Schedule 4 row 3, same column"
   },
   {
+   "writer_key": "frm2000:txtTax14",
+   "peso_html_id": "p2c36",
+   "cent_html_id": "p2c38",
+   "decimal_html_id": "p1c48",
+   "printed": "14 Tax Due for the Month (From Schedule 1); TOTAL TAX DUE (To Item 14)",
+   "reason": "the 14-slot amount comb on the printed item 14 row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them); and the page 2 schedule total pair (TOTAL TAX DUE (To Item 14)), the same amount"
+  },
+  {
+   "writer_key": "frm2000:txtTax15A",
+   "decimal_html_id": "p1c50",
+   "printed": "15A Balance Carried Over from Previous Return",
+   "reason": "the 14-slot amount comb on the printed item 15A row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
+   "writer_key": "frm2000:txtTax15B",
+   "peso_html_id": "p2c71",
+   "cent_html_id": "p2c73",
+   "decimal_html_id": "p1c52",
+   "printed": "15B Payment thru Constructive Affixture (From Schedule 2); TOTAL PAYMENT/S (To Item 15B)",
+   "reason": "the 14-slot amount comb on the printed item 15B row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them); and the page 2 schedule total pair (TOTAL PAYMENT/S (To Item 15B)), the same amount"
+  },
+  {
+   "writer_key": "frm2000:txtTax15C",
+   "peso_html_id": "p2c106",
+   "cent_html_id": "p2c108",
+   "decimal_html_id": "p1c54",
+   "printed": "15C Advance Payment during the month (From Schedule 3); TOTAL PAYMENT/S (To Item 15C)",
+   "reason": "the 14-slot amount comb on the printed item 15C row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them); and the page 2 schedule total pair (TOTAL PAYMENT/S (To Item 15C)), the same amount"
+  },
+  {
+   "writer_key": "frm2000:txtTax15D",
+   "decimal_html_id": "p1c56",
+   "printed": "15D Total (Sum of Items 15A to 15C)",
+   "reason": "the 14-slot amount comb on the printed item 15D row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
+   "writer_key": "frm2000:txtTax16",
+   "decimal_html_id": "p1c58",
+   "printed": "16 Net Tax Payable/(Overpayment)",
+   "reason": "the 14-slot amount comb on the printed item 16 row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
+   "writer_key": "frm2000:txtTax17A",
+   "decimal_html_id": "p1c60",
+   "printed": "17A Surcharge",
+   "reason": "the 14-slot amount comb on the printed item 17A row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
+   "writer_key": "frm2000:txtTax17B",
+   "decimal_html_id": "p1c62",
+   "printed": "17B Interest",
+   "reason": "the 14-slot amount comb on the printed item 17B row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
+   "writer_key": "frm2000:txtTax17C",
+   "decimal_html_id": "p1c64",
+   "printed": "17C Compromise",
+   "reason": "the 14-slot amount comb on the printed item 17C row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
+   "writer_key": "frm2000:txtTax17D",
+   "decimal_html_id": "p1c66",
+   "printed": "17D Total Penalties",
+   "reason": "the 14-slot amount comb on the printed item 17D row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
+   "writer_key": "frm2000:txtTax18",
+   "decimal_html_id": "p1c68",
+   "printed": "18 Total Amount Payable/(Overpayment)",
+   "reason": "the 14-slot amount comb on the printed item 18 row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them)"
+  },
+  {
    "writer_key": "frm2000:txtTax19",
    "peso_html_id": "p2c148",
    "cent_html_id": "p2c150",
-   "printed": "TOTAL REMITTANCE (To Item 19)",
-   "reason": "peso comb with the 2-slot centavo comb directly right"
+   "decimal_html_id": "p1c71",
+   "printed": "19 Total Amount of Documentary Stamps Sold for the Month (From Schedule 4); TOTAL REMITTANCE (To Item 19)",
+   "reason": "the 14-slot amount comb on the printed item 19 row of page 1 (12 peso slots and 2 centavo slots; the sheet prints the point on the line between them); and the page 2 schedule total pair (TOTAL REMITTANCE (To Item 19)), the same amount"
   }
  ],
  "xbox_joins": [
@@ -489,11 +553,128 @@
    "reason": "box immediately left of the printed option"
   }
  ],
- "left_out": [
+ "date_joins": [
   {
-   "html_id": "p1c31",
-   "reason": "one 40-slot comb sits under both item 8 Contact Number and item 9 Email Address captions; cannot tell which item it carries, so txtTelNum and txtEmail stay blank"
+   "writer_key": "frm2000:sched2:txtPaymentDate0",
+   "mm_html_id": "p2c43",
+   "dd_html_id": "p2c45",
+   "yyyy_html_id": "p2c47",
+   "printed": "Schedule 2 row 1, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 2 row 1 (rows 2-3 take the column header above row 1); one writer date split across the three"
   },
+  {
+   "writer_key": "frm2000:sched2:txtPaymentDate1",
+   "mm_html_id": "p2c52",
+   "dd_html_id": "p2c54",
+   "yyyy_html_id": "p2c56",
+   "printed": "Schedule 2 row 2, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 2 row 2 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2000:sched2:txtPaymentDate2",
+   "mm_html_id": "p2c61",
+   "dd_html_id": "p2c63",
+   "yyyy_html_id": "p2c65",
+   "printed": "Schedule 2 row 3, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 2 row 3 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2000:sched3:txtPaymentDate0",
+   "mm_html_id": "p2c78",
+   "dd_html_id": "p2c80",
+   "yyyy_html_id": "p2c82",
+   "printed": "Schedule 3 row 1, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 3 row 1 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2000:sched3:txtPaymentDate1",
+   "mm_html_id": "p2c87",
+   "dd_html_id": "p2c89",
+   "yyyy_html_id": "p2c91",
+   "printed": "Schedule 3 row 2, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 3 row 2 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2000:sched3:txtPaymentDate2",
+   "mm_html_id": "p2c96",
+   "dd_html_id": "p2c98",
+   "yyyy_html_id": "p2c100",
+   "printed": "Schedule 3 row 3, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 3 row 3 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2000:sched4:txtRemittanceDate0",
+   "mm_html_id": "p2c118",
+   "dd_html_id": "p2c119",
+   "yyyy_html_id": "p2c120",
+   "printed": "Schedule 4 row 1, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 4 row 1 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2000:sched4:txtRemittanceDate1",
+   "mm_html_id": "p2c128",
+   "dd_html_id": "p2c129",
+   "yyyy_html_id": "p2c130",
+   "printed": "Schedule 4 row 2, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 4 row 2 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2000:sched4:txtRemittanceDate2",
+   "mm_html_id": "p2c138",
+   "dd_html_id": "p2c139",
+   "yyyy_html_id": "p2c140",
+   "printed": "Schedule 4 row 3, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs at the start of Schedule 4 row 3 (rows 2-3 take the column header above row 1); one writer date split across the three"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm2000:sched1:txtTotalDue1",
+    "frm2000:sched2:txtTotalPayment1",
+    "frm2000:sched3:txtTotalPayment1",
+    "frm2000:sched4:txtTotalRemittance1"
+   ],
+   "reason": "schedule total control of the page: the same amount as txtTax14 / 15B / 15C / 19, which print in the schedule total cells and the page 1 items"
+  },
+  {
+   "writer_keys": [
+    "frm2000:txtTelNum",
+    "txtEmail"
+   ],
+   "reason": "prints from derived:contact_email (the print map shapes Items 8 and 9 on one shared 40-slot comb for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm2000:txtPg2TIN1",
+    "frm2000:txtPg2TIN2",
+    "frm2000:txtPg2TIN3",
+    "frm2000:txtPg2BranchCode",
+    "frm2000:txtPg2TaxpayerName"
+   ],
+   "reason": "prints inside derived:page_header (TIN then name on the one page 2 header comb)"
+  },
+  {
+   "writer_key": "frm2000:numOfDays",
+   "reason": "day count the page computes for its own checks; the sheet has no box for it"
+  },
+  {
+   "writer_keys": [
+    "ds106modYes",
+    "ds106modNo"
+   ],
+   "reason": "radio of the page's DS106 popup, not on the paper form"
+  },
+  {
+   "writer_key": "frm2000:txtLineBus",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm2000:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c38",
    "reason": "second row beside the item 12 TIN with no printed caption and a different width from the item 11 name cell; cannot confirm it is the txtOtherName2 line"
@@ -513,118 +694,6 @@
   {
    "html_id": "p1c108",
    "reason": "Part III date (MM/DD/YYYY) is one 8-slot comb with no slash cells; the writer date format for this comb is not verifiable"
-  },
-  {
-   "html_id": "p2c5",
-   "reason": "one 40-slot comb under both the page 2 TIN and Taxpayer's Name captions; TIN parts and branch have no separate cells, so txtPg2TIN1-3, txtPg2BranchCode and txtPg2TaxpayerName stay blank"
-  },
-  {
-   "html_id": "p2c43",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c45",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c47",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c52",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c54",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c56",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c61",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c63",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c65",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c78",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c80",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c82",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c87",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c89",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c91",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c96",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c98",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c100",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c118",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c119",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c120",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c128",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c129",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c130",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c138",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c139",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p2c140",
-   "reason": "Payment/remittance date is a multi-comb MM/DD/YYYY (2+2+4) under one layout key; one key maps to one cell, so left blank"
   }
  ]
 }

@@ -1217,6 +1217,21 @@
   {
    "writer_key": "frm2552:txtLOB",
    "reason": "Hidden profile field; the sheet has no line-of-business item."
+  },
+  {
+   "writer_key": "frm2552:rdoPg1Pt1I5RDO",
+   "reason": "duplicate of frm2552:txtPg1I5RDO (same RDO), which prints in item 5"
+  },
+  {
+   "writer_keys": [
+    "frm2552:txtPg1P2I14TaxATC",
+    "frm2552:txtPg1P2I15TaxATC"
+   ],
+   "reason": "ATC PT 201/202 is preprinted on the item 14/15 rows; there is no box to fill"
+  },
+  {
+   "writer_key": "frm2552:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
   }
  ]
 }

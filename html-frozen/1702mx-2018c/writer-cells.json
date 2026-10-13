@@ -1,7 +1,7 @@
 {
  "form_id": "1702mx-v2018c",
  "html_slug": "1702mx-2018c",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption sits directly left of or above it, or the printed item number on its row. Schedule amounts in single text cells (Schedules 1-5, 10 and the Schedule 6 total) take plain text joins and print as the writer holds them. Items 1, 3, 4, 13 and 21 options and the Instructions A/B boxes take xbox_joins (box immediately left of the printed option). Part II and the 12-slot Schedule 7, 8 and 9 amounts (Schedule 9 continuation columns excepted) have no centavo comb, so no money_joins pair exists and each one takes a peso_joins entry that prints the amount rounded to whole pesos. Schedule 1 effectivity dates, Schedule 6 rows 1-4 and Schedule 7.1/8.1 rows 4-7 print no row number or are multi-comb dates, and stay blank. The item 5 ATC boxes stay blank. Stamped TIN combs (name=) take no join.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption sits directly left of or above it, or the printed item number on its row. Schedule amounts in single text cells (Schedules 1-5, 10 and the Schedule 6 total) take plain text joins and print as the writer holds them. Items 1, 3, 4, 13 and 21 options and the Instructions A/B boxes take xbox_joins (box immediately left of the printed option). Part II and the 12-slot Schedule 7, 8 and 9 amounts (Schedule 9 continuation columns excepted) have no centavo comb, so no money_joins pair exists and each one takes a peso_joins entry that prints the amount rounded to whole pesos. Schedule 6 rows 1-4 and Schedule 7.1/8.1 rows 4-7 print no row number: they take the printed row order under their column headers (the layout numbers them in the same order). Item 5 takes the MCIT box, the other-code box and code cell by the model's meaning. Schedule 1 effectivity dates have no layout keys and stay blank. Stamped TIN combs (name=) take no join. Since #113: Item 2, Item 10, the Part III dates and the page 2-4 TIN combs print (derived: keys of Form1702MXDraft::to_print_field_map, date_joins); every other value has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm1702MX:drpPg1Pt1I7RDO",
@@ -1964,6 +1964,466 @@
    "html_id": "p4c195",
    "printed": "Schedule 10 item 10 Net Taxable Income/(Loss) (key carries the Sc2 prefix), column D",
    "reason": "Schedule 10 item 10 Net Taxable Income/(Loss) (key carries the Sc2 prefix): column D header and row label"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "html_ids": [
+    "p3c5",
+    "p4c5"
+   ],
+   "printed": "Pages 2-4 header TIN",
+   "reason": "the 14-slot comb under each later page's TIN caption: the nine TIN digits (the sheet preprints the branch 0 0 0 0 0 after them)"
+  },
+  {
+   "writer_key": "derived:year_end_mm1",
+   "html_id": "p1c19",
+   "printed": "2 Year Ended (MM/20YY), mm1",
+   "reason": "digit box 1 of the four single-character boxes under the item 2 caption (MM / 20 YY)"
+  },
+  {
+   "writer_key": "derived:year_end_mm2",
+   "html_id": "p1c20",
+   "printed": "2 Year Ended (MM/20YY), mm2",
+   "reason": "digit box 2 of the four single-character boxes under the item 2 caption (MM / 20 YY)"
+  },
+  {
+   "writer_key": "derived:year_end_yy1",
+   "html_id": "p1c21",
+   "printed": "2 Year Ended (MM/20YY), yy1",
+   "reason": "digit box 3 of the four single-character boxes under the item 2 caption (MM / 20 YY)"
+  },
+  {
+   "writer_key": "derived:year_end_yy2",
+   "html_id": "p1c22",
+   "printed": "2 Year Ended (MM/20YY), yy2",
+   "reason": "digit box 4 of the four single-character boxes under the item 2 caption (MM / 20 YY)"
+  },
+  {
+   "writer_key": "frm1702MX:drpPg1I5ATCR2",
+   "html_id": "p1c16",
+   "printed": "5 ATC, other code",
+   "reason": "the code cell at the start of the second ATC row; the model: other_code"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg2Sc3It30",
+   "html_id": "p2c278",
+   "printed": "Schedule 3 item 30 description",
+   "reason": "the description cell left of the Schedule 3 item 30 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg2Sc3It31",
+   "html_id": "p2c280",
+   "printed": "Schedule 3 item 31 description",
+   "reason": "the description cell left of the Schedule 3 item 31 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc5It17d",
+   "html_id": "p3c223",
+   "printed": "Schedule 5 item 17d description",
+   "reason": "the description cell left of the item 17d A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc5It17e",
+   "html_id": "p3c225",
+   "printed": "Schedule 5 item 17e description",
+   "reason": "the description cell left of the item 17e A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc5It17f",
+   "html_id": "p3c227",
+   "printed": "Schedule 5 item 17f description",
+   "reason": "the description cell left of the item 17f A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc5It17g",
+   "html_id": "p3c229",
+   "printed": "Schedule 5 item 17g description",
+   "reason": "the description cell left of the item 17g A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc5It17h",
+   "html_id": "p3c231",
+   "printed": "Schedule 5 item 17h description",
+   "reason": "the description cell left of the item 17h A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc5It17i",
+   "html_id": "p3c233",
+   "printed": "Schedule 5 item 17i description",
+   "reason": "the description cell left of the item 17i A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc10Itm2",
+   "html_id": "p4c196",
+   "printed": "Schedule 10 item 2 description",
+   "reason": "the description cell left of the item 2 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc10Itm3",
+   "html_id": "p4c198",
+   "printed": "Schedule 10 item 3 description",
+   "reason": "the description cell left of the item 3 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc10Itm5",
+   "html_id": "p4c200",
+   "printed": "Schedule 10 item 5 description",
+   "reason": "the description cell left of the item 5 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc10Itm6",
+   "html_id": "p4c202",
+   "printed": "Schedule 10 item 6 description",
+   "reason": "the description cell left of the item 6 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc10Itm7",
+   "html_id": "p4c204",
+   "printed": "Schedule 10 item 7 description",
+   "reason": "the description cell left of the item 7 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4Sc10Itm8",
+   "html_id": "p4c206",
+   "printed": "Schedule 10 item 8 description",
+   "reason": "the description cell left of the item 8 A-D amount cells"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I1description",
+   "html_id": "p3c187",
+   "printed": "Schedule 6 row 1, Description",
+   "reason": "the cell under the Description header; Schedule 6 row 1 (rows carry no printed number: row 1 is the 1th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I1legal",
+   "html_id": "p3c188",
+   "printed": "Schedule 6 row 1, Legal Basis",
+   "reason": "the cell under the Legal Basis header; Schedule 6 row 1 (rows carry no printed number: row 1 is the 1th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I2description",
+   "html_id": "p3c193",
+   "printed": "Schedule 6 row 2, Description",
+   "reason": "the cell under the Description header; Schedule 6 row 2 (rows carry no printed number: row 2 is the 2th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I2legal",
+   "html_id": "p3c194",
+   "printed": "Schedule 6 row 2, Legal Basis",
+   "reason": "the cell under the Legal Basis header; Schedule 6 row 2 (rows carry no printed number: row 2 is the 2th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I3description",
+   "html_id": "p3c199",
+   "printed": "Schedule 6 row 3, Description",
+   "reason": "the cell under the Description header; Schedule 6 row 3 (rows carry no printed number: row 3 is the 3th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I3legal",
+   "html_id": "p3c200",
+   "printed": "Schedule 6 row 3, Legal Basis",
+   "reason": "the cell under the Legal Basis header; Schedule 6 row 3 (rows carry no printed number: row 3 is the 3th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc6I4description",
+   "html_id": "p3c205",
+   "printed": "Schedule 6 row 4, Description",
+   "reason": "the cell under the Description header; Schedule 6 row 4 (rows carry no printed number: row 4 is the 4th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc6I4legal",
+   "html_id": "p3c206",
+   "printed": "Schedule 6 row 4, Legal Basis",
+   "reason": "the cell under the Legal Basis header; Schedule 6 row 4 (rows carry no printed number: row 4 is the 4th printed row under the headers, as the layout numbers I1-I4)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_4Year",
+   "html_id": "p4c16",
+   "printed": "Schedule 7.1 item 4, Year",
+   "reason": "the cell under the Schedule 7.1 Year column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_4A",
+   "html_id": "p4c17",
+   "printed": "Schedule 7.1 item 4, A",
+   "reason": "the cell under the Schedule 7.1 A column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_4B",
+   "html_id": "p4c18",
+   "printed": "Schedule 7.1 item 4, B",
+   "reason": "the cell under the Schedule 7.1 B column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_4C",
+   "html_id": "p4c19",
+   "printed": "Schedule 7.1 item 4, C",
+   "reason": "the cell under the Schedule 7.1 C column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_4D",
+   "html_id": "p4c20",
+   "printed": "Schedule 7.1 item 4, D",
+   "reason": "the cell under the Schedule 7.1 D column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_4E",
+   "html_id": "p4c21",
+   "printed": "Schedule 7.1 item 4, E",
+   "reason": "the cell under the Schedule 7.1 E column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_5Year",
+   "html_id": "p4c23",
+   "printed": "Schedule 7.1 item 5, Year",
+   "reason": "the cell under the Schedule 7.1 Year column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_5A",
+   "html_id": "p4c24",
+   "printed": "Schedule 7.1 item 5, A",
+   "reason": "the cell under the Schedule 7.1 A column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_5B",
+   "html_id": "p4c25",
+   "printed": "Schedule 7.1 item 5, B",
+   "reason": "the cell under the Schedule 7.1 B column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_5C",
+   "html_id": "p4c26",
+   "printed": "Schedule 7.1 item 5, C",
+   "reason": "the cell under the Schedule 7.1 C column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_5D",
+   "html_id": "p4c27",
+   "printed": "Schedule 7.1 item 5, D",
+   "reason": "the cell under the Schedule 7.1 D column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_5E",
+   "html_id": "p4c28",
+   "printed": "Schedule 7.1 item 5, E",
+   "reason": "the cell under the Schedule 7.1 E column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_6Year",
+   "html_id": "p4c30",
+   "printed": "Schedule 7.1 item 6, Year",
+   "reason": "the cell under the Schedule 7.1 Year column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_6A",
+   "html_id": "p4c31",
+   "printed": "Schedule 7.1 item 6, A",
+   "reason": "the cell under the Schedule 7.1 A column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_6B",
+   "html_id": "p4c32",
+   "printed": "Schedule 7.1 item 6, B",
+   "reason": "the cell under the Schedule 7.1 B column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_6C",
+   "html_id": "p4c33",
+   "printed": "Schedule 7.1 item 6, C",
+   "reason": "the cell under the Schedule 7.1 C column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_6D",
+   "html_id": "p4c34",
+   "printed": "Schedule 7.1 item 6, D",
+   "reason": "the cell under the Schedule 7.1 D column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_6E",
+   "html_id": "p4c35",
+   "printed": "Schedule 7.1 item 6, E",
+   "reason": "the cell under the Schedule 7.1 E column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_7Year",
+   "html_id": "p4c37",
+   "printed": "Schedule 7.1 item 7, Year",
+   "reason": "the cell under the Schedule 7.1 Year column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_7A",
+   "html_id": "p4c38",
+   "printed": "Schedule 7.1 item 7, A",
+   "reason": "the cell under the Schedule 7.1 A column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_7B",
+   "html_id": "p4c39",
+   "printed": "Schedule 7.1 item 7, B",
+   "reason": "the cell under the Schedule 7.1 B column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_7C",
+   "html_id": "p4c40",
+   "printed": "Schedule 7.1 item 7, C",
+   "reason": "the cell under the Schedule 7.1 C column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_7D",
+   "html_id": "p4c41",
+   "printed": "Schedule 7.1 item 7, D",
+   "reason": "the cell under the Schedule 7.1 D column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed7_7E",
+   "html_id": "p4c42",
+   "printed": "Schedule 7.1 item 7, E",
+   "reason": "the cell under the Schedule 7.1 E column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed8_4Year",
+   "html_id": "p4c63",
+   "printed": "Schedule 8.1 item 4, Year",
+   "reason": "the cell under the Schedule 8.1 Year column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_4A",
+   "html_id": "p4c64",
+   "printed": "Schedule 8.1 item 4, A",
+   "reason": "the cell under the Schedule 8.1 A column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_4B",
+   "html_id": "p4c65",
+   "printed": "Schedule 8.1 item 4, B",
+   "reason": "the cell under the Schedule 8.1 B column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_4C",
+   "html_id": "p4c66",
+   "printed": "Schedule 8.1 item 4, C",
+   "reason": "the cell under the Schedule 8.1 C column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_4D",
+   "html_id": "p4c67",
+   "printed": "Schedule 8.1 item 4, D",
+   "reason": "the cell under the Schedule 8.1 D column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_4E",
+   "html_id": "p4c68",
+   "printed": "Schedule 8.1 item 4, E",
+   "reason": "the cell under the Schedule 8.1 E column header on the item 4 row (the table rows 4-7 carry no printed number; row 4 is the 1th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed8_5Year",
+   "html_id": "p4c70",
+   "printed": "Schedule 8.1 item 5, Year",
+   "reason": "the cell under the Schedule 8.1 Year column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_5A",
+   "html_id": "p4c71",
+   "printed": "Schedule 8.1 item 5, A",
+   "reason": "the cell under the Schedule 8.1 A column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_5B",
+   "html_id": "p4c72",
+   "printed": "Schedule 8.1 item 5, B",
+   "reason": "the cell under the Schedule 8.1 B column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_5C",
+   "html_id": "p4c73",
+   "printed": "Schedule 8.1 item 5, C",
+   "reason": "the cell under the Schedule 8.1 C column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_5D",
+   "html_id": "p4c74",
+   "printed": "Schedule 8.1 item 5, D",
+   "reason": "the cell under the Schedule 8.1 D column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_5E",
+   "html_id": "p4c75",
+   "printed": "Schedule 8.1 item 5, E",
+   "reason": "the cell under the Schedule 8.1 E column header on the item 5 row (the table rows 4-7 carry no printed number; row 5 is the 2th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed8_6Year",
+   "html_id": "p4c77",
+   "printed": "Schedule 8.1 item 6, Year",
+   "reason": "the cell under the Schedule 8.1 Year column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_6A",
+   "html_id": "p4c78",
+   "printed": "Schedule 8.1 item 6, A",
+   "reason": "the cell under the Schedule 8.1 A column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_6B",
+   "html_id": "p4c79",
+   "printed": "Schedule 8.1 item 6, B",
+   "reason": "the cell under the Schedule 8.1 B column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3IShed8_6C",
+   "html_id": "p4c80",
+   "printed": "Schedule 8.1 item 6, C",
+   "reason": "the cell under the Schedule 8.1 C column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_6D",
+   "html_id": "p4c81",
+   "printed": "Schedule 8.1 item 6, D",
+   "reason": "the cell under the Schedule 8.1 D column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_6E",
+   "html_id": "p4c82",
+   "printed": "Schedule 8.1 item 6, E",
+   "reason": "the cell under the Schedule 8.1 E column header on the item 6 row (the table rows 4-7 carry no printed number; row 6 is the 3th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_7Year",
+   "html_id": "p4c84",
+   "printed": "Schedule 8.1 item 7, Year",
+   "reason": "the cell under the Schedule 8.1 Year column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_7A",
+   "html_id": "p4c85",
+   "printed": "Schedule 8.1 item 7, A",
+   "reason": "the cell under the Schedule 8.1 A column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_7B",
+   "html_id": "p4c86",
+   "printed": "Schedule 8.1 item 7, B",
+   "reason": "the cell under the Schedule 8.1 B column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_7C",
+   "html_id": "p4c87",
+   "printed": "Schedule 8.1 item 7, C",
+   "reason": "the cell under the Schedule 8.1 C column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_7D",
+   "html_id": "p4c88",
+   "printed": "Schedule 8.1 item 7, D",
+   "reason": "the cell under the Schedule 8.1 D column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg4IShed8_7E",
+   "html_id": "p4c89",
+   "printed": "Schedule 8.1 item 7, E",
+   "reason": "the cell under the Schedule 8.1 E column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
   }
  ],
  "money_joins": [],
@@ -2039,6 +2499,18 @@
    "html_id": "p2c10",
    "printed": "Instructions B (two or more activities)",
    "reason": "box immediately left of \"B. Two or more activities\""
+  },
+  {
+   "writer_key": "frm1702MX:chkPg1I5ATCR1",
+   "html_id": "p1c11",
+   "printed": "5 ATC IC 055 Minimum Corporate Income Tax (MCIT)",
+   "reason": "the box at the end of the printed IC 055 MCIT row; the model: mcit_selected"
+  },
+  {
+   "writer_key": "frm1702MX:chkPg1I5ATCR2",
+   "html_id": "p1c18",
+   "printed": "5 ATC, other code",
+   "reason": "the box at the end of the second ATC row (the other-code row); the model: other_selected"
   }
  ],
  "peso_joins": [
@@ -2211,50 +2683,152 @@
    "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
   }
  ],
- "left_out": [
+ "date_joins": [
   {
-   "html_id": "p1c11",
-   "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; chkPg1I5ATCR1B, drpPg1I5ATCR2 and chkPg1I5ATCR2B stay blank"
+   "writer_key": "frm1702MX:txtPg1Pt1I8",
+   "mm_html_id": "p1c46",
+   "dd_html_id": "p1c48",
+   "yyyy_html_id": "p1c50",
+   "printed": "10 Date of Incorporation/Organization (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs right of the item 10 caption; one writer date split across the three"
   },
   {
-   "html_id": "p1c16",
-   "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; chkPg1I5ATCR1B, drpPg1I5ATCR2 and chkPg1I5ATCR2B stay blank"
+   "writer_key": "frm1702MX:txtPg1Pt1I26CashC3",
+   "mm_html_id": "p1c104",
+   "dd_html_id": "p1c105",
+   "yyyy_html_id": "p1c106",
+   "printed": "Part III item I2, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on that payment row (column C3 between Number C2 and Amount C4); one writer date split across the three"
   },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I27CheckC3",
+   "mm_html_id": "p1c111",
+   "dd_html_id": "p1c112",
+   "yyyy_html_id": "p1c113",
+   "printed": "Part III item I2, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on that payment row (column C3 between Number C2 and Amount C4); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I28TaxDebitC3",
+   "mm_html_id": "p1c117",
+   "dd_html_id": "p1c118",
+   "yyyy_html_id": "p1c119",
+   "printed": "Part III item I2, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on that payment row (column C3 between Number C2 and Amount C4); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I29OthersC3",
+   "mm_html_id": "p1c125",
+   "dd_html_id": "p1c126",
+   "yyyy_html_id": "p1c127",
+   "printed": "Part III item I2, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on that payment row (column C3 between Number C2 and Amount C4); one writer date split across the three"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1702MX:txtPg2TIN1",
+    "frm1702MX:txtPg2TIN2",
+    "frm1702MX:txtPg2TIN3",
+    "frm1702MX:txtPg3TIN1",
+    "frm1702MX:txtPg3TIN2",
+    "frm1702MX:txtPg3TIN3",
+    "frm1702MX:txtPg4TIN1",
+    "frm1702MX:txtPg4TIN2",
+    "frm1702MX:txtPg4TIN3"
+   ],
+   "reason": "prints from derived:tin_digits (the print map shapes the nine TIN digits of the page 2-4 headers for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:txtPg1Pt1I6TINC4",
+    "frm1702MX:txtPg2TIN4",
+    "frm1702MX:txtPg3TIN4",
+    "frm1702MX:txtPg4TIN4",
+    "frm1702MX:txtPg1TINMASK",
+    "frm1702MX:txtPg2TINMASK",
+    "frm1702MX:txtPg3TINMASK",
+    "frm1702MX:txtPg4TINMASK"
+   ],
+   "reason": "branch code: the sheet preprints 0 0 0 0 0 beside each TIN comb (no fillable branch cells)"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:ddlPg1I2Date",
+    "frm1702MX:txtPg1I2YearEnd"
+   ],
+   "reason": "prints from derived:year_end_mm1/mm2/yy1/yy2 (the print map shapes Item 2 over its four digit boxes for the sheet)"
+  },
+  {
+   "writer_key": "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized",
+   "reason": "item 13 Itemized Deduction box: the frozen sheet draws it without an input (only the OSD box p1c56 has one); printing it needs a fillable box in html-frozen/1702mx-2018c/index.html (reported on #113)"
+  },
+  {
+   "writer_keys": [
+    "attachmentCurrent",
+    "attachmentTotal",
+    "frm1702MX:rdoPg1AttMExempt",
+    "frm1702MX:rdoPg1AttMSpecialRate",
+    "frm1702MX:totalEXAttach",
+    "frm1702MX:totalSPAttach",
+    "frm1702MX:txtPg1AttMPt5ScAIt5",
+    "frm1702MX:txtPg1AttMPt5ScAIt6",
+    "frm1702MX:txtPg1AttMTIN1",
+    "frm1702MX:txtPg1AttMTIN2",
+    "frm1702MX:txtPg1AttMTIN3",
+    "frm1702MX:txtPg1AttMTIN4",
+    "frm1702MX:txtPg1AttMTINMASK",
+    "frm1702MX:txtPg2AttMDesc20",
+    "frm1702MX:txtPg2AttMDesc21",
+    "frm1702MX:txtPg2AttMDesc22",
+    "frm1702MX:txtPg2AttMDesc23",
+    "frm1702MX:txtPg2AttMDesc24",
+    "frm1702MX:txtPg2AttMScDI17iother",
+    "frm1702MX:txtPg2AttMScF1I4year",
+    "frm1702MX:txtPg2AttMTIN1",
+    "frm1702MX:txtPg2AttMTIN2",
+    "frm1702MX:txtPg2AttMTIN3",
+    "frm1702MX:txtPg2AttMTIN4",
+    "frm1702MX:txtPg2AttMTINMASK"
+   ],
+   "reason": "annex (Attachment M / exempt and special-rate attachment) control of the page; the four-page frozen sheet has no annex pages"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:txtCtrmodalPg3Sc5I17i",
+    "frm1702MX:txtCtrmodalPg6Sc6",
+    "frm1702MX:txtCtrmodalPg7Sc10I3",
+    "frm1702MX:txtCtrmodalPg7Sc10I6",
+    "frm1702MX:txtCtrmodalPg7Sc10I8",
+    "frm1702MX:txtCtrmodalPg7Sc8"
+   ],
+   "reason": "add-more popup row counter of the page; the sheet prints the rows the return carries, not the popup bookkeeping"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg1Pt1I7RDO",
+   "reason": "duplicate of frm1702MX:drpPg1Pt1I7RDO (same RDO), which prints in item 7"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:txtCurrentPage",
+    "frm1702MX:txtMaxPage"
+   ],
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  },
+  {
+   "writer_keys": [
+    "txtEnroll",
+    "txtFinalFlag",
+    "driveSelectTPExport"
+   ],
+   "reason": "eBIRForms system field (enrolment flag, final flag, export drive, online-filing credentials), not on the paper form"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c17",
    "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; chkPg1I5ATCR1B, drpPg1I5ATCR2 and chkPg1I5ATCR2B stay blank"
-  },
-  {
-   "html_id": "p1c18",
-   "reason": "Item 5 ATC: the IC 055 and Other boxes and code cells have no unambiguous box-to-option mapping on this sheet; chkPg1I5ATCR1B, drpPg1I5ATCR2 and chkPg1I5ATCR2B stay blank"
-  },
-  {
-   "html_id": "p1c19",
-   "reason": "Item 2 Year Ended: four single-character boxes; the keys are a date dropdown and a year text, which a join cannot split across boxes"
-  },
-  {
-   "html_id": "p1c20",
-   "reason": "Item 2 Year Ended: four single-character boxes; the keys are a date dropdown and a year text, which a join cannot split across boxes"
-  },
-  {
-   "html_id": "p1c21",
-   "reason": "Item 2 Year Ended: four single-character boxes; the keys are a date dropdown and a year text, which a join cannot split across boxes"
-  },
-  {
-   "html_id": "p1c22",
-   "reason": "Item 2 Year Ended: four single-character boxes; the keys are a date dropdown and a year text, which a join cannot split across boxes"
-  },
-  {
-   "html_id": "p1c46",
-   "reason": "Item 10 Date of Incorporation: three combs under one layout key (txtPg1Pt1I8)"
-  },
-  {
-   "html_id": "p1c48",
-   "reason": "Item 10 Date of Incorporation: three combs under one layout key (txtPg1Pt1I8)"
-  },
-  {
-   "html_id": "p1c50",
-   "reason": "Item 10 Date of Incorporation: three combs under one layout key (txtPg1Pt1I8)"
   },
   {
    "html_id": "p1c81",
@@ -2263,54 +2837,6 @@
   {
    "html_id": "p1c82",
    "reason": "attach authorization letter line: no layout key"
-  },
-  {
-   "html_id": "p1c104",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c105",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c106",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c111",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c112",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c113",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c117",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c118",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c119",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c125",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c126",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
-  },
-  {
-   "html_id": "p1c127",
-   "reason": "Part III payment date: three combs (MM/DD/YYYY) under one layout key per row; left blank"
   },
   {
    "html_id": "p2c30",
@@ -2425,10 +2951,6 @@
    "reason": "Applicable rate row (Schedule 1 item 4 and Schedule 2 item 14): a 2-slot and a 15-wide box per column with no single rate key; left blank"
   },
   {
-   "html_id": "p3c188",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
    "html_id": "p3c189",
    "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
   },
@@ -2442,10 +2964,6 @@
   },
   {
    "html_id": "p3c192",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c194",
    "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
   },
   {
@@ -2465,10 +2983,6 @@
    "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
   },
   {
-   "html_id": "p3c200",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
    "html_id": "p3c201",
    "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
   },
@@ -2482,10 +2996,6 @@
   },
   {
    "html_id": "p3c204",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c206",
    "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
   },
   {
@@ -2503,198 +3013,6 @@
   {
    "html_id": "p3c210",
    "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p4c16",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c17",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c18",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c19",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c20",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c21",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c23",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c24",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c25",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c26",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c27",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c28",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c30",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c31",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c32",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c33",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c34",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c35",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c37",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c38",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c39",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c40",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c41",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c42",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c63",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c64",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c65",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c66",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c67",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c68",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c70",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c71",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c72",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c73",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c74",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c75",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c77",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c78",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c79",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c80",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c81",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c82",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c84",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c85",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c86",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c87",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c88",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
-  },
-  {
-   "html_id": "p4c89",
-   "reason": "Schedule 7.1 / 8.1 NOLCO rows 4-7: rows print no item number in the text layer; the Year and A-E columns cannot be tied to a row key; left blank"
   },
   {
    "html_id": "p4c120",

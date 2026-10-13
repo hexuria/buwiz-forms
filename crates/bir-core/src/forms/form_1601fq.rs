@@ -946,6 +946,76 @@ impl Form1601FqDraft {
         self.schedule.len().max(FORM_1601FQ_MAIN_ROWS)
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the later pages' header TIN, one 14-digit
+    ///   comb (TIN then branch).
+    /// - `derived:address_line1` / `derived:line:address_line2`: the
+    ///   registered address over its 40-slot first line, broken at a
+    ///   space, and the second line (printed whole when longer).
+    /// - `derived:line:tax_relief_specify`: "If yes, specify", the relief
+    ///   named by `frm1601FQ:drpSpecialTax` (the upload carries the dropdown code).
+    /// - `derived:rate{n}_whole` / `derived:rate{n}_tenths`: Part II row
+    ///   `n`'s rate over its 2-slot comb and 1-slot tenths box.
+    /// - `derived:sched1_drpTreatyCode{i}` / `derived:sched1_drpATCCode{i}`:
+    ///   Schedule 1 row `i`'s codes, blank for the page placeholders.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1601FQ:txtPg2TIN1",
+                "frm1601FQ:txtPg2TIN2",
+                "frm1601FQ:txtPg2TIN3",
+                "frm1601FQ:txtPg2BranchCode",
+            ],
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        let specify = super::print_map::tax_relief_label(
+            fields
+                .get("frm1601FQ:drpSpecialTax")
+                .map_or("", String::as_str),
+        )
+        .to_string();
+        // Part II rows 1-6: the rate (` 20.0`) over its 2-slot whole comb
+        // and 1-slot tenths box; Schedule 1's dropdowns print blank for the
+        // page's `-` / `NA` placeholders.
+        for n in 1..=6 {
+            let rate = fields
+                .get(&format!("frm1601FQ:txtTaxRate{n}"))
+                .map(|rate| rate.trim().to_string())
+                .unwrap_or_default();
+            let (whole, tenths) = rate.split_once('.').unwrap_or((rate.as_str(), ""));
+            fields.insert(format!("derived:rate{n}_whole"), whole.to_string());
+            fields.insert(
+                format!("derived:rate{n}_tenths"),
+                tenths.chars().take(1).collect(),
+            );
+        }
+        for index in 0..5 {
+            for key in ["drpTreatyCode", "drpATCCode"] {
+                let value = fields
+                    .get(&format!("{key}{index}"))
+                    .map(|value| value.trim())
+                    .filter(|value| !matches!(*value, "-" | FORM_1601FQ_NOT_APPLICABLE))
+                    .unwrap_or("")
+                    .to_string();
+                fields.insert(format!("derived:sched1_{key}{index}"), value);
+            }
+        }
+        for (key, value) in [
+            ("tin_digits", tin_digits),
+            ("address_line1", line1),
+            ("line:address_line2", line2),
+            ("line:tax_relief_specify", specify),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();

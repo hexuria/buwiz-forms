@@ -1,7 +1,7 @@
 {
  "form_id": "1602q-v2018",
  "html_slug": "1602q-2019",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) names the item. Text and TIN combs: caption left of or above the comb, or the header over the column. Amounts: the peso comb plus the 2-slot centavo comb directly right of it form one money_joins pair. Booleans and radios: X in the box immediately left of the printed option; the first printed option of a pair takes _1. Schedule 1 rows 13-14 rate boxes, the Schedule 2/3 row-3 lines, and the Part III/tax agent blocks have no safe key and stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) names the item. Text and TIN combs: caption left of or above the comb, or the header over the column. Amounts: the peso comb plus the 2-slot centavo comb directly right of it form one money_joins pair. Booleans and radios: X in the box immediately left of the printed option; the first printed option of a pair takes _1. Schedule 1 rows 13-14 rate boxes, the Schedule 2/3 row-3 lines, and the Part III/tax agent blocks have no safe key and stay blank. Since #113: the item 9 second line, Item 13A, the Schedule 1 items 13-14 BSP exchange rate (peso+2-slot comb) and the page 2/3 TIN headers print too (derived: keys from Form1602QDraft::to_print_field_map); every other value has a reviewed not_joined reason. One writer key may fill several cells (html_ids).",
  "joins": [
   {
    "writer_key": "frm1602Q:txtYear",
@@ -52,12 +52,6 @@
    "reason": "caption above the 40-slot comb"
   },
   {
-   "writer_key": "frm1602Q:txtAddress",
-   "html_id": "p1c39",
-   "printed": "9 Registered Address",
-   "reason": "caption above the first address comb; second line p1c40 left out"
-  },
-  {
    "writer_key": "frm1602Q:txtZipCode",
    "html_id": "p1c42",
    "printed": "9A ZIP Code",
@@ -76,22 +70,10 @@
    "reason": "caption left of the 34-slot comb"
   },
   {
-   "writer_key": "frm1602Q:txtPage2TIN",
-   "html_id": "p2c5",
-   "printed": "TIN (page 2)",
-   "reason": "TIN header above the 14-slot comb"
-  },
-  {
    "writer_key": "frm1602Q:txtPage2Agent",
    "html_id": "p2c6",
    "printed": "Withholding Agent's Name (page 2)",
    "reason": "header above the 26-slot comb"
-  },
-  {
-   "writer_key": "frm1602Q:txtPage3TIN",
-   "html_id": "p3c5",
-   "printed": "TIN (page 3)",
-   "reason": "TIN header above the 14-slot comb"
   },
   {
    "writer_key": "frm1602Q:txtPage3Agent",
@@ -158,6 +140,33 @@
    "html_id": "p2c216",
    "printed": "Schedule 3 Rate, row 2",
    "reason": "same column as row 1, row 2"
+  },
+  {
+   "writer_key": "derived:address_line1",
+   "html_id": "p1c39",
+   "printed": "9 Registered Address, line 1",
+   "reason": "full-width 40-slot comb under the item 9 caption; the print map breaks the address at the last space that fits"
+  },
+  {
+   "writer_key": "derived:line:address_line2",
+   "html_id": "p1c40",
+   "printed": "9 Registered Address, line 2",
+   "reason": "31-slot comb left of 9A ZIP Code on the second item 9 row: the rest of the address; a longer line prints whole in smaller type"
+  },
+  {
+   "writer_key": "derived:line:tax_relief_specify",
+   "html_id": "p1c52",
+   "printed": "13A If yes, specify",
+   "reason": "17-slot comb right of the 13A If yes, specify caption; the relief named on a Yes (the upload carries the lstSpecialTax code)"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "html_ids": [
+    "p3c5"
+   ],
+   "printed": "Page 2 and page 3 TIN",
+   "reason": "the 14-slot comb under each later page's TIN caption: the TIN digits then branch (the upload's txtPage2TIN/txtPage3TIN are dashed and would not fit the 14 boxes)"
   }
  ],
  "money_joins": [
@@ -538,6 +547,20 @@
    "cent_html_id": "p2c233",
    "printed": "Schedule 3 total taxes withheld (preferential rates)",
    "reason": "Total row cell"
+  },
+  {
+   "writer_key": "frm1602Q:txtSched1Rate13",
+   "peso_html_id": "p2c133",
+   "cent_html_id": "p2c135",
+   "printed": "Schedule 1 item 13, BSP Exchange Rate on the Date of Remittance",
+   "reason": "3-slot peso comb plus 2-slot comb under the BSP Exchange Rate column header on the item 13 row (the writer exchange rate, e.g. 56.79)"
+  },
+  {
+   "writer_key": "frm1602Q:txtSched1Rate14",
+   "peso_html_id": "p2c144",
+   "cent_html_id": "p2c146",
+   "printed": "Schedule 1 item 14, BSP Exchange Rate on the Date of Remittance",
+   "reason": "3-slot peso comb plus 2-slot comb under the BSP Exchange Rate column header on the item 14 row (the writer exchange rate, e.g. 56.79)"
   }
  ],
  "xbox_joins": [
@@ -632,15 +655,38 @@
    "reason": "box immediately left of the third printed option (x431, lower line)"
   }
  ],
- "left_out": [
+ "not_joined": [
   {
-   "html_id": "p1c40",
-   "reason": "second address line: the single txtAddress key fills p1c39 only"
+   "writer_key": "frm1602Q:txtAddress",
+   "reason": "prints from derived:address_line1 / derived:line:address_line2 (the print map shapes the address over both item 9 combs for the sheet)"
   },
   {
-   "html_id": "p1c52",
-   "reason": "13A \"If yes, specify\": the writer holds the option code (lstSpecialTax), not printable text"
+   "writer_key": "frm1602Q:lstSpecialTax",
+   "reason": "dropdown code (0 none, 1 special rate, 2 treaty, 3 both); item 13A prints the relief name from derived:line:tax_relief_specify"
   },
+  {
+   "writer_keys": [
+    "frm1602Q:txtPage2TIN",
+    "frm1602Q:txtPage3TIN"
+   ],
+   "reason": "dashed TIN (17 characters) for a 14-slot comb; the page headers print derived:tin_digits"
+  },
+  {
+   "writer_keys": [
+    "frm1602Q:txtSched1TaxRate13",
+    "frm1602Q:txtSched1TaxRate14"
+   ],
+   "reason": "the Tax Rate column of items 13-14 is preprinted (15%); there is no box to fill"
+  },
+  {
+   "writer_keys": [
+    "frm1602Q:txtSched1Amount15",
+    "frm1602Q:txtSched1Tax15"
+   ],
+   "reason": "the 2019 sheet prints 14 Schedule 1 rows; its item 15 is the Total line (txtSched1Total), so the layout row 15 has no printed row"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c123",
    "reason": "Tax Agent Accreditation No.: no layout key"
@@ -768,22 +814,6 @@
   {
    "html_id": "p1c205",
    "reason": "blank text cell under Part II with no printed caption and no layout key"
-  },
-  {
-   "html_id": "p2c133",
-   "reason": "Schedule 1 item 13 rate (3-slot): TaxRate13 is a rate split, not an amount, no safe single cell"
-  },
-  {
-   "html_id": "p2c135",
-   "reason": "Schedule 1 item 13 rate (2-slot): Rate13 is a rate split, not an amount"
-  },
-  {
-   "html_id": "p2c144",
-   "reason": "Schedule 1 item 14 rate (3-slot): TaxRate14 is a rate split, not an amount"
-  },
-  {
-   "html_id": "p2c146",
-   "reason": "Schedule 1 item 14 rate (2-slot): Rate14 is a rate split, not an amount"
   },
   {
    "html_id": "p2c181",

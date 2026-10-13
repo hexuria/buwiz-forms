@@ -485,7 +485,7 @@ pub(crate) const PRINT_SLUG: &str = "2550q-2024";
 pub(crate) fn print_fields(
     draft: &bir_core::forms::form_2550q::Form2550QDraft,
 ) -> std::collections::BTreeMap<String, String> {
-    draft.to_bir_field_map()
+    draft.to_print_field_map()
 }
 
 impl Form2550QV2View {

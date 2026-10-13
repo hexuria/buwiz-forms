@@ -1,7 +1,7 @@
 {
  "form_id": "1702ex-v2018c",
  "html_slug": "1702ex-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the single fillable cell whose printed caption (from the frozen page's own text layer) names the item. The sheet prints whole pesos ('DO NOT enter Centavos') in 12-slot combs with no centavo comb, so every amount prints from a derived:amount: key of to_print_field_map: the writer's amount rounded to whole pesos (50 centavos or more round up), right-aligned, a loss or overpayment in parentheses; description rows nobody filled print blank. Year Ended, the incorporation and effectivity dates, the registered name and address lines (38/38 and 38/38/30 slots), the attachment count and the 9-digit page 2/3 TIN combs are also derived: keys (never submitted). The sheet preprints the branch code as 00000 on all three pages (no fillable cells), so a non-zero branch code does not print. Booleans fill X in the box left of the printed option. Long descriptions are cut at the comb width; the submitted XML always carries the full text. Not joined (blank on print): Item 18 Tax Due (p1c75) and Item 41 Tax Due (p2c38), because the frozen sheet preprints 0 0 0 in the last three of their twelve slots and leaves only nine fillable, so a right-aligned amount would read a thousand times larger (a defect of the freeze, not of the form); Item 40 Tax Rate (the sheet has no fillable cell for it), the signature and Title of Signatory/TIN cells, and Part III Details of Payment (the model does not hold them). Add More popup rows beyond the fixed rows are not modeled.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the single fillable cell whose printed caption (from the frozen page's own text layer) names the item. The sheet prints whole pesos ('DO NOT enter Centavos') in 12-slot combs with no centavo comb, so every amount prints from a derived:amount: key of to_print_field_map: the writer's amount rounded to whole pesos (50 centavos or more round up), right-aligned, a loss or overpayment in parentheses; description rows nobody filled print blank. Year Ended, the incorporation and effectivity dates, the registered name and address lines (38/38 and 38/38/30 slots), the attachment count and the 9-digit page 2/3 TIN combs are also derived: keys (never submitted). The sheet preprints the branch code as 00000 on all three pages (no fillable cells), so a non-zero branch code does not print. Booleans fill X in the box left of the printed option. Long descriptions are cut at the comb width; the submitted XML always carries the full text. Not joined (blank on print): Item 18 Tax Due (p1c75) and Item 41 Tax Due (p2c38), because the frozen sheet preprints 0 0 0 in the last three of their twelve slots and leaves only nine fillable, so a right-aligned amount would read a thousand times larger (a defect of the freeze, not of the form); Item 40 Tax Rate (the sheet has no fillable cell for it), the signature and Title of Signatory/TIN cells, and Part III Details of Payment (the model does not hold them). Add More popup rows beyond the fixed rows are not modeled. Since #113 every value the print map carries has a box or a reviewed not_joined reason (the raw controls behind each derived: key are listed there).",
  "joins": [
   {
    "writer_key": "derived:year_end_mm1",
@@ -839,6 +839,161 @@
    "html_id": "p1c88",
    "printed": "To be carried over as tax credit for next year/quarter",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg1Pt2I19TotalTaxCrPmt",
+    "frm1702EX:txtPg1Pt2I20TotalOverpmt",
+    "frm1702EX:txtPg1Pt2I21PenaltyCompromise",
+    "frm1702EX:txtPg1Pt2I22TotalAmtPayable",
+    "frm1702EX:txtPg2Pt4I28SalesReceiptsRevFees",
+    "frm1702EX:txtPg2Pt4I29SalesRetAllowanceDisc",
+    "frm1702EX:txtPg2Pt4I30NetSalesReceiptsRevFees",
+    "frm1702EX:txtPg2Pt4I31CostOfSalesServ",
+    "frm1702EX:txtPg2Pt4I32GrossIncomeFromOper",
+    "frm1702EX:txtPg2Pt4I33AddOther",
+    "frm1702EX:txtPg2Pt4I34TotalGross",
+    "frm1702EX:txtPg2Pt4I35OrdinaryAllowable",
+    "frm1702EX:txtPg2Pt4I36SpecialAllowable",
+    "frm1702EX:txtPg2Pt4I37TotalItemized",
+    "frm1702EX:txtPg2Pt4I38OptionalStandardDeduc",
+    "frm1702EX:txtPg2Pt4I39NetTaxable",
+    "frm1702EX:txtPg2Pt4I42PriorYearExcessCr",
+    "frm1702EX:txtPg2Pt4I43IncomeTaxPmtFromPreviousQrt",
+    "frm1702EX:txtPg2Pt4I44CreditableTaxWithheldFromPrevQrt",
+    "frm1702EX:txtPg2Pt4I45CreditableTaxWithheldFor4thQrt",
+    "frm1702EX:txtPg2Pt4I46ForeignTaxCr",
+    "frm1702EX:txtPg2Pt4I47TaxPaidInReturnPrevFiled",
+    "frm1702EX:txtPg2Pt4I48OtherTaxCrPmtAmt",
+    "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt",
+    "frm1702EX:txtPg2Pt4I50TotalTaxCrPmt",
+    "frm1702EX:txtPg2Pt4I51TotalOverpayment",
+    "frm1702EX:txtPg2Pt5I52RegularIncomeOtherwiseDue",
+    "frm1702EX:txtPg2Pt5I53SpecialAllowableItemizedDeduc",
+    "frm1702EX:txtPg2Pt5I54TotalTaxReliefAvailment",
+    "frm1702EX:txtPg3Pt6I17OthersDAmt",
+    "frm1702EX:txtPg3Pt6I17OthersEAmt",
+    "frm1702EX:txtPg3Pt6I17OthersFAmt",
+    "frm1702EX:txtPg3Pt6I17OthersGAmt",
+    "frm1702EX:txtPg3Pt6I17OthersHAmt",
+    "frm1702EX:txtPg3Pt6I17OthersIAmt",
+    "frm1702EX:txtPg3Pt6S1I10PensionTrust",
+    "frm1702EX:txtPg3Pt6S1I11Rental",
+    "frm1702EX:txtPg3Pt6S1I12RnD",
+    "frm1702EX:txtPg3Pt6S1I13SalaryWageAllowance",
+    "frm1702EX:txtPg3Pt6S1I14SssGsisPHealthHDMFOthers",
+    "frm1702EX:txtPg3Pt6S1I15TaxAndLicense",
+    "frm1702EX:txtPg3Pt6S1I16TranspoAndTravel",
+    "frm1702EX:txtPg3Pt6S1I17aJanitorAndMessengerServ",
+    "frm1702EX:txtPg3Pt6S1I17bProfessionalFee",
+    "frm1702EX:txtPg3Pt6S1I17cSecurityServices",
+    "frm1702EX:txtPg3Pt6S1I18TotOrdinaryAllowableItemDeduc",
+    "frm1702EX:txtPg3Pt6S1I1Ammortization",
+    "frm1702EX:txtPg3Pt6S1I2BadDebts",
+    "frm1702EX:txtPg3Pt6S1I3CharitableContrib",
+    "frm1702EX:txtPg3Pt6S1I4Depletion",
+    "frm1702EX:txtPg3Pt6S1I5Depreciation",
+    "frm1702EX:txtPg3Pt6S1I6EntertainmentAmuseRecreate",
+    "frm1702EX:txtPg3Pt6S1I7FringeBenefits",
+    "frm1702EX:txtPg3Pt6S1I8Interest",
+    "frm1702EX:txtPg3Pt6S1I9Losses",
+    "frm1702EX:txtPg3Pt6S2I1Amount",
+    "frm1702EX:txtPg3Pt6S2I2Amount",
+    "frm1702EX:txtPg3Pt6S2I3Amount",
+    "frm1702EX:txtPg3Pt6S2I4Amount",
+    "frm1702EX:txtPg3Pt6S2I5TotSpecialAllowedItemDeduc",
+    "frm1702EX:txtPg3Pt6S3I10NetTaxableIncome",
+    "frm1702EX:txtPg3Pt6S3I1NetIncomePerBook",
+    "frm1702EX:txtPg3Pt6S3I2NonDeductExpenseOtherIncomeAmt",
+    "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeAmt",
+    "frm1702EX:txtPg3Pt6S3I4Total",
+    "frm1702EX:txtPg3Pt6S3I5NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
+    "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
+    "frm1702EX:txtPg3Pt6S3I7SpecialDeductAmt",
+    "frm1702EX:txtPg3Pt6S3I8SpecialDeductAmt",
+    "frm1702EX:txtPg3Pt6S3I9Total"
+   ],
+   "reason": "prints from its derived:amount:<control> key (whole pesos right-aligned in the 12-slot comb, the sheet says DO NOT enter centavos; a loss or overpayment in parentheses)"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:ddlPg1I2Date",
+    "frm1702EX:txtPg1I2YearEnd"
+   ],
+   "reason": "prints from derived:year_end_mm1/mm2 and the year digits (the print map shapes Item 2 Year Ended as MM / YY digits for the sheet)"
+  },
+  {
+   "writer_key": "frm1702EX:txtPg1Pt1I10DateofIncorporation",
+   "reason": "prints from derived:incorporation_mm / _dd / _yyyy (the print map shapes the item 10 date over its combs for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg1Pt1I17EffectivityFrom",
+    "frm1702EX:txtPg1Pt1I17EffectivityTo"
+   ],
+   "reason": "prints from derived:effectivity_from_* / derived:effectivity_to_* (the print map shapes the item 17 dates over their combs for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg1Pt1I8RegisteredName",
+    "frm1702EX:txtPg1Pt1I9RegisteredAddress"
+   ],
+   "reason": "prints from derived:name_line1-3 / derived:address_line1-3 (the print map shapes the name and address over the sheet's 38-slot lines for the sheet)"
+  },
+  {
+   "writer_key": "frm1702EX:txtPg1P2I23NumOfAttachments",
+   "reason": "prints from derived:attachments (the print map shapes the attachment count digits for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg2TinC1",
+    "frm1702EX:txtPg2TinC2",
+    "frm1702EX:txtPg2TinC3",
+    "frm1702EX:txtPg3TinC1",
+    "frm1702EX:txtPg3TinC2",
+    "frm1702EX:txtPg3TinC3"
+   ],
+   "reason": "prints from derived:tin_digits / derived:tin_digits_p3 (the print map shapes the nine TIN digits of the page 2 and 3 headers for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg1Pt1I6TINC4",
+    "frm1702EX:txtPg2TinC4",
+    "frm1702EX:txtPg3TinC4"
+   ],
+   "reason": "branch code: the sheet preprints 00000 on all three pages (no fillable cells)"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg1Pt2I18TaxDue",
+    "frm1702EX:txtPg2Pt4I41TaxDue"
+   ],
+   "reason": "Items 18 and 41 Tax Due: the frozen sheet preprints 0 0 0 in the last three of their twelve slots and leaves nine fillable, so a right-aligned amount would read a thousand times larger; printing them needs the freeze fixed in html-frozen/1702ex-2018/index.html (reported on #113)"
+  },
+  {
+   "writer_key": "frm1702EX:txtPg2Pt4I40TaxRate",
+   "reason": "Item 40 Tax Rate: the frozen sheet has no fillable cell for it"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg1Pt2TitleofSignatory",
+    "frm1702EX:txtPg1Pt2TitleofSignatory2"
+   ],
+   "reason": "signatory title dropdown codes; the signature block has no fillable cell for them"
+  },
+  {
+   "writer_key": "frm1702EX:rdoPg1Pt1I7RDO",
+   "reason": "duplicate of frm1702EX:hdnPg1Pt1I7RDO (same RDO), which prints in item 7"
+  },
+  {
+   "writer_key": "frm1702EX:txtLOB",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm1702EX:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
   }
  ]
 }

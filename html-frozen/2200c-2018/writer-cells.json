@@ -1,7 +1,7 @@
 {
  "form_id": "2200c-v2018",
  "html_slug": "2200c-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs (MM, DD, YYYY). Item 6 RDO takes the 4-slot comb to the right of its caption (txtPg1I6RDO; rdoPg1Pt1I6RDO carries the same value and is not joined). Items 9 and 10 share one full-width 40-slot comb, and Item 11 Region, Province and City share another; each takes one derived print-map line (to_print_field_map) with the values placed under their own captions. Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins, not money_joins. Part IV rows 25-28 are 33-slot combs spanning the Drawee Bank, Number, Date and Amount columns, so those row keys stay blank. Schedule 1 (page 2) has ten rows numbered by position, top to bottom, and columns A-J whose captions sit directly above each cell: A exempt, B excisable, C non-excisable (CPP), D net of VAT, E excisable net, F excisable VAT exempt, G non-excisable (GR), H excise tax, I VAT, J total billed (AC). The total cell on the TOTAL EXCISE TAX DUE row joins to ACexciseTotal. Keys with no fillable cell (TIN parts and the second name line on page 2, signature names, Part IV name fields) stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Item 1 date takes three combs (MM, DD, YYYY). Item 6 RDO takes the 4-slot comb to the right of its caption (txtPg1I6RDO; rdoPg1Pt1I6RDO carries the same value and is not joined). Items 9 and 10 share one full-width 40-slot comb, and Item 11 Region, Province and City share another; each takes one derived print-map line (to_print_field_map) with the values placed under their own captions. Part III items 16-24 are one 14-slot comb per line with no centavo comb beside it, so they are plain joins, not money_joins. Part IV rows 25-28 are 33-slot combs spanning the Drawee Bank, Number, Date and Amount columns, so those row keys stay blank. Schedule 1 (page 2) has ten rows numbered by position, top to bottom, and columns A-J whose captions sit directly above each cell: A exempt, B excisable, C non-excisable (CPP), D net of VAT, E excisable net, F excisable VAT exempt, G non-excisable (GR), H excise tax, I VAT, J total billed (AC). The total cell on the TOTAL EXCISE TAX DUE row joins to ACexciseTotal. Keys with no fillable cell (TIN parts and the second name line on page 2, signature names, Part IV name fields) stay blank. Since #113: the page 2 header comb prints the TIN then the name (derived:page_header); every other value has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm2200C:txtPg1I1Month",
@@ -206,12 +206,6 @@
    "html_id": "p1c96",
    "printed": "Date of Expiry",
    "reason": "caption left of the text cell"
-  },
-  {
-   "writer_key": "frm2200C:txtPg2RegisteredName",
-   "html_id": "p2c5",
-   "printed": "Taxpayer's Name (page 2 header)",
-   "reason": "caption above the 40-slot comb; the TIN parts (txtPg2TinC1-4) have no separate cells"
   },
   {
    "writer_key": "frm2200C:CPPexmpt1",
@@ -830,6 +824,12 @@
    "html_id": "p1c41",
    "printed": "11 Region / Province / City",
    "reason": "one 40-slot comb under the three captions: the print map puts the region code from slot 0, the province code from slot 10 (caption x 94pt; a 9-digit region code needs slots 0-8) and the city code from slot 24 (caption x 369pt)"
+  },
+  {
+   "writer_key": "derived:page_header",
+   "html_id": "p2c5",
+   "printed": "Page 2 header: TIN / Taxpayer's Name",
+   "reason": "later page header: the sheet draws the TIN and Taxpayer's Name boxes as one 40-slot comb, so derived:page_header holds the 14 TIN digits then the name from slot 14 (under the Taxpayer's Name caption)"
   }
  ],
  "money_joins": [],
@@ -877,7 +877,49 @@
    "reason": "box immediately right of the item 15 number"
   }
  ],
- "left_out": [
+ "not_joined": [
+  {
+   "writer_key": "frm2200C:txtPg2RegisteredName",
+   "reason": "prints inside derived:page_header (TIN then name on the one page 2 header comb)"
+  },
+  {
+   "writer_keys": [
+    "frm2200C:txtPg2TinC1",
+    "frm2200C:txtPg2TinC2",
+    "frm2200C:txtPg2TinC3",
+    "frm2200C:txtPg2TinC4"
+   ],
+   "reason": "prints inside derived:page_header (TIN then name on the one page 2 header comb)"
+  },
+  {
+   "writer_key": "frm2200C:rdoPg1Pt1I6RDO",
+   "reason": "duplicate of frm2200C:txtPg1I6RDO (same RDO), which prints in item 6"
+  },
+  {
+   "writer_keys": [
+    "frm2200C:txtPg1Pt1I9ContactNumber",
+    "frm2200C:txtPg1Pt1I10Email"
+   ],
+   "reason": "prints from derived:contact_email (the print map shapes Items 9-10, one shared 40-slot comb for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm2200C:txtPg1Pt1I11Region",
+    "frm2200C:txtPg1Pt1I11Province",
+    "frm2200C:txtPg1Pt1I11City"
+   ],
+   "reason": "prints from derived:place (the print map shapes Item 11 as place names on one shared comb instead of PSGC codes for the sheet)"
+  },
+  {
+   "writer_key": "frm2200C:txtLOB",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm2200C:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c104",
    "reason": "Part IV row 25 (Cash/Bank Debit Memo) is one 33-slot comb across the Drawee Bank, Number, Date and Amount columns; no separate cell per column, so the row keys (txtPg1Pt3I25CashC1-C3) stay blank"
