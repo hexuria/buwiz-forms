@@ -1,6 +1,43 @@
-# Windows hardening plan: fixing #91 to #100 to the impeccable-rust bar
+# Windows hardening plan: findings, fixes and acceptance
 
-Tracking issue: #101. Tick items there and here in the same PR.
+Tracking issue: [#101](https://github.com/hexuria/buwiz-forms/issues/101). Tick items there and here in the same PR.
+
+## Current evidence and scope (2026-10-13)
+
+This is a plan, not authorization to merge, publish, submit to BIR or run the
+official application's upload path. Code baseline: `56d7e2eb` on main, including
+the all-form agent integration. Latest **visual** evidence was collected on
+`47584c85` before that integration; do not claim that newer main was visually tested.
+Reproduce on the implementation branch before choosing or declaring any fix.
+
+Evidence: [original Windows checklist](https://github.com/hexuria/buwiz-forms/issues/90#issuecomment-6119512665),
+[official comparison correction](https://github.com/hexuria/buwiz-forms/issues/99#issuecomment-6119692230),
+[latest visual test](https://github.com/hexuria/buwiz-forms/pull/105#issuecomment-6143307647),
+[unsigned installer CI](https://github.com/hexuria/buwiz-forms/actions/runs/38360442158),
+[runtime CI](https://github.com/hexuria/buwiz-forms/actions/runs/38374863887).
+
+| Work ID | Finding / evidence classification | State and owning section |
+|---|---|---|
+| W01 | Debug main-thread stack overflow, confirmed by stderr and visible navigation crash; exact local exit `0xC000041D` | Open #96, §3; first implementation slice |
+| W02 | 2551Q page-two ATC/rate/tax cells blank despite populated editor; incomplete writer joins confirmed in source | Open, tracked here and in #101, §15 |
+| W03 | 2551Q printed identity incomplete with a seed lacking confirmed effective profile history | Coverage gap, **not** a confirmed renderer defect, §15.1 |
+| W04 | Preview close logs `Invalid window handle` / `window not found`, but release remains usable | Observed warning; cause/severity unconfirmed, §16 |
+| W05 | Smoke gate exists in open #105, but debug still fails; visible paint alone cannot prove box correctness | Implemented report-only on branch, promotion pending §1 |
+| W06 | Setup, packaging prerequisites and MSIX installation | Implementation merged #103; #91–#93 closed; clean-VM/signed-release acceptance still open §7/§17 |
+| W07 | Preview re-entrancy crash and blank WebView | Fix merged #107; #97 closed; release visibly verified; preserve regressions §2 |
+| W08 | Duplicate/full-width validation alerts | Fix merged #109; compact inline/summary behavior visually verified; retain wider-form acceptance §17 |
+| W09 | Unreadable database silently quarantined | Open #95; product decision D1 before behavior change, §4 |
+| W10 | Second launch does not foreground main window | Open #98; mechanism to discriminate on real desktop, §5 |
+| W11 | Export confirmation cannot open folder | Open #100, §6 |
+| W12 | Installed MSIX fails to launch | Open #94; loader/package-context cause unconfirmed, §8 |
+| W13 | Official XML comparison/emulator discrepancies | Open #99; Save/upload distinction corrected; upload oracle needs approval D2, §9 |
+| W14 | Hotkey feedback, calendar handoff, existing-profile setup, COR Confirm and manual-entry icon | Individually tracked backlog rows §10 |
+| W15 | Receipt printing, Windows Hello, calendar integration, clean host and real foreground behavior | Explicit acceptance gaps, §17 |
+
+W01/W02 are separate from W07: a painted preview host can work while a debug
+navigation path crashes or a printed tax box remains empty. One green result
+must not close the others. W02–W04 use stable tracking IDs here and in #101;
+create individual implementation issues if they need separate ownership.
 
 This plan changes as we work. Update it in the same PR as each change: tick the box, add the PR link, record what was measured, and move anything learned into **Decisions** or **Changelog**. If a step turns out wrong, rewrite it here first, then change the code.
 
@@ -18,16 +55,18 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 ## 0. Ground rules for every PR in this plan
 
 1. **Branch naming:** one branch per workstream: `devin/<ts>-win-<slug>`. Commit author is `hexuria <295542929+hexuria@users.noreply.github.com>`. PRs stay open for owner review; nothing is merged without explicit approval.
-2. **Order inside each PR:** a regression test or gate that fails on `main` comes first, then the fix. The PR shows both runs: red before the fix, green after.
+2. **Order inside each PR:** record the exact base/head; reproduce locally; add a regression that fails before the fix; implement; run the scoped tests, lint/type checks and affected Windows flows locally; inspect the rendered app; only then push and update the PR. CI confirms local evidence, it does not replace it. Documentation-only changes use document/link checks, not an unnecessary app rebuild.
 3. **Windows acceptance:** each PR re-runs the #90 steps it touches on a real Windows VM:
-   - dry run only, `BIR_SFTP_*` unset;
-   - test TIN 123-456-788-00000 or 00002;
+   - remove all inherited `BIR_SFTP_*`, then set only `BIR_SFTP_DRY_RUN=1`; never set `BIR_SFTP_LIVE`;
+   - test TIN 123-456-788-00000 (branch 00002 may be used for a second profile), scratch DB and isolated LOCALAPPDATA;
    - results go in a PR comment with evidence.
 4. **Verification impact block** in every PR description (template in §11).
 5. **Repo hygiene:**
    - no generated artifacts, logs or DBs committed;
    - no session or org IDs in the repo;
    - dev runbooks go in `CONTRIBUTING.md` (new), not the README.
+6. **No false-green testing:** use a freshly built exact-head binary; compatible Cargo cache reuse is allowed, stale binaries are not. No stack patches or composition overrides in acceptance runs. Experimental stack copies are confined to §3 measurement and never used as proof of the shipped fix. Keep an existing human app/database untouched.
+7. **Evidence record per work item:** base/head, OS/toolchain, fixture period/history, command or click sequence, expected/actual result, negative-control result, artifact link, skips with reasons, PR and issue links. Mark implementation complete separately from platform acceptance. In the official eBIRForms app click only Validate and Save; a plan does not approve D2.
 
 ---
 
@@ -38,27 +77,21 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - None of the Windows failures in #90 is a unit-test failure. They are runtime failures: nested message loops, stack depth, foreground rules and packaging.
 - They need an owner that actually *runs the app*.
 
-- [ ] **1.1 `windows-smoke` job** in `ci.yml` (windows-latest), driven by the agent control plane we already ship. In #90 step 29 it was verified working on Windows: `hello` and `snapshot` both work.
-  - Build `bir-desktop --features dev-tools,agent`. Launch with:
-    - `GPUI_AGENT=1`, `GPUI_AGENT_INSECURE_NO_TOKEN=1` (loopback only);
-    - `BIR_DATABASE_PATH=$RUNNER_TEMP\smoke.db`;
-    - `BIR_SFTP_DRY_RUN=1`.
-  - Script (`scripts/windows-smoke.ps1`, also runnable locally):
-    1. `hello`, then create profile 123-456-788-00000 and add a manual COR with 1601C plus one 2200 form.
-    2. Open 1601C and use **Print Preview**. Assert the preview window exists, `print-preview-scroll` is present, and the app process is still alive.
-    3. Close the preview, then open 2200M preview: same asserts.
-    4. Hide to tray, then show: assert the process is alive and no panic is in stderr.
-    5. Validate and Submit 1601C in dry run: assert status `Submitted` and the log line `SFTP dry-run PUT (no network)`.
-  - Fail the job on any `panicked at`, `overflowed its stack`, or non-zero exit in the captured stderr.
-  - Runs the **debug** build (where #96 bites) and the **release** build (what users get).
-  - **Rollout:** lands first with `continue-on-error: true` (report-only, expected red on `main` because of #97). Flip it to required when §2 and §3 merge.
-- [ ] **1.2 PE header check:** a CI step reads the `bir.exe` stack reserve (`dumpbin /headers`, or a tiny Rust test using the `object` crate). Fail if it's below the value chosen in §3.
-- [ ] **1.3** Add `zizmor --persona=auditor` on `.github/workflows/**`. The repo has three workflows, and smoke jobs add secrets surface. This is the skill's CI-shape item 8.
+- [~] **1.1 Integrate the existing report-only gate** from [#105](https://github.com/hexuria/buwiz-forms/pull/105), not a second runner. It uses `scripts/windows_smoke.py`, `file_tax_smoke.AgentClient`, random token authentication and an explicit loopback address. Each phase owns a fresh process/DB. Existing phases: filled 1601C and 2551Q previews, tray hide and dry-run submit. Reconcile with newly merged all-form agent operations before extending it.
+  - Correct its fixture using §15.1; select a fixed historical period with an explicitly confirmed profile segment. Keep intentional invalid-period checks in a separate fixture.
+  - Record **profile-sidebar navigation** as its own reached step before filing.start so W01 is not mislabeled as a preview-only failure.
+  - Keep process/agent liveness, semantic readiness, and painted-content checks distinct. A failed capture is SKIPPED, not a passed visual check. Add value correctness at the Rust HTML boundary (§15), not only a dark-pixel threshold.
+  - Retain diagnostic exit code and stderr independently. `0xC000041D` is a callback exception; only the stack-overflow log/debugger establishes that cause. Do not rename it `0xC00000FD`.
+  - Local commands after integration: `just smoke-windows debug`, then `just smoke-windows release`. Both must pass after W01, plus a visible filled-form run on this Windows VM before pushing.
+- [ ] **1.2 Turn the existing PE reader into a regression assertion** after §3 chooses the measured reserve. Check both Cargo's `bir-desktop.exe` and its shipping `bir.exe` alias; fail a reserve below policy. Test truncated/non-PE/wrong optional-header input and prove a 1 MiB fixture fails the new policy.
+- [ ] **1.3 Workflow audit:** scope `zizmor --persona=auditor` to changed workflows, triage findings without weakening repository security. This is separate from fixing the application crash.
+- [ ] **1.4 Promote only after evidence:** remove report-only behavior only after debug/release local runs and matching CI succeed, with fixture/paint coverage reported. Require three consecutive clean executions per profile on the same revision (a retry does not erase a failure). Setting branch-protection required checks is an **owner action**, not authorized here. Never disable a failing phase to turn CI green.
 
 **Oracle:** the user-visible behaviour in #90 (process alive, window present). The agent snapshot is the observation channel.
 **Blind spots, written down:**
 - GitHub runners have no GPU (WARP renderer).
 - Foreground-window rules on a service desktop differ from a real session.
+- The mailbox drains while `AppState::render` runs; a hidden app cannot reliably receive agent operations. Tray show/graceful exit stay explicit manual acceptance, not claims made from the hide-only phase.
 - So §5's foreground check stays a manual VM step.
 
 ---
@@ -74,18 +107,18 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 
 - **Implementation note (2026-10-12):** The confirmed chain is `launch_frozen_html` → `cx.open_window` → `FrozenHtmlPreviewView::new` → `build_as_child` → WebView2 `create_controller` → nested `wait_with_pump` → `BlinkCursor::blink` → `AsyncApp::update_entity` → `RefCell already borrowed` at `gpui/async_context.rs:65`. Windows now defers construction with `cx.spawn_in(window, ...)`, yields once, copies the raw handle in a short `update_in`, and builds WRY after that borrow returns. The second update installs `Ready` or `Failed`; macOS remains synchronous.
 - **Second root cause (2026-10-12):** The WebView2 child was visible and correctly sized according to `EnumChildWindows` (`WRY_WEBVIEW` and `Chrome_WidgetWin_*`), and JS metrics loaded, but the embedded area remained white. Setting `GPUI_DISABLE_DIRECT_COMPOSITION=1` made the filled 1601C and 2551Q documents render. gpui-pre-windows' DirectComposition visual was covering the WRY child HWND; the startup fallback now prefers the HWND swap-chain path while honoring an existing override.
-- [~] **2.1 Two-phase construction.**
-  - `FrozenHtmlPreviewView` gets an explicit state: `enum PreviewState { Pending { html }, Ready(Entity<WebView>), Failed { error, html } }`.
+- [x] **2.1 Two-phase construction** merged in [#107](https://github.com/hexuria/buwiz-forms/pull/107).
+  - `FrozenHtmlPreviewView` uses explicit Pending, Ready and retained Failed states; use the actual types in `frozen_html_preview.rs`, not a parallel state model.
   - `new()` only stores `Pending` and schedules creation with `cx.spawn_in(window, ...)`, yielding with a zero-duration background timer after `open_window` returns and the borrow is released.
   - The deferred step builds the WRY child and moves to `Ready` or `Failed`.
   - `render()` matches on the state, so "rendering a webview that doesn't exist yet" can't be written.
-- [~] **2.2 Same pattern for every WebView2 operation that can pump messages** (`print()`, `evaluate_script` used by `request_js_metrics`): WebView-dependent methods now operate only on `PreviewState::Ready`; construction is moved outside the GPUI borrow.
-- [~] **2.3 #90 step 17 polish:** map WebView2 errors to a retained failed-preview state and provide an **Open in browser** fallback that reuses `write_frozen_html_document`. Toolbar operation errors remain separate from construction errors.
+- [ ] **2.2 Audit remaining operations, not a claimed completed fix:** construction is deferred and operations require Ready, but this does not prove every print/evaluate callback is re-entrancy-safe. Include close/late-callback investigation under §16; retain missing-runtime and print-dialog checks under §17.
+- [x] **2.3 #90 step 17 fallback implementation** merged in #107: retained failed-preview state and **Open in browser** reuse `write_frozen_html_document`. Toolbar operation errors remain separate from construction errors. Runtime-absent coverage used simulation, not a clean machine without WebView2.
 - [~] **Tests:**
   - Unit: the state machine (`Pending→Ready`, `Pending→Failed`, no transition out of `Failed`).
   - Gate: §1.1 steps 2 and 3, with readiness exposed to the agent.
   - Manual: #90 step 16 on a VM (window about 1200×900; Print opens the WebView2 dialog with A4 and no scaled margins), plus step 17 by setting `WEBVIEW2_BROWSER_EXECUTABLE_FOLDER` to an empty folder.
-- **Also verify** that macOS and Linux print preview are unchanged: run the existing `drain.rs` print-preview metrics tests, plus a manual macOS check by the owner.
+- **Also verify** that macOS and Linux print preview are unchanged: run the existing metrics-parsing/state tests in `frozen_html_preview.rs` and test the affected agent dispatch when it changes. `agent/drain.rs::print_preview_metrics` is a method, not an existing dedicated metrics test. A visible macOS preview and Linux browser-fallback check remain platform acceptance; neither is certified by the existing drain tests.
 
 **Changelog**
 
@@ -96,26 +129,28 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 
 ---
 
-## 3. #96: debug build overflows the 1 MiB main-thread stack (P0 for dev, unknown for release)
+## 3. W01 / #96: debug stack overflow (P0 for development)
 
 **Facts:**
-- MSVC's default stack reserve is 1 MiB; macOS and Linux main threads get 8 MiB.
+- The measured current Windows debug PE reserve is 1 MiB. Do not infer another OS's actual reserve from a conventional default.
 - `[profile.dev]` leaves workspace crates at opt-level 0 (only deps get 1), so GPUI render frames are large.
-- An 8 MiB `editbin` copy runs cleanly.
-- The release build (`opt-level="z"`, `panic="abort"`) didn't crash in a short session. That is not proof.
+- Earlier 8 MiB experimental copies ran the exercised paths; that is supporting evidence, not a measurement on newer main or a fix in the shipped binary.
+- Latest local release previews pass. Unpatched debug maximizes successfully, then crashes on taxpayer-sidebar navigation before 2551Q opens. Stderr says main-thread stack overflow; exit is `0xC000041D`. Exact deep frame/recursion cause remains to be diagnosed.
 
 - [ ] **3.1 Measure before choosing a number.**
-  - Bisect `editbin /STACK:` over 1, 2, 4 and 8 MiB with the #90 repro (tray Show, then click a profile; open a form; open the COR editor) on debug and release builds.
-  - Record the smallest passing size for each, here.
+  - Build current debug/release once, record hashes and PE headers, and keep the original binaries unchanged. Use separate diagnostic copies with 1, 2, 4 and 8 MiB reserves.
+  - Exercise maximize → taxpayer sidebar → dashboard → library → filled 1601C/2551Q → close/reopen preview, then COR editor and tray restore. Repeat each configuration three times; record all failures, not only the smallest successful run.
+  - Capture a debugger stack on the unpatched failure. If recursion is unbounded, fix its cause before choosing a reserve; a larger reserve alone is not acceptance. Record OS, profile, peak/observed stack data where available, smallest consistently passing reserve and chosen margin.
 - [ ] **3.2 Fix at the binary, not RUSTFLAGS.**
   - `ci.yml` relies on "no RUSTFLAGS anywhere" for cache sharing, so don't add `.cargo/config.toml` rustflags.
-  - Instead, `crates/bir-desktop/build.rs` emits `cargo:rustc-link-arg-bin=bir=/STACK:<chosen>` only when `CARGO_CFG_TARGET_ENV == "msvc"`.
-  - Default choice is 8 MiB, matching the other OSes, unless 3.1 says otherwise.
+  - Add `crates/bir-desktop/build.rs` and emit `cargo:rustc-link-arg-bin=bir-desktop=/STACK:<measured-policy>` only for Windows + MSVC. The manifest's target is **bir-desktop**, not the shipping alias `bir`; `scripts/alias_desktop_bin.py` copies that binary. Do not apply it to every crate or to `bir-headless` without separate evidence.
+  - 8 MiB is a candidate, not a predetermined answer. Use the measurements and a documented margin; do not claim a bound from one passing run.
 - [ ] **3.3 Find the deep frames** so the margin is known, not just moved:
   - capture the overflow backtrace under a debugger with a 1 MiB stack;
   - write down the top recursive or large-frame functions;
   - open follow-ups for any surprisingly large frame (big arrays on the stack in render paths).
 - **Owners:** §1.2 (PE header) and §1.1 (debug and release runs).
+- **Acceptance:** rebuild without editbin/environment overrides; both executable names meet PE policy; all navigation and preview steps pass three consecutive times in debug/release; macOS/Linux compilation unchanged. Run `cargo fmt --all -- --check`, focused build-script/policy tests, agent-feature desktop Clippy, then the normal workspace tests once. Publish the local visible recording before claiming the runtime fixed. Reverting the linker policy must fail the PE regression.
 
 ---
 
@@ -125,10 +160,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - `Database::open_or_recreate` quarantines to `bir_data.db.corrupt-<ts>.bak` and creates a fresh DB.
 - `open_live_database()` returns `(Database, PathBuf, Option<PathBuf>)`.
 - `gui.rs:288` only `eprintln!`s the `Option`.
-- A DB from another machine is always unreadable, because the SQLCipher key lives in that machine's keychain.
+- A raw encrypted DB from another machine may be unreadable without the matching key; do not label every unreadable file as corruption or infer the cause from a generic SQLCipher error.
 
 - [ ] **4.1 Make ignoring it hard (type-enforced).**
-  - Replace the tuple with `#[must_use] pub struct LiveDatabase { db, path, recovery: Option<Recovery> }`.
+  - Replace the tuple with `#[must_use] pub struct LiveDatabase { db, path, recovery: Option<Recovery> }` and route desktop initialization through a helper that persists/reports recovery before exposing the database. `#[must_use]` on the struct alone cannot enforce consumption of its recovery field; test the initialization boundary explicitly.
   - `Recovery { backup_path, reason: RecoveryReason }`, with `RecoveryReason` one of `WrongKeyOrForeign | NotADatabase | Truncated`. If SQLCipher's errors can't tell these apart, use one variant and write that down.
 - [ ] **4.2 Make it visible and persistent.**
   - Write a high-severity alert row (`db/alerts.rs`) into the new DB, so the bell shows it after restarts.
@@ -137,7 +172,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - **Decision needed:** keep auto-quarantine plus a loud notice (proposed), or refuse to start until the user chooses?
 - **Tests (bir-core, every OS):**
   - **property-tested:** any random-byte file opens with `recovery: Some`, the backup's SHA-256 matches the input, and the fresh DB opens;
-  - a DB under key A opened with key B gives `WrongKeyOrForeign`;
+  - a DB under key A opened with key B reports recovery without claiming corruption (use a generic unreadable reason if the engine cannot discriminate);
   - retention pruning keeps exactly N backups;
   - error-path litmus: a failed rename (read-only dir) must be `Err`, never a silent fresh DB.
   - Desktop: the alert row exists after a recovered open. #90 step 7 is the manual acceptance.
@@ -149,7 +184,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 **Facts:**
 - The second instance already calls `AllowSetForegroundWindow(ASFW_ANY)` (`ipc.rs:38`) before sending `SHOW`.
 - The receiver's `show_in_dock()` runs `EnumWindows` over **every** window of the process (`platform/windows.rs` `show_window_callback`), calling `SW_RESTORE`, `SW_SHOW` and `SetForegroundWindow` on each one.
-- That includes GPUI and tray helper windows, so the last window enumerated wins the foreground, and hidden helper windows get shown.
+- This can include GPUI and tray helper windows. Wrong-window selection is a leading mechanism, not a proven explanation of every failed foreground request; Windows foreground policy may also reject the request. Log selected HWND/return values without taxpayer data to discriminate.
 - `toggle_window_callback` has the same pattern.
 
 - [ ] **5.1** Keep the main window's `HWND` (from `raw-window-handle`) in a typed `MainWindow` handle. Show, hide and toggle act on it alone, and the `EnumWindows` callbacks are deleted.
@@ -196,10 +231,10 @@ execution was safely refused because a real installation is registered.
   in the Server 2022 VM verification. The evidence records that the installed
   app still failed to start under the separate #94 issue ([#90 evidence](https://github.com/hexuria/buwiz-forms/issues/90#issuecomment-6119512665);
   [PR #103](https://github.com/hexuria/buwiz-forms/pull/103)).
-- [ ] **7.5 Final Setup audit:** The shared audit script and parser checks
-  are implemented. Local final-Setup execution safely refused because a real
-  eBIRForms installation is registered; disposable CI must verify
-  install/audit/uninstall ([PR #103](https://github.com/hexuria/buwiz-forms/pull/103)).
+- [x] **7.5 Unsigned final Setup audit:** The shared script and parser checks
+  passed disposable Windows CI's actual build/install/audit/uninstall path
+  ([run](https://github.com/hexuria/buwiz-forms/actions/runs/38360442158/job/115173162450)).
+  Local execution safely refused the existing eBIRForms installation.
   Never remove a pre-existing installation.
 - **Acceptance:** a clean VM must run setup, `just run`, `just exe`, `just msix`,
   `just sign-dev`, `just install msix`, and `cargo install gpui-agent-cli`.
@@ -221,7 +256,7 @@ execution was safely refused because a real installation is registered.
 - (c) the Server 2022 SKU.
 
 - [ ] **8.1 Diagnose:** loader snaps (`gflags +sls`) or Procmon on activation, `Invoke-CommandInDesktopPackage` with a console, and a Windows 11 retest. Record the result here.
-- [ ] **8.2** Add an early panic hook and startup breadcrumb (`%TEMP%\ebirforms-startup.log`) before anything else. This helps every platform.
+- [ ] **8.2** If existing diagnostics are insufficient, add an opt-in early startup breadcrumb before DB/UI initialization. Log only startup stage/error category, never taxpayer fields, DB contents or credentials. A panic hook alone cannot diagnose a loader failure before Rust starts; preserve loader/activation evidence from 8.1.
 - [ ] **8.3** If (a): depend on the `Microsoft.VCLibs.140.00.UWPDesktop` framework in `assets/windows/AppxManifest.xml` instead of copying DLLs. If (b): fix the startup path.
 - **Acceptance:** #90 step 4 launch on Windows 11 and Server 2022.
 
@@ -245,7 +280,7 @@ execution was safely refused because a real installation is registered.
 - **4 (disabled debit-memo controls):** a real emulator gap. `official.js setValue()` writes `disabled` controls, and the recipe's steps 174–177 are impossible in the real app.
 - **5 (`txtPg4Sc3I2TotalDeductions` 0 vs 2,181,125):** a real gap. The emulator doesn't fire the handler sequence IE fires, so one recompute never runs.
 
-- [ ] **9.1 Correct the record:** a comment on #99/#89 with the table above, so nobody "fixes" 2 and 3.
+- [x] **9.1 Correct the record:** [#99 correction](https://github.com/hexuria/buwiz-forms/issues/99#issuecomment-6119692230) and [#89 correction](https://github.com/hexuria/buwiz-forms/issues/89#issuecomment-6119692413); do not "fix" expected Save/upload differences.
 - [ ] **9.2 Upload-path oracle without Submit.** In a scratch copy of the HTA, a harness calls `saveEncryptedProfile`'s plaintext builder (or `saveXML(true)` with the final-copy writes redirected), and captures `allXML` before encryption and before any SFTP code.
   - It must never touch Submit, Final Copy, the network or `RenameAndSendFile`.
   - **The owner approves the harness before it runs**, since it goes beyond Validate and Save.
@@ -254,8 +289,9 @@ execution was safely refused because a real installation is registered.
   - store it as `*.ie.xml` fixtures with provenance (package version and sha, Windows build, recipe hash).
 - [ ] **9.4 Fix the emulator (`tools/official-xml`):**
   - `setValue` refuses `disabled`/`readOnly` controls and reports the step as invalid;
+  - distinguish user-input recipe steps from the official handlers' programmatic writes to computed fields; do not block valid derived-value updates while enforcing user-editability;
   - fire IE's event order for typed input (keydown/keypress/keyup, then change, then blur; verify against the HTA handlers);
-  - normalize the `xmlFormat` separator to CRLF the way IE does;
+  - normalize the `xmlFormat` separator only after the approved upload capture establishes its bytes; do not regenerate every sample on the CRLF hypothesis alone;
   - keep the `+ '0'` trailer, which matches upload line 9993.
 - [ ] **9.5 Conformance test (differential):**
   - `node runtime.js` output must equal the `*.ie.xml` capture byte for byte for every captured recipe;
@@ -279,7 +315,7 @@ execution was safely refused because a real installation is registered.
 
 ## 11. Verification architecture (impeccable-rust audit summary)
 
-**Current verifiers:** `cargo test`, clippy and fmt on macOS, Linux and Windows; the sample-payload byte tests (78); frozen-HTML inventory checks; proptest-style crates in `bir-core`. Missing: `cargo deny`, nextest flaky gating, zizmor, and **any runtime check of the desktop app**.
+**Current verifiers:** workspace tests, Clippy and fmt on macOS/Linux/Windows; sample-payload byte comparisons; frozen-HTML inventory/stamp checks; bir-core property tests; Python script tests and actual `just --summary` on all OSes; disposable unsigned Windows installer audit. Runtime smoke exists on #105, still report-only, not yet on this plan's main baseline. Missing coverage is tracked explicitly below rather than treating green unit tests as runtime evidence.
 
 | Failure class (this plan) | Owner | Verdict |
 |---|---|---|
@@ -289,6 +325,9 @@ execution was safely refused because a real installation is registered.
 | Wrong-window Win32 calls (#98) | trait-injected unit tests plus manual VM steps | REQUIRED |
 | Dialog semantics differ by OS (#100) | pure mapping unit test, or the in-app dialog | REQUIRED |
 | Official-XML parity (#99) | §9.5 differential conformance against real-IE captures | REQUIRED |
+| Missing printed fields (W02) | §15 writer-map-to-rendered-cell assertions plus visible official-layout comparison | REQUIRED |
+| Invalid smoke fixture (W03) | §15.1 confirmed history invariant and unresolved-profile negative case | REQUIRED |
+| Late preview-close work (W04) | §16 lifecycle regressions and close/reopen Windows acceptance | REQUIRED after diagnosis |
 | Contributor setup drift (#91–#93) | clean-VM acceptance per PR; nightly `setup-windows` job | USEFUL |
 | Vulnerable or unvetted deps | `cargo deny` (RUSTSEC) in CI | USEFUL |
 | Compromised workflows | `zizmor --persona=auditor` | USEFUL |
@@ -296,7 +335,7 @@ execution was safely refused because a real installation is registered.
 | Win32 `unsafe` (~93 sites) | review, safe wrappers, smoke gate. Miri can't run FFI | Miri: NOT JUSTIFIED |
 | Loom, TLA+, Kani, provers | no concurrency kernel or protocol in scope | NOT JUSTIFIED |
 
-**Anti-drift:** add `CONTRIBUTING.md` holding the skill's anti-drift block, the Verification impact template and the Windows dev runbook from §7. The emulator (jsdom) is a second model of the official HTA, so it counts as evidence only through the §9.5 conformance link.
+**Anti-drift:** keep the existing `CONTRIBUTING.md` verification rules and dev runbook current. Do not add a second smoke protocol client or duplicate state machine. The emulator (jsdom) counts as an official oracle only through §9.5 conformance. For new pure Python fixture/PE policy logic, use focused unittest error-path/negative-control tests and available lint/type checking; record unavailable tools, never imply they ran. Rust unsafe/FFI changes need boundary review plus real platform acceptance; Miri cannot execute WebView2/Win32. New formal models are not justified for these deterministic mappings and scoped UI fixes.
 
 **Verification impact template** (copy into each PR):
 ```text
@@ -321,18 +360,24 @@ Windows acceptance (#90 steps re-run, VM evidence):
 
 | # | PR | Covers | Depends on | Gate |
 |---|---|---|---|---|
-| 1 | `win-tooling` | §7 (#91 upstream first, then #92, #93) | none | clean-VM setup run |
-| 2 | `win-smoke-gate` | §1.1–1.3 in report-only mode | 1 (CLI) | job runs, red on `main` as expected |
-| 3 | `win-print-preview` | §2 | 2 | smoke steps 2–3 green |
-| 4 | `win-stack` | §3 | 2 | PE check plus smoke on debug |
-| 5 | flip §1.1 to required | none | 3, 4 | none |
-| 6 | `db-recovery-notice` | §4 | owner decision | property tests plus #90 step 7 |
-| 7 | `win-window-focus` | §5 and §6 | none | unit tests plus #90 steps 8, 9, 13, 18 |
-| 8 | `official-xml-ie-parity` | §9 (separate track, needs Windows eBIRForms sessions) | owner approval of the 9.2 harness | §9.5 conformance |
-| 9 | `msix-start` | §8 | 8.1 diagnosis | #90 step 4 |
-| 10 | backlog | §10 | none | per item |
+| Done | tooling / preview host / validation summary | #103 / #107 / #109 | merged | Preserve regressions; outstanding acceptance remains §17 |
+| A | reconcile existing smoke branch and fix its profile fixture | W03/W05, §1/§15.1 | current main includes all-form agent; #105 is open | Local script tests; seeded profile resolves full filing period; release visual baseline |
+| B | `win-stack` | W01, §3 | A's reproducible fixture (or equivalent valid manual fixture) | Measured reserve, PE regression, unpatched debug/release navigation and filled previews |
+| C | `2551q-print-fields` | W02, §15.2–15.4 | A; can develop independently of B using release | Cell-value regression red→green, official layout oracle, all sample bytes unchanged |
+| D | `preview-close-lifecycle` | W04, §16 | A's release baseline | Diagnose log owner first; close/reopen stress without stale-window work |
+| E | promote smoke gate | W05, §1.4 | A+B; C's field assertions included before claiming content completeness | Three clean local/CI runs per profile; no disabled phases; owner controls branch protection |
+| F | `db-recovery-notice` | W09 / #95, §4 | D1 | Backup preservation and failure-path tests + visible persistent notice |
+| G1 | `win-window-focus` | W10 / #98, §5 | real Windows desktop | Only main HWND targeted; foreground or explicit flash fallback |
+| G2 | `export-open-folder` | W11 / #100, §6 | none | In-app action opens correct folder; cancel/no-handler errors tested |
+| H | `official-xml-ie-parity` | W13 / #99, §9 | D2 before capture | Real capture → emulator conformance → reviewed fixture/Rust writer changes |
+| I | `msix-start` | W12 / #94, §8 | diagnose on disposable Windows client/server | Activation + persistent process + first painted window, not activation event alone |
+| J | backlog and acceptance | W14/W15, §10/§17 | per item | One focused fix/acceptance slice each, no invented PASS for unavailable prerequisites |
 
-Each PR ends with the #90 steps it touches re-run on Windows. After PR 5, a full #90 pass gives the new Windows baseline.
+Start A/B next, then C. H is an independent correctness track once approved;
+do not block diagnosis on unrelated UI polish. Each PR contains only its slice,
+plus its regressions and plan update. No application fixes are part of this
+documentation PR. After E, rerun the full #90 checklist and publish a new
+baseline that names remaining manual/credential/hardware skips.
 
 ---
 
@@ -343,11 +388,171 @@ Each PR ends with the #90 steps it touches re-run on Windows. After PR 5, a full
 | | #95: auto-quarantine plus loud notice, or refuse to start? | **open (owner)** |
 | | #99: approve the upload-path plaintext harness (9.2) that goes beyond Validate and Save? | **open (owner)** |
 | | #99: does BIR's upload carry CRLF (parity target)? | open: settled by 9.2 |
-| | #96: stack reserve size | open: settled by 3.1 |
-| | #97: GPUI primitive for deferred WebView creation | open: settled in PR 3 |
+| | #96: stack reserve size | open: measured in §3.1; 8 MiB is a candidate only |
+| 2026-10-13 | #97: deferred WebView construction + production DirectComposition fallback | implemented #107; latest release previews visibly paint |
+| 2026-10-13 | Keep W02 print mapping separate from W03 unresolved profile identity | missing schedule mappings are confirmed; identity must be retested with valid history |
+| | Smoke branch-protection requirement | owner action after §1.4 evidence; no settings change authorized by this plan |
 
 ## 14. Changelog
 - Plan created from the #90/#89 Windows verification. Corrected the #99 assessment: diffs 2 and 3 come from different official save paths.
 - 2026-10-13 | Replaced 7-Zip payload inspection with strict source validation and actual installed-Setup auditing; implementation is distinct from pending clean-VM and signed-release acceptance.
 - 2026-10-13 | Re-review follow-up: CI parses the justfile on all three OSes, the source auditor rejects unsupported ISPP directives including StageDir overrides, and AGENT.md follows the repository-root gpui-agent pin. Clean-VM and signed-release acceptance remain unverified.
 - 2026-10-13 | Restricted inline ISPP expressions across the entire installer to the exact MyAppVersion and StageDir tokens; assignment and Define expressions outside the Files section now fail the source gate.
+- 2026-10-13 | Reconciled merged fixes and latest visual findings; corrected Cargo linker target and callback-exception attribution; added print mapping, fixture history, lifecycle diagnostics and a local-before-push acceptance matrix. Latest main includes #110 but has not been visually retested by this plan.
+
+---
+
+## 15. W02/W03: 2551Q printed values and valid profile fixtures (P1)
+
+**Observed:** release editor displays PT010 / 3% / 60.00 for taxable amount
+2,000.00; printed page two displays the taxable amount but leaves ATC/rate/tax
+cells blank. Page-one total tax displays 60.00. This is independent of WebView
+painting and must not be repaired by changing the tax calculation to fit a
+preview snapshot.
+
+**Confirmed code boundary:**
+- `crates/bir-core/src/forms/form_2551q_xml.rs` writes schedule keys including
+  `txtATCAmt1`, `txtATCRate1` and `txtATCDue1`; the ATC key and row loop are in
+  that same writer. Its existing rate tests expect the XML form `3.0`, not a
+  percentage label invented by the UI.
+- `html-frozen/2551q-2018/writer-cells.json` joins `txtATCAmt1` and page-one
+  `frm2551Qv2018:txt14`, but explicitly lists `txtATCDue1` as not joined.
+- `crates/bir-print/src/frozen_html.rs::{fill_by_name_with_cells,fill_2551q,filled_2551q_document}`
+  ignores unmatched keys and only fills known direct names/approved joins.
+  An emitted value is therefore not evidence that its physical print box is filled.
+- `Form2551QView::{preview_draft_snapshot,preview_pdf}` in
+  `crates/bir-desktop/src/views/form_2551q_view.rs` uses in-memory Draft data,
+  but reloads persisted non-Draft data. Both semantics must be preserved.
+
+### 15.1 Repair the fixture before diagnosing identity (W03)
+
+- [ ] Replace #105's flat profile/forms-set-only `seed_profile` with confirmed
+  effective profile/COR history covering the **entire** selected quarter, via
+  existing profile/COR APIs (no direct production-table SQL shortcuts).
+- [ ] Assert before preview: `effective_profile_version_id` present,
+  `profile_resolution_error` absent, expected taxpayer name/address resolved.
+  `Form2551QDraft::{new_from_effective_profile,reconcile_with_effective_profile}`
+  in `form_2551q.rs` is the authority. The unresolved branch intentionally
+  retains stable TIN rather than silently falling back to flat profile values.
+- [ ] Keep a separate negative test: missing, overlapping or insufficient
+  effective history remains unresolved and blocks filing; never loosen that
+  check merely to make the smoke fixture pass.
+- **Oracle:** confirmed profile segment → draft snapshot → writer map → printed
+  name/address. Existing `filled_document_2551q_fills_taxpayer_name_and_address`
+  covers a filled draft, not successful profile resolution in the application.
+- **Acceptance:** local visible run with valid history and a historical filing
+  period. If printed identity is then still missing, capture the four boundary
+  values and open a focused bug; do not assert a root cause before that check.
+
+### 15.2 Complete the missing cell mappings (W02)
+
+- [ ] Inventory each Schedule 1 row against the official printed sheet and
+  current `writer-cells.json`/HTML inputs; record source writer key, physical
+  cell IDs, text/rate vs peso+cent type, row and expected display.
+  Do not guess box IDs by visual proximity. Verify how all six first-sheet
+  rows and any continuation sheet are produced.
+- [ ] Add deterministic Rust regressions at `filled_2551q_document`: PT010,
+  2,000.00 at the period-correct 3% gives 60.00 in its actual row tax cells
+  and page-one total. Assert exact destination values/comb slots, not global
+  substring presence (page-one 60.00 could otherwise hide page-two omission).
+- [ ] Cover one distinct second ATC row, cents, empty unused rows and a
+  continuation case if supported by this rendering path. Derive expected
+  values from the official rate/domain and existing writer, not from the
+  renderer under test. Preserve the rule that >6 ATCs cannot be submitted
+  without a verified official attachment protocol.
+- [ ] Fill text/rate cells through vetted joins and tax amounts through
+  `money_joins`' peso/cent splitting; never stamp synthetic official field
+  names or put a dotted amount into a peso comb. Update provenance in the
+  manifest and remove only now-covered `not_joined` entries.
+- [ ] Locate the corresponding maintained generator/catalog in
+  `hexuria/buwiz-forms-html` before editing generated bundles. Carry the source
+  change and regenerated join artifacts together so regeneration cannot erase
+  the fix. No unreviewed broad regeneration of tax payloads.
+
+### 15.3 Verification commands and acceptance
+
+- Focused existing checks first: `cargo test --locked -p bir-print filled_document_2551q`
+  and the new destination-cell regressions; `cargo test --locked -p bir-core form_2551q`.
+- Then `cargo test --locked -p bir-core --test sample_payloads_test` (must retain
+  XML/IAF bytes for a print-only change), `cargo test --locked -p bir-print`,
+  scoped Clippy, rustfmt, and the existing frozen-inventory/name-stamp checks.
+- For any changed agent-derived definition, run its derivation regression in
+  isolated and workspace-unified feature modes. Preserve canonical object-key
+  order (`serde_json/preserve_order` must not make fixtures appear stale).
+- Locally rebuild release and debug after W01. Enter values visibly, preview
+  both pages, compare the populated editor with the specific physical cells,
+  close/reopen and inspect printer preview without printing/submitting.
+- A non-Draft persisted-snapshot regression must show that later profile or
+  editor changes do not rewrite the historical printed return.
+
+### 15.4 Earlier 1601C print observations
+
+- [x] Item 11 category mapping has a dedicated merged fix (#108); latest
+  filled release preview paints. Preserve that regression rather than redoing it.
+- [ ] Recheck earlier items 15–19 blank-field observations with valid profile
+  history and an intentionally populated fixture; latest 1,000/100 demo did
+  not establish completeness for every box. Trace through
+  `Form1601CDraft::to_bir_field_map`, `frozen_html::filled_document` and
+  `html-frozen/1601c-2018/writer-cells.json`. If missing joins are reproduced,
+  apply §15.2's per-cell oracle in a separate focused print-mapping commit.
+
+---
+
+## 16. W04: preview-close warnings (P2 diagnosis, not a proven crash)
+
+**Observed:** release logs include `Invalid window handle` / `window not found`
+when previews close, but the app remained usable. Do not suppress the messages
+or call them harmless without identifying the producer.
+
+- [ ] Attribute the log with span/timestamp/backtrace in a diagnostic build;
+  determine application callback vs GPUI/WRY cleanup, close-before-ready vs
+  ready-state close, and whether work targets an expired preview generation.
+- **Source seams:** `frozen_html_preview.rs` deferred `cx.spawn_in` construction,
+  `request_js_metrics`, `Drop`, generation-keyed `PreviewSlot`; and
+  `form_html_preview_launcher.rs::HtmlPreviewLaunchKind::observe_close`. Do not assume that
+  holding the metrics Arc proves the native window is still valid.
+- [ ] If application-owned: cancel/ignore only demonstrably stale work using
+  weak window/entity ownership and the current generation, never a global
+  catch-and-ignore. If dependency-owned: capture minimal reproduction and
+  record an upstream issue/fix pin rather than changing unrelated lifecycle code.
+- **Regressions:** close while Pending, close while Ready, immediately open a
+  replacement, then deliver the old callback; old completion cannot mutate or
+  clear the new preview. Keep existing generation-slot unit tests as the seam.
+- **Local acceptance:** ten open/close cycles for each filled form in release
+  and debug after W01, including rapid early close; no crash, no leaked live
+  child window, no application work against a closed handle. Remaining known
+  dependency warnings require an explicit disposition and evidence, not silence.
+- **Done:** root cause + owning layer recorded, regression demonstrates the
+  fix, and the same sequence has clean or explicitly accounted-for logs.
+
+---
+
+## 17. Platform acceptance ledger and completion criteria
+
+Implementation, unit tests, hosted-runner tests and a real desktop are separate
+columns of evidence. The owner of each item is the implementer of its PR;
+product/security approvals and branch-protection changes remain with the owner.
+
+| Surface / gap | Exact next acceptance | Done / blocked condition |
+|---|---|---|
+| Clean Windows contributor machine | Run documented setup twice (idempotence), `just run`, named/token agent handshake, `just exe`, MSIX build/sign/install on a disposable VM | Evidence includes OS/tool versions and exact revision; existing development VM is not clean-VM proof |
+| Signed Windows release | Obtain explicit owner approval for a non-publishing validation run or real release; run existing signing, final EXE audit and MSIX gates | No fake tag, weakened signing, secret exposure or automatic release publication |
+| WebView2 unavailable | Keep empty-runtime-folder simulation; add a genuinely runtime-absent disposable machine when available | Clear failure state + browser fallback; native/browser print layout and temp-file handling documented |
+| Preview close/print | §16 plus open OS print dialog with filled forms, close/cancel; no physical print or submission | App stays alive, data and status unchanged |
+| Validation banners | 1601C invalid month and representative wide-column generic form; dismiss, change error contents without changing count, expand many errors | One detailed inline error per field; summary matches its column; dismissal and capped scrolling remain correct |
+| Tray/second launch/hotkeys | Hide, launch second instance, inspect foreground HWND, restore by tray and hotkey on actual desktop | §5 foreground/flash contract, no exposed helper windows; mailbox silence not mistaken for process death |
+| Database recovery | Unreadable/wrong-key scratch DB, failed rename, reopen after restart | D1 behavior; original bytes preserved, persistent notice, permission failure returns error |
+| Export/calendar | Export, click Open folder, then `.ics` on a machine with and without a handler | Folder really opens; no false calendar-handoff success (§6/§10) |
+| MSIX activation | Windows 11 plus Server 2022 diagnostic comparison; inspect loader and early startup trace | §8 demonstrated startup, or explicit unsupported-platform disposition; activation event alone is not PASS |
+| Receipt print | Synthetic stored receipt in a scratch 2551Q fixture; verify receipt content and preview without contacting email/BIR services | Fake fixture tests layout only; live receipt retrieval remains separately unverified |
+| Windows Hello | Owner-provided supported hardware; test authenticate and Cancel→PIN | SKIPPED with reason on hardware without Hello, never mark success from Cancel alone |
+| Google Calendar | Owner-approved test account and reversible event; no credentials means skip | Authorization/data-flow evidence, not an inferred integration pass |
+| Other desktop platforms | Matching Linux/macOS checks for affected shared code; real macOS preview acceptance on an approved macOS machine | Windows evidence cannot certify WKWebView; record unavailable platform coverage |
+| §10 smaller gaps | Hotkey conflict feedback; existing-profile setup should not duplicate TIN; COR Confirm explains unapplied edits; manual_entry asset resolves | Focused regression + corresponding visible action per item; create issue when assigning a slice |
+
+**Closure rule:** do not close a finding until its oracle/regression, scoped
+local checks and affected platform acceptance have evidence links. A skip
+remains unchecked in #101 with its reason. Completed issues #91–#93/#97 do not
+imply signed-release certification or resolve #94/#96. At each merge, update
+this ledger, #101's matching work ID and the decisions/changelog; retain older
+evidence as historical, not as a claim about a new head.
