@@ -1,8 +1,10 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::excise_places::ExcisePlace;
 use bir_core::forms::form_2200an::{
     Form2200ANDraft, Form2200ANManner, Form2200ANOtherGood, Form2200ANRow,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2200an() -> Form2200ANDraft {
     let mut draft =
@@ -47,6 +49,7 @@ fn sample_2200an() -> Form2200ANDraft {
     draft.creditable_excise_tax = 250.25;
     draft.surcharge = 100.0;
     draft.interest = 12.345;
+    draft.keep_entered_penalties();
     draft.tax_payment = 1_500_000.0;
     draft.recompute();
     draft
@@ -63,6 +66,17 @@ fn form_2200an_sample_payload_is_current() {
         "2200an-v2018",
         &payload,
         "eeca56971ee38ec266aa889ca9cff22cf9ac0609830635edd683946d234f14b6",
+    );
+}
+
+/// Event-based: the calendar has no 2200-AN deadline.
+#[test]
+fn form_2200an_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2200an,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 

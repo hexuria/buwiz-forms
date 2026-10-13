@@ -12,6 +12,8 @@
 //! those rows. Item 17's rate (6%) comes from `xml/taxRate.xml` through
 //! `js/tax-rate-helper.js`; `init()` shows it as `6.0%`.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use chrono::NaiveDate;
@@ -311,6 +313,10 @@ pub struct Form1801Draft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
 
@@ -362,6 +368,7 @@ impl Form1801Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             filing_year: year,
             open_ended_key,
@@ -531,10 +538,12 @@ impl Form1801Draft {
         self.foreign_estate_tax = cents(self.foreign_estate_tax).max(0.0);
         self.tax_paid_previous = cents(self.tax_paid_previous).max(0.0);
         self.installment_portion = cents(self.installment_portion).max(0.0);
+        self.total_credits = fc(self.foreign_estate_tax + self.tax_paid_previous);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge).max(0.0);
         self.interest = cents(self.interest).max(0.0);
         self.compromise = cents(self.compromise).max(0.0);
-        self.total_credits = fc(self.foreign_estate_tax + self.tax_paid_previous);
         self.total_penalties = fc(self.surcharge + self.interest + self.compromise);
     }
 
@@ -1227,7 +1236,32 @@ impl FormValidator for Form1801Draft {
     }
 }
 
+impl Form1801Draft {
+    /// Items 23A-23C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "23A Surcharge",
+                interest: "23B Interest",
+                compromise: "23C Compromise",
+            ],
+            controls: [
+                "frm1801v2018:txtPen_Surcharge",
+                "frm1801v2018:txtPen_Interest",
+                "frm1801v2018:txtPen_Compromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 22", |d| d.payables().1,
+        )
+    }
+}
+
 impl QueueableForm for Form1801Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1801";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1801v2018']`).
     const FORM_TYPE: &'static str = "1801v2018";
@@ -1379,6 +1413,7 @@ mod tests {
         let mut d = sample();
         d.standard_deduction = 0.0;
         d.surcharge = 10.0;
+        d.keep_entered_penalties();
         d.recompute();
         assert_eq!(d.net_taxable_estate, 1_150_000.01);
         assert_eq!(d.estate_tax_due(), 69_000.0);
@@ -1502,6 +1537,7 @@ mod tests {
         d.queue(crate::filing_queue::QueueAuthSource::Gui).unwrap();
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.surcharge = 99.0;
+        d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
     }
 }

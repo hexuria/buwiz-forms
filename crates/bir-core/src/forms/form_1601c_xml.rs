@@ -484,11 +484,7 @@ impl Form1601CDraft {
             tax_32_surcharge: parse_optional_money(fields, "frm1601c:txtTax32", &mut errors),
             tax_33_interest: parse_optional_money(fields, "frm1601c:txtTax33", &mut errors),
             tax_34_compromise: parse_optional_money(fields, "frm1601c:txtTax34", &mut errors),
-            penalty_model_version: super::form_1601c::PENALTY_MODEL_VERSION,
-            penalty_due_date: None,
-            penalty_taxpayer_class: None,
-            computed_penalties: None,
-            penalty_overrides: Default::default(),
+            penalty: crate::forms::penalty_items::PenaltyState::imported(),
             tax_35_total_penalties: 0.0,
             tax_36_total_amount_payable: 0.0,
             status: super::FilingStatus::Draft,
@@ -515,13 +511,7 @@ impl Form1601CDraft {
 
         // An imported return carries the penalties it was prepared with:
         // keep each one as an override so the source amounts round-trip.
-        for (component, value) in crate::penalties::PenaltyComponent::ALL.into_iter().zip([
-            draft.tax_32_surcharge,
-            draft.tax_33_interest,
-            draft.tax_34_compromise,
-        ]) {
-            draft.set_penalty_override(component, Some(value));
-        }
+        Form1601CDraft::penalty_items().adopt_imported(&mut draft);
         draft.compute();
         for (index, source_adjustment) in source_adjustments.into_iter().enumerate() {
             if (draft.schedule_1[index].adjustment - source_adjustment).abs() > 0.001 {

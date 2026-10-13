@@ -21,6 +21,8 @@
 //! - Text fields are uppercased only when `capital()` runs, which on this
 //!   form happens when a Schedule 2/3 code field is left (`onblur`).
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -297,6 +299,10 @@ pub struct Form1602QDraft {
     pub interest_penalty: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub item27: f64,
     #[serde(default)]
@@ -337,6 +343,7 @@ impl Form1602QDraft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
@@ -486,6 +493,8 @@ impl Form1602QDraft {
                 + self.over_remittance_previous_quarter,
         );
         self.item23 = cents(self.item17 - self.item22);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest_penalty = cents(self.interest_penalty);
         self.compromise = cents(self.compromise);
@@ -960,7 +969,32 @@ impl FormValidator for Form1602QDraft {
     }
 }
 
+impl Form1602QDraft {
+    /// Items 24-26 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: Withholding,
+            items: [
+                surcharge: "24 Surcharge",
+                interest_penalty: "25 Interest",
+                compromise: "26 Compromise",
+            ],
+            controls: [
+                "frm1602Q:txt24",
+                "frm1602Q:txt25",
+                "frm1602Q:txt26",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 23", |d| d.item23,
+        )
+    }
+}
+
 impl QueueableForm for Form1602QDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1602Q";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1602Qv2018']`).
     const FORM_TYPE: &'static str = "1602Qv2018";
@@ -1041,6 +1075,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form1602QDraft {
         let mut draft = Form1602QDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             tin: "12345678800000".to_string(),
             taxable_year: 2025,
@@ -1110,6 +1145,7 @@ mod tests {
         draft.over_remittance_previous_quarter = 500.0;
         draft.surcharge = 25.5;
         draft.interest_penalty = 10.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1343,6 +1379,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

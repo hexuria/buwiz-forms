@@ -15,6 +15,8 @@
 //! - "Other Selected ATC" rows 7+ (more than six ATCs), right after
 //!   `hPartIITableSize`.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -747,6 +749,10 @@ pub struct Form1601EqDraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 30.
@@ -788,6 +794,7 @@ impl Form1601EqDraft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
@@ -918,6 +925,8 @@ impl Form1601EqDraft {
                 + self.over_remittance_previous_quarter,
         );
         self.tax_still_due = cents(self.total_taxes_withheld - self.total_remittances);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -1382,7 +1391,32 @@ impl FormValidator for Form1601EqDraft {
     }
 }
 
+impl Form1601EqDraft {
+    /// Items 26-28 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: Withholding,
+            items: [
+                surcharge: "26 Surcharge",
+                interest: "27 Interest",
+                compromise: "28 Compromise",
+            ],
+            controls: [
+                "frm1601EQ:txtTax26",
+                "frm1601EQ:txtTax27",
+                "frm1601EQ:txtTax28",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 25", |d| d.tax_still_due,
+        )
+    }
+}
+
 impl QueueableForm for Form1601EqDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1601EQ";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1601EQ']`).
     const FORM_TYPE: &'static str = "1601EQ";
@@ -1476,6 +1510,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form1601EqDraft {
         let mut draft = Form1601EqDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             tin: "12345678800000".to_string(),
             taxable_year: 2025,
@@ -1517,6 +1552,7 @@ mod tests {
         draft.schedule[1].tax_base = 1_000.005;
         draft.remittance_first_month = 100.0;
         draft.surcharge = 10.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1785,6 +1821,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

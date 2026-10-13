@@ -455,9 +455,9 @@
 "frm1801v2018:txtInstallmentYear": {"path":"/installment_year","type":"text"},
 "frm1801v2018:txtOtherDed_C": {"path":"/other_special_deduction","type":"amount"},
 "frm1801v2018:txtOtherDed_Specify": {"path":"/other_special_deduction_description","type":"text"},
-"frm1801v2018:txtPen_Compromise": {"path":"/compromise","type":"amount"},
-"frm1801v2018:txtPen_Interest": {"path":"/interest","type":"amount"},
-"frm1801v2018:txtPen_Surcharge": {"path":"/surcharge","type":"amount"},
+"frm1801v2018:txtPen_Compromise": {"path":"/penalty_overrides/compromise","type":"amount"},
+"frm1801v2018:txtPen_Interest": {"path":"/penalty_overrides/interest","type":"amount"},
+"frm1801v2018:txtPen_Surcharge": {"path":"/penalty_overrides/surcharge","type":"amount"},
 "frm1801v2018:txtRDOCode_1": {"lock":"profile","path":"/rdo_code","type":"text"},
 "frm1801v2018:txtSheets": {"path":"/number_of_attached_sheets","type":"whole"},
 "frm1801v2018:txtStandardDed_C": {"path":"/standard_deduction","type":"amount"}

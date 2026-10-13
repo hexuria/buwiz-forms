@@ -282,6 +282,7 @@ impl Form0619EDraft {
         }
 
         let mut draft = Form0619EDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::imported(),
             id: None,
             tin: format!(
                 "{}{}{}{}",
@@ -358,6 +359,9 @@ impl Form0619EDraft {
         let source_16 = parse_money(fields, "frm0619E:txtTax16", false, &mut errors);
         let source_17d = parse_money(fields, "frm0619E:txtTax17D", false, &mut errors);
         let source_18 = parse_money(fields, "frm0619E:txtTax18", false, &mut errors);
+        // An imported return carries the penalties it was prepared with:
+        // keep each one as an override so the source amounts round-trip.
+        Form0619EDraft::penalty_declaration().adopt_imported(&mut draft);
         draft.recompute();
         verify_computed_source(
             "frm0619E:txtTax16",
@@ -1257,5 +1261,26 @@ mod tests {
             hex::encode(Sha256::digest(&official_pdf)),
             OFFICIAL_FORM_SHA256
         );
+    }
+
+    #[test]
+    fn imported_penalties_are_kept_as_overrides() {
+        // The return was prepared for a period now long past its deadline:
+        // the imported penalty items are kept as overrides, so recomputing
+        // today files exactly what the source carried.
+        let mut draft = Form0619EDraft::from_bir_xml_payload(&reviewed_sample("1", true))
+            .expect("reviewed save must parse");
+        let fields = draft.to_bir_field_map();
+        let items = Form0619EDraft::penalty_declaration();
+        let state = &draft.penalty.penalty_overrides;
+        assert_eq!(
+            [state.surcharge, state.interest, state.compromise],
+            items.filed(&draft).map(Some)
+        );
+        crate::forms::penalty_items::with_clock(
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 13).unwrap(),
+            || draft.recompute(),
+        );
+        assert_eq!(draft.to_bir_field_map(), fields);
     }
 }

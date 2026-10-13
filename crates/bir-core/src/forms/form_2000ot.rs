@@ -11,6 +11,8 @@
 //! submitted after it, so every text box except `txtEmail` reaches the
 //! submit plaintext in capitals.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -258,6 +260,10 @@ pub struct Form2000OTDraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 21.
@@ -290,6 +296,7 @@ impl Form2000OTDraft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             transaction_date: String::new(),
             year,
@@ -409,6 +416,8 @@ impl Form2000OTDraft {
         };
         self.tax_paid_previous = cents(self.tax_paid_previous);
         self.tax_still_due = fixed_cents(self.tax_due - self.tax_paid_previous);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -865,7 +874,32 @@ impl FormValidator for Form2000OTDraft {
     }
 }
 
+impl Form2000OTDraft {
+    /// Items 20A-20C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "20A Surcharge",
+                interest: "20B Interest",
+                compromise: "20C Compromise",
+            ],
+            controls: [
+                "frm2000OT:txtTax20A",
+                "frm2000OT:txtTax20B",
+                "frm2000OT:txtTax20C",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 19", |d| d.tax_still_due,
+        )
+    }
+}
+
 impl QueueableForm for Form2000OTDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "2000OT";
     /// Official `formType` and PROD SFTP folder (`ftpTargetFolder.PROD['2000OTv2018']`).
     const FORM_TYPE: &'static str = "2000OTv2018";
@@ -986,6 +1020,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form2000OTDraft {
         let mut draft = Form2000OTDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             transaction_date: "06/15/2025".into(),
             year: 2025,
@@ -1100,6 +1135,7 @@ mod tests {
         draft.is_amended = true;
         draft.tax_paid_previous = 1_000.0;
         draft.surcharge = 25.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         assert_eq!(draft.tax_still_due, -247.0);
         assert_eq!(draft.total_amount_payable, 25.0);
@@ -1226,6 +1262,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

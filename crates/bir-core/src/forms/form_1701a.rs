@@ -30,6 +30,7 @@
 //! only the `value` attribute, so the parity samples copy each typed value
 //! into its attribute right before SAVE AND CLOSE (that is the only shim).
 
+use super::penalty_items::{PenaltyItems, PenaltyState};
 use std::collections::BTreeMap;
 
 use chrono::{Datelike, NaiveDate};
@@ -174,6 +175,10 @@ pub struct Form1701AColumn {
     pub surcharge: f64,
     pub interest: f64,
     pub compromise: f64,
+    /// This column's penalty items' computed values, overrides, note and
+    /// engine inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     pub total_penalties: f64,
     pub total_amount_payable: f64,
 }
@@ -690,6 +695,15 @@ impl Form1701ADraft {
         self.taxpayer.round_inputs();
         self.spouse_column.round_inputs();
         let year = self.taxable_year;
+        self.taxpayer.compute(year, atc);
+        self.spouse_column.compute(year, spouse_atc);
+        // Each column's penalty items file their override, else the
+        // computed value; the column totals are then summed with them.
+        for items in Self::penalty_declarations() {
+            items.apply(self);
+        }
+        self.taxpayer.round_inputs();
+        self.spouse_column.round_inputs();
         self.taxpayer.compute(year, atc);
         self.spouse_column.compute(year, spouse_atc);
         self.aggregate_amount_payable =
@@ -1668,7 +1682,59 @@ impl FormValidator for Form1701ADraft {
     }
 }
 
+impl Form1701ADraft {
+    /// The penalty items of each column on the shared penalty model
+    /// ([`super::penalty_items`]): the taxpayer/filer's, then the spouse's,
+    /// which apply only to a joint return.
+    pub fn penalty_declarations() -> Vec<PenaltyItems<Self>> {
+        let filer = super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                taxpayer.surcharge: "25 Surcharge",
+                taxpayer.interest: "26 Interest",
+                taxpayer.compromise: "27 Compromise",
+            ],
+            controls: [
+                "frm1701A:txt25A",
+                "frm1701A:txt26A",
+                "frm1701A:txt27A",
+            ],
+            state: taxpayer.penalty,
+            basic_tax_due: "Item 24A", |d| d.taxpayer.amount_payable,
+            party: Some("Taxpayer/Filer"),
+            rounding: super::penalty_items::PenaltyRounding::Cents,
+            deadline_period: |d: &Self| (!d.is_short_period && d.month == 12).then(|| super::penalty_items::calendar_period(d)).flatten(),
+        );
+        let spouse = super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                spouse_column.surcharge: "25 Surcharge",
+                spouse_column.interest: "26 Interest",
+                spouse_column.compromise: "27 Compromise",
+            ],
+            controls: [
+                "frm1701A:txt25B",
+                "frm1701A:txt26B",
+                "frm1701A:txt27B",
+            ],
+            state: spouse_column.penalty,
+            basic_tax_due: "Item 24B", |d| d.spouse_column.amount_payable,
+            party: Some("Spouse"),
+            applies: |d: &Self| d.is_joint(),
+            // The profile's EOPT class is the filer's, not the spouse's.
+            rounding: super::penalty_items::PenaltyRounding::Cents,
+            deadline_period: |d: &Self| (!d.is_short_period && d.month == 12).then(|| super::penalty_items::calendar_period(d)).flatten(),
+        );
+        vec![filer, spouse]
+    }
+}
+
 impl QueueableForm for Form1701ADraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        Self::penalty_declarations()
+    }
     const FORM_CODE: &'static str = "1701A";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1701A']`).
     const FORM_TYPE: &'static str = "1701A";
@@ -1830,6 +1896,8 @@ mod tests {
             number_of_attachments: 0,
             lifecycle: SubmissionLifecycle::default(),
         };
+        // This sample enters its penalties by hand.
+        d.keep_entered_penalties();
         d.recompute();
         d
     }
@@ -2003,6 +2071,8 @@ mod tests {
             &|d| {
                 joint(d);
                 d.spouse.tin = "12".into();
+                // The joint sample enters the spouse's penalties by hand.
+                d.keep_entered_penalties();
                 d.recompute();
             },
             "Please enter a valid TIN number on Item 66.",
@@ -2111,6 +2181,8 @@ mod tests {
         };
         d.spouse_column.eight_sales = 900_000.0;
         d.spouse_column.eight_reduction = 250_000.0;
+        // The joint sample enters the spouse's penalties by hand.
+        d.keep_entered_penalties();
         d.recompute();
         assert_eq!(d.spouse_column.eight_tax_due, 52_000.0);
         assert_eq!(d.aggregate_amount_payable, 56_848.0 + 52_000.0);
@@ -2192,6 +2264,8 @@ mod tests {
         d.spouse_column.eight_sales = 900_000.0;
         d.spouse_column.eight_reduction = 250_000.0;
         d.number_of_attachments = 12;
+        // The joint sample enters the spouse's penalties by hand.
+        d.keep_entered_penalties();
         d.recompute();
         let p = d.to_print_field_map();
         assert_eq!(p["derived:amount_47B"], "  900000");
@@ -2224,6 +2298,7 @@ mod tests {
         d.queue(crate::filing_queue::QueueAuthSource::Gui).unwrap();
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.taxpayer.surcharge = 99.0;
+        d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
     }
 }

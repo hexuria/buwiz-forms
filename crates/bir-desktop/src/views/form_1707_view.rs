@@ -22,8 +22,12 @@ use super::event_form_kit::{
     computed, field, format_tin, grid, money_text, section,
 };
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 /// Plain inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
@@ -108,6 +112,9 @@ pub struct Form1707View {
     draft: Form1707Draft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
+    _penalty_subscription: Subscription,
     /// Schedule 2 / 3 rows on screen: never fewer than the draft holds.
     share_rows: usize,
     expense_rows: usize,
@@ -142,9 +149,11 @@ impl Form1707View {
             "inst_amount" => money_text(inst.installment_amount),
             "inst_total" => money_text(inst.total_collection),
             "less" => money_text(d.tax_paid_previous),
-            "surcharge" => money_text(d.surcharge),
-            "interest" => money_text(d.interest),
-            "compromise" => money_text(d.compromise),
+            "surcharge" => penalty_section::override_text(&d.penalty, PenaltyComponent::Surcharge),
+            "interest" => penalty_section::override_text(&d.penalty, PenaltyComponent::Interest),
+            "compromise" => {
+                penalty_section::override_text(&d.penalty, PenaltyComponent::Compromise)
+            }
             _ => Self::row_value(d, key),
         }
     }
@@ -668,9 +677,18 @@ impl Form1707View {
                 &["less", "tax_paid_previous"],
             ),
             computed("17 — Tax payable (overpayment)", d.tax_payable, cx),
-            self.f("surcharge", layout),
-            self.f("interest", layout),
-            self.f("compromise", layout),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .kit
+                    .validation_errors
+                    .iter()
+                    .chain(&self.kit.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             computed("18D — Total penalties", d.total_penalties, cx),
             self.with_errors(
                 computed(
@@ -837,7 +855,15 @@ impl KitView for Form1707View {
             d.shares = shares;
             d.expenses = expenses;
         }
-        r.errors
+        let mut errors = r.errors;
+        // An empty penalty box means "use computed"; any amount overrides it.
+        errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &<Form1707Draft as bir_core::forms::queueable::QueueableForm>::penalty_items(),
+            &mut self.draft,
+            cx,
+        ));
+        errors
     }
 }
 
@@ -873,10 +899,24 @@ impl QueueableFormView for Form1707View {
             window,
             cx,
         );
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs =
+            vec![["surcharge", "interest", "compromise"].map(|key| kit.inputs[key].clone())];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        let _penalty_subscription = cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                super::event_form_kit::sync(this, cx);
+            },
+        );
         Self {
             draft,
             db,
             kit,
+            penalty,
+            _penalty_subscription,
             share_rows,
             expense_rows,
         }

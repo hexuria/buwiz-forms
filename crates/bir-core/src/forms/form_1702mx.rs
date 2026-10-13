@@ -5,6 +5,7 @@
 //! documents distinct. It supports local editable-save persistence only; no
 //! electronic-submission or attachment-transport contract has been reviewed.
 
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -65,6 +66,20 @@ impl WholePesoInput {
 
     pub fn set(&mut self, amount: WholePeso) {
         *self = Self::from_amount(amount);
+    }
+}
+
+/// Items 17-19 hold whole pesos. A blank item that files zero stays blank,
+/// so its source lexeme round-trips.
+impl super::penalty_items::PenaltyField for WholePesoInput {
+    fn penalty_value(&self) -> f64 {
+        self.value_or_zero().0 as f64
+    }
+    fn set_penalty_value(&mut self, value: f64) {
+        let value = value.round() as i64;
+        if value != self.value_or_zero().0 {
+            self.set(WholePeso(value));
+        }
     }
 }
 
@@ -318,6 +333,10 @@ pub struct Form1702MXDraft {
     pub email: String,
     pub deduction_method: Form1702MXDeductionMethod,
     pub part_ii: Form1702MXPartII,
+    /// Items 17-19's computed values, overrides, note and engine inputs
+    /// (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     pub relief_basis: Form1702MXReliefBasis,
     pub schedule_2: Form1702MXSchedule2,
     pub schedule_3: Form1702MXSchedule3,
@@ -376,6 +395,7 @@ impl Form1702MXDraft {
         let name_lines = split_fixed_lines(&profile.full_name);
         let address_lines = split_fixed_lines(&profile.registered_address);
         Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
