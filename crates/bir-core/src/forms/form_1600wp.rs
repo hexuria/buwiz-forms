@@ -809,6 +809,11 @@ impl QueueableForm for Form1600WpDraft {
     /// number of Part II rows.
     const LAYOUT_ID: &'static str = "1600wp-v2010-atc2";
 
+    /// Total Amount Still Due.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.total_amount_due)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

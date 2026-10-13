@@ -1856,6 +1856,11 @@ impl QueueableForm for Form2550MDraft {
     const FORM_TYPE: &'static str = "2550M";
     const LAYOUT_ID: &'static str = FORM_2550M_FORM_ID;
 
+    /// Item 26 Total Amount Payable.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.total_amount_payable)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

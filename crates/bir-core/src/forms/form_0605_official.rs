@@ -991,6 +991,11 @@ impl QueueableForm for Form0605Draft {
     const FORM_TYPE: &'static str = FORM_0605_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_0605_LAYOUT_ID;
 
+    /// Item 21 Total Amount Payable.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.item_21_total_amount_payable)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }
