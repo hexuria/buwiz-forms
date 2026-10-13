@@ -159,6 +159,11 @@ mod tests {
             draft.tax_14_total_compensation = withheld * 10.0;
             draft.tax_25_total_taxes_withheld = withheld;
         }
+        // Pin Items 32-34 at zero: the period is past its deadline, and this
+        // test is not about penalties, so they must not grow with the clock.
+        for component in crate::penalties::PenaltyComponent::ALL {
+            draft.set_penalty_override(component, Some(0.0));
+        }
         draft.compute();
         draft
     }

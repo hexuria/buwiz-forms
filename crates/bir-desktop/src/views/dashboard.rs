@@ -179,6 +179,9 @@ pub struct DashboardView {
     deadlines: Vec<ResolvedTaxDeadline>,
     /// Saved returns of the selected year that are not yet Paid.
     actionable_forms: Vec<CalendarReturn>,
+    /// Total penalties an unfiled 1601-C would carry if filed today, keyed by
+    /// (form code, taxable year, month). Only periods it can be computed for.
+    penalty_estimates: std::collections::HashMap<(String, i32, u8), f64>,
     upcoming_deadlines_list:
         Entity<crate::components::upcoming_deadlines_list::UpcomingDeadlinesList>,
     /// Consistency issues from the last resolve_profile_obligations_for_year call
@@ -290,6 +293,7 @@ impl DashboardView {
             active_tab: ProfileTab::Calendar,
             deadlines: Vec::new(),
             actionable_forms: Vec::new(),
+            penalty_estimates: std::collections::HashMap::new(),
             upcoming_deadlines_list,
             consistency_issues: Vec::new(),
             header_menu_open: false,
@@ -396,6 +400,7 @@ impl DashboardView {
     fn reload_filing_progress(&mut self, profile: &TaxpayerProfile, cx: &mut Context<Self>) {
         self.filing_progress.clear();
         self.actionable_forms.clear();
+        self.penalty_estimates.clear();
         self.deadlines.clear();
 
         if let Ok(db) = self.db.lock() {
@@ -453,7 +458,10 @@ impl DashboardView {
                 }
             }
 
-            let mut overrides = db.get_deadline_overrides();
+            let global_overrides = db.get_deadline_overrides();
+            self.penalty_estimates =
+                Self::penalty_estimates(&db, profile, &self.actionable_forms, &global_overrides);
+            let mut overrides = global_overrides;
             overrides.extend(bir_core::integration::profile_deadline_overrides_for_year(
                 profile, year,
             ));
@@ -502,6 +510,50 @@ impl DashboardView {
                 state.update_for_profile(profile, year, available_codes, cx);
             });
         }
+    }
+
+    /// "If filed today" penalty totals for unfiled 1601-C returns, computed
+    /// the same way the form computes them (deadline overrides and the
+    /// profile's EOPT class applied, per-component overrides honoured).
+    fn penalty_estimates(
+        db: &Database,
+        profile: &TaxpayerProfile,
+        returns: &[CalendarReturn],
+        global_overrides: &[bir_core::calendar_rules::DeadlineOverride],
+    ) -> std::collections::HashMap<(String, i32, u8), f64> {
+        let today = Local::now().date_naive();
+        let mut estimates = std::collections::HashMap::new();
+        for item in returns {
+            let summary = &item.summary;
+            if summary.form_code != "1601C"
+                || !matches!(summary.status, FilingStatus::Draft | FilingStatus::Queued)
+            {
+                continue;
+            }
+            let Some(month) = summary.month else {
+                continue;
+            };
+            let Ok(Some(mut draft)) =
+                db.get_1601c_draft(&profile.tin.full(), summary.taxable_year, month)
+            else {
+                continue;
+            };
+            draft.apply_penalty_profile(profile, global_overrides);
+            if let Some(total) = draft
+                .penalties_payable_if_filed_on(today)
+                .filter(|total| *total > 0.0)
+            {
+                estimates.insert(
+                    (
+                        summary.form_code.clone(),
+                        i32::from(summary.taxable_year),
+                        month,
+                    ),
+                    total,
+                );
+            }
+        }
+        estimates
     }
 
     /// Colors and labels for a given QuarterState
@@ -1678,6 +1730,28 @@ impl Render for DashboardView {
                             .map(|date| date.format("%d").to_string())
                             .unwrap_or_else(|| "--".to_string());
 
+                        let penalty_estimate = match d.period {
+                            DeadlinePeriod::Monthly {
+                                taxable_year,
+                                month,
+                            } => self
+                                .penalty_estimates
+                                .get(&(d.form_code.clone(), taxable_year, month))
+                                .copied(),
+                            _ => None,
+                        };
+                        let penalty_line = match penalty_estimate {
+                            Some(total) => div()
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(overdue_text)
+                                .child(format!(
+                                    "≈ ₱{} penalties if filed today",
+                                    bir_core::official_xml::official_amount(total)
+                                ))
+                                .into_any_element(),
+                            None => Empty.into_any_element(),
+                        };
                         let route = d.route_year_quarter();
                         let form_code_click = d.form_code.clone();
                         let card_id =
@@ -1769,6 +1843,7 @@ impl Render for DashboardView {
                                     <div text_sm text_color={cx.theme().muted_foreground}>
                                         {d.form_name.clone()}
                                     </div>
+                                    {penalty_line}
                                 </div>
                             }),
                         );
