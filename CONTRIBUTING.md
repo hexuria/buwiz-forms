@@ -29,6 +29,16 @@ The audit refuses to run when an eBIRForms uninstall registration already
 exists. Never remove a real installation to make the audit pass. CI runs the
 same installer audit on a disposable Windows runner.
 
+## CI change selection
+
+Pull requests and pushes containing only files under `docs/`, top-level
+Markdown files, `crates/<crate>/docs/`, or direct `.github/*.md` files keep the
+required per-OS check statuses but skip the build and test steps. Scheduled and
+manual runs, unknown or empty change ranges, and changes to any other path run
+full CI. Markdown under `rules/` or `scripts/`, crate `README.md` files, and
+anything under `evidence/` still runs full CI because those files affect
+code-generation inputs or policy checks.
+
 ## Anti-drift
 
 > Any change to observable semantics names the verification boundary it affects.

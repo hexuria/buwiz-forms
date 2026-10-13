@@ -32,6 +32,8 @@ concurrency:
 
 jobs:
   check:
+    needs: changes
+    if: ${{ always() }}
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +50,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: "Docs-only change: skipping build and tests"
+      if: needs.changes.outputs.code == 'false'
+      shell: bash
+      run: |
+        echo "Docs-only change detected: build and test steps were skipped." >> "$GITHUB_STEP_SUMMARY"
+
     - name: Check out formgen scripts from buwiz-forms-html
+      if: needs.changes.outputs.code != 'false'
       uses: actions/checkout@v4
       with:
         repository: hexuria/buwiz-forms-html
@@ -56,14 +65,17 @@ jobs:
         persist-credentials: false
 
     - name: Install Python
+      if: needs.changes.outputs.code != 'false'
       uses: actions/setup-python@v5
       with:
         python-version: '3.13'
 
     - name: Test Python scripts
+      if: needs.changes.outputs.code != 'false'
       run: python -m unittest discover -s scripts/tests -v
 
     - name: Install Rust Toolchain
+      if: needs.changes.outputs.code != 'false'
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: 1.99.0
@@ -90,19 +102,22 @@ jobs:
     # host-* and check-* entries are no longer read by anything and age out.
     # Saving only from main also stops pull requests churning it.
     - name: Rust Cache
+      if: needs.changes.outputs.code != 'false'
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: workspace-${{ runner.os }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install just
+      if: needs.changes.outputs.code != 'false'
       run: cargo install just --version 1.45.0 --locked
 
     - name: Validate justfile
+      if: needs.changes.outputs.code != 'false'
       run: just --summary
 
     - name: Install Linux Dependencies
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && needs.changes.outputs.code != 'false'
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -134,7 +149,7 @@ jobs:
     # "Failed to initialize GTK". A virtual framebuffer lets them run for real
     # rather than being skipped.
     - name: Start virtual display
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && needs.changes.outputs.code != 'false'
       run: |
         Xvfb :99 -screen 0 1280x1024x24 &
         echo "DISPLAY=:99" >> "$GITHUB_ENV"
@@ -148,7 +163,7 @@ jobs:
     # persist between runs, so OPENSSL_DIR/OPENSSL_LIB_DIR must be re-exported
     # even when the install itself was restored from cache.
     - name: Cache OpenSSL
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
       uses: actions/cache@v4
       with:
         path: |
@@ -157,7 +172,7 @@ jobs:
         key: openssl-${{ runner.os }}-choco-v1
 
     - name: Install Windows Dependencies
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
       shell: pwsh
       run: |
         if ((Test-Path "C:\Program Files\OpenSSL\include") -or
@@ -190,6 +205,7 @@ jobs:
         }
 
     - name: Format
+      if: needs.changes.outputs.code != 'false'
       run: cargo fmt --all -- --check
 
     # No separate `cargo check` step: clippy performs the same analysis over the
@@ -208,6 +224,7 @@ jobs:
     # unchanged. release.yml keeps its `--target` flags - those cross-compile
     # both macOS architectures for the universal binary and are genuine.
     - name: Clippy
+      if: needs.changes.outputs.code != 'false'
       run: cargo clippy --locked --workspace -- -D warnings
 
     # The Mac App Store variant is a feature configuration nothing else in this
@@ -222,7 +239,7 @@ jobs:
     # macOS only: the variant exists solely to be submitted to Apple, and it is
     # only ever built from a Mac.
     - name: Clippy (Mac App Store variant)
-      if: runner.os == 'macOS'
+      if: runner.os == 'macOS' && needs.changes.outputs.code != 'false'
       run: cargo clippy --locked -p bir-desktop --features mas_build -- -D warnings
 
     # The agent control plane is off by default, so the two steps above never
@@ -233,17 +250,20 @@ jobs:
     # builds without `agent`, so this is the only step that type-checks the
     # control plane at all.
     - name: Clippy (agent control plane)
+      if: needs.changes.outputs.code != 'false'
       run: cargo clippy --locked -p bir-desktop --all-targets --features dev-tools,agent -- -D warnings
 
     # One command per line: this job's default shell is pwsh on windows-latest,
     # and bash `\` continuations are a parse error there.
     - name: Frozen HTML inventory and TIN name stamps
+      if: needs.changes.outputs.code != 'false'
       run: |
         python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
         python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
         python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
 
     - name: Test
+      if: needs.changes.outputs.code != 'false'
       run: cargo test --locked --workspace
 
     # The production-filing boundary stays gating on every PR, whatever the
@@ -252,14 +272,15 @@ jobs:
     # app change can open it; and it reuses this job's build, so it is cheap.
     # A boundary failure is far more serious than an open validation slice.
     - name: Check validation-rules production boundaries
+      if: needs.changes.outputs.code != 'false'
       run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
 
     - name: Agent mailbox scheduling regression
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
       run: cargo test --locked -p bir-desktop --features dev-tools,agent --lib agent::drain::tests::agent_mailbox_drains_without_rendering_app_state -- --exact
 
     - name: Install Windows packaging tools
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
       shell: pwsh
       run: |
         choco install innosetup -y --no-progress
@@ -272,7 +293,7 @@ jobs:
         }
 
     - name: Build and audit unsigned Windows Setup
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
       shell: pwsh
       run: |
         just exe
@@ -290,7 +311,7 @@ jobs:
     # crates/bir-desktop/build.rs. Checking the PE header here means reverting
     # the linker policy fails CI instead of silently returning to 1 MiB.
     - name: Verify bir-desktop PE stack reserve
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
       shell: pwsh
       run: |
         python scripts/check_pe_stack_reserve.py target/x86_64-pc-windows-msvc/release/bir-desktop.exe
@@ -322,6 +343,7 @@ jobs:
       pull-requests: read
     outputs:
       validation: ${{ steps.decide.outputs.validation }}
+      code: ${{ steps.decide.outputs.code }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -343,6 +365,34 @@ jobs:
         PUSH_AFTER: ${{ github.sha }}
       run: |
         set -euo pipefail
+
+        range=""
+        changed=""
+        changed_known=false
+        if [[ "$EVENT" == pull_request && -n "$PR_BASE" && -n "$PR_HEAD" ]]; then
+          range="$PR_BASE...$PR_HEAD"
+        elif [[ "$EVENT" == push && -n "$PUSH_BEFORE" && ! "$PUSH_BEFORE" =~ ^0+$ && -n "$PUSH_AFTER" ]]; then
+          range="$PUSH_BEFORE..$PUSH_AFTER"
+        fi
+        if [[ -n "$range" ]] && changed=$(git diff --name-only "$range"); then
+          changed_known=true
+        fi
+
+        code=true
+        code_reason="event $EVENT requires full CI"
+        if [[ "$EVENT" == pull_request || "$EVENT" == push ]]; then
+          if [[ "$changed_known" != true ]]; then
+            code_reason="change range unknown"
+          elif [[ -z "$changed" ]]; then
+            code_reason="no changed files"
+          elif grep -qEv '^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$)' <<<"$changed"; then
+            code_reason="non-docs file changed"
+          else
+            code=false
+            code_reason="docs-only changes"
+          fi
+        fi
+
         run=false
         reason="no validation-rules path changed"
         if [[ "$EVENT" == schedule ]]; then
@@ -357,14 +407,7 @@ jobs:
         elif [[ "$BRANCH" == ebirforms-* ]]; then
           run=true; reason="branch $BRANCH"
         else
-          if [[ "$EVENT" == pull_request ]]; then
-            range="$PR_BASE...$PR_HEAD"
-          elif [[ "$EVENT" == push && -n "$PUSH_BEFORE" && ! "$PUSH_BEFORE" =~ ^0+$ ]]; then
-            range="$PUSH_BEFORE..$PUSH_AFTER"
-          else
-            range=""
-          fi
-          if [[ -z "$range" ]] || ! changed=$(git diff --name-only "$range"); then
+          if [[ "$changed_known" != true ]]; then
             # Unknown range (new branch, force push): fail safe and run.
             run=true; reason="change range unknown"
           elif grep -qE '^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/|crates/bir-desktop/src/components/form_validation/|evidence/validation-rules/|rust-toolchain|\.github/workflows/ci\.yml$)' <<<"$changed"; then
@@ -372,7 +415,9 @@ jobs:
           fi
         fi
         echo "validation=$run" >> "$GITHUB_OUTPUT"
+        echo "code=$code" >> "$GITHUB_OUTPUT"
         echo "validation-rules audits: $run ($reason)" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "full build and tests: $code ($code_reason)" | tee -a "$GITHUB_STEP_SUMMARY"
 
   validation-rules-v1:
     needs: changes
@@ -555,6 +600,9 @@ jobs:
   # Hosted runners use WARP, do not exercise real
   # foreground-window rules, and 2200M is not agent-reachable.
   windows-smoke:
+    # Same docs-only skip as `check`: a docs-only change builds nothing.
+    needs: changes
+    if: needs.changes.outputs.code != 'false'
     runs-on: windows-latest
     timeout-minutes: 60
     continue-on-error: true
