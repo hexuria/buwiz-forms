@@ -64,7 +64,8 @@ Windows is not yet verified. Treat it as untested until
 [#90](https://github.com/hexuria/buwiz-forms/issues/90) is closed.
 
 **Prerequisites (to build from source):** Visual Studio 2022 Build Tools with
-the C++ workload and Windows 11 SDK, Rust, OpenSSL, Strawberry Perl and NASM.
+the C++ workload and Windows 11 SDK, Rust, OpenSSL, Strawberry Perl, NASM, Inno
+Setup and Python.
 One script installs them and sets the `OPENSSL_*` variables:
 
 ```powershell

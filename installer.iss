@@ -1,3 +1,7 @@
+#ifndef StageDir
+#error StageDir is required; invoke ISCC with /DStageDir=<audited-stage>
+#endif
+
 [Setup]
 AppName=eBIRForms
 AppVersion={#MyAppVersion}
@@ -12,6 +16,7 @@ OutputBaseFilename=eBIRForms-Windows-x64-{#MyAppVersion}-Setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
+PrivilegesRequiredOverridesAllowed=commandline
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\bir.exe
 SetupIconFile=assets\icon.ico
@@ -20,8 +25,8 @@ WizardStyle=modern
 ; SignTool=signtool sign /f "$CERT_FILE" /p "$CERT_PASSWORD" /t http://timestamp.digicert.com $f
 
 [Files]
-Source: "target\x86_64-pc-windows-msvc\release\bir.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#StageDir}\bir.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\eBIRForms"; Filename: "{app}\bir.exe"; IconFilename: "{app}\assets\icon.ico"
