@@ -461,59 +461,15 @@ msix *args="": build-frozen-html-identity
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
     $VERSION = "{{VERSION}}"
-    $MSIX_DIR = "target/release-artifacts/msix-staging"
-    
-    # Stage MSIX layout
-    if (Test-Path $MSIX_DIR) { Remove-Item $MSIX_DIR -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $MSIX_DIR | Out-Null
-    Copy-Item "target/{{WIN_TARGET}}/release/bir.exe" "$MSIX_DIR\"
-
-    # OpenSSL is statically compiled (vendored), so no OpenSSL DLL is needed.
-    # These runner-local MSVC DLL copies are diagnostic only. They do not close
-    # the Store runtime-certification blocker documented above.
-    $vcr = "$env:WINDIR\System32\vcruntime140.dll"
-    if (Test-Path $vcr) { Copy-Item $vcr "$MSIX_DIR\" }
-    $msvcp = "$env:WINDIR\System32\msvcp140.dll"
-    if (Test-Path $msvcp) { Copy-Item $msvcp "$MSIX_DIR\" }
-
-    Copy-Item "assets" "$MSIX_DIR\assets" -Recurse
-    {{PYTHON}} scripts/audit_no_legacy.py --package-root $MSIX_DIR
+    $MSIX_PATH = "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package_msix.ps1 `
+        -ExePath "target/{{WIN_TARGET}}/release/bir.exe" `
+        -AssetsDir assets `
+        -Version $VERSION `
+        -BuildNumber {{BUILD_NUMBER}} `
+        -OutFile $MSIX_PATH `
+        -Python {{PYTHON}}
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    
-    # Use the shared BUILD_NUMBER from the justfile (synced with App Store Connect via bump-build).
-    # This ensures macOS and Windows builds share the same build counter.
-    $BUILD_NUMBER = "{{BUILD_NUMBER}}"
-
-    # Microsoft Store requires Version format: Major.Minor.Build.0
-    # The 4th part (Revision) MUST be 0 — Microsoft reserves it.
-    # We use: Major.Minor.BuildNumber.0 (semver patch folds into build number progression).
-    $vParts = $VERSION.Split('.')
-    $MSIX_VERSION = "$($vParts[0]).$($vParts[1]).$BUILD_NUMBER.0"
-    Write-Host "MSIX version: $MSIX_VERSION (from app version $VERSION, build $BUILD_NUMBER)"
-
-    # Copy and stamp manifest
-    (Get-Content "assets\windows\AppxManifest.xml") `
-        -replace 'MSIX_VERSION_PLACEHOLDER', $MSIX_VERSION | `
-        Set-Content "$MSIX_DIR\AppxManifest.xml"
-    
-    # Build MSIX
-    $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1
-    $MAKEAPPX = "$($SDK_DIR.FullName)\x64\MakeAppx.exe"
-    $MAKEPRI = "$($SDK_DIR.FullName)\x64\MakePri.exe"
-    
-    if (Test-Path $MAKEPRI) {
-        Write-Host "Generating resources.pri for advanced tile icons..."
-        & $MAKEPRI createconfig /cf "$MSIX_DIR\priconfig.xml" /dq en-US /pv 10.0.0 /o
-        & $MAKEPRI new /pr "$MSIX_DIR" /cf "$MSIX_DIR\priconfig.xml" /in "GOLDCODERSCORP.ebirforms" /of "$MSIX_DIR\resources.pri" /o
-        Remove-Item "$MSIX_DIR\priconfig.xml" -Force
-    }
-    
-    if (Test-Path $MAKEAPPX) {
-        & $MAKEAPPX pack /d "$MSIX_DIR" /p "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix" /o
-        Write-Host "✅ MSIX package created: target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix"
-    } else {
-        Write-Warning "⚠️ MakeAppx.exe not found. Install Windows SDK to build MSIX."
-    }
 
 # Sign the Store-identity MSIX with a local development certificate for
 # sideload testing only. This does not make it a public release artifact.

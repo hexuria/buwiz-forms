@@ -1,0 +1,452 @@
+name: Release (Windows)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        description: Require release signing secrets
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - .github/workflows/release-windows.yml
+      - scripts/package_msix.ps1
+      - scripts/smoke_msix.ps1
+      - assets/windows/**
+      - installer.iss
+      - installer.wxs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  APP_NAME: eBIRForms
+  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+
+jobs:
+  installers:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read workspace version
+        shell: pwsh
+        run: |
+          $cargo = Get-Content Cargo.toml -Raw
+          $workspacePackage = [regex]::Match($cargo, '(?ms)^\[workspace\.package\]\s*(.*?)(?=^\[|\z)')
+          $versionMatch = [regex]::Match($workspacePackage.Groups[1].Value, '(?m)^version\s*=\s*"([^"]+)"')
+          if (-not $versionMatch.Success) { throw "Could not read [workspace.package] version from Cargo.toml" }
+          $version = $versionMatch.Groups[1].Value
+          "WINDOWS_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Resolve Windows signing mode
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $release = '${{ inputs.release == true }}' -eq 'true'
+          $hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+          if ($release -and -not $hasPfx) {
+            throw "Missing required Windows release secret: WINDOWS_CERTIFICATE_PFX"
+          }
+          if ($release -and -not $hasPassword) {
+            throw "Missing required Windows release secret: WINDOWS_CERTIFICATE_PASSWORD"
+          }
+          if (-not ($hasPfx -and $hasPassword)) {
+            "WINDOWS_SIGNING=0" >> $env:GITHUB_ENV
+            Write-Warning "Windows release artifacts are unsigned because signing secrets are unavailable."
+          } else {
+            "WINDOWS_SIGNING=1" >> $env:GITHUB_ENV
+            $certificate = Join-Path $env:RUNNER_TEMP "windows-release-signing.pfx"
+            try {
+              [IO.File]::WriteAllBytes(
+                $certificate,
+                [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX)
+              )
+            } catch {
+              throw "WINDOWS_CERTIFICATE_PFX is not valid base64: $($_.Exception.Message)"
+            }
+            $sdk = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" |
+              Sort-Object Name -Descending |
+              Select-Object -First 1
+            if (-not $sdk) { throw "Windows SDK signing tools were not found" }
+            $signtool = Join-Path $sdk.FullName "x64\signtool.exe"
+            if (-not (Test-Path $signtool)) { throw "signtool.exe was not found" }
+            "WINDOWS_CERTIFICATE_PATH=$certificate" >> $env:GITHUB_ENV
+            "WINDOWS_SIGNTOOL=$signtool" >> $env:GITHUB_ENV
+          }
+
+      - name: Install Windows Dependencies
+        shell: pwsh
+        run: |
+          choco install openssl innosetup -y
+          $chocoExitCode = $LASTEXITCODE
+          if ($chocoExitCode -eq 3010) {
+            Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
+          } elseif ($chocoExitCode -ne 0) {
+            [Console]::Error.WriteLine("Chocolatey install failed (exit code $chocoExitCode).")
+            exit $chocoExitCode
+          }
+          choco install wixtoolset --version=3.11.2 -y
+          $chocoExitCode = $LASTEXITCODE
+          if ($chocoExitCode -eq 3010) {
+            Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
+          } elseif ($chocoExitCode -ne 0) {
+            [Console]::Error.WriteLine("WiX Toolset install failed (exit code $chocoExitCode).")
+            exit $chocoExitCode
+          }
+          $openssl_dir = ""
+          if (Test-Path "C:\Program Files\OpenSSL\include") {
+              $openssl_dir = "C:\Program Files\OpenSSL"
+          } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+              $openssl_dir = "C:\Program Files\OpenSSL-Win64"
+          } else {
+              [Console]::Error.WriteLine("OpenSSL include directory not found!")
+              exit 1
+          }
+          echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+
+          # Find the actual library directory
+          $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+          if ($lib_file) {
+              echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+              if ($lib_file.Name -ne "libcrypto.lib") {
+                  Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+              }
+          } else {
+              Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+          }
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Verify frozen HTML
+        run: |
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
+
+      - name: Build
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc
+
+      - name: Stage desktop executable name
+        shell: pwsh
+        run: python scripts/alias_desktop_bin.py target/x86_64-pc-windows-msvc/release
+
+      - name: Sign and verify Windows executable payloads
+        if: env.WINDOWS_SIGNING == '1'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $payloads = @(
+            "target/x86_64-pc-windows-msvc/release/bir.exe"
+          )
+          foreach ($payload in $payloads) {
+            & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /f $env:WINDOWS_CERTIFICATE_PATH `
+              /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+              $payload
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $payload" }
+            & $env:WINDOWS_SIGNTOOL verify /pa /all /v $payload
+            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $payload" }
+          }
+
+      - name: Stage signed Windows payload
+        shell: pwsh
+        run: |
+          $VERSION = $env:WINDOWS_VERSION
+          $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          "WINDOWS_STAGE=$PKG" >> $env:GITHUB_ENV
+          if (Test-Path $PKG) { Remove-Item $PKG -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $PKG
+          Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$PKG/"
+          Copy-Item -Recurse "assets" "$PKG/"
+          python scripts/audit_no_legacy.py --package-root $PKG
+          $auditExitCode = $LASTEXITCODE
+          if ($auditExitCode -ne 0) { exit $auditExitCode }
+
+      - name: Create EXE Installer
+        shell: pwsh
+        run: |
+          $VERSION = $env:WINDOWS_VERSION
+          $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          $PKG = $env:WINDOWS_STAGE
+          python scripts/audit_installer_sources.py --installer installer.iss --stage-dir $PKG
+          $sourceExitCode = $LASTEXITCODE
+          if ($sourceExitCode -ne 0) {
+            [Console]::Error.WriteLine("Installer [Files] source validation failed.")
+            exit $sourceExitCode
+          }
+          & $ISCC "/DMyAppVersion=$VERSION" "/DStageDir=$PKG" installer.iss
+          $isccExitCode = $LASTEXITCODE
+          if ($isccExitCode -ne 0) {
+            [Console]::Error.WriteLine("Inno Setup failed (exit code $isccExitCode).")
+            exit $isccExitCode
+          }
+
+      - name: Create MSI Installer
+        shell: pwsh
+        run: |
+          $VERSION = $env:WINDOWS_VERSION
+          $PKG = $env:WINDOWS_STAGE
+          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+
+          heat.exe dir "$PKG" -dr INSTALLDIR -cg HarvestedComponents -ag -g1 -sf -srd -var "var.SourceDir" -out harvest.wxs
+          $heatExitCode = $LASTEXITCODE
+          if ($heatExitCode -ne 0) { exit $heatExitCode }
+          candle.exe installer.wxs harvest.wxs -arch x64 -dSourceDir="$PKG" -dVersion="$VERSION" -ext WixUIExtension
+          $candleExitCode = $LASTEXITCODE
+          if ($candleExitCode -ne 0) { exit $candleExitCode }
+          light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension
+          $lightExitCode = $LASTEXITCODE
+          if ($lightExitCode -ne 0) { exit $lightExitCode }
+
+      - name: Audit Windows public artifact set
+        shell: pwsh
+        run: |
+          $msix = @(Get-ChildItem "target/release-artifacts/*.msix" -ErrorAction SilentlyContinue)
+          if ($msix.Count -ne 0) {
+            throw "Public GitHub releases must not contain MSIX artifacts; use the Store-only just msix workflow"
+          }
+          $artifacts = @(
+            Get-ChildItem "target/release-artifacts/*-Setup.exe"
+            Get-ChildItem "target/release-artifacts/*.msi"
+          )
+          if ($artifacts.Count -ne 2) {
+            throw "Expected exactly one EXE and one MSI public release artifact"
+          }
+
+      - name: Sign and verify Windows release artifacts
+        if: env.WINDOWS_SIGNING == '1'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $artifacts = @(
+            Get-ChildItem "target/release-artifacts/*-Setup.exe"
+            Get-ChildItem "target/release-artifacts/*.msi"
+          )
+          foreach ($artifact in $artifacts) {
+            & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /f $env:WINDOWS_CERTIFICATE_PATH `
+              /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+              $artifact.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $($artifact.FullName)" }
+            & $env:WINDOWS_SIGNTOOL verify /pa /all /v $artifact.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Signature verification failed: $($artifact.FullName)"
+            }
+          }
+
+      - name: Audit final Windows installer payloads
+        shell: pwsh
+        run: |
+          $VERSION = $env:WINDOWS_VERSION
+          $msi = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi").Path
+          $setup = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}-Setup.exe").Path
+          $msiRoot = Join-Path $env:RUNNER_TEMP "ebirforms-final-installers\msi"
+          Remove-Item $msiRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $msiRoot | Out-Null
+
+          & pwsh -NoProfile -File scripts/audit_final_setup.ps1 -Installer $setup -Python python
+          $setupAuditExitCode = $LASTEXITCODE
+          if ($setupAuditExitCode -ne 0) { exit $setupAuditExitCode }
+
+          $msiProcess = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
+            "/a",
+            "`"$msi`"",
+            "/qn",
+            "TARGETDIR=`"$msiRoot`""
+          )
+          if ($msiProcess.ExitCode -ne 0) {
+            throw "Could not administratively extract final MSI: $($msiProcess.ExitCode)"
+          }
+          python scripts/audit_no_legacy.py --package-root $msiRoot
+          $msiAuditExitCode = $LASTEXITCODE
+          if ($msiAuditExitCode -ne 0) { exit $msiAuditExitCode }
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          if-no-files-found: error
+          path: |
+            target/release-artifacts/*-Setup.exe
+            target/release-artifacts/*.msi
+
+      - name: Upload Windows stage for MSIX packaging
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-stage
+          retention-days: 1
+          if-no-files-found: error
+          path: target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${{ env.WINDOWS_VERSION }}
+
+  msix:
+    needs: installers
+    runs-on: windows-latest
+    continue-on-error: ${{ inputs.release == true }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows stage
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-stage
+          path: target/windows-stage
+
+      - name: Resolve Windows MSIX signing mode
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+          $sdk = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          if (-not $sdk) { throw "Windows SDK signing tools were not found" }
+          $signtool = Join-Path $sdk.FullName "x64\signtool.exe"
+          if (-not (Test-Path $signtool)) { throw "signtool.exe was not found" }
+          "WINDOWS_SIGNTOOL=$signtool" >> $env:GITHUB_ENV
+          if ($hasPfx -and $hasPassword) {
+            "WINDOWS_SIGNING=1" >> $env:GITHUB_ENV
+            $certificate = Join-Path $env:RUNNER_TEMP "windows-release-signing.pfx"
+            [IO.File]::WriteAllBytes(
+              $certificate,
+              [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX)
+            )
+            "WINDOWS_CERTIFICATE_PATH=$certificate" >> $env:GITHUB_ENV
+          } else {
+            "WINDOWS_SIGNING=0" >> $env:GITHUB_ENV
+          }
+
+      - name: Read MSIX version and build number
+        shell: pwsh
+        run: |
+          $cargo = Get-Content Cargo.toml -Raw
+          $workspacePackage = [regex]::Match($cargo, '(?ms)^\[workspace\.package\]\s*(.*?)(?=^\[|\z)')
+          $versionMatch = [regex]::Match($workspacePackage.Groups[1].Value, '(?m)^version\s*=\s*"([^"]+)"')
+          if (-not $versionMatch.Success) { throw "Could not read [workspace.package] version from Cargo.toml" }
+          $buildMatch = [regex]::Match((Get-Content justfile -Raw), 'env_var_or_default\("BUILD_NUMBER",\s*"(\d+)"\)')
+          if (-not $buildMatch.Success) { throw "Could not read numeric BUILD_NUMBER default from justfile" }
+          "WINDOWS_VERSION=$($versionMatch.Groups[1].Value)" >> $env:GITHUB_ENV
+          "WINDOWS_BUILD_NUMBER=$($buildMatch.Groups[1].Value)" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force -Path target/release-artifacts | Out-Null
+
+      - name: Build and sign MSIX packages
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $version = $env:WINDOWS_VERSION
+          $stage = "target/windows-stage"
+          $storePackage = "target/release-artifacts/eBIRForms-Windows-x64-$version-store.msix"
+          $sideloadPackage = "target/release-artifacts/eBIRForms-Windows-x64-$version.msix"
+          $certificatePath = $null
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package_msix.ps1 `
+            -ExePath "$stage/bir.exe" -AssetsDir "$stage/assets" `
+            -Version $version -BuildNumber ([int]$env:WINDOWS_BUILD_NUMBER) `
+            -OutFile $storePackage
+          if ($LASTEXITCODE -ne 0) { throw "Store-upload MSIX packaging failed: $LASTEXITCODE" }
+
+          if ($env:WINDOWS_SIGNING -eq '1') {
+            $pfx = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+              $env:WINDOWS_CERTIFICATE_PATH,
+              $env:WINDOWS_CERTIFICATE_PASSWORD
+            )
+            try {
+              $publisher = $pfx.Subject
+            } finally {
+              $pfx.Dispose()
+            }
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package_msix.ps1 `
+              -ExePath "$stage/bir.exe" -AssetsDir "$stage/assets" `
+              -Version $version -BuildNumber ([int]$env:WINDOWS_BUILD_NUMBER) `
+              -Publisher $publisher -OutFile $sideloadPackage
+            if ($LASTEXITCODE -ne 0) { throw "Sideload MSIX packaging failed: $LASTEXITCODE" }
+            & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /f $env:WINDOWS_CERTIFICATE_PATH `
+              /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+              $sideloadPackage
+            if ($LASTEXITCODE -ne 0) { throw "Signing sideload MSIX failed: $LASTEXITCODE" }
+            & $env:WINDOWS_SIGNTOOL verify /pa $sideloadPackage
+            if ($LASTEXITCODE -ne 0) { throw "Sideload MSIX signature verification failed: $LASTEXITCODE" }
+          } else {
+            $signingCertificate = New-SelfSignedCertificate -Type Custom `
+              -Subject "CN=eBIRForms CI Test Signing" `
+              -KeyUsage DigitalSignature `
+              -FriendlyName "eBIRForms CI Test Signing" `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
+              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+            $publisher = $signingCertificate.Subject
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package_msix.ps1 `
+              -ExePath "$stage/bir.exe" -AssetsDir "$stage/assets" `
+              -Version $version -BuildNumber ([int]$env:WINDOWS_BUILD_NUMBER) `
+              -Publisher $publisher -OutFile $sideloadPackage
+            if ($LASTEXITCODE -ne 0) { throw "Sideload MSIX packaging failed: $LASTEXITCODE" }
+            & $env:WINDOWS_SIGNTOOL sign /fd SHA256 /sha1 $signingCertificate.Thumbprint $sideloadPackage
+            if ($LASTEXITCODE -ne 0) { throw "Signing sideload MSIX failed: $LASTEXITCODE" }
+            Export-Certificate -Cert $signingCertificate `
+              -FilePath "target/release-artifacts/eBIRForms-CI-test-signing.cer" | Out-Null
+            $certificatePath = "target/release-artifacts/eBIRForms-CI-test-signing.cer"
+          }
+          if ($certificatePath) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/smoke_msix.ps1 `
+              -Package $sideloadPackage -Certificate $certificatePath `
+              -LogPath "target/release-artifacts/smoke-msix.log" `
+              -StderrLogPath "target/release-artifacts/smoke-msix-layout-stderr.log"
+          } else {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/smoke_msix.ps1 `
+              -Package $sideloadPackage `
+              -LogPath "target/release-artifacts/smoke-msix.log" `
+              -StderrLogPath "target/release-artifacts/smoke-msix-layout-stderr.log"
+          }
+          if ($LASTEXITCODE -ne 0) { throw "MSIX smoke test failed: $LASTEXITCODE" }
+
+      - name: Upload Windows MSIX artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msix
+          if-no-files-found: error
+          path: |
+            target/release-artifacts/*.msix
+            target/release-artifacts/*.cer
+            target/release-artifacts/smoke-msix.log
+            target/release-artifacts/smoke-msix-layout-stderr.log
+
+  # ── Linux ────────────────────────────────────────────────────────────────

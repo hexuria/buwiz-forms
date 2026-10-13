@@ -248,18 +248,21 @@ execution was safely refused because a real installation is registered.
 
 **Facts:**
 - Activation is logged as successful, but no process is ever seen and no app log is written.
-- `bir.exe` imports `VCRUNTIME140.dll` and `VCRUNTIME140_1.dll`. The package ships `vcruntime140.dll` and `msvcp140.dll` copied from System32, but not `vcruntime140_1.dll`.
+- The packager follows `dumpbin /dependents`; the runtime payload now includes the required `VCRUNTIME140_1.dll`.
+- On this Server 2022 VM, with UAC disabled and the built-in Administrator account, the unpacked package layout launches, paints a window and remains alive for 10 seconds. Packaged activation still produces no process.
 - The release build uses `panic = "abort"` and has no console.
 
 **Hypotheses (unconfirmed):**
 - (a) incomplete or mixed packaged VC runtime;
 - (b) package-context startup (CWD `System32`, virtualized AppData) aborts before tracing starts;
 - (c) the Server 2022 SKU.
+- (d) UAC disabled (`EnableLUA=0`) / built-in Administrator blocks packaged activation, matching Start Menu/Search activation failures on this VM.
 
 - [ ] **8.1 Diagnose:** loader snaps (`gflags +sls`) or Procmon on activation, `Invoke-CommandInDesktopPackage` with a console, and a Windows 11 retest. Record the result here.
 - [ ] **8.2** If existing diagnostics are insufficient, add an opt-in early startup breadcrumb before DB/UI initialization. Log only startup stage/error category, never taxpayer fields, DB contents or credentials. A panic hook alone cannot diagnose a loader failure before Rust starts; preserve loader/activation evidence from 8.1.
 - [ ] **8.3** If (a): depend on the `Microsoft.VCLibs.140.00.UWPDesktop` framework in `assets/windows/AppxManifest.xml` instead of copying DLLs. If (b): fix the startup path.
-- **Acceptance:** #90 step 4 launch on Windows 11 and Server 2022.
+- **Acceptance remains open:** packaged activation on Windows 11 with UAC enabled, using `smoke_msix.ps1 -RequireActivation`. The UAC-disabled host's registration and unpacked-layout checks do not close #94.
+- **Progress:** User-provided Server 2022 evidence shows the unpacked layout paints and persists while packaged activation produces no process. The revised smoke gates registration and layout execution, skipping activation only when `EnableLUA=0`; Windows 11 UAC-on activation remains unverified.
 
 ---
 
