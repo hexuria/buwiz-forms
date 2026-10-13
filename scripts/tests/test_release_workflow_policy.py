@@ -281,9 +281,15 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIsNotNone(just_install)
         self.assertIsNotNone(just_step)
         if just_install is not None:
-            self.assertNotRegex(just_install.group(1), r"(?m)^\s+if:")
+            self.assertRegex(
+                just_install.group(1),
+                r"(?m)^\s+if: needs\.changes\.outputs\.code != 'false'$",
+            )
         if just_step is not None:
-            self.assertNotRegex(just_step.group(1), r"(?m)^\s+if:")
+            self.assertRegex(
+                just_step.group(1),
+                r"(?m)^\s+if: needs\.changes\.outputs\.code != 'false'$",
+            )
         self.assertLess(
             check.index("    - name: Install Rust Toolchain"),
             check.index("    - name: Rust Cache"),
