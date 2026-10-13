@@ -2052,7 +2052,9 @@ pub(crate) fn push_notification(
 impl Render for AppState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(feature = "agent")]
-        crate::agent::apply_agent(self, window, cx);
+        if self.scrolled_job.is_some() {
+            crate::agent::apply_agent(self, window, cx);
+        }
 
         // Apply a lifecycle change the administrator prompt authorised. It
         // lands here because this is the first point after the prompt

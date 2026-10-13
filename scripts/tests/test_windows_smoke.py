@@ -2,6 +2,8 @@ import struct
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from scripts import windows_smoke
 
@@ -47,6 +49,36 @@ class WindowsSmokeTests(unittest.TestCase):
     def test_dark_pixel_ratio_half_black(self):
         pixels = bytes([0x00, 0x00, 0x00, 0x00]) * 4 + bytes([0xFF, 0xFF, 0xFF, 0x00]) * 4
         self.assertEqual(windows_smoke.dark_pixel_ratio(pixels), 0.5)
+
+    def test_capture_requires_foreground_preview(self):
+        user32 = Mock()
+        user32.GetForegroundWindow.return_value = 9
+        rect = SimpleNamespace(left=10, top=20, right=30, bottom=40)
+        with self.assertRaisesRegex(windows_smoke.PaintCaptureError, "foregrounded"):
+            windows_smoke.ensure_preview_capture_visible(user32, 8, rect)
+        user32.SetForegroundWindow.assert_called_once_with(8)
+        user32.WindowFromPoint.assert_not_called()
+
+    def test_capture_rejects_occlusion_at_every_sample(self):
+        rect = SimpleNamespace(left=10, top=20, right=30, bottom=40)
+        for index in range(5):
+            with self.subTest(index=index):
+                user32 = Mock()
+                user32.GetForegroundWindow.return_value = 8
+                roots = [8] * 5
+                roots[index] = 9
+                user32.GetAncestor.side_effect = roots
+                with self.assertRaisesRegex(windows_smoke.PaintCaptureError, "obscured"):
+                    windows_smoke.ensure_preview_capture_visible(user32, 8, rect)
+
+    def test_capture_accepts_only_owned_visible_area(self):
+        user32 = Mock()
+        user32.GetForegroundWindow.return_value = 8
+        user32.GetAncestor.return_value = 8
+        rect = SimpleNamespace(left=10, top=20, right=30, bottom=40)
+        windows_smoke.ensure_preview_capture_visible(user32, 8, rect)
+        points = [(call.args[0].x, call.args[0].y) for call in user32.WindowFromPoint.call_args_list]
+        self.assertEqual(points, [(10, 20), (29, 20), (10, 39), (29, 39), (20, 30)])
 
     def test_smoke_env_strips_sftp(self):
         with tempfile.TemporaryDirectory() as directory:

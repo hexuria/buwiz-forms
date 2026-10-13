@@ -91,7 +91,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 **Blind spots, written down:**
 - GitHub runners have no GPU (WARP renderer).
 - Foreground-window rules on a service desktop differ from a real session.
-- The mailbox drains while `AppState::render` runs; a hidden app cannot reliably receive agent operations. Tray show/graceful exit stay explicit manual acceptance, not claims made from the hide-only phase.
+- Normal mailbox requests drain from a work-gated UI-thread timer, independently of painting. The tray phase checks hello while hidden, show/hide via the real global action handlers, and graceful shutdown while hidden. Clicking the OS tray menu remains manual acceptance. Scrolled screenshot jobs retain paint-driven progress.
 - So §5's foreground check stays a manual VM step.
 
 ---

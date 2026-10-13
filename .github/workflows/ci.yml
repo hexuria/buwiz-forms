@@ -234,6 +234,10 @@ jobs:
     - name: Test
       run: cargo test --locked --workspace
 
+    - name: Agent mailbox scheduling regression
+      if: runner.os == 'Windows'
+      run: cargo test --locked -p bir-desktop --features dev-tools,agent --lib agent::drain::tests::agent_mailbox_drains_without_rendering_app_state -- --exact
+
     - name: Install Windows packaging tools
       if: runner.os == 'Windows'
       shell: pwsh

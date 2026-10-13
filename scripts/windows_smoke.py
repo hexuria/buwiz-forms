@@ -28,15 +28,30 @@ PHASES = ("preview-1601c", "preview-2551q", "tray", "submit")
 SMOKE_TIN = "12345678800000"
 PANIC_MARKERS = ("panicked at", "overflowed its stack")
 TRAY_NOTE = (
-    "Showing the window again and graceful exit while hidden are not "
-    "agent-reachable because the agent mailbox drains in AppState::render; "
-    "cover those as manual VM steps (#98)."
+    "Hide/show uses the real global keybinding handlers; clicking the OS "
+    "tray menu remains a manual VM step (#98)."
 )
 PAINT_THRESHOLD = 0.02
 
 
 class PaintCaptureError(RuntimeError):
     """The desktop or preview child could not be captured."""
+
+
+def ensure_preview_capture_visible(user32: Any, hwnd: int, rect: Any) -> None:
+    user32.SetForegroundWindow(hwnd)
+    if user32.GetForegroundWindow() != hwnd:
+        raise PaintCaptureError("preview could not be foregrounded for screen capture")
+    for x, y in (
+        (rect.left, rect.top),
+        (rect.right - 1, rect.top),
+        (rect.left, rect.bottom - 1),
+        (rect.right - 1, rect.bottom - 1),
+        ((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2),
+    ):
+        root = user32.GetAncestor(user32.WindowFromPoint(wintypes.POINT(x, y)), 2)
+        if root != hwnd:
+            raise PaintCaptureError("preview is obscured or off-screen; screen capture is invalid")
 
 
 def dark_pixel_ratio(pixels: bytes) -> float:
@@ -106,6 +121,13 @@ def _capture_preview_dark_ratio(pid: int) -> float:
     user32.EnumWindows.restype = wt.BOOL
     user32.EnumChildWindows.argtypes = [wt.HWND, ctypes.c_void_p, wt.LPARAM]
     user32.EnumChildWindows.restype = wt.BOOL
+    user32.SetForegroundWindow.argtypes = [wt.HWND]
+    user32.SetForegroundWindow.restype = wt.BOOL
+    user32.GetForegroundWindow.restype = wt.HWND
+    user32.WindowFromPoint.argtypes = [wt.POINT]
+    user32.WindowFromPoint.restype = wt.HWND
+    user32.GetAncestor.argtypes = [wt.HWND, wt.UINT]
+    user32.GetAncestor.restype = wt.HWND
     user32.GetDC.argtypes = [wt.HWND]
     user32.GetDC.restype = wt.HDC
     user32.ReleaseDC.argtypes = [wt.HWND, wt.HDC]
@@ -182,6 +204,7 @@ def _capture_preview_dark_ratio(pid: int) -> float:
     width, height = rect.right - rect.left, rect.bottom - rect.top
     if width <= 0 or height <= 0:
         raise PaintCaptureError("WRY_WEBVIEW child window has empty bounds")
+    ensure_preview_capture_visible(user32, preview_hwnd[0], rect)
 
     screen_dc = user32.GetDC(None)
     if not screen_dc:
@@ -557,14 +580,18 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
             marker = scan_logs(read_text(stdout_path), read_text(stderr_path))
             if marker:
                 raise SmokeError(marker)
-            result["step_reached"] = "visibility hidden; process alive after 3s"
-            client.close()
-            client = None
-            proc.kill()
-            proc.wait(timeout=5)
-            result["exit_code"] = proc.returncode
-            result["status"] = "pass"
-            return result
+            hello = client.request({"op": "hello"})
+            if not hello.get("ok"):
+                raise SmokeError(f"hello while hidden failed: {hello}")
+            result["step_reached"] = "visibility hidden; hello answered"
+            reply = client.request({"op": "keybinding", "binding": "app.toggle_visibility", "scope": "global"})
+            if not reply.get("ok"):
+                raise SmokeError(f"show while hidden failed: {reply}")
+            result["step_reached"] = "visibility restored"
+            reply = client.request({"op": "keybinding", "binding": "app.toggle_visibility", "scope": "global"})
+            if not reply.get("ok"):
+                raise SmokeError(f"hide before shutdown failed: {reply}")
+            result["step_reached"] = "hidden again for graceful shutdown"
         elif phase == "submit":
             invoke(client, "filing.start", {"code": "1601C", "year": year, "period": 1, "tin": SMOKE_TIN})
             invoke(client, "form.fill", {"any_taxes_withheld": "Yes", "category_of_agent": "P"})
