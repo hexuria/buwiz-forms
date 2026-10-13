@@ -25,6 +25,9 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::form_header::{
     AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
@@ -32,6 +35,7 @@ use crate::views::form_header::{
     separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 impl EventEmitter<QueueableFormEvent> for Form0619EView {}
 
@@ -116,6 +120,8 @@ pub struct Form0619EView {
     /// Validate ran at the current entries; every edit clears it.
     validated: bool,
     header: FormHeaderState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -131,9 +137,9 @@ impl Form0619EView {
             "email" => draft.email.clone(),
             "i14" => money_text(draft.item_14_amount_of_remittance),
             "i15" => money_text(draft.item_15_amount_remitted_previously),
-            "i17a" => money_text(draft.item_17a_surcharge),
-            "i17b" => money_text(draft.item_17b_interest),
-            "i17c" => money_text(draft.item_17c_compromise),
+            "i17a" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Surcharge),
+            "i17b" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Interest),
+            "i17c" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Compromise),
             _ => String::new(),
         }
     }
@@ -192,6 +198,13 @@ impl Form0619EView {
         draft.zip_code = self.input_text("zip", cx).trim().to_string();
         draft.contact_number = self.input_text("phone", cx).trim().to_string();
         draft.email = self.input_text("email", cx).trim().to_string();
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form0619EDraft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -649,9 +662,17 @@ impl Form0619EView {
                 d.item_16_net_amount_of_remittance,
                 cx,
             ),
-            self.field("i17a", layout, false),
-            self.field("i17b", layout, false),
-            self.field("i17c", layout, false),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .validation_errors
+                    .iter()
+                    .chain(&self.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             self.computed("17D — Total penalties", d.item_17d_total_penalties, cx),
             self.computed(
                 "18 — Total amount of remittance",
@@ -696,6 +717,22 @@ impl QueueableFormView for Form0619EView {
             inputs.insert(key.to_string(), input);
         }
         let validation_errors = draft.validate();
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = vec![[
+            inputs["i17a"].clone(),
+            inputs["i17b"].clone(),
+            inputs["i17c"].clone(),
+        ]];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -707,6 +744,7 @@ impl QueueableFormView for Form0619EView {
             release_claim_confirm_open: false,
             validated: false,
             header: FormHeaderState::new(),
+            penalty,
             _subscriptions: subscriptions,
         }
     }

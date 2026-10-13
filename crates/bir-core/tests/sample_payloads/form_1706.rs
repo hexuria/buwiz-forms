@@ -1,8 +1,10 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1706::{
     Form1706Draft, Form1706PropertyClass, Form1706SellerType, Form1706TaxRelief,
     Form1706TaxableBase, Form1706TransactionType,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1706() -> Form1706Draft {
     let mut draft = Form1706Draft::new_from_profile(&dummy_profile("1706", "Individual"), 2025, 1);
@@ -44,6 +46,7 @@ fn sample_1706() -> Form1706Draft {
     draft.surcharge = 25.5;
     draft.interest = 10.005;
     draft.compromise = 1_000.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -59,5 +62,16 @@ fn form_1706_sample_payload_is_current() {
         "1706-v2018",
         &payload,
         "80132b201b450803fe84940c2b1ad78dd1b7d4fbf3cbcaa4c7611d751f3ffc1c",
+    );
+}
+
+/// Event-based: the calendar has no 1706 deadline.
+#[test]
+fn form_1706_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_1706,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }

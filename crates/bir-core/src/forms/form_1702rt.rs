@@ -6,6 +6,7 @@
 //! centavos or more. XML persistence is supported, but electronic submission
 //! remains disabled until an independently reviewed submission contract exists.
 
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -104,6 +105,16 @@ impl WholePeso {
         } else {
             grouped
         }
+    }
+}
+
+/// Items 17-19 hold whole pesos: a computed amount is rounded.
+impl super::penalty_items::PenaltyField for WholePeso {
+    fn penalty_value(&self) -> f64 {
+        self.0 as f64
+    }
+    fn set_penalty_value(&mut self, value: f64) {
+        *self = Self(value.round() as i64);
     }
 }
 
@@ -561,6 +572,10 @@ pub struct Form1702RTDraft {
     pub email: String,
     pub deduction_method: Form1702RTDeductionMethod,
     pub part_ii: Form1702RTPartII,
+    /// Items 17-19's computed values, overrides, note and engine inputs
+    /// (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     /// Official fixed payment rows: Cash/Bank Debit Memo, Check, Tax Debit
     /// Memo, and Others.
     pub payment_details: [Form1702RTPaymentDetail; 4],
@@ -614,6 +629,7 @@ impl Form1702RTDraft {
             .ok()
         });
         let mut draft = Self {
+            penalty: PenaltyState::for_profile(profile),
             tin: profile.tin.full(),
             taxable_year: year,
             month,

@@ -1,8 +1,10 @@
 use crate::dummy_profile;
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_2000::{
     Form2000AffixtureMode, Form2000Draft, Form2000OtherParty, Form2000PaymentRow,
     Form2000RemittanceRow, form_2000_atc_option,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2000() -> Form2000Draft {
     let mut draft =
@@ -70,6 +72,7 @@ fn sample_2000() -> Form2000Draft {
     }];
     draft.surcharge = 25.5;
     draft.interest = 10.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -143,4 +146,15 @@ pub(crate) fn check_sample_with_layout(
     }
     assert_eq!(std::fs::read_to_string(&plain_path).unwrap(), plaintext);
     assert_eq!(std::fs::read(&iaf_path).unwrap(), encrypted);
+}
+
+/// The calendar lists 2000 as event-based.
+#[test]
+fn form_2000_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2000,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
+    );
 }

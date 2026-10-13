@@ -2,11 +2,14 @@
 //! `Form1701ADraft::to_bir_field_map`); profile fields are filled the way
 //! `loadBGData` does.
 
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
+// The samples enter their penalties by hand (`keep_entered_penalties`).
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1701a::{
     Form1701AAtc, Form1701ACivilStatus, Form1701AColumn, Form1701ADraft, Form1701AFilerType,
     Form1701AFilingStatus, Form1701AMoreRow, Form1701ASpouse,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1701a() -> Form1701ADraft {
     let mut draft = Form1701ADraft::new_from_profile(&dummy_profile("1701A", "Individual"), 2025);
@@ -31,6 +34,7 @@ fn sample_1701a() -> Form1701ADraft {
     };
     draft.other_income_41_description = "Interest income".to_string();
     draft.other_credits_description = "Sample credit".to_string();
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -73,6 +77,7 @@ fn sample_1701a_joint() -> Form1701ADraft {
         cwt_q1_q3: 4_500.5,
         ..Form1701AColumn::default()
     };
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -111,6 +116,7 @@ fn form_1701a_joint_more_sample_payload_is_current() {
         more_row("Royalty income", 12_000.4, 0.0),
         more_row("Prize", 750.0, 0.0),
     ];
+    draft.keep_entered_penalties();
     draft.recompute();
     assert_eq!(draft.other_income_42_description, "OTHERS");
     assert_eq!(draft.taxpayer.other_income_42, 13_250.0);
@@ -146,6 +152,7 @@ fn form_1701a_more_sample_payload_is_current() {
         more_row("Rental income", 500.0, 0.0),
         more_row("Consulting", 1_500.25, 0.0),
     ];
+    draft.keep_entered_penalties();
     draft.recompute();
     assert_eq!(draft.eight_other_income_51_description, "OTHERS");
     assert_eq!(draft.taxpayer.eight_other_income_51, 2_000.0);
@@ -174,6 +181,7 @@ fn form_1701a_joint_many_rows_sample_payload_is_current() {
             .other_income_more
             .push(more_row(&format!("Other income {n}"), amount, 0.0));
     }
+    draft.keep_entered_penalties();
     draft.recompute();
     assert_eq!(draft.other_income_more.len(), 12);
     assert_eq!(draft.taxpayer.other_income_42, 77_560.0);
@@ -187,4 +195,16 @@ fn form_1701a_joint_many_rows_sample_payload_is_current() {
         &payload,
         "1f22c121e80d3d392f0bf3e5f04b1cbac82c2c0bff0b0fa445b31b40c51f5943",
     );
+}
+
+/// Calendar year 2025: due 15 April 2026.
+#[test]
+fn form_1701a_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1701a, Deadline::Calendar(day(2026, 4, 15)));
+}
+
+/// Joint return: the spouse column too.
+#[test]
+fn form_1701a_joint_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1701a_joint, Deadline::Calendar(day(2026, 4, 15)));
 }

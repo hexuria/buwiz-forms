@@ -170,10 +170,22 @@ pub fn open_form_view<V: QueueableFormView>(
     window: &mut Window,
     cx: &mut Context<AppState>,
 ) -> AnyView {
-    let draft = match db.lock() {
-        Ok(guard) => V::load_draft(&guard, profile, year, period),
-        Err(_) => V::new_draft(profile, year, period),
+    let (mut draft, deadline_overrides) = match db.lock() {
+        Ok(guard) => (
+            V::load_draft(&guard, profile, year, period),
+            guard.get_deadline_overrides(),
+        ),
+        Err(_) => (V::new_draft(profile, year, period), Vec::new()),
     };
+    // Penalties are measured from the deadline the Calendar shows (deadline
+    // overrides applied) with the profile's EOPT class; an open Draft shows
+    // today's computed values. Filed returns keep what they were filed with.
+    if !V::Draft::penalty_items().is_empty() {
+        draft.apply_penalty_profile(profile, &deadline_overrides);
+        if draft.lifecycle().is_editable() {
+            draft.compute();
+        }
+    }
     let view = cx.new(|cx| V::new(draft, Arc::clone(&db), window, cx));
     cx.subscribe_in(
         &view,

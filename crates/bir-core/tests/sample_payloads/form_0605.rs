@@ -1,3 +1,4 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{dummy_profile, samples_dir};
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt};
 use bir_core::forms::form_0605::{
@@ -5,6 +6,7 @@ use bir_core::forms::form_0605::{
     Form0605TypeOfPayment,
 };
 use bir_core::forms::form_0605_official::{form_0605_atc, form_0605_tax_type};
+use bir_core::forms::queueable::QueueableForm as _;
 use bir_core::official_xml;
 use sha2::{Digest, Sha256};
 
@@ -28,6 +30,7 @@ fn sample_0605() -> Form0605Draft {
     draft.item_20a_surcharge = 1_234.5;
     draft.item_20b_interest = 99.995;
     draft.item_20c_compromise = 1_000.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -100,4 +103,20 @@ fn form_0605_sample_payload_is_current() {
         &payload,
         "fb64e6e0472c32572841cf412428308687696df02a10d9758ad63898522948d4",
     );
+}
+
+/// Event-based: the calendar has no 0605 deadline.
+#[test]
+fn form_0605_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_0605,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
+    );
+}
+
+#[test]
+fn form_0605_imported_penalties_are_kept_as_overrides() {
+    penalty_items::check_import(sample_0605, Form0605Draft::from_bir_xml_payload);
 }

@@ -1,7 +1,9 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, check_sample_with_layout, dummy_profile};
 use bir_core::forms::form_1600pt::{
     Form1600PtAgentCategory, Form1600PtDraft, Form1600PtScheduleRow, form_1600pt_atc_index,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1600pt() -> Form1600PtDraft {
     let mut draft =
@@ -25,6 +27,7 @@ fn sample_1600pt() -> Form1600PtDraft {
     draft.other_payments = 250.5;
     draft.surcharge = 125.125;
     draft.interest = 10.0;
+    draft.keep_entered_penalties();
     draft.schedule = vec![
         Form1600PtScheduleRow {
             tin: "987654321000".into(),
@@ -75,6 +78,7 @@ fn sample_1600pt_private() -> Form1600PtDraft {
     draft.atc_rows[0].tax_base = 41_666.665;
     draft.atc_rows[1].tax_base = 1_000_000.0;
     draft.compromise = 1_000.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -128,6 +132,7 @@ fn sample_1600pt_other_atcs() -> Form1600PtDraft {
     }
     draft.other_payments = 500.0;
     draft.interest = 12.5;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -144,4 +149,10 @@ fn form_1600pt_other_atcs_sample_payload_is_current() {
         &payload,
         "ae8b3603f776bca76e74d4a911c2d975e2bbd681529c36759065043d35a543c8",
     );
+}
+
+/// June 2025: due 10 July 2025.
+#[test]
+fn form_1600pt_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1600pt, Deadline::Calendar(day(2025, 7, 10)));
 }

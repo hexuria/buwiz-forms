@@ -365,6 +365,7 @@ impl Form0605Draft {
         }
 
         let mut draft = Form0605Draft {
+            penalty: crate::forms::penalty_items::PenaltyState::imported(),
             id: None,
             tin: format!(
                 "{}{}{}{}",
@@ -416,6 +417,9 @@ impl Form0605Draft {
             lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
 
+        // An imported return carries the penalties it was prepared with:
+        // keep each one as an override so the source amounts round-trip.
+        Form0605Draft::penalty_declaration().adopt_imported(&mut draft);
         draft.recompute();
         verify_computed_source(
             "frm0605:txtTax20D",

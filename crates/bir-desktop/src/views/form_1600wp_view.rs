@@ -25,6 +25,9 @@ use gpui_component::*;
 
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{
     messages_for, new_select_state, on_select, select_field, sync_select, with_field_error,
 };
@@ -34,6 +37,7 @@ use crate::views::form_header::{
     separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
 
@@ -168,6 +172,8 @@ pub struct Form1600WpView {
     validated: bool,
     /// One ATC select per Schedule II row.
     schedule_atc_selects: Vec<Entity<ComboboxState>>,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -223,9 +229,9 @@ impl Form1600WpView {
             "zip" => draft.zip_code.clone(),
             "email" => draft.email.clone(),
             "prev" => money(draft.tax_remitted_previous),
-            "sur" => money(draft.surcharge),
-            "int" => money(draft.interest),
-            "comp" => money(draft.compromise),
+            "sur" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Surcharge),
+            "int" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Interest),
+            "comp" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Compromise),
             _ => {
                 if let Some(row) = key
                     .strip_prefix("base")
@@ -334,6 +340,13 @@ impl Form1600WpView {
         draft.registered_address = self.input_text("address", cx);
         draft.zip_code = self.input_text("zip", cx).trim().to_string();
         draft.email = self.input_text("email", cx).trim().to_string();
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form1600WpDraft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -351,6 +364,9 @@ impl Form1600WpView {
                 input.update(cx, |state, cx| state.set_value(value, window, cx));
             }
         }
+        let penalty_views = PenaltyPartyView::all(&self.draft);
+        self.penalty
+            .update(cx, |section, cx| section.load(&penalty_views, window, cx));
         self.sync_from_inputs(cx);
     }
 
@@ -901,9 +917,17 @@ impl Form1600WpView {
             self.computed("12 — Total tax withheld", d.total_tax_withheld, cx),
             self.text_field("prev", layout, !editable || !d.is_amended),
             self.computed("14 — Tax still due/(overremittance)", d.tax_still_due, cx),
-            self.text_field("sur", layout, !editable),
-            self.text_field("int", layout, !editable),
-            self.text_field("comp", layout, !editable),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .validation_errors
+                    .iter()
+                    .chain(&self.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             self.computed("15D — Total penalties", d.total_penalties, cx),
             with_field_error(
                 self.computed(
@@ -1018,6 +1042,22 @@ impl QueueableFormView for Form1600WpView {
             })
             .collect();
         let validation_errors = draft.validate();
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = vec![[
+            inputs["sur"].clone(),
+            inputs["int"].clone(),
+            inputs["comp"].clone(),
+        ]];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -1030,6 +1070,7 @@ impl QueueableFormView for Form1600WpView {
             header: FormHeaderState::new(),
             validated: false,
             schedule_atc_selects,
+            penalty,
             _subscriptions: subscriptions,
         }
     }

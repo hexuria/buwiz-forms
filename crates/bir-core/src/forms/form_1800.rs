@@ -14,6 +14,8 @@
 //! Item 33; and Item 38 goes negative (a negative tax due) when net gifts are
 //! within the ₱250,000 exemption.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use chrono::NaiveDate;
@@ -165,6 +167,10 @@ pub struct Form1800Draft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// 20.
@@ -193,6 +199,7 @@ impl Form1800Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             filing_year: year,
             open_ended_key,
@@ -295,6 +302,8 @@ impl Form1800Draft {
         self.total_credits =
             cents(self.prior_gift_payments + self.foreign_tax_paid + self.tax_paid_previous);
         self.tax_payable = cents(self.tax_due - self.total_credits);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -680,7 +689,32 @@ impl FormValidator for Form1800Draft {
     }
 }
 
+impl Form1800Draft {
+    /// Items 19A-19C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "19A Surcharge",
+                interest: "19B Interest",
+                compromise: "19C Compromise",
+            ],
+            controls: [
+                "frm1800v2018:Surcharge",
+                "frm1800v2018:Interest",
+                "frm1800v2018:Compromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 18", |d| d.tax_payable,
+        )
+    }
+}
+
 impl QueueableForm for Form1800Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1800";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1800v2018']`).
     const FORM_TYPE: &'static str = "1800v2018";
@@ -769,6 +803,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form1800Draft {
         let mut d = Form1800Draft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             filing_year: 2025,
             open_ended_key: 1,
@@ -923,6 +958,7 @@ mod tests {
         d.queue(crate::filing_queue::QueueAuthSource::Gui).unwrap();
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.surcharge = 99.0;
+        d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
     }
 

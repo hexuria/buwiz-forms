@@ -1,9 +1,11 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile, samples_dir};
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use bir_core::forms::form_2550m::{
     Form2550MAdvancePaymentRow, Form2550MAllocation, Form2550MAmortizedRow,
     Form2550MCapitalGoodsRow, Form2550MDraft, Form2550MPurchase, Form2550MWithholdingRow,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 use bir_core::official_xml;
 use sha2::{Digest, Sha256};
 
@@ -36,6 +38,7 @@ fn sample_2550m() -> Form2550MDraft {
     draft.advance_payments = 200.0;
     draft.surcharge = 25.5;
     draft.interest = 10.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -252,5 +255,16 @@ fn form_2550m_credits_sample_payload_is_current() {
         "2550M-092022",
         &payload(sample_2550m_credits()),
         "98c8f3c08bb6f0a5db771793181015b9e07b1558b7f6e3c9ec63f203ed092aca",
+    );
+}
+
+/// The calendar has no 2550-M rule.
+#[test]
+fn form_2550m_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2550m,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }

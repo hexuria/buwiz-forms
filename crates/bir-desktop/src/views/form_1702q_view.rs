@@ -25,6 +25,9 @@ use gpui_rsx::rsx;
 
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{
     self, field_error, messages_for, select_field, with_field_error,
 };
@@ -34,6 +37,7 @@ use crate::views::form_header::{
     separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 use bir_core::profile::TaxpayerProfile;
 
 impl EventEmitter<QueueableFormEvent> for Form1702qView {}
@@ -744,6 +748,8 @@ pub struct Form1702qView {
     /// Validate ran at the current entries; every edit clears it.
     validated: bool,
     header: FormHeaderState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -771,6 +777,16 @@ impl Form1702qView {
 
     /// Editor text for one input from the draft.
     fn initial(draft: &Draft, key: &str) -> String {
+        // The penalty items show their override; empty means "use computed".
+        for (item, component) in [
+            ("p2_surcharge", PenaltyComponent::Surcharge),
+            ("p2_interest", PenaltyComponent::Interest),
+            ("p2_compromise", PenaltyComponent::Compromise),
+        ] {
+            if key == item {
+                return penalty_section::override_text(&draft.penalty, component);
+            }
+        }
         if let Some(text) = TEXTS.iter().find(|t| t.key == key) {
             return (text.get)(draft);
         }
@@ -823,6 +839,13 @@ impl Form1702qView {
         parse_errors.extend(apply_amount_texts(&mut draft, |key| {
             texts.get(key).cloned().unwrap_or_default()
         }));
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form1702qDraft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -1118,8 +1141,11 @@ impl Form1702qView {
         cx: &Context<Self>,
     ) -> Vec<(u32, AnyElement)> {
         let editable = self.draft.lifecycle.is_editable();
+        // Items 21-23 render as the shared penalty section (item 21's slot).
+        let penalties = ["p2_surcharge", "p2_interest", "p2_compromise"];
         let mut rows: Vec<(u32, AnyElement)> = moneys
             .iter()
+            .filter(|m| !penalties.contains(&m.key))
             .map(|m| {
                 (
                     label_item_no(m.label),
@@ -1127,6 +1153,22 @@ impl Form1702qView {
                 )
             })
             .collect();
+        if moneys.iter().any(|m| m.key == penalties[0]) {
+            rows.push((
+                21,
+                penalty_section::render(
+                    &self.penalty,
+                    &PenaltyPartyView::all(&self.draft),
+                    &self
+                        .validation_errors
+                        .iter()
+                        .chain(&self.parse_errors)
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                    cx,
+                ),
+            ));
+        }
         rows.extend(computed.iter().map(|c| {
             (
                 label_item_no(c.label),
@@ -1487,6 +1529,22 @@ impl QueueableFormView for Form1702qView {
             },
         ));
         let validation_errors = draft.validate();
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = vec![[
+            inputs["p2_surcharge"].clone(),
+            inputs["p2_interest"].clone(),
+            inputs["p2_compromise"].clone(),
+        ]];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -1500,6 +1558,7 @@ impl QueueableFormView for Form1702qView {
             release_claim_confirm_open: false,
             validated: false,
             header: FormHeaderState::new(),
+            penalty,
             _subscriptions: subscriptions,
         }
     }

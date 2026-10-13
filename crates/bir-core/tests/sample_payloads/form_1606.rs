@@ -1,8 +1,10 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1606::{
     Form1606AgentCategory, Form1606Draft, Form1606PropertyClass, Form1606SellerType,
     Form1606TaxRate, Form1606TaxRelief, Form1606TaxableBaseBox, Form1606Transaction,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1606() -> Form1606Draft {
     let mut draft = Form1606Draft::new_from_profile(&dummy_profile("1606", "Corporation"), 2025, 1);
@@ -45,6 +47,7 @@ fn sample_1606() -> Form1606Draft {
     draft.tax_remitted_previous = 1_000.0;
     draft.surcharge = 140.625;
     draft.interest = 33.335;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -61,4 +64,10 @@ fn form_1606_sample_payload_is_current() {
         &payload,
         "e6690b744ed1a6131134a0e275dadfb4ac5ab77b3c3604e75653cde06899efd6",
     );
+}
+
+/// Transaction in June 2025: due 10 July 2025.
+#[test]
+fn form_1606_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1606, Deadline::Calendar(day(2025, 7, 10)));
 }

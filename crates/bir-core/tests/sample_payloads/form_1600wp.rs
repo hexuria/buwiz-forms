@@ -1,7 +1,9 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1600wp::{
     Form1600WpAgentCategory, Form1600WpDraft, Form1600WpScheduleRow,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn draft(month: u8, day: u8) -> Form1600WpDraft {
     let mut draft =
@@ -23,6 +25,7 @@ fn sample_two_atcs() -> Form1600WpDraft {
     draft.tax_remitted_previous = 1_000.0;
     draft.surcharge = 125.125;
     draft.interest = 10.0;
+    draft.keep_entered_penalties();
     draft.schedule = vec![
         Form1600WpScheduleRow {
             tin: "987654321000".into(),
@@ -51,6 +54,7 @@ fn sample_one_atc() -> Form1600WpDraft {
     draft.toggle_atc("WB194").unwrap();
     draft.atc_rows[0].tax_base = 7_777.775;
     draft.compromise = 1_000.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -99,5 +103,16 @@ fn form_1600wp_no_atc_sample_payload_is_current() {
         "1600WP-08312025",
         "1600wp-v2010-atc0",
         "ac0764b857e205d728a7177184badb6b0cd26c955599265fa8d5099740a9f1da",
+    );
+}
+
+/// The calendar lists 1600-WP as event-based.
+#[test]
+fn form_1600wp_one_atc_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_one_atc,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }

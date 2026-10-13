@@ -25,7 +25,11 @@ use super::form_controls::{
 };
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 /// Kit choice chip that may shrink and wrap inside its card on narrow widths.
 fn choice(
@@ -238,6 +242,9 @@ pub struct Form1706View {
     draft: Form1706Draft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
+    _penalty_subscription: Subscription,
     class_select: Entity<ComboboxState>,
     transaction_select: Entity<ComboboxState>,
     base_select: Entity<ComboboxState>,
@@ -319,9 +326,15 @@ impl Form1706View {
             "others_description" => draft.others_description.clone(),
             "email" => draft.email.clone(),
             "less" => money_text(draft.tax_paid_previous),
-            "surcharge" => money_text(draft.surcharge),
-            "interest" => money_text(draft.interest),
-            "compromise" => money_text(draft.compromise),
+            "surcharge" => {
+                penalty_section::override_text(&draft.penalty, PenaltyComponent::Surcharge)
+            }
+            "interest" => {
+                penalty_section::override_text(&draft.penalty, PenaltyComponent::Interest)
+            }
+            "compromise" => {
+                penalty_section::override_text(&draft.penalty, PenaltyComponent::Compromise)
+            }
             _ => {
                 if let Some(index) = key
                     .strip_prefix("sched")
@@ -709,9 +722,18 @@ impl Form1706View {
                 &["tax_paid_previous", "less"],
             ),
             computed("16 — Tax payable (overpayment)", d.tax_payable, cx),
-            self.f("surcharge", layout),
-            self.f("interest", layout),
-            self.f("compromise", layout),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .kit
+                    .validation_errors
+                    .iter()
+                    .chain(&self.kit.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             computed("17D — Total penalties", d.total_penalties, cx),
             self.with_err(
                 computed(
@@ -873,7 +895,15 @@ impl KitView for Form1706View {
             .rposition(|cell| !cell.trim().is_empty())
             .map_or(0, |last| last + 1);
         d.schedule_1 = cells.into_iter().take(used).collect();
-        reader.errors
+        let mut errors = reader.errors;
+        // An empty penalty box means "use computed"; any amount overrides it.
+        errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &<Form1706Draft as bir_core::forms::queueable::QueueableForm>::penalty_items(),
+            &mut self.draft,
+            cx,
+        ));
+        errors
     }
 }
 
@@ -943,10 +973,24 @@ impl QueueableFormView for Form1706View {
                 },
             ),
         ];
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs =
+            vec![["surcharge", "interest", "compromise"].map(|key| kit.inputs[key].clone())];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        let _penalty_subscription = cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                super::event_form_kit::sync(this, cx);
+            },
+        );
         Self {
             draft,
             db,
             kit,
+            penalty,
+            _penalty_subscription,
             class_select,
             transaction_select,
             base_select,

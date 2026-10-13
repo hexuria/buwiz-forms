@@ -27,6 +27,9 @@ use gpui_rsx::rsx;
 use super::event_form_kit as kit;
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{
     self, field_error, messages_for, select_field, with_field_error,
 };
@@ -36,6 +39,7 @@ use crate::views::form_header::{
     separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 use bir_core::profile::TaxpayerProfile;
 
 impl EventEmitter<QueueableFormEvent> for Form1701AView {}
@@ -682,6 +686,17 @@ fn text(key: &str) -> &'static Text {
         .expect("text input registry is complete")
 }
 
+/// The penalty item a column money id is, if any (Items surcharge,
+/// interest, compromise: the shared penalty section renders those).
+fn penalty_component(id: &str) -> Option<PenaltyComponent> {
+    match id {
+        "surcharge" => Some(PenaltyComponent::Surcharge),
+        "interest" => Some(PenaltyComponent::Interest),
+        "compromise" => Some(PenaltyComponent::Compromise),
+        _ => None,
+    }
+}
+
 fn money_key(who: Who, id: &str) -> String {
     format!("{}:{id}", who.prefix())
 }
@@ -803,6 +818,8 @@ pub struct Form1701AView {
     /// Validate ran at the current entries; every edit clears it.
     validated: bool,
     header: FormHeaderState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -875,6 +892,10 @@ impl Form1701AView {
             let Some(id) = key.strip_prefix(&format!("{}:", who.prefix())) else {
                 continue;
             };
+            // A penalty box shows its override; empty means "use computed".
+            if let Some(component) = penalty_component(id) {
+                return penalty_section::override_text(&who.column(draft).penalty, component);
+            }
             return all_money()
                 .find(|m| m.id == id)
                 .map(|m| Self::money_text((m.get)(who.column(draft))))
@@ -998,6 +1019,13 @@ impl Form1701AView {
                 row.spouse = amounts[1];
             }
         }
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form1701ADraft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -1374,6 +1402,7 @@ impl Form1701AView {
         let column = who.column(&self.draft);
         let mut rows: Vec<(u32, AnyElement)> = moneys
             .iter()
+            .filter(|money| penalty_component(money.id).is_none())
             .map(|money| {
                 if folded_item(&self.draft, money.id) {
                     return (
@@ -1428,6 +1457,33 @@ impl Form1701AView {
             }));
         }
         // Stable sort: a note follows the money row with the same number.
+        if moneys
+            .iter()
+            .any(|money| penalty_component(money.id).is_some())
+        {
+            let index = match who {
+                Who::Taxpayer => 0,
+                Who::Spouse => 1,
+            };
+            let views = PenaltyPartyView::all(&self.draft);
+            let errors: Vec<(String, String)> = self
+                .validation_errors
+                .iter()
+                .chain(&self.parse_errors)
+                .cloned()
+                .collect();
+            rows.push((
+                25,
+                penalty_section::render_party(
+                    &self.penalty,
+                    index,
+                    &views[index],
+                    false,
+                    &errors,
+                    cx,
+                ),
+            ));
+        }
         rows.sort_by_key(|(n, _)| *n);
         rows.into_iter().map(|(_, el)| el).collect()
     }
@@ -2026,6 +2082,24 @@ impl QueueableFormView for Form1701AView {
             },
         ));
         let validation_errors = draft.validate();
+        // Each column's penalty boxes are overrides (empty means "use
+        // computed"): the filer's, then the spouse's.
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = [Who::Taxpayer, Who::Spouse]
+            .map(|who| {
+                ["surcharge", "interest", "compromise"]
+                    .map(|id| inputs[&money_key(who, id)].clone())
+            })
+            .to_vec();
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -2040,6 +2114,7 @@ impl QueueableFormView for Form1701AView {
             release_claim_confirm_open: false,
             validated: false,
             header: FormHeaderState::new(),
+            penalty,
             _subscriptions: subscriptions,
         }
     }

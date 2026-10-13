@@ -1,6 +1,8 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::excise_places::ExcisePlace;
 use bir_core::forms::form_2200c::{Form2200CDraft, Form2200CManner, Form2200CRow};
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2200c() -> Form2200CDraft {
     let mut draft =
@@ -36,6 +38,7 @@ fn sample_2200c() -> Form2200CDraft {
     draft.creditable_excise_tax = 8.0;
     draft.surcharge = 25.0;
     draft.compromise = 10.0;
+    draft.keep_entered_penalties();
     draft.tax_payment = 3_000.0;
     draft.recompute();
     draft
@@ -52,5 +55,16 @@ fn form_2200c_sample_payload_is_current() {
         "2200c-v2018",
         &payload,
         "71c985b171d1b0c4a0e1e34a213deb0428882ab572fbec4b554c29ac1c425826",
+    );
+}
+
+/// Item 1 is a date the calendar's monthly 2200-C rule is not keyed to.
+#[test]
+fn form_2200c_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2200c,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }

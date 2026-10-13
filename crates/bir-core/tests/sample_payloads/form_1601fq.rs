@@ -1,9 +1,13 @@
 use crate::dummy_profile;
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_1601fq::{Form1601FqCategory, Form1601FqDraft, Form1601FqTaxRelief};
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1601fq() -> Form1601FqDraft {
     let mut draft =
         Form1601FqDraft::new_from_profile(&dummy_profile("1601FQ", "Corporation"), 2025, 2);
+    // The sample enters its penalties by hand.
+    draft.keep_entered_penalties();
     draft.set_any_tax_withheld(true);
     draft.set_category(Form1601FqCategory::Private);
     draft.set_tax_relief(Some(Form1601FqTaxRelief::InternationalTaxTreaty));
@@ -30,6 +34,7 @@ fn sample_1601fq() -> Form1601FqDraft {
     draft.remittance_second_month = 1_000.505;
     draft.surcharge = 25.5;
     draft.interest = 10.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -46,4 +51,10 @@ fn form_1601fq_sample_payload_is_current() {
         &payload,
         "d94b93bb3037e91bf9528fc50b44e03baa174ca2fbc364fc39bad5af3bfc2d69",
     );
+}
+
+/// Q2 2025: due the last day of July 2025.
+#[test]
+fn form_1601fq_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1601fq, Deadline::Calendar(day(2025, 7, 31)));
 }

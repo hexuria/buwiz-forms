@@ -26,6 +26,9 @@ use gpui_rsx::rsx;
 
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{
     self, MultiChange, messages_for, multi_select_field, with_field_error,
 };
@@ -34,6 +37,7 @@ use crate::views::form_header::{
     render_header_buttons, render_status_box, revert_for_amendment, separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 use bir_core::profile::TaxpayerProfile;
 
 impl EventEmitter<QueueableFormEvent> for Form2550MView {}
@@ -638,6 +642,8 @@ pub struct Form2550MView {
     header: FormHeaderState,
     /// Validate ran at the current entries; every edit clears it.
     validated: bool,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -697,6 +703,16 @@ impl Form2550MView {
 
     /// Editor text for one input from the draft.
     fn initial(draft: &Form2550MDraft, key: &str) -> String {
+        // Items 25A-25C show their override; empty means "use computed".
+        for (item, component) in [
+            ("25a", PenaltyComponent::Surcharge),
+            ("25b", PenaltyComponent::Interest),
+            ("25c", PenaltyComponent::Compromise),
+        ] {
+            if key == item {
+                return penalty_section::override_text(&draft.penalty, component);
+            }
+        }
         match key {
             "year" => draft.taxable_year.to_string(),
             "sheets" => draft.number_of_attached_sheets.to_string(),
@@ -907,6 +923,13 @@ impl Form2550MView {
             refreshed_rows.push(table.key(row, "input"));
         }
         refreshed.extend(refreshed_rows.iter().map(String::as_str));
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form2550MDraft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = self.draft.lifecycle.updated_at.clone();
         let changed = draft != self.draft;
@@ -1737,9 +1760,17 @@ impl Form2550MView {
             ),
         ];
         let penalties = vec![
-            self.money_field("25a", layout, false),
-            self.money_field("25b", layout, false),
-            self.money_field("25c", layout, false),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .validation_errors
+                    .iter()
+                    .chain(&self.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             self.computed("25D — Total penalties", d.total_penalties, cx),
             self.computed(
                 "26 — Total amount payable/(overpayment)",
@@ -1792,6 +1823,21 @@ impl QueueableFormView for Form2550MView {
             |this: &Self| selected_atcs(&this.draft),
             on_change,
         ));
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = vec![[
+            inputs["25a"].clone(),
+            inputs["25b"].clone(),
+            inputs["25c"].clone(),
+        ]];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, window, cx| {
+                this.sync_from_inputs(window, cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -1804,6 +1850,7 @@ impl QueueableFormView for Form2550MView {
             header: FormHeaderState::new(),
             validated: false,
             atc_select,
+            penalty,
             _subscriptions: subscriptions,
         }
     }
