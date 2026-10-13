@@ -1460,6 +1460,15 @@ impl AppState {
         cx.notify();
     }
 
+    /// A form view is waiting for the next frame to be built
+    /// (`pending_form_*`, mounted in `render`).
+    #[cfg(feature = "agent")]
+    pub(crate) fn has_pending_form_mount(&self) -> bool {
+        self.pending_form_draft.is_some()
+            || self.pending_form_1601c_draft.is_some()
+            || self.pending_form_2550q_draft.is_some()
+    }
+
     pub(crate) fn open_named_form(
         &mut self,
         form_code: &str,

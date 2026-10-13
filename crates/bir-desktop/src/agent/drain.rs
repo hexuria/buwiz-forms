@@ -34,7 +34,19 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
     if app.pending_keybinding.is_some() {
         return;
     }
-    while let Some(posted) = app.agent_request_backlog.pop_front() {
+    loop {
+        // A form opened by an earlier request is built on the next frame
+        // (it needs a `Window`). Until then the next request would read state
+        // without that form, so a `form.fill` right after `filing.start`
+        // failed with "form … is not open". Ask for the frame and resume
+        // after it; the requests stay queued in order.
+        if app.has_pending_form_mount() {
+            cx.notify();
+            break;
+        }
+        let Some(posted) = app.agent_request_backlog.pop_front() else {
+            break;
+        };
         let shutdown = matches!(posted.request.op, Op::Shutdown);
         let mutating = matches!(
             posted.request.op,
@@ -1465,7 +1477,7 @@ impl AppState {
                     .timer(std::time::Duration::from_millis(16))
                     .await;
                 let alive = this.update_in(cx, |app, window, cx| {
-                    if app.scrolled_job.is_some() {
+                    if app.scrolled_job.is_some() || app.has_pending_form_mount() {
                         cx.notify();
                     } else if !app.agent_request_backlog.is_empty()
                         || app
@@ -1552,6 +1564,68 @@ mod tests {
             assert_eq!(response.id, id);
             assert!(response.ok, "{:?}", response.error);
         }
+    }
+
+    #[gpui::test]
+    fn agent_requests_wait_for_a_pending_form_to_mount(cx: &mut gpui::TestAppContext) {
+        use gpui::*;
+        use gpui_agent::mailbox::AgentMailbox;
+        use gpui_agent::protocol::{Op, Request};
+        use std::sync::{Arc, Mutex, atomic::AtomicBool};
+        use std::time::Duration;
+
+        cx.update(gpui_kit::init);
+        let db = Arc::new(Mutex::new(
+            bir_core::db::Database::open_ephemeral().unwrap(),
+        ));
+        let mailbox = AgentMailbox::new();
+        // Renders Empty, so the pending form is never mounted by a frame here.
+        let window = cx.add_window(|_, _| Empty);
+        let app = window
+            .update(cx, |_, window, cx| {
+                cx.new(|cx| {
+                    let mut app = super::AppState::new(db, Vec::new(), window, cx);
+                    app.attach_agent(
+                        mailbox.clone(),
+                        None,
+                        Arc::new(AtomicBool::new(false)),
+                        window,
+                        cx,
+                    );
+                    app
+                })
+            })
+            .unwrap();
+        cx.run_until_parked();
+
+        let profile = crate::agent::host::fixture_profile();
+        cx.update(|cx| {
+            app.update(cx, |app, _| {
+                app.pending_form_1601c_draft = Some(
+                    bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
+                        &profile, 2026, 12,
+                    ),
+                );
+            })
+        });
+        let reply = mailbox.push(Request::new("after-open", Op::Hello));
+        cx.background_executor
+            .advance_clock(Duration::from_millis(64));
+        cx.run_until_parked();
+        assert!(
+            reply.try_recv().is_err(),
+            "a request must not run while the form it follows is unmounted"
+        );
+
+        cx.update(|cx| app.update(cx, |app, _| app.pending_form_1601c_draft = None));
+        cx.background_executor
+            .advance_clock(Duration::from_millis(64));
+        cx.run_until_parked();
+        let response = reply
+            .try_recv()
+            .expect("the queued request runs once mounted");
+        assert_eq!(response.id, "after-open");
+        assert!(response.ok, "{:?}", response.error);
     }
 
     #[test]
