@@ -1199,6 +1199,11 @@ impl QueueableForm for Form1706Draft {
     const FORM_TYPE: &'static str = "1706";
     const LAYOUT_ID: &'static str = FORM_1706_FORM_ID;
 
+    /// Total Amount Payable/(Overpayment).
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.total_amount_payable)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

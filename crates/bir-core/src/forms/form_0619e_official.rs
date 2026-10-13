@@ -354,6 +354,11 @@ impl QueueableForm for Form0619EDraft {
     const FORM_TYPE: &'static str = FORM_0619E_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_0619E_LAYOUT_ID;
 
+    /// Item 18 Total Amount of Remittance.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.item_18_total_amount_of_remittance)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }
