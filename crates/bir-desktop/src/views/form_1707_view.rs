@@ -844,6 +844,20 @@ impl KitView for Form1707View {
 impl QueueableFormView for Form1707View {
     type Draft = Form1707Draft;
 
+    const PRINT_SLUG: &'static str = "1707-2021";
+
+    fn print_fields(draft: &Form1707Draft) -> std::collections::BTreeMap<String, String> {
+        bir_core::forms::queueable::QueueableForm::field_map(draft)
+    }
+
+    fn agent_draft(&self) -> &Form1707Draft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        super::event_form_kit::header_actions::<Self>()
+    }
+
     fn new(
         draft: Form1707Draft,
         db: Arc<Mutex<Database>>,
@@ -907,7 +921,7 @@ impl FormViewTrait for Form1707View {
         kit::cancel(self, window, cx);
     }
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        kit::preview(self, "1707-2021", cx);
+        kit::preview(self, Self::PRINT_SLUG, cx);
     }
 }
 

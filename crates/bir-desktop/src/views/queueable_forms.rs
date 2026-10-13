@@ -6,15 +6,18 @@
 //! navigation and agent chrome all read that table, so adding a form never
 //! touches `app.rs`, `agent/ids.rs` or `agent/host.rs`.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use bir_core::profile::TaxpayerProfile;
 use gpui::*;
+use serde_json::Value;
 
 use crate::agent::ids::FormChrome;
 use crate::app::{ActiveView, AppState};
+use crate::views::form_header::FormHeaderActions;
 
 /// Events every queueable form view emits.
 pub enum QueueableFormEvent {
@@ -46,6 +49,19 @@ pub trait QueueableFormView: Render + EventEmitter<QueueableFormEvent> + Sized +
             .flatten()
             .unwrap_or_else(|| Self::new_draft(profile, year, period))
     }
+
+    /// Frozen print sheet (`bir_print::frozen_html`) the page's Print
+    /// preview fills.
+    const PRINT_SLUG: &'static str;
+
+    /// The field map the page's Print preview fills [`Self::PRINT_SLUG`] with.
+    fn print_fields(draft: &Self::Draft) -> BTreeMap<String, String>;
+
+    /// The draft as the page holds it (every edit is synced into it).
+    fn agent_draft(&self) -> &Self::Draft;
+
+    /// The page's header callbacks (its own Validate among them).
+    fn header_actions() -> FormHeaderActions<Self>;
 }
 
 /// Builds the view for one dashboard request and subscribes the app to it.
@@ -58,6 +74,27 @@ pub type OpenFormView = fn(
     &mut Context<AppState>,
 ) -> AnyView;
 
+/// The page's draft for `(profile, year, period)` as JSON, exactly as
+/// [`QueueableFormView::load_draft`] opens it.
+pub type LoadFormDraft = fn(&Database, &TaxpayerProfile, u16, u8) -> Value;
+
+/// The page's print sheet slug and its filled field map for a JSON draft.
+pub type PrintFormDraft = fn(&Value) -> Result<(&'static str, BTreeMap<String, String>), String>;
+
+/// Builds the view around a given JSON draft (the assistant's edits).
+pub type OpenFormWithDraft = fn(
+    &Value,
+    Arc<Mutex<Database>>,
+    &mut Window,
+    &mut Context<AppState>,
+) -> Result<AnyView, String>;
+
+/// The open view's draft as JSON.
+pub type ReadFormView = fn(&AnyView, &App) -> Option<Value>;
+
+/// Run the page's own Validate and mark the header for the user's review.
+pub type ReviewFormView = fn(&AnyView, &mut Window, &mut App);
+
 pub struct FormViewSpec {
     pub kind: QueueableKind,
     pub page_id: &'static str,
@@ -65,6 +102,11 @@ pub struct FormViewSpec {
     pub title: &'static str,
     pub chrome: FormChrome,
     pub open: OpenFormView,
+    pub load: LoadFormDraft,
+    pub print: PrintFormDraft,
+    pub open_with: OpenFormWithDraft,
+    pub read: ReadFormView,
+    pub review: ReviewFormView,
 }
 
 /// One entry per form: `form_view_spec!(Variant, ViewType, "code", "slug")`.
@@ -87,6 +129,11 @@ macro_rules! form_view_spec {
                 submit: concat!($slug, "_submit"),
             },
             open: $crate::views::queueable_forms::open_form_view::<$view>,
+            load: $crate::views::queueable_forms::load_draft_json::<$view>,
+            print: $crate::views::queueable_forms::print_draft_json::<$view>,
+            open_with: $crate::views::queueable_forms::open_form_view_with::<$view>,
+            read: $crate::views::queueable_forms::read_view_draft::<$view>,
+            review: $crate::views::queueable_forms::review_view::<$view>,
         }
     };
 }
@@ -174,6 +221,55 @@ pub fn open_form_view<V: QueueableFormView>(
         Ok(guard) => V::load_draft(&guard, profile, year, period),
         Err(_) => V::new_draft(profile, year, period),
     };
+    mount_view::<V>(draft, db, window, cx)
+}
+
+pub fn load_draft_json<V: QueueableFormView>(
+    db: &Database,
+    profile: &TaxpayerProfile,
+    year: u16,
+    period: u8,
+) -> Value {
+    serde_json::to_value(V::load_draft(db, profile, year, period))
+        .expect("a form draft serializes to JSON")
+}
+
+pub fn print_draft_json<V: QueueableFormView>(
+    draft: &Value,
+) -> Result<(&'static str, BTreeMap<String, String>), String> {
+    let typed: V::Draft = serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    Ok((V::PRINT_SLUG, V::print_fields(&typed)))
+}
+
+pub fn open_form_view_with<V: QueueableFormView>(
+    draft: &Value,
+    db: Arc<Mutex<Database>>,
+    window: &mut Window,
+    cx: &mut Context<AppState>,
+) -> Result<AnyView, String> {
+    let typed: V::Draft = serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    Ok(mount_view::<V>(typed, db, window, cx))
+}
+
+pub fn read_view_draft<V: QueueableFormView>(view: &AnyView, cx: &App) -> Option<Value> {
+    let entity = view.clone().downcast::<V>().ok()?;
+    serde_json::to_value(entity.read(cx).agent_draft()).ok()
+}
+
+pub fn review_view<V: QueueableFormView>(view: &AnyView, window: &mut Window, cx: &mut App) {
+    if let Ok(entity) = view.clone().downcast::<V>() {
+        entity.update(cx, |this, cx| {
+            crate::views::form_header::agent_review(this, V::header_actions(), window, cx);
+        });
+    }
+}
+
+fn mount_view<V: QueueableFormView>(
+    draft: V::Draft,
+    db: Arc<Mutex<Database>>,
+    window: &mut Window,
+    cx: &mut Context<AppState>,
+) -> AnyView {
     let view = cx.new(|cx| V::new(draft, Arc::clone(&db), window, cx));
     cx.subscribe_in(
         &view,

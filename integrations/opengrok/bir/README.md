@@ -1,7 +1,10 @@
 # /file-tax for OpenGrok
 
-Lets OpenGrok prepare a **draft** 2551Q or 1601C in the BIR desktop app while
-the user watches the form. Three pieces:
+Lets OpenGrok prepare a **draft** of any of BIR's 43 forms in the BIR desktop
+app while the user watches the form: fill every user box by its official key,
+validate with the page's own rules, preview the filled sheet, show open
+questions as a chat form card, and hand a clean draft to the user's own Submit
+click (`bir_form_review`). Three pieces:
 
 - `bir-mcp` (`crates/bir-mcp`): an MCP server that lists every running BIR
   app through gpui-agent's discovery records, works only on the one the user

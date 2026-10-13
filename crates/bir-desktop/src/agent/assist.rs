@@ -121,6 +121,42 @@ impl AssistState {
     }
 }
 
+/// The assistant's state for the open generic-queue form, kept by the app
+/// between requests (those pages keep no per-box state of their own).
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenericAssistMemo {
+    pub kind: bir_core::forms::agent::AgentFormKind,
+    pub assist: AssistState,
+    /// The draft as the assistant last left it: a box that differs on the
+    /// page now was typed by the user.
+    pub draft: Value,
+    pub validated: bool,
+}
+
+/// Official boxes whose value differs between two drafts of `kind`.
+pub fn changed_official_boxes(
+    kind: bir_core::forms::agent::AgentFormKind,
+    before: &Value,
+    after: &Value,
+) -> Vec<String> {
+    let (Ok(before), Ok(after)) = (
+        bir_core::forms::agent::field_map(kind, before),
+        bir_core::forms::agent::field_map(kind, after),
+    ) else {
+        return Vec::new();
+    };
+    let def = kind.definition();
+    after
+        .keys()
+        .chain(before.keys())
+        .filter(|key| after.get(*key) != before.get(*key))
+        .filter(|key| def.box_def(key).is_some_and(|entry| entry.is_user_box()))
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
 /// One empty box the user has to answer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NeedsYouBox {
@@ -151,6 +187,8 @@ const FIELDS_2551Q: &[(&str, Kind)] = &[
     ("tax_paid_previous", Kind::Money),
     ("other_tax_credit", Kind::Money),
     ("other_tax_credit_description", Kind::Text),
+    // Item 21C; official key `frm2551Qv2018:txt22`.
+    ("compromise", Kind::Money),
     (
         "overpayment_disposition",
         Kind::Enum(&["none", "refund", "tax_credit_certificate"]),
@@ -164,6 +202,8 @@ const FIELDS_1601C: &[(&str, Kind)] = &[
     ("any_taxes_withheld", Kind::Withheld),
     ("number_of_sheets", Kind::Int),
     ("atc", Kind::Text),
+    // Address line 2; official key `frm1601c:txtAddress2`.
+    ("registered_address_2", Kind::Text),
     ("category_of_agent", Kind::Category),
     ("tax_relief", Kind::Bool),
     ("tax_relief_specification", Kind::Text),
@@ -923,6 +963,16 @@ pub fn needs_you_1601c(draft: &Form1601CDraft) -> Vec<NeedsYouBox> {
     let index = rules_1601c();
     let object = to_object(draft);
     let mut boxes = Vec::new();
+    // Item 3 (`TaxWithheld_1/2`, required) starts unanswered on a new
+    // return (`new_unanswered_from_profile`); both radios are then empty.
+    // Item 2 (`AmendedRtn_1/2`) starts answered No, so it never needs you.
+    if draft.taxes_withheld_answer().is_none() {
+        push_box(
+            &mut boxes,
+            "any_taxes_withheld".into(),
+            "Item 3 Any taxes withheld? (Yes or No)".into(),
+        );
+    }
     for rule in RULES_1601C {
         let condition = match rule.when {
             When::Always => true,

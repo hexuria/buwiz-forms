@@ -29,3 +29,8 @@ fn form_1603q_sample_payload_is_current() {
         "33acf73277ef10fc2743ec4eeba370b40c57aac22b82825d59aa09aad5ad869d",
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![serde_json::to_value(sample_1603q()).expect("sample serializes")]
+}

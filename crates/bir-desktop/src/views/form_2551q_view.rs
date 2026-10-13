@@ -20,8 +20,8 @@ use bir_core::db::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database, ReceiptConfirmationOutcome,
 };
 use bir_core::forms::form_2551q::{
-    FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election,
-    OFFICIAL_YEAR_ENDED_MONTH_MESSAGE, OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
+    FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Form2551QEntries, Item13Election,
+    OverpaymentDisposition, Schedule1Row, TaxPeriodBasis,
 };
 use bir_core::forms::{ATC_TABLE_2551Q, FilingPeriod, FilingStatus, FormValidator};
 use bir_core::parse_bir_receipt_email;
@@ -1419,84 +1419,27 @@ impl Form2551QView {
     fn validate_for_submit(&self, cx: &Context<Self>) -> Vec<(String, String)> {
         use bir_core::forms::FormValidator;
         let mut errors = FormValidator::validate(&self.draft);
-
-        if matches!(self.draft.tax_period_basis, TaxPeriodBasis::Fiscal) {
-            let month = self.year_end_month_input.read(cx).value();
-            if month.trim().parse::<u8>().is_err()
-                && !errors.iter().any(|(field, _)| field == "year_end_month")
-            {
-                errors.push((
-                    "year_end_month".to_string(),
-                    OFFICIAL_YEAR_ENDED_MONTH_MESSAGE.to_string(),
-                ));
-            }
-        }
-
-        let attached_sheets = self.attached_sheets_input.read(cx).value();
-        if attached_sheets.trim().is_empty() || attached_sheets.trim().parse::<u16>().is_err() {
-            errors.push((
-                "number_of_attached_sheets".to_string(),
-                "Number of attached sheets must be a whole number from 0 to 99".to_string(),
-            ));
-        }
-
-        for (i, row_state) in self.row_inputs.iter().enumerate() {
-            let val_str = row_state.taxable_amount.read(cx).value();
-            if val_str.trim().is_empty() {
-                errors.push((
-                    format!("schedule_1_row_{}", i + 1),
-                    format!("Schedule 1 row {} taxable amount is required", i + 1),
-                ));
-            } else if val_str.trim().parse::<f64>().is_err() {
-                errors.push((
-                    format!("schedule_1_row_{}", i + 1),
-                    format!(
-                        "Schedule 1 row {} taxable amount must be a valid number",
-                        i + 1
-                    ),
-                ));
-            }
-        }
-
-        let cred_str = self.creditable_withheld_input.read(cx).value();
-        if cred_str.trim().is_empty() {
-            errors.push((
-                "creditable_withheld".to_string(),
-                "Creditable percentage tax withheld is required".to_string(),
-            ));
-        } else if cred_str.trim().parse::<f64>().is_err() {
-            errors.push((
-                "creditable_withheld".to_string(),
-                "Creditable percentage tax withheld must be a valid number".to_string(),
-            ));
-        }
-
-        if self.is_amended {
-            let prev_str = self.tax_paid_previous_input.read(cx).value();
-            if prev_str.trim().is_empty() {
-                errors.push((
-                    "tax_paid_previous".to_string(),
-                    "Tax paid in return previously filed is required".to_string(),
-                ));
-            } else if prev_str.trim().parse::<f64>().is_err() {
-                errors.push((
-                    "tax_paid_previous".to_string(),
-                    "Tax paid in return previously filed must be a valid number".to_string(),
-                ));
-            }
-        }
-
-        let other_credit = self.other_tax_credit_input.read(cx).value();
-        if !other_credit.trim().is_empty() {
-            match other_credit.trim().parse::<f64>() {
-                Ok(value) if value >= 0.0 => {}
-                _ => errors.push((
-                    "other_tax_credit".to_string(),
-                    "Other tax credit/payment must be a non-negative number".to_string(),
-                )),
-            }
-        }
-
+        let text = |input: &Entity<InputState>| input.read(cx).value().to_string();
+        let entries = Form2551QEntries {
+            year_end_month: text(&self.year_end_month_input),
+            attached_sheets: text(&self.attached_sheets_input),
+            taxable_amounts: self
+                .row_inputs
+                .iter()
+                .map(|row| text(&row.taxable_amount))
+                .collect(),
+            creditable_withheld: text(&self.creditable_withheld_input),
+            tax_paid_previous: if self.is_amended {
+                text(&self.tax_paid_previous_input)
+            } else {
+                String::new()
+            },
+            other_tax_credit: text(&self.other_tax_credit_input),
+        };
+        // The page-only entry checks live in bir-core so the agent's
+        // `form.validate` runs exactly the same ones.
+        let entry_errors = self.draft.entry_errors(&entries, &errors);
+        errors.extend(entry_errors);
         errors
     }
 
@@ -3314,6 +3257,13 @@ impl Render for Form2551QView {
 }
 
 impl Form2551QView {
+    /// `form.review_in_app`: the page's own Validate, then the header's
+    /// "prepared by the assistant" note and highlighted Submit.
+    #[cfg(feature = "agent")]
+    pub(crate) fn agent_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::views::form_header::agent_review(self, HEADER_ACTIONS, window, cx);
+    }
+
     fn header_props(&self) -> FormHeaderProps<'static> {
         FormHeaderProps {
             slug: "2551q",

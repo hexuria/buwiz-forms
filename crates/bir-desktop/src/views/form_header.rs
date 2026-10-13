@@ -70,6 +70,11 @@ pub fn is_queue_unavailable_message(text: &str) -> bool {
 /// Fallback when a form has no official success alert.
 pub const DEFAULT_SUCCESS_MESSAGE: &str = "Validation successful.";
 
+/// Status box text after the assistant brought a validated draft here
+/// (`form.review_in_app`). Only the user's own Submit click files it.
+pub const AGENT_REVIEW_MESSAGE: &str =
+    "Prepared by the assistant. Review every box, then click Submit yourself.";
+
 // 0 = not loaded, 1 = off, 2 = on.
 static SEPARATE_VALIDATE: AtomicU8 = AtomicU8::new(0);
 
@@ -199,6 +204,9 @@ pub struct FormHeaderState {
     show_why: bool,
     show_errors: bool,
     sent: std::cell::OnceCell<Option<AmendmentSnapshot>>,
+    /// Set by the assistant's `form.review_in_app`: the status box says so
+    /// and Submit is highlighted until the user validates or submits.
+    agent_review: bool,
 }
 
 impl FormHeaderState {
@@ -213,6 +221,16 @@ impl FormHeaderState {
 
     pub fn close_menu(&mut self) {
         self.menu_open = false;
+    }
+
+    /// Mark the return as prepared by the assistant for the user's review.
+    pub fn mark_agent_review(&mut self) {
+        self.agent_review = true;
+        self.dismissed = None;
+    }
+
+    pub fn agent_review(&self) -> bool {
+        self.agent_review
     }
 
     /// Load the newest amendment snapshot of this return once (call from
@@ -307,6 +325,7 @@ pub fn revert_for_amendment<F: QueueableForm>(
 }
 
 /// What the view reports to the header each render.
+#[derive(Clone)]
 pub struct FormHeaderProps<'a> {
     /// Lowercase element-id prefix, e.g. `"2550q"`.
     pub slug: &'a str,
@@ -360,8 +379,35 @@ fn validate_then<V: 'static>(
     cx: &mut Context<V>,
 ) {
     (actions.on_validate)(this, window, cx);
-    (actions.state)(this).reset_dismissal();
+    let state = (actions.state)(this);
+    state.reset_dismissal();
+    // The user's own Validate takes over from the assistant's hand-over.
+    state.agent_review = false;
     cx.notify();
+}
+
+/// `form.review_in_app`: run the page's own Validate (as its button does),
+/// then mark the header so the status box says the assistant prepared it
+/// and Submit is highlighted. Nothing is queued or submitted here.
+pub fn agent_review<V: 'static>(
+    this: &mut V,
+    actions: FormHeaderActions<V>,
+    window: &mut Window,
+    cx: &mut Context<V>,
+) {
+    (actions.on_validate)(this, window, cx);
+    (actions.state)(this).mark_agent_review();
+    cx.notify();
+}
+
+/// The status box text while the assistant's hand-over stands: only on a
+/// Draft that validates; otherwise the usual text (errors win).
+pub fn agent_review_text(props: &FormHeaderProps<'_>, agent_review: bool) -> Option<String> {
+    (agent_review
+        && props.message.is_none()
+        && props.errors.is_empty()
+        && header_visibility(&props.status, props.editor_safe).submit)
+        .then(|| AGENT_REVIEW_MESSAGE.to_string())
 }
 
 /// The right side of the toolbar: `[Validate] [Submit] [⋯]` and the menu.
@@ -376,6 +422,8 @@ pub fn render_header_buttons<V: 'static>(
     let state = (actions.state_ref)(this);
     let separate = props.separate_validate;
     let enabled = submit_enabled(separate, props.validated, props.errors.len());
+    let highlight = enabled && agent_review_text(props, state.agent_review).is_some();
+    let ring = cx.theme().ring;
     let simulate = actions
         .on_simulate
         .filter(|_| matches!(props.status, FilingStatus::Submitted));
@@ -512,22 +560,30 @@ pub fn render_header_buttons<V: 'static>(
             )
         })
         .when(visible.submit, |row| {
-            row.child(
-                Button::new(id(props.slug, "submit"))
-                    .label("Submit")
-                    .primary()
-                    .when(phone, |b| b.small())
-                    .disabled(!enabled)
-                    .on_click(cx.listener(move |this: &mut V, _, window, cx| {
-                        if !separate {
-                            // Validation always runs before submit (D2A).
-                            validate_then(actions, this, window, cx);
-                            if (actions.blocking_errors)(this) > 0 {
-                                return;
-                            }
+            let submit = Button::new(id(props.slug, "submit"))
+                .label("Submit")
+                .primary()
+                .when(phone, |b| b.small())
+                .disabled(!enabled)
+                .on_click(cx.listener(move |this: &mut V, _, window, cx| {
+                    (actions.state)(this).agent_review = false;
+                    if !separate {
+                        // Validation always runs before submit (D2A).
+                        validate_then(actions, this, window, cx);
+                        if (actions.blocking_errors)(this) > 0 {
+                            return;
                         }
-                        (actions.on_submit)(this, window, cx);
-                    })),
+                    }
+                    (actions.on_submit)(this, window, cx);
+                }));
+            // The assistant's hand-over: a ring around Submit, which the
+            // user still has to click themselves.
+            row.child(
+                div()
+                    .id(id(props.slug, "submit_highlight"))
+                    .rounded_md()
+                    .when(highlight, |d| d.p_0p5().border_2().border_color(ring))
+                    .child(submit),
             )
         })
         .child(menu)
@@ -543,7 +599,8 @@ pub fn render_status_box<V: 'static>(
     cx: &mut Context<V>,
 ) -> Option<AnyElement> {
     let state = (actions.state_ref)(this);
-    let text = status_text(props, props.separate_validate)
+    let text = agent_review_text(props, state.agent_review)
+        .or_else(|| status_text(props, props.separate_validate))
         .filter(|text| {
             state.dismissed.as_deref() != Some(dismiss_key(text, &props.errors).as_str())
         })
@@ -720,6 +777,7 @@ pub fn render_status_box<V: 'static>(
 
 #[cfg(test)]
 mod tests {
+    use super::{AGENT_REVIEW_MESSAGE, FormHeaderState, agent_review_text};
     use super::{
         AMENDED_REVERT_MESSAGE, CLICK_VALIDATE_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderProps,
         HeaderVisibility, dismiss_key, form_header_visibility, header_visibility,
@@ -727,6 +785,31 @@ mod tests {
     };
     use super::{is_queue_unavailable_message, queue_unavailable_message};
     use gpui::px;
+
+    #[test]
+    fn agent_review_note_shows_only_on_a_clean_draft() {
+        let mut state = FormHeaderState::new();
+        assert!(!state.agent_review());
+        state.mark_agent_review();
+        assert!(state.agent_review());
+        let mut clean = props(FilingStatus::Draft);
+        clean.validated = true;
+        assert_eq!(
+            agent_review_text(&clean, true).as_deref(),
+            Some(AGENT_REVIEW_MESSAGE)
+        );
+        assert_eq!(agent_review_text(&clean, false), None);
+        let mut errors = clean.clone();
+        errors.errors.push("Invalid month".to_string());
+        assert_eq!(agent_review_text(&errors, true), None);
+        assert!(!submit_enabled(true, errors.validated, errors.errors.len()));
+        assert_eq!(
+            status_text(&errors, true).as_deref(),
+            Some("Fix 1 item marked below before submitting.")
+        );
+        // Never on a return that is no longer a Draft.
+        assert_eq!(agent_review_text(&props(FilingStatus::Queued), true), None);
+    }
 
     #[test]
     fn queue_unavailable_text_names_the_form_and_next_step() {

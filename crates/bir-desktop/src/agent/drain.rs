@@ -134,9 +134,10 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
         let mut host = snapshot_host(app, cx);
         host.set_sidebar_hidden(app.is_sidebar_hidden);
         host.set_layout(tree_layout(app, window, cx));
+        let generic_before = host.generic_form().map(|form| form.draft.clone());
         let response = handle_request(&mut host, posted.request.clone(), None, None);
         if mutating && response.ok {
-            apply_host(host, app, window, cx);
+            apply_host(host, app, generic_before, window, cx);
         }
         crate::agent::request_log::emit_request_log(&posted.request, &response);
         posted.reply(response);
@@ -244,6 +245,22 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
         );
         host.set_form_2551q_assist(form.agent_assist().clone());
     }
+    if let Some((kind, draft)) = open_generic_draft(app, cx) {
+        // The page keeps no per-box sources: the app holds them between
+        // requests, and a box that changed since the assistant's last
+        // request was typed by the user.
+        let memo = app.agent_generic.as_ref().filter(|memo| memo.kind == kind);
+        let mut assist = memo.map(|memo| memo.assist.clone()).unwrap_or_default();
+        if let Some(memo) = memo {
+            assist.note_user_edits(crate::agent::assist::changed_official_boxes(
+                kind,
+                &memo.draft,
+                &draft,
+            ));
+        }
+        let validated = memo.is_some_and(|memo| memo.validated && memo.draft == draft);
+        host.replace_generic_form(kind, draft, validated, assist);
+    }
     host.reconcile_open_forms_from_db();
     // Jobs and submissions are only read back out of the host by `jobs.list` /
     // `submissions.list` (which reload themselves) and by the Background Tasks
@@ -260,9 +277,37 @@ fn snapshot_host(app: &AppState, cx: &App) -> BirAgentHost {
     host
 }
 
+/// The open generic-queue page's draft: the 2550Q page when it is the one
+/// showing, else the open registry page (`views::queueable_forms`).
+fn open_generic_draft(
+    app: &AppState,
+    cx: &App,
+) -> Option<(bir_core::forms::agent::AgentFormKind, serde_json::Value)> {
+    use bir_core::forms::agent::AgentFormKind;
+    use bir_core::forms::queueable::QueueableKind;
+    let from_2550q = || {
+        let view = app.form_2550q_view.as_ref()?;
+        let draft = serde_json::to_value(view.read(cx).agent_draft()).ok()?;
+        Some((AgentFormKind::Queueable(QueueableKind::Form2550Q), draft))
+    };
+    let from_registry = || {
+        let view = app.queueable_view.as_ref()?;
+        crate::views::queueable_forms::FORM_VIEW_SPECS
+            .iter()
+            .find_map(|spec| (spec.read)(view, cx).map(|draft| (spec.kind, draft)))
+            .map(|(kind, draft)| (AgentFormKind::Queueable(kind), draft))
+    };
+    if app.active_view == ActiveView::Form2550Q {
+        from_2550q().or_else(from_registry)
+    } else {
+        from_registry().or_else(from_2550q)
+    }
+}
+
 fn apply_host(
     mut host: BirAgentHost,
     app: &mut AppState,
+    generic_before: Option<serde_json::Value>,
     window: &mut Window,
     cx: &mut Context<AppState>,
 ) {
@@ -299,7 +344,13 @@ fn apply_host(
     match host.take_dismissed_form() {
         Some("2551Q") => app.dismiss_form_view(ActiveView::Form2551Q, cx),
         Some("1601C") => app.dismiss_form_view(ActiveView::Form1601C, cx),
-        _ => {}
+        Some("2550Q") => app.dismiss_form_view(ActiveView::Form2550Q, cx),
+        Some(code) => {
+            if let Some(spec) = crate::views::queueable_forms::spec_for_code(code) {
+                app.dismiss_form_view(ActiveView::Queueable(spec.kind), cx);
+            }
+        }
+        None => {}
     }
 
     if host.active_view() != app.active_view {
@@ -420,11 +471,78 @@ fn apply_host(
         });
     }
 
+    apply_generic_form(&host, app, generic_before, print_requested, window, cx);
+
+    if let Some(kind) = host.take_review_request() {
+        app.review_agent_form(kind, window, cx);
+    }
+
     app.agent_submit_confirmation_visible = host.submit_confirmation_visible();
 
     if host.wants_palette() && !app.is_command_palette_open {
         app.handle_open_command_palette(&OpenCommandPalette, window, cx);
     }
+}
+
+/// Show the assistant's work on a generic-queue form: rebuild the page around
+/// the host's draft when it changed (or the page is not built yet), open the
+/// print preview when asked, and keep the per-box sources for the next request.
+fn apply_generic_form(
+    host: &BirAgentHost,
+    app: &mut AppState,
+    generic_before: Option<serde_json::Value>,
+    print_requested: bool,
+    window: &mut Window,
+    cx: &mut Context<AppState>,
+) {
+    use bir_core::forms::agent::AgentFormKind;
+    let Some(form) = host.generic_form() else {
+        return;
+    };
+    let AgentFormKind::Queueable(kind) = form.kind else {
+        return;
+    };
+    let page = crate::agent::host::generic_view(kind);
+    if host.active_view() != page {
+        return;
+    }
+    let built = if kind == bir_core::forms::queueable::QueueableKind::Form2550Q {
+        app.form_2550q_view.is_some() && app.pending_form_2550q_draft.is_none()
+    } else {
+        app.queueable_view.is_some() && app.pending_queueable.is_none()
+    };
+    if (!built || generic_before.as_ref() != Some(&form.draft))
+        && let Err(error) = app.mount_agent_form(kind, &form.draft, window, cx)
+    {
+        crate::app::push_notification(
+            "error",
+            "The assistant's draft could not be shown",
+            &error,
+            window,
+            cx,
+        );
+    }
+    if print_requested {
+        match crate::agent::host::print_sheet(form.kind, &form.draft).and_then(|(slug, fields)| {
+            crate::views::form_html_preview_launcher::launch_frozen_form_preview(
+                slug,
+                &fields,
+                &format!("{} — Print Preview", form.kind.form_code()),
+                cx,
+            )
+        }) {
+            Ok(_) => {}
+            Err(error) => {
+                crate::app::push_notification("error", "Print preview failed", &error, window, cx)
+            }
+        }
+    }
+    app.agent_generic = Some(crate::agent::assist::GenericAssistMemo {
+        kind: form.kind,
+        assist: form.assist.clone(),
+        draft: form.draft.clone(),
+        validated: form.validated,
+    });
 }
 
 /// The freshly saved profile the profile manager must reload, if the agent

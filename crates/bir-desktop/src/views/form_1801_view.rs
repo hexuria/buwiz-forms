@@ -885,7 +885,7 @@ impl KitView for Form1801View {
         Self::text_value(&self.draft, key)
     }
     fn print_field_map(&self) -> std::collections::BTreeMap<String, String> {
-        self.draft.to_print_field_map()
+        <Self as QueueableFormView>::print_fields(&self.draft)
     }
 
     fn read_inputs(&mut self, cx: &mut Context<Self>) -> Vec<(String, String)> {
@@ -1064,6 +1064,20 @@ impl KitView for Form1801View {
 impl QueueableFormView for Form1801View {
     type Draft = Form1801Draft;
 
+    const PRINT_SLUG: &'static str = "1801-2018";
+
+    fn print_fields(draft: &Form1801Draft) -> std::collections::BTreeMap<String, String> {
+        draft.to_print_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form1801Draft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        super::event_form_kit::header_actions::<Self>()
+    }
+
     fn new(
         draft: Form1801Draft,
         db: Arc<Mutex<Database>>,
@@ -1140,7 +1154,7 @@ impl FormViewTrait for Form1801View {
         kit::cancel(self, window, cx);
     }
     fn preview_pdf(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        kit::preview(self, "1801-2018", cx);
+        kit::preview(self, Self::PRINT_SLUG, cx);
     }
 }
 
