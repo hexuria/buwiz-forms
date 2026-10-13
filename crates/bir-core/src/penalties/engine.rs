@@ -1,8 +1,9 @@
 use super::compromise::lookup_compromise;
 use super::taxpayer::TaxpayerClass;
 use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PenaltyProfile {
     StandardFiling,
     Withholding,

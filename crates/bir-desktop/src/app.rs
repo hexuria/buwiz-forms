@@ -1936,6 +1936,15 @@ impl AppState {
                     profile, year, month,
                 ),
             };
+            // Penalties are measured from the deadline the Calendar shows
+            // (deadline overrides applied) with the profile's EOPT class.
+            let mut draft = draft;
+            let global_overrides = self
+                .db
+                .lock()
+                .map(|db| db.get_deadline_overrides())
+                .unwrap_or_default();
+            draft.apply_penalty_profile(profile, &global_overrides);
             self.pending_form_1601c_draft = Some(draft);
             self.active_view = ActiveView::Form1601C;
             cx.notify();

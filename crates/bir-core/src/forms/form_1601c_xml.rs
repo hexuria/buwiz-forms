@@ -484,6 +484,11 @@ impl Form1601CDraft {
             tax_32_surcharge: parse_optional_money(fields, "frm1601c:txtTax32", &mut errors),
             tax_33_interest: parse_optional_money(fields, "frm1601c:txtTax33", &mut errors),
             tax_34_compromise: parse_optional_money(fields, "frm1601c:txtTax34", &mut errors),
+            penalty_model_version: super::form_1601c::PENALTY_MODEL_VERSION,
+            penalty_due_date: None,
+            penalty_taxpayer_class: None,
+            computed_penalties: None,
+            penalty_overrides: Default::default(),
             tax_35_total_penalties: 0.0,
             tax_36_total_amount_payable: 0.0,
             status: super::FilingStatus::Draft,
@@ -508,6 +513,15 @@ impl Form1601CDraft {
             return Err(errors);
         }
 
+        // An imported return carries the penalties it was prepared with:
+        // keep each one as an override so the source amounts round-trip.
+        for (component, value) in crate::penalties::PenaltyComponent::ALL.into_iter().zip([
+            draft.tax_32_surcharge,
+            draft.tax_33_interest,
+            draft.tax_34_compromise,
+        ]) {
+            draft.set_penalty_override(component, Some(value));
+        }
         draft.compute();
         for (index, source_adjustment) in source_adjustments.into_iter().enumerate() {
             if (draft.schedule_1[index].adjustment - source_adjustment).abs() > 0.001 {
@@ -815,6 +829,11 @@ mod tests {
         draft.tax_14_total_compensation = 100_000.0;
         draft.tax_17_13th_month_pay = 20_000.0;
         draft.tax_25_total_taxes_withheld = 15_000.0;
+        // Pin Items 32-34 at zero: the period is past its deadline, and this
+        // test is not about penalties, so they must not grow with the clock.
+        for component in crate::penalties::PenaltyComponent::ALL {
+            draft.set_penalty_override(component, Some(0.0));
+        }
         draft.compute();
 
         let field_map = draft.to_bir_field_map();
