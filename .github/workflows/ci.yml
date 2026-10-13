@@ -50,10 +50,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Docs-only change: skipping build and tests
+    - name: "Docs-only change: skipping build and tests"
       if: needs.changes.outputs.code == 'false'
       shell: bash
-      run: echo "Docs-only change detected: build and test steps were skipped." >> "$GITHUB_STEP_SUMMARY"
+      run: |
+        echo "Docs-only change detected: build and test steps were skipped." >> "$GITHUB_STEP_SUMMARY"
 
     - name: Check out formgen scripts from buwiz-forms-html
       if: needs.changes.outputs.code != 'false'

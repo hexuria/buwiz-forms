@@ -348,7 +348,7 @@ class CiChangeDetectionTests(unittest.TestCase):
         docs_notice_index = next(
             index
             for index, step in enumerate(steps)
-            if step.startswith("name: Docs-only change: skipping build and tests")
+            if step.startswith('name: "Docs-only change: skipping build and tests"')
         )
         self.assertEqual(docs_notice_index, checkout_index + 1)
         self.assertRegex(
