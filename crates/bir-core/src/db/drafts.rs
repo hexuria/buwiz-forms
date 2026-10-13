@@ -2879,6 +2879,23 @@ impl Database {
         Ok(summaries)
     }
 
+    /// The total amount payable the saved return `draft_id` computed for
+    /// itself (see [`crate::forms::calendar_status::amount_payable_from_json`]).
+    /// `None` when the row is gone or its form has no readable total.
+    pub fn draft_amount_payable(&self, draft_id: i64) -> Result<Option<f64>, DbError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT form_code, data_json FROM form_drafts WHERE id = ?1",
+                params![draft_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?;
+        Ok(row.and_then(|(form_code, data_json)| {
+            crate::forms::calendar_status::amount_payable_from_json(&form_code, &data_json)
+        }))
+    }
+
     pub fn list_all_queued_submissions(&self) -> Result<Vec<FormDraftSummary>, DbError> {
         self.list_form_drafts_with_status(&["Queued", "Submitted"])
     }
@@ -3098,6 +3115,27 @@ mod tests {
         let filed = db.list_all_filed_submissions().unwrap();
         assert_eq!(filed.len(), 1);
         assert_eq!(filed[0].status, FilingStatus::Confirmed);
+    }
+
+    /// The Calendar reads a filed return's own total amount payable to decide
+    /// between "Mark as paid" and its done state.
+    #[test]
+    fn draft_amount_payable_reads_the_saved_1601c_item_36() {
+        let db = test_db();
+        let profile = test_profile();
+        let zero_due = editable_1601c_draft(&profile);
+        let zero_id = db.save_1601c_draft(&zero_due).expect("zero-due draft");
+        assert_eq!(db.draft_amount_payable(zero_id).unwrap(), Some(0.0));
+
+        let mut owing = Form1601CDraft::new_from_profile(&profile, 2026, 6);
+        owing.set_any_taxes_withheld(true);
+        owing.tax_14_total_compensation = 15_000.0;
+        owing.tax_25_total_taxes_withheld = 1_500.0;
+        owing.compute();
+        let owing_id = db.save_1601c_draft(&owing).expect("owing draft");
+        assert_eq!(db.draft_amount_payable(owing_id).unwrap(), Some(1_500.0));
+
+        assert_eq!(db.draft_amount_payable(owing_id + 1_000).unwrap(), None);
     }
 
     fn test_db() -> Database {
