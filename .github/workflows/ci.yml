@@ -5,6 +5,10 @@ on:
     branches: [ "main", "codex/**" ]
   pull_request:
     branches: [ "main", "gol/**", "codex/**" ]
+  # Nightly safety net: the full CI, validation audits included, on main.
+  # 18:00 UTC is 02:00 in Manila.
+  schedule:
+    - cron: "0 18 * * *"
   # Run by hand from the Actions tab; tick the box to force the validation-rules
   # corpus audits on any branch.
   workflow_dispatch:
@@ -302,11 +306,16 @@ jobs:
   # only run when that corpus can have changed:
   #   - a branch named ebirforms-* (work synced from hexuria/buwiz-validation),
   #   - a change under one of the paths below,
+  #   - a PR carrying the run-validation label,
+  #   - the nightly run on main,
   #   - a manual run with the "validation" box ticked.
   # The boundary check that guards production filing is NOT gated: it runs in
   # `check` on every PR.
   changes:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       validation: ${{ steps.decide.outputs.validation }}
     steps:
@@ -321,6 +330,9 @@ jobs:
         EVENT: ${{ github.event_name }}
         BRANCH: ${{ github.head_ref || github.ref_name }}
         FORCE: ${{ inputs.validation }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
         PR_BASE: ${{ github.event.pull_request.base.sha }}
         PR_HEAD: ${{ github.event.pull_request.head.sha }}
         PUSH_BEFORE: ${{ github.event.before }}
@@ -329,7 +341,14 @@ jobs:
         set -euo pipefail
         run=false
         reason="no validation-rules path changed"
-        if [[ "$EVENT" == workflow_dispatch ]]; then
+        if [[ "$EVENT" == schedule ]]; then
+          run=true; reason="nightly run"
+        # Read the PR's labels now, not from the event payload, so adding the
+        # label and then clicking "Re-run all jobs" picks it up. (Triggering on
+        # `labeled` instead would restart the whole CI for any label.)
+        elif [[ "$EVENT" == pull_request ]] && gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | grep -qx run-validation; then
+          run=true; reason="run-validation label"
+        elif [[ "$EVENT" == workflow_dispatch ]]; then
           if [[ "$FORCE" == true ]]; then run=true; reason="manual run"; else reason="manual run, box not ticked"; fi
         elif [[ "$BRANCH" == ebirforms-* ]]; then
           run=true; reason="branch $BRANCH"
@@ -495,3 +514,31 @@ jobs:
         for r in "$V1" "$V2"; do
           [[ "$r" == success || "$r" == skipped ]] || { echo "::error::validation-rules audit $r"; exit 1; }
         done
+
+  # A failed nightly run opens (or comments on) one tracking issue, so a break
+  # that slipped past PRs is seen the next morning instead of going unread.
+  nightly-report:
+    needs: [ check, validation-rules ]
+    if: always() && github.event_name == 'schedule' && (needs.check.result != 'success' || needs.validation-rules.result != 'success')
+    runs-on: ubuntu-22.04
+    permissions:
+      issues: write
+    steps:
+    - name: Open or update the nightly failure issue
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        CHECK: ${{ needs.check.result }}
+        VALIDATION: ${{ needs.validation-rules.result }}
+      run: |
+        set -euo pipefail
+        title="Nightly CI failed on main"
+        body="Nightly run: $RUN_URL"$'\n\n'"- check: $CHECK"$'\n'"- validation-rules: $VALIDATION"
+        existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+        if [[ -n "$existing" ]]; then
+          gh issue comment "$existing" --body "$body"
+        else
+          gh issue create --title "$title" --body "$body"
+        fi
