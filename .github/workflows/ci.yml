@@ -262,6 +262,20 @@ jobs:
         $auditExitCode = $LASTEXITCODE
         if ($auditExitCode -ne 0) { exit $auditExitCode }
 
+    # #96: the shipped bir-desktop.exe must carry the /STACK reserve from
+    # crates/bir-desktop/build.rs. Checking the PE header here means reverting
+    # the linker policy fails CI instead of silently returning to 1 MiB.
+    - name: Verify bir-desktop PE stack reserve
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        python scripts/check_pe_stack_reserve.py target/x86_64-pc-windows-msvc/release/bir-desktop.exe
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cargo build --locked -p bir-desktop --bin bir-desktop
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python scripts/check_pe_stack_reserve.py target/debug/bir-desktop.exe
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
   # PowerShell job, which is exactly why three separate Windows-path defects in
   # rules/validate.ps1 went undetected: on macOS and Linux the v2 exclusions

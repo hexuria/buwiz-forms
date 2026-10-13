@@ -18,7 +18,7 @@ Evidence: [original Windows checklist](https://github.com/hexuria/buwiz-forms/is
 
 | Work ID | Finding / evidence classification | State and owning section |
 |---|---|---|
-| W01 | Debug main-thread stack overflow, confirmed by stderr and visible navigation crash; exact local exit `0xC000041D` | Open #96, §3; first implementation slice |
+| W01 | Debug main-thread stack overflow, confirmed by stderr and visible navigation crash; exact local exit `0xC000041D`; CDB shows bounded request_layout recursion | Implemented on branch, §3 |
 | W02 | 2551Q page-two ATC/rate/tax cells blank despite populated editor; incomplete writer joins confirmed in source | Open, tracked here and in #101, §15 |
 | W03 | 2551Q printed identity incomplete with a seed lacking confirmed effective profile history | Coverage gap, **not** a confirmed renderer defect, §15.1 |
 | W04 | Preview close logs `Invalid window handle` / `window not found`, but release remains usable | Observed warning; cause/severity unconfirmed, §16 |
@@ -125,6 +125,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 | Date | Result |
 |---|---|
 | 2026-10-12 | Implemented the Windows two-phase WebView construction and explicit pending/ready/failed state. The first main-branch smoke results were release: both previews panic with `RefCell already borrowed` (#97); debug: 1601C panics and 2551Q overflows its stack (`0xC00000FD`, #96); submit passes in both; `stack_reserve` is 1 MiB. |
+| 2026-10-13 | W01/#96 measured and fixed on branch: CDB proves bounded layout recursion in debug (`__chkstk` in `dashboard::render`, ~150 GPUI request_layout frames), 1 MiB crashes 4/4 at taxpayer-sidebar, 2 MiB survives; shipped binary gets `/STACK:8388608` via `crates/bir-desktop/build.rs` plus a CI PE-header regression (`scripts/check_pe_stack_reserve.py`). |
 | 2026-10-12 | Confirmed the second #97 rendering cause: DirectComposition hid the visible, correctly sized WebView2 child HWND. With `GPUI_DISABLE_DIRECT_COMPOSITION=1`, filled 1601C and 2551Q previews rendered; the main window continued to paint normally. |
 
 ---
@@ -135,20 +136,20 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - The measured current Windows debug PE reserve is 1 MiB. Do not infer another OS's actual reserve from a conventional default.
 - `[profile.dev]` leaves workspace crates at opt-level 0 (only deps get 1), so GPUI render frames are large.
 - Earlier 8 MiB experimental copies ran the exercised paths; that is supporting evidence, not a measurement on newer main or a fix in the shipped binary.
-- Latest local release previews pass. Unpatched debug maximizes successfully, then crashes on taxpayer-sidebar navigation before 2551Q opens. Stderr says main-thread stack overflow; exit is `0xC000041D`. Exact deep frame/recursion cause remains to be diagnosed.
+- Latest local release previews pass. Unpatched debug maximizes successfully, then crashes on taxpayer-sidebar navigation before 2551Q opens. Stderr says main-thread stack overflow; exit is `0xC000041D`.
+- **Cause diagnosed (2026-10-13):** CDB on the unpatched 1 MiB debug binary catches `c00000fd` at `bir_desktop!__chkstk` entering `bir_desktop::views::dashboard::impl$2::render` (dashboard.rs). ~150 bounded frames of `gpui` element `Interactivity::request_layout` + `smallvec` `Extend` + `with_element_state`/`with_text_style`/`with_image_cache` wrappers — deep-but-bounded layout recursion per nesting level, inflated by unoptimized debug frames. Not unbounded recursion, so a PE reserve policy is a legitimate fix; no single surprising frame to follow up on.
 
-- [ ] **3.1 Measure before choosing a number.**
-  - Build current debug/release once, record hashes and PE headers, and keep the original binaries unchanged. Use separate diagnostic copies with 1, 2, 4 and 8 MiB reserves.
-  - Exercise maximize → taxpayer sidebar → dashboard → library → filled 1601C/2551Q → close/reopen preview, then COR editor and tray restore. Repeat each configuration three times; record all failures, not only the smallest successful run.
-  - Capture a debugger stack on the unpatched failure. If recursion is unbounded, fix its cause before choosing a reserve; a larger reserve alone is not acceptance. Record OS, profile, peak/observed stack data where available, smallest consistently passing reserve and chosen margin.
-- [ ] **3.2 Fix at the binary, not RUSTFLAGS.**
-  - `ci.yml` relies on "no RUSTFLAGS anywhere" for cache sharing, so don't add `.cargo/config.toml` rustflags.
-  - Add `crates/bir-desktop/build.rs` and emit `cargo:rustc-link-arg-bin=bir-desktop=/STACK:<measured-policy>` only for Windows + MSVC. The manifest's target is **bir-desktop**, not the shipping alias `bir`; `scripts/alias_desktop_bin.py` copies that binary. Do not apply it to every crate or to `bir-headless` without separate evidence.
-  - 8 MiB is a candidate, not a predetermined answer. Use the measurements and a documented margin; do not claim a bound from one passing run.
-- [ ] **3.3 Find the deep frames** so the margin is known, not just moved:
-  - capture the overflow backtrace under a debugger with a 1 MiB stack;
-  - write down the top recursive or large-frame functions;
-  - open follow-ups for any surprisingly large frame (big arrays on the stack in render paths).
+- [x] **3.1 Measure before choosing a number.**
+  - Built exact-head debug (`3169105b`, sha256 `096daea8...`) and release once; originals untouched; diagnostic copies patched to 1/2/4/8 MiB via PE edit.
+  - Flow exercised: maximize → taxpayer sidebar → dashboard forms tab → filled 1601C + 2551Q → close/reopen print preview ×2 each → COR editor → hide/tray restore, three times per configuration.
+  - Debug matrix: **1 MiB crashes at taxpayer-sidebar 4/4** (3 patched + original baseline, `0xC000041D`, stderr main-thread overflow). **2 MiB survives every run** (3/3 reached filled-form previews; 1 full end-to-end pass including COR editor and hide/restore). 4/8 MiB: no crashes in any run.
+  - Release matrix: full flow **passes 3/3 at every reserve** — 1, 2, 4 and 8 MiB — confirming optimized frames shrink the same recursion below 1 MiB.
+  - Debugger stack captured on the unpatched failure (see facts above); recursion is bounded.
+- [x] **3.2 Fix at the binary, not RUSTFLAGS.**
+  - `crates/bir-desktop/build.rs` emits `cargo:rustc-link-arg-bin=bir-desktop=/STACK:8388608` only when `CARGO_CFG_TARGET_OS=windows` and `CARGO_CFG_TARGET_ENV=msvc`. Per-bin flag: `bir-headless`, tests and other crates keep platform defaults.
+  - Chosen reserve **8 MiB** — smallest consistently passing debug reserve is 2 MiB; 8 MiB is ~4× margin over observed need, matching the earlier experimental evidence, with headroom for deeper element trees.
+  - Regression: `scripts/check_pe_stack_reserve.py` + `scripts/tests/test_pe_stack_reserve.py`; CI `check` job verifies the release `bir-desktop.exe` after `just exe` and a debug `bir-desktop.exe`, both on Windows only. Reverting `build.rs` fails the PE check.
+- [x] **3.3 Find the deep frames:** `c00000fd` at `__chkstk` inside `dashboard::render`; the depth is ~150 small GPUI layout frames (request_layout/smallvec/element-state wrappers), not a big-array frame — no follow-up issue needed.
 - **Owners:** §1.2 (PE header) and §1.1 (debug and release runs).
 - **Acceptance:** rebuild without editbin/environment overrides; both executable names meet PE policy; all navigation and preview steps pass three consecutive times in debug/release; macOS/Linux compilation unchanged. Run `cargo fmt --all -- --check`, focused build-script/policy tests, agent-feature desktop Clippy, then the normal workspace tests once. Publish the local visible recording before claiming the runtime fixed. Reverting the linker policy must fail the PE regression.
 
@@ -388,7 +389,7 @@ baseline that names remaining manual/credential/hardware skips.
 | | #95: auto-quarantine plus loud notice, or refuse to start? | **open (owner)** |
 | | #99: approve the upload-path plaintext harness (9.2) that goes beyond Validate and Save? | **open (owner)** |
 | | #99: does BIR's upload carry CRLF (parity target)? | open: settled by 9.2 |
-| | #96: stack reserve size | open: measured in §3.1; 8 MiB is a candidate only |
+| 2026-10-13 | #96: stack reserve size | **8 MiB** — smallest passing debug reserve 2 MiB, ~4× margin; §3.1-3.3 |
 | 2026-10-13 | #97: deferred WebView construction + production DirectComposition fallback | implemented #107; latest release previews visibly paint |
 | 2026-10-13 | Keep W02 print mapping separate from W03 unresolved profile identity | missing schedule mappings are confirmed; identity must be retested with valid history |
 | | Smoke branch-protection requirement | owner action after §1.4 evidence; no settings change authorized by this plan |
