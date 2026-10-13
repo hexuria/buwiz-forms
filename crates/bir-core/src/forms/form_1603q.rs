@@ -581,6 +581,11 @@ impl QueueableForm for Form1603QDraft {
     const FORM_TYPE: &'static str = "1603Qv2018";
     const LAYOUT_ID: &'static str = FORM_1603Q_FORM_ID;
 
+    /// Total Amount Still Due.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.total_amount_due)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

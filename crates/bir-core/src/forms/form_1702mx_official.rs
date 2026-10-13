@@ -1620,6 +1620,14 @@ impl QueueableForm for Form1702MXDraft {
     const FORM_TYPE: &'static str = FORM_1702MX_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1702MX_LAYOUT_ID;
 
+    /// Item 21 Total Amount Payable/(Overpayment), whole pesos; unknown while blank.
+    fn amount_payable(&self) -> Option<f64> {
+        self.part_ii
+            .item_21_total_amount_payable_or_overpayment
+            .amount
+            .map(|peso| peso.0 as f64)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

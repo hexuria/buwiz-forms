@@ -1392,6 +1392,11 @@ impl QueueableForm for Form2000Draft {
     const FORM_TYPE: &'static str = "2000v2018";
     const LAYOUT_ID: &'static str = FORM_2000_FORM_ID;
 
+    /// Total Amount Payable.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.total_amount_payable)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

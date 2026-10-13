@@ -1114,6 +1114,11 @@ impl QueueableForm for Form1702RTDraft {
     const FORM_TYPE: &'static str = FORM_1702RT_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1702RT_LAYOUT_ID;
 
+    /// Item 21 Total Amount Payable/(Overpayment), whole pesos.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.part_ii.item_21_total_amount_payable_or_overpayment.0 as f64)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }
