@@ -873,7 +873,7 @@ impl QueueableFormView for Form1707View {
     const PRINT_SLUG: &'static str = "1707-2021";
 
     fn print_fields(draft: &Form1707Draft) -> std::collections::BTreeMap<String, String> {
-        bir_core::forms::queueable::QueueableForm::field_map(draft)
+        draft.to_print_field_map()
     }
 
     fn agent_draft(&self) -> &Form1707Draft {

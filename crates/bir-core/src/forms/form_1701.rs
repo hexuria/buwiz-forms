@@ -480,6 +480,45 @@ impl Default for Form1701Draft {
 }
 
 impl Form1701Draft {
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the nine TIN digits of the page 2-4 header
+    ///   combs (the sheet preprints the branch 00000 after them).
+    /// - `derived:attachments_tens` / `derived:attachments_units`: Item 33
+    ///   over its two digit boxes.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1701:txtPg2TIN1",
+                "frm1701:txtPg2TIN2",
+                "frm1701:txtPg2TIN3",
+            ],
+        );
+        let attachments: Vec<char> = fields
+            .get("frm1701:txtPg1I33NumberOfAttachments")
+            .map(|count| format!("{:0>2}", count.trim()).chars().collect())
+            .unwrap_or_default();
+        let digit = |at: usize| {
+            attachments
+                .get(at)
+                .filter(|_| attachments.len() == 2)
+                .map(char::to_string)
+                .unwrap_or_default()
+        };
+        let (tens, units) = (digit(0), digit(1));
+        for (key, value) in [
+            ("tin_digits", tin_digits),
+            ("attachments_tens", tens),
+            ("attachments_units", units),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, _legacy_month: u8) -> Self {
         let mut draft = Self {
             tin: profile.tin.full(),

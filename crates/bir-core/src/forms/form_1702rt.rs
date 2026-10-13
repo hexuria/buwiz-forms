@@ -618,6 +618,39 @@ pub struct Form1702RTDraft {
 }
 
 impl Form1702RTDraft {
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the nine TIN digits of the page 2-4 header
+    ///   combs (the sheet preprints the branch 00000 after them).
+    /// - `derived:year_end_mm1` / `_mm2` / `_yy1` / `_yy2`: Item 2 Year
+    ///   Ended (MM/20YY) over its four digit boxes.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1702RT:txtPg2TIN1",
+                "frm1702RT:txtPg2TIN2",
+                "frm1702RT:txtPg2TIN3",
+            ],
+        );
+        fields.insert("derived:tin_digits".to_string(), tin_digits);
+        for (key, name) in [
+            ("frm1702RT:ddlPg1I2Month", "mm"),
+            ("frm1702RT:txtPg1I2Year", "yy"),
+        ] {
+            let digits: Vec<String> = fields
+                .get(key)
+                .map(|value| value.chars().map(String::from).collect())
+                .unwrap_or_default();
+            for (at, digit) in digits.iter().take(2).enumerate() {
+                fields.insert(format!("derived:year_end_{name}{}", at + 1), digit.clone());
+            }
+        }
+        fields
+    }
+
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
         let incorporation_date = profile.business_start_date.and_then(|date| {
             use chrono::Datelike;

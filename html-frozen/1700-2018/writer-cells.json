@@ -1,7 +1,7 @@
 {
  "form_id": "1700-v2013",
  "html_slug": "1700-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Parts III and V and Schedule 1 print every amount in one comb per column with no centavo comb ('DO NOT enter Centavos'), so amounts come from derived:amount_* keys of to_print_field_map: whole pesos (49 centavos or less drop down, 50 or more round up), digits only, right-aligned in the comb; an overpayment prints in parentheses; a zero amount, column B of a non-joint return, and an amount wider than the comb stay blank. The sheet numbers Part III Item 31 Surcharge and 32 Interest (the page's own controls are the other way round), so those derived amounts follow the printed captions. The address splits over the item 8 combs (40 + 32 slots) at a word break; the date of birth, the page 2 TIN (nine fillable slots), each employer's 14-digit TIN, Item 37's two digits and the spouse RDO (blank unless joint) are derived: keys too. Never submitted. Schedule 1 Item 4 prints what the return files: OTHERS with the add-more popup subtotal when more than four employers are filed; the popup rows themselves have no cells. Left blank on print: the Items 4 and 18 TIN branch combs (the frozen sheet has no inputs in them), Item 3 ATC (II011 is preprinted), Items 6 and 20 Taxpayer Type, Item 24 and the Schedule 1 Taxpayer/Spouse marks (the only cells there span the printed captions, no separate boxes), the Items 45/49/51/57 descriptions (the only cell on each row spans the printed caption), the signature block and Part IV payment details (Items 38-41, no writer values). The submitted XML always carries every value. Booleans fill X in the box left of the printed option.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Parts III and V and Schedule 1 print every amount in one comb per column with no centavo comb ('DO NOT enter Centavos'), so amounts come from derived:amount_* keys of to_print_field_map: whole pesos (49 centavos or less drop down, 50 or more round up), digits only, right-aligned in the comb; an overpayment prints in parentheses; a zero amount, column B of a non-joint return, and an amount wider than the comb stay blank. The sheet numbers Part III Item 31 Surcharge and 32 Interest (the page's own controls are the other way round), so those derived amounts follow the printed captions. The address splits over the item 8 combs (40 + 32 slots) at a word break; the date of birth, the page 2 TIN (nine fillable slots), each employer's 14-digit TIN, Item 37's two digits and the spouse RDO (blank unless joint) are derived: keys too. Never submitted. Schedule 1 Item 4 prints what the return files: OTHERS with the add-more popup subtotal when more than four employers are filed; the popup rows themselves have no cells. Since #113 the Items 6, 20, 24 and Schedule 1 mark cells hold two boxes under one input name, so their xbox_joins name each box by its input id (<cell>-i0/-i1), and the Items 45/49/51/57 (specify) inputs, inset past the caption, print the descriptions. Left blank on print: the Items 4 and 18 TIN branch combs (the frozen sheet has no inputs in them), Item 3 ATC (II011 is preprinted), the signature block and Part IV payment details (Items 38-41, no writer values). The submitted XML always carries every value. Booleans fill X in the box left of the printed option. Every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm1700:txtPg1I1Year",
@@ -686,6 +686,30 @@
    "html_id": "p2c119",
    "printed": "Schedule 1 Item 5B e. Tax Withheld",
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML; whole pesos (the sheet says DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up), right-aligned in the comb"
+  },
+  {
+   "writer_key": "frm1700:txtPg2I45Desc",
+   "html_id": "p2c151",
+   "printed": "45 (specify)",
+   "reason": "the input of the item 45 row cell, inset past the printed caption and (specify), left of the A/B amount combs"
+  },
+  {
+   "writer_key": "frm1700:txtPg2I49Desc",
+   "html_id": "p2c153",
+   "printed": "49 (specify)",
+   "reason": "the input of the item 49 row cell, inset past the printed caption and (specify), left of the A/B amount combs"
+  },
+  {
+   "writer_key": "frm1700:txtPg2I51Desc",
+   "html_id": "p2c155",
+   "printed": "51 (specify)",
+   "reason": "the input of the item 51 row cell, inset past the printed caption and (specify), left of the A/B amount combs"
+  },
+  {
+   "writer_key": "frm1700:txtPg2I57Desc",
+   "html_id": "p2c157",
+   "printed": "57 (specify)",
+   "reason": "the input of the item 57 row cell, inset past the printed caption and (specify), left of the A/B amount combs"
   }
  ],
  "money_joins": [],
@@ -761,6 +785,216 @@
    "html_id": "p1c56",
    "printed": "17 Filing Status Separate Filing",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1700:rdoPg1I6TaxpayerTypeE",
+   "html_id": "p1c13-i0",
+   "printed": "6 Taxpayer Type: Employee",
+   "reason": "cell with two boxes under one input name: the join names the box's own input id (the first box, inset 32.7pt), left of the printed Employee option"
+  },
+  {
+   "writer_key": "frm1700:rdoPg1I6TaxpayerTypeN",
+   "html_id": "p1c13-i1",
+   "printed": "6 Taxpayer Type: NRANETB",
+   "reason": "cell with two boxes under one input name: the join names the box's own input id (the second box, inset 123.1pt), left of the printed NRANETB* option"
+  },
+  {
+   "writer_key": "frm1700:rdoPg1I20SpouseTaxpayerTypeE",
+   "html_id": "p1c60-i1",
+   "printed": "20 Spouse Taxpayer Type: Employee",
+   "reason": "cell with two boxes under one input name: the join names the box's own input id (p1c60-i1, inset 32.7pt), left of the printed Employee option"
+  },
+  {
+   "writer_key": "frm1700:rdoPg1I20SpouseTaxpayerTypeN",
+   "html_id": "p1c60-i0",
+   "printed": "20 Spouse Taxpayer Type: NRANETB",
+   "reason": "cell with two boxes under one input name: the join names the box's own input id (p1c60-i0, inset 125.2pt), left of the printed NRANETB* option"
+  },
+  {
+   "writer_key": "frm1700:rdoPg1I24SpouseForeignTaxCreditsYes",
+   "html_id": "p1c75-i0",
+   "printed": "24 Spouse claiming Foreign Tax Credits? Yes",
+   "reason": "cell with two boxes under one input name: the join names the box's own input id (the first box, inset 144.8pt), left of the printed Yes"
+  },
+  {
+   "writer_key": "frm1700:rdoPg1I24SpouseForeignTaxCreditsNo",
+   "html_id": "p1c75-i1",
+   "printed": "24 Spouse claiming Foreign Tax Credits? No",
+   "reason": "cell with two boxes under one input name: the join names the box's own input id (the second box, inset 185.9pt), left of the printed No"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I1PartVIEmployeeT",
+   "html_id": "p2c72-i0",
+   "printed": "Schedule 1 row 1: Taxpayer",
+   "reason": "the upper box of the row 1 mark cell (p2c72-i0), left of the printed Taxpayer label"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I1PartVIEmployeeS",
+   "html_id": "p2c72-i1",
+   "printed": "Schedule 1 row 1: Spouse",
+   "reason": "the lower box of the row 1 mark cell (p2c72-i1), left of the printed Spouse label"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I2PartVIEmployeeT",
+   "html_id": "p2c77-i0",
+   "printed": "Schedule 1 row 2: Taxpayer",
+   "reason": "the upper box of the row 2 mark cell (p2c77-i0), left of the printed Taxpayer label"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I2PartVIEmployeeS",
+   "html_id": "p2c77-i1",
+   "printed": "Schedule 1 row 2: Spouse",
+   "reason": "the lower box of the row 2 mark cell (p2c77-i1), left of the printed Spouse label"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I3PartVIEmployeeT",
+   "html_id": "p2c82-i0",
+   "printed": "Schedule 1 row 3: Taxpayer",
+   "reason": "the upper box of the row 3 mark cell (p2c82-i0), left of the printed Taxpayer label"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I3PartVIEmployeeS",
+   "html_id": "p2c82-i1",
+   "printed": "Schedule 1 row 3: Spouse",
+   "reason": "the lower box of the row 3 mark cell (p2c82-i1), left of the printed Spouse label"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I4PartVIEmployeeT",
+   "html_id": "p2c87-i0",
+   "printed": "Schedule 1 row 4: Taxpayer",
+   "reason": "the upper box of the row 4 mark cell (p2c87-i0), left of the printed Taxpayer label"
+  },
+  {
+   "writer_key": "frm1700:rdoPg2I4PartVIEmployeeS",
+   "html_id": "p2c87-i1",
+   "printed": "Schedule 1 row 4: Spouse",
+   "reason": "the lower box of the row 4 mark cell (p2c87-i1), left of the printed Spouse label"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1700:txtPg1I26A",
+    "frm1700:txtPg1I26B",
+    "frm1700:txtPg1I27A",
+    "frm1700:txtPg1I27B",
+    "frm1700:txtPg1I28A",
+    "frm1700:txtPg1I28B",
+    "frm1700:txtPg1I29A",
+    "frm1700:txtPg1I29B",
+    "frm1700:txtPg1I30A",
+    "frm1700:txtPg1I30B",
+    "frm1700:txtPg1I31A",
+    "frm1700:txtPg1I31B",
+    "frm1700:txtPg1I32A",
+    "frm1700:txtPg1I32B",
+    "frm1700:txtPg1I33A",
+    "frm1700:txtPg1I33B",
+    "frm1700:txtPg1I34A",
+    "frm1700:txtPg1I34B",
+    "frm1700:txtPg1I35A",
+    "frm1700:txtPg1I35B",
+    "frm1700:txtPg1I36",
+    "frm1700:txtPg2I42A",
+    "frm1700:txtPg2I42B",
+    "frm1700:txtPg2I43A",
+    "frm1700:txtPg2I43B",
+    "frm1700:txtPg2I44A",
+    "frm1700:txtPg2I44B",
+    "frm1700:txtPg2I45A",
+    "frm1700:txtPg2I45B",
+    "frm1700:txtPg2I46A",
+    "frm1700:txtPg2I46B",
+    "frm1700:txtPg2I47A",
+    "frm1700:txtPg2I47B",
+    "frm1700:txtPg2I48A",
+    "frm1700:txtPg2I48B",
+    "frm1700:txtPg2I49A",
+    "frm1700:txtPg2I49B",
+    "frm1700:txtPg2I50A",
+    "frm1700:txtPg2I50B",
+    "frm1700:txtPg2I51A",
+    "frm1700:txtPg2I51B",
+    "frm1700:txtPg2I52A",
+    "frm1700:txtPg2I52B",
+    "frm1700:txtPg2I53A",
+    "frm1700:txtPg2I53B",
+    "frm1700:txtPg2I54A",
+    "frm1700:txtPg2I54B",
+    "frm1700:txtPg2I55A",
+    "frm1700:txtPg2I55B",
+    "frm1700:txtPg2I56A",
+    "frm1700:txtPg2I56B",
+    "frm1700:txtPg2I57A",
+    "frm1700:txtPg2I57B",
+    "frm1700:txtPg2I58A",
+    "frm1700:txtPg2I58B",
+    "frm1700:txtPg2I59A",
+    "frm1700:txtPg2I59B",
+    "frm1700:txtPg2ISched1c_1REG",
+    "frm1700:txtPg2ISched1c_2REG",
+    "frm1700:txtPg2ISched1c_3REG",
+    "frm1700:txtPg2ISched1c_4REG",
+    "frm1700:txtPg2ISched1c_5AREG",
+    "frm1700:txtPg2ISched1c_5BREG",
+    "frm1700:txtPg2ISched1d_1CIFR",
+    "frm1700:txtPg2ISched1d_2CIFR",
+    "frm1700:txtPg2ISched1d_3CIFR",
+    "frm1700:txtPg2ISched1d_4CIFR",
+    "frm1700:txtPg2ISched1d_5ACIFR",
+    "frm1700:txtPg2ISched1d_5BCIFR",
+    "frm1700:txtPg2ISched1e_1TW",
+    "frm1700:txtPg2ISched1e_2TW",
+    "frm1700:txtPg2ISched1e_3TW",
+    "frm1700:txtPg2ISched1e_4TW",
+    "frm1700:txtPg2ISched1e_5ATW",
+    "frm1700:txtPg2ISched1e_5BTW"
+   ],
+   "reason": "prints from its derived:amount_* key (whole pesos right-aligned in the comb, the sheet says DO NOT enter centavos; an overpayment in parentheses; zero and a non-joint column B blank)"
+  },
+  {
+   "writer_key": "frm1700:txtPg1I8Address",
+   "reason": "prints from derived:address_line1 / derived:address_line2 (the print map shapes the address over the item 8 combs for the sheet)"
+  },
+  {
+   "writer_key": "frm1700:txtPg1I9BirthDate",
+   "reason": "prints from derived:birth_mm / _dd / _yyyy (the print map shapes the item 9 date over its three combs for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1700:txtPg2TIN1",
+    "frm1700:txtPg2TIN2",
+    "frm1700:txtPg2TIN3"
+   ],
+   "reason": "prints from derived:tin_digits (the print map shapes the page 2 TIN, nine fillable slots for the sheet)"
+  },
+  {
+   "writer_key": "frm1700:txtPg2BranchCode",
+   "reason": "page 2 branch: the page 2 TIN comb has nine fillable slots and the branch 00000 preprinted"
+  },
+  {
+   "writer_key": "frm1700:txtPg1I4BranchCode",
+   "reason": "item 4 branch comb: the frozen sheet has no inputs in it (branch preprinted 0 0 0 0 0)"
+  },
+  {
+   "writer_key": "frm1700:txtPg1I37NumberOfAttachments",
+   "reason": "prints from derived:attachments (the print map shapes Item 37 as two digits for the sheet)"
+  },
+  {
+   "writer_key": "frm1700:txtSpouseRDOCode",
+   "reason": "prints from derived:spouse_rdo (the print map shapes the spouse RDO, blank unless joint for the sheet)"
+  },
+  {
+   "writer_key": "frm1700:txtPg1I3ATC",
+   "reason": "item 3 ATC II011 is preprinted on the sheet; there is no box to fill"
+  },
+  {
+   "writer_key": "frm1700:txtLOB",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm1700:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
   }
  ]
 }

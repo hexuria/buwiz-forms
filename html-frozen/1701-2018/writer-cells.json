@@ -1,7 +1,7 @@
 {
  "form_id": "1701-v2018",
  "html_slug": "1701-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Text cells and combs: caption beside or above the cell, or the column header of the NOLCO and Schedule 5 tables. Booleans: X in the box immediately left of the printed option (Yes/No, civil status, filing status, taxpayer type, ATC, tax rate and deduction method, overpayment). Amounts: every amount is a 9-slot whole-peso comb with no centavo comb, so they are peso_joins: the writer value (1,234.00) is parsed, rounded to whole pesos (50 centavos up) and right-aligned. No money_joins exist on this sheet. The Part VI summary (page 4) stays blank because its key family does not name Part VI. The item 1 sheet has only a YYYY comb. Stamped TIN cells keep their catalog name=. Split date combs, the email, the attachment-count boxes and the signature block stay blank.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Text cells and combs: caption beside or above the cell, or the column header of the NOLCO and Schedule 5 tables. Booleans: X in the box immediately left of the printed option (Yes/No, civil status, filing status, taxpayer type, ATC, tax rate and deduction method, overpayment). Amounts: every amount is a 9-slot whole-peso comb with no centavo comb, so they are peso_joins: the writer value (1,234.00) is parsed, rounded to whole pesos (50 centavos up) and right-aligned. No money_joins exist on this sheet. The Part VI summary (page 4) prints from txtPg4ISc6_*: the official layout names that family Part VI. The item 1 sheet has only a YYYY comb. Stamped TIN cells keep their catalog name=. Split dates print through date_joins (MM, DD, YYYY combs from one key); the email prints as typed; the page 2-4 TIN combs and the Item 33 digit boxes print from derived: keys of Form1701Draft::to_print_field_map. The signature block stays blank. Since #113 every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm1701:txtPg1I1Year",
@@ -566,6 +566,40 @@
    "html_id": "p4c43",
    "printed": "12 E. Net Operating Loss (Unapplied)",
    "reason": "row 12 under the \"E\" column header"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "html_ids": [
+    "p3c5",
+    "p4c5"
+   ],
+   "printed": "Pages 2-4 header TIN",
+   "reason": "the TIN comb under each later page's TIN caption: the nine TIN digits (the sheet preprints the branch 0 0 0 0 0 after them)"
+  },
+  {
+   "writer_key": "txtEmail",
+   "html_id": "p1c48",
+   "printed": "11 Email Address",
+   "reason": "the 32-slot comb under the item 11 caption; emails print as typed (not uppercased)"
+  },
+  {
+   "writer_key": "derived:attachments_tens",
+   "html_id": "p1c127",
+   "printed": "33 Number of Attachments (tens)",
+   "reason": "the first of the two digit boxes right of the item 33 caption"
+  },
+  {
+   "writer_key": "derived:attachments_units",
+   "html_id": "p1c128",
+   "printed": "33 Number of Attachments (units)",
+   "reason": "the second digit box right of the item 33 caption"
+  },
+  {
+   "writer_key": "frm1701:txtPg4IPart7_9Specify",
+   "html_id": "p4c213",
+   "printed": "Part VII item 9 (specify)",
+   "reason": "the input of the item 9 row cell, inset past the printed caption, left of the A/B amount combs"
   }
  ],
  "money_joins": [],
@@ -899,6 +933,42 @@
    "html_id": "p2c49",
    "printed": "12 Tax Rate 8% in lieu of Graduated Rates",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I8ForeignTaxCreditsYes",
+   "html_id": "p2c36-i0",
+   "printed": "8 Claiming Foreign Tax Credits? Yes",
+   "reason": "cell with two boxes under one input name: the first box (input id p2c36-i0, inset 142.6pt) left of the printed Yes"
+  },
+  {
+   "writer_key": "frm1701:rdoPg2I8ForeignTaxCreditsNo",
+   "html_id": "p2c36-i1",
+   "printed": "8 Claiming Foreign Tax Credits? No",
+   "reason": "the second box of the item 8 cell (input id p2c36-i1, inset 185.6pt) left of the printed No"
+  },
+  {
+   "writer_key": "frm1701:chkPg2IShed1a_1Taxpayer",
+   "html_id": "p2c54-i0",
+   "printed": "Schedule 1 row: Taxpayer",
+   "reason": "the upper box of the row mark cell (p2c54-i0), left of the printed Taxpayer label"
+  },
+  {
+   "writer_key": "frm1701:chkPg2IShed1a_1Spouse",
+   "html_id": "p2c54-i1",
+   "printed": "Schedule 1 row: Spouse",
+   "reason": "the lower box of the row mark cell (p2c54-i1), left of the printed Spouse label"
+  },
+  {
+   "writer_key": "frm1701:chkPg2IShed2a_2Taxpayer",
+   "html_id": "p2c59-i0",
+   "printed": "Schedule 2 row: Taxpayer",
+   "reason": "the upper box of the row mark cell (p2c59-i0), left of the printed Taxpayer label"
+  },
+  {
+   "writer_key": "frm1701:chkPg2IShed2a_2Spouse",
+   "html_id": "p2c59-i1",
+   "printed": "Schedule 2 row: Spouse",
+   "reason": "the lower box of the row mark cell (p2c59-i1), left of the printed Spouse label"
   }
  ],
  "peso_joins": [
@@ -2143,84 +2213,158 @@
    "html_id": "p4c181",
    "printed": "11 Net Taxable Income/(Loss) (Item 5 Less Item 10), B. Spouse",
    "reason": "item row caption and A/B column name the key; whole pesos, no centavo comb"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_1A",
+   "html_id": "p4c50",
+   "printed": "PART VI Summary of Income Tax Due item 1, column A",
+   "reason": "9-slot whole-peso comb on the Part VI item 1 row, column A (the official layout names txtPg4ISc6_1 as Part VI item 1)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_1B",
+   "html_id": "p4c51",
+   "printed": "PART VI Summary of Income Tax Due item 1, column B",
+   "reason": "9-slot whole-peso comb on the Part VI item 1 row, column B (the official layout names txtPg4ISc6_1 as Part VI item 1)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_2A",
+   "html_id": "p4c53",
+   "printed": "PART VI Summary of Income Tax Due item 2, column A",
+   "reason": "9-slot whole-peso comb on the Part VI item 2 row, column A (the official layout names txtPg4ISc6_2 as Part VI item 2)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_2B",
+   "html_id": "p4c54",
+   "printed": "PART VI Summary of Income Tax Due item 2, column B",
+   "reason": "9-slot whole-peso comb on the Part VI item 2 row, column B (the official layout names txtPg4ISc6_2 as Part VI item 2)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_3A",
+   "html_id": "p4c56",
+   "printed": "PART VI Summary of Income Tax Due item 3, column A",
+   "reason": "9-slot whole-peso comb on the Part VI item 3 row, column A (the official layout names txtPg4ISc6_3 as Part VI item 3)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_3B",
+   "html_id": "p4c57",
+   "printed": "PART VI Summary of Income Tax Due item 3, column B",
+   "reason": "9-slot whole-peso comb on the Part VI item 3 row, column B (the official layout names txtPg4ISc6_3 as Part VI item 3)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_4A",
+   "html_id": "p4c59",
+   "printed": "PART VI Summary of Income Tax Due item 4, column A",
+   "reason": "9-slot whole-peso comb on the Part VI item 4 row, column A (the official layout names txtPg4ISc6_4 as Part VI item 4)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_4B",
+   "html_id": "p4c60",
+   "printed": "PART VI Summary of Income Tax Due item 4, column B",
+   "reason": "9-slot whole-peso comb on the Part VI item 4 row, column B (the official layout names txtPg4ISc6_4 as Part VI item 4)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_5A",
+   "html_id": "p4c62",
+   "printed": "PART VI Summary of Income Tax Due item 5, column A",
+   "reason": "9-slot whole-peso comb on the Part VI item 5 row, column A (the official layout names txtPg4ISc6_5 as Part VI item 5)"
+  },
+  {
+   "writer_key": "frm1701:txtPg4ISc6_5B",
+   "html_id": "p4c63",
+   "printed": "PART VI Summary of Income Tax Due item 5, column B",
+   "reason": "9-slot whole-peso comb on the Part VI item 5 row, column B (the official layout names txtPg4ISc6_5 as Part VI item 5)"
   }
  ],
- "left_out": [
+ "date_joins": [
   {
-   "html_id": "p1c45",
-   "reason": "Item 10 date of birth: three combs (MM, DD, YYYY) under one key txtPg1I10BirthDate; a single value cannot be split"
+   "writer_key": "frm1701:txtPg1I10BirthDate",
+   "mm_html_id": "p1c45",
+   "dd_html_id": "p1c46",
+   "yyyy_html_id": "p1c47",
+   "printed": "10 Date of Birth (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the item 10 caption; one writer date split across the three"
   },
   {
-   "html_id": "p1c46",
-   "reason": "Item 10 date of birth: three combs (MM, DD, YYYY) under one key txtPg1I10BirthDate; a single value cannot be split"
+   "writer_key": "frm1701:txtPg1I34Date",
+   "mm_html_id": "p1c139",
+   "dd_html_id": "p1c140",
+   "yyyy_html_id": "p1c141",
+   "printed": "Part III row 34, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on the row 34 line; one writer date split across the three"
   },
   {
-   "html_id": "p1c47",
-   "reason": "Item 10 date of birth: three combs (MM, DD, YYYY) under one key txtPg1I10BirthDate; a single value cannot be split"
+   "writer_key": "frm1701:txtPg1I35Date",
+   "mm_html_id": "p1c146",
+   "dd_html_id": "p1c147",
+   "yyyy_html_id": "p1c148",
+   "printed": "Part III row 35, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on the row 35 line; one writer date split across the three"
   },
   {
-   "html_id": "p1c48",
-   "reason": "Item 11 email: not joined; the print path uppercases joined values but the official capital() skips txtEmail"
+   "writer_key": "frm1701:txtPg1I36Date",
+   "mm_html_id": "p1c152",
+   "dd_html_id": "p1c153",
+   "yyyy_html_id": "p1c154",
+   "printed": "Part III row 36, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on the row 36 line; one writer date split across the three"
   },
+  {
+   "writer_key": "frm1701:txtPg1I37Date",
+   "mm_html_id": "p1c160",
+   "dd_html_id": "p1c161",
+   "yyyy_html_id": "p1c162",
+   "printed": "Part III row 37, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part III Date column on the row 37 line; one writer date split across the three"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1701:txtPg2TIN1",
+    "frm1701:txtPg2TIN2",
+    "frm1701:txtPg2TIN3",
+    "frm1701:txtPg3TIN1",
+    "frm1701:txtPg3TIN2",
+    "frm1701:txtPg3TIN3",
+    "frm1701:txtPg4TIN1",
+    "frm1701:txtPg4TIN2",
+    "frm1701:txtPg4TIN3"
+   ],
+   "reason": "prints from derived:tin_digits (the print map shapes the nine TIN digits of the page 2-4 headers for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1701:txtPg1I4BranchCode",
+    "frm1701:txtPg2BranchCode",
+    "frm1701:txtPg3BranchCode",
+    "frm1701:txtPg4BranchCode"
+   ],
+   "reason": "branch code: the sheet preprints 0 0 0 0 0 beside each TIN comb (no fillable branch cells)"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I33NumberOfAttachments",
+   "reason": "prints from derived:attachments_tens / derived:attachments_units (the print map shapes Item 33 over its two digit boxes for the sheet)"
+  },
+  {
+   "writer_key": "frm1701:txtPg1I1Month",
+   "reason": "item 1 prints only a YYYY comb on the 2018 sheet; the fiscal month has no box"
+  },
+  {
+   "writer_key": "frm1701:txtVersion",
+   "reason": "form version stamp of the eBIRForms page, not on the paper form"
+  },
+  {
+   "writer_keys": [
+    "frm1701:txtCurrentPage",
+    "frm1701:txtMaxPage"
+   ],
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c125",
    "reason": "signature block line (authorized representative): no layout key"
-  },
-  {
-   "html_id": "p1c127",
-   "reason": "Item 33 number of attachments: two single-character boxes for one 2-digit key"
-  },
-  {
-   "html_id": "p1c128",
-   "reason": "Item 33 number of attachments: two single-character boxes for one 2-digit key"
-  },
-  {
-   "html_id": "p1c139",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c140",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c141",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c146",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c147",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c148",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c152",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c153",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c154",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c160",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c161",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
-  },
-  {
-   "html_id": "p1c162",
-   "reason": "Part III Date (MM/DD/YYYY): three combs (2/2/4) under one key; a single value cannot be split"
   },
   {
    "html_id": "p2c55",
@@ -2245,46 +2389,6 @@
   {
    "html_id": "p2c63",
    "reason": "Schedule 1/2 employer name and TIN rows: the Taxpayer/Spouse row cannot be matched to the 1a/2a name keys without the checkbox cells (none on the sheet), and the 14-slot employer TIN does not match the three-key TIN layout"
-  },
-  {
-   "html_id": "p4c50",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c51",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c53",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c54",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c56",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c57",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c59",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c60",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c62",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
-  },
-  {
-   "html_id": "p4c63",
-   "reason": "Part VI summary amount (page 4): the Sc6 keys do not name Part VI, so the key is not clearly identified"
   }
  ]
 }

@@ -1313,7 +1313,7 @@ impl FormViewTrait for Form1601CView {
         );
         match super::form_html_preview_launcher::launch_frozen_form_preview_with_receipt(
             "1601c-2018",
-            &render_draft.to_bir_field_map(),
+            &render_draft.to_print_field_map(),
             receipt,
             "1601-C — Print Preview",
             cx,

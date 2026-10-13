@@ -1,7 +1,7 @@
 {
  "form_id": "1701q-v2018",
  "html_slug": "1701q-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) names the item. Text cells and combs: caption left of or above the cell. Booleans: X in the box immediately left of the printed option (quarter, amended, type, ATC, foreign tax credit, tax rate, method, spouse options). ATC booleans follow the printed grid order, read row by row (Part I: II012, II014, II013 / II015, II017, II016; Part II first row: II012, II014, II013, II011, then II015, II017, II016). Part III, Part IV and Part V (page 2) amounts are whole-peso 8-slot combs with no centavo comb (the print says not to enter centavos), so each one takes a peso_joins entry that prints the amount rounded to whole pesos. Part IV dates are three combs per row under one key. The page 2 TIN is one 14-slot comb for four keys. The item 5 and item 17 branch combs (p1c22, p1c72) are mixed cells with no input element, so they stay blank. TIN combs carry catalog name stamps and take no join. Layout keys with no printed cell (txtCurrentPage, txtMaxPage, txtLOB, txtTelno, txtFinalFlag, txtEnroll, ebirOnline*, driveSelectTPExport, Part V Desc keys) have no cell to fill.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) names the item. Text cells and combs: caption left of or above the cell. Booleans: X in the box immediately left of the printed option (quarter, amended, type, ATC, foreign tax credit, tax rate, method, spouse options). ATC booleans follow the printed grid order, read row by row (Part I: II012, II014, II013 / II015, II017, II016; Part II first row: II012, II014, II013, II011, then II015, II017, II016). Part III, Part IV and Part V (page 2) amounts are whole-peso 8-slot combs with no centavo comb (the print says not to enter centavos), so each one takes a peso_joins entry that prints the amount rounded to whole pesos. Part IV dates are three combs per row under one key: date_joins split the writer date across them. The page 2 TIN is one 14-slot comb: it prints derived:tin_digits (Form1701QDraft::to_print_field_map). The item 5 and item 17 branch combs (p1c22, p1c72) are mixed cells with no input element, so they stay blank. TIN combs carry catalog name stamps and take no join. Layout keys with no printed cell (txtCurrentPage, txtMaxPage, txtLOB, txtTelno, txtFinalFlag, txtEnroll, ebirOnline*, driveSelectTPExport) have no cell to fill. Since #113 the Part V (specify) boxes print too and every other value has a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm1701q:txtYear",
@@ -106,12 +106,6 @@
    "reason": "16-slot comb under \"23 Foreign Tax Number\""
   },
   {
-   "writer_key": "frm1701q:txtPg2TaxpayerName",
-   "html_id": "p2c6",
-   "printed": "Page 2 Taxpayer/Filer's Last Name",
-   "reason": "26-slot comb under \"Taxpayer/Filer's Last Name\" on page 2"
-  },
-  {
    "writer_key": "frm1701q:txtAgency32",
    "html_id": "p1c134",
    "printed": "32 Cash/Bank Debit Memo, Drawee Bank/Agency",
@@ -158,6 +152,36 @@
    "html_id": "p1c156",
    "printed": "35 Others, Number",
    "reason": "11-slot comb under the \"Number\" column, row 35"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "printed": "Page 2 TIN",
+   "reason": "the 14-slot comb under the page 2 TIN caption: TIN then branch, from the page-2 TIN keys"
+  },
+  {
+   "writer_key": "frm1701q:txt43Desc",
+   "html_id": "p2c148",
+   "printed": "43 (specify)",
+   "reason": "the specify box on the item 43 row, after the printed caption (input inset past the caption), left of the A/B amount combs"
+  },
+  {
+   "writer_key": "frm1701q:txt48Desc",
+   "html_id": "p2c150",
+   "printed": "48 (specify)",
+   "reason": "the specify box on the item 48 row, after the printed caption (input inset past the caption), left of the A/B amount combs"
+  },
+  {
+   "writer_key": "frm1701q:txt61Desc",
+   "html_id": "p2c152",
+   "printed": "61 (specify)",
+   "reason": "the specify box on the item 61 row, after the printed caption (input inset past the caption), left of the A/B amount combs"
+  },
+  {
+   "writer_key": "derived:page2_name",
+   "html_id": "p2c6",
+   "printed": "Page 2 Taxpayer/Filer's Last Name",
+   "reason": "the 26-slot comb under the page 2 name caption: the last name, or the taxpayer name's part before its comma when the draft holds no separate last name (a new return leaves it blank)"
   }
  ],
  "money_joins": [],
@@ -873,7 +897,82 @@
    "reason": "whole-peso comb with no centavo comb; the print says do not enter centavos"
   }
  ],
- "left_out": [
+ "date_joins": [
+  {
+   "writer_key": "frm1701q:txtDate32",
+   "mm_html_id": "p1c136",
+   "dd_html_id": "p1c137",
+   "yyyy_html_id": "p1c138",
+   "printed": "Part IV row 32, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part IV Date column on the row 32 line; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1701q:txtDate33",
+   "mm_html_id": "p1c143",
+   "dd_html_id": "p1c144",
+   "yyyy_html_id": "p1c145",
+   "printed": "Part IV row 33, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part IV Date column on the row 33 line; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1701q:txtDate34",
+   "mm_html_id": "p1c149",
+   "dd_html_id": "p1c150",
+   "yyyy_html_id": "p1c151",
+   "printed": "Part IV row 34, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part IV Date column on the row 34 line; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1701q:txtDate35",
+   "mm_html_id": "p1c157",
+   "dd_html_id": "p1c158",
+   "yyyy_html_id": "p1c159",
+   "printed": "Part IV row 35, Date (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the Part IV Date column on the row 35 line; one writer date split across the three"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1701q:txtPg2TIN1",
+    "frm1701q:txtPg2TIN2",
+    "frm1701q:txtPg2TIN3",
+    "frm1701q:txtPg2BranchCode"
+   ],
+   "reason": "page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits, built from these four keys"
+  },
+  {
+   "writer_key": "frm1701q:txtBranchCode",
+   "reason": "item 5 branch is preprinted 0 0 0 0 0 inside a mixed cell with no input on the frozen sheet; there is no box to fill"
+  },
+  {
+   "writer_key": "frm1701q:txtLOB",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm1701q:txtTelno",
+   "reason": "not on the paper form: the 1701Q (2018) sheet has no contact number box (item 12 is the email)"
+  },
+  {
+   "writer_keys": [
+    "frm1701q:txtCurrentPage",
+    "frm1701q:txtMaxPage"
+   ],
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  },
+  {
+   "writer_keys": [
+    "txtEnroll",
+    "txtFinalFlag"
+   ],
+   "reason": "eBIRForms system field (enrolment flag, final flag, export drive, online-filing credentials), not on the paper form"
+  },
+  {
+   "writer_key": "frm1701q:txtPg2TaxpayerName",
+   "reason": "prints from derived:page2_name (the print map shapes the page 2 last name, falling back to the taxpayer name for the sheet)"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c259",
    "reason": "Authorized Representative TIN text cell under the signature block: no layout key"
@@ -885,58 +984,6 @@
   {
    "html_id": "p1c72",
    "reason": "spouse branch comb (5 slots) under item 17 is a mixed cell with no input element in the frozen sheet, so the fill path cannot target it; left blank"
-  },
-  {
-   "html_id": "p2c5",
-   "reason": "one 14-slot TIN comb under the page 2 \"TIN\" caption; four keys (txtPg2TIN1-3 and txtPg2BranchCode) cannot share one cell, so left blank"
-  },
-  {
-   "html_id": "p1c136",
-   "reason": "Part IV date for row 32: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c137",
-   "reason": "Part IV date for row 32: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c138",
-   "reason": "Part IV date for row 32: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c143",
-   "reason": "Part IV date for row 33: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c144",
-   "reason": "Part IV date for row 33: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c145",
-   "reason": "Part IV date for row 33: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c149",
-   "reason": "Part IV date for row 34: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c150",
-   "reason": "Part IV date for row 34: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c151",
-   "reason": "Part IV date for row 34: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c157",
-   "reason": "Part IV date for row 35: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c158",
-   "reason": "Part IV date for row 35: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c159",
-   "reason": "Part IV date for row 35: three combs (MM, DD, YYYY) under one layout date key; one key maps to one cell, so left blank"
   }
  ]
 }

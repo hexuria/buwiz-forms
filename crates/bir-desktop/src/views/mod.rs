@@ -58,6 +58,8 @@ pub mod global_dashboard;
 pub mod import_export;
 pub mod lock_screen;
 pub mod notifications;
+#[cfg(test)]
+mod print_coverage;
 pub mod profile_manager;
 pub mod queueable_forms;
 pub(crate) mod secondary_window;

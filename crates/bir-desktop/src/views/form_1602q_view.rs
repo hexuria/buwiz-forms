@@ -1143,7 +1143,7 @@ impl QueueableFormView for Form1602QView {
     const PRINT_SLUG: &'static str = "1602q-2019";
 
     fn print_fields(draft: &Form1602QDraft) -> std::collections::BTreeMap<String, String> {
-        draft.to_bir_field_map()
+        draft.to_print_field_map()
     }
 
     fn agent_draft(&self) -> &Form1602QDraft {

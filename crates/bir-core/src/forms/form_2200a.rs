@@ -946,7 +946,10 @@ impl Form2200ADraft {
     /// The print preview's map: the submit map plus `derived:` keys for the
     /// printed combs that Items 8-9, the three Item 10 levels and the three
     /// Item 11 levels share (one 40-slot comb each, values placed under their
-    /// own captions). The email prints as typed.
+    /// own captions). The email prints as typed. `derived:page_header` is the
+    /// page 2 and 3 header comb (TIN then name, one 40-slot comb on this
+    /// sheet); `derived:address_line1` / `derived:line:address_line2` put
+    /// Item 7 over both its lines.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         let mut put = |key: &str, value: String| {
@@ -979,6 +982,14 @@ impl Form2200ADraft {
                 ),
             );
         }
+        put(
+            "page_header",
+            super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        put("address_line1", line1);
+        put("line:address_line2", line2);
         fields
     }
 

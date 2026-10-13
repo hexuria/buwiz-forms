@@ -1,7 +1,7 @@
 {
  "form_id": "2200a-v2020",
  "html_slug": "2200a-2020",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) names the item. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow printed order). Schedule 1 rows map by ATC block, the printed effective-date caption and the Export/Taxable/Due column headers. The second group of Php 50.60 blocks on page 3 is left out. Page-2/3 header repeats of tinA/branchCode/registeredName are left out because each writer key can be joined once. Address line 2, Part IV date combs and tax agent cells stay blank because the layout has no key for them. Items 8-9 share one 40-slot comb, and each of items 10 and 11 has one 40-slot comb for its region, province and city codes; each comb takes one derived print-map line (to_print_field_map) with the values placed under their own captions. The three Others rows join ATC, description, tax bracket and rate by the column captions of the Schedule 1 header.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) names the item. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow printed order). Schedule 1 rows map by ATC block, the printed effective-date caption and the Export/Taxable/Due column headers. The second group of Php 50.60 blocks on page 3 is left out. Page-2/3 header repeats of tinA/branchCode/registeredName are left out because each writer key can be joined once. Address line 2, Part IV date combs and tax agent cells stay blank because the layout has no key for them. Items 8-9 share one 40-slot comb, and each of items 10 and 11 has one 40-slot comb for its region, province and city codes; each comb takes one derived print-map line (to_print_field_map) with the values placed under their own captions. The three Others rows join ATC, description, tax bracket and rate by the column captions of the Schedule 1 header. Since #113: the page 2/3 header comb, the item 7 second line and the page 3 XA056 block (keys matched by the ATC, effective date and rate the model gives each key) print too; every other value has a reviewed not_joined reason. One writer key may fill several cells (html_ids).",
  "joins": [
   {
    "writer_key": "frm2200Av2020:txtDateMonth",
@@ -62,12 +62,6 @@
    "html_id": "p1c26",
    "printed": "6 Taxpayer Name",
    "reason": "full-width comb under item 6 caption"
-  },
-  {
-   "writer_key": "frm2200Av2020:registeredAddress",
-   "html_id": "p1c28",
-   "printed": "7 Registered Address",
-   "reason": "full-width comb under item 7 caption"
   },
   {
    "writer_key": "frm2200Av2020:zipCode",
@@ -1310,6 +1304,135 @@
    "html_id": "p1c44",
    "printed": "11 Place of Removal: Region / Province / City",
    "reason": "one 40-slot comb under the three captions: region code from slot 0, province code from slot 10, city code from slot 24"
+  },
+  {
+   "writer_key": "derived:page_header",
+   "html_id": "p2c5",
+   "html_ids": [
+    "p3c5"
+   ],
+   "printed": "Page 2 and page 3 header: TIN / Taxpayer's Name",
+   "reason": "later page header: the sheet draws the TIN and Taxpayer's Name boxes as one 40-slot comb, so derived:page_header holds the 14 TIN digits then the name from slot 14 (under the Taxpayer's Name caption)"
+  },
+  {
+   "writer_key": "derived:address_line1",
+   "html_id": "p1c28",
+   "printed": "7 Registered Address, line 1",
+   "reason": "full-width 40-slot comb under the item 7 caption; the print map breaks the address at the last space that fits"
+  },
+  {
+   "writer_key": "derived:line:address_line2",
+   "html_id": "p1c29",
+   "printed": "7 Registered Address, line 2",
+   "reason": "the second item 7 comb: the rest of the address; a longer line prints whole in smaller type"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2020A_Export",
+   "html_id": "p3c24",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2020, P26.43 Export",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2020 and rate 26.43, which the row prints; Export column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2020A_Taxable",
+   "html_id": "p3c25",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2020, P26.43 Taxable",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2020 and rate 26.43, which the row prints; Taxable column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2020A_Due",
+   "html_id": "p3c26",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2020, P26.43 Due",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2020 and rate 26.43, which the row prints; Due column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3B_2020B2_Export",
+   "html_id": "p3c29",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 23, 2020, P35.00 Export",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 23, 2020 and rate 35.00, which the row prints; Export column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3B_2020B2_Taxable",
+   "html_id": "p3c30",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 23, 2020, P35.00 Taxable",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 23, 2020 and rate 35.00, which the row prints; Taxable column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3B_2020B2_Due",
+   "html_id": "p3c31",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 23, 2020, P35.00 Due",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 23, 2020 and rate 35.00, which the row prints; Due column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2021B_Export",
+   "html_id": "p3c34",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2021, P37.00 Export",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2021 and rate 37.00, which the row prints; Export column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2021B_Taxable",
+   "html_id": "p3c35",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2021, P37.00 Taxable",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2021 and rate 37.00, which the row prints; Taxable column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2021B_Due",
+   "html_id": "p3c36",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2021, P37.00 Due",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2021 and rate 37.00, which the row prints; Due column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2022B_Export",
+   "html_id": "p3c39",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2022, P39.00 Export",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2022 and rate 39.00, which the row prints; Export column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2022B_Taxable",
+   "html_id": "p3c40",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2022, P39.00 Taxable",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2022 and rate 39.00, which the row prints; Taxable column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2022B_Due",
+   "html_id": "p3c41",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2022, P39.00 Due",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2022 and rate 39.00, which the row prints; Due column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2023B_Export",
+   "html_id": "p3c44",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2023, P41.00 Export",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2023 and rate 41.00, which the row prints; Export column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2023B_Taxable",
+   "html_id": "p3c45",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2023, P41.00 Taxable",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2023 and rate 41.00, which the row prints; Taxable column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2023B_Due",
+   "html_id": "p3c46",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2023, P41.00 Due",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2023 and rate 41.00, which the row prints; Due column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2024B_Export",
+   "html_id": "p3c49",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2024, P43.00 Export",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2024 and rate 43.00, which the row prints; Export column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2024B_Taxable",
+   "html_id": "p3c50",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2024, P43.00 Taxable",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2024 and rate 43.00, which the row prints; Taxable column by x order"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtSched1_3A_2024B_Due",
+   "html_id": "p3c51",
+   "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2024, P43.00 Due",
+   "reason": "the XA056 block heads page 3; the model lists this key under ATC XA056 with effective date January 1, 2024 and rate 43.00, which the row prints; Due column by x order"
   }
  ],
  "money_joins": [],
@@ -1357,11 +1480,48 @@
    "reason": "box immediately left of item 15 caption"
   }
  ],
- "left_out": [
+ "not_joined": [
   {
-   "html_id": "p1c29",
-   "reason": "second line of item 7 address; the layout has one address key (registeredAddress) and no continuation key"
+   "writer_key": "frm2200Av2020:registeredAddress",
+   "reason": "prints from derived:address_line1 / derived:line:address_line2 (the print map shapes the address over both item 7 combs for the sheet)"
   },
+  {
+   "writer_keys": [
+    "frm2200Av2020:phoneNumber",
+    "frm2200Av2020:txtEmail"
+   ],
+   "reason": "prints from derived:contact_email (the print map shapes Items 8-9, one shared 40-slot comb for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm2200Av2020:prodRegion",
+    "frm2200Av2020:prodProvince",
+    "frm2200Av2020:prodCity"
+   ],
+   "reason": "prints from derived:place_of_production (the print map shapes Item 10 as place names on one shared comb instead of PSGC codes for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm2200Av2020:remRegion",
+    "frm2200Av2020:remProvince",
+    "frm2200Av2020:remCity"
+   ],
+   "reason": "prints from derived:place_of_removal (the print map shapes Item 11 as place names on one shared comb instead of PSGC codes for the sheet)"
+  },
+  {
+   "writer_key": "frm2200Av2020:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  },
+  {
+   "writer_keys": [
+    "frm2200Av2020:txtSched1_xa_others1_Check",
+    "frm2200Av2020:txtSched1_xa_others2_Check",
+    "frm2200Av2020:txtSched1_xa_others3_Check"
+   ],
+   "reason": "row-enable checkbox of the page; the paper Others rows have no box for it"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c96",
    "reason": "Attorney's Roll No. / Tax Agent Accreditation No.: no layout key"
@@ -1389,86 +1549,6 @@
   {
    "html_id": "p1c114",
    "reason": "Part IV row 28 bank column is one 33-slot comb spanning the full width; no column split for othersBank"
-  },
-  {
-   "html_id": "p2c5",
-   "reason": "page 2 header repeat of the Taxpayer name; registeredName is already joined on page 1 and a writer key may appear once"
-  },
-  {
-   "html_id": "p3c5",
-   "reason": "page 3 header repeat of the Taxpayer name; registeredName is already joined on page 1 and a writer key may appear once"
-  },
-  {
-   "html_id": "p3c24",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c25",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c26",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c29",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c30",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c31",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c34",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c35",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c36",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c39",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c40",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c41",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c44",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c45",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c46",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c49",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c50",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
-  },
-  {
-   "html_id": "p3c51",
-   "reason": "page 3 repeats the \"Php 50.60 and below\" caption and the same rates as the page 2 block; the 3A second-group keys (2020A-2024B) cannot be told apart by caption"
   }
  ]
 }

@@ -398,6 +398,23 @@ impl Form2553Draft {
         }
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:line:tax_relief_specify`: "If yes, specify", the relief
+    ///   named by `frm2553:lstTaxTreaty` (the upload carries the dropdown code).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let specify = super::print_map::tax_relief_label(
+            fields
+                .get("frm2553:lstTaxTreaty")
+                .map_or("", String::as_str),
+        )
+        .to_string();
+        fields.insert("derived:line:tax_relief_specify".to_string(), specify);
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
