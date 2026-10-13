@@ -277,6 +277,12 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("uses: ./.github/workflows/release-linux.yml", linux_job)
         self.assertIn("tag: ${{ github.ref_name }}", linux_job)
         linux = self.linux_release_workflow
+        self.assertIn('if [[ -n "$RELEASE_TAG" ]]; then', linux)
+        self.assertNotIn('GITHUB_EVENT_NAME" == workflow_call', linux)
+        self.assertIn(
+            "group: release-linux-${{ github.event_name }}-${{ github.ref }}",
+            linux,
+        )
         self.assertIn("ubuntu-22.04-arm", linux)
         self.assertIn("x86_64-unknown-linux-gnu", linux)
         self.assertIn("aarch64-unknown-linux-gnu", linux)

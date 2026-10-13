@@ -199,7 +199,15 @@ PKGBUILD
     sed \
         -e 's/^pkgname=ebirforms$/pkgname=ebirforms-bin/' \
         -e "s|^source=('${archive_name}')$|source=('${aur_url}')|" \
-        "$arch_build/PKGBUILD" > "$OUT/ebirforms-bin.PKGBUILD"
+        "$arch_build/PKGBUILD" | awk '
+            /^pkgname=ebirforms-bin$/ {
+                print
+                print "provides=(" sprintf("%c", 39) "ebirforms" sprintf("%c", 39) ")"
+                print "conflicts=(" sprintf("%c", 39) "ebirforms" sprintf("%c", 39) ")"
+                next
+            }
+            { print }
+        ' > "$OUT/ebirforms-bin.PKGBUILD"
     docker run --rm --platform linux/amd64 \
         -v "$arch_build:/work" archlinux:base-devel \
         bash -euc '

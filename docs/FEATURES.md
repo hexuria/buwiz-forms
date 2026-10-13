@@ -30,7 +30,7 @@ there, but nobody has run it on that platform.
 | Add deadlines to a calendar (.ics) | ✓ | untested | ✓ |
 | Google Calendar credentials storage | ✓ | untested | untested |
 | Keyboard shortcuts | ✓ | untested | ✓ |
-| Packaging | ✓ | untested | `.deb`, `.rpm`, x86_64 Arch package, tarball, and installer. |
+| Packaging | ✓ | untested | ✓ |
 | Agent control (gpui-agent) | ✓ | partial | ✓ |
 | Agent screenshots | ✓ | ✗ | ✗ |
 | Dev Mode panel (debug builds only) | ✓ | untested | ✓ |

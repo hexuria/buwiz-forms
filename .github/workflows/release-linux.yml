@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-linux-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -106,7 +106,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == workflow_call ]]; then
+          if [[ -n "$RELEASE_TAG" ]]; then
             version="${RELEASE_TAG#v}"
           else
             cargo_version="$(awk -F '"' '
