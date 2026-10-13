@@ -103,6 +103,9 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Test Python scripts
+        run: python -m unittest discover -s scripts/tests -v
+
       - name: Verify Rust workspace
         run: |
           cargo fmt --all -- --check
@@ -347,15 +350,29 @@ jobs:
       - name: Install Windows Dependencies
         shell: pwsh
         run: |
-          choco install openssl innosetup 7zip -y
+          choco install openssl innosetup -y
+          $chocoExitCode = $LASTEXITCODE
+          if ($chocoExitCode -eq 3010) {
+            Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
+          } elseif ($chocoExitCode -ne 0) {
+            [Console]::Error.WriteLine("Chocolatey install failed (exit code $chocoExitCode).")
+            exit $chocoExitCode
+          }
           choco install wixtoolset --version=3.11.2 -y
+          $chocoExitCode = $LASTEXITCODE
+          if ($chocoExitCode -eq 3010) {
+            Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
+          } elseif ($chocoExitCode -ne 0) {
+            [Console]::Error.WriteLine("WiX Toolset install failed (exit code $chocoExitCode).")
+            exit $chocoExitCode
+          }
           $openssl_dir = ""
           if (Test-Path "C:\Program Files\OpenSSL\include") {
               $openssl_dir = "C:\Program Files\OpenSSL"
           } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
               $openssl_dir = "C:\Program Files\OpenSSL-Win64"
           } else {
-              Write-Error "OpenSSL include directory not found!"
+              [Console]::Error.WriteLine("OpenSSL include directory not found!")
               exit 1
           }
           
@@ -453,29 +470,50 @@ jobs:
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
           $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          "WINDOWS_STAGE=$PKG" >> $env:GITHUB_ENV
+          if (Test-Path $PKG) { Remove-Item $PKG -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $PKG
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$PKG/"
           Copy-Item -Recurse "assets" "$PKG/"
           python scripts/audit_no_legacy.py --package-root $PKG
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $auditExitCode = $LASTEXITCODE
+          if ($auditExitCode -ne 0) { exit $auditExitCode }
 
       - name: Create EXE Installer
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
           $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          & $ISCC /DMyAppVersion=$VERSION installer.iss
+          $PKG = $env:WINDOWS_STAGE
+          python scripts/audit_installer_sources.py --installer installer.iss --stage-dir $PKG
+          $sourceExitCode = $LASTEXITCODE
+          if ($sourceExitCode -ne 0) {
+            [Console]::Error.WriteLine("Installer [Files] source validation failed.")
+            exit $sourceExitCode
+          }
+          & $ISCC "/DMyAppVersion=$VERSION" "/DStageDir=$PKG" installer.iss
+          $isccExitCode = $LASTEXITCODE
+          if ($isccExitCode -ne 0) {
+            [Console]::Error.WriteLine("Inno Setup failed (exit code $isccExitCode).")
+            exit $isccExitCode
+          }
 
       - name: Create MSI Installer
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
-          $PKG = "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}"
+          $PKG = $env:WINDOWS_STAGE
           $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
           
           heat.exe dir "$PKG" -dr INSTALLDIR -cg HarvestedComponents -ag -g1 -sf -srd -var "var.SourceDir" -out harvest.wxs
+          $heatExitCode = $LASTEXITCODE
+          if ($heatExitCode -ne 0) { exit $heatExitCode }
           candle.exe installer.wxs harvest.wxs -arch x64 -dSourceDir="$PKG" -dVersion="$VERSION" -ext WixUIExtension
+          $candleExitCode = $LASTEXITCODE
+          if ($candleExitCode -ne 0) { exit $candleExitCode }
           light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension
+          $lightExitCode = $LASTEXITCODE
+          if ($lightExitCode -ne 0) { exit $lightExitCode }
 
       - name: Sign and verify Windows release artifacts
         shell: pwsh
@@ -510,19 +548,15 @@ jobs:
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
-          $setup = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}-Setup.exe").Path
           $msi = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi").Path
-          $extractRoot = Join-Path $env:RUNNER_TEMP "ebirforms-final-installers"
-          $setupRoot = Join-Path $extractRoot "setup"
-          $msiRoot = Join-Path $extractRoot "msi"
-          Remove-Item $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $setupRoot, $msiRoot | Out-Null
+          $setup = (Resolve-Path "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}-Setup.exe").Path
+          $msiRoot = Join-Path $env:RUNNER_TEMP "ebirforms-final-installers\msi"
+          Remove-Item $msiRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $msiRoot | Out-Null
 
-          $sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
-          & $sevenZip x -y "-o$setupRoot" $setup
-          if ($LASTEXITCODE -ne 0) { throw "Could not extract final Inno Setup installer" }
-          python scripts/audit_no_legacy.py --package-root $setupRoot
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & pwsh -NoProfile -File scripts/audit_final_setup.ps1 -Installer $setup -Python python
+          $setupAuditExitCode = $LASTEXITCODE
+          if ($setupAuditExitCode -ne 0) { exit $setupAuditExitCode }
 
           $msiProcess = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
             "/a",
@@ -534,7 +568,8 @@ jobs:
             throw "Could not administratively extract final MSI: $($msiProcess.ExitCode)"
           }
           python scripts/audit_no_legacy.py --package-root $msiRoot
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $msiAuditExitCode = $LASTEXITCODE
+          if ($msiAuditExitCode -ne 0) { exit $msiAuditExitCode }
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4

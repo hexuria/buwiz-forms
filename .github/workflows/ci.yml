@@ -48,6 +48,9 @@ jobs:
       with:
         python-version: '3.13'
 
+    - name: Test Python scripts
+      run: python -m unittest discover -s scripts/tests -v
+
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@master
       with:
@@ -79,6 +82,12 @@ jobs:
       with:
         shared-key: workspace-${{ runner.os }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
+
+    - name: Validate justfile
+      run: just --summary
 
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
@@ -151,7 +160,7 @@ jobs:
         } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
             $openssl_dir = "C:\Program Files\OpenSSL-Win64"
         } else {
-            Write-Error "OpenSSL include directory not found!"
+            [Console]::Error.WriteLine("OpenSSL include directory not found!")
             exit 1
         }
         
@@ -224,6 +233,34 @@ jobs:
 
     - name: Test
       run: cargo test --locked --workspace
+
+    - name: Install Windows packaging tools
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        choco install innosetup -y --no-progress
+        $installExitCode = $LASTEXITCODE
+        if ($installExitCode -eq 3010) {
+          Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
+        } elseif ($installExitCode -ne 0) {
+          [Console]::Error.WriteLine("Inno Setup installation failed (exit code $installExitCode).")
+          exit $installExitCode
+        }
+
+    - name: Build and audit unsigned Windows Setup
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        just exe
+        $buildExitCode = $LASTEXITCODE
+        if ($buildExitCode -ne 0) { exit $buildExitCode }
+        $installers = @(Get-ChildItem "target/release-artifacts/*-Setup.exe")
+        if ($installers.Count -ne 1) {
+          throw "Expected exactly one Setup.exe after just exe; found $($installers.Count)."
+        }
+        & pwsh -NoProfile -File scripts/audit_final_setup.ps1 -Installer $installers[0].FullName -Python python
+        $auditExitCode = $LASTEXITCODE
+        if ($auditExitCode -ne 0) { exit $auditExitCode }
 
   # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
   # PowerShell job, which is exactly why three separate Windows-path defects in

@@ -344,6 +344,7 @@ class MacosCandidateCertificationTests(unittest.TestCase):
         with self.assertRaisesRegex(certification.EvidenceError, "after its start"):
             certification.validate_attestation(path, binding)
 
+    @unittest.skipIf(os.name == "nt", "verifier fixture requires POSIX shebang execution")
     def test_owned_pdf_verifier_is_rerun_and_exact_output_is_compared(self) -> None:
         binding = self._binding()
         path, value = self._attestation(binding)

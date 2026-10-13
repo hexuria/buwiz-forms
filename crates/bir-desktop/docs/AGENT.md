@@ -19,12 +19,14 @@ point `gpui-agent` at the same token and address. Default bind is
 queue stay host-side; the client must not skip them.
 
 Pinned crate: [`gpui-agent`](https://github.com/hexuria/gpui-agent) commit
-`1edec4dbf49755bf91ffbbc23359698ea5b867f4` (`main` after PR #40 —
+`dab85991d700b8f3410cbaacbc5d9f90568c7ee3` (`main` after PR #40 —
 `Op::Keybinding` / `Keybindings`, `screenshot --mode scrolled`,
-`assert --visible` / `--in-viewport`, `wait_until`). Host GPUI is
-**gpui-pre** through gpui-kit 0.6. Cookbook:
-[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/1edec4dbf49755bf91ffbbc23359698ea5b867f4/docs/INTEGRATING.md)
-and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/1edec4dbf49755bf91ffbbc23359698ea5b867f4/docs/SDK.md).
+`assert --visible` / `--in-viewport`, `wait_until`; it also includes named CLI
+discovery (#49) and Windows bcrypt linking (#50)). The repository-root
+[`Cargo.toml`](../../../Cargo.toml) is the source of truth for the pin. Host
+GPUI is **gpui-pre** through gpui-kit 0.6. Cookbook:
+[`docs/INTEGRATING.md`](https://github.com/hexuria/gpui-agent/blob/dab85991d700b8f3410cbaacbc5d9f90568c7ee3/docs/INTEGRATING.md)
+and [`docs/SDK.md`](https://github.com/hexuria/gpui-agent/blob/dab85991d700b8f3410cbaacbc5d9f90568c7ee3/docs/SDK.md).
 Do not fork the protocol. There is no crates.io release; git/path only.
 CLI and host **must** both be on this rev (or later). A v1 CLI cannot talk
 to a v2 host.
@@ -69,7 +71,7 @@ These are host constraints. They do not fork protocol v2.
   `bir` and `bir-headless serve` both default to `127.0.0.1:17421` and take
   `bir_data.db.owner.lock`. See [Two hosts, one agent port](#two-hosts-one-agent-port).
   There is **no** protocol `Op::Yield` / `Takeover`.
-- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/1edec4dbf49755bf91ffbbc23359698ea5b867f4/docs/ADR-001-daemon-sot.md))
+- ADR-001 ([daemon SoT, GUI as protocol client](https://github.com/hexuria/gpui-agent/blob/dab85991d700b8f3410cbaacbc5d9f90568c7ee3/docs/ADR-001-daemon-sot.md))
   is the long-term shape. **This slice is shared persistence only:** the
   daemon opens `default_database_path()` (`platform::data_dir()/bir_data.db`
   + the same SQLCipher key). Smoke C reopen of the GUI is offline
@@ -712,10 +714,12 @@ setup script (`scripts/setup-linux.sh`, `scripts/setup-macos.sh`,
 manually:
 
 ```bash
-REV=$(grep -oE 'gpui-agent = \{ git = "[^"]+", rev = "[0-9a-f]+"' \
-    crates/bir-desktop/Cargo.toml | grep -oE '[0-9a-f]{7,}' | tail -1)
+REV=$(tr '\n' ' ' < Cargo.toml | grep -oE \
+    'gpui-agent[[:space:]]*=[[:space:]]*\{[^}]*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})"' \
+    | sed -nE 's/.*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})".*/\1/p' | head -1)
+[ -n "$REV" ] || { echo "gpui-agent rev pin not found in root Cargo.toml" >&2; exit 1; }
 cargo install --git https://github.com/hexuria/gpui-agent --rev "$REV" \
-    --locked gpui-agent-cli
+    gpui-agent-cli
 ```
 
 ### Mac: Screen Recording (TCC)
@@ -761,7 +765,7 @@ gpui-agent keybinding --id app.toggle_sidebar --scope focused --activate
 ### Mac: bir-headless
 
 Clap: `serve` / `status` / `shutdown` / `logs`, global `--wait` and `--detach`.
-Shell matches gpui-agent `apps/todo-headless` on pin `1edec4dbf49755bf91ffbbc23359698ea5b867f4`:
+Shell matches gpui-agent `apps/todo-headless` on pin `dab85991d700b8f3410cbaacbc5d9f90568c7ee3`:
 `from_env` + mailbox host, `PlatformKind::Headless`, loop until shutdown.
 `GPUI_AGENT_TOKEN` is required to bind. `--detach` / `logs --follow` are the
 Docker-like lab path; Mac production uses the launchd example (no `--detach`).
@@ -864,7 +868,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
 
-Other terminal (CLI from pin `1edec4dbf49755bf91ffbbc23359698ea5b867f4`):
+Other terminal (CLI from pin `dab85991d700b8f3410cbaacbc5d9f90568c7ee3`):
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421
@@ -1458,4 +1462,3 @@ inbox has **one** Google OAuth credential set:
 
 Do not log access or refresh tokens. Do not point tests at the live Mac
 app-group DB.
-

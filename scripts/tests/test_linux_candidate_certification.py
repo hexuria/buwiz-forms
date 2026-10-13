@@ -420,6 +420,7 @@ class LinuxCandidateCertificationTests(unittest.TestCase):
         with self.assertRaisesRegex(certification.EvidenceError, "changed"):
             certification.validate_attestation(path, binding)
 
+    @unittest.skipIf(os.name == "nt", "verifier fixture requires POSIX shebang execution")
     def test_owned_pdf_verifier_is_replayed_for_linux_and_both_backends(self) -> None:
         binding = self._binding()
         path, value = self._attestation(binding)
