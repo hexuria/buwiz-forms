@@ -374,6 +374,7 @@ check-exe-prerequisites:
         exit 1
     }
 
+[windows]
 exe *args="": check-exe-prerequisites build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'

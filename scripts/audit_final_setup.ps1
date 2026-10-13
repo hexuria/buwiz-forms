@@ -28,7 +28,8 @@ function Find-EbirFormsUninstallEntry {
                     try {
                         if ($null -eq $entry) { continue }
                         $displayName = [string]$entry.GetValue('DisplayName')
-                        if ($displayName -and $displayName -ilike 'eBIRForms*') {
+                        if ($name -ieq 'eBIRForms_is1' -or
+                            ($displayName -and $displayName -ilike 'eBIRForms*')) {
                             return "$hive/$view/$name"
                         }
                     } finally {
@@ -58,6 +59,7 @@ $installRoot = Join-Path ([IO.Path]::GetTempPath()) (
 )
 $uninstaller = $null
 $uninstallSucceeded = $false
+$uninstallError = $null
 $installSucceeded = $false
 try {
     New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
@@ -96,24 +98,33 @@ finally {
             Select-Object -First 1
     }
     if ($null -ne $uninstaller) {
-        $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @(
-            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
-        ) -Wait -PassThru
-        if ($uninstall.ExitCode -eq 0) {
-            $uninstallSucceeded = $true
-        } else {
-            [Console]::Error.WriteLine(
-                "Uninstaller failed with exit code $($uninstall.ExitCode); retaining $installRoot"
-            )
-            throw "Final Setup uninstall failed; diagnostics retained at $installRoot"
+        try {
+            $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @(
+                '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+            ) -Wait -PassThru
+            if ($uninstall.ExitCode -ne 0) {
+                $uninstallError = "Uninstaller failed with exit code $($uninstall.ExitCode)"
+            } else {
+                $remaining = Find-EbirFormsUninstallEntry
+                if ($remaining) {
+                    $uninstallError = "Uninstall registration remains at $remaining"
+                } else {
+                    $uninstallSucceeded = $true
+                }
+            }
+        } catch {
+            $uninstallError = "Could not run generated uninstaller: $($_.Exception.Message)"
         }
     } elseif ($installSucceeded) {
-        [Console]::Error.WriteLine("No generated uninstaller found; retaining $installRoot")
-        throw "Final Setup uninstaller is missing; diagnostics retained at $installRoot"
+        $uninstallError = 'No generated uninstaller found'
     }
     if ($uninstallSucceeded) {
         Remove-Item -LiteralPath $installRoot -Recurse -Force
     } elseif (Test-Path -LiteralPath $installRoot) {
         Write-Host "Final Setup audit diagnostics retained at $installRoot"
+    }
+    if ($uninstallError) {
+        [Console]::Error.WriteLine("$uninstallError; retaining $installRoot")
+        throw "$uninstallError; diagnostics retained at $installRoot"
     }
 }

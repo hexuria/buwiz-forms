@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -12,6 +14,8 @@ from typing import Iterable
 _SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]\s*(?:;.*)?$")
 _NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 _ALLOWED = {"source", "destdir", "flags"}
+_ALLOWED_FLAGS = {"ignoreversion", "recursesubdirs", "createallsubdirs"}
+_FILE_ATTRIBUTE_REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 _STAGE_PREFIX = "{#StageDir}\\"
 
 
@@ -124,11 +128,92 @@ def _validate_source(source: str, quoted: bool, stage: Path, line_number: int) -
             ) from exc
 
 
+def _is_reparse_point(info: os.stat_result) -> bool:
+    attributes = getattr(info, "st_file_attributes", 0)
+    return bool(attributes & _FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _reject_stage_links(stage: Path) -> None:
+    pending = [stage]
+    while pending:
+        directory = pending.pop()
+        try:
+            with os.scandir(directory) as contents:
+                entries = list(contents)
+        except OSError as exc:
+            raise InstallerSourceError(
+                f"cannot inspect stage directory {directory}: {exc}"
+            ) from exc
+        for entry in entries:
+            path = Path(entry.path)
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise InstallerSourceError(
+                    f"cannot inspect stage entry {path}: {exc}"
+                ) from exc
+            if stat.S_ISLNK(info.st_mode) or _is_reparse_point(info):
+                relative = path.relative_to(stage)
+                raise InstallerSourceError(
+                    f"stage contains a symlink or reparse point: {relative}"
+                )
+            if stat.S_ISDIR(info.st_mode):
+                pending.append(path)
+
+
+def _validate_destdir(
+    destdir: str, quoted: bool, line_number: int
+) -> None:
+    if not quoted:
+        raise InstallerSourceError(f"line {line_number}: DestDir must be quoted")
+    if not destdir.startswith("{app}") or (
+        len(destdir) > len("{app}") and destdir[len("{app}")] not in "\\/"
+    ):
+        raise InstallerSourceError(
+            f"line {line_number}: DestDir must be anchored at {{app}}"
+        )
+    suffix = destdir[len("{app}") :]
+    if not suffix:
+        return
+    if any(character in suffix for character in "{}:*?[]"):
+        raise InstallerSourceError(
+            f"line {line_number}: unsupported DestDir path"
+        )
+    relative = suffix[1:].replace("/", "\\")
+    segments = relative.split("\\")
+    if any(segment in {".", ".."} for segment in segments):
+        raise InstallerSourceError(
+            f"line {line_number}: DestDir traversal is not allowed"
+        )
+    if not relative or any(not segment for segment in segments):
+        raise InstallerSourceError(
+            f"line {line_number}: unsupported DestDir path"
+        )
+
+
+def _validate_flags(flags: str, line_number: int) -> None:
+    values = [flag.casefold() for flag in flags.split()]
+    unsupported = set(values) - _ALLOWED_FLAGS
+    if unsupported:
+        raise InstallerSourceError(
+            f"line {line_number}: unsupported Flags value {sorted(unsupported)[0]}"
+        )
+    if len(values) != len(set(values)):
+        raise InstallerSourceError(f"line {line_number}: duplicate Flags value")
+
+
 def validate_installer_sources(installer: Path, stage_dir: Path) -> int:
     text = installer.read_text(encoding="utf-8")
     if re.search(r"#include\b", text, re.IGNORECASE):
         raise InstallerSourceError("#include is not supported")
+    try:
+        stage_info = stage_dir.lstat()
+    except OSError as exc:
+        raise InstallerSourceError(f"cannot inspect stage directory {stage_dir}: {exc}") from exc
+    if stat.S_ISLNK(stage_info.st_mode) or _is_reparse_point(stage_info):
+        raise InstallerSourceError("stage directory cannot be a symlink or reparse point")
     stage = stage_dir.resolve(strict=True)
+    _reject_stage_links(stage)
     in_files = False
     files_seen = False
     sources = 0
@@ -149,16 +234,29 @@ def validate_installer_sources(installer: Path, stage_dir: Path) -> int:
                 f"line {line_number}: unsupported [Files] directive "
                 f"{sorted(unknown)[0]}"
             )
-        if names.count("source") != 1:
+        if names.count("source") != 1 or names.count("destdir") != 1:
             raise InstallerSourceError(
-                f"line {line_number}: exactly one Source is required"
+                f"line {line_number}: exactly one Source and DestDir are required"
             )
+        if names.count("flags") > 1:
+            raise InstallerSourceError(f"line {line_number}: duplicate Flags directive")
         source, quoted = next(
             (value, is_quoted)
             for name, value, is_quoted in parameters
             if name == "source"
         )
+        destdir, destdir_quoted = next(
+            (value, is_quoted)
+            for name, value, is_quoted in parameters
+            if name == "destdir"
+        )
         _validate_source(source, quoted, stage, line_number)
+        _validate_destdir(destdir, destdir_quoted, line_number)
+        flags = [
+            value for name, value, _ in parameters if name == "flags"
+        ]
+        if flags:
+            _validate_flags(flags[0], line_number)
         sources += 1
     if not files_seen:
         raise InstallerSourceError("installer has no [Files] section")

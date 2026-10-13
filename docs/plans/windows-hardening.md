@@ -185,16 +185,22 @@ per-user directory and audit its installed tree before uninstall; local
 execution was safely refused because a real installation is registered.
 
 - [x] **7.1 #91, upstream in `hexuria/gpui-agent`.** The bcrypt linkage fix and
-  pinned-revision update are merged upstream.
-- [x] **7.2 `scripts/setup-windows.ps1`:** Root-manifest pin resolution, PATH
+  pinned-revision update are merged upstream ([gpui-agent PR #50](https://github.com/hexuria/gpui-agent/pull/50)).
+- [x] **7.2 #91 `scripts/setup-windows.ps1`:** Root-manifest pin resolution, PATH
   ordering/deduplication, and 3010 handling passed PowerShell parsing and the
-  focused setup-policy test.
-- [x] **7.3 #92 `justfile`:** Python/ISCC prerequisites, source gating, MSIX
-  path handling, and the real Windows packaging build passed locally.
-- [ ] **7.4 #93 installer audit:** The shared audit script and parser checks
+  focused setup-policy test ([PR #103](https://github.com/hexuria/buwiz-forms/pull/103)).
+- [x] **7.3 #92 `justfile`:** Python/ISCC prerequisites and source gating were
+  verified with the real Windows packaging build ([PR #103](https://github.com/hexuria/buwiz-forms/pull/103)).
+- [x] **7.4 #93 MSIX installation:** `just install msix` invokes
+  `Add-AppxPackage` through Windows PowerShell 5.1, which installed the package
+  in the Server 2022 VM verification. The evidence records that the installed
+  app still failed to start under the separate #94 issue ([#90 evidence](https://github.com/hexuria/buwiz-forms/issues/90#issuecomment-6119512665);
+  [PR #103](https://github.com/hexuria/buwiz-forms/pull/103)).
+- [ ] **7.5 Final Setup audit:** The shared audit script and parser checks
   are implemented. Local final-Setup execution safely refused because a real
   eBIRForms installation is registered; disposable CI must verify
-  install/audit/uninstall. Never remove a pre-existing installation.
+  install/audit/uninstall ([PR #103](https://github.com/hexuria/buwiz-forms/pull/103)).
+  Never remove a pre-existing installation.
 - **Acceptance:** a clean VM must run setup, `just run`, `just exe`, `just msix`,
   `just sign-dev`, `just install msix`, and `cargo install gpui-agent-cli`.
   A signed release run remains a separate acceptance item. Local verification

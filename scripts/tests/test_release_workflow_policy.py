@@ -13,6 +13,7 @@ INSTALLER_WXS_PATH = REPOSITORY_ROOT / "installer.wxs"
 JUSTFILE_PATH = REPOSITORY_ROOT / "justfile"
 LINUX_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-linux.sh"
 WINDOWS_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-windows.ps1"
+FINAL_SETUP_AUDIT_PATH = REPOSITORY_ROOT / "scripts/audit_final_setup.ps1"
 
 
 class ReleaseWorkflowPolicyTests(unittest.TestCase):
@@ -25,6 +26,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         cls.justfile = JUSTFILE_PATH.read_text(encoding="utf-8")
         cls.linux_setup = LINUX_SETUP_PATH.read_text(encoding="utf-8")
         cls.windows_setup = WINDOWS_SETUP_PATH.read_text(encoding="utf-8")
+        cls.final_setup_audit = FINAL_SETUP_AUDIT_PATH.read_text(encoding="utf-8")
 
     def job(self, name: str) -> str:
         match = re.search(
@@ -157,6 +159,30 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertLess(source_gate, compile_installer)
         self.assertNotIn("7z", exe_recipe.lower())
         self.assertNotIn("audit_final_setup.ps1", exe_recipe)
+
+    def test_exe_recipe_and_prerequisite_are_windows_only(self) -> None:
+        self.assertRegex(self.justfile, r"(?m)^\[windows\]\r?\nexe \*args=")
+        self.assertRegex(
+            self.justfile,
+            r"(?m)^\[private\]\r?\n\[windows\]\r?\ncheck-exe-prerequisites:",
+        )
+
+    def test_final_setup_audit_checks_registration_name_and_after_uninstall(
+        self,
+    ) -> None:
+        self.assertIn("$name -ieq 'eBIRForms_is1'", self.final_setup_audit)
+        self.assertIn(
+            "$remaining = Find-EbirFormsUninstallEntry",
+            self.final_setup_audit,
+        )
+        self.assertIn("if ($remaining)", self.final_setup_audit)
+        uninstall = self.final_setup_audit.index(
+            "Start-Process -FilePath $uninstaller"
+        )
+        registration_check = self.final_setup_audit.index(
+            "$remaining = Find-EbirFormsUninstallEntry"
+        )
+        self.assertLess(uninstall, registration_check)
 
     def test_ci_tests_python_policy_and_audits_a_real_unsigned_setup(self) -> None:
         self.assertIn(
