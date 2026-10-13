@@ -2,6 +2,23 @@
 
 use gpui::*;
 
+fn should_set(existing: Option<&std::ffi::OsStr>) -> bool {
+    existing.is_none()
+}
+
+/// gpui-pre-windows composes via DirectComposition with
+/// `WS_EX_NOREDIRECTIONBITMAP`, which hides the WRY/WebView2 child HWND used by
+/// the print preview (#97).
+pub fn prefer_hwnd_swap_chain() {
+    if should_set(std::env::var_os("GPUI_DISABLE_DIRECT_COMPOSITION").as_deref()) {
+        // SAFETY: This runs from the binary's single-threaded entry point before
+        // GPUI creates the application or starts any other thread.
+        unsafe {
+            std::env::set_var("GPUI_DISABLE_DIRECT_COMPOSITION", "1");
+        }
+    }
+}
+
 // ── Application Lifecycle ────────────────────────────────────────────────────
 
 /// Enforces that only one instance of the application runs at a time.
@@ -332,5 +349,18 @@ pub fn toggle_app_visibility() {
     // SAFETY: `toggle_window_callback` is a correctly-typed Win32 EnumWindows callback.
     unsafe {
         let _ = EnumWindows(Some(toggle_window_callback), LPARAM(0));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_set;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn should_set_direct_composition_override_only_when_absent() {
+        assert!(should_set(None));
+        assert!(!should_set(Some(OsStr::new("0"))));
+        assert!(!should_set(Some(OsStr::new("1"))));
     }
 }
