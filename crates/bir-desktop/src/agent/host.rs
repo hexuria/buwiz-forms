@@ -38,6 +38,11 @@ use crate::agent::search::{self, ProfileHit};
 use crate::app::ActiveView;
 use crate::views::form_1601c_view::{Agent1601CCategory, Agent1601CHostPatch};
 
+#[path = "host_generic.rs"]
+mod generic;
+pub(crate) use generic::print_sheet;
+pub use generic::{GenericFormState, generic_view};
+
 const FIXTURE_TIN: &str = "12345678900000";
 const FIXTURE_NAME: &str = "Agent Fixture Taxpayer";
 const FIXTURE_EMAIL: &str = "agent-fixture@example.com";
@@ -210,6 +215,10 @@ pub struct BirAgentHost {
     dues: Vec<DueItem>,
     form_1601c: Option<Form1601CState>,
     form_2551q: Option<Form2551QState>,
+    /// Any other of the 43 forms (`bir_core::forms::agent`).
+    generic_form: Option<GenericFormState>,
+    /// One-shot: `form.review_in_app` handed this form to the user.
+    review_requested: Option<bir_core::forms::agent::AgentFormKind>,
     /// Set by `form.dismiss` so the desktop drain closes the matching view.
     dismissed_form: Option<&'static str>,
     submit_confirmation_visible: bool,
@@ -252,6 +261,8 @@ impl BirAgentHost {
             dues: Vec::new(),
             form_1601c: None,
             form_2551q: None,
+            generic_form: None,
+            review_requested: None,
             dismissed_form: None,
             submit_confirmation_visible: false,
             form_loaded: false,
@@ -725,7 +736,7 @@ impl BirAgentHost {
 
     /// The open form holding the one-form lock: `(code, year, period, tin)`.
     /// A form saved with nothing changed since does not hold it.
-    fn form_lock_holder(&self) -> Option<(&'static str, u16, u8, &str)> {
+    fn form_lock_holder(&self) -> Option<(&'static str, u16, u8, String)> {
         if let Some(form) = &self.form_1601c
             && !form.assist.lock_released
         {
@@ -733,7 +744,7 @@ impl BirAgentHost {
                 "1601C",
                 form.draft.taxable_year,
                 form.draft.month,
-                &form.draft.tin,
+                form.draft.tin.clone(),
             ));
         }
         if let Some(form) = &self.form_2551q
@@ -743,7 +754,18 @@ impl BirAgentHost {
                 "2551Q",
                 form.draft.taxable_year,
                 form.draft.quarter,
-                &form.draft.tin,
+                form.draft.tin.clone(),
+            ));
+        }
+        if let Some(form) = &self.generic_form
+            && !form.assist.lock_released
+            && let Some((tin, year, period)) = form.identity()
+        {
+            return Some((
+                form.kind.form_code(),
+                year,
+                u8::try_from(period).unwrap_or(u8::MAX),
+                tin,
             ));
         }
         None
@@ -762,9 +784,13 @@ impl BirAgentHost {
             return Ok(false);
         };
         let tin = tin.or(self.selected_tin.as_deref());
+        let wanted_period = match open_code {
+            "1601C" | "2551Q" => clamp_form_period(open_code, period),
+            _ => generic::page_period(open_code, period).unwrap_or(period),
+        };
         if open_code.eq_ignore_ascii_case(code)
             && open_year == year
-            && open_period == clamp_form_period(open_code, period)
+            && open_period == wanted_period
             && tin.is_none_or(|tin| tin == open_tin)
         {
             return Ok(true);
@@ -954,6 +980,7 @@ impl BirAgentHost {
         }
         self.form_1601c = None;
         self.form_2551q = None;
+        self.generic_form = None;
         self.active_view = view;
         Ok(DispatchResult::json(json!({
             "selected": last4(&profile.tin),
@@ -1910,6 +1937,19 @@ impl BirAgentHost {
 
     fn open_form(&mut self, code: &str, year: u16, period: u8) -> Result<DispatchResult, String> {
         self.gate_locked()?;
+        // Every form other than the hand-built 1601C and 2551Q opens the way
+        // its page does (`views::queueable_forms` registry, or 2550Q's own).
+        match bir_core::forms::agent::AgentFormKind::from_code(code) {
+            Some(bir_core::forms::agent::AgentFormKind::Queueable(kind)) => {
+                return self.open_generic(kind, year, period);
+            }
+            Some(_) => {}
+            None => {
+                return Err(format!(
+                    "unknown form `{code}`; use one of the 43 BIR form codes, e.g. 1601C, 2550Q, 1701"
+                ));
+            }
+        }
         let Some(chrome) = ids::FORM_CHROME
             .iter()
             .find(|item| item.code.eq_ignore_ascii_case(code))
@@ -1946,8 +1986,10 @@ impl BirAgentHost {
             }
             self.form_1601c = Some(Form1601CState::fresh(draft));
             self.form_2551q = None;
+            self.generic_form = None;
         } else if chrome.code == "2551Q" {
             self.open_2551q_draft(Some(year), Some(period.clamp(1, 4)))?;
+            self.generic_form = None;
         } else {
             self.form_1601c = None;
             self.form_2551q = None;
@@ -1991,11 +2033,17 @@ impl BirAgentHost {
                 "form": "2551Q",
             })));
         }
-        Err("open form 1601C or 2551Q first".into())
+        if let Some(result) = self.validate_generic() {
+            return result;
+        }
+        Err("open a form first (bir_form_open)".into())
     }
 
     fn save_form_draft(&mut self) -> Result<DispatchResult, String> {
         self.gate_locked()?;
+        if let Some(result) = self.save_generic() {
+            return result;
+        }
         match self.active_view {
             ActiveView::Form1601C => {
                 let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
@@ -2040,7 +2088,7 @@ impl BirAgentHost {
                 })))
             }
             other => Err(format!(
-                "draft save for {} is not mapped in this agent slice; use 1601C or 2551Q",
+                "no form is open on {} to save; open one with form.open",
                 ids::view_slug(other)
             )),
         }
@@ -2051,6 +2099,33 @@ impl BirAgentHost {
     /// the Dismiss button (which asks first).
     fn form_dismiss(&mut self) -> Result<DispatchResult, String> {
         self.gate_locked()?;
+        if let Some(form) = self.generic_form.as_ref()
+            && (self.active_generic().is_some()
+                || (self.form_1601c.is_none() && self.form_2551q.is_none()))
+        {
+            let code = form.kind.form_code();
+            if form.assist.unsaved_user_edits {
+                return Err(format!(
+                    "form {code} has unsaved edits the user typed; the agent cannot discard them. Ask the user to press Dismiss in the form (it confirms first) or save the draft"
+                ));
+            }
+            let open_here = self.active_generic().is_some();
+            self.generic_form = None;
+            self.dismissed_form = Some(code);
+            self.submit_confirmation_visible = false;
+            if open_here {
+                self.form_loaded = false;
+                self.active_view = if self.selected_tin.is_some() {
+                    ActiveView::Dashboard
+                } else {
+                    ActiveView::GlobalDashboard
+                };
+            }
+            return Ok(DispatchResult::json(json!({
+                "dismissed": true,
+                "form": code,
+            })));
+        }
         let open_1601c = self
             .form_1601c
             .as_ref()
@@ -2377,6 +2452,12 @@ impl BirAgentHost {
         {
             let claimed = form.draft.submission_claim_token.is_some()
                 || form.draft.submission_claimed_at.is_some();
+            let json = serde_json::to_value(&form.draft).map_err(|err| err.to_string())?;
+            let official = Self::official_boxes(
+                bir_core::forms::agent::AgentFormKind::Form1601C,
+                &json,
+                &form.assist,
+            )?;
             return Ok(DispatchResult::json(json!({
                 "form": "1601C",
                 "status": format!("{:?}", form.draft.status),
@@ -2384,6 +2465,7 @@ impl BirAgentHost {
                 "id": form.draft.id,
                 "fields": form_1601c_fields(&form.draft),
                 "boxes": fillable_boxes(assist::fillable_values_1601c(&form.draft), &form.assist),
+                "official_boxes": official["boxes"],
             })));
         }
         if let Some(form) = &self.form_2551q
@@ -2391,6 +2473,12 @@ impl BirAgentHost {
         {
             let claimed = form.draft.submission_claim_token.is_some()
                 || form.draft.submission_claimed_at.is_some();
+            let json = serde_json::to_value(&form.draft).map_err(|err| err.to_string())?;
+            let official = Self::official_boxes(
+                bir_core::forms::agent::AgentFormKind::Form2551Q,
+                &json,
+                &form.assist,
+            )?;
             return Ok(DispatchResult::json(json!({
                 "form": "2551Q",
                 "status": format!("{:?}", form.draft.status),
@@ -2398,9 +2486,13 @@ impl BirAgentHost {
                 "id": form.draft.id,
                 "fields": form_2551q_fields(&form.draft),
                 "boxes": fillable_boxes(assist::fillable_values_2551q(&form.draft), &form.assist),
+                "official_boxes": official["boxes"],
             })));
         }
-        Err("open form 1601C or 2551Q first".into())
+        if let Some(result) = self.generic_fields() {
+            return result;
+        }
+        Err("open a form first (bir_form_open)".into())
     }
 
     /// `form.fill`: write boxes by key with a source. A box the user typed
@@ -2409,20 +2501,17 @@ impl BirAgentHost {
         self.gate_locked()?;
         self.reconcile_open_forms_from_db();
         let fields = collect_fill_fields(args)?;
-        let source = BoxSource::parse_fill(args.get("source").and_then(Value::as_str))?;
+        let source = self.fill_source(args, &fields)?;
         if self.active_view == ActiveView::Form1601C {
             let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            let keyed = fields
-                .iter()
-                .map(|(key, value)| {
-                    assist::canonical_1601c_key(key)
-                        .map(|canonical| (canonical, value))
-                        .ok_or_else(|| format!("unknown or read-only 1601C field `{key}`"))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let (keyed, official) = split_fill_keys(
+                bir_core::forms::agent::AgentFormKind::Form1601C,
+                &fields,
+                assist::canonical_1601c_key,
+            )?;
             let mut draft = form.draft.clone();
             let (mut filled, mut kept) = (Vec::new(), Vec::new());
             for (key, value) in keyed {
@@ -2433,6 +2522,20 @@ impl BirAgentHost {
                 assist::apply_1601c(&mut draft, &key, value)?;
                 filled.push(key);
             }
+            let mut not_shown = Vec::new();
+            if !official.is_empty() {
+                let json = serde_json::to_value(&draft).map_err(|err| err.to_string())?;
+                let (next, more, also_kept, hidden) = generic::fill_official(
+                    bir_core::forms::agent::AgentFormKind::Form1601C,
+                    &json,
+                    &form.assist,
+                    &official,
+                )?;
+                draft = serde_json::from_value(next).map_err(|err| err.to_string())?;
+                filled.extend(more);
+                kept.extend(also_kept);
+                not_shown = hidden;
+            }
             draft.compute();
             form.draft = draft;
             for key in &filled {
@@ -2441,21 +2544,21 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            return Ok(fill_result("1601C", source, filled, kept));
+            return Ok(generic::with_not_shown(
+                fill_result("1601C", source, filled, kept),
+                not_shown,
+            ));
         }
         if self.active_view == ActiveView::Form2551Q {
             let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            let keyed = fields
-                .iter()
-                .map(|(key, value)| {
-                    assist::canonical_2551q_key(key)
-                        .map(|canonical| (canonical, value))
-                        .ok_or_else(|| format!("unknown or read-only 2551Q field `{key}`"))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let (keyed, official) = split_fill_keys(
+                bir_core::forms::agent::AgentFormKind::Form2551Q,
+                &fields,
+                assist::canonical_2551q_key,
+            )?;
             let mut draft = form.draft.clone();
             let (mut filled, mut kept) = (Vec::new(), Vec::new());
             for (key, value) in keyed {
@@ -2466,6 +2569,20 @@ impl BirAgentHost {
                 assist::apply_2551q(&mut draft, &key, value)?;
                 filled.push(key);
             }
+            let mut not_shown = Vec::new();
+            if !official.is_empty() {
+                let json = serde_json::to_value(&draft).map_err(|err| err.to_string())?;
+                let (next, more, also_kept, hidden) = generic::fill_official(
+                    bir_core::forms::agent::AgentFormKind::Form2551Q,
+                    &json,
+                    &form.assist,
+                    &official,
+                )?;
+                draft = serde_json::from_value(next).map_err(|err| err.to_string())?;
+                filled.extend(more);
+                kept.extend(also_kept);
+                not_shown = hidden;
+            }
             draft.recompute(None);
             form.draft = draft;
             for key in &filled {
@@ -2474,9 +2591,15 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            return Ok(fill_result("2551Q", source, filled, kept));
+            return Ok(generic::with_not_shown(
+                fill_result("2551Q", source, filled, kept),
+                not_shown,
+            ));
         }
-        Err("open form 1601C or 2551Q first".into())
+        if let Some(result) = self.fill_generic(&fields, source) {
+            return result;
+        }
+        Err("open a form first (bir_form_open)".into())
     }
 
     /// `form.context`: what the agent may fill from — the taxpayer's COR
@@ -2507,7 +2630,16 @@ impl BirAgentHost {
                     draft.filing_period_bounds(),
                 )
             }),
-            _ => None,
+            _ => self.active_generic().and_then(|form| {
+                let (tin, year, period) = form.identity()?;
+                Some((
+                    form.kind.form_code(),
+                    tin,
+                    year,
+                    u8::try_from(period).unwrap_or(0),
+                    None,
+                ))
+            }),
         };
         let tin = match &open {
             Some((_, tin, ..)) => tin.clone(),
@@ -2682,64 +2814,37 @@ impl BirAgentHost {
         if let Some(form) = &self.form_1601c
             && self.active_view == ActiveView::Form1601C
         {
+            let json = serde_json::to_value(&form.draft).map_err(|err| err.to_string())?;
+            let official = Self::needs_you_json(
+                bir_core::forms::agent::AgentFormKind::Form1601C,
+                &json,
+                &form.assist,
+            )?;
             return Ok(DispatchResult::json(json!({
                 "form": "1601C",
                 "boxes": assist::needs_you_1601c(&form.draft),
+                "official": official,
             })));
         }
         if let Some(form) = &self.form_2551q
             && self.active_view == ActiveView::Form2551Q
         {
+            let json = serde_json::to_value(&form.draft).map_err(|err| err.to_string())?;
+            let official = Self::needs_you_json(
+                bir_core::forms::agent::AgentFormKind::Form2551Q,
+                &json,
+                &form.assist,
+            )?;
             return Ok(DispatchResult::json(json!({
                 "form": "2551Q",
                 "boxes": assist::needs_you_2551q(&form.draft),
+                "official": official,
             })));
         }
-        Err("open form 1601C or 2551Q first".into())
-    }
-
-    fn form_pdf(&self) -> Result<DispatchResult, String> {
-        self.gate_locked()?;
-        let (slug, fields, form, receipt_id, mailbox) = if let Some(form) = &self.form_1601c
-            && self.active_view == ActiveView::Form1601C
-        {
-            (
-                "1601c-2018",
-                form.draft.to_bir_field_map(),
-                "1601C",
-                form.draft.receipt_id,
-                form.draft.email_address.clone(),
-            )
-        } else if let Some(form) = &self.form_2551q
-            && self.active_view == ActiveView::Form2551Q
-        {
-            (
-                "2551q-2018",
-                form.draft.to_bir_field_map(),
-                "2551Q",
-                form.draft.receipt_id,
-                form.draft.email.clone(),
-            )
-        } else {
-            return Err("open form 1601C or 2551Q first".into());
-        };
-        // Same document the painted preview prints: a confirmed return
-        // carries BIR's receipt as the last page.
-        let receipt = self.db.as_ref().and_then(|db| {
-            crate::views::form_html_preview_launcher::receipt_page_for(db, receipt_id, &mailbox)
-        });
-        let path = write_agent_frozen_html(slug, &fields, receipt.as_ref())?;
-        let path = path.canonicalize().unwrap_or(path);
-        if !path.is_absolute() {
-            return Err("form.pdf must return an absolute path, not file bytes".into());
+        if let Some(result) = self.needs_you_generic() {
+            return result;
         }
-        Ok(DispatchResult::json(json!({
-            "path": path.to_string_lossy(),
-            "kind": "frozen-html",
-            "form": form,
-            "receipt_page": receipt.is_some(),
-            "note": "the app print pipeline is frozen HTML (bir_print::frozen_html::filled_document_with_receipt); invoke result is an absolute path, never file bytes"
-        })))
+        Err("open a form first (bir_form_open)".into())
     }
 
     fn form_print(&mut self, args: &Value) -> Result<DispatchResult, String> {
@@ -2748,8 +2853,9 @@ impl BirAgentHost {
         if !matches!(
             self.active_view,
             ActiveView::Form1601C | ActiveView::Form2551Q
-        ) {
-            return Err("open form 1601C or 2551Q first".into());
+        ) && self.active_generic().is_none()
+        {
+            return Err("open a form first (bir_form_open)".into());
         }
         if self.platform == PlatformKind::Headless {
             return Err(
@@ -2871,7 +2977,7 @@ impl BirAgentHost {
                 "filed": false,
             })));
         }
-        Err("open form 1601C or 2551Q first".into())
+        Err("form.revert_draft works on an open 1601C or 2551Q return; other forms revert from their page".into())
     }
 
     fn form_release_abandoned_claim(&mut self, args: &Value) -> Result<DispatchResult, String> {
@@ -3066,7 +3172,7 @@ impl BirAgentHost {
                 "status": format!("{:?}", form.draft.status),
             })));
         }
-        Err("open form 1601C or 2551Q first".into())
+        Err("form.mark_paid works on an open 1601C or 2551Q return only".into())
     }
 
     fn form_upload_receipt(&self) -> Result<DispatchResult, String> {
@@ -3193,13 +3299,7 @@ impl BirAgentHost {
                         return self.navigate(ActiveView::Dashboard);
                     }
                     if other == chrome.save {
-                        if chrome.code == "1601C" || chrome.code == "2551Q" {
-                            return self.save_form_draft();
-                        }
-                        return Err(format!(
-                            "draft save for {} is not mapped in this agent slice; use 1601C or 2551Q",
-                            chrome.code
-                        ));
+                        return self.save_form_draft();
                     }
                     if other == chrome.submit {
                         return self.request_submit_confirm();
@@ -3284,7 +3384,12 @@ impl BirAgentHost {
             "form.fill" => self.form_fill(args),
             "form.needs_you" => self.form_needs_you(),
             "form.context" => self.form_context(),
-            "form.pdf" | "form.preview_pdf" => self.form_pdf(),
+            "form.preview" => self.form_preview(true),
+            // The old names: the same honest output (an HTML path, never a
+            // PDF), without opening the preview in the app.
+            "form.pdf" | "form.preview_pdf" => self.form_preview(false),
+            "form.card" => self.form_card(),
+            "form.review_in_app" => self.review_in_app(),
             "form.print" => self.form_print(args),
             "form.revert_draft" | "draft.revert" => self.form_revert_draft(args),
             "form.release_abandoned_claim" => self.form_release_abandoned_claim(args),
@@ -4346,6 +4451,33 @@ fn fillable_boxes(values: BTreeMap<String, Value>, assist: &AssistState) -> Vec<
         .collect()
 }
 
+/// Assist keys with their values, and the official box keys left over.
+type SplitFill<'a> = (Vec<(String, &'a Value)>, serde_json::Map<String, Value>);
+
+/// 1601C/2551Q fills: the assist module's own keys (and aliases) first,
+/// official box keys (`fields.json`) through the generic map.
+fn split_fill_keys<'a>(
+    kind: bir_core::forms::agent::AgentFormKind,
+    fields: &'a serde_json::Map<String, Value>,
+    canonical: fn(&str) -> Option<String>,
+) -> Result<SplitFill<'a>, String> {
+    let mut keyed = Vec::new();
+    let mut official = serde_json::Map::new();
+    for (key, value) in fields {
+        if let Some(canonical) = canonical(key) {
+            keyed.push((canonical, value));
+        } else if kind.definition().box_def(key).is_some() {
+            official.insert(key.clone(), value.clone());
+        } else {
+            return Err(format!(
+                "unknown or read-only {} field `{key}`",
+                kind.form_code()
+            ));
+        }
+    }
+    Ok((keyed, official))
+}
+
 fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, String> {
     let mut fields = serde_json::Map::new();
     match args.get("fields") {
@@ -4355,7 +4487,7 @@ fn collect_fill_fields(args: &Value) -> Result<serde_json::Map<String, Value>, S
     }
     if let Some(object) = args.as_object() {
         for (key, value) in object {
-            if key != "fields" && key != "source" {
+            if !matches!(key.as_str(), "fields" | "source" | "from_card") {
                 fields.insert(key.clone(), value.clone());
             }
         }

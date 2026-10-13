@@ -173,3 +173,11 @@ fn form_2552_add_more_sample_payload_is_current() {
         assert_eq!(std::fs::read(&iaf_path).unwrap(), encrypted);
     }
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_2552()).expect("sample serializes"),
+        serde_json::to_value(sample_2552_add_more()).expect("sample serializes"),
+    ]
+}

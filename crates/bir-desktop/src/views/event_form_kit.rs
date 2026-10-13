@@ -726,7 +726,7 @@ pub fn simulate_confirmation<V: KitView>(this: &mut V, window: &mut Window, cx: 
 }
 
 /// The kit's header callbacks.
-fn header_actions<V: KitView>() -> FormHeaderActions<V> {
+pub fn header_actions<V: KitView>() -> FormHeaderActions<V> {
     FormHeaderActions {
         state: |this: &mut V| &mut this.kit_mut().header,
         state_ref: |this: &V| &this.kit().header,

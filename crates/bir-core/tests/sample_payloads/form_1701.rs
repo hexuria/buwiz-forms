@@ -174,3 +174,11 @@ fn form_1701_sample_payload_matches_the_official_page() {
         payload
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_1701()).expect("sample serializes"),
+        serde_json::to_value(sample_1701_joint()).expect("sample serializes"),
+    ]
+}

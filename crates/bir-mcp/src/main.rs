@@ -10,7 +10,7 @@ use bir_mcp::http;
 use bir_mcp::server::{Server, serve};
 use std::process::ExitCode;
 
-const USAGE: &str = "bir-mcp: draft-only MCP server for BIR forms 2551Q and 1601C.
+const USAGE: &str = "bir-mcp: draft-only MCP server for all 43 BIR forms (the user clicks Submit in BIR).
 
 Usage: bir-mcp                       speak MCP (JSON-RPC 2.0, one message per line) on stdin/stdout
        bir-mcp --http 127.0.0.1:PORT serve MCP Streamable HTTP at http://127.0.0.1:PORT/mcp

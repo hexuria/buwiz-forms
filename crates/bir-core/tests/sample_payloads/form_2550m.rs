@@ -254,3 +254,13 @@ fn form_2550m_credits_sample_payload_is_current() {
         "98c8f3c08bb6f0a5db771793181015b9e07b1558b7f6e3c9ec63f203ed092aca",
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_2550m()).expect("sample serializes"),
+        serde_json::to_value(sample_2550m_schedule_1()).expect("sample serializes"),
+        serde_json::to_value(sample_2550m_capital_goods()).expect("sample serializes"),
+        serde_json::to_value(sample_2550m_credits()).expect("sample serializes"),
+    ]
+}
