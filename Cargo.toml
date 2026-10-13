@@ -55,7 +55,7 @@ rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 # bir-mcp, so both sides speak one protocol and one discovery format.
 # `version` lets crates.io `bir` (via bir-desktop) resolve the published crate;
 # local and CI builds use the git rev.
-gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "b828bb7a1d6bf29e813f5205a3bd1548d5f20efa" }
+gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "dab85991d700b8f3410cbaacbc5d9f90568c7ee3" }
 
 # Error handling
 thiserror = "2"
@@ -103,4 +103,3 @@ codegen-units = 1
 panic = "abort"
 strip = true
 opt-level = "z"
-

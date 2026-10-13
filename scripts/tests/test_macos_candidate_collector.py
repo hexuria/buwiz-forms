@@ -413,6 +413,7 @@ class MacosCandidateCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(collector.EvidenceError, "reused the preview"):
             collector.validate_print_dialog_observation(print_dialog)
 
+    @unittest.skipIf(os.name == "nt", "collector output permissions require POSIX ownership")
     def test_private_output_directory_and_live_print_acknowledgement_fail_closed(self) -> None:
         output = collector.private_output_directory(self.root / "evidence")
         self.assertEqual(output.stat().st_mode & 0o777, 0o700)

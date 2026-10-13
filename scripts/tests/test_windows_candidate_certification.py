@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 import zipfile
@@ -487,6 +488,7 @@ class WindowsCandidateCertificationTests(unittest.TestCase):
         with self.assertRaisesRegex(certification.EvidenceError, "installed-tree blocker"):
             certification.validate_attestation(path, binding)
 
+    @unittest.skipIf(os.name == "nt", "verifier fixture requires POSIX shebang execution")
     def test_owned_pdf_verifier_is_platform_scoped_and_rerun(self) -> None:
         binding = self._binding()
         path, value = self._attestation(binding)
