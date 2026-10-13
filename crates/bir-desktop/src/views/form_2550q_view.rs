@@ -443,6 +443,8 @@ enum Form2550QDiagnosticState {
     Incomplete(String),
 }
 
+const CONTENT_MAX_W: Pixels = px(1100.);
+
 pub struct Form2550QV2View {
     draft: Form2550QDraft,
     db: Arc<Mutex<Database>>,
@@ -2231,23 +2233,6 @@ impl Form2550QV2View {
             .into_any_element()
     }
 
-    fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
-        if self.validation_errors.is_empty() {
-            return div().into_any_element();
-        }
-        let mut list = div().mt_2().flex().flex_col().gap_1();
-        for (_, message) in &self.validation_errors {
-            list = list.child(rsx! { <div text_xs>{message.clone()}</div> });
-        }
-        let root = rsx! {
-            <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
-                <div font_weight={FontWeight::BOLD}>{"Draft needs review"}</div>
-                {list}
-            </div>
-        };
-        root.into_any_element()
-    }
-
     fn render_validation_diagnostic(&self, cx: &Context<Self>) -> AnyElement {
         // "Validation successful." shows in the header's status box.
         let mut root = div().flex().flex_col().gap_4();
@@ -2557,8 +2542,7 @@ impl FormViewTrait for Form2550QV2View {
         }
         self.sync_from_inputs(None, cx);
         if self.editor_state_error.is_some() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".to_string());
+            self.status_message = Some("Fix the items marked below before submitting.".to_string());
             cx.notify();
             return;
         }
@@ -2568,8 +2552,7 @@ impl FormViewTrait for Form2550QV2View {
             bir_core::filing_queue::QueueAuthSource::Gui,
         ) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".to_string());
+            self.status_message = Some("Fix the items marked below before submitting.".to_string());
             cx.notify();
             return;
         }
@@ -2859,7 +2842,7 @@ impl Render for Form2550QV2View {
 
         let mut content = div()
             .w_full()
-            .max_w(px(1100.0))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -2898,7 +2881,6 @@ impl Render for Form2550QV2View {
         }
         content = content
             .child(self.render_validation_diagnostic(cx))
-            .child(self.render_error_summary(cx))
             .child(
                 section_card(cx, "FILING PERIOD AND BACKGROUND INFORMATION")
                     .child(div().text_sm().child(format!(
@@ -4083,11 +4065,12 @@ impl Form2550QV2View {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: self.editor_state_error.is_none(),
             validated: self.validated_at_current_revision,
-            blocking_errors: self.validation_errors.len(),
-            first_error: self
+            errors: self
                 .validation_errors
-                .first()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .iter()
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

@@ -239,6 +239,8 @@ enum GeoLevel {
     City,
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form2200AView {
     draft: Form2200ADraft,
     db: Arc<Mutex<Database>>,
@@ -1440,16 +1442,14 @@ impl FormViewTrait for Form2200AView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -1582,15 +1582,6 @@ impl Render for Form2200AView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
 
         let phone = layout == Layout::Phone;
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
@@ -1613,17 +1604,13 @@ impl Render for Form2200AView {
                 ))
                 .child(header_buttons);
 
-        let has_issues = !issues.is_empty();
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
             .gap_5()
-            .when(has_issues, |col| {
-                col.child(self.section("Needs review", issues, cx))
-            })
             .when(self.release_claim_confirm_open, |col| {
                 col.child(
                     div()
@@ -1707,13 +1694,13 @@ impl Form2200AView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone().or(unavailable),
             separate_validate: separate_validate_button(&self.db),

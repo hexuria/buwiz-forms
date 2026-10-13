@@ -11,7 +11,7 @@
 //! 2. Track "validated at the current entries" (a flag cleared on every
 //!    edit, set by the view's Validate).
 //! 3. Each render, build a [`FormHeaderProps`] (status, editor safety,
-//!    validated flag, blocking-error count, first error, the form's official
+//!    validated flag, blocking-error count, errors, the form's official
 //!    success text, plus any other status message the view has) and a
 //!    [`FormHeaderActions`] of plain `fn` callbacks.
 //! 4. Put [`render_header_buttons`] on the right of the toolbar (next to
@@ -164,17 +164,16 @@ pub fn status_text(props: &FormHeaderProps<'_>, separate_validate: bool) -> Opti
     if !header_visibility(&props.status, props.editor_safe).submit {
         return None;
     }
-    if props.blocking_errors > 0 {
-        let first = props
-            .first_error
-            .clone()
-            .unwrap_or_else(|| "This return needs review.".to_string());
-        let more = props.blocking_errors - 1;
-        return Some(if more > 0 {
-            format!("{first} (+{more} more under Needs review)")
+    if !props.errors.is_empty() {
+        let item = if props.errors.len() == 1 {
+            "item"
         } else {
-            first
-        });
+            "items"
+        };
+        return Some(format!(
+            "Fix {} {item} marked below before submitting.",
+            props.errors.len()
+        ));
     }
     if props.validated {
         return Some(props.success_text.to_string());
@@ -188,6 +187,13 @@ pub fn status_box_visible(text: Option<&str>, showing_sent: bool) -> bool {
     showing_sent || text.is_some_and(|t| !t.trim().is_empty())
 }
 
+fn dismiss_key(text: &str, errors: &[String]) -> String {
+    std::iter::once(text)
+        .chain(errors.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Header state a view keeps: the ⋯ menu, the status box's dismiss state
 /// and the latest snapshot of what BIR received.
 #[derive(Default)]
@@ -196,6 +202,7 @@ pub struct FormHeaderState {
     dismissed: Option<String>,
     show_sent: bool,
     show_why: bool,
+    show_errors: bool,
     sent: std::cell::OnceCell<Option<AmendmentSnapshot>>,
     /// Set by the assistant's `form.review_in_app`: the status box says so
     /// and Submit is highlighted until the user validates or submits.
@@ -326,8 +333,8 @@ pub struct FormHeaderProps<'a> {
     /// False for a locked or unsafe editor.
     pub editor_safe: bool,
     pub validated: bool,
-    pub blocking_errors: usize,
-    pub first_error: Option<String>,
+    pub errors: Vec<String>,
+    pub content_max_w: Pixels,
     /// The form's official success alert, or [`DEFAULT_SUCCESS_MESSAGE`].
     pub success_text: &'a str,
     /// Any other status message (save result, lock reason, revert note…).
@@ -398,7 +405,7 @@ pub fn agent_review<V: 'static>(
 pub fn agent_review_text(props: &FormHeaderProps<'_>, agent_review: bool) -> Option<String> {
     (agent_review
         && props.message.is_none()
-        && props.blocking_errors == 0
+        && props.errors.is_empty()
         && header_visibility(&props.status, props.editor_safe).submit)
         .then(|| AGENT_REVIEW_MESSAGE.to_string())
 }
@@ -414,7 +421,7 @@ pub fn render_header_buttons<V: 'static>(
     let visible = form_header_visibility(props.slug, &props.status, props.editor_safe);
     let state = (actions.state_ref)(this);
     let separate = props.separate_validate;
-    let enabled = submit_enabled(separate, props.validated, props.blocking_errors);
+    let enabled = submit_enabled(separate, props.validated, props.errors.len());
     let highlight = enabled && agent_review_text(props, state.agent_review).is_some();
     let ring = cx.theme().ring;
     let simulate = actions
@@ -594,7 +601,9 @@ pub fn render_status_box<V: 'static>(
     let state = (actions.state_ref)(this);
     let text = agent_review_text(props, state.agent_review)
         .or_else(|| status_text(props, props.separate_validate))
-        .filter(|text| state.dismissed.as_deref() != Some(text.as_str()))
+        .filter(|text| {
+            state.dismissed.as_deref() != Some(dismiss_key(text, &props.errors).as_str())
+        })
         .filter(|text| status_box_visible(Some(text), false));
     let sent = state
         .show_sent
@@ -609,10 +618,17 @@ pub fn render_status_box<V: 'static>(
     if !status_box_visible(text.as_deref(), sent.is_some()) {
         return None;
     }
-    let is_error = props.message.is_none() && props.blocking_errors > 0;
-    let mut col = div().flex().flex_col().gap_2().w_full().min_w_0();
+    let is_error = props.message.is_none() && !props.errors.is_empty();
+    let mut col = div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .w_full()
+        .max_w(props.content_max_w)
+        .mx_auto()
+        .min_w_0();
     if let Some(text) = text {
-        let dismissed_text = text.clone();
+        let dismissed_key = dismiss_key(&text, &props.errors);
         col = col.child(
             div()
                 .flex()
@@ -631,6 +647,7 @@ pub fn render_status_box<V: 'static>(
                 .child({
                     let why = is_queue_unavailable_message(&text);
                     let show_why = state.show_why;
+                    let show_errors = state.show_errors;
                     div()
                         .flex_1()
                         .min_w_0()
@@ -640,7 +657,7 @@ pub fn render_status_box<V: 'static>(
                         .child(text.clone())
                         .when(why, |d| {
                             d.child(
-                                div().child(
+                                div().flex().flex_none().child(
                                     Button::new(id(props.slug, "status_why"))
                                         .label(if show_why { "Why? ▾" } else { "Why? ▸" })
                                         .ghost()
@@ -661,6 +678,44 @@ pub fn render_status_box<V: 'static>(
                                 )
                             })
                         })
+                        .when(is_error, |d| {
+                            d.child(
+                                div().flex().flex_none().child(
+                                    Button::new(id(props.slug, "status_errors"))
+                                        .label(if show_errors {
+                                            "Show all ▾"
+                                        } else {
+                                            "Show all ▸"
+                                        })
+                                        .ghost()
+                                        .xsmall()
+                                        .on_click(cx.listener(move |this: &mut V, _, _, cx| {
+                                            let st = (actions.state)(this);
+                                            st.show_errors = !st.show_errors;
+                                            cx.notify();
+                                        })),
+                                ),
+                            )
+                            .when(show_errors, |d| {
+                                d.child(
+                                    div()
+                                        .id(id(props.slug, "status_errors_list"))
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .max_h(px(160.))
+                                        .overflow_y_scroll()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .children(
+                                            props
+                                                .errors
+                                                .iter()
+                                                .map(|error| div().child(format!("• {error}"))),
+                                        ),
+                                )
+                            })
+                        })
                 })
                 .child(
                     Button::new(id(props.slug, "status_dismiss"))
@@ -668,7 +723,7 @@ pub fn render_status_box<V: 'static>(
                         .ghost()
                         .xsmall()
                         .on_click(cx.listener(move |this: &mut V, _, _, cx| {
-                            (actions.state)(this).dismissed = Some(dismissed_text.clone());
+                            (actions.state)(this).dismissed = Some(dismissed_key.clone());
                             cx.notify();
                         })),
                 ),
@@ -725,10 +780,11 @@ mod tests {
     use super::{AGENT_REVIEW_MESSAGE, FormHeaderState, agent_review_text};
     use super::{
         AMENDED_REVERT_MESSAGE, CLICK_VALIDATE_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderProps,
-        HeaderVisibility, form_header_visibility, header_visibility, status_box_visible,
-        status_text, submit_enabled, submit_hidden_for_slug,
+        HeaderVisibility, dismiss_key, form_header_visibility, header_visibility,
+        status_box_visible, status_text, submit_enabled, submit_hidden_for_slug,
     };
     use super::{is_queue_unavailable_message, queue_unavailable_message};
+    use gpui::px;
 
     #[test]
     fn agent_review_note_shows_only_on_a_clean_draft() {
@@ -744,8 +800,13 @@ mod tests {
         );
         assert_eq!(agent_review_text(&clean, false), None);
         let mut errors = clean.clone();
-        errors.blocking_errors = 1;
+        errors.errors.push("Invalid month".to_string());
         assert_eq!(agent_review_text(&errors, true), None);
+        assert!(!submit_enabled(true, errors.validated, errors.errors.len()));
+        assert_eq!(
+            status_text(&errors, true).as_deref(),
+            Some("Fix 1 item marked below before submitting.")
+        );
         // Never on a return that is no longer a Draft.
         assert_eq!(agent_review_text(&props(FilingStatus::Queued), true), None);
     }
@@ -768,8 +829,8 @@ mod tests {
             status,
             editor_safe: true,
             validated: false,
-            blocking_errors: 0,
-            first_error: None,
+            errors: Vec::new(),
+            content_max_w: px(800.),
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: None,
             separate_validate: true,
@@ -865,14 +926,23 @@ mod tests {
             status_text(&p, true).as_deref(),
             Some(DEFAULT_SUCCESS_MESSAGE)
         );
-        p.blocking_errors = 3;
-        p.first_error = Some("Bad TIN.".into());
+        p.errors = vec![
+            "Bad TIN.".into(),
+            "Other error.".into(),
+            "Third error.".into(),
+        ];
         assert_eq!(
             status_text(&p, true).as_deref(),
-            Some("Bad TIN. (+2 more under Needs review)")
+            Some("Fix 3 items marked below before submitting.")
         );
-        p.blocking_errors = 1;
-        assert_eq!(status_text(&p, true).as_deref(), Some("Bad TIN."));
+        assert!(!status_text(&p, true).unwrap().contains("Bad TIN."));
+        assert!(!status_text(&p, true).unwrap().contains("Other error."));
+        assert!(!status_text(&p, true).unwrap().contains("Third error."));
+        p.errors = vec!["Bad TIN.".into()];
+        assert_eq!(
+            status_text(&p, true).as_deref(),
+            Some("Fix 1 item marked below before submitting.")
+        );
         p.message = Some(AMENDED_REVERT_MESSAGE.into());
         assert_eq!(
             status_text(&p, true).as_deref(),
@@ -889,5 +959,21 @@ mod tests {
         assert!(!status_box_visible(Some("   "), false));
         assert!(status_box_visible(Some("Validation successful."), false));
         assert!(status_box_visible(None, true));
+    }
+
+    #[test]
+    fn dismissal_key_tracks_error_contents() {
+        let first = vec!["First error.".to_string(), "Second error.".to_string()];
+        let same = vec!["First error.".to_string(), "Second error.".to_string()];
+        let changed = vec!["First error.".to_string(), "Different error.".to_string()];
+
+        assert_eq!(
+            dismiss_key("Fix 2 items.", &first),
+            dismiss_key("Fix 2 items.", &same)
+        );
+        assert_ne!(
+            dismiss_key("Fix 2 items.", &first),
+            dismiss_key("Fix 2 items.", &changed)
+        );
     }
 }

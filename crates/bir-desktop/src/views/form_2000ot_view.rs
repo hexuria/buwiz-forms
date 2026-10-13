@@ -186,6 +186,8 @@ fn money_text(value: f64) -> String {
     }
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form2000OTView {
     draft: Form2000OTDraft,
     db: Arc<Mutex<Database>>,
@@ -1368,16 +1370,14 @@ impl FormViewTrait for Form2000OTView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -1508,16 +1508,6 @@ impl Render for Form2000OTView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .take(20)
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
 
         let phone = layout == Layout::Phone;
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
@@ -1542,7 +1532,7 @@ impl Render for Form2000OTView {
 
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -1594,10 +1584,6 @@ impl Render for Form2000OTView {
                     .child(BLOCK_ROUNDING_NOTE),
             );
         }
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
-
         div()
             .flex()
             .flex_col()
@@ -1694,13 +1680,13 @@ impl Form2000OTView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: VALIDATION_SUCCESS,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),

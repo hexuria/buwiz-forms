@@ -140,6 +140,8 @@ fn place_index(item: u8, level: PlaceLevel) -> usize {
     usize::from(item == 13) * 3 + level as usize
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form2200SView {
     draft: Form2200SDraft,
     db: Arc<Mutex<Database>>,
@@ -1396,7 +1398,7 @@ impl FormViewTrait for Form2200SView {
                 );
                 // initialValidateBeforeSave: the draft is saved anyway; its
                 // first official alert shows in the status line and under
-                // Needs review. Queueing still blocks on validation.
+                // Queueing still blocks on validation.
                 self.status_message = None;
                 if let Some((key, alert)) = self.draft.save_alert() {
                     self.status_message = Some(alert.to_string());
@@ -1430,16 +1432,14 @@ impl FormViewTrait for Form2200SView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -1571,15 +1571,6 @@ impl Render for Form2200SView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .map(|(_, message)| {
-                rsx! { <div text_sm text_color={cx.theme().danger}>{message.clone()}</div> }
-                    .into_any_element()
-            })
-            .collect();
 
         let phone = layout == Layout::Phone;
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
@@ -1602,10 +1593,9 @@ impl Render for Form2200SView {
                 ))
                 .child(header_buttons);
 
-        let needs_review = (!issues.is_empty()).then(|| self.section("Needs review", issues, cx));
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -1635,7 +1625,6 @@ impl Render for Form2200SView {
                         ),
                 )
             })
-            .children(needs_review)
             .child(self.render_period(layout, cx))
             .child(self.render_part_one(layout, cx))
             .child(self.render_manner(layout, cx))
@@ -1701,13 +1690,13 @@ impl Form2200SView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),
