@@ -4,12 +4,14 @@ Headless eBIRForms agent CLI. It serves the gpui-agent control plane over TCP
 with no desktop window.
 
 ```bash
-cargo install bir
-cargo binstall bir
+cargo install --git https://github.com/hexuria/buwiz-forms bir --locked
 ```
 
-Prebuilt binaries are attached to GitHub Releases tagged `bir-vMAJOR.MINOR.PATCH`
-(for example `bir-v0.1.0`) in this repository:
+There is no crates.io release. Add `--tag <tag>` or `--rev <commit>` to pin a
+version.
+
+A GitHub Release tagged `bir-vMAJOR.MINOR.PATCH` (for example `bir-v0.1.0`)
+also carries prebuilt binaries:
 
 - `bir-x86_64-unknown-linux-gnu.tgz`
 - `bir-aarch64-apple-darwin.tgz`

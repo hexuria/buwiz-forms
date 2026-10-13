@@ -208,3 +208,11 @@ fn form_1701a_penalty_items_follow_the_shared_model() {
 fn form_1701a_joint_penalty_items_follow_the_shared_model() {
     penalty_items::check(sample_1701a_joint, Deadline::Calendar(day(2026, 4, 15)));
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_1701a()).expect("sample serializes"),
+        serde_json::to_value(sample_1701a_joint()).expect("sample serializes"),
+    ]
+}

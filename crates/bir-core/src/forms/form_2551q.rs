@@ -1311,6 +1311,129 @@ pub const OFFICIAL_TELEPHONE_MESSAGE: &str = "Please enter Telephone Number on I
 pub const OFFICIAL_ZERO_ATC_MESSAGE: &str =
     "If you are filing zero transaction, please select the applicable ATC in Page 2 Schedule 1.";
 
+/// What the 2551Q page's text boxes hold for the entries it checks on top of
+/// [`FormValidator::validate`] (blank or unparseable text). The page reads
+/// them from its inputs; the agent uses [`Self::from_draft`], which is how
+/// the page fills those inputs when it opens a draft.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Form2551QEntries {
+    pub year_end_month: String,
+    pub attached_sheets: String,
+    /// Schedule 1 taxable amount, one per row.
+    pub taxable_amounts: Vec<String>,
+    pub creditable_withheld: String,
+    pub tax_paid_previous: String,
+    pub other_tax_credit: String,
+}
+
+impl Form2551QEntries {
+    /// The text each input shows for `draft` (a negative amount is a blank box).
+    pub fn from_draft(draft: &Form2551QDraft) -> Self {
+        let amount = |value: f64| {
+            if value >= 0.0 {
+                format!("{value:.2}")
+            } else {
+                String::new()
+            }
+        };
+        Self {
+            year_end_month: draft.year_end_month.to_string(),
+            attached_sheets: draft.number_of_attached_sheets.to_string(),
+            taxable_amounts: draft
+                .schedule_1
+                .iter()
+                .map(|row| amount(row.taxable_amount))
+                .collect(),
+            creditable_withheld: amount(draft.creditable_tax_withheld),
+            tax_paid_previous: amount(draft.tax_paid_previous),
+            other_tax_credit: amount(draft.other_tax_credit),
+        }
+    }
+}
+
+impl Form2551QDraft {
+    /// The page's checks on its entries, run after [`FormValidator::validate`]
+    /// (whose errors are passed in so a month error is not repeated).
+    pub fn entry_errors(
+        &self,
+        entries: &Form2551QEntries,
+        validate_errors: &[(String, String)],
+    ) -> Vec<(String, String)> {
+        let mut errors = Vec::new();
+        if matches!(self.tax_period_basis, TaxPeriodBasis::Fiscal)
+            && entries.year_end_month.trim().parse::<u8>().is_err()
+            && !validate_errors
+                .iter()
+                .any(|(field, _)| field == "year_end_month")
+        {
+            errors.push((
+                "year_end_month".to_string(),
+                OFFICIAL_YEAR_ENDED_MONTH_MESSAGE.to_string(),
+            ));
+        }
+        let sheets = entries.attached_sheets.trim();
+        if sheets.is_empty() || sheets.parse::<u16>().is_err() {
+            errors.push((
+                "number_of_attached_sheets".to_string(),
+                "Number of attached sheets must be a whole number from 0 to 99".to_string(),
+            ));
+        }
+        for (i, text) in entries.taxable_amounts.iter().enumerate() {
+            if text.trim().is_empty() {
+                errors.push((
+                    format!("schedule_1_row_{}", i + 1),
+                    format!("Schedule 1 row {} taxable amount is required", i + 1),
+                ));
+            } else if text.trim().parse::<f64>().is_err() {
+                errors.push((
+                    format!("schedule_1_row_{}", i + 1),
+                    format!(
+                        "Schedule 1 row {} taxable amount must be a valid number",
+                        i + 1
+                    ),
+                ));
+            }
+        }
+        let creditable = entries.creditable_withheld.trim();
+        if creditable.is_empty() {
+            errors.push((
+                "creditable_withheld".to_string(),
+                "Creditable percentage tax withheld is required".to_string(),
+            ));
+        } else if creditable.parse::<f64>().is_err() {
+            errors.push((
+                "creditable_withheld".to_string(),
+                "Creditable percentage tax withheld must be a valid number".to_string(),
+            ));
+        }
+        if self.is_amended {
+            let previous = entries.tax_paid_previous.trim();
+            if previous.is_empty() {
+                errors.push((
+                    "tax_paid_previous".to_string(),
+                    "Tax paid in return previously filed is required".to_string(),
+                ));
+            } else if previous.parse::<f64>().is_err() {
+                errors.push((
+                    "tax_paid_previous".to_string(),
+                    "Tax paid in return previously filed must be a valid number".to_string(),
+                ));
+            }
+        }
+        let other_credit = entries.other_tax_credit.trim();
+        if !other_credit.is_empty() {
+            match other_credit.parse::<f64>() {
+                Ok(value) if value >= 0.0 => {}
+                _ => errors.push((
+                    "other_tax_credit".to_string(),
+                    "Other tax credit/payment must be a non-negative number".to_string(),
+                )),
+            }
+        }
+        errors
+    }
+}
+
 impl FormValidator for Form2551QDraft {
     fn validate(&self) -> Vec<(String, String)> {
         let mut errors = Vec::new();

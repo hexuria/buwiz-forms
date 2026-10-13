@@ -1192,6 +1192,20 @@ impl Form2000OTView {
 impl QueueableFormView for Form2000OTView {
     type Draft = Form2000OTDraft;
 
+    const PRINT_SLUG: &'static str = "2000-ot-2018";
+
+    fn print_fields(draft: &Form2000OTDraft) -> std::collections::BTreeMap<String, String> {
+        draft.to_print_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form2000OTDraft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        HEADER_ACTIONS
+    }
+
     fn new(
         draft: Form2000OTDraft,
         db: Arc<Mutex<Database>>,
@@ -1496,9 +1510,9 @@ impl FormViewTrait for Form2000OTView {
             ));
             return;
         }
-        let fields = self.draft.to_print_field_map();
+        let fields = Self::print_fields(&self.draft);
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "2000-ot-2018",
+            Self::PRINT_SLUG,
             &fields,
             "2000-OT — Print Preview",
             cx,

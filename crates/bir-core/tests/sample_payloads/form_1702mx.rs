@@ -229,3 +229,12 @@ fn form_1702mx_schedule_6_rows_sample_payload_is_current() {
 fn form_1702mx_penalty_items_follow_the_shared_model() {
     penalty_items::check(sample_1702mx, Deadline::Calendar(day(2026, 4, 15)));
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_1702mx()).expect("sample serializes"),
+        serde_json::to_value(sample_1702mx_fiscal()).expect("sample serializes"),
+        serde_json::to_value(sample_1702mx_schedule_6_rows()).expect("sample serializes"),
+    ]
+}

@@ -120,3 +120,8 @@ fn form_0605_penalty_items_follow_the_shared_model() {
 fn form_0605_imported_penalties_are_kept_as_overrides() {
     penalty_items::check_import(sample_0605, Form0605Draft::from_bir_xml_payload);
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![serde_json::to_value(sample_0605()).expect("sample serializes")]
+}

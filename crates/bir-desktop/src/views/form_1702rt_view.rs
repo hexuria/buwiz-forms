@@ -1910,6 +1910,20 @@ impl Form1702RTView {
 impl QueueableFormView for Form1702RTView {
     type Draft = Form1702RTDraft;
 
+    const PRINT_SLUG: &'static str = "1702rt-2018c";
+
+    fn print_fields(draft: &Form1702RTDraft) -> std::collections::BTreeMap<String, String> {
+        draft.to_bir_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form1702RTDraft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        HEADER_ACTIONS
+    }
+
     fn new(
         draft: Form1702RTDraft,
         db: Arc<Mutex<Database>>,
@@ -2216,9 +2230,9 @@ impl FormViewTrait for Form1702RTView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = Self::print_fields(&self.draft);
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "1702rt-2018c",
+            Self::PRINT_SLUG,
             &fields,
             "1702-RT — Print Preview",
             cx,

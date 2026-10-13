@@ -1,13 +1,14 @@
 ---
 name: file-tax
-description: Prepare a draft BIR return (2551Q or 1601C) in the BIR desktop app with the user, using the bir-mcp tools. Use when the user types /file-tax <FORM> or asks to prepare, fill or draft a 2551Q or 1601C. Draft only - never submits, queues, files or pays.
+description: Prepare a draft BIR return (any of BIR's 43 forms, e.g. 2551Q, 1601C, 2550Q, 0619E, 1701) in the BIR desktop app with the user, using the bir-mcp tools. Use when the user types /file-tax <FORM> or asks to prepare, fill or draft a BIR return. Draft only - never submits, queues, files or pays; the user clicks Submit in BIR.
 ---
 
 # /file-tax <FORM>
 
-Prepare a **draft** of BIR form `<FORM>` (`2551Q` quarterly percentage tax, or
-`1601C` monthly withholding on compensation) in the BIR desktop app, together
-with the user. The user watches the form in BIR while you work, and can type in
+Prepare a **draft** of BIR form `<FORM>` (any of the 43 forms BIR has, for
+example `2551Q` quarterly percentage tax, `1601C` monthly withholding on
+compensation, `2550Q` quarterly VAT, `0619E` monthly expanded withholding, or
+`1701` annual income tax) in the BIR desktop app, together with the user. The user watches the form in BIR while you work, and can type in
 any box at any time.
 
 The BIR app runs on **the user's own computer**, not on your box: the `bir_*`
@@ -21,7 +22,8 @@ user picks it**.
 You only have the `bir_*` tools from the `bir` MCP server. They are draft-only:
 there is no way to submit, queue, file or pay, and you must never suggest that
 you did. Filing is the user's own act, in BIR, after they have reviewed the
-draft.
+draft. When the draft validates, `bir_form_review` brings it up in BIR with
+the Submit button highlighted; the user still clicks Submit themselves.
 
 ## Hard rules
 
@@ -72,29 +74,47 @@ draft.
 4. **Taxpayer.** Call `bir_profiles_list` and ask the user which taxpayer this
    return is for (show registered name, TIN and branch). If there is exactly
    one profile, confirm it rather than assuming. Never invent a TIN.
-5. **Period.** Ask for the taxable year and period: a quarter (1-4) for 2551Q,
-   a month (1-12) for 1601C. `bir_dues_list` can suggest what is due; offer
-   it, but let the user confirm.
+5. **Period.** Ask for the taxable year and period: a month (1-12) for a
+   monthly form (1601C, 0619E), a quarter (1-4) for a quarterly form (2551Q,
+   2550Q, 1601EQ), nothing (0) for an annual return (1701, 1702RT), and the
+   return number for an as-needed form (0605, 1707). `bir_dues_list` can
+   suggest what is due; offer it, but let the user confirm.
 6. **Open.** `bir_form_open {code, year, period, tin}` with the `tin` exactly
    as `bir_profiles_list` returned it. Handle "form already open" per rule 5.
-7. **Learn.** Call `bir_form_context` and `bir_form_fields`. Use the field keys
-   from `bir_form_fields`; skip computed boxes (BIR computes them).
+7. **Learn.** Call `bir_form_context` and `bir_form_fields`. Use the official
+   box keys from `bir_form_fields` (with their item numbers, labels and
+   options); computed boxes and boxes owned by the profile or the period are
+   not listed (BIR computes or keeps them). A radio item (Yes/No, Private or
+   Government, ...) is one box: fill its key with one of its option values or
+   labels, e.g. `{"frm0619E:optWithheld": "Yes"}`.
 8. **Fill what is grounded.** For each source in the context, call
    `bir_form_fill {fields, source}` with only the boxes that source supports.
-   Report what was filled and anything returned in `kept_user_boxes`.
-9. **Needs you.** Call `bir_form_needs_you`. For each box, ask the user in chat
-   (show the box label, and why you could not fill it), or tell them they can
-   type it directly in BIR. When they answer in chat, fill it with
-   `source: "ai"` only if they gave you the value; if they say they typed it in
-   BIR, do not fill it. Repeat `bir_form_needs_you` until it is empty or the
-   user says to leave the rest.
+   Report what was filled, anything returned in `kept_user_boxes`, and any
+   `not_shown` boxes (the form shows them only once an item such as Amended
+   Return or Tax Relief is answered).
+9. **Needs you.** Call `bir_form_needs_you`, or `bir_form_card` to show the
+   open questions as a form in the chat (key, item, label, kind, options,
+   value and BIR's error text per box). Ask the user for each box, or tell them
+   they can type it directly in BIR. Send their answers from the card with
+   `bir_form_fill {fields, source: "user", from_card: true}`; a value you
+   worked out yourself goes with `source: "ai"`. If they say they typed it in
+   BIR, do not fill it. Repeat until nothing is left or the user says to leave
+   the rest.
 10. **Validate.** Call `bir_form_validate`. For each entry in `field_errors`,
    explain in plain words what is wrong with that box and what would fix it.
    Fix only what is grounded (rule 1); otherwise ask the user. Validate again
    after fixes.
-11. **Save.** Call `bir_form_save_draft` and tell the user the draft is saved in
-   BIR, what is still open (needs-you boxes or field errors), and that
-   reviewing and filing happen in BIR by them. Do not offer to submit or pay.
+11. **Preview.** Offer `bir_form_preview`: it fills BIR's printed sheet and
+   gives a local HTML path (in the desktop app it also opens in the browser).
+   It is not a PDF and nothing is filed.
+12. **Save, or hand over.** Call `bir_form_save_draft` and tell the user the
+   draft is saved in BIR and what is still open. When `bir_form_validate` is
+   clean and the user wants to file, call `bir_form_review`: BIR saves the
+   draft, opens its page with Submit highlighted and "Prepared by the
+   assistant. Review every box, then click Submit yourself." Tell the user to
+   review every box and click Submit in BIR themselves. A headless BIR app
+   refuses it; then the user opens the return in the desktop app. Never say
+   the return was filed, and never offer to pay.
 
 ## Tool reference
 
@@ -105,11 +125,14 @@ draft.
 | `bir_status` | Which app is selected (id, mode, test/real) and whether it is reachable. |
 | `bir_profiles_list` | Taxpayers saved in BIR. |
 | `bir_dues_list` | Returns due (`filter`: upcoming/overdue/all; `scope`: profile/global). |
-| `bir_form_open` | Open a draft: `code` 2551Q/1601C, `year`, `period`, `tin`. |
-| `bir_form_fields` | Every box: key, label, value, computed, source. |
+| `bir_form_open` | Open a draft of any of the 43 forms: `code`, `year`, `period` (month, quarter, 0 annual), `tin`. |
+| `bir_form_fields` | Every fillable box: official key, item, label, kind, options, value, source. |
 | `bir_form_context` | `{profile, elections, past_returns, documents}`. |
-| `bir_form_fill` | `{fields: {key: value}, source}` -> `{filled, kept_user_boxes}`. |
-| `bir_form_needs_you` | Required boxes still empty: `{form, boxes: [{field, label}]}`. |
-| `bir_form_validate` | `{ok, errors, field_errors: [{field, message}]}`. |
+| `bir_form_fill` | `{fields: {key: value}, source, from_card?}` -> `{filled, kept_user_boxes, not_shown?}`. |
+| `bir_form_needs_you` | Boxes still needing an answer: `{form, boxes: [...]}`. |
+| `bir_form_card` | The needs-you and error boxes as chat form data; answers go back with `source: "user", from_card: true`. |
+| `bir_form_validate` | The page's own Validate: `{ok, errors, field_errors: [{field, message}]}`. |
+| `bir_form_preview` | Filled printed sheet as a local HTML `path` (not a PDF). Files nothing. |
+| `bir_form_review` | Clean draft only: BIR opens its page with Submit highlighted for the user to click. Never files. |
 | `bir_form_save_draft` | Save the draft. Never files. |
 | `bir_form_dismiss` | Close without saving; refused with "unsaved edits". |

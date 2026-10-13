@@ -8,7 +8,7 @@ verbs live in this host as `invoke` names. Start at the
 [Authorization](#authorization) if you are driving painted `bir` or
 `bir-headless` from CLI / MCP / Grok Bot.
 
-The published CLI is crate `bir` (`cargo install bir`). `bir-headless` is the in-repo cargo target for the same daemon.
+The CLI is crate `bir`: `cargo install --git https://github.com/hexuria/buwiz-forms bir --locked` (no crates.io release). `bir-headless` is the in-repo cargo target for the same daemon.
 
 Launch is env only. There is no `scripts/bir-agent` wrapper. Set
 `GPUI_AGENT=1`, `GPUI_AGENT_TOKEN`, and `GPUI_AGENT_ADDR` on the host, then
@@ -39,6 +39,7 @@ to a v2 host.
 - [Authorization](#authorization)
 - [Security gates](#security-gates)
 - [AI agent playbook](#ai-agent-playbook) (capabilities / limits, including Forms Set)
+- [Assistant on all 43 forms](#assistant-on-all-43-forms-bir-mcp) (validate, fill, preview, form card, hand-over)
 - [Mac: build and run beside Grok Bot](#mac-build-and-run-beside-grok-bot)
 - [Mac: Screen Recording (TCC)](#mac-screen-recording-tcc)
 - [Mac: `bir-headless`](#mac-bir-headless)
@@ -477,9 +478,12 @@ gpui-agent invoke calendar.html --arg scope=upcoming
 ### Forms workflow
 
 `filing.start` → `form.fill` → `filing.validate` → `form.save_draft` →
-`form.pdf`. `form.pdf` returns a **frozen HTML** absolute `path`
-(`kind: "frozen-html"`). Convert to PDF **client-side**; the invoke does not
-put file bytes on the result and does not run `filing.validate`.
+`form.preview`. `form.preview` (old names `form.pdf` / `form.preview_pdf`)
+returns a **frozen HTML** absolute `path` (`kind: "frozen-html"`, `pdf: null`:
+this app has no PDF export). Convert to PDF **client-side**; the invoke does
+not put file bytes on the result and does not run `filing.validate`. Every one
+of the 43 forms works this way; see
+[Assistant on all 43 forms](#assistant-on-all-43-forms-bir-mcp).
 
 Zero-tax 1601-C (`any_taxes_withheld=false`):
 
@@ -509,8 +513,9 @@ Semantic invokes that do not need a GPU/window:
 - Demo HTML: `profile.html`, `dues.html` (`calendar.html`)
 - Forms Set: `profile.forms_set.get`, `profile.forms_set` (confirm-gated write)
 - Dues / jobs: `dues.list`, `tax-dues.refresh`, `jobs.list`, `submissions.list`
-- 1601-C / 2551Q: `filing.start`, `form.fill`, `form.fields`, `filing.validate`,
-  `form.save_draft`, `form.pdf` (frozen HTML path)
+- All 43 forms: `filing.start`, `form.fields`, `form.fill`, `form.needs_you`,
+  `filing.validate`, `form.card`, `form.save_draft`, `form.dismiss`,
+  `form.preview` (frozen HTML path). `form.review_in_app` is desktop-only.
 - Daemon: `bir-headless serve` / `status` / `shutdown` (and `gpui-agent hello` /
   `shutdown`)
 
@@ -546,6 +551,137 @@ export EBIR_TEST_ENV=1                               # test zero key; demo only
 # do not set GPUI_AGENT_INSECURE_NO_TOKEN=1 here
 cargo run --locked --bin bir-headless --features agent -- serve
 ```
+
+## Assistant on all 43 forms (`bir-mcp`)
+
+The `bir` OpenGrok plugin (`bir-mcp`, `crates/bir-mcp/src/tools.rs`) reaches
+these ops on every one of BIR's 43 forms. The hand-built 1601-C and 2551Q keep
+their own state and short keys; every other form (the 41 drafts of the generic
+queue, 2550Q included) goes through one seam in `bir-core`:
+`bir_core::forms::agent`.
+
+| Tool | Op | What it does |
+| --- | --- | --- |
+| `bir_form_open` | `form.open` | Opens the form's page draft (registry `views::queueable_forms` `load`, or 2550Q's own open) |
+| `bir_form_fields` | `form.fields` | Every fillable box from `rules/forms/<package>/fields.json` |
+| `bir_form_fill` | `form.fill` | Writes official box keys, recomputes, keeps user-typed boxes |
+| `bir_form_needs_you` | `form.needs_you` | Required empty boxes plus empty boxes validation names |
+| `bir_form_validate` | `form.validate` | The page's Validate, same errors as the page |
+| `bir_form_preview` | `form.preview` | Filled frozen sheet (HTML path; opens in the browser on desktop) |
+| `bir_form_card` | `form.card` | Needs-you and error boxes as chat form data |
+| `bir_form_review` | `form.review_in_app` | Hands a clean draft to the user's own Submit |
+| `bir_form_save_draft` / `bir_form_dismiss` | `form.save_draft` / `form.dismiss` | Any form |
+
+### One validation, page and assistant alike
+
+`agent::validate(kind, &mut draft)` recomputes the draft and runs the form's
+own `validate()` — the call each page's header Validate makes. 2551Q's page
+also checks its text entries (blank or unparseable amounts); those checks live
+in `bir-core` (`Form2551QDraft::entry_errors` with `Form2551QEntries`) and the
+page and the assistant both call them. The other pages add only parse errors
+for text that is not a number; the assistant cannot produce those, because
+`form.fill` refuses a value that does not parse for its box.
+
+### Box keys and how they are written
+
+`form.fill` takes the **official** box key (`frm1601c:txtTax14`). The map from
+official key to draft field is derived, never typed: `agent::probe` sets each
+leaf of the sample drafts in `crates/bir-core/tests/sample_payloads/` to a
+recognisable value, recomputes, and diffs the official field map. Text,
+amounts, whole numbers and dates are bound where the box shows the value;
+radios, checkboxes and selects where a flag or option produces each official
+value. Rows past the samples' last row follow the numbered pattern of the rows
+probed. Each binding is then filled back into the samples and kept only when
+the box shows it.
+
+The result is pinned per form in `crates/bir-core/data/agent-forms/<package>.json`
+(boxes, bindings, blank rows, and every unbound user box with its reason).
+Regenerate after a form, sample or `fields.json` change:
+
+```bash
+UPDATE_AGENT_FORMS=1 cargo test -p bir-core --test sample_payloads_test agent_forms
+```
+
+Locked boxes map but are not fillable: the TIN, year and period (`form.open`
+picks the return), profile values (change them in the profile) and
+`*election*` fields (only the user answers an income-tax election). Computed
+boxes are never fillable. A box behind an unanswered item (Amended Return,
+Tax Relief) is written but comes back in `not_shown` until that item is
+answered. 1601-C and 2551Q still take their short keys and aliases too.
+
+### Labels and radio items
+
+- **Labels.** A box's label is its `fields.json` label; where that is only
+  the key, the caption printed beside the box on the official sheet
+  (`html-frozen/<sheet>/writer-cells.json`, `printed`); else `Item N`; else
+  the key's own words. The derive step reads the sheets (from `html-frozen/`
+  or `crates/bir-print/html-frozen/`) and bakes the labels into the pinned
+  data; nothing reads `html-frozen/` at run time.
+- **Radio items are one box.** Radios (and checkboxes that act as radios)
+  whose bindings decide the same draft fields form a group box keyed by their
+  common key (`frm0619E:optWithheld` for `:Y` / `:N`). Its `options` are
+  `{value, label}` with the printed meaning (`Yes`/`No`, `Private`/`Government`,
+  `Single Proprietor`, ...), and its `value` is the chosen option (`""` while
+  unanswered). Fill it with the option value or its label
+  (`{"frm0619E:optWithheld": "Y"}` or `"Yes"`). Each radio's own key still
+  takes `true` as before.
+
+### `form.needs_you` and `form.card`
+
+Both list only boxes someone can fill here (never a computed box or one the
+app writes itself), a radio item once:
+
+- every fillable box a validation error names, with BIR's message;
+- while the form does not validate yet, the required fillable boxes that are
+  still empty.
+
+A form that validates needs nothing: both lists are empty. Errors that name
+no fillable box come back in `other_errors` as `{field, label, message}`.
+`form.needs_you` returns `{form, ok, boxes, other_errors}`; on 1601C and
+2551Q the older `boxes` list stays and the same result sits under `official`.
+
+```json
+{
+  "form": "1601C",
+  "title": "Form 1601C: what BIR still needs",
+  "fields": [
+    {
+      "key": "frm1601c:TaxWithheld",
+      "field": "frm1601c:TaxWithheld",
+      "item": "3",
+      "label": "Taxes withheld/remitted",
+      "kind": "radio",
+      "options": [{"value": "1", "label": "Yes"}, {"value": "2", "label": "No"}],
+      "value": "",
+      "required": true,
+      "error": "Please select an option for Item 3."
+    }
+  ],
+  "other_errors": [{"field": "xml", "label": "xml", "message": "..."}],
+  "submit": {"tool": "bir_form_fill", "source": "user", "from_card": true}
+}
+```
+
+- `options`: a radio item's choices, a select's options, or a checkbox's
+  `true`/`false`. `error` is BIR's own message. `source` appears once someone
+  filled the box.
+- Answers go back through `bir_form_fill` with `source: "user"` and
+  `from_card: true` (the user's own answers; BIR accepts `user` only for boxes
+  the card lists right now), e.g.
+  `{"fields": {"frm1601c:TaxWithheld": "Yes"}, "source": "user", "from_card": true}`.
+  Values the assistant worked out itself go back with `source: "ai"`.
+
+### Hand-over to Submit
+
+`bir_form_review` (`form.review_in_app`) is the only path towards filing, and
+it stops at the user. It runs only when validate has no errors, saves the
+draft, brings the window to the form's page (still Draft), runs the page's
+own Validate and highlights the header's Submit with "Prepared by the
+assistant. Review every box, then click Submit yourself." It never queues,
+submits, uploads or calls `mark_submitted`; the status stays Draft and the
+queue stays empty until the user clicks Submit (the existing header path).
+`bir-mcp`'s `banned()` guard is unchanged: no tool or op name contains submit,
+queue, pay, file or send.
 
 ## Mac: build and run beside Grok Bot
 
@@ -1072,11 +1208,15 @@ table; do not use them in recipes.
 | `palette.search` | `q` | Same ranking as Command Palette (shared `search_profiles_for_palette`). `{matches, can_create, create_query?}`. Does **not** create and does **not** require the overlay to be open |
 | `dashboard.set_forms` | `forms`=`all` or codes | Agent-side form filter + `dashboard-form-filter` / `dashboard-form-chip-*`. **Global Dashboard UI has no form combobox**; this is host/tree + profile `FilterBar` chips |
 | `dashboard.filter` | `q` | Text filter (`dashboard-filter-query`). Profile dashboard FilterBar search; Global Dashboard has no search box |
-| `filing.start` | `code`, `year`, `period` | Open a form for the selected profile |
-| `filing.validate` | — | Run `FormValidator` for open 1601-C or 2551Q |
-| `form.fields` | — | Required/optional fields, current values, `profile_defaulted` / `fillable` for the open 1601-C or 2551Q. `status` / `claimed` / `id` come from the `form_drafts` row (same id as `submissions.list`), not a stale in-memory Draft |
+| `filing.start` | `code`, `year`, `period` | Open any of the 43 forms for the selected profile, the way its page opens it (saved draft, else prefilled from the profile). `period`: month 1-12, quarter 1-4, `0` annual, the return number for as-needed forms |
+| `filing.validate` | — | The open form's page Validate (`bir_core::forms::agent::validate`: recompute, then the form's `validate()` plus the page's entry checks). `{ok, errors, field_errors:[{field, message}]}` |
+| `form.fields` | — | Generic forms: `boxes` = every fillable `fields.json` box `{key, field, item, label, kind, options, value, required, source}`, plus `read_only` / `computed` counts. 1601-C / 2551Q: required/optional fields, current values, `profile_defaulted` / `fillable`, their short `boxes`, and the same `official_boxes`. `status` / `claimed` / `id` come from the `form_drafts` row (same id as `submissions.list`), not a stale in-memory Draft |
 | `form.fill` | `fields` object and/or fillable KEY=VALUE args | Set only provided fillable keys; refuse unknown. 1601-C: `tax_14`, `tax_25`, `sheets`, **`any_taxes_withheld`** (boolean `true`/`false` or `Yes`/`No`; aliases `withheld_btn`, `form-1601c-withheld`), **`category_of_agent`** (`P`/`G`, `private`/`government`; boolean `true`/`false` or `Yes`/`No`/`1`/`0` map to Private/Government; aliases `category_btn`, `form-1601c-category`). Live window drain applies withheld and category through `Agent1601CHostPatch` so the painted controls and the next snapshot/`form.fields`/`filing.validate` match. 2551Q: `creditable_tax_withheld`, `other_tax_credit`, `taxable_amount` — 2551Q has **no** Any Taxes Withheld Yes/No control. Does not queue or file |
-| `form.save_draft` | — | Persist a 1601-C or 2551Q **draft** |
+| `form.save_draft` | — | Persist the open form's **draft** (any of the 43; the page's own save path). Refuses a return that is no longer a Draft |
+| `form.needs_you` | — | Required boxes still empty plus empty boxes a validation error names. Generic forms: `CardBox` objects (see below); 1601-C / 2551Q keep `{field, label}` (1601-C lists an unanswered Item 3 as `any_taxes_withheld`) |
+| `form.card` | — | Chat form card data for AG-UI `request_user_form` (shape below). Read-only |
+| `form.preview` | — | The open form's filled frozen sheet as a local `index.html`: `{path, kind:"frozen-html", sheet, pdf:null, opened_in_app, receipt_page}`. Desktop also opens it the way the page's Print preview does. Offline; no official page rasters. Never queues |
+| `form.review_in_app` | — | Desktop only (headless refuses). Only when validate has no errors: saves the draft, brings the window to the form's page in Draft status, runs the page's own Validate, highlights Submit and shows "Prepared by the assistant. Review every box, then click Submit yourself." Never queues, submits, uploads or calls `mark_submitted`; only the user's Submit click does |
 | `form.pdf` | — | Real `bir_print::frozen_html::filled_document` pipeline to a temp `index.html` (TIN stamps, writer-cell identity including email, 1601-C For the Month `txtMonth`/`txtYear` on `p1c9`/`p1c10`, Amended/Withheld `xbox_joins`, 2551Q header period, demo tax `money_joins`). Writer-cell letter combs ASCII-uppercase for BIR CAPITAL LETTERS; money/digits/xbox and profile DB values are unchanged. Does **not** run `filing.validate` and does not refuse on validation errors. Returns `{path, kind:"frozen-html"}` with an **absolute** `path`. Does **not** put file bytes on the invoke result | When the return is Confirmed the document ends with BIR's receipt confirmation page (`receipt_page: true`), as the painted Print Preview does.
 | `form.print` | optional `copies` (ignored; preview has no copies API) | Desktop: flags the existing frozen HTML preview. Headless: error. Never queues filing |
 | `form.revert_draft` | Unclaimed: no args. Claimed Queued: `confirm` boolean `true` + `reason`=`abandoned_no_bir_filing` (same gate as `form.release_abandoned_claim`) | Unclaimed **Queued** → **Draft** via cancel CAS. Claimed **Queued** with unresolved outcome → **Draft** via the abandoned-claim CAS (does not file). Snapshot `form-1601c-status` stays `Queued` + `claimed` until that CAS succeeds. Submitted/Confirmed/Paid refuse. Agent click on `form-1601c-return-draft` does **not** skip the confirm args |
@@ -1097,7 +1237,7 @@ Match-arm synonyms for the same handler. Allow-list and recipes use the
 
 | Alias (match-arm only) | Canonical |
 | --- | --- |
-| `form.preview_pdf` | `form.pdf` |
+| `form.preview_pdf`, `form.pdf` | `form.preview` (same output; does not open the preview in the app) |
 | `draft.revert` | `form.revert_draft` |
 | `payment.mark_paid` | `form.mark_paid` |
 | `receipt.upload` | `form.upload_receipt` |

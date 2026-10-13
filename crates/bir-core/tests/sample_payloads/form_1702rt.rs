@@ -233,3 +233,11 @@ fn sample_1702rt_unpaid() -> Form1702RTDraft {
 fn form_1702rt_penalty_items_follow_the_shared_model() {
     penalty_items::check(sample_1702rt_unpaid, Deadline::Calendar(day(2026, 4, 15)));
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_1702rt()).expect("sample serializes"),
+        serde_json::to_value(sample_1702rt_more_rows()).expect("sample serializes"),
+    ]
+}

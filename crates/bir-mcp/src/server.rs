@@ -15,13 +15,15 @@ const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 
-const INSTRUCTIONS: &str = "Draft-only access to the BIR desktop app for forms 2551Q and 1601C. \
+const INSTRUCTIONS: &str = "Draft-only access to the BIR desktop app for all 43 BIR forms. \
 Several BIR apps may be running. First call bir_list_apps, show the list to the user, ask which \
 app to use, then bir_connect with that id; never pick one for the user. An app on the REAL \
 taxpayer database needs the user's explicit confirmation (bir_connect confirm_real). Then you can \
-read taxpayer profiles, dues and form context, fill boxes with a stated source, list the boxes \
-that need the user, validate, save a draft and dismiss. You cannot submit, queue, file or pay: \
-the user does that in BIR. Only one form is open at a time.";
+read taxpayer profiles, dues and form context, fill any box by its official key with a stated \
+source, list the boxes that need the user (or get them as a chat form card), validate with the \
+page's own rules, preview the filled sheet, save a draft and dismiss. You cannot submit, queue, \
+file or pay: when a draft validates, bir_form_review brings it up in BIR with Submit highlighted \
+and the user clicks Submit there. Only one form is open at a time.";
 
 /// Refusal for every form/profile/dues tool while no app is selected.
 pub const NOT_SELECTED: &str =
@@ -574,6 +576,9 @@ mod tests {
                 "bir_form_fill",
                 "bir_form_needs_you",
                 "bir_form_validate",
+                "bir_form_preview",
+                "bir_form_card",
+                "bir_form_review",
                 "bir_form_save_draft",
                 "bir_form_dismiss",
             ]

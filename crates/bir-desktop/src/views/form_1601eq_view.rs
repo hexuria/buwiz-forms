@@ -1080,6 +1080,20 @@ impl Form1601EqView {
 impl QueueableFormView for Form1601EqView {
     type Draft = Form1601EqDraft;
 
+    const PRINT_SLUG: &'static str = "1601eq-2019";
+
+    fn print_fields(draft: &Form1601EqDraft) -> std::collections::BTreeMap<String, String> {
+        draft.to_bir_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form1601EqDraft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        HEADER_ACTIONS
+    }
+
     fn new(
         draft: Form1601EqDraft,
         db: Arc<Mutex<Database>>,
@@ -1366,9 +1380,9 @@ impl FormViewTrait for Form1601EqView {
             ));
             return;
         }
-        let fields = self.draft.to_bir_field_map();
+        let fields = Self::print_fields(&self.draft);
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "1601eq-2019",
+            Self::PRINT_SLUG,
             &fields,
             "1601-EQ — Print Preview",
             cx,

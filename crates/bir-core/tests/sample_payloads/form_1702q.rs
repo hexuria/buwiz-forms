@@ -71,3 +71,8 @@ fn form_1702q_sample_payload_is_current() {
 fn form_1702q_penalty_items_follow_the_shared_model() {
     penalty_items::check(sample_1702q, Deadline::Calendar(day(2025, 8, 29)));
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![serde_json::to_value(sample_1702q()).expect("sample serializes")]
+}

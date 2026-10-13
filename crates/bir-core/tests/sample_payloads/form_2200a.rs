@@ -77,3 +77,8 @@ fn form_2200a_penalty_items_follow_the_shared_model() {
         },
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![serde_json::to_value(sample_2200a()).expect("sample serializes")]
+}

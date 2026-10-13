@@ -156,3 +156,12 @@ fn form_1600pt_other_atcs_sample_payload_is_current() {
 fn form_1600pt_penalty_items_follow_the_shared_model() {
     penalty_items::check(sample_1600pt, Deadline::Calendar(day(2025, 7, 10)));
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_1600pt()).expect("sample serializes"),
+        serde_json::to_value(sample_1600pt_private()).expect("sample serializes"),
+        serde_json::to_value(sample_1600pt_other_atcs()).expect("sample serializes"),
+    ]
+}
