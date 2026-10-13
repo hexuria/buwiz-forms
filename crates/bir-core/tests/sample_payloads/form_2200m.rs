@@ -1,5 +1,7 @@
 use crate::dummy_profile;
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_2200m::{Form2200MDraft, Form2200MPayment, Form2200MPlace};
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2200m() -> Form2200MDraft {
     let mut draft =
@@ -66,6 +68,7 @@ fn sample_2200m() -> Form2200MDraft {
     draft.surcharge = 25.5;
     draft.interest = 10.0;
     draft.compromise = 1_000.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft.tax_deposit = draft.tax_still_due + 100.0;
     draft.recompute();
@@ -120,6 +123,17 @@ fn form_2200m_sample_with_many_rows_is_current() {
         &layout,
         &payload,
         "3e68f97ca2c240fd596325bfea7318f657d708c68e33adb331c30b8d720b1f74",
+    );
+}
+
+/// The calendar's 2200-M rule is quarterly; this return is dated.
+#[test]
+fn form_2200m_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2200m,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 

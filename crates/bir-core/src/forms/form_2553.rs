@@ -6,6 +6,8 @@
 //! `saveXMLsubmit` through [`crate::official_xml`]. The first form on the
 //! generic [`QueueableForm`] submission path.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -203,6 +205,10 @@ pub struct Form2553Draft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 23.
@@ -241,6 +247,7 @@ impl Form2553Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             tax_period_basis: TaxPeriodBasis::Calendar,
@@ -365,6 +372,8 @@ impl Form2553Draft {
         self.creditable_tax_withheld = cents(self.creditable_tax_withheld);
         self.total_tax_credits = cents(self.tax_paid_previous + self.creditable_tax_withheld);
         self.tax_payable = cents(self.total_tax_due - self.total_tax_credits);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -676,7 +685,32 @@ impl FormValidator for Form2553Draft {
     }
 }
 
+impl Form2553Draft {
+    /// Items 22A-22C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "22A Surcharge",
+                interest: "22B Interest",
+                compromise: "22C Compromise",
+            ],
+            controls: [
+                "frm2553:txt22A",
+                "frm2553:txt22B",
+                "frm2553:txt22C",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 21", |d| d.tax_payable,
+        )
+    }
+}
+
 impl QueueableForm for Form2553Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "2553";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['2553']`).
     const FORM_TYPE: &'static str = "2553";
@@ -755,6 +789,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form2553Draft {
         let mut draft = Form2553Draft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             tin: "12345678800000".to_string(),
             tax_period_basis: TaxPeriodBasis::Calendar,
@@ -789,6 +824,7 @@ mod tests {
         draft.schedule[0].taxable_amount = 123_456.789;
         draft.creditable_tax_withheld = 1_000.0;
         draft.surcharge = 25.5;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1020,6 +1056,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

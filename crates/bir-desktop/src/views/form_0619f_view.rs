@@ -25,6 +25,9 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{messages_for, with_field_error};
 use crate::views::form_header::{
     AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
@@ -32,6 +35,7 @@ use crate::views::form_header::{
     separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 impl EventEmitter<QueueableFormEvent> for Form0619FView {}
 
@@ -117,6 +121,8 @@ pub struct Form0619FView {
     /// Validate ran at the current entries; every edit clears it.
     validated: bool,
     header: FormHeaderState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -133,9 +139,9 @@ impl Form0619FView {
             "i13" => money_text(draft.item_13_interest_final_tax_withheld),
             "i14" => money_text(draft.item_14_other_final_tax_withheld),
             "i16" => money_text(draft.item_16_remitted_previously),
-            "i18a" => money_text(draft.item_18a_surcharge),
-            "i18b" => money_text(draft.item_18b_interest),
-            "i18c" => money_text(draft.item_18c_compromise),
+            "i18a" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Surcharge),
+            "i18b" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Interest),
+            "i18c" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Compromise),
             _ => String::new(),
         }
     }
@@ -195,6 +201,13 @@ impl Form0619FView {
         draft.zip_code = self.input_text("zip", cx).trim().to_string();
         draft.contact_number = self.input_text("phone", cx).trim().to_string();
         draft.email = self.input_text("email", cx).trim().to_string();
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form0619FDraft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -678,9 +691,17 @@ impl Form0619FView {
                 d.item_17_net_amount_of_remittance,
                 cx,
             ),
-            self.field("i18a", layout, false),
-            self.field("i18b", layout, false),
-            self.field("i18c", layout, false),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .validation_errors
+                    .iter()
+                    .chain(&self.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             self.computed("18D — Total penalties", d.item_18d_total_penalties, cx),
             with_field_error(
                 self.computed(
@@ -747,6 +768,22 @@ impl QueueableFormView for Form0619FView {
             inputs.insert(key.to_string(), input);
         }
         let validation_errors = draft.validate();
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = vec![[
+            inputs["i18a"].clone(),
+            inputs["i18b"].clone(),
+            inputs["i18c"].clone(),
+        ]];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -758,6 +795,7 @@ impl QueueableFormView for Form0619FView {
             release_claim_confirm_open: false,
             validated: false,
             header: FormHeaderState::new(),
+            penalty,
             _subscriptions: subscriptions,
         }
     }

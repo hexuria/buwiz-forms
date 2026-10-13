@@ -1,8 +1,10 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1801::{
     Form1801Business, Form1801Draft, Form1801Frequency, Form1801Particular, Form1801RealProperty,
     Form1801Shares, Form1801Split,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn split(exclusive: f64, conjugal: f64) -> Form1801Split {
     Form1801Split {
@@ -80,6 +82,7 @@ fn sample_1801() -> Form1801Draft {
     d.family_home_deduction = 1_000_000.0;
     d.installment_year = "2026".into();
     d.surcharge = 25.5;
+    d.keep_entered_penalties();
     d.recompute();
     d
 }
@@ -140,6 +143,7 @@ fn sample_1801_with_tax_and_added_rows() -> Form1801Draft {
     });
     d.surcharge = 1_000.0;
     d.interest = 250.25;
+    d.keep_entered_penalties();
     d.recompute();
     d
 }
@@ -244,6 +248,17 @@ fn form_1801_sample_with_many_rows_is_current() {
         &layout,
         &payload,
         "88a21bbbba7be3539d3adda4bb49d632bcf3700dd22124d853b17e4ef1085ded",
+    );
+}
+
+/// Event-based: the calendar has no 1801 deadline.
+#[test]
+fn form_1801_with_tax_and_added_rows_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_1801_with_tax_and_added_rows,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 

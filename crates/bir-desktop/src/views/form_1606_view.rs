@@ -26,6 +26,9 @@ use gpui_component::*;
 
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{self, field_error, messages_for, select_field};
 use crate::views::form_header::{
     AMENDED_REVERT_MESSAGE, DEFAULT_SUCCESS_MESSAGE, FormHeaderActions, FormHeaderProps,
@@ -33,6 +36,7 @@ use crate::views::form_header::{
     separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 impl EventEmitter<QueueableFormEvent> for Form1606View {}
 
@@ -174,6 +178,8 @@ pub struct Form1606View {
     header: FormHeaderState,
     /// Validate ran at the current entries; every edit clears it.
     validated: bool,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -225,9 +231,9 @@ impl Form1606View {
             "others_base" => money(draft.others_base),
             "bid" => money(draft.bid_price),
             "less" => money(draft.tax_remitted_previous),
-            "sur" => money(draft.surcharge),
-            "int" => money(draft.interest),
-            "comp" => money(draft.compromise),
+            "sur" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Surcharge),
+            "int" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Interest),
+            "comp" => penalty_section::override_text(&draft.penalty, PenaltyComponent::Compromise),
             "fmv_a" => fmv(draft.fmv_land_tax_declaration),
             "fmv_b" => fmv(draft.fmv_improvements_tax_declaration),
             "fmv_c" => fmv(draft.fmv_land_zonal),
@@ -353,6 +359,13 @@ impl Form1606View {
         draft.transaction_other = text("txn_other");
         draft.others_base_description = text("base_other_desc");
         draft.email = text("email").trim().to_string();
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form1606Draft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = self.draft.lifecycle.updated_at.clone();
         let changed = draft != self.draft;
@@ -377,6 +390,9 @@ impl Form1606View {
                 input.update(cx, |state, cx| state.set_value(value, window, cx));
             }
         }
+        let penalty_views = PenaltyPartyView::all(&self.draft);
+        self.penalty
+            .update(cx, |section, cx| section.load(&penalty_views, window, cx));
         self.sync_from_inputs(cx);
     }
 
@@ -1107,9 +1123,17 @@ impl Form1606View {
             self.computed("32 — Tax Required to be Withheld", d.tax_required, cx),
             self.text_field("less", layout, !editable || !d.is_amended),
             self.computed("34 — Tax Still Due/(Overremittance)", d.tax_still_due, cx),
-            self.text_field("sur", layout, !editable || !withheld),
-            self.text_field("int", layout, !editable || !withheld),
-            self.text_field("comp", layout, !editable || !withheld),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .validation_errors
+                    .iter()
+                    .chain(&self.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             self.computed("35D — Total Penalties", d.total_penalties, cx),
             self.computed(
                 "36 — Total Amount Still Due/(Overremittance)",
@@ -1228,6 +1252,22 @@ impl QueueableFormView for Form1606View {
             },
         ));
         let validation_errors = draft.validate();
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = vec![[
+            inputs["sur"].clone(),
+            inputs["int"].clone(),
+            inputs["comp"].clone(),
+        ]];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -1240,6 +1280,7 @@ impl QueueableFormView for Form1606View {
             release_claim_confirm_open: false,
             header: FormHeaderState::new(),
             validated: false,
+            penalty,
             _subscriptions: subscriptions,
         }
     }

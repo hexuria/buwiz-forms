@@ -5,6 +5,7 @@
 //! remains manual/external: the reviewed saves prove an editable persistence
 //! contract, not an electronic-submission contract.
 
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -442,6 +443,10 @@ pub struct Form0605Draft {
     pub item_20b_interest: f64,
     #[serde(alias = "txt_tax20c")]
     pub item_20c_compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(alias = "txt_tax20d")]
     pub item_20d_total_penalties: f64,
     #[serde(alias = "txt_tax21")]
@@ -486,6 +491,7 @@ const fn default_year_end_month() -> u8 {
 impl Form0605Draft {
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, period_slot: u8) -> Self {
         Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
@@ -668,6 +674,7 @@ mod tests {
         draft.item_20a_surcharge = 10.0;
         draft.item_20b_interest = 20.0;
         draft.item_20c_compromise = 1_000.0;
+        crate::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         draft.lifecycle.updated_at = "fixed".to_string();
         draft.recompute();
         assert_eq!(draft.item_20d_total_penalties, 1_030.0);

@@ -13,8 +13,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use super::penalty_items::PenaltyItems;
 use super::{FilingPeriod, FilingStatus};
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
+use crate::penalties::PenaltyComponent;
 
 /// Status, queue authorization, network claim and retry state of one return.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -312,6 +314,53 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
         None
     }
 
+    /// The form's Surcharge, Interest and Compromise items on the shared
+    /// computed-with-override model ([`super::penalty_items`]): one set per
+    /// party that carries its own (the filer, then the spouse on a joint
+    /// individual return). Empty for a form without such items, or one not
+    /// wired to the model.
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        Vec::new()
+    }
+
+    /// Set (`Some`) or clear (`None`) the override of one of the filer's
+    /// (first declared) penalty items. Returns false for a form without wired
+    /// penalty items.
+    fn set_penalty_override(&mut self, component: PenaltyComponent, value: Option<f64>) -> bool {
+        match Self::penalty_items().first() {
+            Some(items) => {
+                items.set_override(self, component, value);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Resolve each party's penalty inputs from the profile: the period's
+    /// deadline as the Calendar resolves it (global and profile deadline
+    /// overrides applied) and the profile's EOPT class. A return that has
+    /// left Draft keeps the inputs it was reviewed with.
+    fn apply_penalty_profile(
+        &mut self,
+        profile: &crate::profile::TaxpayerProfile,
+        global_overrides: &[crate::calendar_rules::DeadlineOverride],
+    ) {
+        for items in Self::penalty_items() {
+            items.apply_profile(self, profile, global_overrides);
+        }
+    }
+
+    /// Treat every applicable penalty item's current amount as entered by
+    /// hand: each one becomes that component's override, so it files as it
+    /// stands whatever the engine computes (what an import does).
+    fn keep_entered_penalties(&mut self) {
+        for items in Self::penalty_items() {
+            if (items.applies)(self) {
+                items.adopt_imported(self);
+            }
+        }
+    }
+
     /// `form_drafts.quarter` value: month, quarter, 0 for annual returns.
     fn period_column(&self) -> i64 {
         period_column(&self.filing_period())
@@ -385,12 +434,29 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
             )]);
         }
         let reviewed = self.lifecycle().queued_submission_fingerprint.clone();
-        self.compute();
+        // Computed penalties refresh here (and only here) once queued: a
+        // change since the return was reviewed fails closed.
+        let penalty_items = Self::penalty_items();
+        let reviewed_penalties: Vec<[f64; 3]> = penalty_items
+            .iter()
+            .map(|items| items.filed(self))
+            .collect();
+        let today = super::penalty_items::today();
+        match penalty_items.first() {
+            // One compute chain refreshes every party's items.
+            Some(items) => items.compute_on(self, today, true),
+            None => self.compute(),
+        }
         let refreshed = self.submission_fingerprint();
         let mut errors = match self.official_payload() {
             Ok(_) => Vec::new(),
             Err(errors) => errors,
         };
+        for (items, reviewed) in penalty_items.iter().zip(reviewed_penalties) {
+            if items.filed(self) != reviewed {
+                errors.push(items.changed_error(self, today));
+            }
+        }
         match reviewed {
             Some(fingerprint) if fingerprint == refreshed => {}
             Some(_) => errors.push((
@@ -560,6 +626,24 @@ impl QueueableKind {
     /// Official form type in filenames and transport, e.g. `"2553"`.
     pub fn form_type(self) -> &'static str {
         crate::with_queueable_kind!(self, F => <F as QueueableForm>::FORM_TYPE)
+    }
+
+    /// The compromise schedule of each party's penalty items; empty for a
+    /// form without items on the shared penalty model.
+    pub fn penalty_schedules(self) -> Vec<crate::penalties::PenaltyProfile> {
+        crate::with_queueable_kind!(self, F => <F as QueueableForm>::penalty_items()
+            .iter()
+            .map(|items| items.schedule)
+            .collect())
+    }
+
+    /// The draft fields of each party's penalty items (surcharge, interest,
+    /// compromise); empty for a form without items on the shared model.
+    pub fn penalty_fields(self) -> Vec<[&'static str; 3]> {
+        crate::with_queueable_kind!(self, F => <F as QueueableForm>::penalty_items()
+            .iter()
+            .map(|items| items.fields)
+            .collect())
     }
 
     /// From `form_drafts.form_code`.

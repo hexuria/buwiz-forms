@@ -6,10 +6,12 @@
 //! is raw filer input (profile fields are filled the way `loadBGData` does,
 //! both `txtTelNum` controls the way a saved return reloads).
 
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1702q::{
     Form1702qDeduction, Form1702qDraft, Form1702qOtherCredit, Form1702qSchedule1Column,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1702q() -> Form1702qDraft {
     let mut draft =
@@ -44,6 +46,7 @@ fn sample_1702q() -> Form1702qDraft {
         amount: 1_234.0,
     }];
     draft.surcharge = 1_000.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -61,6 +64,12 @@ fn form_1702q_sample_payload_is_current() {
         &payload,
         "65ad36691688357558676ec0186ae9394d17ef5df5f74769bfdb6ef65d8ddb65",
     );
+}
+
+/// Q2 2025 (calendar year): due 60 days after 30 June 2025.
+#[test]
+fn form_1702q_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1702q, Deadline::Calendar(day(2025, 8, 29)));
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

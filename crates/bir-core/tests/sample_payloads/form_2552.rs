@@ -1,8 +1,10 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile, samples_dir};
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
 use bir_core::forms::form_2552::{
     Form2552Draft, Form2552ExemptRow, Form2552NonTaxableRow, Form2552ShareRow, Form2552Transaction,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 use bir_core::official_xml;
 use sha2::{Digest, Sha256};
 
@@ -70,6 +72,7 @@ fn sample_2552() -> Form2552Draft {
     draft.creditable_tax_withheld = 1_000.25;
     draft.surcharge = 25.5;
     draft.interest = 10.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -172,6 +175,17 @@ fn form_2552_add_more_sample_payload_is_current() {
         assert_eq!(std::fs::read_to_string(&plain_path).unwrap(), plaintext);
         assert_eq!(std::fs::read(&iaf_path).unwrap(), encrypted);
     }
+}
+
+/// Event-based: the calendar has no 2552 deadline.
+#[test]
+fn form_2552_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2552,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
+    );
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

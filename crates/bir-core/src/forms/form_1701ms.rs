@@ -26,6 +26,7 @@
 //! (`Math.round`) or a `Math.round` in the compute chain, so the model holds
 //! whole pesos; only the Item 31 amounts keep centavos (`round(this,2)`).
 
+use super::penalty_items::{PenaltyItems, PenaltyState};
 use std::collections::BTreeMap;
 
 use chrono::{Datelike, NaiveDate};
@@ -263,6 +264,10 @@ pub struct Form1701MsColumn {
     pub surcharge: f64,
     pub interest: f64,
     pub compromise: f64,
+    /// This column's penalty items' computed values, overrides, note and
+    /// engine inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     pub total_penalties: f64,
     pub total_amount_payable: f64,
 
@@ -1180,6 +1185,15 @@ impl Form1701MsDraft {
         self.spouse.normalize(true, spouse_previous);
         self.taxpayer.compute();
         self.spouse.compute();
+        // Each column's penalty items file their override, else the
+        // computed value; the column totals are then summed with them.
+        for items in Self::penalty_declarations() {
+            items.apply(self);
+        }
+        self.taxpayer.round_inputs();
+        self.spouse.round_inputs();
+        self.taxpayer.compute();
+        self.spouse.compute();
 
         // computeAggregateAmountNo30.
         let a = self.taxpayer.total_amount_payable;
@@ -1975,7 +1989,59 @@ impl FormValidator for Form1701MsDraft {
     }
 }
 
+impl Form1701MsDraft {
+    /// The penalty items of each column on the shared penalty model
+    /// ([`super::penalty_items`]): the taxpayer/filer's, then the spouse's,
+    /// which apply only to a joint return.
+    pub fn penalty_declarations() -> Vec<PenaltyItems<Self>> {
+        let filer = super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                taxpayer.surcharge: "28A Surcharge",
+                taxpayer.interest: "28B Interest",
+                taxpayer.compromise: "28C Compromise",
+            ],
+            controls: [
+                "frm1701MS:txtSurchangeNo28a",
+                "frm1701MS:txtInterestNo28a",
+                "frm1701MS:txtCompromise28a",
+            ],
+            state: taxpayer.penalty,
+            basic_tax_due: "Item 27A", |d| d.taxpayer.amount_payable,
+            party: Some("Taxpayer/Filer"),
+            rounding: super::penalty_items::PenaltyRounding::WholePesos,
+            deadline_period: |d: &Self| (!d.is_short_period && d.month == 12).then(|| super::penalty_items::calendar_period(d)).flatten(),
+        );
+        let spouse = super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                spouse.surcharge: "28A Surcharge",
+                spouse.interest: "28B Interest",
+                spouse.compromise: "28C Compromise",
+            ],
+            controls: [
+                "frm1701MS:txtSurchangeNo28b",
+                "frm1701MS:txtInterestNo28b",
+                "frm1701MS:txtCompromise28b",
+            ],
+            state: spouse.penalty,
+            basic_tax_due: "Item 27B", |d| d.spouse.amount_payable,
+            party: Some("Spouse"),
+            applies: |d: &Self| d.is_joint(),
+            // The profile's EOPT class is the filer's, not the spouse's.
+            rounding: super::penalty_items::PenaltyRounding::WholePesos,
+            deadline_period: |d: &Self| (!d.is_short_period && d.month == 12).then(|| super::penalty_items::calendar_period(d)).flatten(),
+        );
+        vec![filer, spouse]
+    }
+}
+
 impl QueueableForm for Form1701MsDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        Self::penalty_declarations()
+    }
     const FORM_CODE: &'static str = "1701MS";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1701MS']`).
     const FORM_TYPE: &'static str = "1701MS";
@@ -2107,6 +2173,8 @@ mod tests {
             perjury_agreed: true,
             lifecycle: SubmissionLifecycle::default(),
         };
+        // This sample enters its penalties by hand.
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
