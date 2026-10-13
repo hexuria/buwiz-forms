@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import tarfile
 import tempfile
 import unittest
@@ -376,6 +377,7 @@ class LinuxCandidateCollectorTests(unittest.TestCase):
         )
 
     @mock.patch.object(collector.platform, "system", return_value="Linux")
+    @unittest.skipIf(os.name == "nt", "collector output permissions require POSIX ownership")
     def test_collection_invokes_strict_verifier_and_stays_non_promotional(
         self, _system: mock.Mock
     ) -> None:

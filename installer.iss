@@ -1,5 +1,5 @@
 #ifndef StageDir
-#define StageDir "target\installer-stage"
+#error StageDir is required; invoke ISCC with /DStageDir=<audited-stage>
 #endif
 
 [Setup]
@@ -16,6 +16,7 @@ OutputBaseFilename=eBIRForms-Windows-x64-{#MyAppVersion}-Setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
+PrivilegesRequiredOverridesAllowed=commandline
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\bir.exe
 SetupIconFile=assets\icon.ico

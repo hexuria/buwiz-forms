@@ -68,7 +68,7 @@ host with env vars, then talk to it with `gpui-agent`.
 The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
 and is installed automatically by every setup script — `setup-windows.ps1`,
 `setup-linux.sh`, and `setup-macos.sh` all resolve the rev the app pins
-(`crates/bir-desktop/Cargo.toml` / `Cargo.lock`) so driver and host can never
+(`Cargo.toml` / `Cargo.lock`) so driver and host can never
 drift on protocol version. Manually:
 `cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
 

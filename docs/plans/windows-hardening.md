@@ -23,7 +23,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
    - dry run only, `BIR_SFTP_*` unset;
    - test TIN 123-456-788-00000 or 00002;
    - results go in a PR comment with evidence.
-4. **Verification impact block** in every PR description (template in §6).
+4. **Verification impact block** in every PR description (template in §11).
 5. **Repo hygiene:**
    - no generated artifacts, logs or DBs committed;
    - no session or org IDs in the repo;
@@ -176,22 +176,29 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 
 ## 7. Contributor tooling: #91, #92, #93 (P1, every new Windows contributor hits these)
 
-- [ ] **7.1 #91, upstream in `hexuria/gpui-agent`.**
-  - `crates/gpui-agent/src/hmac_auth.rs` declares `extern "system" fn BCryptGenRandom` with no `#[link(name = "bcrypt")]`.
-  - The app links bcrypt through other deps, which is why only the standalone CLI fails.
-  - Fix with `#[link(name = "bcrypt")]` (or move to `getrandom`), add a windows-latest `cargo install --path crates/gpui-agent-cli` CI step there, then bump the pinned rev in our `Cargo.toml`/`Cargo.lock`.
-- [ ] **7.2 `scripts/setup-windows.ps1`:**
-  - move the Strawberry Perl/NASM PATH fix **before** any `cargo install` (today it runs after);
-  - set `OPENSSL_*` in the current process too;
-  - `choco install innosetup 7zip python`;
-  - delete the stale "HMAC fails closed on Windows" note (#90 step 29 showed it works);
-  - keep it idempotent.
-- [ ] **7.3 #92 `justfile`:**
-  - add `python := if os_family() == "windows" { "python" } else { "python3" }` and use `{{python}}` in every recipe;
-  - `exe` checks ISCC, 7z and python up front, before the long release build.
-  - CI never saw this because GitHub windows images ship `python3`, Inno Setup and 7-Zip (check against runner-images).
-- [ ] **7.4 #93:** `install msix` calls `powershell.exe -NoProfile -Command Add-AppxPackage …` (or `Import-Module Appx -UseWindowsPowerShell`).
-- **Acceptance:** on a clean VM, run setup, then `just run`, `just exe`, `just msix`, `just sign-dev`, `just install msix` and `cargo install gpui-agent-cli`. These are #90 steps 1, 2, 4 and the CLI part of 29.
+Implementation for this tooling slice is complete, but acceptance remains
+pending a clean VM and a signed release run. 7-Zip extraction is prohibited:
+it does not model Inno Setup installation behavior. The package path is staged
+once and gated by strict `[Files]` source validation before ISCC. The shared
+audit is implemented to install the actual Setup.exe into a disposable
+per-user directory and audit its installed tree before uninstall; local
+execution was safely refused because a real installation is registered.
+
+- [x] **7.1 #91, upstream in `hexuria/gpui-agent`.** The bcrypt linkage fix and
+  pinned-revision update are merged upstream.
+- [x] **7.2 `scripts/setup-windows.ps1`:** Root-manifest pin resolution, PATH
+  ordering/deduplication, and 3010 handling passed PowerShell parsing and the
+  focused setup-policy test.
+- [x] **7.3 #92 `justfile`:** Python/ISCC prerequisites, source gating, MSIX
+  path handling, and the real Windows packaging build passed locally.
+- [ ] **7.4 #93 installer audit:** The shared audit script and parser checks
+  are implemented. Local final-Setup execution safely refused because a real
+  eBIRForms installation is registered; disposable CI must verify
+  install/audit/uninstall. Never remove a pre-existing installation.
+- **Acceptance:** a clean VM must run setup, `just run`, `just exe`, `just msix`,
+  `just sign-dev`, `just install msix`, and `cargo install gpui-agent-cli`.
+  A signed release run remains a separate acceptance item. Local verification
+  on the existing VM is partial evidence, not clean-VM certification.
 
 ---
 
@@ -335,3 +342,4 @@ Each PR ends with the #90 steps it touches re-run on Windows. After PR 5, a full
 
 ## 14. Changelog
 - Plan created from the #90/#89 Windows verification. Corrected the #99 assessment: diffs 2 and 3 come from different official save paths.
+- 2026-10-13 | Replaced 7-Zip payload inspection with strict source validation and actual installed-Setup auditing; implementation is distinct from pending clean-VM and signed-release acceptance.

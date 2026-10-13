@@ -576,10 +576,12 @@ setup script (`scripts/setup-linux.sh`, `scripts/setup-macos.sh`,
 manually:
 
 ```bash
-REV=$(grep -oE 'gpui-agent = \{ git = "[^"]+", rev = "[0-9a-f]+"' \
-    crates/bir-desktop/Cargo.toml | grep -oE '[0-9a-f]{7,}' | tail -1)
+REV=$(tr '\n' ' ' < Cargo.toml | grep -oE \
+    'gpui-agent[[:space:]]*=[[:space:]]*\{[^}]*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})"' \
+    | sed -nE 's/.*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})".*/\1/p' | head -1)
+[ -n "$REV" ] || { echo "gpui-agent rev pin not found in root Cargo.toml" >&2; exit 1; }
 cargo install --git https://github.com/hexuria/gpui-agent --rev "$REV" \
-    --locked gpui-agent-cli
+    gpui-agent-cli
 ```
 
 ### Mac: Screen Recording (TCC)
@@ -1318,4 +1320,3 @@ inbox has **one** Google OAuth credential set:
 
 Do not log access or refresh tokens. Do not point tests at the live Mac
 app-group DB.
-
