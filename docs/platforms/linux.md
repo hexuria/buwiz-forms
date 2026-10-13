@@ -30,47 +30,69 @@ there, but nobody has run it on that platform.
 | Add deadlines to a calendar (.ics) | ✓ | Opens with `xdg-open`. |
 | Google Calendar credentials storage | untested | Through `keyring`. No backend in this branch (same cause as the database key). |
 | Keyboard shortcuts | ✓ | Ctrl based; also F11. |
-| Packaging | ✓ | `.deb` with a `.desktop` entry and icon; tarball without `cargo-deb`. |
+| Packaging | ✓ | `.deb`, `.rpm`, x86_64 Arch package, tarball, installer, and x86_64 AUR build file. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
 | Agent screenshots | ✗ | macOS only. |
 | Dev Mode panel (debug builds only) | ✓ |  |
 
 ## Install and run
 
-Install the `.deb` from the
-[Releases](https://github.com/hexuria/buwiz-forms/releases) page:
+### One-line installer
+
+The installer detects Debian/Ubuntu, Fedora/RHEL, openSUSE, and Arch-based
+systems, verifies the downloaded package against the release checksums, and
+installs it with the distro's package manager. Unknown distributions and
+`--tarball` use a per-user install under `~/.local/share/ebirforms`.
 
 ```bash
-sudo apt install ./eBIRForms-Linux-x64-<version>.deb
+curl -fsSL https://github.com/hexuria/buwiz-forms/releases/latest/download/install-linux.sh | sh
 ```
 
-The package ships (see `[package.metadata.deb]` in
-`crates/bir-desktop/Cargo.toml`):
+To install a specific release:
 
-| File | Installed to |
-|---|---|
-| The `bir` binary | `/usr/bin/ebirforms` |
-| App assets | `/usr/share/ebirforms/assets/` |
-| [`assets/linux/dev.goldcoders.bir.desktop`](../../assets/linux/dev.goldcoders.bir.desktop) | `/usr/share/applications/dev.goldcoders.bir.desktop` |
-| `assets/linux/icons/hicolor/<size>/apps/dev.goldcoders.bir.png` (48, 64, 128, 256, 512) | `/usr/share/icons/hicolor/<size>/apps/dev.goldcoders.bir.png` |
+```bash
+curl -fsSL https://github.com/hexuria/buwiz-forms/releases/latest/download/install-linux.sh | sh -s -- --version v0.1.0
+```
 
-The desktop entry has `Exec=ebirforms`, `Icon=dev.goldcoders.bir`, the
-categories `Office;Finance;` and `StartupWMClass=dev.goldcoders.bir`. Every
-window (main, previews, cron tasks) goes through `window_identity::identified()`,
-which sets the application id to `dev.goldcoders.bir` and a 128 px window icon,
-so docks group the windows under the entry. Launch it from the application menu
-or run `ebirforms`. From the tarball, run `assets/linux/install-desktop-entry.sh`
-to add the same entry for the current user (`--remove` undoes it).
+### Manual package install
 
-Runtime packages (the `.deb` `depends`): `libgtk-3-0`, `libwebkit2gtk-4.1-0`,
-`libvulkan1`, `libxkbcommon0`, `libwayland-client0`, `fontconfig`,
-`libfreetype6`, plus whatever `$auto` finds. Install Noto Sans too: without a
-UI font the window is a blank white frame.
+Download the matching package from the
+[Releases](https://github.com/hexuria/buwiz-forms/releases) page, then use your
+distro's package manager:
 
-Without `cargo-deb`, `just _package-linux` makes a `.tar.gz` instead. Unpack it
-and run `bir` from the folder, which holds the `assets/` directory beside it.
-The app looks for `assets` next to the binary, in `../Resources`, up to three
-folders above it, and `/usr/share/ebirforms`.
+```bash
+# Debian 12+ and Ubuntu 22.04+
+sudo apt install ./eBIRForms-Linux-x64-<version>.deb
+
+# Fedora 36+
+sudo dnf install ./eBIRForms-Linux-x64-<version>.rpm
+
+# openSUSE Tumbleweed (Leap 15 is unsupported)
+sudo zypper --no-gpg-checks install --allow-unsigned-rpm ./eBIRForms-Linux-x64-<version>.rpm
+
+# Arch Linux, x86_64 only
+sudo pacman -U ./eBIRForms-Linux-x64-<version>.pkg.tar.zst
+```
+
+The `.deb` and `.rpm` install `/usr/bin/ebirforms`, assets under
+`/usr/share/ebirforms/assets/`, a desktop entry, and five hicolor icon sizes.
+The package metadata declares runtime libraries; RPM dependencies are detected
+from the binary's linked shared libraries.
+
+### Tarball
+
+Use `--tarball` with the installer or download the `.tar.gz` release asset. To
+install manually, extract it and run `./install-desktop-entry.sh`; launch with
+`./bir`. The tarball contains `bir`, `assets/`, and the desktop-entry installer
+at its top level.
+
+### Runtime requirements
+
+Release binaries target glibc 2.35 or newer: Ubuntu 22.04+, Debian 12+,
+Fedora 36+, current Arch Linux, and openSUSE Tumbleweed. openSUSE Leap 15 is
+unsupported. Install Noto Sans (`fonts-noto-core` on Debian/Ubuntu,
+`google-noto-sans-fonts` on Fedora, `noto-fonts` on Arch) to avoid a blank
+window when the system has no UI font.
 
 ## Build from source
 

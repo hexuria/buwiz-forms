@@ -1,0 +1,136 @@
+name: Linux Release Packages
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag; the leading v is optional
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - .github/workflows/release-linux.yml
+      - packaging/linux/**
+      - crates/bir-desktop/Cargo.toml
+      - assets/linux/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+          - runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libx11-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libwayland-dev \
+            libwayland-client0 \
+            libasound2-dev \
+            libudev-dev \
+            libvulkan-dev \
+            libfontconfig1-dev \
+            libfreetype-dev \
+            libssl-dev \
+            libpolkit-gobject-1-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            mesa-vulkan-drivers \
+            rpm \
+            zstd
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Verify frozen HTML and write build identity
+        run: |
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
+
+      - name: Build release binary
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Stage desktop executable name
+        run: python3 scripts/alias_desktop_bin.py target/${{ matrix.target }}/release
+
+      - name: Resolve package version
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == workflow_call ]]; then
+            version="${RELEASE_TAG#v}"
+          else
+            cargo_version="$(awk -F '"' '
+              /^\[workspace\.package\]$/ { in_workspace_package = 1; next }
+              in_workspace_package && /^\[/ { exit }
+              in_workspace_package && /^version[[:space:]]*=/ { print $2; exit }
+            ' Cargo.toml)"
+            version="${cargo_version}-pr"
+          fi
+          if [[ ! "$version" =~ ^[0-9][A-Za-z0-9.+~-]*$ ]]; then
+            echo "Invalid package version: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build Linux packages
+        run: packaging/linux/build-packages.sh --version "${{ steps.version.outputs.version }}" --target "${{ matrix.target }}" --out target/release-artifacts
+
+      - name: Smoke test Linux packages
+        run: packaging/linux/smoke-test.sh --out target/release-artifacts --arch "${{ matrix.arch }}"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-${{ matrix.arch }}
+          if-no-files-found: error
+          path: target/release-artifacts/*
