@@ -157,6 +157,8 @@ fn format_tin(tin: &str) -> String {
     )
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form1606View {
     draft: Form1606Draft,
     db: Arc<Mutex<Database>>,
@@ -1305,16 +1307,14 @@ impl FormViewTrait for Form1606View {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -1440,18 +1440,6 @@ impl Render for Form1606View {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .map(|(_, message)| {
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(message.clone())
-                    .into_any_element()
-            })
-            .collect();
 
         let phone = layout == Layout::Phone;
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
@@ -1476,7 +1464,7 @@ impl Render for Form1606View {
 
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -1505,9 +1493,6 @@ impl Render for Form1606View {
                                 })),
                         ),
                 )
-            })
-            .when(!issues.is_empty(), |col| {
-                col.child(self.section("Needs review", issues, cx))
             })
             .child(self.render_header_items(layout, cx))
             .child(self.render_parties(layout, cx))
@@ -1556,13 +1541,13 @@ impl Form1606View {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.blocking_errors(),
-            first_error: self
+            errors: self
                 .parse_errors
                 .iter()
                 .chain(self.validation_errors.iter())
-                .next()
-                .map(|(_, message)| message.replace('\n', " ")),
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),
