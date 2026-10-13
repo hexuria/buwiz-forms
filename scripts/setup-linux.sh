@@ -227,30 +227,29 @@ install_rust() {
 
 # ---------------------------------------------------------------------------
 # gpui-agent — the client half of the agent control plane. The app embeds the
-# matching host crate pinned by git rev in crates/bir-desktop/Cargo.toml; the
+# matching host crate pinned by git rev in the repository-root Cargo.toml; the
 # CLI has to speak the same protocol revision, so install that exact rev
-# instead of tracking main. If the manifest can't be read (script copied out
-# of the repo), fall back to the default branch with a warning.
+# instead of tracking main. A missing manifest or pin is an error.
 # ---------------------------------------------------------------------------
 install_gpui_agent() {
+    local manifest="$SCRIPT_DIR/../Cargo.toml"
+    [ -f "$manifest" ] || die "repository-root Cargo.toml is required for the gpui-agent pin"
+    local declaration rev installed_rev
+    declaration="$(tr '\n' ' ' < "$manifest" | grep -oE \
+        'gpui-agent[[:space:]]*=[[:space:]]*\{[^}]*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})"' | head -1 || true)"
+    rev="$(printf '%s' "$declaration" | sed -nE 's/.*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})".*/\1/p')"
+    [ -n "$rev" ] || die "gpui-agent rev pin not found in repository-root Cargo.toml"
     if command -v gpui-agent >/dev/null 2>&1; then
-        log "gpui-agent already installed"
-        return 0
+        installed_rev="$(cargo install --list 2>/dev/null | sed -n \
+            's/.*gpui-agent?rev=\([0-9a-fA-F]\{7,64\}\)#.*/\1/p' | head -1)"
+        if [ "$installed_rev" = "$rev" ]; then
+            log "gpui-agent already installed at pinned rev ${rev:0:7}"
+            return 0
+        fi
+        warn "installed gpui-agent revision ${installed_rev:-unknown} does not match ${rev:0:7}; reinstalling"
     fi
-    local manifest="$SCRIPT_DIR/../crates/bir-desktop/Cargo.toml"
-    local rev=""
-    if [ -f "$manifest" ]; then
-        rev="$(grep -oE 'gpui-agent = \{ git = "[^"]+", rev = "[0-9a-f]+"' "$manifest" \
-            | grep -oE '[0-9a-f]{7,}' | tail -1)"
-    fi
-    if [ -n "$rev" ]; then
-        log "Installing gpui-agent CLI @ $rev (matches the app's pinned host crate)"
-        cargo install --git https://github.com/hexuria/gpui-agent --rev "$rev" \
-            --locked gpui-agent-cli
-    else
-        warn "could not read the pinned gpui-agent rev; installing from main"
-        cargo install --git https://github.com/hexuria/gpui-agent --locked gpui-agent-cli
-    fi
+    log "Installing gpui-agent CLI @ $rev (matches the app's pinned host crate)"
+    cargo install --git https://github.com/hexuria/gpui-agent --rev "$rev" gpui-agent-cli
 }
 
 # ---------------------------------------------------------------------------

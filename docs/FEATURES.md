@@ -31,15 +31,16 @@ there, but nobody has run it on that platform.
 | Google Calendar credentials storage | ✓ | untested | untested |
 | Keyboard shortcuts | ✓ | untested | ✓ |
 | Packaging | ✓ | untested | ✓ |
-| Agent control (gpui-agent) | ✓ | ✗ | ✓ |
+| Agent control (gpui-agent) | ✓ | partial | ✓ |
 | Agent screenshots | ✓ | ✗ | ✗ |
 | Dev Mode panel (debug builds only) | ✓ | untested | ✓ |
 
 ## Reading this table
 
-- macOS and Linux are fully tested. Windows is not yet verified ([#90](https://github.com/hexuria/buwiz-forms/issues/90)),
-  so every Windows cell is "untested" unless the code shows the feature cannot
-  work there.
+- macOS and Linux are fully tested. Windows has partial evidence from one
+  Windows Server 2022 VM ([#90 comment 6119512665](https://github.com/hexuria/buwiz-forms/issues/90#issuecomment-6119512665));
+  this is not full certification, and all Windows cells without specific
+  evidence remain "untested".
 - The table was derived from the code on branch `forms/integration` (commit
   `fe86f57d`): `cfg(target_os)` blocks, `crates/bir-desktop/src/platform/`,
   `gui.rs`, `export_target.rs`, `crates/bir-core/src/db/mod.rs` and the

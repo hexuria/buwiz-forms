@@ -1,11 +1,13 @@
 # eBIRForms on Windows
 
-Status: not yet verified. Tracked in [#90](https://github.com/hexuria/buwiz-forms/issues/90). Back to the
+Status: partially verified on one Windows Server 2022 VM. Evidence is recorded in
+[#90 comment 6119512665](https://github.com/hexuria/buwiz-forms/issues/90#issuecomment-6119512665).
+Tracked in [#90](https://github.com/hexuria/buwiz-forms/issues/90). Back to the
 [README](../../README.md). The same matrix for all platforms is in
 [FEATURES.md](../FEATURES.md).
 
-Every item below describes what the code is written to do. Nobody has run it
-on Windows. "Untested" in the matrix means exactly that.
+The matrix combines checks completed on that VM with features that remain
+untested. This is not full Windows certification.
 
 ## Feature matrix
 
@@ -35,7 +37,7 @@ there, but nobody has run it on that platform.
 | Google Calendar credentials storage | untested | Credential Manager, through `keyring`. |
 | Keyboard shortcuts | untested | Ctrl based; also F11 and Win+M. |
 | Packaging | untested | `Setup.exe` and `.msi` from CI; MSIX with `just msix`. |
-| Agent control (gpui-agent) | ✗ | The token handshake fails closed at the current pin. Local use needs `GPUI_AGENT_INSECURE_NO_TOKEN=1`. |
+| Agent control (gpui-agent) | partial | Token-authenticated control works at the current pinned revision; the complete acceptance matrix remains open. |
 | Agent screenshots | ✗ | macOS only. |
 | Dev Mode panel (debug builds only) | untested |  |
 
@@ -106,10 +108,11 @@ there, but nobody has run it on that platform.
 
 ## Agent control
 
-- The gpui-agent token handshake fails closed on Windows at the current pin,
-  because the library reads its nonce from `/dev/urandom`. For local driving,
-  set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`. Never do
-  that on a shared machine.
+- The gpui-agent token handshake works on Windows at the current pinned
+  revision. Set `GPUI_AGENT_TOKEN` for secure driving.
+  `gpui-agent --connect bir-desktop` finds a running app, and bare commands go
+  to the default address. `GPUI_AGENT_INSECURE_NO_TOKEN=1` remains for
+  local-only driving; never use it on a shared machine.
 - Agent screenshots are macOS only.
 
 ## Packaging
