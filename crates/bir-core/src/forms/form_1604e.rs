@@ -581,6 +581,11 @@ impl QueueableForm for Form1604eDraft {
     const FORM_TYPE: &'static str = "1604Ev2018";
     const LAYOUT_ID: &'static str = FORM_1604E_FORM_ID;
 
+    /// An annual information return: nothing is paid with it.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(0.0)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

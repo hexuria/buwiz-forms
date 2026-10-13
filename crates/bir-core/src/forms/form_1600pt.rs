@@ -1101,6 +1101,11 @@ impl QueueableForm for Form1600PtDraft {
     /// the Item 10 category.
     const LAYOUT_ID: &'static str = FORM_1600PT_GOVERNMENT_LAYOUT_ID;
 
+    /// Total Amount Still Due.
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.total_amount_due)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }
