@@ -17,6 +17,7 @@ use std::sync::OnceLock;
 use bir_core::forms::ATC_TABLE_2551Q;
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use bir_core::forms::form_2551q::{Form2551QDraft, Item13Election, Schedule1Row};
+use bir_core::penalties::PenaltyComponent;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -591,6 +592,17 @@ pub fn apply_1601c(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Resu
         // Answering Item 3 clears the "unanswered" marker.
         draft.set_any_taxes_withheld(draft.any_taxes_withheld);
     }
+    // Items 32-34 file the override when one is set, else the computed
+    // value: an amount written into one of them is an override.
+    let penalty = match key {
+        "tax_32_surcharge" => Some((PenaltyComponent::Surcharge, draft.tax_32_surcharge)),
+        "tax_33_interest" => Some((PenaltyComponent::Interest, draft.tax_33_interest)),
+        "tax_34_compromise" => Some((PenaltyComponent::Compromise, draft.tax_34_compromise)),
+        _ => None,
+    };
+    if let Some((component, amount)) = penalty {
+        draft.set_penalty_override(component, Some(amount));
+    }
     Ok(())
 }
 
@@ -984,5 +996,33 @@ mod tests {
         assert!(canonical_2551q_key("item_13_election").is_none());
         assert!(canonical_1601c_key("tax_21_total_non_taxable").is_none());
         assert!(canonical_1601c_key("taxpayer_name").is_none());
+    }
+
+    #[test]
+    fn an_agent_written_1601c_penalty_is_an_override_that_survives_compute() {
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null,
+                "full_name": "Test Withholding Agent",
+                "tin": {"segment1": "111", "segment2": "111", "segment3": "114", "branch": "00000"},
+                "rdo_code": "018",
+                "line_of_business": "Software Development",
+                "registered_address": "Olongapo",
+                "zip_code": "2200",
+                "phone": "09123456789",
+                "email": "tax@example.com",
+                "default_form_type": "1601Cv2018",
+                "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 8);
+        draft.tax_25_total_taxes_withheld = 20_000.0;
+
+        apply_1601c(&mut draft, "tax_34_compromise", &serde_json::json!("500")).unwrap();
+        draft.compute();
+
+        assert_eq!(draft.penalty_overrides.compromise, Some(500.0));
+        assert_eq!(draft.penalty_overrides.surcharge, None);
+        assert_eq!(draft.tax_34_compromise, 500.0);
     }
 }

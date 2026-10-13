@@ -5,6 +5,12 @@ fn sample_1601c() -> Form1601CDraft {
     let mut draft =
         Form1601CDraft::new_from_profile(&dummy_profile("1601Cv2018", "Corporation"), 2025, 6);
     draft.auto_compute_penalties = false;
+    // Pin Items 32-34 at zero: the period is past its deadline, so the
+    // computed penalties would otherwise grow with the clock and change the
+    // hash-locked payload every day.
+    for component in bir_core::penalties::PenaltyComponent::ALL {
+        draft.set_penalty_override(component, Some(0.0));
+    }
     draft.tax_14_total_compensation = 250_000.0;
     draft.tax_15_statutory_minimum_wage = 0.0;
     draft.tax_17_13th_month_pay = 20_000.0;
