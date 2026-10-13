@@ -324,6 +324,10 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
     def test_package_builds_are_deterministic_and_scope_consistent(self) -> None:
         windows = self.windows_job("installers")
         self.assertIn("choco install wixtoolset --version=3.11.2 -y", windows)
+        self.assertIn("function Find-WixBin", windows)
+        self.assertIn('"WIX_BIN=$wixBin" >> $env:GITHUB_ENV', windows)
+        self.assertIn("$env:WIX_BIN", windows)
+        self.assertIn("heat.exe", windows)
         self.assertIn("-cg HarvestedComponents -ag ", windows)
         self.assertNotIn("-cg HarvestedComponents -gg ", windows)
         self.assertIn("candle.exe installer.wxs harvest.wxs -arch x64", windows)

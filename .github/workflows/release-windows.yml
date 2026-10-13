@@ -97,14 +97,53 @@ jobs:
             [Console]::Error.WriteLine("Chocolatey install failed (exit code $chocoExitCode).")
             exit $chocoExitCode
           }
-          choco install wixtoolset --version=3.11.2 -y
-          $chocoExitCode = $LASTEXITCODE
-          if ($chocoExitCode -eq 3010) {
-            Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
-          } elseif ($chocoExitCode -ne 0) {
-            [Console]::Error.WriteLine("WiX Toolset install failed (exit code $chocoExitCode).")
-            exit $chocoExitCode
+          function Find-WixBin {
+            $candidateDirectories = @()
+            if ($env:WIX) {
+              $candidateDirectories += Join-Path $env:WIX "bin"
+            }
+            $programFilesX86 = ${env:ProgramFiles(x86)}
+            if ($programFilesX86) {
+              $wixInstallations = Get-ChildItem `
+                -Path (Join-Path $programFilesX86 "WiX Toolset v3.*") `
+                -Directory `
+                -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending
+              $candidateDirectories += @(
+                $wixInstallations | ForEach-Object { Join-Path $_.FullName "bin" }
+              )
+            }
+            foreach ($candidateDirectory in $candidateDirectories) {
+              if (Test-Path (Join-Path $candidateDirectory "candle.exe")) {
+                return $candidateDirectory
+              }
+            }
+            return $null
           }
+          $wixBin = Find-WixBin
+          if (-not $wixBin) {
+            choco install wixtoolset --version=3.11.2 -y
+            $chocoExitCode = $LASTEXITCODE
+            if ($chocoExitCode -eq 3010) {
+              Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
+            } elseif ($chocoExitCode -ne 0) {
+              [Console]::Error.WriteLine("WiX Toolset install failed (exit code $chocoExitCode).")
+              exit $chocoExitCode
+            }
+            $wixBin = Find-WixBin
+          }
+          if (-not $wixBin) {
+            [Console]::Error.WriteLine("WiX Toolset was not found: candle.exe is missing from the WiX 3.x installation.")
+            exit 1
+          }
+          $missingWixTools = @("heat.exe", "candle.exe", "light.exe") | Where-Object {
+            -not (Test-Path (Join-Path $wixBin $_))
+          }
+          if ($missingWixTools) {
+            [Console]::Error.WriteLine("WiX Toolset at '$wixBin' is missing required tools: $($missingWixTools -join ', ').")
+            exit 1
+          }
+          "WIX_BIN=$wixBin" >> $env:GITHUB_ENV
           $openssl_dir = ""
           if (Test-Path "C:\Program Files\OpenSSL\include") {
               $openssl_dir = "C:\Program Files\OpenSSL"
@@ -219,7 +258,17 @@ jobs:
         run: |
           $VERSION = $env:WINDOWS_VERSION
           $PKG = $env:WINDOWS_STAGE
-          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          $wixBin = $env:WIX_BIN
+          if (-not $wixBin) {
+            throw "WIX_BIN was not set by Install Windows Dependencies."
+          }
+          $missingWixTools = @("heat.exe", "candle.exe", "light.exe") | Where-Object {
+            -not (Test-Path (Join-Path $wixBin $_))
+          }
+          if ($missingWixTools) {
+            throw "WiX Toolset at '$wixBin' is missing required tools: $($missingWixTools -join ', ')."
+          }
+          $env:PATH += ";$wixBin"
 
           heat.exe dir "$PKG" -dr INSTALLDIR -cg HarvestedComponents -ag -g1 -sf -srd -var "var.SourceDir" -out harvest.wxs
           $heatExitCode = $LASTEXITCODE
