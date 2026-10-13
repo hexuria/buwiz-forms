@@ -21,6 +21,8 @@
 //! the upload (`saveEncryptedProfile`) writes every `frmMain` control in DOM
 //! order, and the popup rows exist only once the filer adds them.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -191,6 +193,10 @@ pub struct Form2552Draft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 25.
@@ -334,6 +340,7 @@ impl Form2552Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8, day: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             transaction_month: month,
             transaction_day: day,
@@ -457,13 +464,15 @@ impl Form2552Draft {
         // pageOneComputation.
         self.tax_paid_previous = cents(self.tax_paid_previous);
         self.creditable_tax_withheld = cents(self.creditable_tax_withheld);
-        self.surcharge = cents(self.surcharge);
-        self.interest = cents(self.interest);
-        self.compromise = cents(self.compromise);
         self.total_tax_due =
             pesos(self.tax_due_lse + self.tax_due_primary + self.tax_due_secondary);
         self.total_tax_credits = pesos(self.tax_paid_previous + self.creditable_tax_withheld);
         self.tax_still_due = pesos(self.total_tax_due - self.total_tax_credits);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
+        self.surcharge = cents(self.surcharge);
+        self.interest = cents(self.interest);
+        self.compromise = cents(self.compromise);
         self.total_penalties = pesos(self.surcharge + self.interest + self.compromise);
         // Item 25: with an overpayment, only the penalties are payable.
         self.total_amount_payable = if self.total_penalties > 0.0 && self.tax_still_due < 0.0 {
@@ -1177,7 +1186,32 @@ impl FormValidator for Form2552Draft {
     }
 }
 
+impl Form2552Draft {
+    /// Items 21-23 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "21 Surcharge",
+                interest: "22 Interest",
+                compromise: "23 Compromise",
+            ],
+            controls: [
+                "frm2552:txtPg1P2I21Surcharge",
+                "frm2552:txtPg1P2I22Interest",
+                "frm2552:txtPg1P2I23Compromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 20", |d| d.tax_still_due,
+        )
+    }
+}
+
 impl QueueableForm for Form2552Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "2552";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['2552v2018']`).
     const FORM_TYPE: &'static str = "2552v2018";
@@ -1290,6 +1324,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form2552Draft {
         let mut draft = Form2552Draft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             transaction_month: 3,
             transaction_day: 14,
@@ -1344,6 +1379,8 @@ mod tests {
             }],
             lifecycle: SubmissionLifecycle::default(),
         };
+        // This sample enters its penalties by hand.
+        draft.keep_entered_penalties();
         draft.set_transaction(Form2552Transaction::LocalStockExchange);
         draft.schedule = vec![
             Form2552ShareRow {
@@ -1404,6 +1441,7 @@ mod tests {
         assert_eq!(draft.total_amount_payable, 36.0);
         draft.surcharge = 0.0;
         draft.interest = 0.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         assert_eq!(draft.total_amount_payable, -6_694.0);
     }
@@ -1704,6 +1742,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

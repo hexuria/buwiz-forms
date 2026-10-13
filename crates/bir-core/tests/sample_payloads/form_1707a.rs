@@ -1,5 +1,7 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1707a::{Form1707AAtc, Form1707ADraft, Form1707ARow};
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn row(date: &str, name: &str, selling: f64, cost: f64, tax_paid: f64) -> Form1707ARow {
     Form1707ARow {
@@ -38,6 +40,7 @@ fn sample_1707a() -> Form1707ADraft {
     draft.losses = vec![row("09/01/2025", "Loss Co", 50_000.0, 80_000.55, 0.0)];
     draft.surcharge = 25.5;
     draft.interest = 10.009;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -140,6 +143,12 @@ fn form_1707a_sample_with_many_rows_is_current() {
         &payload,
         "84d47ec4db11f76eda439d651a93b591bd42d3b09599b8b84b05ad1d8c264d56",
     );
+}
+
+/// Year ended 31 December 2025: due 15 April 2026.
+#[test]
+fn form_1707a_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1707a, Deadline::Calendar(day(2026, 4, 15)));
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

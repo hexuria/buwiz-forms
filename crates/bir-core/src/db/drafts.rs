@@ -2896,6 +2896,34 @@ impl Database {
         }))
     }
 
+    /// The total penalties a saved, unfiled return would carry if filed on
+    /// `filing_date` (see [`crate::forms::calendar_status::penalties_payable_from_json`]).
+    pub fn draft_penalties_if_filed_on(
+        &self,
+        draft_id: i64,
+        profile: &crate::profile::TaxpayerProfile,
+        deadline_overrides: &[crate::calendar_rules::DeadlineOverride],
+        filing_date: chrono::NaiveDate,
+    ) -> Result<Option<f64>, DbError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT form_code, data_json FROM form_drafts WHERE id = ?1",
+                params![draft_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?;
+        Ok(row.and_then(|(form_code, data_json)| {
+            crate::forms::calendar_status::penalties_payable_from_json(
+                &form_code,
+                &data_json,
+                profile,
+                deadline_overrides,
+                filing_date,
+            )
+        }))
+    }
+
     pub fn list_all_queued_submissions(&self) -> Result<Vec<FormDraftSummary>, DbError> {
         self.list_form_drafts_with_status(&["Queued", "Submitted"])
     }
@@ -4011,6 +4039,7 @@ mod tests {
         draft.item_20a_surcharge = 10.0;
         draft.item_20b_interest = 20.0;
         draft.item_20c_compromise = 1_000.0;
+        crate::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         draft.signatures.taxpayer_or_authorized_representative = "TEST TAXPAYER".to_string();
         draft.signatures.title_or_position = "OWNER".to_string();
         draft.payment_details.check.drawee_bank_or_agency = "AAB".to_string();
@@ -4064,6 +4093,7 @@ mod tests {
         draft.item_17a_surcharge = 100.0;
         draft.item_17b_interest = 30.0;
         draft.item_17c_compromise = 100.0;
+        crate::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         draft.payment_details.others = Form0619EPaymentRow {
             drawee_bank_or_agency: "AAB".to_string(),
             number: "REF-22".to_string(),
@@ -4114,6 +4144,7 @@ mod tests {
         draft.item_18a_surcharge = 100.0;
         draft.item_18b_interest = 30.0;
         draft.item_18c_compromise = 100.0;
+        crate::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         draft.payment_details.others = Form0619FPaymentRow {
             drawee_bank_or_agency: "AAB".to_string(),
             number: "REF-23".to_string(),

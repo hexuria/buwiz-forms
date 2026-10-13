@@ -11,6 +11,7 @@ pub mod form_multi_select;
 pub mod form_validation;
 pub mod hotkey_recorder;
 pub mod multi_select;
+pub mod penalty_section;
 pub mod smart_date_filter;
 pub mod upcoming_deadlines_list;
 

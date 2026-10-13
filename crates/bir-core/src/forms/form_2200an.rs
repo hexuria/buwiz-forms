@@ -18,6 +18,8 @@
 //! the official submit passes an undefined SFTP folder; queueing stays off in
 //! the registry until the folder is confirmed.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -310,6 +312,10 @@ pub struct Form2200ANDraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// 22.
@@ -345,6 +351,7 @@ impl Form2200ANDraft {
             last_day_of_month(year, month)
         };
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             month,
             day,
@@ -451,6 +458,8 @@ impl Form2200ANDraft {
         self.net_tax_due = cents(self.excise_tax_due - self.total_credits);
         self.previous_payment = cents(self.previous_payment);
         self.tax_still_due = cents(self.net_tax_due - self.previous_payment);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -791,7 +800,32 @@ impl FormValidator for Form2200ANDraft {
     }
 }
 
+impl Form2200ANDraft {
+    /// Items 21A-21C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "21A Surcharge",
+                interest: "21B Interest",
+                compromise: "21C Compromise",
+            ],
+            controls: [
+                "frm2200ANv2018:txt21A",
+                "frm2200ANv2018:txt21B",
+                "frm2200ANv2018:txt21C",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 20", |d| d.tax_still_due,
+        )
+    }
+}
+
 impl QueueableForm for Form2200ANDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "2200AN";
     /// Official `formType` (`saveXMLsubmit`, `createXMLFileName`). PROD has no
     /// SFTP folder for it; see the module docs.
@@ -900,6 +934,7 @@ mod tests {
         };
         draft.goods[1].tax_due = 1_234.567;
         draft.surcharge = 100.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1042,6 +1077,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 

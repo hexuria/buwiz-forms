@@ -46,6 +46,7 @@ mod form_2550q;
 mod form_2551q;
 mod form_2552;
 mod form_2553;
+pub mod penalty_items;
 
 /// Sample drafts per form module, for the agent-form probe.
 pub(crate) fn agent_seeds() -> Vec<(&'static str, Vec<serde_json::Value>)> {

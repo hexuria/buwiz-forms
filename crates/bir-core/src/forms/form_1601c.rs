@@ -16,14 +16,11 @@
 //! return is a Draft and at queue revalidation, where a change fails closed;
 //! a Submitted, Confirmed or Paid return keeps the penalties it was filed with.
 
+use super::penalty_items::{PenaltyItems, PenaltyRounding, PenaltyState};
 use super::{FilingStatus, FormValidator};
-use crate::calendar_rules::{DeadlineOverride, DeadlinePeriod, DeadlineResolver};
+use crate::calendar_rules::{DeadlineOverride, DeadlinePeriod};
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
-use crate::penalties::{
-    ComputedPenalties, PenaltyComponent, PenaltyOverrides, PenaltyProfile, PenaltyRequest,
-    TaxpayerClass, compute_penalties,
-};
-use crate::profile::EoptTier;
+use crate::penalties::{ComputedPenalties, PenaltyComponent, PenaltyProfile, TaxpayerClass};
 use crate::profile::TaxpayerProfile;
 use crate::validation::{
     OFFICIAL_INVALID_RDO_MESSAGE, OFFICIAL_MIN_FORM_YEAR, OFFICIAL_OLD_VERSION_MESSAGE,
@@ -88,18 +85,7 @@ fn round_currency(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
 }
 
-/// Current penalty model: computed default with a per-component override.
-pub const PENALTY_MODEL_VERSION: u8 = 1;
-
-/// The penalty engine's class for a profile's EOPT classification.
-pub fn taxpayer_class_of(tier: &EoptTier) -> TaxpayerClass {
-    match tier {
-        EoptTier::Micro => TaxpayerClass::Micro,
-        EoptTier::Small => TaxpayerClass::Small,
-        EoptTier::Medium => TaxpayerClass::Medium,
-        EoptTier::Large => TaxpayerClass::Large,
-    }
-}
+pub use super::penalty_items::{PENALTY_MODEL_VERSION, taxpayer_class_of};
 
 /// The 1601-C deadline the app resolves for a month (the same resolver the
 /// Calendar uses), with `overrides` applied.
@@ -108,17 +94,14 @@ pub fn resolved_due_date(
     month: u8,
     overrides: &[DeadlineOverride],
 ) -> Option<NaiveDate> {
-    DeadlineResolver::resolve_taxable_year_with_overrides(i32::from(year), overrides)
-        .into_iter()
-        .find(|deadline| {
-            deadline.form_code == "1601C"
-                && matches!(
-                    deadline.period,
-                    DeadlinePeriod::Monthly { taxable_year, month: m }
-                        if taxable_year == i32::from(year) && m == month
-                )
-        })
-        .and_then(|deadline| deadline.final_deadline_date())
+    super::penalty_items::resolve_due_date(
+        "1601C",
+        &DeadlinePeriod::Monthly {
+            taxable_year: i32::from(year),
+            month,
+        },
+        overrides,
+    )
 }
 
 /// Complete draft or filed return for Form 1601C.
@@ -249,24 +232,10 @@ pub struct Form1601CDraft {
     /// Item 34 as filed: the compromise override when set, else the computed one.
     #[serde(default)]
     pub tax_34_compromise: f64,
-    /// `0` for a draft saved while Items 32-34 were manual-only; its non-zero
-    /// hand-typed values become overrides the first time it is computed.
-    #[serde(default)]
-    pub penalty_model_version: u8,
-    /// The app's resolved deadline for this period (business-day and deadline
-    /// overrides applied). `None` falls back to the standard calendar rule.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub penalty_due_date: Option<NaiveDate>,
-    /// The profile's EOPT classification; `None` assumes the standard class.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub penalty_taxpayer_class: Option<TaxpayerClass>,
-    /// What the engine last computed for Items 32-34, with its inputs. Frozen
-    /// once the return leaves Draft, refreshed only by queue revalidation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub computed_penalties: Option<ComputedPenalties>,
-    /// Per-component overrides and the reason recorded with them.
-    #[serde(default)]
-    pub penalty_overrides: PenaltyOverrides,
+    /// Items 32-34's computed values, overrides, note and engine inputs
+    /// (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
 
     // Computed Total Penalties
     #[serde(default)]
@@ -400,11 +369,7 @@ impl Form1601CDraft {
             tax_32_surcharge: 0.0,
             tax_33_interest: 0.0,
             tax_34_compromise: 0.0,
-            penalty_model_version: PENALTY_MODEL_VERSION,
-            penalty_due_date: None,
-            penalty_taxpayer_class: profile.eopt_tier.as_ref().map(taxpayer_class_of),
-            computed_penalties: None,
-            penalty_overrides: PenaltyOverrides::default(),
+            penalty: PenaltyState::for_profile(profile),
             tax_35_total_penalties: 0.0,
             tax_36_total_amount_payable: 0.0,
 
@@ -586,13 +551,7 @@ impl Form1601CDraft {
         let refreshed_fingerprint = self.submission_fingerprint();
         let mut errors = self.validate();
         if self.filed_penalties() != reviewed_penalties {
-            let [surcharge, interest, compromise] = self.filed_penalties();
-            errors.push((
-                "computed_penalties".to_string(),
-                format!(
-                    "Computed penalties changed since the return was queued (filing on {today}: surcharge {surcharge:.2}, interest {interest:.2}, compromise {compromise:.2}); review the return and queue it again"
-                ),
-            ));
+            errors.push(Self::penalty_items().changed_error(self, today));
         }
         match reviewed_fingerprint {
             Some(fingerprint) if fingerprint == refreshed_fingerprint => {}
@@ -679,15 +638,60 @@ impl Form1601CDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// Items 32-34 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_items() -> PenaltyItems<Self> {
+        use PenaltyComponent as C;
+        PenaltyItems {
+            form_code: "1601C",
+            party: None,
+            applies: |_| true,
+            schedule: PenaltyProfile::Withholding,
+            fields: ["tax_32_surcharge", "tax_33_interest", "tax_34_compromise"],
+            controls: [
+                "frm1601c:txtTax32",
+                "frm1601c:txtTax33",
+                "frm1601c:txtTax34",
+            ],
+            labels: ["32 Surcharge", "33 Interest", "34 Compromise"],
+            basic_tax_due_label: "Item 31",
+            rounding: PenaltyRounding::Cents,
+            get: |d, component| match component {
+                C::Surcharge => d.tax_32_surcharge,
+                C::Interest => d.tax_33_interest,
+                C::Compromise => d.tax_34_compromise,
+            },
+            set: |d, component, value| match component {
+                C::Surcharge => d.tax_32_surcharge = value,
+                C::Interest => d.tax_33_interest = value,
+                C::Compromise => d.tax_34_compromise = value,
+            },
+            basic_tax_due: |d| d.tax_31_tax_still_due,
+            // A compensation-withholding return has no gross-sales basis for
+            // the engine's no-tax-due compromise tier.
+            gross_sales: None,
+            state: |d| &d.penalty,
+            state_mut: |d| &mut d.penalty,
+            status: |d| d.status.clone(),
+            deadline_period: |d| {
+                Some(DeadlinePeriod::Monthly {
+                    taxable_year: i32::from(d.taxable_year),
+                    month: d.month,
+                })
+            },
+            period_code: |d| d.period_code(),
+            is_amended: |d| d.is_amended,
+            recompute: |d| d.compute(),
+        }
+    }
+
     /// The deadline penalties are measured from.
     pub fn penalty_due_date(&self) -> Option<NaiveDate> {
-        self.penalty_due_date
-            .or_else(|| resolved_due_date(self.taxable_year, self.month, &[]))
+        Self::penalty_items().due_date(self)
     }
 
     /// Set (`Some`) or clear (`None`) one penalty component's override.
     pub fn set_penalty_override(&mut self, component: PenaltyComponent, value: Option<f64>) {
-        self.penalty_overrides.set(component, value);
+        Self::penalty_items().set_override(self, component, value);
     }
 
     /// Record the profile-derived penalty inputs. A return that has left
@@ -697,11 +701,7 @@ impl Form1601CDraft {
         due_date: Option<NaiveDate>,
         taxpayer_class: Option<TaxpayerClass>,
     ) {
-        if !matches!(self.status, FilingStatus::Draft) {
-            return;
-        }
-        self.penalty_due_date = due_date;
-        self.penalty_taxpayer_class = taxpayer_class;
+        Self::penalty_items().set_context(self, due_date, taxpayer_class);
     }
 
     /// Resolve the penalty inputs from the profile: the period's deadline as
@@ -712,90 +712,40 @@ impl Form1601CDraft {
         profile: &TaxpayerProfile,
         global_overrides: &[DeadlineOverride],
     ) {
-        let mut overrides = global_overrides.to_vec();
-        overrides.extend(crate::integration::profile_deadline_overrides_for_year(
-            profile,
-            self.taxable_year,
-        ));
-        self.set_penalty_context(
-            resolved_due_date(self.taxable_year, self.month, &overrides),
-            profile.eopt_tier.as_ref().map(taxpayer_class_of),
-        );
+        Self::penalty_items().apply_profile(self, profile, global_overrides);
     }
 
     /// What the engine computes for this return if it is filed (and paid) on
     /// `filing_date`. `None` when no deadline is known for the period.
     pub fn penalties_if_filed_on(&self, filing_date: NaiveDate) -> Option<ComputedPenalties> {
-        let due_date = self.penalty_due_date()?;
-        Some(compute_penalties(&PenaltyRequest {
-            form_code: "1601Cv2018",
-            taxable_period: self.period_code(),
-            schedule: PenaltyProfile::Withholding,
-            taxpayer_class: self.penalty_taxpayer_class,
-            due_date,
-            filing_date,
-            payment_date: None,
-            basic_tax_due: self.tax_31_tax_still_due,
-            // A compensation-withholding return has no gross-sales basis for
-            // the engine's no-tax-due compromise tier.
-            gross_sales_or_receipts: None,
-            is_amended_return: self.is_amended,
-        }))
+        Self::penalty_items().if_filed_on(self, filing_date)
     }
 
     /// Item 35 as it would stand if this unfiled return were filed on
     /// `filing_date` (overrides honoured). `None` for a filed return or when
     /// nothing can be computed.
     pub fn penalties_payable_if_filed_on(&self, filing_date: NaiveDate) -> Option<f64> {
-        if !matches!(self.status, FilingStatus::Draft | FilingStatus::Queued) {
-            return None;
-        }
-        let mut estimate = self.clone();
-        estimate.compute_on(filing_date, true);
-        estimate.computed_penalties.as_ref()?;
-        Some(estimate.tax_35_total_penalties)
+        Self::penalty_items().payable_if_filed_on(self, filing_date)
     }
 
     /// Items 32-34 as filed.
     fn filed_penalties(&self) -> [f64; 3] {
-        [
-            self.tax_32_surcharge,
-            self.tax_33_interest,
-            self.tax_34_compromise,
-        ]
-    }
-
-    /// A draft saved while Items 32-34 were manual-only: keep every non-zero
-    /// hand-typed amount as an override so it files the same value.
-    fn adopt_legacy_manual_penalties(&mut self) {
-        if self.penalty_model_version >= PENALTY_MODEL_VERSION {
-            return;
-        }
-        for (component, value) in PenaltyComponent::ALL
-            .into_iter()
-            .zip(self.filed_penalties())
-        {
-            if value != 0.0 && self.penalty_overrides.get(component).is_none() {
-                self.penalty_overrides.set(component, Some(value));
-            }
-        }
-        self.penalty_model_version = PENALTY_MODEL_VERSION;
+        Self::penalty_items().filed(self)
     }
 
     /// The used value of each component: the override, else the computed one.
     fn used_penalties(&self) -> [f64; 3] {
-        let computed = self.computed_penalties.as_ref();
-        PenaltyComponent::ALL
-            .map(|component| round_currency(self.penalty_overrides.used(component, computed)))
+        Self::penalty_items().used(self).map(round_currency)
+    }
+
+    /// Run the compute chain as of `today`; `refresh_penalties` recomputes
+    /// the engine's values even for a Queued return.
+    fn compute_on(&mut self, today: NaiveDate, refresh_penalties: bool) {
+        Self::penalty_items().compute_on(self, today, refresh_penalties);
     }
 
     /// Recalculate computed fields based on user inputs.
     pub fn compute(&mut self) {
-        let refresh = matches!(self.status, FilingStatus::Draft);
-        self.compute_on(chrono::Local::now().date_naive(), refresh);
-    }
-
-    fn compute_on(&mut self, today: NaiveDate, refresh_penalties: bool) {
         // Official Schedule I Item 7 = Item 6 less Item 5. The Schedule I
         // total feeds Part II Item 26.
         for row in &mut self.schedule_1 {
@@ -839,22 +789,14 @@ impl Form1601CDraft {
         // Legacy persisted switch: penalties are always computed now and the
         // per-component overrides decide what is filed.
         self.auto_compute_penalties = false;
-        self.adopt_legacy_manual_penalties();
-
         // Submitted, Confirmed and Paid returns keep the Items 32-34 they
         // were filed with. A Draft refreshes the computed values; a Queued
         // return refreshes them only at revalidation, where a change fails
         // closed.
-        if matches!(self.status, FilingStatus::Draft | FilingStatus::Queued) {
-            if refresh_penalties {
-                self.computed_penalties = self.penalties_if_filed_on(today);
-            }
-            [
-                self.tax_32_surcharge,
-                self.tax_33_interest,
-                self.tax_34_compromise,
-            ] = self.used_penalties();
-        }
+        Self::penalty_items().apply(self);
+        self.tax_32_surcharge = round_currency(self.tax_32_surcharge);
+        self.tax_33_interest = round_currency(self.tax_33_interest);
+        self.tax_34_compromise = round_currency(self.tax_34_compromise);
 
         // Line 35 = 32 + 33 + 34
         self.tax_35_total_penalties =
@@ -1201,7 +1143,7 @@ impl FormValidator for Form1601CDraft {
 
         // Items 32-34 must be the used values: the override when set, else the
         // computed value shown to the user.
-        if self.penalty_model_version >= PENALTY_MODEL_VERSION
+        if self.penalty.penalty_model_version >= PENALTY_MODEL_VERSION
             && matches!(self.status, FilingStatus::Draft | FilingStatus::Queued)
         {
             for ((field, actual), expected) in [
@@ -1399,7 +1341,7 @@ fn valid_submission_tin(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profile::TaxpayerProfile;
+    use crate::profile::{EoptTier, TaxpayerProfile};
 
     fn test_profile() -> TaxpayerProfile {
         serde_json::from_value(serde_json::json!({
@@ -1704,15 +1646,15 @@ mod tests {
             object.remove(key);
         }
         let mut draft: Form1601CDraft = serde_json::from_value(json).unwrap();
-        assert_eq!(draft.penalty_model_version, 0);
+        assert_eq!(draft.penalty.penalty_model_version, 0);
 
         draft.compute_on(day(2026, 10, 13), true);
 
         assert!(!draft.auto_compute_penalties);
-        assert_eq!(draft.penalty_model_version, PENALTY_MODEL_VERSION);
-        assert_eq!(draft.penalty_overrides.surcharge, Some(125.25));
-        assert_eq!(draft.penalty_overrides.interest, Some(31.5));
-        assert_eq!(draft.penalty_overrides.compromise, Some(1_000.0));
+        assert_eq!(draft.penalty.penalty_model_version, PENALTY_MODEL_VERSION);
+        assert_eq!(draft.penalty.penalty_overrides.surcharge, Some(125.25));
+        assert_eq!(draft.penalty.penalty_overrides.interest, Some(31.5));
+        assert_eq!(draft.penalty.penalty_overrides.compromise, Some(1_000.0));
         assert_eq!(draft.tax_32_surcharge, 125.25);
         assert_eq!(draft.tax_33_interest, 31.5);
         assert_eq!(draft.tax_34_compromise, 1_000.0);
@@ -1720,6 +1662,7 @@ mod tests {
         assert_eq!(draft.tax_36_total_amount_payable, 2_156.75);
         assert!(
             draft
+                .penalty
                 .computed_penalties
                 .as_ref()
                 .is_some_and(|computed| computed.total() > 0.0),
@@ -1760,9 +1703,9 @@ mod tests {
 
         draft.compute_on(day(2026, 10, 13), true);
 
-        assert_eq!(draft.penalty_overrides.surcharge, None);
-        assert_eq!(draft.penalty_overrides.interest, Some(31.5));
-        assert_eq!(draft.penalty_overrides.compromise, None);
+        assert_eq!(draft.penalty.penalty_overrides.surcharge, None);
+        assert_eq!(draft.penalty.penalty_overrides.interest, Some(31.5));
+        assert_eq!(draft.penalty.penalty_overrides.compromise, None);
         assert_eq!(draft.tax_32_surcharge, 5_000.0);
         assert_eq!(draft.tax_33_interest, 31.5);
     }
@@ -1812,6 +1755,7 @@ mod tests {
         draft.compute_on(day(2026, 10, 13), true);
 
         let computed = draft
+            .penalty
             .computed_penalties
             .clone()
             .expect("a late return with tax due has computed penalties");
@@ -1848,7 +1792,7 @@ mod tests {
 
         draft.compute_on(day(2026, 10, 13), true);
 
-        let computed = draft.computed_penalties.clone().unwrap();
+        let computed = draft.penalty.computed_penalties.clone().unwrap();
         assert_eq!(computed.inputs.taxpayer_class, TaxpayerClass::Micro);
         assert!(computed.inputs.class_from_profile);
         // 20,000 x 10%; 20,000 x 6% x 33/365 = 108.49; 5,000 x 50%.
@@ -1868,10 +1812,10 @@ mod tests {
 
         let mut draft = late_august_2026_draft();
         draft.set_penalty_override(PenaltyComponent::Compromise, Some(500.0));
-        draft.penalty_overrides.note = "RDO 018 approval ref. 2026-0042".to_string();
+        draft.penalty.penalty_overrides.note = "RDO 018 approval ref. 2026-0042".to_string();
         draft.compute_on(day(2026, 10, 13), true);
 
-        let computed = draft.computed_penalties.clone().unwrap();
+        let computed = draft.penalty.computed_penalties.clone().unwrap();
         assert_eq!(computed.compromise, 5_000.0, "the computed value is kept");
         assert_eq!(draft.tax_32_surcharge, 5_000.0);
         assert_eq!(draft.tax_33_interest, 216.99);
@@ -1897,7 +1841,10 @@ mod tests {
 
         let restored: Form1601CDraft =
             serde_json::from_str(&serde_json::to_string(&draft).unwrap()).unwrap();
-        assert_eq!(restored.penalty_overrides, draft.penalty_overrides);
+        assert_eq!(
+            restored.penalty.penalty_overrides,
+            draft.penalty.penalty_overrides
+        );
     }
 
     #[test]
@@ -1919,7 +1866,7 @@ mod tests {
         let mut draft = late_august_2026_draft();
         draft.compute_on(day(2026, 9, 10), true);
 
-        let computed = draft.computed_penalties.clone().unwrap();
+        let computed = draft.penalty.computed_penalties.clone().unwrap();
         assert!(computed.filed_on_time());
         assert_eq!(computed.total(), 0.0);
         assert_eq!(draft.tax_35_total_penalties, 0.0);
@@ -1930,10 +1877,14 @@ mod tests {
     fn resolved_deadline_from_the_app_drives_the_computation() {
         // A deadline override (e.g. an RMC extension) moves the due date.
         let mut draft = late_august_2026_draft();
-        draft.penalty_due_date = Some(day(2026, 10, 13));
+        draft.penalty.penalty_due_date = Some(day(2026, 10, 13));
         draft.compute_on(day(2026, 10, 13), true);
         assert_eq!(
-            draft.computed_penalties.as_ref().map(|c| c.inputs.due_date),
+            draft
+                .penalty
+                .computed_penalties
+                .as_ref()
+                .map(|c| c.inputs.due_date),
             Some(day(2026, 10, 13))
         );
         assert_eq!(draft.tax_35_total_penalties, 0.0);
@@ -1948,7 +1899,7 @@ mod tests {
             draft.tax_33_interest,
             draft.tax_34_compromise,
             draft.tax_35_total_penalties,
-            draft.computed_penalties.clone(),
+            draft.penalty.computed_penalties.clone(),
         );
         assert!(filed.3 > 0.0);
         for status in [
@@ -1965,7 +1916,7 @@ mod tests {
                     draft.tax_33_interest,
                     draft.tax_34_compromise,
                     draft.tax_35_total_penalties,
-                    draft.computed_penalties.clone(),
+                    draft.penalty.computed_penalties.clone(),
                 )
             );
         }
@@ -2019,7 +1970,7 @@ mod tests {
         let imported =
             Form1601CDraft::from_bir_field_map(&fields).expect("a reviewed field map imports");
         assert_eq!(imported.tax_35_total_penalties, 0.0);
-        assert_eq!(imported.penalty_overrides.surcharge, Some(0.0));
+        assert_eq!(imported.penalty.penalty_overrides.surcharge, Some(0.0));
         assert_eq!(imported.to_bir_field_map(), fields);
     }
 

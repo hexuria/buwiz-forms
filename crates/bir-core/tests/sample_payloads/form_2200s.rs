@@ -1,3 +1,4 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::excise_places::ExcisePlace;
 use bir_core::forms::form_2200s::{Form2200SDraft, Form2200SManner, Form2200SOtherRow};
@@ -90,6 +91,25 @@ fn form_2200s_sample_with_many_rows_is_current() {
         &layout,
         &payload,
         "4d4a96ac185982f983f2d63f5ad8de61f6a39417daa7c7c71fcd922f96cfa4cc",
+    );
+}
+
+/// The sample as a prepayment (Item 13 manner of payment).
+fn sample_2200s_prepayment() -> Form2200SDraft {
+    let mut draft = sample_2200s();
+    draft.manner = Form2200SManner::Prepayment;
+    draft.recompute();
+    draft
+}
+
+/// Items 23A-23C are open on a prepayment only.
+#[test]
+fn form_2200s_prepayment_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2200s_prepayment,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 

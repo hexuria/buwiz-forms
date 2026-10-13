@@ -1,9 +1,11 @@
 use crate::dummy_profile;
 use crate::sample_payloads::form_2000::check_sample_with_layout;
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_2000ot::{
     Form2000OTAtc, Form2000OTDraft, Form2000OTNature, Form2000OTOtherParty, Form2000OTPropertyRow,
     Form2000OTShareRow,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2000ot() -> Form2000OTDraft {
     let mut draft =
@@ -57,6 +59,7 @@ fn sample_2000ot() -> Form2000OTDraft {
     }
     draft.gross_selling_price = 2_750_000.005;
     draft.surcharge = 25.5;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -108,6 +111,17 @@ fn form_2000ot_shares_sample_with_added_rows_is_current() {
         &draft.official_layout().expect("layout"),
         &payload,
         "22986716d723a37071db3f4143f6a1f30587c8c4ed03edf367fb764701af432d",
+    );
+}
+
+/// Event-based: the calendar has no 2000-OT deadline.
+#[test]
+fn form_2000ot_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2000ot,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 

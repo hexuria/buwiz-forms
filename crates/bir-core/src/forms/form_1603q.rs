@@ -14,6 +14,8 @@
 //!   `xml/taxRate.xml` through `js/tax-rate-helper.js` (`65%`, `35%`, `75%`,
 //!   `25%`), exactly as the helper writes them into the inputs.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -167,6 +169,10 @@ pub struct Form1603QDraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 23.
@@ -206,6 +212,7 @@ impl Form1603QDraft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
@@ -253,6 +260,7 @@ impl Form1603QDraft {
             self.surcharge = 0.0;
             self.interest = 0.0;
             self.compromise = 0.0;
+            self.penalty.clear_overrides();
         }
         self.any_tax_withheld = Some(withheld);
         self.recompute();
@@ -280,6 +288,8 @@ impl Form1603QDraft {
         self.other_remittances = cents(self.other_remittances);
         self.total_remittances = cents(self.tax_remitted_previous + self.other_remittances);
         self.tax_still_due = cents(self.total_taxes_withheld - self.total_remittances);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -575,7 +585,32 @@ impl FormValidator for Form1603QDraft {
     }
 }
 
+impl Form1603QDraft {
+    /// Items 19-21 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: Withholding,
+            items: [
+                surcharge: "19 Surcharge",
+                interest: "20 Interest",
+                compromise: "21 Compromise",
+            ],
+            controls: [
+                "frm1603Q:txtTax19",
+                "frm1603Q:txtTax20",
+                "frm1603Q:txtTax21",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 18", |d| d.tax_still_due,
+        )
+    }
+}
+
 impl QueueableForm for Form1603QDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1603Q";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1603Qv2018']`).
     const FORM_TYPE: &'static str = "1603Qv2018";
@@ -656,6 +691,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form1603QDraft {
         let mut draft = Form1603QDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             tin: "12345678800000".to_string(),
             taxable_year: 2025,
@@ -695,6 +731,7 @@ mod tests {
         draft.other_remittances = 1_000.505;
         draft.surcharge = 25.5;
         draft.interest = 10.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -864,6 +901,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

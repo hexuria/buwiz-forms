@@ -14,6 +14,8 @@
 //! its filename period is the transaction date plus the TCT/OCT/CCT number
 //! (`createXMLFileName`).
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -368,6 +370,10 @@ pub struct Form1606Draft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 36.
@@ -443,6 +449,7 @@ impl Form1606Draft {
             (1, 1)
         };
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             filing_year: year,
             open_ended_key: open_ended_key.max(1),
@@ -624,6 +631,12 @@ impl Form1606Draft {
             None => 0.0,
         };
         self.tax_still_due = cents(self.tax_required - self.tax_remitted_previous);
+        // The penalty items file their override, else the computed value,
+        // held at cents like every typed amount.
+        Self::penalty_declaration().apply(self);
+        self.surcharge = cents(self.surcharge);
+        self.interest = cents(self.interest);
+        self.compromise = cents(self.compromise);
         self.total_penalties = cents(self.surcharge + self.interest + self.compromise);
         self.total_amount_due = cents(self.total_penalties + self.tax_still_due);
         if self.total_amount_due >= 0.0 {
@@ -1272,7 +1285,40 @@ impl FormValidator for Form1606Draft {
     }
 }
 
+impl Form1606Draft {
+    /// Items 35A-35C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: Withholding,
+            items: [
+                surcharge: "35A Surcharge",
+                interest: "35B Interest",
+                compromise: "35C Compromise",
+            ],
+            controls: [
+                "frm1606:txtSurcharge",
+                "frm1606:txtInterest",
+                "frm1606:txtCompromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 34", |d| d.tax_still_due,
+            // Item 1 is the date of the transaction: the calendar's
+            // monthly 1606 deadline is the one for that month.
+            deadline_period: |d: &Self| {
+                Some(crate::calendar_rules::DeadlinePeriod::Monthly {
+                    taxable_year: i32::from(d.transaction_year),
+                    month: d.transaction_month,
+                })
+            },
+        )
+    }
+}
+
 impl QueueableForm for Form1606Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1606";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1606']`).
     const FORM_TYPE: &'static str = "1606";
@@ -1384,6 +1430,7 @@ mod tests {
         draft.taxable_base_box = Some(Form1606TaxableBaseBox::FairMarketValue);
         draft.tax_rate = Some(Form1606TaxRate::Six);
         draft.surcharge = 100.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1623,6 +1670,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

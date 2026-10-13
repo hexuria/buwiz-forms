@@ -1,9 +1,11 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{dummy_profile, samples_dir};
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt};
 use bir_core::forms::form_1702rt::{
     Form1702RTDate, Form1702RTDeductionMethod, Form1702RTDraft, Form1702RTNamedAmount,
     Form1702RTSpecialDeductionRow, WholePeso,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 use sha2::{Digest, Sha256};
 
 fn named(description: &str, amount: i64) -> Form1702RTNamedAmount {
@@ -68,6 +70,7 @@ fn sample_1702rt() -> Form1702RTDraft {
     p2.item_17_surcharge = WholePeso(23_343);
     p2.item_18_interest = WholePeso(4_000);
     p2.item_19_compromise = WholePeso(1_000);
+    draft.keep_entered_penalties();
     draft.recompute();
     let cash = &mut draft.payment_details[0];
     cash.drawee_bank_or_agency = "Sample Bank".to_string();
@@ -214,6 +217,21 @@ fn form_1702rt_more_rows_sample_payload_is_current() {
         &payload,
         "62bf0aec0324d90a04ff9f313c03479181b540046b350ce0775753c5d2b704ed",
     );
+}
+
+/// The sample before its payment is recorded: Part III must equal Item 21,
+/// which moves with the computed penalties.
+fn sample_1702rt_unpaid() -> Form1702RTDraft {
+    let mut draft = sample_1702rt();
+    draft.payment_details[0] = Default::default();
+    draft.recompute();
+    draft
+}
+
+/// Calendar year 2025: due 15 April 2026.
+#[test]
+fn form_1702rt_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1702rt_unpaid, Deadline::Calendar(day(2026, 4, 15)));
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

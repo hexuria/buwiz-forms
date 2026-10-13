@@ -217,11 +217,31 @@ pub fn open_form_view<V: QueueableFormView>(
     window: &mut Window,
     cx: &mut Context<AppState>,
 ) -> AnyView {
-    let draft = match db.lock() {
-        Ok(guard) => V::load_draft(&guard, profile, year, period),
-        Err(_) => V::new_draft(profile, year, period),
+    let (mut draft, deadline_overrides) = match db.lock() {
+        Ok(guard) => (
+            V::load_draft(&guard, profile, year, period),
+            guard.get_deadline_overrides(),
+        ),
+        Err(_) => (V::new_draft(profile, year, period), Vec::new()),
     };
+    prepare_penalties::<V>(&mut draft, profile, &deadline_overrides);
     mount_view::<V>(draft, db, window, cx)
+}
+
+/// Penalties are measured from the deadline the Calendar shows (deadline
+/// overrides applied) with the profile's EOPT class; an open Draft shows
+/// today's computed values. Filed returns keep what they were filed with.
+fn prepare_penalties<V: QueueableFormView>(
+    draft: &mut V::Draft,
+    profile: &TaxpayerProfile,
+    deadline_overrides: &[bir_core::calendar_rules::DeadlineOverride],
+) {
+    if !V::Draft::penalty_items().is_empty() {
+        draft.apply_penalty_profile(profile, deadline_overrides);
+        if draft.lifecycle().is_editable() {
+            draft.compute();
+        }
+    }
 }
 
 pub fn load_draft_json<V: QueueableFormView>(
@@ -230,8 +250,9 @@ pub fn load_draft_json<V: QueueableFormView>(
     year: u16,
     period: u8,
 ) -> Value {
-    serde_json::to_value(V::load_draft(db, profile, year, period))
-        .expect("a form draft serializes to JSON")
+    let mut draft = V::load_draft(db, profile, year, period);
+    prepare_penalties::<V>(&mut draft, profile, &db.get_deadline_overrides());
+    serde_json::to_value(draft).expect("a form draft serializes to JSON")
 }
 
 pub fn print_draft_json<V: QueueableFormView>(

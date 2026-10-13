@@ -815,7 +815,8 @@ impl Form1702MXDraft {
                 field(fields, &format!("frm1702MX:txtPg4Sc10Itm{}", index + 1)).to_string();
         }
 
-        let draft = Self {
+        let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::imported(),
             id: None,
             tin: tin_segments.concat(),
             taxable_year: parse_taxable_year(fields, "frm1702MX:txtPg1I2YearEnd", &mut errors),
@@ -912,6 +913,9 @@ impl Form1702MXDraft {
             last_error: None,
             lifecycle: super::queueable::SubmissionLifecycle::default(),
         };
+        // An imported return carries the penalties it was prepared with:
+        // keep each one as an override so the source amounts round-trip.
+        Form1702MXDraft::penalty_declaration().adopt_imported(&mut draft);
         if errors.is_empty() {
             Ok(draft)
         } else {
