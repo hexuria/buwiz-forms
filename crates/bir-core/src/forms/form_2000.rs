@@ -848,6 +848,29 @@ impl Form2000Draft {
         self.total_amount_payable = cents(self.net_tax_payable + self.total_penalties);
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:page_header`: the page 2 header, one 40-slot comb under the
+    ///   TIN and Taxpayer's Name captions (14 TIN digits, then the name).
+    /// - `derived:contact_email`: Items 8 and 9 on their one shared 40-slot
+    ///   comb (the number from slot 0, the email as typed from slot 13).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        fields.insert(
+            "derived:page_header".to_string(),
+            super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),
+        );
+        let contact = super::excise_places::contact_email_comb_line(
+            &self.contact_number,
+            &self.email,
+            13,
+            40,
+        );
+        fields.insert("derived:contact_email".to_string(), contact);
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();

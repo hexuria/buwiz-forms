@@ -492,6 +492,37 @@ impl Form2200MDraft {
         self.balance_to_carry_over = cents(self.amount_payable - self.total_payment);
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the page 2 header TIN, one 14-digit comb.
+    /// - `derived:line:item{10,11}_{region,province,city}`: Items 10 and 11
+    ///   as place names (the upload carries the PSGC codes); a name longer
+    ///   than its comb prints whole in smaller type.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm2200M:txtPg2TinC1",
+                "frm2200M:txtPg2TinC2",
+                "frm2200M:txtPg2TinC3",
+                "frm2200M:txtPg2TinC4",
+            ],
+        );
+        fields.insert("derived:tin_digits".to_string(), tin_digits);
+        for (item, place) in [
+            (10, &self.place_of_production),
+            (11, &self.place_of_removal),
+        ] {
+            let names = super::print_map::place_names(&place.region, &place.province, &place.city);
+            for (level, name) in ["region", "province", "city"].into_iter().zip(names) {
+                fields.insert(format!("derived:line:item{item}_{level}"), name);
+            }
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();

@@ -1,7 +1,7 @@
 {
  "form_id": "2553-v1999",
  "html_slug": "2553-1999",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the single fillable cell whose printed caption (from the frozen page's own text layer) names the item. Amounts print the writer's official text (1,234.56) in one text cell. On this 1999 sheet rows 14-17 expose only some columns as fillable cells (14-16: C and E; 17: C, D, E); row 18 exposes A-E. Unexposed columns stay blank on print; the submitted XML always carries them. Item 13 'If yes, specify' is not joined: the writer holds the option code, not printable text. Booleans fill X in the box left of the printed option.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the single fillable cell whose printed caption (from the frozen page's own text layer) names the item. Amounts print the writer's official text (1,234.56) in one text cell. On this 1999 sheet rows 14-17 expose only some columns as fillable cells (14-16: C and E; 17: C, D, E); row 18 exposes A-E. Unexposed columns stay blank on print; the submitted XML always carries them. Item 13 'If yes, specify' prints the relief name from derived:line:tax_relief_specify (Form2553Draft::to_print_field_map); the upload keeps the option code. Booleans fill X in the box left of the printed option. Since #113 every value has a box or a reviewed not_joined reason; the unexposed row 14-17 columns are listed there.",
  "joins": [
   {
    "writer_key": "frm2553:itemYearEndMonth",
@@ -224,6 +224,12 @@
    "html_id": "p1c70",
    "printed": "23 Total Amount Payable/(Overpayment)",
    "reason": "geometry: the only fillable cell for this printed item on the 2553 (1999) sheet"
+  },
+  {
+   "writer_key": "derived:line:tax_relief_specify",
+   "html_id": "p1c32",
+   "printed": "13 If yes, specify",
+   "reason": "the text box right of the item 13 caption, above If yes, specify; the relief named on a Yes (the upload carries the lstTaxTreaty code)"
   }
  ],
  "money_joins": [],
@@ -299,6 +305,47 @@
    "html_id": "p1c72",
    "printed": "23 To be issued a Tax Credit Certificate",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm2553:lstTaxTreaty",
+   "reason": "dropdown code (0 none, 1 special rate, 2 treaty); item 13 prints the relief name from derived:line:tax_relief_specify"
+  },
+  {
+   "writer_keys": [
+    "frm2553:txt14A",
+    "frm2553:txt14B",
+    "frm2553:txt14D"
+   ],
+   "reason": "item 14 A/B/D: the 1999 freeze sheet draws this box as a label cell with no input (rows 14-17 expose only some columns); printing it needs a fillable cell in html-frozen/2553-1999/index.html (buwiz-forms-html), reported on #113"
+  },
+  {
+   "writer_keys": [
+    "frm2553:txt15A",
+    "frm2553:txt15B",
+    "frm2553:txt15D"
+   ],
+   "reason": "item 15 A/B/D: the 1999 freeze sheet draws this box as a label cell with no input (rows 14-17 expose only some columns); printing it needs a fillable cell in html-frozen/2553-1999/index.html (buwiz-forms-html), reported on #113"
+  },
+  {
+   "writer_keys": [
+    "frm2553:txt16A",
+    "frm2553:txt16B",
+    "frm2553:txt16D"
+   ],
+   "reason": "item 16 A/B/D: the 1999 freeze sheet draws this box as a label cell with no input (rows 14-17 expose only some columns); printing it needs a fillable cell in html-frozen/2553-1999/index.html (buwiz-forms-html), reported on #113"
+  },
+  {
+   "writer_keys": [
+    "frm2553:txt17A",
+    "frm2553:txt17B"
+   ],
+   "reason": "item 17 A/B: the 1999 freeze sheet draws this box as a label cell with no input (rows 14-17 expose only some columns); printing it needs a fillable cell in html-frozen/2553-1999/index.html (buwiz-forms-html), reported on #113"
+  },
+  {
+   "writer_key": "txtEmail",
+   "reason": "not on the paper form: the 1999 sheet has no email box"
   }
  ]
 }

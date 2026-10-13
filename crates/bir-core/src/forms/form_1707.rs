@@ -481,6 +481,26 @@ impl Form1707Draft {
         (first.to_uppercase(), second.to_uppercase())
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the later pages' header TIN, one 14-digit
+    ///   comb (TIN then branch).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1707:txtPg2TinC1",
+                "frm1707:txtPg2TinC2",
+                "frm1707:txtPg2TinC3",
+                "frm1707:txtPg2TinC4",
+            ],
+        );
+        fields.insert("derived:tin_digits".to_string(), tin_digits);
+        fields
+    }
+
     /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();

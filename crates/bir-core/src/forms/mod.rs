@@ -58,6 +58,7 @@ pub mod form_2553;
 pub mod forms_set;
 pub mod official_inputs;
 pub mod penalty_items;
+pub mod print_map;
 pub mod queueable;
 pub mod registry;
 pub mod support_level;

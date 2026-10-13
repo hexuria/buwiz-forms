@@ -557,5 +557,36 @@
    "printed": "11 Tax relief? No",
    "reason": "box immediately left of the printed option; X when the writer value is true"
   }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm1604f:RegisteredAddress",
+   "reason": "prints from derived:address1 / derived:address2_zip (the print map shapes the address over both item 7 lines for the sheet)"
+  },
+  {
+   "writer_key": "frm1604f:zipCode",
+   "reason": "prints from derived:address2_zip (the print map shapes the second address line and 7A ZIP Code, one comb on this sheet for the sheet)"
+  },
+  {
+   "writer_key": "frm1604f:txtLineBus",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_keys": [
+    "frm1604f:txtPg2TIN1",
+    "frm1604f:txtPg2TIN2",
+    "frm1604f:txtPg2TIN3",
+    "frm1604f:txtPg2BranchCode"
+   ],
+   "reason": "page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits"
+  },
+  {
+   "writer_key": "frm1604f:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  },
+  {
+   "writer_key": "txtEmail",
+   "reason": "duplicate of frm1604f:email (same value), which prints in item 10"
+  }
  ]
 }

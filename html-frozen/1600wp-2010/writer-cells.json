@@ -1,7 +1,7 @@
 {
  "form_id": "1600wp-v2010",
  "html_slug": "1600wp-2010",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Amounts print the writer's official text (1,234.56) in single text cells. Part II has one printed row per ATC (WB191-WB194) while the page numbers rows by ticked ATC, so Part II amounts, the one-comb 'From' date and the attachment header come from derived: keys of to_print_field_map, never from the submitted XML. Schedule 1.1 prints its first six rows (the page has ten). Unexposed items stay blank on print; the submitted XML always carries them.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Amounts print the writer's official text (1,234.56) in single text cells. Part II has one printed row per ATC (WB191-WB194) while the page numbers rows by ticked ATC, so Part II amounts, the one-comb 'From' date and the attachment header come from derived: keys of to_print_field_map, never from the submitted XML. Schedule 1.1 prints its first six rows (the page has ten). Unexposed items stay blank on print; the submitted XML always carries them. Since #113 every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "derived:from_date",
@@ -539,6 +539,61 @@
    "html_id": "p1c29",
    "printed": "11 Tax relief? No",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1600WP:DateWithholdingMonth",
+    "frm1600WP:DateWithholdingDay",
+    "frm1600WP:DateWithholdingYear"
+   ],
+   "reason": "prints from derived:from_date (the print map shapes Item 1 From, one 8-slot MMDDYYYY comb on this sheet for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1600WP:dtSched:txtTin7",
+    "frm1600WP:dtSched:txtFullname7",
+    "frm1600WP:dtSched:drpAtcCode7",
+    "frm1600WP:dtSched:naturePayment7",
+    "frm1600WP:dtSched:amount7",
+    "frm1600WP:dtSched:txtRatePercent7",
+    "frm1600WP:dtSched:taxWithheld7",
+    "frm1600WP:dtSched:txtTin8",
+    "frm1600WP:dtSched:txtFullname8",
+    "frm1600WP:dtSched:drpAtcCode8",
+    "frm1600WP:dtSched:naturePayment8",
+    "frm1600WP:dtSched:amount8",
+    "frm1600WP:dtSched:txtRatePercent8",
+    "frm1600WP:dtSched:taxWithheld8",
+    "frm1600WP:dtSched:txtTin9",
+    "frm1600WP:dtSched:txtFullname9",
+    "frm1600WP:dtSched:drpAtcCode9",
+    "frm1600WP:dtSched:naturePayment9",
+    "frm1600WP:dtSched:amount9",
+    "frm1600WP:dtSched:txtRatePercent9",
+    "frm1600WP:dtSched:taxWithheld9",
+    "frm1600WP:dtSched:txtTin10",
+    "frm1600WP:dtSched:txtFullname10",
+    "frm1600WP:dtSched:drpAtcCode10",
+    "frm1600WP:dtSched:naturePayment10",
+    "frm1600WP:dtSched:amount10",
+    "frm1600WP:dtSched:txtRatePercent10",
+    "frm1600WP:dtSched:taxWithheld10"
+   ],
+   "reason": "Schedule 1.1 prints six rows; rows 7-10 of the page belong on an attached sheet"
+  },
+  {
+   "writer_key": "frm1600WP:dtSched:TotaltaxWithheld",
+   "reason": "the 2010 sheet has no Schedule 1.1 total box; Part II items 14-16 carry the totals"
+  },
+  {
+   "writer_key": "hPartIITableSize",
+   "reason": "row counter of the page, not on the paper form"
+  },
+  {
+   "writer_key": "txtEmail",
+   "reason": "not on the paper form: the 2010 sheet has no email box"
   }
  ]
 }

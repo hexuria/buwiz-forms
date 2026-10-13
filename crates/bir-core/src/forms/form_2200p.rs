@@ -542,7 +542,8 @@ impl Form2200PDraft {
     /// The print preview's map: the submit map plus `derived:` keys for the
     /// printed combs that Items 8-9, the three Item 10 levels and the three
     /// Item 11 levels share (one 40-slot comb each, values placed under their
-    /// own captions).
+    /// own captions), and `derived:page_header`, the page 2 header comb (TIN
+    /// then name, one 40-slot comb on this sheet).
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         let mut put = |key: &str, value: String| {
@@ -575,6 +576,10 @@ impl Form2200PDraft {
                 ),
             );
         }
+        put(
+            "page_header",
+            super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),
+        );
         fields
     }
 

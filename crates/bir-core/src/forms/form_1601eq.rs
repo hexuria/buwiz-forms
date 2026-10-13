@@ -957,6 +957,37 @@ impl Form1601EqDraft {
         self.schedule.len().max(FORM_1601EQ_MAIN_ROWS)
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the later pages' header TIN, one 14-digit
+    ///   comb (TIN then branch).
+    /// - `derived:address_line1` / `derived:line:address_line2`: the
+    ///   registered address over its 40-slot first line, broken at a
+    ///   space, and the second line (printed whole when longer).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1601EQ:txtTIN1",
+                "frm1601EQ:txtTIN2",
+                "frm1601EQ:txtTIN3",
+                "frm1601EQ:txtBranchCode",
+            ],
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        for (key, value) in [
+            ("tin_digits", tin_digits),
+            ("address_line1", line1),
+            ("line:address_line2", line2),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();

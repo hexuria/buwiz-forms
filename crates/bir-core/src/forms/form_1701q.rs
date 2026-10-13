@@ -531,6 +531,39 @@ pub struct Form1701QDraft {
 }
 
 impl Form1701QDraft {
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the later pages' header TIN, one 14-digit
+    ///   comb (TIN then branch).
+    /// - `derived:page2_name`: the page 2 header's last name. A new return
+    ///   leaves `taxpayer_last_name` blank, so the header falls back to the
+    ///   part of the taxpayer name before its first comma (Last Name, First
+    ///   Name), or the whole name when it has none.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let last_name = if self.taxpayer_last_name.trim().is_empty() {
+            self.taxpayer_name.split(',').next().unwrap_or_default()
+        } else {
+            self.taxpayer_last_name.as_str()
+        };
+        fields.insert(
+            "derived:page2_name".to_string(),
+            last_name.trim().to_uppercase(),
+        );
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1701q:txtPg2TIN1",
+                "frm1701q:txtPg2TIN2",
+                "frm1701q:txtPg2TIN3",
+                "frm1701q:txtPg2BranchCode",
+            ],
+        );
+        fields.insert("derived:tin_digits".to_string(), tin_digits);
+        fields
+    }
+
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
         let (tax_rate, deduction_method) = match annual_income_tax_election(profile, year) {
             AnnualIncomeTaxElection::EightPercent => (Some(Form1701QTaxRate::EightPercent), None),

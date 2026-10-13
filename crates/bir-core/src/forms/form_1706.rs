@@ -681,6 +681,72 @@ impl Form1706Draft {
             .unwrap_or_default()
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// the 2018 sheet needs, never submitted.
+    ///
+    /// - `derived:seller_tin` / `derived:buyer_tin`: the item 6 and 7 TIN
+    ///   cells, one dashed TIN each; `derived:buyer_tin_digits` the page 2
+    ///   header comb.
+    /// - `derived:line:tax_relief_specify`: Item 11 "If yes, specify".
+    /// - `derived:sched1_kind{1,2}` / `derived:sched1_fmv{1,2}` /
+    ///   `derived:sched1_total`: the lot (row 1) and the improvement (row 2)
+    ///   of the Schedule 1 continuation, the higher FMV of each and the total.
+    /// - `derived:sched4_a`: Schedule 4 A, the gross selling price or, on a
+    ///   foreclosure, the bid price.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let dashed = |tin: &str| {
+            let (a, b, c, d) = split_tin(tin);
+            format!("{a}-{b}-{c}-{d}")
+        };
+        let (b1, b2, b3, _) = split_tin(&self.buyer_tin);
+        let buyer_branch = format!("{:0>5}", self.buyer_branch_code.trim());
+        let higher = |a: Option<f64>, b: Option<f64>| match (a, b) {
+            (None, None) => String::new(),
+            (a, b) => official_amount(a.unwrap_or(0.0).max(b.unwrap_or(0.0))),
+        };
+        let land = (self.fmv_land_tax_declaration, self.fmv_land_zonal);
+        let improvement = (
+            self.fmv_improvements_tax_declaration,
+            self.fmv_improvements_bir,
+        );
+        let mut put = |key: &str, value: String| {
+            fields.insert(format!("derived:{key}"), value);
+        };
+        put("seller_tin", dashed(&self.tin));
+        put("buyer_tin", format!("{b1}-{b2}-{b3}-{buyer_branch}"));
+        put("buyer_tin_digits", format!("{b1}{b2}{b3}{buyer_branch}"));
+        put(
+            "line:tax_relief_specify",
+            match self.tax_relief {
+                Form1706TaxRelief::InternationalTaxTreaty => "INTERNATIONAL TAX TREATY",
+                Form1706TaxRelief::SpecialLaw => "SPECIAL LAW",
+                Form1706TaxRelief::No | Form1706TaxRelief::YesUnspecified => "",
+            }
+            .to_string(),
+        );
+        for (row, kind, (a, b)) in [(1, "LOT", land), (2, "IMPROVEMENT", improvement)] {
+            let shown = a.is_some() || b.is_some();
+            put(
+                &format!("sched1_kind{row}"),
+                if shown { kind } else { "" }.to_string(),
+            );
+            put(&format!("sched1_fmv{row}"), higher(a, b));
+        }
+        put("sched1_total", amount_text(self.fair_market_value));
+        put(
+            "sched4_a",
+            amount_text(
+                if self.transaction_type == Some(Form1706TransactionType::ForeclosureSale) {
+                    self.bid_price
+                } else {
+                    self.gross_selling_price
+                },
+            ),
+        );
+        fields
+    }
+
     /// The official control values the upload loop writes, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();

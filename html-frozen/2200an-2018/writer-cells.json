@@ -1,7 +1,7 @@
 {
  "form_id": "2200an-v2018",
  "html_slug": "2200an-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Part III items 16-24 pair the 11-slot peso comb with the 2-slot centavo comb directly right (money_joins). Part IV: the layout keys are numbered 24-27 and print as items 25-28; they are matched to the printed rows by their captions (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) and their Drawee Bank/Number/Amount columns. Part IV dates are three combs per row and stay blank. Schedule 1A/1B: each printed ATC code row (XG021 to XG120, plus the two Others rows) maps its five cells in print order to Exempt1, Taxable1, Exempt2, Taxable2, TaxDue; the Others rows also take the name and tax-rate cells. Region/province/city keys and lstSpecialTax hold option codes (default 00 or a code), not printable text, and stay blank. The second address line has no layout key and stays blank. Items 10 and 11 print the region, province and city names from derived:line: keys of to_print_field_map (the upload keeps the codes); a derived:line: value or an email wider than its comb prints whole on one line across the comb.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or just above it. Booleans take xbox_joins: the box immediately left of the printed option. Part III items 16-24 pair the 11-slot peso comb with the 2-slot centavo comb directly right (money_joins). Part IV: the layout keys are numbered 24-27 and print as items 25-28; they are matched to the printed rows by their captions (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) and their Drawee Bank/Number/Amount columns. Schedule 1A/1B: each printed ATC code row (XG021 to XG120, plus the two Others rows) maps its five cells in print order to Exempt1, Taxable1, Exempt2, Taxable2, TaxDue; the Others rows also take the name and tax-rate cells. Region/province/city keys and lstSpecialTax hold option codes (default 00 or a code), not printable text, and stay blank. The second address line has no layout key and stays blank. Items 10 and 11 print the region, province and city names from derived:line: keys of to_print_field_map (the upload keeps the codes); a derived:line: value or an email wider than its comb prints whole on one line across the comb. date_joins split each payment-row date (MM/DD/YYYY) across the MM, DD and YYYY combs of the row whose Agency/Number/Amount joins share its suffix.",
  "joins": [
   {
    "writer_key": "frm2200ANv2018:txtMonth",
@@ -200,12 +200,6 @@
    "html_id": "p1c174",
    "printed": "28 Others, Number",
    "reason": "Number column, others row, 6-slot comb"
-  },
-  {
-   "writer_key": "frm2200ANv2018:txtPage2TIN",
-   "html_id": "p2c4",
-   "printed": "TIN (page 2 header)",
-   "reason": "caption above the 14-slot comb"
   },
   {
    "writer_key": "frm2200ANv2018:txtPage2Taxpayer",
@@ -1064,6 +1058,24 @@
    "html_id": "p2c264",
    "printed": "Schedule 1C total (Sum of Schedule 1A and 1B) (To Part III, Item 16)",
    "reason": "caption left of the cell on the same row"
+  },
+  {
+   "writer_key": "frm2200ANv2018:txtXGOthers1",
+   "html_id": "p2c245",
+   "printed": "Schedule 1B Others (specify) row 1, ATC",
+   "reason": "the ATC box at the left of the others row 1 (the XG prefix is printed inside it); left of the Name of Item/Product column"
+  },
+  {
+   "writer_key": "frm2200ANv2018:txtXGOthers2",
+   "html_id": "p2c253",
+   "printed": "Schedule 1B Others (specify) row 2, ATC",
+   "reason": "the ATC box at the left of the others row 2 (the XG prefix is printed inside it); left of the Name of Item/Product column"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c4",
+   "printed": "Page 2 TIN",
+   "reason": "the 14-slot comb under the page 2 TIN caption: TIN then branch as digits (the upload's txtPage2TIN is dashed and would not fit the 14 boxes)"
   }
  ],
  "money_joins": [
@@ -1252,62 +1264,70 @@
    "reason": "box immediately left of the printed option (item 15)"
   }
  ],
- "left_out": [
+ "date_joins": [
+  {
+   "writer_key": "frm2200ANv2018:txtDate24",
+   "mm_html_id": "p1c147",
+   "dd_html_id": "p1c148",
+   "yyyy_html_id": "p1c149",
+   "printed": "25 Cash/Bank Debit Memo: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 25 row, between its Number and Amount cells (the row txtAmount24 fills); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2200ANv2018:txtDate25",
+   "mm_html_id": "p1c156",
+   "dd_html_id": "p1c157",
+   "yyyy_html_id": "p1c158",
+   "printed": "26 Check: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 26 row, between its Number and Amount cells (the row txtAmount25 fills); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2200ANv2018:txtDate26",
+   "mm_html_id": "p1c165",
+   "dd_html_id": "p1c166",
+   "yyyy_html_id": "p1c167",
+   "printed": "27 Tax Debit Memo: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 27 row, between its Number and Amount cells (the row txtAmount26 fills); one writer date split across the three"
+  },
+  {
+   "writer_key": "frm2200ANv2018:txtDate27",
+   "mm_html_id": "p1c175",
+   "dd_html_id": "p1c176",
+   "yyyy_html_id": "p1c177",
+   "printed": "28 Others: Date (MM/DD/YYYY)",
+   "reason": "the MM, DD and YYYY combs under the Date column on the item 28 row, between its Number and Amount cells (the row txtAmount27 fills); one writer date split across the three"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm2200ANv2018optRegion",
+    "frm2200ANv2018optProvince",
+    "frm2200ANv2018optCity"
+   ],
+   "reason": "prints from derived:line:item10_region / _province / _city (the print map shapes Item 10 as place names instead of PSGC codes for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm2200ANv2018optRegion1",
+    "frm2200ANv2018optProvince1",
+    "frm2200ANv2018optCity1"
+   ],
+   "reason": "prints from derived:line:item11_region / _province / _city (the print map shapes Item 11 as place names instead of PSGC codes for the sheet)"
+  },
+  {
+   "writer_key": "frm2200ANv2018:txtPage2TIN",
+   "reason": "dashed TIN (17 characters) for a 14-slot comb; the page 2 header prints derived:tin_digits"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c29",
    "reason": "second address line; the layout has one address key (txtAddress) and it is already on p1c28"
   },
   {
-   "html_id": "p1c147",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate24); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c148",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate24); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c149",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate24); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c156",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate25); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c157",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate25); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c158",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate25); one key maps to one cell, so left blank"
-  },
-  {
    "html_id": "p1c163",
    "reason": "Tax Debit Memo row has a 5-slot comb under the Drawee Bank column, but the layout has no drawee key for that row (Number26/Date26/Amount26 only)"
-  },
-  {
-   "html_id": "p1c165",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate26); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c166",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate26); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c167",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate26); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c175",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate27); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c176",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate27); one key maps to one cell, so left blank"
-  },
-  {
-   "html_id": "p1c177",
-   "reason": "Part IV date is three combs (MM/DD/YYYY) under one layout date key (txtDate27); one key maps to one cell, so left blank"
   }
  ]
 }
