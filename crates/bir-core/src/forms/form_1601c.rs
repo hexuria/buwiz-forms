@@ -305,6 +305,58 @@ impl Form1601CDraft {
         draft
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the page-2 header TIN, one 14-digit comb
+    ///   (TIN then branch).
+    /// - `derived:address_line1` / `derived:line:address_line2`: Item 9 over
+    ///   its 40-slot first line, broken at a space, and the 31-slot second
+    ///   line (the rest, then Address 2).
+    /// - `derived:line:tax_relief_specify`: Item 13A, the relief named on a Yes.
+    ///
+    /// Schedule I rows past the draft's rows print blank, not `0.00`.
+    pub fn to_print_field_map(&self) -> std::collections::BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1601c:txtPg2TIN1",
+                "frm1601c:txtPg2TIN2",
+                "frm1601c:txtPg2TIN3",
+                "frm1601c:txtPg2BranchCode",
+            ],
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, rest) = super::print_map::split_print_line(&address, 40);
+        let line2 = [rest.as_str(), self.registered_address_2.trim()]
+            .iter()
+            .filter(|part| !part.is_empty())
+            .map(|part| part.to_uppercase())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let specify = if self.tax_relief {
+            self.tax_relief_specification.trim().to_string()
+        } else {
+            String::new()
+        };
+        // Schedule I rows past the draft's print blank, not 0.00.
+        for row in self.schedule_1.len()..MAX_SCHEDULE_1_ROWS {
+            for key in ["txtTaxPaid", "txtShouldTaxDue", "txtAdjustments"] {
+                fields.insert(format!("frm1601c:sched1:{key}{row}"), String::new());
+            }
+        }
+        for (key, value) in [
+            ("tin_digits", tin_digits),
+            ("address_line1", line1),
+            ("line:address_line2", line2),
+            ("line:tax_relief_specify", specify),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     /// Item 3's answer: `None` while unanswered.
     pub fn taxes_withheld_answer(&self) -> Option<bool> {
         (!self.any_taxes_withheld_unanswered).then_some(self.any_taxes_withheld)

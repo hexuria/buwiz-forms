@@ -2107,6 +2107,70 @@ fn validate_specify_popup_rows(draft: &Form2550QDraft, errors: &mut Vec<(String,
 }
 
 impl Form2550QDraft {
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the nine TIN digits of the page 2 header
+    ///   comb (its branch slots are preprinted).
+    /// - `derived:address_line1` / `derived:line:address_line2`: Item 9 over
+    ///   its 40-slot first line, broken at a space, and the 31-slot second.
+    /// - `derived:sched3_period{0,1}` / `derived:sched4_period{0,1}`: the
+    ///   Schedule 3 and 4 "Period Covered" cell, `MM/DD/YY-MM/DD/YY`.
+    ///
+    /// Schedule 4 rows past the draft's print blank (the upload writes
+    /// `0.00` into an empty official receipt number).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm2550qv2024:txtPg2TIN1",
+                "frm2550qv2024:txtPg2TIN2",
+                "frm2550qv2024:txtPg2TIN3",
+            ],
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        let period = |from: Option<Form2550QDate>, to: Option<Form2550QDate>| {
+            let short = |date: Form2550QDate| {
+                format!("{:02}/{:02}/{:02}", date.month, date.day, date.year % 100)
+            };
+            match (from, to) {
+                (Some(from), Some(to)) => format!("{}-{}", short(from), short(to)),
+                (Some(date), None) | (None, Some(date)) => short(date),
+                (None, None) => String::new(),
+            }
+        };
+        let mut derived = vec![
+            ("tin_digits".to_string(), tin_digits),
+            ("address_line1".to_string(), line1),
+            ("line:address_line2".to_string(), line2),
+        ];
+        for offset in 0..2 {
+            let row3 = self.schedule_3.get(offset);
+            derived.push((
+                format!("sched3_period{offset}"),
+                row3.map(|row| period(row.period_from, row.period_to))
+                    .unwrap_or_default(),
+            ));
+            let Some(row4) = self.schedule_4.get(offset) else {
+                for key in ["txtOfficialReceiptNumber4", "txtAmountPaid4"] {
+                    fields.insert(format!("{key}{offset}"), String::new());
+                }
+                derived.push((format!("sched4_period{offset}"), String::new()));
+                continue;
+            };
+            derived.push((
+                format!("sched4_period{offset}"),
+                period(row4.period_from, row4.period_to),
+            ));
+        }
+        for (key, value) in derived {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     /// `closeModalNo19/42/47/56`: an item with popup rows shows `VARIOUS`
     /// (or the one row's description) and `formatCurrency` of the rows' sum.
     fn apply_specify_popup_rows(&mut self) {

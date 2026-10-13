@@ -14,6 +14,18 @@
 //! fill-paths, not `official_field_key` harvests. Do not stamp `name=` on
 //! peso/cent/xbox boxes, do not left-align a dotted money string into the
 //! peso comb, and do not write `"true"` into an xbox.
+//!
+//! One writer key may print in several cells (`html_ids` beside `html_id`;
+//! `peso_html_ids`/`cent_html_ids` and `decimal_html_ids` for money), so a
+//! name, TIN or total repeats in the later pages' headers and schedules.
+//! A money comb whose last two slots are the centavos is a
+//! `decimal_html_id` (`point_slot` when the slot before them carries the
+//! printed point). `date_joins` split one writer date (`MM/DD/YYYY`,
+//! `MM/YYYY`, ISO) over separate MM, DD and YYYY combs. An xbox join may
+//! name one box of a two-box cell by its input id (`<cell>-i<n>`).
+//! `not_joined` lists, with a reason, each writer key the sheet does not
+//! print, and `not_joined_cells` each cell no key fills: [`unprinted_keys`]
+//! is the coverage gate over both.
 
 use bir_core::forms::form_2551q::Form2551QDraft;
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,7 +66,7 @@ pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
 fn fill_by_name_with_cells(
     html: &str,
     fields: &BTreeMap<String, String>,
-    cells: &BTreeMap<String, String>,
+    cells: &BTreeMap<String, Vec<String>>,
 ) -> String {
     let tags = input_tags(html);
     if tags.is_empty() {
@@ -62,70 +74,101 @@ fn fill_by_name_with_cells(
     }
 
     let mut replacements: Vec<(usize, usize, String)> = Vec::new();
-    let mut grouped: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-    for (index, tag) in tags.iter().enumerate() {
-        grouped.entry(tag.name).or_default().push(index);
-    }
+    let grouped = grouped_input_indices(&tags);
 
     for (name, value) in fields {
-        let (input_name, via_cell) = if grouped.contains_key(name.as_str()) {
-            (name.as_str(), false)
-        } else if let Some(cell) = cells.get(name) {
-            (cell.as_str(), true)
+        let targets: Vec<(&str, bool)> = if grouped.contains_key(name.as_str()) {
+            vec![(name.as_str(), false)]
+        } else if let Some(ids) = cells.get(name) {
+            ids.iter().map(|id| (id.as_str(), true)).collect()
         } else {
             continue;
         };
-        let Some(indices) = grouped.get(input_name) else {
-            continue;
-        };
-        // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
-        // TIN/branch (`via_cell` false) keep the writer map as-is.
-        // Like the official capital(), email inputs keep their typed casing.
-        let print_value = (via_cell && !is_email_key(name)).then(|| value.to_ascii_uppercase());
-        let print = print_value.as_deref().unwrap_or(value.as_str());
-        let comb = indices.iter().any(|&index| tags[index].slot.is_some());
-        if comb {
-            let mut ordered = indices.clone();
-            ordered.sort_by_key(|&index| tags[index].slot.unwrap_or(usize::MAX));
-            let chars: Vec<char> = print.chars().collect();
-            // An email (or a `derived:line:` print value) longer than its
-            // comb prints whole on one line across the comb instead of losing
-            // the characters past the last box.
-            let whole_line = is_email_key(name) || name.starts_with("derived:line:");
-            let overflow = (whole_line && chars.len() > ordered.len())
-                .then(|| comb_overflow_line(html, input_name, print, chars.len()))
-                .flatten();
-            let spread = overflow.is_none();
-            if let Some((at, line)) = overflow {
-                replacements.push((at, at, line));
-            }
-            for (offset, index) in ordered.into_iter().enumerate() {
-                let ch = chars
-                    .get(offset)
-                    .filter(|_| spread)
-                    .copied()
-                    .map(|c| c.to_string())
-                    .unwrap_or_default();
-                let writer = (via_cell && offset == 0).then_some(print);
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &ch, writer),
-                ));
-            }
-        } else {
-            for &index in indices {
-                let writer = via_cell.then_some(print);
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, print, writer),
-                ));
-            }
+        for (input_name, via_cell) in targets {
+            let Some(indices) = grouped.get(input_name) else {
+                continue;
+            };
+            let target = TextTarget {
+                name,
+                input_name,
+                value,
+                via_cell,
+            };
+            fill_text_input(html, &tags, indices, &target, &mut replacements);
         }
     }
 
     apply_replacements(html, replacements)
+}
+
+/// Writer key `name` printed into input `input_name`: a stamped `name=`
+/// (`via_cell` false) or a writer-cells join target.
+struct TextTarget<'a> {
+    name: &'a str,
+    input_name: &'a str,
+    value: &'a str,
+    via_cell: bool,
+}
+
+/// One text value into one cell: a comb gets a character per slot, a plain
+/// box the whole value.
+fn fill_text_input(
+    html: &str,
+    tags: &[InputTag<'_>],
+    indices: &[usize],
+    target: &TextTarget<'_>,
+    replacements: &mut Vec<(usize, usize, String)>,
+) {
+    let TextTarget {
+        name,
+        input_name,
+        value,
+        via_cell,
+    } = *target;
+    // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
+    // TIN/branch (`via_cell` false) keep the writer map as-is.
+    // Like the official capital(), email inputs keep their typed casing.
+    let print_value = (via_cell && !is_email_key(name)).then(|| value.to_ascii_uppercase());
+    let print = print_value.as_deref().unwrap_or(value);
+    let comb = indices.iter().any(|&index| tags[index].slot.is_some());
+    if comb {
+        let ordered = ordered_comb_indices(tags, indices);
+        let chars: Vec<char> = print.chars().collect();
+        // An email (or a `derived:line:` print value) longer than its
+        // comb prints whole on one line across the comb instead of losing
+        // the characters past the last box.
+        let whole_line = is_email_key(name) || name.starts_with("derived:line:");
+        let overflow = (whole_line && chars.len() > ordered.len())
+            .then(|| comb_overflow_line(html, input_name, print, chars.len()))
+            .flatten();
+        let spread = overflow.is_none();
+        if let Some((at, line)) = overflow {
+            replacements.push((at, at, line));
+        }
+        for (offset, index) in ordered.into_iter().enumerate() {
+            let ch = chars
+                .get(offset)
+                .filter(|_| spread)
+                .copied()
+                .map(|c| c.to_string())
+                .unwrap_or_default();
+            let writer = (via_cell && offset == 0).then_some(print);
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                set_value(tags[index].tag, &ch, writer),
+            ));
+        }
+    } else {
+        for &index in indices {
+            let writer = via_cell.then_some(print);
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                set_value(tags[index].tag, print, writer),
+            ));
+        }
+    }
 }
 
 fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>) -> String {
@@ -278,234 +321,436 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
 
 const XBOX_CHECKED_GLYPH: &str = "X";
 
+/// Top-level `writer-cells.json` sections; anything else is a format error
+/// (the old catch-all `left_out` is now the reviewed `not_joined_cells`).
+const WRITER_CELLS_SECTIONS: [&str; 10] = [
+    "form_id",
+    "html_slug",
+    "rule",
+    "joins",
+    "money_joins",
+    "xbox_joins",
+    "peso_joins",
+    "date_joins",
+    "not_joined",
+    "not_joined_cells",
+];
+
+/// One printed amount box: a peso comb plus its 2-slot centavo comb, or
+/// (`cent_html_id` `None`, a row's `decimal_html_ids`) one comb whose last
+/// two slots take the centavos. With `point_slot` the slot before them holds
+/// the printed decimal point and stays blank; without it the sheet prints
+/// the point on the line between the peso and centavo slots.
+struct MoneyCells {
+    peso_html_id: String,
+    cent_html_id: Option<String>,
+    point_slot: bool,
+}
+
+/// A `{:.2}` writer amount printed in every listed peso + cents pair.
 struct MoneyJoin {
     writer_key: String,
-    peso_html_id: String,
-    cent_html_id: String,
+    cells: Vec<MoneyCells>,
 }
 
 struct XboxJoin {
     writer_key: String,
-    html_id: String,
+    html_ids: Vec<String>,
 }
 
 /// A peso comb with no centavo comb beside it ("Do not enter centavos"):
 /// the amount prints rounded to whole pesos, 50 centavos and up rounding up.
 struct PesoJoin {
     writer_key: String,
-    html_id: String,
+    html_ids: Vec<String>,
+}
+
+/// One writer date printed across the sheet's separate MM / DD / YYYY combs
+/// (`dd_html_id` absent for an MM / YYYY pair).
+struct DateJoin {
+    writer_key: String,
+    mm_html_id: String,
+    dd_html_id: Option<String>,
+    yyyy_html_id: String,
 }
 
 struct WriterCells {
-    joins: BTreeMap<String, String>,
+    /// Text joins: one writer key, every cell it prints in (page-1 box and
+    /// the later pages' header repeats).
+    joins: BTreeMap<String, Vec<String>>,
     money_joins: Vec<MoneyJoin>,
     xbox_joins: Vec<XboxJoin>,
     peso_joins: Vec<PesoJoin>,
+    date_joins: Vec<DateJoin>,
+    /// Reviewed exceptions: writer keys that print nowhere, with the reason.
+    not_joined: BTreeMap<String, String>,
+    /// Reviewed sheet cells no writer key fills, with the reason.
+    not_joined_cells: BTreeMap<String, String>,
+}
+
+impl WriterCells {
+    fn empty() -> Self {
+        Self {
+            joins: BTreeMap::new(),
+            money_joins: Vec::new(),
+            xbox_joins: Vec::new(),
+            peso_joins: Vec::new(),
+            date_joins: Vec::new(),
+            not_joined: BTreeMap::new(),
+            not_joined_cells: BTreeMap::new(),
+        }
+    }
+
+    fn has_fill_join(&self) -> bool {
+        !self.joins.is_empty()
+            || !self.money_joins.is_empty()
+            || !self.xbox_joins.is_empty()
+            || !self.peso_joins.is_empty()
+            || !self.date_joins.is_empty()
+    }
+
+    /// Every writer key any join prints.
+    fn joined_keys(&self) -> BTreeSet<&str> {
+        self.joins
+            .keys()
+            .map(String::as_str)
+            .chain(self.money_joins.iter().map(|j| j.writer_key.as_str()))
+            .chain(self.xbox_joins.iter().map(|j| j.writer_key.as_str()))
+            .chain(self.peso_joins.iter().map(|j| j.writer_key.as_str()))
+            .chain(self.date_joins.iter().map(|j| j.writer_key.as_str()))
+            .collect()
+    }
+
+    /// `(writer key, cell)` for every fill target, in file order.
+    fn targets(&self) -> Vec<(&str, &str)> {
+        let mut out = Vec::new();
+        for (key, ids) in &self.joins {
+            out.extend(ids.iter().map(|id| (key.as_str(), id.as_str())));
+        }
+        for join in &self.money_joins {
+            for cells in &join.cells {
+                out.push((join.writer_key.as_str(), cells.peso_html_id.as_str()));
+                if let Some(cent) = &cells.cent_html_id {
+                    out.push((join.writer_key.as_str(), cent.as_str()));
+                }
+            }
+        }
+        for join in &self.xbox_joins {
+            out.extend(
+                join.html_ids
+                    .iter()
+                    .map(|id| (join.writer_key.as_str(), id.as_str())),
+            );
+        }
+        for join in &self.peso_joins {
+            out.extend(
+                join.html_ids
+                    .iter()
+                    .map(|id| (join.writer_key.as_str(), id.as_str())),
+            );
+        }
+        for join in &self.date_joins {
+            out.push((join.writer_key.as_str(), join.mm_html_id.as_str()));
+            if let Some(dd) = &join.dd_html_id {
+                out.push((join.writer_key.as_str(), dd.as_str()));
+            }
+            out.push((join.writer_key.as_str(), join.yyyy_html_id.as_str()));
+        }
+        out
+    }
+}
+
+fn required_str<'a>(row: &'a serde_json::Value, field: &str) -> Option<&'a str> {
+    row.get(field)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+}
+
+/// A row's cell ids: `single` (`"html_id"`) and/or `plural`
+/// (`"html_ids": [...]`), at least one, each a cell id and listed once.
+fn cell_ids(
+    row: &serde_json::Value,
+    key: &str,
+    single: &str,
+    plural: &str,
+) -> Result<Vec<String>, String> {
+    let mut ids: Vec<String> = Vec::new();
+    if let Some(value) = row.get(single) {
+        let id = value
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| format!("writer-cells.json {key} {single} must be a cell id"))?;
+        ids.push(id.to_string());
+    }
+    if let Some(value) = row.get(plural) {
+        let list = value
+            .as_array()
+            .filter(|list| !list.is_empty())
+            .ok_or_else(|| format!("writer-cells.json {key} {plural} must list cell ids"))?;
+        for id in list {
+            let id = id
+                .as_str()
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| format!("writer-cells.json {key} {plural} must list cell ids"))?;
+            ids.push(id.to_string());
+        }
+    }
+    if ids.is_empty() {
+        return Err(format!("writer-cells.json {key} missing {single}"));
+    }
+    for (at, id) in ids.iter().enumerate() {
+        if id.starts_with("frm") {
+            return Err(format!(
+                "writer-cells.json {key} must target a cell id, not {id}"
+            ));
+        }
+        if ids[..at].contains(id) {
+            return Err(format!("writer-cells.json {key} lists {id} twice"));
+        }
+    }
+    Ok(ids)
+}
+
+/// [`cell_ids`] for a row where these cells are optional: empty when the
+/// row names neither field.
+fn optional_cell_ids(
+    row: &serde_json::Value,
+    key: &str,
+    single: &str,
+    plural: &str,
+) -> Result<Vec<String>, String> {
+    if row.get(single).is_none() && row.get(plural).is_none() {
+        return Ok(Vec::new());
+    }
+    cell_ids(row, key, single, plural)
+}
+
+fn join_rows<'a>(
+    payload: &'a serde_json::Value,
+    section: &str,
+) -> Result<&'a [serde_json::Value], String> {
+    match payload.get(section) {
+        None => Ok(&[]),
+        Some(value) => value
+            .as_array()
+            .map(Vec::as_slice)
+            .ok_or_else(|| format!("writer-cells.json {section} must be a list")),
+    }
+}
+
+fn row_key<'a>(row: &'a serde_json::Value, section: &str) -> Result<&'a str, String> {
+    required_str(row, "writer_key")
+        .ok_or_else(|| format!("writer-cells.json {section} row missing writer_key"))
 }
 
 fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
     let payload: serde_json::Value =
         serde_json::from_str(json).map_err(|error| format!("writer-cells.json: {error}"))?;
-    let joins = payload
+    let object = payload
+        .as_object()
+        .ok_or_else(|| "writer-cells.json must be an object".to_string())?;
+    if let Some(unknown) = object
+        .keys()
+        .find(|key| !WRITER_CELLS_SECTIONS.contains(&key.as_str()))
+    {
+        return Err(format!("writer-cells.json unknown section {unknown}"));
+    }
+    if payload
         .get("joins")
         .and_then(|value| value.as_array())
-        .ok_or_else(|| "writer-cells.json missing joins[]".to_string())?;
-    let mut cells = BTreeMap::new();
-    for join in joins {
-        let key = join
-            .get("writer_key")
-            .and_then(|value| value.as_str())
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| "writer-cells.json join missing writer_key".to_string())?;
-        let html_id = join
-            .get("html_id")
-            .and_then(|value| value.as_str())
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| format!("writer-cells.json {key} missing html_id"))?;
-        if html_id.starts_with("frm") {
-            return Err(format!(
-                "writer-cells.json {key} must target a cell id, not {html_id}"
-            ));
+        .is_none()
+    {
+        return Err("writer-cells.json missing joins[]".to_string());
+    }
+    let mut cells = WriterCells::empty();
+    // One writer key is one row across every join kind; a key that prints
+    // in several boxes lists them all on that row.
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut claim = |key: &str| -> Result<(), String> {
+        if seen.insert(key.to_string()) {
+            Ok(())
+        } else {
+            Err(format!(
+                "writer-cells.json duplicate writer_key {key} across joins"
+            ))
         }
-        if cells.insert(key.to_string(), html_id.to_string()).is_some() {
-            return Err(format!("writer-cells.json duplicate writer_key {key}"));
-        }
+    };
+
+    for row in join_rows(&payload, "joins")? {
+        let key = row_key(row, "join")?;
+        let ids = cell_ids(row, key, "html_id", "html_ids")?;
+        claim(key)?;
+        cells.joins.insert(key.to_string(), ids);
     }
 
-    let mut money_joins = Vec::new();
-    if let Some(rows) = payload
-        .get("money_joins")
-        .and_then(|value| value.as_array())
-    {
-        for join in rows {
-            let key = join
-                .get("writer_key")
-                .and_then(|value| value.as_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| "writer-cells.json money_join missing writer_key".to_string())?;
-            let peso_html_id = join
-                .get("peso_html_id")
-                .and_then(|value| value.as_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| format!("writer-cells.json {key} missing peso_html_id"))?;
-            let cent_html_id = join
-                .get("cent_html_id")
-                .and_then(|value| value.as_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| format!("writer-cells.json {key} missing cent_html_id"))?;
-            if peso_html_id.starts_with("frm") || cent_html_id.starts_with("frm") {
-                return Err(format!(
-                    "writer-cells.json {key} must target cell ids, not stamped names"
-                ));
-            }
+    for row in join_rows(&payload, "money_joins")? {
+        let key = row_key(row, "money_join")?;
+        let pesos = optional_cell_ids(row, key, "peso_html_id", "peso_html_ids")?;
+        let cents = optional_cell_ids(row, key, "cent_html_id", "cent_html_ids")?;
+        let decimals = optional_cell_ids(row, key, "decimal_html_id", "decimal_html_ids")?;
+        let point_slot = match row.get("point_slot") {
+            None => false,
+            Some(value) => value.as_bool().ok_or_else(|| {
+                format!("writer-cells.json {key} point_slot must be true or false")
+            })?,
+        };
+        if pesos.len() != cents.len() {
+            return Err(format!(
+                "writer-cells.json {key} pairs {} peso cells with {} cent cells",
+                pesos.len(),
+                cents.len()
+            ));
+        }
+        if pesos.is_empty() && decimals.is_empty() {
+            return Err(format!("writer-cells.json {key} missing peso_html_id"));
+        }
+        claim(key)?;
+        let mut pairs = Vec::new();
+        for (peso_html_id, cent_html_id) in pesos.into_iter().zip(cents) {
             if peso_html_id == cent_html_id {
                 return Err(format!(
                     "writer-cells.json {key} peso and cent cells must differ"
                 ));
             }
-            if cells.contains_key(key) {
-                return Err(format!(
-                    "writer-cells.json duplicate writer_key {key} across joins and money_joins"
-                ));
-            }
-            if money_joins
-                .iter()
-                .any(|row: &MoneyJoin| row.writer_key == key)
-            {
-                return Err(format!(
-                    "writer-cells.json duplicate money writer_key {key}"
-                ));
-            }
-            money_joins.push(MoneyJoin {
-                writer_key: key.to_string(),
-                peso_html_id: peso_html_id.to_string(),
-                cent_html_id: cent_html_id.to_string(),
+            pairs.push(MoneyCells {
+                peso_html_id,
+                cent_html_id: Some(cent_html_id),
+                point_slot: false,
             });
+        }
+        pairs.extend(decimals.into_iter().map(|peso_html_id| MoneyCells {
+            peso_html_id,
+            cent_html_id: None,
+            point_slot,
+        }));
+        cells.money_joins.push(MoneyJoin {
+            writer_key: key.to_string(),
+            cells: pairs,
+        });
+    }
+
+    for row in join_rows(&payload, "xbox_joins")? {
+        let key = row_key(row, "xbox_join")?;
+        let html_ids = cell_ids(row, key, "html_id", "html_ids")?;
+        claim(key)?;
+        cells.xbox_joins.push(XboxJoin {
+            writer_key: key.to_string(),
+            html_ids,
+        });
+    }
+
+    for row in join_rows(&payload, "peso_joins")? {
+        let key = row_key(row, "peso_join")?;
+        let html_ids = cell_ids(row, key, "html_id", "html_ids")?;
+        claim(key)?;
+        cells.peso_joins.push(PesoJoin {
+            writer_key: key.to_string(),
+            html_ids,
+        });
+    }
+
+    for row in join_rows(&payload, "date_joins")? {
+        let key = row_key(row, "date_join")?;
+        let one = |field: &str| -> Result<Option<String>, String> {
+            match row.get(field) {
+                None => Ok(None),
+                Some(value) => value
+                    .as_str()
+                    .filter(|id| !id.is_empty() && !id.starts_with("frm"))
+                    .map(|id| Some(id.to_string()))
+                    .ok_or_else(|| format!("writer-cells.json {key} {field} must be a cell id")),
+            }
+        };
+        let mm_html_id = one("mm_html_id")?
+            .ok_or_else(|| format!("writer-cells.json {key} missing mm_html_id"))?;
+        let yyyy_html_id = one("yyyy_html_id")?
+            .ok_or_else(|| format!("writer-cells.json {key} missing yyyy_html_id"))?;
+        let dd_html_id = one("dd_html_id")?;
+        claim(key)?;
+        cells.date_joins.push(DateJoin {
+            writer_key: key.to_string(),
+            mm_html_id,
+            dd_html_id,
+            yyyy_html_id,
+        });
+    }
+
+    // A not_joined row names one key (`writer_key`) or a family sharing one
+    // reason (`writer_keys`, e.g. table rows past the sheet's last row).
+    for row in join_rows(&payload, "not_joined")? {
+        let keys: Vec<&str> = match (required_str(row, "writer_key"), row.get("writer_keys")) {
+            (Some(key), None) => vec![key],
+            (None, Some(list)) => list
+                .as_array()
+                .filter(|list| !list.is_empty())
+                .and_then(|list| list.iter().map(|key| key.as_str()).collect())
+                .ok_or_else(|| {
+                    "writer-cells.json not_joined writer_keys must list keys".to_string()
+                })?,
+            _ => {
+                return Err(
+                    "writer-cells.json not_joined row needs writer_key or writer_keys".to_string(),
+                )
+            }
+        };
+        let reason = required_str(row, "reason")
+            .ok_or_else(|| format!("writer-cells.json not_joined {} needs a reason", keys[0]))?;
+        for key in keys {
+            if key.is_empty() {
+                return Err("writer-cells.json not_joined lists an empty key".to_string());
+            }
+            if cells.joined_keys().contains(key) {
+                return Err(format!(
+                    "writer-cells.json {key} is joined; remove it from not_joined"
+                ));
+            }
+            if cells
+                .not_joined
+                .insert(key.to_string(), reason.to_string())
+                .is_some()
+            {
+                return Err(format!("writer-cells.json duplicate not_joined {key}"));
+            }
         }
     }
 
-    let mut xbox_joins = Vec::new();
-    if let Some(rows) = payload.get("xbox_joins").and_then(|value| value.as_array()) {
-        for join in rows {
-            let key = join
-                .get("writer_key")
-                .and_then(|value| value.as_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| "writer-cells.json xbox_join missing writer_key".to_string())?;
-            let html_id = join
-                .get("html_id")
-                .and_then(|value| value.as_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| format!("writer-cells.json {key} missing html_id"))?;
-            if html_id.starts_with("frm") {
-                return Err(format!(
-                    "writer-cells.json {key} must target a cell id, not {html_id}"
-                ));
-            }
-            if cells.contains_key(key)
-                || money_joins
-                    .iter()
-                    .any(|row: &MoneyJoin| row.writer_key == key)
-                || xbox_joins
-                    .iter()
-                    .any(|row: &XboxJoin| row.writer_key == key)
-            {
-                return Err(format!(
-                    "writer-cells.json duplicate writer_key {key} across joins"
-                ));
-            }
-            xbox_joins.push(XboxJoin {
-                writer_key: key.to_string(),
-                html_id: html_id.to_string(),
-            });
+    let mut used_cells: BTreeSet<String> = BTreeSet::new();
+    for (key, id) in cells.targets() {
+        if !used_cells.insert(id.to_string()) {
+            return Err(format!(
+                "writer-cells.json {key} cell {id} is already a fill target"
+            ));
         }
     }
-
-    let mut peso_joins: Vec<PesoJoin> = Vec::new();
-    if let Some(rows) = payload.get("peso_joins").and_then(|value| value.as_array()) {
-        for join in rows {
-            let key = join
-                .get("writer_key")
-                .and_then(|value| value.as_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| "writer-cells.json peso_join missing writer_key".to_string())?;
-            let html_id = join
-                .get("html_id")
-                .and_then(|value| value.as_str())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| format!("writer-cells.json {key} missing html_id"))?;
-            if html_id.starts_with("frm") {
-                return Err(format!(
-                    "writer-cells.json {key} must target a cell id, not {html_id}"
-                ));
-            }
-            if cells.contains_key(key)
-                || money_joins.iter().any(|row| row.writer_key == key)
-                || xbox_joins.iter().any(|row| row.writer_key == key)
-                || peso_joins.iter().any(|row| row.writer_key == key)
-            {
-                return Err(format!(
-                    "writer-cells.json duplicate writer_key {key} across joins"
-                ));
-            }
-            peso_joins.push(PesoJoin {
-                writer_key: key.to_string(),
-                html_id: html_id.to_string(),
-            });
-        }
-    }
-
     {
-        let mut used_cells: BTreeSet<&str> = cells.values().map(|id| id.as_str()).collect();
-        for join in &money_joins {
-            if !used_cells.insert(&join.peso_html_id) {
+        for row in join_rows(&payload, "not_joined_cells")? {
+            let id = required_str(row, "html_id").ok_or_else(|| {
+                "writer-cells.json not_joined_cells row missing html_id".to_string()
+            })?;
+            let reason = required_str(row, "reason")
+                .ok_or_else(|| format!("writer-cells.json not_joined_cells {id} needs a reason"))?;
+            if used_cells.contains(id) {
                 return Err(format!(
-                    "writer-cells.json {} peso cell {} is already a fill target",
-                    join.writer_key, join.peso_html_id
+                    "writer-cells.json cell {id} is a fill target; remove it from not_joined_cells"
                 ));
             }
-            if !used_cells.insert(&join.cent_html_id) {
-                return Err(format!(
-                    "writer-cells.json {} cent cell {} is already a fill target",
-                    join.writer_key, join.cent_html_id
-                ));
-            }
-        }
-        for join in &xbox_joins {
-            if !used_cells.insert(&join.html_id) {
-                return Err(format!(
-                    "writer-cells.json {} xbox cell {} is already a fill target",
-                    join.writer_key, join.html_id
-                ));
-            }
-        }
-        for join in &peso_joins {
-            if !used_cells.insert(&join.html_id) {
-                return Err(format!(
-                    "writer-cells.json {} peso cell {} is already a fill target",
-                    join.writer_key, join.html_id
-                ));
+            if cells
+                .not_joined_cells
+                .insert(id.to_string(), reason.to_string())
+                .is_some()
+            {
+                return Err(format!("writer-cells.json duplicate not_joined_cells {id}"));
             }
         }
     }
 
-    Ok(WriterCells {
-        joins: cells,
-        money_joins,
-        xbox_joins,
-        peso_joins,
-    })
+    Ok(cells)
 }
 
 fn writer_cells(slug: &str) -> Result<WriterCells, String> {
     match writer_cells_json(slug) {
         Some(json) => parse_writer_cells(json),
-        None => Ok(WriterCells {
-            joins: BTreeMap::new(),
-            money_joins: Vec::new(),
-            xbox_joins: Vec::new(),
-            peso_joins: Vec::new(),
-        }),
+        None => Ok(WriterCells::empty()),
     }
 }
 
@@ -594,39 +839,58 @@ fn fill_money_joins(
             continue;
         };
         let peso = signed_digits(negative, &peso, &cents);
-        let Some(peso_indices) = grouped.get(join.peso_html_id.as_str()) else {
-            continue;
-        };
-        let Some(cent_indices) = grouped.get(join.cent_html_id.as_str()) else {
-            continue;
-        };
-        let peso_ordered = ordered_comb_indices(&tags, peso_indices);
-        let cent_ordered = ordered_comb_indices(&tags, cent_indices);
-        if cent_ordered.len() != 2 {
-            continue;
-        }
-        let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) else {
-            continue;
-        };
-        for (offset, index) in peso_ordered.into_iter().enumerate() {
-            let writer = (offset == 0).then_some(value.as_str());
-            replacements.push((
-                tags[index].start,
-                tags[index].end,
-                set_value(tags[index].tag, &peso_values[offset], writer),
-            ));
-        }
-        for (offset, index) in cent_ordered.into_iter().enumerate() {
-            let ch = cents
-                .chars()
-                .nth(offset)
-                .map(|ch| ch.to_string())
-                .unwrap_or_default();
-            replacements.push((
-                tags[index].start,
-                tags[index].end,
-                set_value(tags[index].tag, &ch, None),
-            ));
+        for cells in &join.cells {
+            let Some(peso_indices) = grouped.get(cells.peso_html_id.as_str()) else {
+                continue;
+            };
+            let mut peso_ordered = ordered_comb_indices(&tags, peso_indices);
+            let cent_ordered = match &cells.cent_html_id {
+                Some(cent) => match grouped.get(cent.as_str()) {
+                    Some(cent_indices) => ordered_comb_indices(&tags, cent_indices),
+                    None => continue,
+                },
+                // The comb's own last two slots; a point slot before them is
+                // left blank (the sheet prints the point there).
+                None if peso_ordered.len() >= 5 => {
+                    let cents = peso_ordered.split_off(peso_ordered.len() - 2);
+                    if cells.point_slot {
+                        let point = peso_ordered.pop().expect("comb has a decimal slot");
+                        replacements.push((
+                            tags[point].start,
+                            tags[point].end,
+                            set_value(tags[point].tag, "", None),
+                        ));
+                    }
+                    cents
+                }
+                None => continue,
+            };
+            if cent_ordered.len() != 2 {
+                continue;
+            }
+            let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) else {
+                continue;
+            };
+            for (offset, index) in peso_ordered.into_iter().enumerate() {
+                let writer = (offset == 0).then_some(value.as_str());
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &peso_values[offset], writer),
+                ));
+            }
+            for (offset, index) in cent_ordered.into_iter().enumerate() {
+                let ch = cents
+                    .chars()
+                    .nth(offset)
+                    .map(|ch| ch.to_string())
+                    .unwrap_or_default();
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &ch, None),
+                ));
+            }
         }
     }
     apply_replacements(html, replacements)
@@ -681,20 +945,111 @@ fn fill_peso_joins(
         let Some(pesos) = whole_pesos(value) else {
             continue;
         };
-        let Some(indices) = grouped.get(join.html_id.as_str()) else {
+        for html_id in &join.html_ids {
+            let Some(indices) = grouped.get(html_id.as_str()) else {
+                continue;
+            };
+            let ordered = ordered_comb_indices(&tags, indices);
+            let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) else {
+                continue;
+            };
+            for (offset, index) in ordered.into_iter().enumerate() {
+                let writer = (offset == 0).then_some(value.as_str());
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &values[offset], writer),
+                ));
+            }
+        }
+    }
+    apply_replacements(html, replacements)
+}
+
+/// Splits a writer date into `(MM, DD, YYYY)`: `MM/DD/YYYY`, `MM/YYYY`
+/// (no day) or ISO `YYYY-MM-DD`. Month and day are zero-padded to two
+/// digits; anything else is not a date and prints nowhere.
+fn split_writer_date(value: &str) -> Option<(String, Option<String>, String)> {
+    let value = value.trim();
+    let parts: Vec<&str> = if value.contains('-') {
+        let iso: Vec<&str> = value.split('-').collect();
+        match iso.as_slice() {
+            [year, month, day] if year.len() == 4 => vec![month, day, year],
+            _ => return None,
+        }
+    } else {
+        value.split('/').collect()
+    };
+    if parts
+        .iter()
+        .any(|part| part.is_empty() || !part.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return None;
+    }
+    let two = |part: &str| (part.len() <= 2).then(|| format!("{part:0>2}"));
+    match parts.as_slice() {
+        [month, day, year] if year.len() == 4 => {
+            Some((two(month)?, Some(two(day)?), year.to_string()))
+        }
+        [month, year] if year.len() == 4 => Some((two(month)?, None, year.to_string())),
+        _ => None,
+    }
+}
+
+fn fill_date_joins(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    date_joins: &[DateJoin],
+) -> String {
+    if date_joins.is_empty() {
+        return html.to_string();
+    }
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for join in date_joins {
+        let Some(value) = fields.get(&join.writer_key) else {
             continue;
         };
-        let ordered = ordered_comb_indices(&tags, indices);
-        let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) else {
+        let Some((month, day, year)) = split_writer_date(value) else {
             continue;
         };
-        for (offset, index) in ordered.into_iter().enumerate() {
-            let writer = (offset == 0).then_some(value.as_str());
-            replacements.push((
-                tags[index].start,
-                tags[index].end,
-                set_value(tags[index].tag, &values[offset], writer),
-            ));
+        // A day the sheet has no comb for (or a comb with no day to fill)
+        // is not this date's shape: print nothing rather than part of it.
+        let day_cells = match (&join.dd_html_id, day) {
+            (Some(html_id), Some(day)) => Some((html_id.as_str(), day)),
+            (None, None) => None,
+            _ => continue,
+        };
+        let combs = std::iter::once((join.mm_html_id.as_str(), month))
+            .chain(day_cells)
+            .chain(std::iter::once((join.yyyy_html_id.as_str(), year)));
+        let mut pending = Vec::new();
+        let mut fits = true;
+        for (at, (html_id, mut digits)) in combs.enumerate() {
+            let ordered = grouped
+                .get(html_id)
+                .map(|indices| ordered_comb_indices(&tags, indices))
+                .unwrap_or_default();
+            // A two-slot year comb takes the year's last two digits.
+            if ordered.len() == 2 && digits.len() == 4 {
+                digits = digits[2..].to_string();
+            }
+            if ordered.len() != digits.len() {
+                fits = false;
+                break;
+            }
+            for (offset, (index, ch)) in ordered.into_iter().zip(digits.chars()).enumerate() {
+                let writer = (at == 0 && offset == 0).then_some(value.as_str());
+                pending.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &ch.to_string(), writer),
+                ));
+            }
+        }
+        if fits {
+            replacements.extend(pending);
         }
     }
     apply_replacements(html, replacements)
@@ -722,28 +1077,41 @@ fn fill_xbox_joins(
         if !writer_is_checked(value) {
             continue;
         }
-        let Some(indices) = grouped.get(join.html_id.as_str()) else {
-            continue;
-        };
-        if indices.len() != 1 {
-            continue;
+        for html_id in &join.html_ids {
+            let Some(index) = xbox_input(&tags, &grouped, html_id) else {
+                continue;
+            };
+            // Char boxes carry `fc` (text-align:center); the catalog xbox inputs
+            // do not, so the X sat against the box's left wall.
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                with_class(
+                    &set_value(tags[index].tag, XBOX_CHECKED_GLYPH, Some(value.as_str())),
+                    "fc",
+                ),
+            ));
         }
-        let index = indices[0];
-        if tags[index].slot.is_some() {
-            continue;
-        }
-        // Char boxes carry `fc` (text-align:center); the catalog xbox inputs
-        // do not, so the X sat against the box's left wall.
-        replacements.push((
-            tags[index].start,
-            tags[index].end,
-            with_class(
-                &set_value(tags[index].tag, XBOX_CHECKED_GLYPH, Some(value.as_str())),
-                "fc",
-            ),
-        ));
     }
     apply_replacements(html, replacements)
+}
+
+/// The one input an xbox join marks: the single unslotted input of cell
+/// `html_id`, or, in a cell that holds several boxes under one name, the
+/// box whose input id is `html_id` (`<cell>-i<n>`).
+fn xbox_input(
+    tags: &[InputTag<'_>],
+    grouped: &BTreeMap<&str, Vec<usize>>,
+    html_id: &str,
+) -> Option<usize> {
+    let index = match grouped.get(html_id) {
+        Some(indices) if indices.len() == 1 => indices[0],
+        Some(_) => return None,
+        None => tags
+            .iter()
+            .position(|tag| attr(tag.tag, "id") == Some(html_id))?,
+    };
+    tags[index].slot.is_none().then_some(index)
 }
 
 /// The tag with `class` present in its class list (added if missing).
@@ -774,116 +1142,99 @@ fn with_class(tag: &str, class: &str) -> String {
 }
 
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
-    if cells.joins.is_empty()
-        && cells.money_joins.is_empty()
-        && cells.xbox_joins.is_empty()
-        && cells.peso_joins.is_empty()
-    {
+    if !cells.has_fill_join() && cells.not_joined.is_empty() && cells.not_joined_cells.is_empty() {
         return Ok(());
     }
     let tags = input_tags(html);
     let present: BTreeSet<&str> = tags.iter().map(|tag| tag.name).collect();
     let grouped = grouped_input_indices(&tags);
-    for (key, html_id) in &cells.joins {
-        if !present.contains(html_id.as_str()) {
+    let slots = |html_id: &str| grouped.get(html_id).map_or(0, Vec::len);
+    let xbox_ids: BTreeSet<&str> = cells
+        .xbox_joins
+        .iter()
+        .flat_map(|join| join.html_ids.iter().map(String::as_str))
+        .collect();
+    for (key, html_id) in cells.targets() {
+        if !present.contains(html_id) && !xbox_ids.contains(html_id) {
             return Err(format!(
-                "{slug}: writer-cells.html_id {html_id} for {key} is not an input name="
+                "{slug}: writer-cells html id {html_id} for {key} is not an input name="
             ));
         }
-        if present.contains(key.as_str()) {
+        if present.contains(key) {
             return Err(format!(
                 "{slug}: writer-cells {key} is already a stamped name=; remove the fill join"
             ));
         }
     }
     for join in &cells.money_joins {
-        if !present.contains(join.peso_html_id.as_str()) {
-            return Err(format!(
-                "{slug}: writer-cells peso_html_id {} for {} is not an input name=",
-                join.peso_html_id, join.writer_key
-            ));
-        }
-        if !present.contains(join.cent_html_id.as_str()) {
-            return Err(format!(
-                "{slug}: writer-cells cent_html_id {} for {} is not an input name=",
-                join.cent_html_id, join.writer_key
-            ));
-        }
-        if present.contains(join.writer_key.as_str()) {
-            return Err(format!(
-                "{slug}: writer-cells {} is already a stamped name=; remove the money join",
-                join.writer_key
-            ));
-        }
-        let peso_slots = grouped
-            .get(join.peso_html_id.as_str())
-            .map(|indices| indices.len())
-            .unwrap_or(0);
-        let cent_slots = grouped
-            .get(join.cent_html_id.as_str())
-            .map(|indices| indices.len())
-            .unwrap_or(0);
-        if peso_slots < 3 {
-            return Err(format!(
-                "{slug}: writer-cells {} peso comb {} must have at least 3 slots",
-                join.writer_key, join.peso_html_id
-            ));
-        }
-        if cent_slots != 2 {
-            return Err(format!(
-                "{slug}: writer-cells {} cent comb {} must be a 2-slot comb",
-                join.writer_key, join.cent_html_id
-            ));
+        for pair in &join.cells {
+            // A decimal comb also holds the point and two centavos.
+            let least = if pair.cent_html_id.is_some() { 3 } else { 6 };
+            if slots(&pair.peso_html_id) < least {
+                return Err(format!(
+                    "{slug}: writer-cells {} peso comb {} must have at least {least} slots",
+                    join.writer_key, pair.peso_html_id
+                ));
+            }
+            if let Some(cent) = pair.cent_html_id.as_ref().filter(|cent| slots(cent) != 2) {
+                return Err(format!(
+                    "{slug}: writer-cells {} cent comb {cent} must be a 2-slot comb",
+                    join.writer_key
+                ));
+            }
         }
     }
     for join in &cells.peso_joins {
-        if !present.contains(join.html_id.as_str()) {
-            return Err(format!(
-                "{slug}: writer-cells peso html_id {} for {} is not an input name=",
-                join.html_id, join.writer_key
-            ));
+        for html_id in &join.html_ids {
+            if slots(html_id) < 3 {
+                return Err(format!(
+                    "{slug}: writer-cells {} peso comb {html_id} must have at least 3 slots",
+                    join.writer_key
+                ));
+            }
         }
-        if present.contains(join.writer_key.as_str()) {
-            return Err(format!(
-                "{slug}: writer-cells {} is already a stamped name=; remove the peso join",
-                join.writer_key
-            ));
-        }
-        let slots = grouped.get(join.html_id.as_str()).map_or(0, Vec::len);
-        if slots < 3 {
-            return Err(format!(
-                "{slug}: writer-cells {} peso comb {} must have at least 3 slots",
-                join.writer_key, join.html_id
-            ));
+    }
+    for join in &cells.date_joins {
+        let parts = [
+            (Some(&join.mm_html_id), &[2][..]),
+            (join.dd_html_id.as_ref(), &[2][..]),
+            (Some(&join.yyyy_html_id), &[2, 4][..]),
+        ];
+        for (html_id, allowed) in parts {
+            let Some(html_id) = html_id else {
+                continue;
+            };
+            let indices = grouped.get(html_id.as_str()).cloned().unwrap_or_default();
+            let comb = indices.iter().all(|&index| tags[index].slot.is_some());
+            if !comb || !allowed.contains(&indices.len()) {
+                return Err(format!(
+                    "{slug}: writer-cells {} date comb {html_id} must be a {allowed:?}-slot comb",
+                    join.writer_key
+                ));
+            }
         }
     }
     for join in &cells.xbox_joins {
-        if !present.contains(join.html_id.as_str()) {
+        for html_id in &join.html_ids {
+            if xbox_input(&tags, &grouped, html_id).is_none() {
+                return Err(format!(
+                    "{slug}: writer-cells {} xbox {html_id} must be a single unslotted input",
+                    join.writer_key
+                ));
+            }
+        }
+    }
+    for key in cells.not_joined.keys() {
+        if present.contains(key.as_str()) {
             return Err(format!(
-                "{slug}: writer-cells xbox html_id {} for {} is not an input name=",
-                join.html_id, join.writer_key
+                "{slug}: writer-cells not_joined {key} is a stamped name= and prints"
             ));
         }
-        if present.contains(join.writer_key.as_str()) {
+    }
+    for html_id in cells.not_joined_cells.keys() {
+        if !html.contains(&format!("<div id=\"{html_id}\"")) {
             return Err(format!(
-                "{slug}: writer-cells {} is already a stamped name=; remove the xbox join",
-                join.writer_key
-            ));
-        }
-        let indices = grouped
-            .get(join.html_id.as_str())
-            .cloned()
-            .unwrap_or_default();
-        if indices.len() != 1 {
-            return Err(format!(
-                "{slug}: writer-cells {} xbox {} must be a single unslotted input",
-                join.writer_key, join.html_id
-            ));
-        }
-        if tags[indices[0]].slot.is_some() {
-            return Err(format!(
-                "{slug}: writer-cells {} xbox {} must not be a comb",
-                join.writer_key, join.html_id
+                "{slug}: writer-cells not_joined_cells {html_id} is not a cell on the sheet"
             ));
         }
     }
@@ -900,13 +1251,57 @@ fn fill_bundle(
     let filled = fill_by_name_with_cells(html, fields, &cells.joins);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
     let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
+    let filled = fill_date_joins(&filled, fields, &cells.date_joins);
     Ok(fill_xbox_joins(&filled, fields, &cells.xbox_joins))
+}
+
+/// Writer keys in `fields` holding a value that `slug`'s sheet prints
+/// nowhere: not a stamped `name=`, in no writer-cells join, and not listed
+/// in `not_joined` with its reason. The print coverage gate: every value
+/// the print map carries has a box, or a reviewed reason it has none.
+pub fn unprinted_keys(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+) -> Result<Vec<String>, String> {
+    let loaded = bundle(slug).ok_or_else(|| format!("no frozen HTML bundle for {slug}"))?;
+    let cells = writer_cells(slug)?;
+    validate_writer_cells(loaded.html, slug, &cells)?;
+    let tags = input_tags(loaded.html);
+    let stamped: BTreeSet<&str> = tags.iter().map(|tag| tag.name).collect();
+    let joined = cells.joined_keys();
+    Ok(fields
+        .iter()
+        .filter(|(_, value)| !value.trim().is_empty())
+        .map(|(key, _)| key)
+        .filter(|key| {
+            !stamped.contains(key.as_str())
+                && !joined.contains(key.as_str())
+                && !cells.not_joined.contains_key(key.as_str())
+        })
+        .cloned()
+        .collect())
+}
+
+/// The characters a filled document prints in input `name` (a cell id or
+/// a stamped key), slots in order: what a reader sees in that box.
+pub fn printed_text(document: &str, name: &str) -> String {
+    let tags = input_tags(document);
+    let indices: Vec<usize> = tags
+        .iter()
+        .enumerate()
+        .filter(|(_, tag)| tag.name == name)
+        .map(|(index, _)| index)
+        .collect();
+    ordered_comb_indices(&tags, &indices)
+        .into_iter()
+        .map(|index| attr(tags[index].tag, "value").unwrap_or(""))
+        .collect()
 }
 
 /// Frozen 2551Q HTML with writer values on stamped `name=` inputs,
 /// writer-cell identity, money, and xbox joins.
 pub fn fill_2551q(draft: &Form2551QDraft) -> String {
-    fill_bundle(html_2551q(), &draft.to_bir_field_map(), "2551q-2018")
+    fill_bundle(html_2551q(), &draft.to_print_field_map(), "2551q-2018")
         .expect("2551q-2018 writer-cells")
 }
 
@@ -1044,7 +1439,7 @@ fn receipt_page_html(receipt: &ReceiptPage, width: &str, height: &str) -> String
 }
 
 pub fn filled_2551q_document(draft: &Form2551QDraft) -> String {
-    filled_document("2551q-2018", &draft.to_bir_field_map()).expect("2551q-2018 freeze bundle")
+    filled_document("2551q-2018", &draft.to_print_field_map()).expect("2551q-2018 freeze bundle")
 }
 
 pub fn stamped_tin_names() -> &'static [&'static str] {
@@ -1240,13 +1635,17 @@ mod tests {
             for join in &cells.peso_joins {
                 fields.insert(join.writer_key.clone(), "1234.56".to_string());
             }
+            for join in &cells.date_joins {
+                let date = if join.dd_html_id.is_some() {
+                    "06/15/2025"
+                } else {
+                    "06/2025"
+                };
+                fields.insert(join.writer_key.clone(), date.to_string());
+            }
             let filled =
                 super::filled_document(slug, &fields).unwrap_or_else(|e| panic!("{slug}: {e}"));
-            let has_join = !cells.joins.is_empty()
-                || !cells.money_joins.is_empty()
-                || !cells.xbox_joins.is_empty()
-                || !cells.peso_joins.is_empty();
-            if has_join {
+            if cells.has_fill_join() {
                 let empty = super::filled_document(slug, &BTreeMap::new())
                     .unwrap_or_else(|e| panic!("{slug}: {e}"));
                 assert_ne!(filled, empty, "{slug}: fill joins changed nothing");
@@ -1290,8 +1689,11 @@ mod tests {
         fields.insert("k".to_string(), "-122,500.25".to_string());
         let joins = [super::MoneyJoin {
             writer_key: "k".into(),
-            peso_html_id: "p".into(),
-            cent_html_id: "c".into(),
+            cells: vec![super::MoneyCells {
+                peso_html_id: "p".into(),
+                cent_html_id: Some("c".into()),
+                point_slot: false,
+            }],
         }];
         let doc = super::fill_money_joins(&html, &fields, &joins);
         assert_eq!(
@@ -1309,6 +1711,148 @@ mod tests {
     }
 
     #[test]
+    fn decimal_comb_money_puts_cents_in_the_last_two_slots() {
+        use std::collections::BTreeMap;
+        let html = comb("p", 8);
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "1,234.50".to_string());
+        let mut joins = [super::MoneyJoin {
+            writer_key: "k".into(),
+            cells: vec![super::MoneyCells {
+                peso_html_id: "p".into(),
+                cent_html_id: None,
+                point_slot: true,
+            }],
+        }];
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            ["", "1", "2", "3", "4", "", "5", "0"]
+        );
+        joins[0].cells[0].point_slot = false;
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            ["", "", "1", "2", "3", "4", "5", "0"]
+        );
+    }
+
+    #[test]
+    fn one_writer_key_fills_every_listed_cell() {
+        use std::collections::BTreeMap;
+        let html = format!("{}{}", comb("a", 4), comb("b", 3));
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "Ab1".to_string());
+        let mut cells = BTreeMap::new();
+        cells.insert("k".to_string(), vec!["a".to_string(), "b".to_string()]);
+        let doc = super::fill_by_name_with_cells(&html, &fields, &cells);
+        assert_eq!(comb_values(&doc, "a"), ["A", "B", "1", ""]);
+        assert_eq!(comb_values(&doc, "b"), ["A", "B", "1"]);
+    }
+
+    #[test]
+    fn date_join_splits_one_writer_date_over_its_combs() {
+        use std::collections::BTreeMap;
+        assert_eq!(
+            super::split_writer_date("6/9/2025"),
+            Some(("06".into(), Some("09".into()), "2025".into()))
+        );
+        assert_eq!(
+            super::split_writer_date("2025-06-09"),
+            Some(("06".into(), Some("09".into()), "2025".into()))
+        );
+        assert_eq!(
+            super::split_writer_date("04/2025"),
+            Some(("04".into(), None, "2025".into()))
+        );
+        assert_eq!(super::split_writer_date("June 9"), None);
+        assert_eq!(super::split_writer_date(""), None);
+        let html = format!("{}{}{}", comb("m", 2), comb("d", 2), comb("y", 4));
+        let join = super::DateJoin {
+            writer_key: "k".into(),
+            mm_html_id: "m".into(),
+            dd_html_id: Some("d".into()),
+            yyyy_html_id: "y".into(),
+        };
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "05/09/2025".to_string());
+        let doc = super::fill_date_joins(&html, &fields, std::slice::from_ref(&join));
+        assert_eq!(comb_values(&doc, "m"), ["0", "5"]);
+        assert_eq!(comb_values(&doc, "d"), ["0", "9"]);
+        assert_eq!(comb_values(&doc, "y"), ["2", "0", "2", "5"]);
+        // A month/year value has no day for the DD comb: nothing prints.
+        fields.insert("k".to_string(), "05/2025".to_string());
+        let doc = super::fill_date_joins(&html, &fields, &[join]);
+        assert_eq!(comb_values(&doc, "y"), ["", "", "", ""]);
+    }
+
+    #[test]
+    fn xbox_join_names_one_box_of_a_two_box_cell_by_input_id() {
+        use std::collections::BTreeMap;
+        let html = concat!(
+            r#"<input type="text" id="c-i0" name="c" maxlength="1">"#,
+            r#"<input type="text" id="c-i1" name="c" maxlength="1">"#,
+        );
+        let join = super::XboxJoin {
+            writer_key: "k".into(),
+            html_ids: vec!["c-i1".into()],
+        };
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "true".to_string());
+        let doc = super::fill_xbox_joins(html, &fields, &[join]);
+        assert_eq!(comb_values(&doc, "c"), ["", "X"]);
+    }
+
+    #[test]
+    fn writer_cells_reject_reused_cells_stale_exceptions_and_old_sections() {
+        let parse = |json: &str| super::parse_writer_cells(json).err().unwrap_or_default();
+        assert!(parse(r#"{"joins":[{"writer_key":"a","html_id":"p1c1"},{"writer_key":"b","html_ids":["p1c2","p1c1"]}]}"#)
+            .contains("already a fill target"));
+        assert!(parse(r#"{"joins":[{"writer_key":"a","html_id":"p1c1"}],"money_joins":[{"writer_key":"a","decimal_html_id":"p1c2"}]}"#)
+            .contains("duplicate writer_key a"));
+        assert!(parse(r#"{"joins":[{"writer_key":"a","html_id":"p1c1"}],"not_joined":[{"writer_key":"a","reason":"x"}]}"#)
+            .contains("remove it from not_joined"));
+        assert!(
+            parse(r#"{"joins":[],"not_joined":[{"writer_keys":["a","b"]}]}"#)
+                .contains("needs a reason")
+        );
+        assert!(parse(r#"{"joins":[{"writer_key":"a","html_id":"p1c1"}],"not_joined_cells":[{"html_id":"p1c1","reason":"x"}]}"#)
+            .contains("remove it from not_joined_cells"));
+        assert!(parse(r#"{"joins":[],"left_out":[]}"#).contains("unknown section left_out"));
+        let ok = super::parse_writer_cells(
+            r#"{"joins":[{"writer_key":"a","html_id":"p1c1","html_ids":["p2c1"]}],
+                "money_joins":[{"writer_key":"m","peso_html_id":"p1c2","cent_html_id":"p1c3","decimal_html_ids":["p2c2"],"point_slot":true}],
+                "date_joins":[{"writer_key":"d","mm_html_id":"p1c4","yyyy_html_id":"p1c5"}],
+                "not_joined":[{"writer_keys":["x","y"],"reason":"not on the paper form"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(ok.joins["a"], ["p1c1", "p2c1"]);
+        assert_eq!(ok.money_joins[0].cells.len(), 2);
+        assert!(ok.money_joins[0].cells[1].point_slot);
+        assert_eq!(ok.not_joined["y"], "not on the paper form");
+    }
+
+    #[test]
+    fn unprinted_keys_lists_values_with_no_box_and_no_reason() {
+        use std::collections::BTreeMap;
+        let mut fields = BTreeMap::new();
+        for (key, value) in [
+            ("frm1601c:txtTIN1", "111"),
+            ("frm1601c:txtTaxpayerName", "NAME"),
+            ("frm1601c:txtCurrentPage", "1"),
+            ("frm1601c:txtTax14", "1.00"),
+            ("frm1601c:unknownBox", "5"),
+            ("frm1601c:emptyBox", ""),
+        ] {
+            fields.insert(key.to_string(), value.to_string());
+        }
+        assert_eq!(
+            super::unprinted_keys("1601c-2018", &fields).unwrap(),
+            ["frm1601c:unknownBox"]
+        );
+    }
+
+    #[test]
     fn negative_peso_join_puts_minus_left_of_pesos() {
         use std::collections::BTreeMap;
         let html = comb("p", 5);
@@ -1316,7 +1860,7 @@ mod tests {
         fields.insert("k".to_string(), "-122.50".to_string());
         let joins = [super::PesoJoin {
             writer_key: "k".into(),
-            html_id: "p".into(),
+            html_ids: vec!["p".into()],
         }];
         let doc = super::fill_peso_joins(&html, &fields, &joins);
         assert_eq!(comb_values(&doc, "p"), ["", "-", "1", "2", "3"]);
@@ -1578,7 +2122,10 @@ mod tests {
         fields.insert("frm1601c:txtTaxpayerName".to_string(), "Ab".to_string());
         fields.insert("frm1601c:txtTIN1".to_string(), "9".to_string());
         let mut cells = BTreeMap::new();
-        cells.insert("frm1601c:txtTaxpayerName".to_string(), "p1c36".to_string());
+        cells.insert(
+            "frm1601c:txtTaxpayerName".to_string(),
+            vec!["p1c36".to_string()],
+        );
         let filled = fill_by_name_with_cells(html, &fields, &cells);
         assert_eq!(comb_text(&filled, "p1c36"), "AB");
         assert!(filled.contains("data-writer-value=\"AB\""));
@@ -1674,28 +2221,173 @@ mod tests {
         assert!(!filled.contains("8888.88"));
     }
 
+    /// A 1601-C for the test TIN 111-111-114 (never a real TIN), every
+    /// Part II item non-zero, Item 13 Yes and one Schedule I row.
+    fn draft_1601c() -> bir_core::forms::form_1601c::Form1601CDraft {
+        use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row};
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Andrea Mae Alicando Galang",
+                "tin": {"segment1": "111", "segment2": "111", "segment3": "114", "branch": "00000"},
+                "rdo_code": "039", "line_of_business": "Payroll",
+                "registered_address": "42 Banahaw Street, Barangay Example, Quezon City",
+                "zip_code": "1100", "phone": "09170000000", "email": "juan@example.com",
+                "default_form_type": "1601Cv2018", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2025, 6);
+        draft.auto_compute_penalties = false;
+        draft.tax_relief = true;
+        draft.tax_relief_specification = "International Tax Treaty".to_string();
+        draft.tax_14_total_compensation = 250_000.0;
+        draft.tax_15_statutory_minimum_wage = 1_500.0;
+        draft.tax_16_holiday_pay = 1_600.0;
+        draft.tax_17_13th_month_pay = 20_000.0;
+        draft.tax_18_de_minimis = 5_000.0;
+        draft.tax_19_sss_gsis = 12_500.0;
+        draft.tax_20_other_name = "Rice subsidy".to_string();
+        draft.tax_20_other_amount = 2_000.0;
+        draft.tax_23_not_subject = 3_000.0;
+        draft.tax_25_total_taxes_withheld = 18_750.0;
+        draft.tax_29_other_remittances_name = "Prior credit".to_string();
+        draft.tax_29_other_remittances_amount = 1_000.0;
+        for (component, value) in [
+            (bir_core::penalties::PenaltyComponent::Surcharge, 100.0),
+            (bir_core::penalties::PenaltyComponent::Interest, 200.0),
+            (bir_core::penalties::PenaltyComponent::Compromise, 300.0),
+        ] {
+            draft.set_penalty_override(component, Some(value));
+        }
+        draft.schedule_1 = vec![Form1601CSchedule1Row {
+            previous_month: "04/2025".to_string(),
+            date_paid: "05/09/2025".to_string(),
+            drawee_bank_code_or_agency: "BANK1".to_string(),
+            payment_number: "REF001".to_string(),
+            tax_paid: 15_000.0,
+            should_be_tax_due: 15_250.0,
+            adjustment: 250.0,
+        }];
+        draft.compute();
+        draft
+    }
+
+    /// The pesos and centavos a peso + 2-slot cents pair prints.
+    fn printed_amount(html: &str, peso: &str, cent: &str) -> String {
+        format!("{}.{}", comb_text(html, peso).trim(), comb_text(html, cent))
+    }
+
     #[test]
     fn filled_document_1601c_fills_taxpayer_name_and_address() {
-        let fields = identity_map(
-            "frm1601c:txtTaxpayerName",
-            "Andrea Mae Alicando Galang",
-            "frm1601c:txtAddress",
-            "42 Banahaw Street",
+        let html = filled_document("1601c-2018", &draft_1601c().to_print_field_map()).unwrap();
+        assert_eq!(
+            comb_text(&html, "p1c36").trim(),
+            "ANDREA MAE ALICANDO GALANG"
         );
-        let html = filled_document("1601c-2018", &fields).unwrap();
-        assert_eq!(comb_text(&html, "p1c36"), "ANDREA MAE ALICANDO GALANG");
-        assert_eq!(comb_text(&html, "p1c38"), "42 BANAHAW STREET");
-        assert!(html.contains("ANDREA MAE ALICANDO GALANG"));
+        // Item 9 over both lines, broken at a space, not cut at 40 slots.
+        assert_eq!(
+            comb_text(&html, "p1c38").trim(),
+            "42 BANAHAW STREET, BARANGAY EXAMPLE,"
+        );
+        assert_eq!(comb_text(&html, "p1c39").trim(), "QUEZON CITY");
         assert!(html.contains("data-writer-value=\"ANDREA MAE ALICANDO GALANG\""));
-        assert!(html.contains("42 BANAHAW STREET"));
         assert!(!html.contains("Andrea Mae Alicando Galang"));
-        assert!(!html.contains("42 Banahaw Street"));
         let stamped: std::collections::BTreeSet<String> = input_tags(&html)
             .into_iter()
             .map(|tag| tag.name.to_string())
             .filter(|name| name.starts_with("frm1601c:"))
             .collect();
         assert_eq!(stamped.len(), 4);
+    }
+
+    /// #113 acceptance: Part II items 14-36, Item 13/13A, Schedule I and the
+    /// page 2 header (name, TIN and branch) print from a 1601-C draft; the
+    /// ATC is the sheet's preprinted WW010.
+    #[test]
+    fn filled_document_1601c_prints_every_part_ii_item_and_the_page_two_header() {
+        let draft = draft_1601c();
+        let fields = draft.to_print_field_map();
+        let html = filled_document("1601c-2018", &fields).unwrap();
+        let money = bir_core::official_xml::official_amount;
+        let items: [(u8, &str, &str, f64); 23] = [
+            (14, "p1c56", "p1c58", draft.tax_14_total_compensation),
+            (15, "p1c61", "p1c63", draft.tax_15_statutory_minimum_wage),
+            (16, "p1c65", "p1c67", draft.tax_16_holiday_pay),
+            (17, "p1c69", "p1c71", draft.tax_17_13th_month_pay),
+            (18, "p1c73", "p1c75", draft.tax_18_de_minimis),
+            (19, "p1c77", "p1c79", draft.tax_19_sss_gsis),
+            (20, "p1c81", "p1c83", draft.tax_20_other_amount),
+            (21, "p1c85", "p1c87", draft.tax_21_total_non_taxable),
+            (22, "p1c89", "p1c91", draft.tax_22_total_taxable),
+            (23, "p1c93", "p1c95", draft.tax_23_not_subject),
+            (24, "p1c97", "p1c99", draft.tax_24_net_taxable),
+            (25, "p1c101", "p1c103", draft.tax_25_total_taxes_withheld),
+            (26, "p1c105", "p1c107", draft.tax_26_adjustment),
+            (
+                27,
+                "p1c109",
+                "p1c111",
+                draft.tax_27_taxes_withheld_for_remittance,
+            ),
+            (28, "p1c113", "p1c115", 0.0),
+            (
+                29,
+                "p1c117",
+                "p1c119",
+                draft.tax_29_other_remittances_amount,
+            ),
+            (30, "p1c121", "p1c123", draft.tax_30_total_tax_remittances),
+            (31, "p1c125", "p1c127", draft.tax_31_tax_still_due),
+            (32, "p1c129", "p1c131", draft.tax_32_surcharge),
+            (33, "p1c133", "p1c135", draft.tax_33_interest),
+            (34, "p1c137", "p1c139", draft.tax_34_compromise),
+            (35, "p1c141", "p1c143", draft.tax_35_total_penalties),
+            (36, "p1c145", "p1c147", draft.tax_36_total_amount_payable),
+        ];
+        for (item, peso, cent, value) in items {
+            assert_eq!(
+                printed_amount(&html, peso, cent),
+                money(value).replace(',', ""),
+                "item {item}"
+            );
+        }
+        assert_ne!(draft.tax_36_total_amount_payable, 0.0);
+        assert_eq!(named_values(&html, "p1c223"), ["RICE SUBSIDY"]);
+        assert_eq!(named_values(&html, "p1c225"), ["PRIOR CREDIT"]);
+        // Item 13 Yes, 13A printed whole (longer than its 17 slots).
+        assert_eq!(named_values(&html, "p1c52"), ["X"]);
+        assert_eq!(named_values(&html, "p1c53"), [""]);
+        assert!(html.contains("readonly value=\"INTERNATIONAL TAX TREATY\""));
+        // Item 5 ATC: preprinted on the sheet, so a reviewed not_joined key.
+        assert_eq!(fields["frm1601c:txtATC"], "WW010");
+        assert!(html.contains(">WW010</div>"));
+        let cells = writer_cells("1601c-2018").unwrap();
+        assert!(cells.not_joined["frm1601c:txtATC"].contains("preprinted WW010"));
+        // Page 1 TIN (stamped) and the page 2 header: TIN, branch and name.
+        assert_eq!(comb_text(&html, "frm1601c:txtTIN1"), "111");
+        assert_eq!(comb_text(&html, "frm1601c:txtTIN3"), "114");
+        assert_eq!(comb_text(&html, "frm1601c:txtBranchCode"), "00000");
+        assert_eq!(comb_text(&html, "p2c5"), "11111111400000");
+        assert_eq!(
+            comb_text(&html, "p2c6").trim(),
+            "ANDREA MAE ALICANDO GALANG"
+        );
+        // Schedule I row 1: both dates split over their combs; rows 2-3 blank.
+        assert_eq!(comb_text(&html, "p2c15"), "04");
+        assert_eq!(comb_text(&html, "p2c16"), "2025");
+        assert_eq!(comb_text(&html, "p2c17"), "05");
+        assert_eq!(comb_text(&html, "p2c18"), "09");
+        assert_eq!(comb_text(&html, "p2c19"), "2025");
+        assert_eq!(comb_text(&html, "p2c20"), "BANK1");
+        assert_eq!(printed_amount(&html, "p2c22", "p2c24"), "15000.00");
+        assert_eq!(printed_amount(&html, "p2c53", "p2c55"), "15250.00");
+        assert_eq!(printed_amount(&html, "p2c57", "p2c59"), "250.00");
+        assert_eq!(comb_text(&html, "p2c33").trim(), "");
+        assert_eq!(printed_amount(&html, "p2c83", "p2c85"), "250.00");
+        // Every value the map carries prints or has a reviewed reason.
+        assert_eq!(
+            unprinted_keys("1601c-2018", &fields).unwrap(),
+            Vec::<String>::new()
+        );
     }
 
     #[test]
@@ -3024,48 +3716,25 @@ mod tests {
             assert!(!cells.xbox_joins.is_empty(), "{slug} xbox_joins");
             let present: std::collections::BTreeSet<&str> =
                 input_tags(html).into_iter().map(|tag| tag.name).collect();
-            for (key, html_id) in &cells.joins {
+            for (key, html_id) in cells.targets() {
                 assert!(
-                    present.contains(html_id.as_str()),
+                    present.contains(html_id) || html.contains(&format!("id=\"{html_id}\"")),
                     "{slug} {key} -> {html_id}"
                 );
                 assert!(
-                    !key.starts_with("p"),
+                    !key.starts_with('p'),
                     "{slug} writer_key looks like a cell id: {key}"
                 );
                 assert!(
-                    html_id.starts_with("p"),
+                    html_id.starts_with('p'),
                     "{slug} html_id must be a cell id: {html_id}"
                 );
-                assert!(!present.contains(key.as_str()), "{slug} {key} is stamped");
+                assert!(!present.contains(key), "{slug} {key} is stamped");
             }
             for join in &cells.money_joins {
-                assert!(
-                    present.contains(join.peso_html_id.as_str()),
-                    "{slug} {} peso {}",
-                    join.writer_key,
-                    join.peso_html_id
-                );
-                assert!(
-                    present.contains(join.cent_html_id.as_str()),
-                    "{slug} {} cent {}",
-                    join.writer_key,
-                    join.cent_html_id
-                );
-                assert!(join.peso_html_id.starts_with("p"));
-                assert!(join.cent_html_id.starts_with("p"));
-                assert_ne!(join.peso_html_id, join.cent_html_id);
-                assert!(!present.contains(join.writer_key.as_str()));
-            }
-            for join in &cells.xbox_joins {
-                assert!(
-                    present.contains(join.html_id.as_str()),
-                    "{slug} {} xbox {}",
-                    join.writer_key,
-                    join.html_id
-                );
-                assert!(join.html_id.starts_with("p"));
-                assert!(!present.contains(join.writer_key.as_str()));
+                for pair in &join.cells {
+                    assert_ne!(Some(&pair.peso_html_id), pair.cent_html_id.as_ref());
+                }
             }
         }
     }

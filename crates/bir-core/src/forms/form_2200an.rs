@@ -480,10 +480,16 @@ impl Form2200ANDraft {
 
     /// The field map plus the print-only `derived:line:` values the printed
     /// sheet needs (`html-frozen/2200an-2018/writer-cells.json`): the Item 10
-    /// and 11 region, province and city names (the upload carries codes).
+    /// and 11 region, province and city names (the upload carries codes) and
+    /// `derived:tin_digits`, the page 2 header TIN as 14 digits (the upload's
+    /// `txtPage2TIN` is dashed).
     /// A region prints its short name (`REGION IV-A`, `NCR`). Never submitted.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
+        fields.insert(
+            "derived:tin_digits".to_string(),
+            super::print_map::tin_digits(&self.tin),
+        );
         for (item, place) in [
             (10, &self.place_of_production),
             (11, &self.place_of_removal),

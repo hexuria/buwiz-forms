@@ -1,7 +1,7 @@
 {
  "form_id": "2550q-v2024",
  "html_slug": "2550q-2024",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or above it, or the printed item number on its row. Money amounts pair the 12-slot peso comb with the 2-slot centavo comb directly right (money_joins); the 2-slot is the centavo comb for items 15-26 and Part IV 31-61. Items 1, 3, 5, 6, 13 and 14 Yes/No or option pairs take xbox_joins (box immediately left of the printed option; the first layout key of a Yes/No pair is Yes). Rows of Schedule 1, Schedule 3 and Schedule 4 print no row number and stay blank. Item 4 return period dates are three combs under one key and stay blank. Stamped TIN and branch combs (name=) take no join.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits directly left of or above it, or the printed item number on its row. Money amounts pair the 12-slot peso comb with the 2-slot centavo comb directly right (money_joins); the 2-slot is the centavo comb for items 15-26 and Part IV 31-61. Items 1, 3, 5, 6, 13 and 14 Yes/No or option pairs take xbox_joins (box immediately left of the printed option; the first layout key of a Yes/No pair is Yes). Schedules 1, 3 and 4 print two rows each with no row number: the layout's rows (10/11, 0/1) take them in order under the column headers. Item 4 return period dates print through date_joins; item 10 over both lines, the page 2 TIN and the schedule Period Covered cells print from derived: keys of Form2550QDraft::to_print_field_map. Stamped TIN and branch combs (name=) take no join. Since #113 every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm2550qv2024:selectedMonthNo2",
@@ -26,12 +26,6 @@
    "html_id": "p1c39",
    "printed": "9 Taxpayer's Name",
    "reason": "caption \"9 Taxpayer's Name\" directly above the 40-slot comb"
-  },
-  {
-   "writer_key": "frm2550qv2024:taxpayerAddress",
-   "html_id": "p1c41",
-   "printed": "10 Registered Address",
-   "reason": "caption \"10 Registered Address\" directly above the 40-slot comb"
   },
   {
    "writer_key": "frm2550qv2024:taxpayerZip",
@@ -104,6 +98,270 @@
    "html_id": "p2c245",
    "printed": "Schedule 4 Total (To Part II, Item 17)",
    "reason": "\"Total (To Part II, Item 17)\" caption directly left"
+  },
+  {
+   "writer_key": "derived:address_line1",
+   "html_id": "p1c41",
+   "printed": "10 Registered Address, line 1",
+   "reason": "full-width 40-slot comb under the item 10 caption; the print map breaks the address at the last space that fits"
+  },
+  {
+   "writer_key": "derived:line:address_line2",
+   "html_id": "p1c42",
+   "printed": "10 Registered Address, line 2",
+   "reason": "31-slot comb left of the ZIP Code on the second item 10 row: the rest of the address; a longer line prints whole in smaller type"
+  },
+  {
+   "writer_key": "frm2550qv2024:addSpecifyNo19",
+   "html_id": "p1c205",
+   "printed": "19 Other Credits/Payment (Specify)",
+   "reason": "the specify box on the item 19 row (input inset past the caption), left of the amount combs"
+  },
+  {
+   "writer_key": "frm2550qv2024:addSpecifyNo42",
+   "html_id": "p2c246",
+   "printed": "42 Others (Specify)",
+   "reason": "the specify box on the item 42 row, left of the amount combs"
+  },
+  {
+   "writer_key": "frm2550qv2024:addSpecifyNo47",
+   "html_id": "p2c248",
+   "printed": "47 Others (Specify)",
+   "reason": "the specify box on the item 47 row, left of the amount combs"
+  },
+  {
+   "writer_key": "frm2550qv2024:addSpecifyNo56",
+   "html_id": "p2c250",
+   "printed": "56 Others (Specify)",
+   "reason": "the specify box on the item 56 row, left of the amount combs"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "printed": "Page 2 TIN",
+   "reason": "the mixed TIN comb under the page 2 TIN caption: its nine inputs take the TIN digits (the branch slots are preprinted)"
+  },
+  {
+   "writer_key": "txtDatePurchase10",
+   "html_id": "p2c184",
+   "printed": "Schedule 1 row 1 (A) Date Purchased/Imported (MM/DD/YYYY)",
+   "reason": "the cell under the Schedule 1 (A) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtSourceCode10",
+   "html_id": "p2c185",
+   "printed": "Schedule 1 row 1 (B) Source Code",
+   "reason": "the cell under the Schedule 1 (B) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtDescription10",
+   "html_id": "p2c186",
+   "printed": "Schedule 1 row 1 (C) Description",
+   "reason": "the cell under the Schedule 1 (C) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtAmountPurchase10",
+   "html_id": "p2c187",
+   "printed": "Schedule 1 row 1 (D) Amount of Purchases/Importation",
+   "reason": "the cell under the Schedule 1 (D) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtInputTax10",
+   "html_id": "p2c188",
+   "printed": "Schedule 1 row 1 (E) Balance of Input Tax from Previous Period",
+   "reason": "the cell under the Schedule 1 (E) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtEstimatedLife10",
+   "html_id": "p2c189",
+   "printed": "Schedule 1 row 1 (F) Estimated Life (in months)",
+   "reason": "the cell under the Schedule 1 (F) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtRecognizedLife10",
+   "html_id": "p2c190",
+   "printed": "Schedule 1 row 1 (G) Recognized Life (Remaining Life)",
+   "reason": "the cell under the Schedule 1 (G) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtAllowedInputTax10",
+   "html_id": "p2c191",
+   "printed": "Schedule 1 row 1 (H) Allowable Input Tax for the Period",
+   "reason": "the cell under the Schedule 1 (H) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtBalanceInputTax10",
+   "html_id": "p2c192",
+   "printed": "Schedule 1 row 1 (I) Balance of Input Tax to be carried to Next Period",
+   "reason": "the cell under the Schedule 1 (I) column header on printed row 1 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtDatePurchase11",
+   "html_id": "p2c193",
+   "printed": "Schedule 1 row 2 (A) Date Purchased/Imported (MM/DD/YYYY)",
+   "reason": "the cell under the Schedule 1 (A) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtSourceCode11",
+   "html_id": "p2c194",
+   "printed": "Schedule 1 row 2 (B) Source Code",
+   "reason": "the cell under the Schedule 1 (B) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtDescription11",
+   "html_id": "p2c195",
+   "printed": "Schedule 1 row 2 (C) Description",
+   "reason": "the cell under the Schedule 1 (C) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtAmountPurchase11",
+   "html_id": "p2c196",
+   "printed": "Schedule 1 row 2 (D) Amount of Purchases/Importation",
+   "reason": "the cell under the Schedule 1 (D) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtInputTax11",
+   "html_id": "p2c197",
+   "printed": "Schedule 1 row 2 (E) Balance of Input Tax from Previous Period",
+   "reason": "the cell under the Schedule 1 (E) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtEstimatedLife11",
+   "html_id": "p2c198",
+   "printed": "Schedule 1 row 2 (F) Estimated Life (in months)",
+   "reason": "the cell under the Schedule 1 (F) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtRecognizedLife11",
+   "html_id": "p2c199",
+   "printed": "Schedule 1 row 2 (G) Recognized Life (Remaining Life)",
+   "reason": "the cell under the Schedule 1 (G) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtAllowedInputTax11",
+   "html_id": "p2c200",
+   "printed": "Schedule 1 row 2 (H) Allowable Input Tax for the Period",
+   "reason": "the cell under the Schedule 1 (H) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "txtBalanceInputTax11",
+   "html_id": "p2c201",
+   "printed": "Schedule 1 row 2 (I) Balance of Input Tax to be carried to Next Period",
+   "reason": "the cell under the Schedule 1 (I) column header on printed row 2 (the layout numbers the two rows 10 and 11; column E carries the input tax the Column E total sums)"
+  },
+  {
+   "writer_key": "derived:sched3_period0",
+   "html_id": "p2c217",
+   "printed": "Schedule 3 row 1 (A) Period Covered",
+   "reason": "the Period Covered cell: from-to as MM/DD/YY-MM/DD/YY (the upload carries the two dates)"
+  },
+  {
+   "writer_key": "txtNameWithHoldingAgent30",
+   "html_id": "p2c218",
+   "printed": "Schedule 3 row 1 (B) Name of Withholding Agent",
+   "reason": "the cell under the (B) header on printed row 1"
+  },
+  {
+   "writer_key": "txtIncomePayment30",
+   "html_id": "p2c219",
+   "printed": "Schedule 3 row 1 (C) Income Payment",
+   "reason": "the cell under the (C) header on printed row 1"
+  },
+  {
+   "writer_key": "txtTotalTaxWithHeld30",
+   "html_id": "p2c220",
+   "printed": "Schedule 3 row 1 (D) Total Tax Withheld",
+   "reason": "the cell under the (D) header on printed row 1"
+  },
+  {
+   "writer_key": "derived:sched3_period1",
+   "html_id": "p2c221",
+   "printed": "Schedule 3 row 2 (A) Period Covered",
+   "reason": "the Period Covered cell: from-to as MM/DD/YY-MM/DD/YY (the upload carries the two dates)"
+  },
+  {
+   "writer_key": "txtNameWithHoldingAgent31",
+   "html_id": "p2c222",
+   "printed": "Schedule 3 row 2 (B) Name of Withholding Agent",
+   "reason": "the cell under the (B) header on printed row 2"
+  },
+  {
+   "writer_key": "txtIncomePayment31",
+   "html_id": "p2c223",
+   "printed": "Schedule 3 row 2 (C) Income Payment",
+   "reason": "the cell under the (C) header on printed row 2"
+  },
+  {
+   "writer_key": "txtTotalTaxWithHeld31",
+   "html_id": "p2c224",
+   "printed": "Schedule 3 row 2 (D) Total Tax Withheld",
+   "reason": "the cell under the (D) header on printed row 2"
+  },
+  {
+   "writer_key": "derived:sched4_period0",
+   "html_id": "p2c234",
+   "printed": "Schedule 4 row 1 (A) Period Covered",
+   "reason": "the Period Covered cell: from-to as MM/DD/YY-MM/DD/YY (the upload carries the two dates)"
+  },
+  {
+   "writer_key": "txtNameOfMiller40",
+   "html_id": "p2c235",
+   "printed": "Schedule 4 row 1 (B) Name of Miller",
+   "reason": "the cell under the (B) header on printed row 1"
+  },
+  {
+   "writer_key": "txtNameOfTaxpayer40",
+   "html_id": "p2c236",
+   "printed": "Schedule 4 row 1 (C) Name of Taxpayer",
+   "reason": "the cell under the (C) header on printed row 1"
+  },
+  {
+   "writer_key": "txtOfficialReceiptNumber40",
+   "html_id": "p2c237",
+   "printed": "Schedule 4 row 1 (D) Official Receipt Number",
+   "reason": "the cell under the (D) header on printed row 1"
+  },
+  {
+   "writer_key": "txtAmountPaid40",
+   "html_id": "p2c238",
+   "printed": "Schedule 4 row 1 (E) Amount Paid",
+   "reason": "the cell under the (E) header on printed row 1"
+  },
+  {
+   "writer_key": "derived:sched4_period1",
+   "html_id": "p2c239",
+   "printed": "Schedule 4 row 2 (A) Period Covered",
+   "reason": "the Period Covered cell: from-to as MM/DD/YY-MM/DD/YY (the upload carries the two dates)"
+  },
+  {
+   "writer_key": "txtNameOfMiller41",
+   "html_id": "p2c240",
+   "printed": "Schedule 4 row 2 (B) Name of Miller",
+   "reason": "the cell under the (B) header on printed row 2"
+  },
+  {
+   "writer_key": "txtNameOfTaxpayer41",
+   "html_id": "p2c241",
+   "printed": "Schedule 4 row 2 (C) Name of Taxpayer",
+   "reason": "the cell under the (C) header on printed row 2"
+  },
+  {
+   "writer_key": "txtOfficialReceiptNumber41",
+   "html_id": "p2c242",
+   "printed": "Schedule 4 row 2 (D) Official Receipt Number",
+   "reason": "the cell under the (D) header on printed row 2"
+  },
+  {
+   "writer_key": "txtAmountPaid41",
+   "html_id": "p2c243",
+   "printed": "Schedule 4 row 2 (E) Amount Paid",
+   "reason": "the cell under the (E) header on printed row 2"
+  },
+  {
+   "writer_key": "frm2550qv2024:sched2TotalRatable",
+   "html_id": "p2c210",
+   "printed": "Schedule 2 Add: Ratable portion of Input Tax not directly attributable",
+   "reason": "the cell on the Add: Ratable portion row; the model writes ratable_input_tax under sched2TotalRatable"
   }
  ],
  "money_joins": [
@@ -556,35 +814,120 @@
    "reason": "box immediately left of \"No\" (second key of the Yes/No pair)"
   }
  ],
- "left_out": [
+ "date_joins": [
   {
-   "html_id": "p1c17",
-   "reason": "Item 4 Return Period From/To: each date is three combs (MM/DD/YYYY) under one layout key (RtnPeriodFromNo4 / RtnPeriodToNo4); left blank"
+   "writer_key": "frm2550qv2024:RtnPeriodFromNo4",
+   "mm_html_id": "p1c17",
+   "dd_html_id": "p1c18",
+   "yyyy_html_id": "p1c19",
+   "printed": "4 Return Period From (MM/DD/YYYY)",
+   "reason": "the first MM, DD and YYYY combs under the item 4 Return Period (MM/DD/YYYY) caption; one writer date split across the three"
   },
   {
-   "html_id": "p1c18",
-   "reason": "Item 4 Return Period From/To: each date is three combs (MM/DD/YYYY) under one layout key (RtnPeriodFromNo4 / RtnPeriodToNo4); left blank"
+   "writer_key": "frm2550qv2024:RtnPeriodToNo4",
+   "mm_html_id": "p1c20",
+   "dd_html_id": "p1c21",
+   "yyyy_html_id": "p1c22",
+   "printed": "4 Return Period To (MM/DD/YYYY)",
+   "reason": "the second MM, DD and YYYY combs under the item 4 caption (To, right of From)"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm2550qv2024:taxpayerAddress",
+   "reason": "prints from derived:address_line1 / derived:line:address_line2 (the print map shapes the address over both item 10 combs for the sheet)"
   },
   {
-   "html_id": "p1c19",
-   "reason": "Item 4 Return Period From/To: each date is three combs (MM/DD/YYYY) under one layout key (RtnPeriodFromNo4 / RtnPeriodToNo4); left blank"
+   "writer_keys": [
+    "resultOtherCreditsNo19",
+    "resultOtherCreditsNo42",
+    "resultOtherCreditsNo47",
+    "resultOtherCreditsNo56"
+   ],
+   "reason": "result control of the page's Others popup; the item amount prints from otherCreditsNo19 / otherSpecify42 / otherSpecify47 / otherSpecify56"
   },
   {
-   "html_id": "p1c20",
-   "reason": "Item 4 Return Period From/To: each date is three combs (MM/DD/YYYY) under one layout key (RtnPeriodFromNo4 / RtnPeriodToNo4); left blank"
+   "writer_keys": [
+    "frm2550qv2024:txtPg2TIN1",
+    "frm2550qv2024:txtPg2TIN2",
+    "frm2550qv2024:txtPg2TIN3"
+   ],
+   "reason": "prints from derived:tin_digits (the print map shapes the nine TIN digits of the page 2 header for the sheet)"
   },
   {
-   "html_id": "p1c21",
-   "reason": "Item 4 Return Period From/To: each date is three combs (MM/DD/YYYY) under one layout key (RtnPeriodFromNo4 / RtnPeriodToNo4); left blank"
+   "writer_keys": [
+    "frm2550qv2024:txtPg2BranchCode",
+    "frm2550qv2024:branchCode"
+   ],
+   "reason": "branch code: the page 2 TIN comb preprints the branch slots, and the page 1 branch comb is a stamped catalog cell"
   },
   {
-   "html_id": "p1c22",
-   "reason": "Item 4 Return Period From/To: each date is three combs (MM/DD/YYYY) under one layout key (RtnPeriodFromNo4 / RtnPeriodToNo4); left blank"
+   "writer_keys": [
+    "txtDateCovered30",
+    "txtDateCovered3To0"
+   ],
+   "reason": "prints from derived:sched3_period0 (the print map shapes the from and to dates in the one Period Covered cell for the sheet)"
   },
   {
-   "html_id": "p1c42",
-   "reason": "second registered address line: no layout key for it (taxpayerAddress is the only address key)"
+   "writer_keys": [
+    "txtDateCovered31",
+    "txtDateCovered3To1"
+   ],
+   "reason": "prints from derived:sched3_period1 (the print map shapes the from and to dates in the one Period Covered cell for the sheet)"
   },
+  {
+   "writer_keys": [
+    "txtDate40",
+    "txtDate4To0"
+   ],
+   "reason": "prints from derived:sched4_period0 (the print map shapes the from and to dates in the one Period Covered cell for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "txtDate41",
+    "txtDate4To1"
+   ],
+   "reason": "prints from derived:sched4_period1 (the print map shapes the from and to dates in the one Period Covered cell for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm2550qv2024:sched2VatExemptSale",
+    "frm2550qv2024:sched2TotalSales",
+    "frm2550qv2024:sched2AmountInputTax"
+   ],
+   "reason": "Schedule 2 formula operand (VAT Exempt Sale / Total Sales x Input Tax not directly attributable); the sheet prints the formula as text with no cells for its operands, the result prints from sched2TotalRatable"
+  },
+  {
+   "writer_keys": [
+    "txtTotalAmountOfBalanceofInputTaxFromPrevious",
+    "txtTotalAmountOfBalanceofInputTaxToBeCarried",
+    "txtTotalAmountofIncomePayment",
+    "txtTotalAmoungOfTaxWithHeld",
+    "txtAmountPaidSched4"
+   ],
+   "reason": "the page's own copy of a schedule total; the same amount prints from sched1TotalBalPrev / sched1TotalBalNext / sched3TotalIncome / sched3TotalTax / sched4AmountPaid"
+  },
+  {
+   "writer_keys": [
+    "frm2550qv2024:txtCurrentPage",
+    "frm2550qv2024:txtMaxPage"
+   ],
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  },
+  {
+   "writer_keys": [
+    "txtEnroll",
+    "txtFinalFlag",
+    "driveSelectTPExport"
+   ],
+   "reason": "eBIRForms system field (enrolment flag, final flag, export drive, online-filing credentials), not on the paper form"
+  },
+  {
+   "writer_key": "txtEmail",
+   "reason": "duplicate of frm2550qv2024:taxpayerEmailAddress (same email), which prints in item 12"
+  }
+ ],
+ "not_joined_cells": [
   {
    "html_id": "p1c115",
    "reason": "Tax agent accreditation, date of issue and expiry: no layout key on 2550Q; left blank"
@@ -708,154 +1051,6 @@
   {
    "html_id": "p1c161",
    "reason": "Part III payment block (items 27-30): no layout key for this block on 2550Q; left blank"
-  },
-  {
-   "html_id": "p2c184",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c185",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c186",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c187",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c188",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c189",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c190",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c191",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c192",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c193",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c194",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c195",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c196",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c197",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c198",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c199",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c200",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c201",
-   "reason": "Schedule 1 rows 10-11 (amortized input tax): rows print no item number and the nine columns carry no printed row key; left blank"
-  },
-  {
-   "html_id": "p2c210",
-   "reason": "Schedule 2 \"Add: Ratable portion\" cell: two candidate keys (sched2AmountInputTax, sched2TotalRatable) and no printed label for the row; left blank"
-  },
-  {
-   "html_id": "p2c217",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c218",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c219",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c220",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c221",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c222",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c223",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c224",
-   "reason": "Schedule 3 rows 30-31: rows print no item number, the period-covered key is a from/to pair for one cell; left blank"
-  },
-  {
-   "html_id": "p2c234",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c235",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c236",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c237",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c238",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c239",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c240",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c241",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c242",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
-  },
-  {
-   "html_id": "p2c243",
-   "reason": "Schedule 4 rows 40-41: rows print no item number; left blank"
   }
  ]
 }

@@ -663,31 +663,7 @@ pub(crate) fn print_sheet(
     kind: AgentFormKind,
     draft: &Value,
 ) -> Result<(&'static str, std::collections::BTreeMap<String, String>), String> {
-    match kind {
-        AgentFormKind::Form1601C => {
-            let typed: bir_core::forms::form_1601c::Form1601CDraft =
-                serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
-            Ok(("1601c-2018", typed.to_bir_field_map()))
-        }
-        AgentFormKind::Form2551Q => {
-            let typed: bir_core::forms::form_2551q::Form2551QDraft =
-                serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
-            Ok(("2551q-2018", typed.to_bir_field_map()))
-        }
-        AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
-            let typed: bir_core::forms::form_2550q::Form2550QDraft =
-                serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
-            Ok((
-                crate::views::form_2550q_view::PRINT_SLUG,
-                crate::views::form_2550q_view::print_fields(&typed),
-            ))
-        }
-        AgentFormKind::Queueable(queueable) => {
-            let spec = crate::views::queueable_forms::spec_for_kind(queueable)
-                .ok_or("this form has no page")?;
-            (spec.print)(draft)
-        }
-    }
+    crate::views::queueable_forms::print_sheet(kind, draft)
 }
 
 #[cfg(test)]

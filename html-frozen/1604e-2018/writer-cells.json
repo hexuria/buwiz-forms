@@ -743,5 +743,28 @@
    "printed": "8A Top withholding agent? No",
    "reason": "box immediately left of the printed option; X when the writer value is true"
   }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm1604e:txtAddress",
+   "reason": "prints from derived:address1 / derived:address2 (the print map shapes the address over both item 7 lines for the sheet)"
+  },
+  {
+   "writer_key": "frm1604e:txtLineBus",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_keys": [
+    "frm1604e:txtPg2TIN1",
+    "frm1604e:txtPg2TIN2",
+    "frm1604e:txtPg2TIN3",
+    "frm1604e:txtPg2BranchCode"
+   ],
+   "reason": "page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits"
+  },
+  {
+   "writer_key": "frm1604e:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  }
  ]
 }

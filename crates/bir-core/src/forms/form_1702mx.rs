@@ -391,6 +391,39 @@ pub struct Form1702MXReliefDetails {
 }
 
 impl Form1702MXDraft {
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the nine TIN digits of the page 2-4 header
+    ///   combs (the sheet preprints the branch 00000 after them).
+    /// - `derived:year_end_mm1` / `_mm2` / `_yy1` / `_yy2`: Item 2 Year
+    ///   Ended (MM/20YY) over its four digit boxes.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1702MX:txtPg2TIN1",
+                "frm1702MX:txtPg2TIN2",
+                "frm1702MX:txtPg2TIN3",
+            ],
+        );
+        fields.insert("derived:tin_digits".to_string(), tin_digits);
+        for (key, name) in [
+            ("frm1702MX:ddlPg1I2Date", "mm"),
+            ("frm1702MX:txtPg1I2YearEnd", "yy"),
+        ] {
+            let digits: Vec<String> = fields
+                .get(key)
+                .map(|value| value.chars().map(String::from).collect())
+                .unwrap_or_default();
+            for (at, digit) in digits.iter().take(2).enumerate() {
+                fields.insert(format!("derived:year_end_{name}{}", at + 1), digit.clone());
+            }
+        }
+        fields
+    }
+
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16) -> Self {
         let name_lines = split_fixed_lines(&profile.full_name);
         let address_lines = split_fixed_lines(&profile.registered_address);

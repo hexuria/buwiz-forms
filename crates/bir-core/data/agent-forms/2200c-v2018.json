@@ -178,7 +178,7 @@
 {"key":"frm2200C:txtPg2TinC2","kind":"text","label":"Page 2 Tin C 2","required":"optional"},
 {"key":"frm2200C:txtPg2TinC3","kind":"text","label":"Page 2 Tin C 3","required":"optional"},
 {"key":"frm2200C:txtPg2TinC4","kind":"text","label":"Page 2 Tin C 4","required":"optional"},
-{"key":"frm2200C:txtPg2RegisteredName","kind":"text","label":"Taxpayer's Name (page 2 header)","required":"optional"},
+{"key":"frm2200C:txtPg2RegisteredName","kind":"text","label":"Page 2 Registered Name","required":"optional"},
 {"item":"Part V","key":"frm2200C:CPPexmpt1","kind":"text","label":"Schedule 1 row 1, column A: cosmetic procedures performed, exempt","required":"optional"},
 {"item":"Part V","key":"frm2200C:CPPexcise1","kind":"text","label":"Schedule 1 row 1, column B: cosmetic procedures performed, excisable","required":"optional"},
 {"item":"Part V","key":"frm2200C:CPPnonexcise1","kind":"text","label":"Schedule 1 row 1, column C: cosmetic procedures performed, non-excisable","required":"optional"},

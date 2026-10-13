@@ -1,7 +1,7 @@
 {
  "form_id": "1707a-v2021",
  "html_slug": "1707a-2021",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. The sheet numbers items differently from the layout keys, so items are matched by caption text, not by key names. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb where the sheet has one, otherwise one text cell. Booleans fill X in the box left of the printed option. Left out: MM and DD of Year Ended (no labels), the TIN branch comb, the MM/DD/YYYY date combs, the Part III grid (unnamed keys), and items with no fillable cell on the sheet.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. The sheet numbers items differently from the layout keys, so items are matched by caption text, not by key names. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb where the sheet has one, otherwise one text cell. Booleans fill X in the box left of the printed option. Item 2 MM and DD follow the printed (MM/DD/YYYY) order; the schedule row dates print through date_joins; the item 9 second line and the page 2 TIN print from derived: keys of Form1707ADraft::to_print_field_map. Left out: the TIN branch comb, the Part III grid (unnamed keys), and items with no fillable cell on the sheet. Since #113 every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm1707Av2021:txtI1YearEndYear",
@@ -44,12 +44,6 @@
    "html_id": "p1c32",
    "printed": "8 Seller's Name",
    "reason": "caption \"Seller's Name (Last Name, First Name ...)\" directly above"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtI9RegisteredAddress",
-   "html_id": "p1c34",
-   "printed": "9 Registered Address (line 1)",
-   "reason": "caption \"9 Registered Address\" directly above; line 1 only"
   },
   {
    "writer_key": "frm1707Av2021:txtI10ZipCode",
@@ -320,6 +314,36 @@
    "html_id": "p1c39",
    "printed": "10 Contact Number / 11 Email Address",
    "reason": "one 40-slot comb under both captions: the print map puts the contact number from slot 0 (caption x 23.04pt) and the email from slot 12 (caption text x 189.02pt; comb from x 17.64pt, pitch 14.4pt)"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtI1YearEndMonth",
+   "html_id": "p1c9",
+   "printed": "2 For the Year Ended (MM/DD/YYYY), MM",
+   "reason": "the first 2-slot comb under the item 2 caption, whose printed format is (MM/DD/YYYY): MM, then DD, then the YYYY comb txtI1YearEndYear"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtI1YearEndDay",
+   "html_id": "p1c10",
+   "printed": "2 For the Year Ended (MM/DD/YYYY), DD",
+   "reason": "the second 2-slot comb under the item 2 (MM/DD/YYYY) caption, between MM and YYYY"
+  },
+  {
+   "writer_key": "derived:address_line1",
+   "html_id": "p1c34",
+   "printed": "9 Registered Address, line 1",
+   "reason": "full-width 40-slot comb under the item 9 caption; the print map breaks the address at the last space that fits"
+  },
+  {
+   "writer_key": "derived:line:address_line2",
+   "html_id": "p1c35",
+   "printed": "9 Registered Address, line 2",
+   "reason": "31-slot comb left of the ZIP Code on the second item 9 row: the rest of the address; a longer line prints whole in smaller type"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "printed": "Page 2 TIN",
+   "reason": "the 14-slot comb under the page 2 TIN caption: TIN then branch"
   }
  ],
  "money_joins": [
@@ -465,15 +489,73 @@
    "reason": "box immediately left of the printed option; X when the writer value is true"
   }
  ],
+ "date_joins": [
+  {
+   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI1",
+   "mm_html_id": "p2c13",
+   "dd_html_id": "p2c14",
+   "yyyy_html_id": "p2c15",
+   "printed": "Schedule 1 row 1 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 1 row 1; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI2",
+   "mm_html_id": "p2c19",
+   "dd_html_id": "p2c20",
+   "yyyy_html_id": "p2c21",
+   "printed": "Schedule 1 row 2 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 1 row 2; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI3",
+   "mm_html_id": "p2c25",
+   "dd_html_id": "p2c26",
+   "yyyy_html_id": "p2c27",
+   "printed": "Schedule 1 row 3 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 1 row 3; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI4",
+   "mm_html_id": "p2c31",
+   "dd_html_id": "p2c32",
+   "yyyy_html_id": "p2c33",
+   "printed": "Schedule 1 row 4 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 1 row 4; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI1",
+   "mm_html_id": "p2c63",
+   "dd_html_id": "p2c64",
+   "yyyy_html_id": "p2c65",
+   "printed": "Schedule 2 row 1 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 2 row 1; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI2",
+   "mm_html_id": "p2c68",
+   "dd_html_id": "p2c69",
+   "yyyy_html_id": "p2c70",
+   "printed": "Schedule 2 row 2 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 2 row 2; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI3",
+   "mm_html_id": "p2c73",
+   "dd_html_id": "p2c74",
+   "yyyy_html_id": "p2c75",
+   "printed": "Schedule 2 row 3 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 2 row 3; one writer date split across the three"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI4",
+   "mm_html_id": "p2c78",
+   "dd_html_id": "p2c79",
+   "yyyy_html_id": "p2c80",
+   "printed": "Schedule 2 row 4 (A) Date of Transaction (MM/DD/YYYY)",
+   "reason": "MM, DD and YYYY combs under the (A) Date of Transaction header on Schedule 2 row 4; one writer date split across the three"
+  }
+ ],
  "not_joined": [
-  {
-   "writer_key": "frm1707Av2021:txtI1YearEndMonth",
-   "reason": "item 2 has two 2-slot combs (p1c9, p1c10) under one caption with no MM or DD label; order alone would be a guess"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtI1YearEndDay",
-   "reason": "item 2 has two 2-slot combs (p1c9, p1c10) under one caption with no MM or DD label; order alone would be a guess"
-  },
   {
    "writer_key": "frm1707Av2021:txtI4TCII030",
    "reason": "no separate text cell for the II030 code; the box rdoI4ATCII030 is the only cell for that item"
@@ -483,16 +565,16 @@
    "reason": "no separate text cell for the IC110 code; the box rdoI4ATCIC110 is the only cell for that item"
   },
   {
-   "writer_key": "frm1707Av2021:txtI5BranchMask",
-   "reason": "TIN branch cell p1c27 is 5 slots with no printed branch caption; the layout mask is 3 digits, so not guessed"
-  },
-  {
    "writer_key": "frm1707Av2021:hdnI5TIN4",
    "reason": "hidden field, no fillable cell"
   },
   {
    "writer_key": "frm1707Av2021:hdnRDO",
    "reason": "hidden field, no fillable cell"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtI5BranchMask",
+   "reason": "TIN branch cell p1c27 is 5 slots with no printed branch caption; the layout mask is 3 digits, so not guessed"
   },
   {
    "writer_key": "frm1707Av2021:txtLineOfBusiness",
@@ -603,44 +685,12 @@
    "reason": "hidden field, no fillable cell"
   },
   {
-   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI1",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI2",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI3",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtS1C1DateOfTransactionI4",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
    "writer_key": "frm1707Av2021:txtS1I20TotalCost",
    "reason": "Schedule 1 TOTAL row has no cost-column cell (column D is blank there)"
   },
   {
    "writer_key": "frm1707Av2021:txtS1I20TotalSellingPrice",
    "reason": "Schedule 1 TOTAL row has no selling-price cell"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI1",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI2",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI3",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtS2C1DateOfTransactionI4",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key"
   },
   {
    "writer_key": "frm1707Av2021:txtS2I21TotalSellingPrice",
@@ -721,25 +771,136 @@
   {
    "writer_key": "driveSelectTPExport",
    "reason": "system field, not printed on the sheet"
+  },
+  {
+   "writer_key": "frm1707Av2021:txtI9RegisteredAddress",
+   "reason": "prints from derived:address_line1 / derived:line:address_line2 (the print map shapes the address over both item 9 combs for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1707Av2021:txtI7TelNo",
+    "frm1707Av2021:txtI11Email"
+   ],
+   "reason": "prints from derived:contact_email (the print map shapes Items 10 and 11 on one shared 40-slot comb for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1707Av2021:txtS1C1DateOfTransaction_1",
+    "frm1707Av2021:txtS1C1DateOfTransaction_10",
+    "frm1707Av2021:txtS1C1DateOfTransaction_11",
+    "frm1707Av2021:txtS1C1DateOfTransaction_2",
+    "frm1707Av2021:txtS1C1DateOfTransaction_3",
+    "frm1707Av2021:txtS1C1DateOfTransaction_4",
+    "frm1707Av2021:txtS1C1DateOfTransaction_5",
+    "frm1707Av2021:txtS1C1DateOfTransaction_6",
+    "frm1707Av2021:txtS1C1DateOfTransaction_7",
+    "frm1707Av2021:txtS1C1DateOfTransaction_8",
+    "frm1707Av2021:txtS1C1DateOfTransaction_9",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_1",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_10",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_11",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_2",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_3",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_4",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_5",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_6",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_7",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_8",
+    "frm1707Av2021:txtS1C2NameOfCorporateStock_9",
+    "frm1707Av2021:txtS1C3SellingPrice_1",
+    "frm1707Av2021:txtS1C3SellingPrice_10",
+    "frm1707Av2021:txtS1C3SellingPrice_11",
+    "frm1707Av2021:txtS1C3SellingPrice_2",
+    "frm1707Av2021:txtS1C3SellingPrice_3",
+    "frm1707Av2021:txtS1C3SellingPrice_4",
+    "frm1707Av2021:txtS1C3SellingPrice_5",
+    "frm1707Av2021:txtS1C3SellingPrice_6",
+    "frm1707Av2021:txtS1C3SellingPrice_7",
+    "frm1707Av2021:txtS1C3SellingPrice_8",
+    "frm1707Av2021:txtS1C3SellingPrice_9",
+    "frm1707Av2021:txtS1C4Cost_1",
+    "frm1707Av2021:txtS1C4Cost_10",
+    "frm1707Av2021:txtS1C4Cost_11",
+    "frm1707Av2021:txtS1C4Cost_2",
+    "frm1707Av2021:txtS1C4Cost_3",
+    "frm1707Av2021:txtS1C4Cost_4",
+    "frm1707Av2021:txtS1C4Cost_5",
+    "frm1707Av2021:txtS1C4Cost_6",
+    "frm1707Av2021:txtS1C4Cost_7",
+    "frm1707Av2021:txtS1C4Cost_8",
+    "frm1707Av2021:txtS1C4Cost_9",
+    "frm1707Av2021:txtS1C5CapitalGains_1",
+    "frm1707Av2021:txtS1C5CapitalGains_10",
+    "frm1707Av2021:txtS1C5CapitalGains_11",
+    "frm1707Av2021:txtS1C5CapitalGains_2",
+    "frm1707Av2021:txtS1C5CapitalGains_3",
+    "frm1707Av2021:txtS1C5CapitalGains_4",
+    "frm1707Av2021:txtS1C5CapitalGains_5",
+    "frm1707Av2021:txtS1C5CapitalGains_6",
+    "frm1707Av2021:txtS1C5CapitalGains_7",
+    "frm1707Av2021:txtS1C5CapitalGains_8",
+    "frm1707Av2021:txtS1C5CapitalGains_9",
+    "frm1707Av2021:txtS1C6TaxPaid_1",
+    "frm1707Av2021:txtS1C6TaxPaid_10",
+    "frm1707Av2021:txtS1C6TaxPaid_11",
+    "frm1707Av2021:txtS1C6TaxPaid_2",
+    "frm1707Av2021:txtS1C6TaxPaid_3",
+    "frm1707Av2021:txtS1C6TaxPaid_4",
+    "frm1707Av2021:txtS1C6TaxPaid_5",
+    "frm1707Av2021:txtS1C6TaxPaid_6",
+    "frm1707Av2021:txtS1C6TaxPaid_7",
+    "frm1707Av2021:txtS1C6TaxPaid_8",
+    "frm1707Av2021:txtS1C6TaxPaid_9",
+    "frm1707Av2021:txtS2C1DateOfTransaction_1",
+    "frm1707Av2021:txtS2C1DateOfTransaction_2",
+    "frm1707Av2021:txtS2C1DateOfTransaction_3",
+    "frm1707Av2021:txtS2C1DateOfTransaction_4",
+    "frm1707Av2021:txtS2C1DateOfTransaction_5",
+    "frm1707Av2021:txtS2C1DateOfTransaction_6",
+    "frm1707Av2021:txtS2C1DateOfTransaction_7",
+    "frm1707Av2021:txtS2C1DateOfTransaction_8",
+    "frm1707Av2021:txtS2C1DateOfTransaction_9",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_1",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_2",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_3",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_4",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_5",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_6",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_7",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_8",
+    "frm1707Av2021:txtS2C2NameOfCorporateStock_9",
+    "frm1707Av2021:txtS2C3SellingPrice_1",
+    "frm1707Av2021:txtS2C3SellingPrice_2",
+    "frm1707Av2021:txtS2C3SellingPrice_3",
+    "frm1707Av2021:txtS2C3SellingPrice_4",
+    "frm1707Av2021:txtS2C3SellingPrice_5",
+    "frm1707Av2021:txtS2C3SellingPrice_6",
+    "frm1707Av2021:txtS2C3SellingPrice_7",
+    "frm1707Av2021:txtS2C3SellingPrice_8",
+    "frm1707Av2021:txtS2C3SellingPrice_9",
+    "frm1707Av2021:txtS2C4Cost_1",
+    "frm1707Av2021:txtS2C4Cost_2",
+    "frm1707Av2021:txtS2C4Cost_3",
+    "frm1707Av2021:txtS2C4Cost_4",
+    "frm1707Av2021:txtS2C4Cost_5",
+    "frm1707Av2021:txtS2C4Cost_6",
+    "frm1707Av2021:txtS2C4Cost_7",
+    "frm1707Av2021:txtS2C4Cost_8",
+    "frm1707Av2021:txtS2C4Cost_9",
+    "frm1707Av2021:txtS2C5CapitalLoss_1",
+    "frm1707Av2021:txtS2C5CapitalLoss_2",
+    "frm1707Av2021:txtS2C5CapitalLoss_3",
+    "frm1707Av2021:txtS2C5CapitalLoss_4",
+    "frm1707Av2021:txtS2C5CapitalLoss_5",
+    "frm1707Av2021:txtS2C5CapitalLoss_6",
+    "frm1707Av2021:txtS2C5CapitalLoss_7",
+    "frm1707Av2021:txtS2C5CapitalLoss_8",
+    "frm1707Av2021:txtS2C5CapitalLoss_9"
+   ],
+   "reason": "add-more popup row of the page; the sheet prints rows 1-3 and, past them, row 4 as OTHERS with the popup subtotal (the I1-I4 keys)"
   }
  ],
  "not_joined_cells": [
-  {
-   "html_id": "p1c9",
-   "reason": "item 2 Year Ended first 2-slot comb (MM position); see txtI1YearEndMonth"
-  },
-  {
-   "html_id": "p1c10",
-   "reason": "item 2 Year Ended second 2-slot comb (DD position); see txtI1YearEndDay"
-  },
-  {
-   "html_id": "p1c27",
-   "reason": "TIN branch cell (5 slots) on the item 6 row; see txtI5BranchMask"
-  },
-  {
-   "html_id": "p1c35",
-   "reason": "item 9 address line 2: the layout has no second address key"
-  },
   {
    "html_id": "p1c119",
    "reason": "Part III payment grid: the layout key has no column name in the layout or fields.json, so no order-only guess"
@@ -747,6 +908,10 @@
   {
    "html_id": "p1c120",
    "reason": "Part III payment grid: the layout key has no column name in the layout or fields.json, so no order-only guess"
+  },
+  {
+   "html_id": "p1c27",
+   "reason": "TIN branch cell (5 slots) on the item 6 row; see txtI5BranchMask"
   },
   {
    "html_id": "p1c121",
@@ -855,106 +1020,6 @@
   {
    "html_id": "p1c154",
    "reason": "Part III payment grid: the layout key has no column name in the layout or fields.json, so no order-only guess"
-  },
-  {
-   "html_id": "p2c5",
-   "reason": "page 2 TIN: one 14-slot comb for the TIN parts and branch; not split"
-  },
-  {
-   "html_id": "p2c13",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c14",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c15",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c19",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c20",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c21",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c25",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c26",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c27",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c31",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c32",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c33",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c63",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c64",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c65",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c68",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c69",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c70",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c73",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c74",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c75",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c78",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c79",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
-  },
-  {
-   "html_id": "p2c80",
-   "reason": "date split over three combs (MM / DD / YYYY); the layout holds one date key with no per-part key (schedule row date)"
   }
  ]
 }

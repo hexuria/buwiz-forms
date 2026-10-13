@@ -970,6 +970,36 @@ impl FormValidator for Form1602QDraft {
 }
 
 impl Form1602QDraft {
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the page-2 and page-3 header TIN, one
+    ///   14-digit comb (the upload's `txtPage2TIN` is dashed).
+    /// - `derived:address_line1` / `derived:line:address_line2`: Item 9 over
+    ///   its 40-slot first line, broken at a space, and the 31-slot second.
+    /// - `derived:line:tax_relief_specify`: Item 13A, the relief named on a
+    ///   Yes.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        let specify = super::print_map::tax_relief_label(
+            fields
+                .get("frm1602Q:lstSpecialTax")
+                .map_or("", String::as_str),
+        );
+        for (key, value) in [
+            ("tin_digits", format!("{tin1}{tin2}{tin3}{branch}")),
+            ("address_line1", line1),
+            ("line:address_line2", line2),
+            ("line:tax_relief_specify", specify.to_string()),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     /// Items 24-26 on the shared penalty model ([`super::penalty_items`]).
     pub fn penalty_declaration() -> PenaltyItems<Self> {
         super::penalty_items::queueable_penalty_items!(

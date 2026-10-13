@@ -1,7 +1,7 @@
 {
  "form_id": "1701a-v2018",
  "html_slug": "1701a-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Parts II and IV print every amount in one 8-slot comb per column with no centavo comb, so amounts come from derived:amount_<item><A|B> keys of to_print_field_map: whole pesos (rounded like toFixed(0)), digits only, right-aligned in the comb; an overpayment prints in parentheses; a zero amount, column B of a non-joint return, and an amount wider than the comb stay blank. The address splits over the item 9 combs (40 + 31 slots) at a word break; the date of birth, the page 2 TIN (nine digits), Item 31's two digit boxes and the spouse RDO (blank unless joint) are derived: keys too. Never submitted. Item 19/75's 8% box has no caption in the text layer; it is the second box on that row. Left blank on print: the TIN branch boxes of Items 4 and 66 and the page 2 TIN comb's last five slots (the sheet preprints 0 0 0 0 0; they are not fillable), the Item 63 description (the only cell on that row spans the printed caption), Item 73 (no separate Yes/No boxes on this sheet), the signature block and payment details (Items 32-35, no writer values). The submitted XML always carries every value. Booleans fill X in the box left of the printed option.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page's own text layer) names the item. Parts II and IV print every amount in one 8-slot comb per column with no centavo comb, so amounts come from derived:amount_<item><A|B> keys of to_print_field_map: whole pesos (rounded like toFixed(0)), digits only, right-aligned in the comb; an overpayment prints in parentheses; a zero amount, column B of a non-joint return, and an amount wider than the comb stay blank. The address splits over the item 9 combs (40 + 31 slots) at a word break; the date of birth, the page 2 TIN (nine digits), Item 31's two digit boxes and the spouse RDO (blank unless joint) are derived: keys too. Never submitted. Item 19/75's 8% box has no caption in the text layer; it is the second box on that row. Since #113 the Item 63 (specify) input, inset past the caption, prints the description, and the Item 73 cell holds two boxes under one input name, so its xbox_joins name each box by input id (p2c139-i0/-i1). Left blank on print: the TIN branch boxes of Items 4 and 66 and the page 2 TIN comb's last five slots (the sheet preprints 0 0 0 0 0; they are not fillable), the signature block and payment details (Items 32-35, no writer values). The submitted XML always carries every value. Booleans fill X in the box left of the printed option. Every value the print map carries has a box or a reviewed not_joined reason.",
  "joins": [
   {
    "writer_key": "frm1701A:txtMonth",
@@ -686,6 +686,12 @@
    "html_id": "p2c113",
    "printed": "65 Net Tax Payable/(Overpayment) B) Spouse",
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
+  },
+  {
+   "writer_key": "frm1701A:txt63Desc",
+   "html_id": "p2c176",
+   "printed": "63 Other Tax Credits/Payments (specify)",
+   "reason": "the input of the item 63 row cell, inset past the printed caption and (specify), left of the A/B amount combs"
   }
  ],
  "money_joins": [],
@@ -887,6 +893,149 @@
    "html_id": "p2c144",
    "printed": "75 Tax Rate 8% (second box on the item 75 row)",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  },
+  {
+   "writer_key": "frm1701A:optSpouseFTC_1",
+   "html_id": "p2c139-i0",
+   "printed": "73 Spouse claiming Foreign Tax Credits? Yes",
+   "reason": "cell with two boxes under one input name: the first box (input id p2c139-i0, inset 140.9pt) left of the printed Yes"
+  },
+  {
+   "writer_key": "frm1701A:optSpouseFTC_2",
+   "html_id": "p2c139-i1",
+   "printed": "73 Spouse claiming Foreign Tax Credits? No",
+   "reason": "the second box of the item 73 cell (input id p2c139-i1, inset 184.4pt) left of the printed No"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_keys": [
+    "frm1701A:txt20A",
+    "frm1701A:txt20B",
+    "frm1701A:txt21A",
+    "frm1701A:txt21B",
+    "frm1701A:txt22A",
+    "frm1701A:txt22B",
+    "frm1701A:txt23A",
+    "frm1701A:txt23B",
+    "frm1701A:txt24A",
+    "frm1701A:txt24B",
+    "frm1701A:txt25A",
+    "frm1701A:txt25B",
+    "frm1701A:txt26A",
+    "frm1701A:txt26B",
+    "frm1701A:txt27A",
+    "frm1701A:txt27B",
+    "frm1701A:txt28A",
+    "frm1701A:txt28B",
+    "frm1701A:txt29A",
+    "frm1701A:txt29B",
+    "frm1701A:txt30",
+    "frm1701A:txt36A",
+    "frm1701A:txt36B",
+    "frm1701A:txt37A",
+    "frm1701A:txt37B",
+    "frm1701A:txt38A",
+    "frm1701A:txt38B",
+    "frm1701A:txt39A",
+    "frm1701A:txt39B",
+    "frm1701A:txt40A",
+    "frm1701A:txt40B",
+    "frm1701A:txt41A",
+    "frm1701A:txt41B",
+    "frm1701A:txt42A",
+    "frm1701A:txt42B",
+    "frm1701A:txt43A",
+    "frm1701A:txt43B",
+    "frm1701A:txt44A",
+    "frm1701A:txt44B",
+    "frm1701A:txt45A",
+    "frm1701A:txt45B",
+    "frm1701A:txt46A",
+    "frm1701A:txt46B",
+    "frm1701A:txt47A",
+    "frm1701A:txt47B",
+    "frm1701A:txt48A",
+    "frm1701A:txt48B",
+    "frm1701A:txt49A",
+    "frm1701A:txt49B",
+    "frm1701A:txt50A",
+    "frm1701A:txt50B",
+    "frm1701A:txt51A",
+    "frm1701A:txt51B",
+    "frm1701A:txt52A",
+    "frm1701A:txt52B",
+    "frm1701A:txt53A",
+    "frm1701A:txt53B",
+    "frm1701A:txt54A",
+    "frm1701A:txt54B",
+    "frm1701A:txt55A",
+    "frm1701A:txt55B",
+    "frm1701A:txt56A",
+    "frm1701A:txt56B",
+    "frm1701A:txt57A",
+    "frm1701A:txt57B",
+    "frm1701A:txt58A",
+    "frm1701A:txt58B",
+    "frm1701A:txt59A",
+    "frm1701A:txt59B",
+    "frm1701A:txt60A",
+    "frm1701A:txt60B",
+    "frm1701A:txt61A",
+    "frm1701A:txt61B",
+    "frm1701A:txt62A",
+    "frm1701A:txt62B",
+    "frm1701A:txt63A",
+    "frm1701A:txt63B",
+    "frm1701A:txt64A",
+    "frm1701A:txt64B",
+    "frm1701A:txt65A",
+    "frm1701A:txt65B"
+   ],
+   "reason": "prints from its derived:amount_* key (whole pesos right-aligned in the 8-slot comb, no centavo comb; an overpayment in parentheses; zero and a non-joint column B blank)"
+  },
+  {
+   "writer_key": "frm1701A:txtAddress",
+   "reason": "prints from derived:address_line1 / derived:address_line2 (the print map shapes the address over the item 9 combs for the sheet)"
+  },
+  {
+   "writer_key": "frm1701A:txtBirthDate",
+   "reason": "prints from derived:birth_mm / _dd / _yyyy (the print map shapes the date of birth over its three combs for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1701A:txtPg2TIN1",
+    "frm1701A:txtPg2TIN2",
+    "frm1701A:txtPg2TIN3"
+   ],
+   "reason": "prints from derived:tin_digits (the print map shapes the page 2 TIN, nine fillable slots for the sheet)"
+  },
+  {
+   "writer_keys": [
+    "frm1701A:txtBranchCode",
+    "frm1701A:txtPg2BranchCode"
+   ],
+   "reason": "TIN branch boxes (items 4 and the page 2 header): the sheet preprints 0 0 0 0 0 and they are not fillable"
+  },
+  {
+   "writer_key": "frm1701A:txtNumberAttachments",
+   "reason": "prints from derived:attachments_tens / derived:attachments_units (the print map shapes Item 31 over its two digit boxes for the sheet)"
+  },
+  {
+   "writer_key": "frm1701A:txtSpouseRDOCode",
+   "reason": "prints from derived:spouse_rdo (the print map shapes the spouse RDO, blank unless joint for the sheet)"
+  },
+  {
+   "writer_key": "frm1701A:txtIsTaxFilerDisabled",
+   "reason": "page flag of the eBIRForms page, not on the paper form"
+  },
+  {
+   "writer_key": "frm1701A:txtLineBus",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm1701A:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
   }
  ]
 }

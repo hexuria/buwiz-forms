@@ -1,7 +1,7 @@
 {
  "form_id": "1603q-v2018",
  "html_slug": "1603q-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Part II item numbers 14-23 are printed and match the keys by number and label. Part III row 24 prints only its number, so it is matched by item number; rows 25-27 match by printed label. Schedule 1 rows print only numbers 1-2 and column headers; ATC codes and percentage divisors are printed text, so they have no cell. Peso comb + 2-slot cents pairs are money_joins. Radios and boxes take xbox_joins.",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) sits directly left of or just above it. Part II item numbers 14-23 are printed and match the keys by number and label. Part III row 24 prints only its number, so it is matched by item number; rows 25-27 match by printed label. Schedule 1 rows print only numbers 1-2 and column headers; ATC codes and percentage divisors are printed text, so they have no cell. Peso comb + 2-slot cents pairs are money_joins. Radios and boxes take xbox_joins. Since #113: the item 9 second line, Item 13A, the item 16 specify box and the page 2 TIN print too (derived: keys from Form1603QDraft::to_print_field_map); every other value has a reviewed not_joined reason. One writer key may fill several cells (html_ids).",
  "joins": [
   {
    "writer_key": "frm1603Q:txtYear",
@@ -49,12 +49,6 @@
    "writer_key": "frm1603Q:txtTaxpayerName",
    "html_id": "p1c37",
    "printed": "8 Withholding Agent's Name",
-   "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
-  },
-  {
-   "writer_key": "frm1603Q:txtAddress",
-   "html_id": "p1c39",
-   "printed": "9 Registered Address",
    "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
   },
   {
@@ -146,6 +140,36 @@
    "html_id": "p2c6",
    "printed": "Page 2 Withholding Agent's Name",
    "reason": "geometry: the printed caption sits directly left of or just above this cell on the frozen sheet"
+  },
+  {
+   "writer_key": "derived:address_line1",
+   "html_id": "p1c39",
+   "printed": "9 Registered Address, line 1",
+   "reason": "full-width 40-slot comb under the item 9 caption; the print map breaks the address at the last space that fits"
+  },
+  {
+   "writer_key": "derived:line:address_line2",
+   "html_id": "p1c40",
+   "printed": "9 Registered Address, line 2",
+   "reason": "31-slot comb left of 9A ZIP Code on the second item 9 row: the rest of the address; a longer line prints whole in smaller type"
+  },
+  {
+   "writer_key": "derived:line:tax_relief_specify",
+   "html_id": "p1c52",
+   "printed": "13A If yes, specify",
+   "reason": "17-slot comb right of the 13A If yes, specify caption; the relief named on a Yes (the upload carries the selTreaty code)"
+  },
+  {
+   "writer_key": "frm1603Q:txt16Other",
+   "html_id": "p1c181",
+   "printed": "16 Other Remittances Made (specify)",
+   "reason": "the specify box between the item 16 caption and its amount combs"
+  },
+  {
+   "writer_key": "derived:tin_digits",
+   "html_id": "p2c5",
+   "printed": "Page 2 TIN",
+   "reason": "the 14-slot comb under the page 2 TIN caption: TIN then branch, from the page-2 TIN keys"
   }
  ],
  "money_joins": [
@@ -369,6 +393,54 @@
    "html_id": "p1c54",
    "printed": "12 Special Law or International Tax Treaty? No",
    "reason": "box immediately left of the printed option; X when the writer value is true"
+  }
+ ],
+ "not_joined": [
+  {
+   "writer_key": "frm1603Q:txtAddress",
+   "reason": "prints from derived:address_line1 / derived:line:address_line2 (the print map shapes the address over both item 9 combs for the sheet)"
+  },
+  {
+   "writer_key": "frm1603Q:selTreaty",
+   "reason": "dropdown code (0 none, 1 special rate, 2 treaty, 3 both); item 13A prints the relief name from derived:line:tax_relief_specify"
+  },
+  {
+   "writer_keys": [
+    "frm1603Q:txtPg2TIN1",
+    "frm1603Q:txtPg2TIN2",
+    "frm1603Q:txtPg2TIN3",
+    "frm1603Q:txtPg2BranchCode"
+   ],
+   "reason": "page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits, built from these four keys"
+  },
+  {
+   "writer_keys": [
+    "frm1603Q:Sched1:txtATC1",
+    "frm1603Q:Sched1:txtATC2"
+   ],
+   "reason": "Schedule 1 ATC column is preprinted (WF360, WF330); there is no box to fill"
+  },
+  {
+   "writer_keys": [
+    "frm1603Q:Sched1:txtDivisor1",
+    "frm1603Q:Sched1:txtDivisor2"
+   ],
+   "reason": "Schedule 1 (D) Percentage Divisor is preprinted (65%, 75%); there is no box to fill"
+  },
+  {
+   "writer_keys": [
+    "frm1603Q:Sched1:txtTaxRate1",
+    "frm1603Q:Sched1:txtTaxRate2"
+   ],
+   "reason": "Schedule 1 (F) Tax Rate is preprinted (35%, 25%); there is no box to fill"
+  },
+  {
+   "writer_key": "frm1603Q:txtLineBus",
+   "reason": "not on the paper form: this sheet has no line-of-business box"
+  },
+  {
+   "writer_key": "frm1603Q:txtCurrentPage",
+   "reason": "page counter of the eBIRForms page, not a box on the paper form"
   }
  ]
 }

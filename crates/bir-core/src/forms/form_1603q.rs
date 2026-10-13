@@ -307,6 +307,44 @@ impl Form1603QDraft {
             .to_uppercase()
     }
 
+    /// The print sheet's field map: the upload map plus `derived:` keys
+    /// that only shape the print.
+    ///
+    /// - `derived:tin_digits`: the later pages' header TIN, one 14-digit
+    ///   comb (TIN then branch).
+    /// - `derived:address_line1` / `derived:line:address_line2`: the
+    ///   registered address over its 40-slot first line, broken at a
+    ///   space, and the second line (printed whole when longer).
+    /// - `derived:line:tax_relief_specify`: "If yes, specify", the relief
+    ///   named by `frm1603Q:selTreaty` (the upload carries the dropdown code).
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1603Q:txtPg2TIN1",
+                "frm1603Q:txtPg2TIN2",
+                "frm1603Q:txtPg2TIN3",
+                "frm1603Q:txtPg2BranchCode",
+            ],
+        );
+        let address = self.registered_address.trim().to_uppercase();
+        let (line1, line2) = super::print_map::split_print_line(&address, 40);
+        let specify = super::print_map::tax_relief_label(
+            fields.get("frm1603Q:selTreaty").map_or("", String::as_str),
+        )
+        .to_string();
+        for (key, value) in [
+            ("tin_digits", tin_digits),
+            ("address_line1", line1),
+            ("line:address_line2", line2),
+            ("line:tax_relief_specify", specify),
+        ] {
+            fields.insert(format!("derived:{key}"), value);
+        }
+        fields
+    }
+
     /// The official field values `saveXMLsubmit` reads, keyed by element id.
     pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = BTreeMap::new();
