@@ -151,6 +151,8 @@ fn format_tin(tin: &str) -> String {
     )
 }
 
+const CONTENT_MAX_W: Pixels = px(1180.);
+
 pub struct Form1600WpView {
     draft: Form1600WpDraft,
     db: Arc<Mutex<Database>>,
@@ -1113,16 +1115,14 @@ impl FormViewTrait for Form1600WpView {
         }
         self.sync_from_inputs(cx);
         if !self.parse_errors.is_empty() || !self.validation_errors.is_empty() {
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
         let before = self.draft.clone();
         if let Err(errors) = self.draft.queue(QueueAuthSource::Gui) {
             self.validation_errors = errors;
-            self.status_message =
-                Some("Fix the items listed under Needs review before submitting.".into());
+            self.status_message = Some("Fix the items marked below before submitting.".into());
             cx.notify();
             return;
         }
@@ -1256,7 +1256,6 @@ impl Render for Form1600WpView {
         }
         let layout = Layout::for_width(window.viewport_size().width);
         let phone = layout == Layout::Phone;
-        let error_count = self.parse_errors.len() + self.validation_errors.len();
         self.header.ensure_sent_snapshot(&self.db, &self.draft);
         let props = self.header_props();
         let header_buttons = render_header_buttons(self, &props, HEADER_ACTIONS, phone, cx);
@@ -1272,29 +1271,6 @@ impl Render for Form1600WpView {
             Layout::Tablet => px(20.),
             Layout::Desktop => px(32.),
         };
-        let mut issues: Vec<AnyElement> = self
-            .parse_errors
-            .iter()
-            .chain(self.validation_errors.iter())
-            .take(20)
-            .map(|(_, message)| {
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(message.clone())
-                    .into_any_element()
-            })
-            .collect();
-        if error_count > issues.len() {
-            issues.push(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(format!("and {} more", error_count - issues.len()))
-                    .into_any_element(),
-            );
-        }
-
         let toolbar = div()
             .flex()
             .flex_wrap()
@@ -1317,7 +1293,7 @@ impl Render for Form1600WpView {
 
         let mut body = div()
             .w_full()
-            .max_w(px(1180.))
+            .max_w(CONTENT_MAX_W)
             .mx_auto()
             .flex()
             .flex_col()
@@ -1352,10 +1328,6 @@ impl Render for Form1600WpView {
             .child(self.render_part_one(layout, cx))
             .child(self.render_part_two(layout, cx))
             .child(self.render_schedule(layout, cx));
-        if !issues.is_empty() {
-            body = body.child(self.section("Needs review", issues, cx));
-        }
-
         div()
             .flex()
             .flex_col()
@@ -1406,8 +1378,10 @@ impl Form1600WpView {
             status: self.draft.lifecycle.status.clone(),
             editor_safe: true,
             validated: self.validated,
-            blocking_errors: self.parse_errors.len() + self.validation_errors.len(),
-            first_error: errors.next().map(|(_, message)| message.replace('\n', " ")),
+            errors: errors
+                .map(|(_, message)| message.replace('\n', " "))
+                .collect(),
+            content_max_w: CONTENT_MAX_W,
             success_text: DEFAULT_SUCCESS_MESSAGE,
             message: self.status_message.clone(),
             separate_validate: separate_validate_button(&self.db),
@@ -1482,7 +1456,6 @@ mod tests {
         assert!(src.contains(concat!("on_submit: Form1600WpView::mark_", "submitted")));
         assert!(src.contains(concat!("render_status_", "box(self")));
         assert!(!src.contains(concat!("Queued for background", " submission as")));
-        assert!(!src.contains(concat!("item(s) under Needs review", " to queue")));
         assert!(src.contains(concat!("revert_for_", "amendment(&self.db")));
     }
 
