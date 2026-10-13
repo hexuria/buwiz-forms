@@ -349,3 +349,4 @@ Each PR ends with the #90 steps it touches re-run on Windows. After PR 5, a full
 ## 14. Changelog
 - Plan created from the #90/#89 Windows verification. Corrected the #99 assessment: diffs 2 and 3 come from different official save paths.
 - 2026-10-13 | Replaced 7-Zip payload inspection with strict source validation and actual installed-Setup auditing; implementation is distinct from pending clean-VM and signed-release acceptance.
+- 2026-10-13 | Re-review follow-up: CI parses the justfile on all three OSes, the source auditor rejects unsupported ISPP directives including StageDir overrides, and AGENT.md follows the repository-root gpui-agent pin. Clean-VM and signed-release acceptance remain unverified.

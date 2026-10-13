@@ -190,7 +190,51 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             self.ci_workflow,
         )
         check = self.ci_workflow.split("  validation-rules-v1:", maxsplit=1)[0]
-        self.assertIn("choco install just -y", check)
+        matrix = check.split("  check:", maxsplit=1)[1].split(
+            "    runs-on:", maxsplit=1
+        )[0]
+        matrix_os = re.findall(r"(?m)^\s+- os: ([^\s]+)\s*$", matrix)
+        self.assertEqual(
+            matrix_os,
+            ["macos-14", "ubuntu-22.04", "windows-latest"],
+        )
+        self.assertEqual(
+            check.count("cargo install just --version 1.45.0 --locked"),
+            1,
+        )
+        self.assertEqual(check.count("run: just --summary"), 1)
+        just_install = re.search(
+            r"(?ms)^    - name: Install just\n(.*?)(?=^    - |\Z)",
+            check,
+        )
+        just_step = re.search(
+            r"(?ms)^    - name: Validate justfile\n(.*?)(?=^    - |\Z)",
+            check,
+        )
+        self.assertIsNotNone(just_install)
+        self.assertIsNotNone(just_step)
+        if just_install is not None:
+            self.assertNotRegex(just_install.group(1), r"(?m)^\s+if:")
+        if just_step is not None:
+            self.assertNotRegex(just_step.group(1), r"(?m)^\s+if:")
+        self.assertLess(
+            check.index("    - name: Install Rust Toolchain"),
+            check.index("    - name: Rust Cache"),
+        )
+        self.assertLess(
+            check.index("    - name: Rust Cache"),
+            check.index("    - name: Install just"),
+        )
+        self.assertLess(
+            check.index("run: just --summary"),
+            check.index("    - name: Test\n"),
+        )
+        for match in re.finditer(
+            r"(?m)^\s*(?:run:\s*)?cargo (?:check|test)\b",
+            check,
+        ):
+            self.assertGreater(match.start(), check.index("run: just --summary"))
+        self.assertNotIn("choco install just -y", check)
         self.assertIn("choco install innosetup -y", check)
         self.assertIn("3010", check)
         self.assertIn("just exe", check)

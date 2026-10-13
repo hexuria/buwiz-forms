@@ -21,8 +21,11 @@ class InstallerSourcePolicyTests(unittest.TestCase):
         (self.root / "assets" / "icon.ico").write_bytes(b"icon")
 
     def add_script(self, files: str) -> Path:
+        return self.write_script(f"[Files]\n{files}\n")
+
+    def write_script(self, text: str) -> Path:
         script = self.root / "installer.iss"
-        script.write_text(f"[Files]\n{files}\n", encoding="utf-8")
+        script.write_text(text, encoding="utf-8")
         return script
 
     def check_valid(self, files: str) -> None:
@@ -37,6 +40,20 @@ class InstallerSourcePolicyTests(unittest.TestCase):
             'Source: "{#StageDir}\\assets\\*"; DestDir: "{app}\\assets"; '
             "Flags: ignoreversion recursesubdirs createallsubdirs"
         )
+
+    def test_real_installer_stage_dir_guard_is_supported(self) -> None:
+        installer = Path(__file__).resolve().parents[2] / "installer.iss"
+        self.assertEqual(validate_installer_sources(installer, self.root), 2)
+
+    def test_full_line_comments_and_quoted_stage_macro_are_not_directives(
+        self,
+    ) -> None:
+        script = self.write_script(
+            '; #include "ignored.iss"\n'
+            "[Files]\n"
+            'Source: "{#StageDir}\\bir.exe"; DestDir: "{app}"\n'
+        )
+        self.assertEqual(validate_installer_sources(script, self.root), 1)
 
     def test_reordered_source_is_valid(self) -> None:
         self.check_valid(
@@ -69,10 +86,101 @@ class InstallerSourcePolicyTests(unittest.TestCase):
                     validate_installer_sources(script, self.root)
 
     def test_include_is_rejected(self) -> None:
-        script = self.root / "installer.iss"
-        script.write_text('#include "other.iss"\n[Files]\n', encoding="utf-8")
+        script = self.write_script('#include "other.iss"\n[Files]\n')
         with self.assertRaises(InstallerSourceError):
             validate_installer_sources(script, self.root)
+
+    def assert_unsupported_directive(
+        self, text: str, line_number: int, directive: str
+    ) -> None:
+        script = self.write_script(text)
+        with self.assertRaises(InstallerSourceError) as raised:
+            validate_installer_sources(script, self.root)
+        self.assertEqual(
+            str(raised.exception),
+            f"line {line_number}: unsupported ISPP directive {directive!r}",
+        )
+
+    def test_stage_dir_define_and_undef_are_rejected(self) -> None:
+        guard = (
+            "#ifndef StageDir\n"
+            "#error StageDir is required\n"
+            "#endif\n"
+        )
+        cases = (
+            (
+                '#define StageDir "override"\n' + guard + "[Files]\n",
+                1,
+                '#define StageDir "override"',
+            ),
+            (
+                guard + '#define StageDir "override"\n[Files]\n',
+                4,
+                '#define StageDir "override"',
+            ),
+            (
+                "#undef StageDir\n" + guard + "[Files]\n",
+                1,
+                "#undef StageDir",
+            ),
+            (
+                guard + "#undef StageDir\n[Files]\n",
+                4,
+                "#undef StageDir",
+            ),
+            (
+                '# DeFiNe \t sTaGeDiR "override"\n[Files]\n',
+                1,
+                '# DeFiNe \t sTaGeDiR "override"',
+            ),
+            (
+                "#  UnDeF   STAGEDIR\n[Files]\n",
+                1,
+                "#  UnDeF   STAGEDIR",
+            ),
+        )
+        for text, line_number, directive in cases:
+            with self.subTest(directive=directive, line_number=line_number):
+                self.assert_unsupported_directive(text, line_number, directive)
+
+    def test_nested_and_extra_ispp_directives_are_rejected(self) -> None:
+        nested_guard = (
+            "#ifndef StageDir\n"
+            "#error StageDir is required\n"
+            "# ifdef StageDir\n"
+            '# define StageDir "override"\n'
+            "# endif\n"
+            "#endif\n"
+            "[Files]\n"
+        )
+        self.assert_unsupported_directive(
+            nested_guard,
+            3,
+            "# ifdef StageDir",
+        )
+        self.assert_unsupported_directive(
+            "#ifndef StageDir\n#error required\n#endif\n#define Extra 1\n[Files]\n",
+            4,
+            "#define Extra 1",
+        )
+        self.assert_unsupported_directive(
+            "[Setup]\n#ifndef StageDir\n#error required\n#endif\n[Files]\n",
+            2,
+            "#ifndef StageDir",
+        )
+
+    def test_malformed_stage_dir_guard_is_rejected(self) -> None:
+        self.assert_unsupported_directive(
+            "#ifndef StageDir\n#endif\n[Files]\n",
+            2,
+            "#endif",
+        )
+        script = self.write_script(
+            "#ifndef StageDir\n#error required\n[Files]\n"
+        )
+        with self.assertRaises(InstallerSourceError) as raised:
+            validate_installer_sources(script, self.root)
+        self.assertEqual(str(raised.exception), "line 2: incomplete StageDir guard")
 
     def test_malformed_entry_is_rejected(self) -> None:
         script = self.add_script('Source "{#StageDir}\\bir.exe"')

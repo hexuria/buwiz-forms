@@ -17,6 +17,11 @@ _ALLOWED = {"source", "destdir", "flags"}
 _ALLOWED_FLAGS = {"ignoreversion", "recursesubdirs", "createallsubdirs"}
 _FILE_ATTRIBUTE_REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 _STAGE_PREFIX = "{#StageDir}\\"
+_STAGE_DIR_GUARD = (
+    re.compile(r"#\s*ifndef\s+StageDir\s*$"),
+    re.compile(r"#\s*error\s+\S.*$"),
+    re.compile(r"#\s*endif\s*$"),
+)
 
 
 class InstallerSourceError(ValueError):
@@ -133,6 +138,51 @@ def _is_reparse_point(info: os.stat_result) -> bool:
     return bool(attributes & _FILE_ATTRIBUTE_REPARSE_POINT)
 
 
+def _validate_ispp_directives(text: str) -> None:
+    significant_lines: list[tuple[int, str]] = []
+    directives: list[tuple[int, str]] = []
+    first_section_line: int | None = None
+
+    for line_number, raw_line in enumerate(text.splitlines(), 1):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith(";"):
+            continue
+        significant_lines.append((line_number, stripped))
+        if first_section_line is None and _SECTION_RE.match(raw_line):
+            first_section_line = line_number
+        if stripped.startswith("#"):
+            directives.append((line_number, stripped))
+
+    if not directives:
+        return
+
+    def reject(line_number: int, directive: str) -> None:
+        raise InstallerSourceError(
+            f"line {line_number}: unsupported ISPP directive {directive!r}"
+        )
+
+    for line_number, directive in directives:
+        if first_section_line is not None and line_number > first_section_line:
+            reject(line_number, directive)
+
+    if significant_lines[0][0] != directives[0][0]:
+        reject(*directives[0])
+
+    for index, (line_number, directive) in enumerate(directives):
+        if index >= len(_STAGE_DIR_GUARD):
+            reject(line_number, directive)
+        if significant_lines[index][0] != line_number:
+            reject(line_number, directive)
+        if _STAGE_DIR_GUARD[index].fullmatch(directive) is None:
+            reject(line_number, directive)
+
+    if len(directives) != len(_STAGE_DIR_GUARD):
+        line_number, _ = directives[-1]
+        raise InstallerSourceError(
+            f"line {line_number}: incomplete StageDir guard"
+        )
+
+
 def _reject_stage_links(stage: Path) -> None:
     pending = [stage]
     while pending:
@@ -204,8 +254,7 @@ def _validate_flags(flags: str, line_number: int) -> None:
 
 def validate_installer_sources(installer: Path, stage_dir: Path) -> int:
     text = installer.read_text(encoding="utf-8")
-    if re.search(r"#include\b", text, re.IGNORECASE):
-        raise InstallerSourceError("#include is not supported")
+    _validate_ispp_directives(text)
     try:
         stage_info = stage_dir.lstat()
     except OSError as exc:

@@ -83,6 +83,12 @@ jobs:
         shared-key: workspace-${{ runner.os }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
+
+    - name: Validate justfile
+      run: just --summary
+
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
@@ -232,14 +238,6 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        choco install just -y --no-progress
-        $installExitCode = $LASTEXITCODE
-        if ($installExitCode -eq 3010) {
-          Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
-        } elseif ($installExitCode -ne 0) {
-          [Console]::Error.WriteLine("just installation failed (exit code $installExitCode).")
-          exit $installExitCode
-        }
         choco install innosetup -y --no-progress
         $installExitCode = $LASTEXITCODE
         if ($installExitCode -eq 3010) {
