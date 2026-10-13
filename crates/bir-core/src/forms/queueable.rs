@@ -304,6 +304,14 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
         None
     }
 
+    /// The return's own computed total amount payable (its final "Total
+    /// Amount Payable/Still Due" item). Zero or negative means nothing is to
+    /// be paid. `None` when the form has no single such total; the Calendar
+    /// then keeps asking for payment once the return is filed.
+    fn amount_payable(&self) -> Option<f64> {
+        None
+    }
+
     /// `form_drafts.quarter` value: month, quarter, 0 for annual returns.
     fn period_column(&self) -> i64 {
         period_column(&self.filing_period())

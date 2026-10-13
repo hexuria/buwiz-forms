@@ -1981,6 +1981,11 @@ impl QueueableForm for Form1701MsDraft {
     const FORM_TYPE: &'static str = "1701MS";
     const LAYOUT_ID: &'static str = FORM_1701MS_FORM_ID;
 
+    /// Aggregate Amount Payable (taxpayer and spouse).
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.aggregate_amount_payable)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

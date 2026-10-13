@@ -1820,6 +1820,24 @@ mod tests {
     }
 
     #[test]
+    fn filled_document_1601c_marks_item_11_category_of_withholding_agent() {
+        let mut fields = BTreeMap::new();
+        fields.insert("frm1601c:CatAgent_P".to_string(), "true".to_string());
+        fields.insert("frm1601c:CatAgent_G".to_string(), "false".to_string());
+        let private = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(named_values(&private, "p1c45"), vec!["X".to_string()]);
+        assert_eq!(named_values(&private, "p1c46"), vec!["".to_string()]);
+        assert!(!private.contains("name=\"frm1601c:CatAgent_P\""));
+
+        fields.insert("frm1601c:CatAgent_P".to_string(), "false".to_string());
+        fields.insert("frm1601c:CatAgent_G".to_string(), "true".to_string());
+        let government = filled_document("1601c-2018", &fields).unwrap();
+        assert_eq!(named_values(&government, "p1c45"), vec!["".to_string()]);
+        assert_eq!(named_values(&government, "p1c46"), vec!["X".to_string()]);
+        assert!(!government.contains("name=\"frm1601c:CatAgent_G\""));
+    }
+
+    #[test]
     fn filled_document_2551q_fills_taxpayer_name_and_address() {
         let draft = sample_draft();
         assert_eq!(draft.taxpayer_name, "Frozen Html Fixture");

@@ -103,3 +103,5 @@ pub mod global_actions {
 pub(crate) use global_actions::*;
 
 pub use gui::run_gui;
+#[cfg(target_os = "windows")]
+pub use platform::prefer_hwnd_swap_chain;
