@@ -28,6 +28,8 @@
 //! 18 adds that total. Those rows sit after `hPartIITableSize` in the form, so
 //! the upload writes them there ([`Form1600PtDraft::official_layout`]).
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use chrono::Datelike;
@@ -392,6 +394,10 @@ pub struct Form1600PtDraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 27.
@@ -466,6 +472,7 @@ impl Form1600PtDraft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             month: month.clamp(1, 12),
             year,
@@ -594,6 +601,8 @@ impl Form1600PtDraft {
         self.other_payments = cents(self.other_payments);
         self.total_payments = cents(self.tax_remitted_previous + self.other_payments);
         self.tax_still_due = cents(self.total_tax_withheld - self.total_payments);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -1093,7 +1102,32 @@ impl FormValidator for Form1600PtDraft {
     }
 }
 
+impl Form1600PtDraft {
+    /// Items 23-25 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: Withholding,
+            items: [
+                surcharge: "23 Surcharge",
+                interest: "24 Interest",
+                compromise: "25 Compromise",
+            ],
+            controls: [
+                "frm1600PT:txtPg1P2I23Surcharge",
+                "frm1600PT:txtPg1P2I24Interest",
+                "frm1600PT:txtPg1P2I25Compromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 22", |d| d.tax_still_due,
+        )
+    }
+}
+
 impl QueueableForm for Form1600PtDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1600PT";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1600PTv2018']`).
     const FORM_TYPE: &'static str = "1600PTv2018";
@@ -1203,6 +1237,7 @@ mod tests {
         draft.atc_rows[0].tax_base = 100_000.005;
         draft.atc_rows[1].tax_base = 50_000.0;
         draft.surcharge = 25.0;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1477,6 +1512,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

@@ -30,6 +30,9 @@ use gpui_rsx::rsx;
 use super::event_form_kit as kit;
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::form_controls::{
     self, MultiChange, field_error, messages_for, multi_select_field, select_field,
     with_field_error,
@@ -40,6 +43,7 @@ use crate::views::form_header::{
     separate_validate_button,
 };
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 impl EventEmitter<QueueableFormEvent> for Form1702MXView {}
 
@@ -417,11 +421,23 @@ pub struct Form1702MXView {
     /// Validate ran at the current entries; every edit clears it.
     validated: bool,
     header: FormHeaderState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Form1702MXView {
     fn initial(draft: &Form1702MXDraft, key: &str) -> String {
+        // Items 17-19 show their override; empty means "use computed".
+        for (item, component) in [
+            ("p2.17", PenaltyComponent::Surcharge),
+            ("p2.18", PenaltyComponent::Interest),
+            ("p2.19", PenaltyComponent::Compromise),
+        ] {
+            if key == item {
+                return penalty_section::override_text(&draft.penalty, component);
+            }
+        }
         let mut scratch = draft.clone();
         if let Some(slot) = amount_slot(&mut scratch, key) {
             return peso_text(slot);
@@ -529,6 +545,13 @@ impl Form1702MXView {
                 }
             }
         }
+        // An empty penalty box means "use computed"; any amount overrides it.
+        parse_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &Form1702MXDraft::penalty_items(),
+            &mut draft,
+            cx,
+        ));
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -1840,9 +1863,17 @@ impl Form1702MXView {
                 p2.item_16_net_tax_payable_or_overpayment.0,
                 cx,
             ),
-            self.field("p2.17", "17 Surcharge", layout, false),
-            self.field("p2.18", "18 Interest", layout, false),
-            self.field("p2.19", "19 Compromise", layout, false),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .validation_errors
+                    .iter()
+                    .chain(&self.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             self.computed(
                 "20 Total penalties",
                 p2.item_20_total_penalties.value_or_zero().0,
@@ -1961,6 +1992,22 @@ impl QueueableFormView for Form1702MXView {
             Self::atc_change(),
         ));
         let validation_errors = draft.validate();
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs = vec![[
+            inputs["p2.17"].clone(),
+            inputs["p2.18"].clone(),
+            inputs["p2.19"].clone(),
+        ]];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
         Self {
             draft,
             db,
@@ -1975,6 +2022,7 @@ impl QueueableFormView for Form1702MXView {
             release_claim_confirm_open: false,
             validated: false,
             header: FormHeaderState::new(),
+            penalty,
             _subscriptions: subscriptions,
         }
     }

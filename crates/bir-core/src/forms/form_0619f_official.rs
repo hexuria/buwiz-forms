@@ -10,6 +10,7 @@
 //! No `capital()` runs on this page in practice: it is bound only to the name
 //! and address controls, which `init()` disables. Values keep their casing.
 
+use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_0619f::{Form0619FDraft, Form0619FTaxType, WithholdingAgentCategory};
@@ -98,6 +99,8 @@ impl Form0619FDraft {
         self.item_16_remitted_previously = cents(self.item_16_remitted_previously);
         self.item_17_net_amount_of_remittance =
             cents(self.item_15_total - self.item_16_remitted_previously);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.item_18a_surcharge = cents(self.item_18a_surcharge);
         self.item_18b_interest = cents(self.item_18b_interest);
         self.item_18c_compromise = cents(self.item_18c_compromise);
@@ -282,7 +285,9 @@ impl Form0619FDraft {
 
         let mut expected = self.clone();
         expected.official_recompute();
+        let penalties = Self::penalty_declaration();
         if expected.item_19_total_amount_of_remittance != self.item_19_total_amount_of_remittance
+            || penalties.filed(&expected) != penalties.filed(self)
             || expected.item_15_total != self.item_15_total
             || expected.item_17_net_amount_of_remittance != self.item_17_net_amount_of_remittance
             || expected.item_18d_total_penalties != self.item_18d_total_penalties
@@ -374,7 +379,32 @@ impl Form0619FDraft {
     }
 }
 
+impl Form0619FDraft {
+    /// Items 18A-18C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: Withholding,
+            items: [
+                item_18a_surcharge: "18A Surcharge",
+                item_18b_interest: "18B Interest",
+                item_18c_compromise: "18C Compromise",
+            ],
+            controls: [
+                "frm0619F:txtTax18A",
+                "frm0619F:txtTax18B",
+                "frm0619F:txtTax18C",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 17", |d| d.item_17_net_amount_of_remittance,
+        )
+    }
+}
+
 impl QueueableForm for Form0619FDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "0619F";
     const FORM_TYPE: &'static str = FORM_0619F_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_0619F_LAYOUT_ID;
@@ -478,6 +508,7 @@ mod tests {
         draft.item_13_interest_final_tax_withheld = 12_345.675;
         draft.item_18a_surcharge = 25.5;
         draft.item_18b_interest = 10.005;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -645,6 +676,7 @@ mod tests {
         draft.queue(QueueAuthSource::Gui).unwrap();
         assert!(draft.clone().revalidate_queued_before_submission().is_ok());
         draft.item_18c_compromise = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

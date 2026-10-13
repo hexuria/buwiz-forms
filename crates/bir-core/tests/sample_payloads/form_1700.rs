@@ -2,11 +2,14 @@
 //! employer rows on page 2); profile fields are filled the way `loadBGData`
 //! does.
 
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
+// The samples enter their penalties by hand (`keep_entered_penalties`).
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1700::{
     Form1700CivilStatus, Form1700Column, Form1700Draft, Form1700Employer, Form1700FilingStatus,
     Form1700Spouse, Form1700TaxpayerType,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1700() -> Form1700Draft {
     let mut draft = Form1700Draft::new_from_profile(&dummy_profile("1700", "Individual"), 2025);
@@ -34,6 +37,7 @@ fn sample_1700() -> Form1700Draft {
         flat: 0.0,
         withheld: 40_000.0,
     }];
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -79,6 +83,7 @@ fn form_1700_joint_sample_payload_is_current() {
         flat: 0.0,
         withheld: 20_000.0,
     });
+    draft.keep_entered_penalties();
     draft.recompute();
     assert_eq!(draft.aggregate_amount_payable, 9_900.0);
     let payload = draft
@@ -122,6 +127,7 @@ fn form_1700_sample_with_popup_rows_is_current() {
             withheld,
         });
     }
+    draft.keep_entered_penalties();
     draft.recompute();
     assert!(draft.schedule_is_folded());
     let payload = draft
@@ -134,6 +140,12 @@ fn form_1700_sample_with_popup_rows_is_current() {
         &payload,
         "bf9ca8160cedfdb509fbc16145f5b755da2a299f0232ca4c7644939b0c00c93f",
     );
+}
+
+/// Calendar year 2025: due 15 April 2026.
+#[test]
+fn form_1700_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1700, Deadline::Calendar(day(2026, 4, 15)));
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

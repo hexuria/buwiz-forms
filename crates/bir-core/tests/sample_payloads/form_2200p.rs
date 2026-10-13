@@ -1,5 +1,7 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_2200p::{Form2200PDraft, Form2200PPayment, Form2200PPlace};
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2200p() -> Form2200PDraft {
     let mut draft =
@@ -50,6 +52,7 @@ fn sample_2200p() -> Form2200PDraft {
     draft.surcharge = 25.5;
     draft.interest = 10.0;
     draft.compromise = 1_000.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft.tax_deposit = draft.tax_still_due + 100.0;
     draft.recompute();
@@ -113,6 +116,17 @@ fn form_2200p_sample_with_many_rows_is_current() {
         &layout,
         &payload,
         "140689c12e730396a14557d7c7c34c45a2352ef3d2c3f9ea960026774d5d755a",
+    );
+}
+
+/// Event-based: the calendar has no 2200-P deadline.
+#[test]
+fn form_2200p_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2200p,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 

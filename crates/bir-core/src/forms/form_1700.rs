@@ -26,6 +26,7 @@
 //! ([`Form1700Draft::official_layout`]). Sample `1700-2025-others` is
 //! byte-identical to the official page.
 
+use super::penalty_items::{PenaltyItems, PenaltyState};
 use std::collections::BTreeMap;
 
 use chrono::{Datelike, NaiveDate};
@@ -116,6 +117,10 @@ pub struct Form1700Column {
     pub interest: f64,
     pub surcharge: f64,
     pub compromise: f64,
+    /// This column's penalty items' computed values, overrides, note and
+    /// engine inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     pub total_penalties: f64,
     pub total_amount_payable: f64,
 }
@@ -576,6 +581,15 @@ impl Form1700Draft {
             Form1700TaxpayerType::Unanswered => {}
         }
         self.spouse_column.tax_withheld = if self.is_joint() { totals[1][2] } else { 0.0 };
+        self.taxpayer.compute(year, tp_type, false);
+        self.spouse_column.compute(year, sp_type, true);
+        // Each column's penalty items file their override, else the
+        // computed value; the column totals are then summed with them.
+        for items in Self::penalty_declarations() {
+            items.apply(self);
+        }
+        self.taxpayer.round_inputs();
+        self.spouse_column.round_inputs();
         self.taxpayer.compute(year, tp_type, false);
         self.spouse_column.compute(year, sp_type, true);
         self.aggregate_amount_payable =
@@ -1453,7 +1467,57 @@ impl FormValidator for Form1700Draft {
     }
 }
 
+impl Form1700Draft {
+    /// The penalty items of each column on the shared penalty model
+    /// ([`super::penalty_items`]): the taxpayer/filer's, then the spouse's,
+    /// which apply only to a joint return.
+    pub fn penalty_declarations() -> Vec<PenaltyItems<Self>> {
+        let filer = super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                taxpayer.surcharge: "32 Surcharge",
+                taxpayer.interest: "31 Interest",
+                taxpayer.compromise: "33 Compromise",
+            ],
+            controls: [
+                "frm1700:txtPg1I32A",
+                "frm1700:txtPg1I31A",
+                "frm1700:txtPg1I33A",
+            ],
+            state: taxpayer.penalty,
+            basic_tax_due: "Item 30A", |d| d.taxpayer.amount_payable,
+            party: Some("Taxpayer/Filer"),
+            rounding: super::penalty_items::PenaltyRounding::Cents,
+        );
+        let spouse = super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                spouse_column.surcharge: "32 Surcharge",
+                spouse_column.interest: "31 Interest",
+                spouse_column.compromise: "33 Compromise",
+            ],
+            controls: [
+                "frm1700:txtPg1I32B",
+                "frm1700:txtPg1I31B",
+                "frm1700:txtPg1I33B",
+            ],
+            state: spouse_column.penalty,
+            basic_tax_due: "Item 30B", |d| d.spouse_column.amount_payable,
+            party: Some("Spouse"),
+            applies: |d: &Self| d.is_joint(),
+            // The profile's EOPT class is the filer's, not the spouse's.
+            rounding: super::penalty_items::PenaltyRounding::Cents,
+        );
+        vec![filer, spouse]
+    }
+}
+
 impl QueueableForm for Form1700Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        Self::penalty_declarations()
+    }
     const FORM_CODE: &'static str = "1700";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1700v2018']`).
     const FORM_TYPE: &'static str = "1700v2018";
@@ -1588,6 +1652,8 @@ mod tests {
             number_of_attachments: 0,
             lifecycle: SubmissionLifecycle::default(),
         };
+        // This sample enters its penalties by hand.
+        d.keep_entered_penalties();
         d.recompute();
         d
     }
@@ -1994,6 +2060,7 @@ mod tests {
         d.queue(crate::filing_queue::QueueAuthSource::Gui).unwrap();
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.taxpayer.surcharge = 99.0;
+        d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
     }
 }

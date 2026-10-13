@@ -1,7 +1,9 @@
 use crate::dummy_profile;
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_1702mx::{
     Form1702MXDeductionMethod, Form1702MXDraft, PercentInput, WholePeso, WholePesoInput,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn peso(value: i64) -> WholePesoInput {
     WholePesoInput::from_amount(WholePeso(value))
@@ -69,6 +71,7 @@ pub(crate) fn sample_1702mx() -> Form1702MXDraft {
     d.schedule_4.items[1].exempt = peso(1_000);
 
     d.part_ii.item_17_surcharge = peso(1_000);
+    d.keep_entered_penalties();
     d.recompute();
 
     // Schedule 10 reconciles to Schedule 2 Item 13 per column.
@@ -219,6 +222,12 @@ fn form_1702mx_schedule_6_rows_sample_payload_is_current() {
         &payload,
         "f20652d58465bd2ca969ed947c33e5a9e801e1a165374605b9664372827aba72",
     );
+}
+
+/// Calendar year 2025: due 15 April 2026.
+#[test]
+fn form_1702mx_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1702mx, Deadline::Calendar(day(2026, 4, 15)));
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

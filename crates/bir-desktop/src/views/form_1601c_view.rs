@@ -9,13 +9,15 @@ use gpui_component::*;
 use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use bir_core::db::{ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Database};
 use bir_core::forms::form_1601c::{
     FORM_1601C_ATC, Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS,
 };
 use bir_core::forms::{FilingPeriod, FilingStatus, FormValidator, can_queue_for_submission};
 use bir_core::official_xml::{official_amount, parse_official_amount};
-use bir_core::penalties::{PenaltyComponent, TaxpayerClass};
 
 use crate::components::combobox::ComboboxState;
 use crate::components::form_engine::FormViewTrait;
@@ -188,11 +190,8 @@ pub struct Form1601CView {
     tax_29_other_remittances_name: Entity<InputState>,
     tax_29_other_remittances_amount: Entity<InputState>,
 
-    tax_32_surcharge: Entity<InputState>,
-    tax_33_interest: Entity<InputState>,
-    tax_34_compromise: Entity<InputState>,
-    /// Optional note or reference recorded with the penalty overrides.
-    penalty_note: Entity<InputState>,
+    /// Items 32-34: the shared penalty section (overrides and note).
+    penalty: Entity<PenaltySection>,
 
     /// Dismiss was pressed with unsaved changes: ask before discarding.
     dismiss_confirm_open: bool,
@@ -292,7 +291,10 @@ impl Form1601CView {
     ) -> Self {
         // The opener resolved the deadline and EOPT class from the profile;
         // keep them on the stored draft it is replaced with.
-        let penalty_context = (draft.penalty_due_date, draft.penalty_taxpayer_class);
+        let penalty_context = (
+            draft.penalty.penalty_due_date,
+            draft.penalty.penalty_taxpayer_class,
+        );
         if let Ok(guard) = db.lock()
             && let Ok(Some(stored)) =
                 guard.get_1601c_draft(&draft.tin, draft.taxable_year, draft.month)
@@ -355,24 +357,16 @@ impl Form1601CView {
             create_input(cx, draft.tax_29_other_remittances_amount, window);
 
         // Items 32-34 are override inputs: empty means "use computed".
-        let create_override_input =
-            |cx: &mut Context<Self>, value: Option<f64>, window: &mut Window| {
-                let input = cx.new(|cx| InputState::new(window, cx).placeholder("Use computed"));
-                if let Some(value) = value {
-                    input.update(cx, |i, cx| i.set_value(format!("{value:.2}"), window, cx));
-                }
-                input
-            };
-        let tax_32_surcharge = create_override_input(cx, draft.penalty_overrides.surcharge, window);
-        let tax_33_interest = create_override_input(cx, draft.penalty_overrides.interest, window);
-        let tax_34_compromise =
-            create_override_input(cx, draft.penalty_overrides.compromise, window);
-        let penalty_note = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("e.g. RDO approval or abatement letter no.")
-        });
-        penalty_note.update(cx, |i, cx| {
-            i.set_value(draft.penalty_overrides.note.clone(), window, cx)
-        });
+        let penalty_views = PenaltyPartyView::form_1601c(&draft);
+        let penalty = cx.new(|cx| PenaltySection::new(&penalty_views, window, cx));
+        subscriptions.push(cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                this.is_validated = false;
+                this.sync_from_inputs(cx);
+            },
+        ));
 
         let inputs = vec![
             number_of_sheets.clone(),
@@ -390,10 +384,6 @@ impl Form1601CView {
             tax_28_tax_remitted_previously.clone(),
             tax_29_other_remittances_name.clone(),
             tax_29_other_remittances_amount.clone(),
-            tax_32_surcharge.clone(),
-            tax_33_interest.clone(),
-            tax_34_compromise.clone(),
-            penalty_note.clone(),
         ];
 
         subscriptions.push(cx.subscribe_in(
@@ -501,10 +491,7 @@ impl Form1601CView {
             tax_29_other_remittances_name,
             tax_29_other_remittances_amount,
 
-            tax_32_surcharge,
-            tax_33_interest,
-            tax_34_compromise,
-            penalty_note,
+            penalty,
 
             _subscriptions: subscriptions,
         }
@@ -662,28 +649,12 @@ impl Form1601CView {
         );
 
         // An empty penalty box means "use computed"; any amount overrides it.
-        for (component, field, input) in [
-            (
-                PenaltyComponent::Surcharge,
-                "tax_32_surcharge",
-                &self.tax_32_surcharge,
-            ),
-            (
-                PenaltyComponent::Interest,
-                "tax_33_interest",
-                &self.tax_33_interest,
-            ),
-            (
-                PenaltyComponent::Compromise,
-                "tax_34_compromise",
-                &self.tax_34_compromise,
-            ),
-        ] {
-            let value = (!input.read(cx).value().trim().is_empty())
-                .then(|| parse_money(field, input, cx, &mut input_errors));
-            self.draft.set_penalty_override(component, value);
-        }
-        self.draft.penalty_overrides.note = get_text(&self.penalty_note, cx).trim().to_string();
+        input_errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &[Form1601CDraft::penalty_items()],
+            &mut self.draft,
+            cx,
+        ));
 
         self.draft.compute();
         self.note_box_changes();
@@ -818,24 +789,9 @@ impl Form1601CView {
         ] {
             Self::set_money_if_changed(input, value, window, cx);
         }
-        for (input, value) in [
-            (&self.tax_32_surcharge, draft.penalty_overrides.surcharge),
-            (&self.tax_33_interest, draft.penalty_overrides.interest),
-            (&self.tax_34_compromise, draft.penalty_overrides.compromise),
-        ] {
-            match value {
-                Some(value) => Self::set_money_if_changed(input, value, window, cx),
-                None => {
-                    Self::set_input_if_changed(input, "", window, cx);
-                }
-            }
-        }
-        Self::set_input_if_changed(
-            &self.penalty_note,
-            &draft.penalty_overrides.note,
-            window,
-            cx,
-        );
+        let penalty_views = PenaltyPartyView::form_1601c(draft);
+        self.penalty
+            .update(cx, |section, cx| section.load(&penalty_views, window, cx));
         Self::set_input_if_changed(
             &self.tax_20_other_name,
             &draft.tax_20_other_name,
@@ -1807,32 +1763,10 @@ impl Render for Form1601CView {
                                 <div text_xl font_weight={FontWeight::BOLD}>
                                     {"Add: Penalties"}
                                 </div>
-                                {self.render_penalty_basis(cx)}
-                                {self.render_penalty_row(layout,
-                                    PenaltyComponent::Surcharge,
-                                    "32 Surcharge",
-                                    &self.tax_32_surcharge,
-                                    "tax_32_surcharge",
-                                    cx,
-                                )}
-                                {self.render_penalty_row(layout,
-                                    PenaltyComponent::Interest,
-                                    "33 Interest",
-                                    &self.tax_33_interest,
-                                    "tax_33_interest",
-                                    cx,
-                                )}
-                                {self.render_penalty_row(layout,
-                                    PenaltyComponent::Compromise,
-                                    "34 Compromise",
-                                    &self.tax_34_compromise,
-                                    "tax_34_compromise",
-                                    cx,
-                                )}
-                                {self.render_input_row(layout,
-                                    "Override note / reference",
-                                    &self.penalty_note,
-                                    &["penalty_overrides"],
+                                {penalty_section::render(
+                                    &self.penalty,
+                                    &PenaltyPartyView::form_1601c(&self.draft),
+                                    &self.validation_errors,
                                     cx,
                                 )}
                                 {self.render_computed_row(layout,
@@ -2166,143 +2100,6 @@ impl Form1601CView {
             .child(label_and_text)
             .child(Self::half(layout).child(Input::new(amount_input).disabled(is_disabled)));
         self.with_errors(row, keys)
-    }
-
-    /// The engine's inputs for Items 32-34, shown above them so a computed
-    /// penalty is never filed without the user seeing what it came from.
-    fn render_penalty_basis(&self, cx: &Context<Self>) -> AnyElement {
-        let muted = cx.theme().muted_foreground;
-        let frozen = !matches!(
-            self.draft.status,
-            FilingStatus::Draft | FilingStatus::Queued
-        );
-        let Some(computed) = self.draft.computed_penalties.as_ref() else {
-            let text = if frozen {
-                "Filed values: penalties are frozen as filed."
-            } else {
-                "Penalties cannot be computed: no deadline is known for this period. Enter any assessed amounts below."
-            };
-            return div()
-                .text_sm()
-                .text_color(muted)
-                .child(text)
-                .into_any_element();
-        };
-        let inputs = &computed.inputs;
-        let class = if inputs.class_from_profile {
-            let class = match inputs.taxpayer_class {
-                TaxpayerClass::Micro => "Micro",
-                TaxpayerClass::Small => "Small",
-                TaxpayerClass::Medium => "Medium",
-                TaxpayerClass::Large => "Large",
-                TaxpayerClass::Regular => "Standard",
-            };
-            format!("Taxpayer class: {class} (from profile)")
-        } else {
-            "Taxpayer class: standard (non-micro/small) assumed, the profile has no EOPT classification"
-                .to_string()
-        };
-        let date = |date: chrono::NaiveDate| date.format("%b %-d, %Y").to_string();
-        let headline = if computed.filed_on_time() {
-            "Filed on time — no penalties".to_string()
-        } else if inputs.basic_tax_due <= 0.0 {
-            format!(
-                "{} days late, but no tax is still due (Item 31), so nothing is computed. Enter any assessed compromise below.",
-                inputs.days_late
-            )
-        } else {
-            format!(
-                "{} day{} late",
-                inputs.days_late,
-                if inputs.days_late == 1 { "" } else { "s" }
-            )
-        };
-        let filing_label = if frozen {
-            "Filing date"
-        } else {
-            "Filing date (today)"
-        };
-        div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .p_2()
-            .rounded_md()
-            .bg(cx.theme().muted.opacity(0.3))
-            .text_sm()
-            .child(div().font_weight(FontWeight::SEMIBOLD).child(headline))
-            .child(div().text_color(muted).child(format!(
-                "Due date {} · {} {} · Payment date {} · Tax still due ₱{}",
-                date(inputs.due_date),
-                filing_label,
-                date(inputs.filing_date),
-                date(inputs.payment_date),
-                official_amount(inputs.basic_tax_due),
-            )))
-            .child(div().text_color(muted).child(format!(
-                "{class} · Withholding compromise schedule (RMO 7-2015)"
-            )))
-            .into_any_element()
-    }
-
-    /// One penalty item: the computed value, the value used, an override
-    /// input, and a way back to the computed value.
-    fn render_penalty_row(
-        &self,
-        layout: Layout,
-        component: PenaltyComponent,
-        label: &str,
-        input: &Entity<InputState>,
-        key: &'static str,
-        cx: &Context<Self>,
-    ) -> AnyElement {
-        let editable = matches!(self.draft.status, FilingStatus::Draft);
-        let computed = self.draft.computed_penalties.as_ref();
-        let overridden = self.draft.penalty_overrides.get(component);
-        let used = self.draft.penalty_overrides.used(component, computed);
-        let computed_text = computed
-            .map(|computed| format!("Computed ₱{}", official_amount(computed.get(component))))
-            .unwrap_or_else(|| "Not computed".to_string());
-        let used_text = if overridden.is_some() {
-            format!("Using ₱{} (override)", official_amount(used))
-        } else {
-            format!("Using ₱{}", official_amount(used))
-        };
-        let reset = (editable && overridden.is_some()).then(|| {
-            let input = input.clone();
-            gpui_component::button::Button::new(SharedString::from(format!("{key}-use-computed")))
-                .label("Use computed")
-                .ghost()
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    input.update(cx, |input, cx| input.set_value("", window, cx));
-                    this.is_validated = false;
-                    this.sync_from_inputs(cx);
-                }))
-        });
-        let label_column = Self::half(layout)
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(format!("{computed_text} · {used_text}"))
-                    .children(reset),
-            );
-        let row = Self::pair_row(layout)
-            .child(label_column)
-            .child(Self::half(layout).child(Input::new(input).disabled(!editable)));
-        self.with_errors(row, &[key])
     }
 
     /// A computed row; the messages for `keys` appear under it.

@@ -127,6 +127,42 @@ pub fn amount_payable_from_json(form_code: &str, data_json: &str) -> Option<f64>
     }
 }
 
+/// The total penalties a saved, unfiled return would carry if filed (and
+/// paid) on `filing_date`, computed the way its form computes them: the
+/// period's deadline as the Calendar resolves it (`deadline_overrides` and
+/// the profile's own applied), the profile's EOPT class, and the return's
+/// per-component overrides. `None` when the form has no penalty items on the
+/// shared model, the return has left Queued, or no deadline is known.
+pub fn penalties_payable_from_json(
+    form_code: &str,
+    data_json: &str,
+    profile: &crate::profile::TaxpayerProfile,
+    deadline_overrides: &[crate::calendar_rules::DeadlineOverride],
+    filing_date: NaiveDate,
+) -> Option<f64> {
+    use super::queueable::QueueableForm;
+    use super::queueable::QueueableKind;
+
+    match form_code {
+        "1601C" => {
+            let mut draft = serde_json::from_str::<super::Form1601CDraft>(data_json).ok()?;
+            draft.apply_penalty_profile(profile, deadline_overrides);
+            draft.penalties_payable_if_filed_on(filing_date)
+        }
+        code => {
+            let kind = QueueableKind::from_form_code(code)?;
+            crate::with_queueable_kind!(kind, F => {
+                let mut draft = serde_json::from_str::<F>(data_json).ok()?;
+                draft.apply_penalty_profile(profile, deadline_overrides);
+                F::penalty_items()
+                    .iter()
+                    .filter_map(|items| items.payable_if_filed_on(&draft, filing_date))
+                    .reduce(|total, party| total + party)
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

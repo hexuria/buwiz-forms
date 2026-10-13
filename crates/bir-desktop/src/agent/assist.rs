@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use bir_core::forms::ATC_TABLE_2551Q;
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
 use bir_core::forms::form_2551q::{Form2551QDraft, Item13Election, Schedule1Row};
-use bir_core::penalties::PenaltyComponent;
+use bir_core::forms::penalty_items::PenaltyItems;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -632,18 +632,21 @@ pub fn apply_1601c(draft: &mut Form1601CDraft, key: &str, value: &Value) -> Resu
         // Answering Item 3 clears the "unanswered" marker.
         draft.set_any_taxes_withheld(draft.any_taxes_withheld);
     }
-    // Items 32-34 file the override when one is set, else the computed
-    // value: an amount written into one of them is an override.
-    let penalty = match key {
-        "tax_32_surcharge" => Some((PenaltyComponent::Surcharge, draft.tax_32_surcharge)),
-        "tax_33_interest" => Some((PenaltyComponent::Interest, draft.tax_33_interest)),
-        "tax_34_compromise" => Some((PenaltyComponent::Compromise, draft.tax_34_compromise)),
-        _ => None,
-    };
-    if let Some((component, amount)) = penalty {
-        draft.set_penalty_override(component, Some(amount));
-    }
+    record_penalty_override(&[Form1601CDraft::penalty_items()], draft, key);
     Ok(())
+}
+
+/// A form's penalty items file their override when one is set, else the
+/// computed value, so an amount written into one of them (by its declared
+/// draft field) is recorded as that component's override. Any other key,
+/// including a look-alike such as 1602-Q's `interest` income, is left alone.
+pub fn record_penalty_override<F>(items: &[PenaltyItems<F>], draft: &mut F, key: &str) {
+    for items in items {
+        if let Some(component) = items.component_of_field(key) {
+            let amount = (items.get)(draft, component);
+            items.set_override(draft, component, Some(amount));
+        }
+    }
 }
 
 // ---------------------------------------------------------------- needs you
@@ -1049,6 +1052,47 @@ mod tests {
     }
 
     #[test]
+    fn an_agent_written_penalty_on_any_wired_form_is_an_override() {
+        use bir_core::forms::form_1602q::Form1602QDraft;
+        use bir_core::forms::form_1606::Form1606Draft;
+        use bir_core::forms::queueable::QueueableForm;
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null,
+                "full_name": "Test Withholding Agent",
+                "tin": {"segment1": "111", "segment2": "111", "segment3": "114", "branch": "00000"},
+                "rdo_code": "018",
+                "line_of_business": "Software Development",
+                "registered_address": "Olongapo",
+                "zip_code": "2200",
+                "phone": "09123456789",
+                "email": "tax@example.com",
+                "default_form_type": "1606",
+                "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        let mut draft = Form1606Draft::new_from_profile(&profile, 2026, 1);
+        draft.compromise = 500.0;
+        record_penalty_override(&Form1606Draft::penalty_items(), &mut draft, "compromise");
+        draft.compute();
+        assert_eq!(draft.penalty.penalty_overrides.compromise, Some(500.0));
+        assert_eq!(draft.penalty.penalty_overrides.surcharge, None);
+        assert_eq!(draft.compromise, 500.0);
+
+        // 1602-Q's `interest` is interest income, not Item 25.
+        let mut quarterly = Form1602QDraft::new_from_profile(&profile, 2026, 1);
+        record_penalty_override(&Form1602QDraft::penalty_items(), &mut quarterly, "interest");
+        assert!(!quarterly.penalty.penalty_overrides.any());
+        quarterly.interest_penalty = 75.0;
+        record_penalty_override(
+            &Form1602QDraft::penalty_items(),
+            &mut quarterly,
+            "interest_penalty",
+        );
+        assert_eq!(quarterly.penalty.penalty_overrides.interest, Some(75.0));
+    }
+
+    #[test]
     fn an_agent_written_1601c_penalty_is_an_override_that_survives_compute() {
         let profile: bir_core::profile::TaxpayerProfile =
             serde_json::from_value(serde_json::json!({
@@ -1071,8 +1115,8 @@ mod tests {
         apply_1601c(&mut draft, "tax_34_compromise", &serde_json::json!("500")).unwrap();
         draft.compute();
 
-        assert_eq!(draft.penalty_overrides.compromise, Some(500.0));
-        assert_eq!(draft.penalty_overrides.surcharge, None);
+        assert_eq!(draft.penalty.penalty_overrides.compromise, Some(500.0));
+        assert_eq!(draft.penalty.penalty_overrides.surcharge, None);
         assert_eq!(draft.tax_34_compromise, 500.0);
     }
 }

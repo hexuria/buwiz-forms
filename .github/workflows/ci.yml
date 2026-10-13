@@ -5,6 +5,18 @@ on:
     branches: [ "main", "codex/**" ]
   pull_request:
     branches: [ "main", "gol/**", "codex/**" ]
+  # Nightly safety net: the full CI, validation audits included, on main.
+  # 18:00 UTC is 02:00 in Manila.
+  schedule:
+    - cron: "0 18 * * *"
+  # Run by hand from the Actions tab; tick the box to force the validation-rules
+  # corpus audits on any branch.
+  workflow_dispatch:
+    inputs:
+      validation:
+        description: "Also run the validation-rules corpus audits"
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -237,6 +249,13 @@ jobs:
     - name: Agent mailbox scheduling regression
       if: runner.os == 'Windows'
       run: cargo test --locked -p bir-desktop --features dev-tools,agent --lib agent::drain::tests::agent_mailbox_drains_without_rendering_app_state -- --exact
+    # The production-filing boundary stays gating on every PR, whatever the
+    # validation-rules jobs below decide. It scans all of bir-core/src and
+    # bir-desktop/src (transport, import, cron, the 2550Q guards), so almost any
+    # app change can open it; and it reuses this job's build, so it is cheap.
+    # A boundary failure is far more serious than an open validation slice.
+    - name: Check validation-rules production boundaries
+      run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
 
     - name: Install Windows packaging tools
       if: runner.os == 'Windows'
@@ -284,7 +303,79 @@ jobs:
   # PowerShell job, which is exactly why three separate Windows-path defects in
   # rules/validate.ps1 went undetected: on macOS and Linux the v2 exclusions
   # never matched, so the wrong file set was audited (and the script exited 1).
+  # Decides whether the validation-rules corpus audits run. They check the
+  # extracted official rule corpus (rules/, bir-rules*, form_rules), which is a
+  # separate objective from the per-form validation the app runs today, so they
+  # only run when that corpus can have changed:
+  #   - a branch named ebirforms-* (work synced from hexuria/buwiz-validation),
+  #   - a change under one of the paths below,
+  #   - a PR carrying the run-validation label,
+  #   - the nightly run on main,
+  #   - a manual run with the "validation" box ticked.
+  # The boundary check that guards production filing is NOT gated: it runs in
+  # `check` on every PR.
+  changes:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      validation: ${{ steps.decide.outputs.validation }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Decide
+      id: decide
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        BRANCH: ${{ github.head_ref || github.ref_name }}
+        FORCE: ${{ inputs.validation }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PUSH_AFTER: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        run=false
+        reason="no validation-rules path changed"
+        if [[ "$EVENT" == schedule ]]; then
+          run=true; reason="nightly run"
+        # Read the PR's labels now, not from the event payload, so adding the
+        # label and then clicking "Re-run all jobs" picks it up. (Triggering on
+        # `labeled` instead would restart the whole CI for any label.)
+        elif [[ "$EVENT" == pull_request ]] && gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | grep -qx run-validation; then
+          run=true; reason="run-validation label"
+        elif [[ "$EVENT" == workflow_dispatch ]]; then
+          if [[ "$FORCE" == true ]]; then run=true; reason="manual run"; else reason="manual run, box not ticked"; fi
+        elif [[ "$BRANCH" == ebirforms-* ]]; then
+          run=true; reason="branch $BRANCH"
+        else
+          if [[ "$EVENT" == pull_request ]]; then
+            range="$PR_BASE...$PR_HEAD"
+          elif [[ "$EVENT" == push && -n "$PUSH_BEFORE" && ! "$PUSH_BEFORE" =~ ^0+$ ]]; then
+            range="$PUSH_BEFORE..$PUSH_AFTER"
+          else
+            range=""
+          fi
+          if [[ -z "$range" ]] || ! changed=$(git diff --name-only "$range"); then
+            # Unknown range (new branch, force push): fail safe and run.
+            run=true; reason="change range unknown"
+          elif grep -qE '^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/|crates/bir-desktop/src/components/form_validation/|evidence/validation-rules/|rust-toolchain|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            run=true; reason="validation-rules paths changed"
+          fi
+        fi
+        echo "validation=$run" >> "$GITHUB_OUTPUT"
+        echo "validation-rules audits: $run ($reason)" | tee -a "$GITHUB_STEP_SUMMARY"
+
   validation-rules-v1:
+    needs: changes
+    if: needs.changes.outputs.validation == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -311,6 +402,8 @@ jobs:
       run: cargo run --locked -p bir-rules-codegen -- validate-v1
 
   validation-rules-v2:
+    needs: changes
+    if: needs.changes.outputs.validation == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -365,6 +458,8 @@ jobs:
     - name: Report validation-rules reconciliation
       run: cargo run --locked -p bir-rules-codegen -- reconciliation --json
 
+    # Also gating on every PR from the `check` job; kept here so a validation
+    # run is complete on its own.
     - name: Check validation-rules production boundaries
       run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
 
@@ -501,3 +596,54 @@ jobs:
         name: windows-smoke-${{ matrix.profile }}
         path: windows-smoke/${{ matrix.profile }}
         retention-days: 7
+
+  # The one required status for the validation-rules audits. A skipped matrix
+  # job reports no per-OS check names, so requiring "validation-rules-v1
+  # (macos-14)" etc. would leave every PR that skips them waiting forever.
+  # Passes when the audits ran green or were skipped; fails if either one
+  # failed or was cancelled.
+  validation-rules:
+    needs: [ changes, validation-rules-v1, validation-rules-v2 ]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Result
+      shell: bash
+      env:
+        DECIDED: ${{ needs.changes.result }}
+        V1: ${{ needs.validation-rules-v1.result }}
+        V2: ${{ needs.validation-rules-v2.result }}
+      run: |
+        echo "changes=$DECIDED v1=$V1 v2=$V2"
+        [[ "$DECIDED" == success ]] || { echo "::error::could not decide whether to run the audits"; exit 1; }
+        for r in "$V1" "$V2"; do
+          [[ "$r" == success || "$r" == skipped ]] || { echo "::error::validation-rules audit $r"; exit 1; }
+        done
+
+  # A failed nightly run opens (or comments on) one tracking issue, so a break
+  # that slipped past PRs is seen the next morning instead of going unread.
+  nightly-report:
+    needs: [ check, validation-rules ]
+    if: always() && github.event_name == 'schedule' && (needs.check.result != 'success' || needs.validation-rules.result != 'success')
+    runs-on: ubuntu-22.04
+    permissions:
+      issues: write
+    steps:
+    - name: Open or update the nightly failure issue
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        CHECK: ${{ needs.check.result }}
+        VALIDATION: ${{ needs.validation-rules.result }}
+      run: |
+        set -euo pipefail
+        title="Nightly CI failed on main"
+        body="Nightly run: $RUN_URL"$'\n\n'"- check: $CHECK"$'\n'"- validation-rules: $VALIDATION"
+        existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+        if [[ -n "$existing" ]]; then
+          gh issue comment "$existing" --body "$body"
+        else
+          gh issue create --title "$title" --body "$body"
+        fi

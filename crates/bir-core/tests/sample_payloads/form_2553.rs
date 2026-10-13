@@ -1,5 +1,7 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_2553::{FORM_2553_ATC_OPTIONS, Form2553Draft, Form2553TaxTreaty};
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2553() -> Form2553Draft {
     let mut draft = Form2553Draft::new_from_profile(&dummy_profile("2553", "Corporation"), 2025, 1);
@@ -14,6 +16,7 @@ fn sample_2553() -> Form2553Draft {
     draft.creditable_tax_withheld = 1_000.0;
     draft.surcharge = 25.5;
     draft.interest = 10.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -29,6 +32,17 @@ fn form_2553_sample_payload_is_current() {
         "2553-v1999",
         &payload,
         "808dc707b627b5dbaa32f625703fd8413ac2fe471d55dc3dce2d018a17ec9181",
+    );
+}
+
+/// The calendar lists 2553 as event-based.
+#[test]
+fn form_2553_penalty_items_follow_the_shared_model() {
+    penalty_items::check(
+        sample_2553,
+        Deadline::None {
+            assumed: day(2025, 12, 31),
+        },
     );
 }
 
