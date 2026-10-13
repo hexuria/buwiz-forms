@@ -72,6 +72,12 @@ class CiChangeDetectionTests(unittest.TestCase):
         push_before: str = "before",
         push_after: str = "after",
     ) -> tuple[dict[str, str], str]:
+        # The Decide step only ever runs in the `changes` job on ubuntu-22.04.
+        # Git Bash on Windows does not resolve the stub `git`/`gh` below ahead
+        # of the real ones, so a Windows run would test a different shell, not
+        # the script CI executes.
+        if os.name == "nt":
+            self.skipTest("the Decide step runs on Linux only")
         bash = shutil.which("bash")
         if bash is None:
             self.skipTest("bash is not available")
