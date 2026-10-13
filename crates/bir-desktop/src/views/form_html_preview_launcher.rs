@@ -149,7 +149,10 @@ fn launch_frozen_html<T: 'static>(
                 let generation = handle
                     .update(cx, |view, _, _| view.generation())
                     .unwrap_or(0);
-                super::frozen_html_preview::register_live_preview(handle, generation);
+                let state = handle
+                    .update(cx, |view, _, _| view.preview_state_kind())
+                    .unwrap_or(super::frozen_html_preview::PreviewStateKind::Pending);
+                super::frozen_html_preview::register_live_preview(handle, generation, state);
                 Ok(HtmlPreviewLaunchKind::FrozenHtmlWindow(handle))
             }
             Err(error) => {
@@ -172,7 +175,7 @@ fn launch_frozen_html<T: 'static>(
     }
 }
 
-fn write_frozen_html_document(html: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn write_frozen_html_document(html: &str) -> Result<std::path::PathBuf, String> {
     let dir = std::env::temp_dir().join(format!("buwiz-frozen-html-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("could not create frozen HTML temp dir: {error}"))?;

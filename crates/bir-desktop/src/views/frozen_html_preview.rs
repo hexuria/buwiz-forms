@@ -18,12 +18,20 @@ use raw_window_handle::HasWindowHandle;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 #[cfg(target_os = "windows")]
+use std::time::Duration;
+#[cfg(target_os = "windows")]
 use wry::WebViewBuilderExtWindows;
 #[cfg(target_os = "macos")]
 use wry::WebViewExtMacOS;
 
-struct LivePreview {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PreviewSlot {
     generation: u64,
+    state: PreviewStateKind,
+}
+
+struct LivePreview {
+    slot: PreviewSlot,
     handle: WindowHandle<FrozenHtmlPreviewView>,
 }
 
@@ -34,9 +42,16 @@ fn live_preview_slot() -> &'static Mutex<Option<LivePreview>> {
     LIVE_PREVIEW.get_or_init(|| Mutex::new(None))
 }
 
-pub(crate) fn register_live_preview(handle: WindowHandle<FrozenHtmlPreviewView>, generation: u64) {
+pub(crate) fn register_live_preview(
+    handle: WindowHandle<FrozenHtmlPreviewView>,
+    generation: u64,
+    state: PreviewStateKind,
+) {
     if let Ok(mut slot) = live_preview_slot().lock() {
-        *slot = Some(LivePreview { generation, handle });
+        *slot = Some(LivePreview {
+            slot: PreviewSlot { generation, state },
+            handle,
+        });
     }
 }
 
@@ -45,6 +60,32 @@ pub(crate) fn live_preview_window() -> Option<WindowHandle<FrozenHtmlPreviewView
         .lock()
         .ok()
         .and_then(|slot| slot.as_ref().map(|live| live.handle))
+}
+
+pub(crate) fn live_preview_state() -> &'static str {
+    live_preview_slot()
+        .lock()
+        .ok()
+        .and_then(|slot| slot.as_ref().map(|live| live.slot.state.label()))
+        .unwrap_or("none")
+}
+
+fn update_preview_slot_state(
+    slot: Option<&mut PreviewSlot>,
+    generation: u64,
+    state: PreviewStateKind,
+) {
+    if let Some(slot) = slot
+        && slot.generation == generation
+    {
+        slot.state = state;
+    }
+}
+
+fn set_preview_state(generation: u64, state: PreviewStateKind) {
+    if let Ok(mut slot) = live_preview_slot().lock() {
+        update_preview_slot_state(slot.as_mut().map(|live| &mut live.slot), generation, state);
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -74,10 +115,63 @@ impl JsScrollMetrics {
     }
 }
 
+enum PreviewState {
+    Pending { html: String },
+    Ready(Entity<WebView>),
+    Failed { error: String, html: String },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PreviewStateKind {
+    Pending,
+    Ready,
+    Failed,
+}
+
+impl PreviewStateKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Ready => "ready",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+impl PreviewState {
+    fn kind(&self) -> PreviewStateKind {
+        match self {
+            Self::Pending { .. } => PreviewStateKind::Pending,
+            Self::Ready(_) => PreviewStateKind::Ready,
+            Self::Failed { .. } => PreviewStateKind::Failed,
+        }
+    }
+
+    fn can_print(&self) -> bool {
+        matches!(self, Self::Ready(_))
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Pending { .. } => PreviewStateKind::Pending.label(),
+            Self::Ready(_) => PreviewStateKind::Ready.label(),
+            Self::Failed { .. } => PreviewStateKind::Failed.label(),
+        }
+    }
+
+    fn webview(&self) -> Option<Entity<WebView>> {
+        match self {
+            Self::Ready(webview) => Some(webview.clone()),
+            _ => None,
+        }
+    }
+}
+
 pub(crate) struct FrozenHtmlPreviewView {
-    webview: Option<Entity<WebView>>,
-    /// Only failures are worth a line in the toolbar.
-    status: Option<String>,
+    preview_state: PreviewState,
+    /// Only toolbar operation failures are shown here; construction failures
+    /// belong to `PreviewState::Failed`.
+    toolbar_status: Option<String>,
     focus_handle: FocusHandle,
     scroll_handle: ScrollHandle,
     js_metrics: Arc<Mutex<Option<JsScrollMetrics>>>,
@@ -168,39 +262,102 @@ p.parentNode.insertBefore(s,p);s.appendChild(p);}})();</script>";
     }
 }
 
+fn build_webview(
+    handle: &raw_window_handle::WindowHandle<'_>,
+    html: String,
+) -> Result<wry::WebView, String> {
+    let builder = wry::WebViewBuilder::new();
+    #[cfg(target_os = "windows")]
+    let builder = builder
+        .with_browser_accelerator_keys(false)
+        .with_default_context_menus(false);
+    builder
+        .with_incognito(true)
+        .with_html(html)
+        .build_as_child(handle)
+        .map_err(|error| error.to_string())
+}
+
 impl FrozenHtmlPreviewView {
     pub(crate) fn new(html: String, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let native_sheet = document_sheet_size(&html).unwrap_or((612.0, 936.0));
         let html = with_screen_canvas(&html, cx.theme().secondary);
         let html = with_fit_style(&html, &fit_css(native_sheet));
         let html = with_sheets(&html);
-        let result = window
-            .window_handle()
-            .map_err(|error| error.to_string())
-            .and_then(|window_handle| {
-                let builder = wry::WebViewBuilder::new();
-                #[cfg(target_os = "windows")]
-                let builder = builder
-                    .with_browser_accelerator_keys(false)
-                    .with_default_context_menus(false);
-                builder
-                    .with_incognito(true)
-                    .with_html(html)
-                    .build_as_child(&window_handle)
-                    .map_err(|error| error.to_string())
-            });
-
-        let (webview, status) = match result {
-            Ok(webview) => (Some(cx.new(|cx| WebView::new(webview, window, cx))), None),
-            Err(error) => (None, Some(format!("Print preview failed: {error}"))),
-        };
-
         let focus_handle = cx.focus_handle();
         super::secondary_window::focus_on_open(&focus_handle, window, cx);
         let generation = PREVIEW_GENERATION.fetch_add(1, Ordering::SeqCst);
+        #[cfg(target_os = "windows")]
+        let preview_state = {
+            let task_html = html.clone();
+            let preview_state = PreviewState::Pending { html };
+            set_preview_state(generation, preview_state.kind());
+            cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(Duration::ZERO).await;
+                let raw_window_handle = this
+                    .update_in(cx, |_, window, _| {
+                        window.window_handle().map(|handle| handle.as_raw())
+                    })
+                    .ok()
+                    .and_then(Result::ok);
+                let Some(raw_window_handle) = raw_window_handle else {
+                    return;
+                };
+                // SAFETY: the window remains alive because this operation is
+                // running on its own foreground task and the handle was just
+                // read from that window.
+                let window_handle =
+                    unsafe { raw_window_handle::WindowHandle::borrow_raw(raw_window_handle) };
+                let result = build_webview(&window_handle, task_html.clone());
+                let _ = this.update_in(cx, |view, window, cx| {
+                    view.preview_state = match result {
+                        Ok(webview) => {
+                            let state =
+                                PreviewState::Ready(cx.new(|cx| WebView::new(webview, window, cx)));
+                            set_preview_state(generation, state.kind());
+                            state
+                        }
+                        Err(error) => {
+                            let state = PreviewState::Failed {
+                                error: format!("Print preview failed: {error}"),
+                                html: task_html,
+                            };
+                            set_preview_state(generation, state.kind());
+                            state
+                        }
+                    };
+                    view.request_js_metrics(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
+            preview_state
+        };
+        #[cfg(not(target_os = "windows"))]
+        let preview_state = {
+            let result = window
+                .window_handle()
+                .map_err(|error| error.to_string())
+                .and_then(|window_handle| build_webview(&window_handle, html.clone()));
+            match result {
+                Ok(webview) => {
+                    let state = PreviewState::Ready(cx.new(|cx| WebView::new(webview, window, cx)));
+                    set_preview_state(generation, state.kind());
+                    state
+                }
+                Err(error) => {
+                    let state = PreviewState::Failed {
+                        error: format!("Print preview failed: {error}"),
+                        html,
+                    };
+                    set_preview_state(generation, state.kind());
+                    state
+                }
+            }
+        };
         let view = Self {
-            webview,
-            status,
+            preview_state,
+            toolbar_status: None,
             focus_handle,
             scroll_handle: ScrollHandle::new(),
             js_metrics: Arc::new(Mutex::new(None)),
@@ -212,6 +369,10 @@ impl FrozenHtmlPreviewView {
 
     pub(crate) fn generation(&self) -> u64 {
         self.generation
+    }
+
+    pub(crate) fn preview_state_kind(&self) -> PreviewStateKind {
+        self.preview_state.kind()
     }
 
     pub(crate) fn scroll_handle(&self) -> &ScrollHandle {
@@ -228,8 +389,8 @@ impl FrozenHtmlPreviewView {
     /// the previous route; WKWebView ignores it, so the button did nothing on
     /// macOS. Script stays as the fallback if the native call errors.
     fn print(&mut self, cx: &mut Context<Self>) {
-        let Some(webview) = self.webview.clone() else {
-            self.status = Some("Nothing to print: the preview did not load.".to_string());
+        let Some(webview) = self.preview_state.webview() else {
+            self.toolbar_status = Some("Nothing to print: the preview did not load.".to_string());
             cx.notify();
             return;
         };
@@ -261,14 +422,14 @@ impl FrozenHtmlPreviewView {
             let native = webview.raw().print();
             native.or_else(|_| webview.raw().evaluate_script("window.print();"))
         });
-        self.status = outcome
+        self.toolbar_status = outcome
             .err()
             .map(|error| format!("Could not open the print dialog: {error}"));
         cx.notify();
     }
 
     pub(crate) fn request_js_metrics(&self, cx: &mut Context<Self>) {
-        let Some(webview) = self.webview.clone() else {
+        let Some(webview) = self.preview_state.webview() else {
             return;
         };
         let slot = Arc::clone(&self.js_metrics);
@@ -311,8 +472,8 @@ impl FrozenHtmlPreviewView {
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         let webview = self
-            .webview
-            .clone()
+            .preview_state
+            .webview()
             .ok_or_else(|| gpui_agent::screenshot_unavailable("the preview did not load"))?;
         let raw = webview.read(cx);
         crate::agent::macos_webview_snapshot::take_snapshot(
@@ -324,7 +485,7 @@ impl FrozenHtmlPreviewView {
 
     pub(crate) fn set_scroll_offset_y(&mut self, y: f32, cx: &mut Context<Self>) {
         self.scroll_handle.set_offset(point(px(0.0), px(-y)));
-        if let Some(webview) = self.webview.clone() {
+        if let Some(webview) = self.preview_state.webview() {
             let js = format!("window.scrollTo(0, {y});");
             let _ = webview.update(cx, |webview, _| {
                 let _ = webview.raw().evaluate_script(&js);
@@ -333,6 +494,24 @@ impl FrozenHtmlPreviewView {
         self.request_js_metrics(cx);
         cx.notify();
     }
+
+    fn open_in_browser(&mut self, cx: &mut Context<Self>) {
+        let Some(html) = (match &self.preview_state {
+            PreviewState::Failed { html, .. } => Some(html.clone()),
+            _ => None,
+        }) else {
+            return;
+        };
+        let result =
+            super::form_html_preview_launcher::write_frozen_html_document(&html).and_then(|path| {
+                open::that_detached(&path)
+                    .map_err(|error| format!("could not open the preview in a browser: {error}"))
+            });
+        if let Err(error) = result {
+            self.toolbar_status = Some(error);
+            cx.notify();
+        }
+    }
 }
 
 impl Drop for FrozenHtmlPreviewView {
@@ -340,7 +519,7 @@ impl Drop for FrozenHtmlPreviewView {
         if let Ok(mut slot) = live_preview_slot().lock()
             && slot
                 .as_ref()
-                .is_some_and(|live| live.generation == self.generation)
+                .is_some_and(|live| live.slot.generation == self.generation)
         {
             *slot = None;
         }
@@ -380,7 +559,14 @@ fn css_color(color: gpui::Hsla) -> String {
 
 impl Render for FrozenHtmlPreviewView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let can_print = self.webview.is_some();
+        let can_print = self.preview_state.can_print();
+        let webview = self.preview_state.webview();
+        let pending = matches!(self.preview_state, PreviewState::Pending { .. });
+        let failed = matches!(self.preview_state, PreviewState::Failed { .. });
+        let error = match &self.preview_state {
+            PreviewState::Failed { error, .. } => Some(error.clone()),
+            _ => None,
+        };
         let body = rsx! {
             <div
                 size_full
@@ -401,7 +587,12 @@ impl Render for FrozenHtmlPreviewView {
                     border_b_1
                     border_color={cx.theme().border}
                 >
-                    <div text_color={cx.theme().danger}>{self.status.clone().unwrap_or_default()}</div>
+                    <div
+                        id={crate::agent::ids::PRINT_PREVIEW_STATE}
+                        text_color={cx.theme().muted_foreground}
+                        text_xs
+                    >{self.preview_state.label()}</div>
+                    <div text_color={cx.theme().danger}>{self.toolbar_status.clone().unwrap_or_default()}</div>
                     <div flex items_center gap_3>
                         <div text_color={cx.theme().muted_foreground}>{"Fits A4"}</div>
                         {Button::new("frozen-html-print")
@@ -419,9 +610,23 @@ impl Render for FrozenHtmlPreviewView {
                     min_h_0
                     overflow_y_scroll
                     track_scroll={&self.scroll_handle}
-                    whenSome={(self.webview.clone(), |this, webview| this.child(webview))}
-                    when={(self.webview.is_none(), |this| {
-                        this.p_6().child(self.status.clone().unwrap_or_default())
+                    whenSome={(webview, |this, webview| this.child(webview))}
+                    when={(pending, |this| {
+                        this.p_6().child("Loading preview…")
+                    })}
+                    when={(failed, |this| {
+                        this.p_6()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(div().text_color(cx.theme().danger).child(error.clone().unwrap_or_default()))
+                            .child(
+                                Button::new("frozen-html-open-in-browser")
+                                    .label("Open in browser")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.open_in_browser(cx);
+                                    })),
+                            )
                     })}
                 />
             </div>
@@ -438,8 +643,9 @@ impl Render for FrozenHtmlPreviewView {
 #[cfg(test)]
 mod tests {
     use super::{
-        PAPER_HEIGHT_PT, PAPER_WIDTH_PT, css_color, document_sheet_size, fit_css, fit_scale,
-        with_fit_style, with_screen_canvas, with_sheets,
+        PAPER_HEIGHT_PT, PAPER_WIDTH_PT, PreviewSlot, PreviewStateKind, css_color,
+        document_sheet_size, fit_css, fit_scale, update_preview_slot_state, with_fit_style,
+        with_screen_canvas, with_sheets,
     };
 
     #[test]
@@ -463,6 +669,51 @@ mod tests {
             "content is required"
         );
         assert!(super::JsScrollMetrics::parse("not json").is_none());
+    }
+
+    #[test]
+    fn preview_state_helpers_expose_stable_labels_and_printability() {
+        assert_eq!(super::PreviewStateKind::Pending.label(), "pending");
+        assert_eq!(super::PreviewStateKind::Ready.label(), "ready");
+        assert_eq!(super::PreviewStateKind::Failed.label(), "failed");
+        assert!(
+            !super::PreviewState::Pending {
+                html: String::new()
+            }
+            .can_print()
+        );
+        assert!(
+            !super::PreviewState::Failed {
+                error: "no webview".into(),
+                html: String::new(),
+            }
+            .can_print()
+        );
+    }
+
+    #[test]
+    fn preview_slot_updates_only_for_current_generation_and_clears_to_none() {
+        let mut slot = Some(PreviewSlot {
+            generation: 7,
+            state: PreviewStateKind::Pending,
+        });
+        update_preview_slot_state(Some(slot.as_mut().unwrap()), 8, PreviewStateKind::Ready);
+        assert_eq!(slot.unwrap().state, PreviewStateKind::Pending);
+
+        let mut slot = Some(PreviewSlot {
+            generation: 7,
+            state: PreviewStateKind::Pending,
+        });
+        update_preview_slot_state(Some(slot.as_mut().unwrap()), 7, PreviewStateKind::Ready);
+        assert_eq!(slot.unwrap().state, PreviewStateKind::Ready);
+
+        let slot: Option<PreviewSlot> = None;
+        assert_eq!(
+            slot.as_ref()
+                .map(|slot| slot.state.label())
+                .unwrap_or("none"),
+            "none"
+        );
     }
 
     #[test]

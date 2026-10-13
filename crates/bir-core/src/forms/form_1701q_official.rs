@@ -819,6 +819,11 @@ impl QueueableForm for Form1701QDraft {
     const FORM_TYPE: &'static str = FORM_1701Q_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1701Q_LAYOUT_ID;
 
+    /// Item 31 Aggregate Amount Payable/(Overpayment).
+    fn amount_payable(&self) -> Option<f64> {
+        self.item_31_aggregate_amount_payable
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }

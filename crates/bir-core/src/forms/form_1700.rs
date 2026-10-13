@@ -1459,6 +1459,11 @@ impl QueueableForm for Form1700Draft {
     const FORM_TYPE: &'static str = "1700v2018";
     const LAYOUT_ID: &'static str = FORM_1700_FORM_ID;
 
+    /// Aggregate Amount Payable (taxpayer and spouse).
+    fn amount_payable(&self) -> Option<f64> {
+        Some(self.aggregate_amount_payable)
+    }
+
     fn lifecycle(&self) -> &SubmissionLifecycle {
         &self.lifecycle
     }
