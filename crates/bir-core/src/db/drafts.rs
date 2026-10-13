@@ -3131,6 +3131,11 @@ mod tests {
         owing.set_any_taxes_withheld(true);
         owing.tax_14_total_compensation = 15_000.0;
         owing.tax_25_total_taxes_withheld = 1_500.0;
+        // Pin Items 32-34 at zero: the period is past its deadline, and this
+        // test is not about penalties, so they must not grow with the clock.
+        for component in crate::penalties::PenaltyComponent::ALL {
+            owing.set_penalty_override(component, Some(0.0));
+        }
         owing.compute();
         let owing_id = db.save_1601c_draft(&owing).expect("owing draft");
         assert_eq!(db.draft_amount_payable(owing_id).unwrap(), Some(1_500.0));
