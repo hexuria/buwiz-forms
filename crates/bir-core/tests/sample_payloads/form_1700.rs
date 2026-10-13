@@ -135,3 +135,8 @@ fn form_1700_sample_with_popup_rows_is_current() {
         "bf9ca8160cedfdb509fbc16145f5b755da2a299f0232ca4c7644939b0c00c93f",
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![serde_json::to_value(sample_1700()).expect("sample serializes")]
+}

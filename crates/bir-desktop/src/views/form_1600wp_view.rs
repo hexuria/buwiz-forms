@@ -971,6 +971,20 @@ impl Form1600WpView {
 impl QueueableFormView for Form1600WpView {
     type Draft = Form1600WpDraft;
 
+    const PRINT_SLUG: &'static str = "1600wp-2010";
+
+    fn print_fields(draft: &Form1600WpDraft) -> std::collections::BTreeMap<String, String> {
+        draft.to_print_field_map()
+    }
+
+    fn agent_draft(&self) -> &Form1600WpDraft {
+        &self.draft
+    }
+
+    fn header_actions() -> crate::views::form_header::FormHeaderActions<Self> {
+        HEADER_ACTIONS
+    }
+
     fn new(
         draft: Form1600WpDraft,
         db: Arc<Mutex<Database>>,
@@ -1217,9 +1231,9 @@ impl FormViewTrait for Form1600WpView {
             ));
             return;
         }
-        let fields = self.draft.to_print_field_map();
+        let fields = Self::print_fields(&self.draft);
         match super::form_html_preview_launcher::launch_frozen_form_preview(
-            "1600wp-2010",
+            Self::PRINT_SLUG,
             &fields,
             "1600WP — Print Preview",
             cx,

@@ -2269,6 +2269,13 @@ impl Form1601CView {
 }
 
 impl Form1601CView {
+    /// `form.review_in_app`: the page's own Validate, then the header's
+    /// "prepared by the assistant" note and highlighted Submit.
+    #[cfg(feature = "agent")]
+    pub(crate) fn agent_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::views::form_header::agent_review(self, HEADER_ACTIONS, window, cx);
+    }
+
     /// The status box carries the cron submitter's error, then any page
     /// message; without in-app queueing, the scaffold notice.
     fn header_message(&self) -> Option<String> {

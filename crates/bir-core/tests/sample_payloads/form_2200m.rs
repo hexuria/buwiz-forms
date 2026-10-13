@@ -122,3 +122,11 @@ fn form_2200m_sample_with_many_rows_is_current() {
         "3e68f97ca2c240fd596325bfea7318f657d708c68e33adb331c30b8d720b1f74",
     );
 }
+
+/// Every sample draft above, for the agent-form probe (`agent_forms`).
+pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::to_value(sample_2200m()).expect("sample serializes"),
+        serde_json::to_value(sample_2200m_many_rows()).expect("sample serializes"),
+    ]
+}
