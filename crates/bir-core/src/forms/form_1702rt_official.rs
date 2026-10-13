@@ -24,6 +24,7 @@
 //! counter control is commented out of the page, so its `saveModalTable`
 //! fails there and the page never reloads those rows.
 
+use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_1702rt::{
@@ -382,6 +383,9 @@ impl Form1702RTDraft {
         p2.item_14_tax_due = p4.item_43_tax_due;
         p2.item_15_total_tax_credits = p4.tax_credits.item_55_total;
         p2.item_16_net_tax_payable_or_overpayment = p4.item_56_net_tax_payable_or_overpayment;
+        // Items 17-19 file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
+        let p2 = &mut self.part_ii;
         p2.item_20_total_penalties = sum([
             p2.item_17_surcharge,
             p2.item_18_interest,
@@ -1109,7 +1113,41 @@ pub(crate) fn email_matches_official_format(email: &str) -> bool {
     local_ok && domain_ok
 }
 
+impl Form1702RTDraft {
+    /// Items 17-19 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                part_ii.item_17_surcharge: "17 Surcharge",
+                part_ii.item_18_interest: "18 Interest",
+                part_ii.item_19_compromise: "19 Compromise",
+            ],
+            controls: [
+                "frm1702RT:txtPg1Pt2I17Surcharge",
+                "frm1702RT:txtPg1Pt2I18Interest",
+                "frm1702RT:txtPg1Pt2I19Compromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 16", |d| d.part_ii.item_16_net_tax_payable_or_overpayment.0 as f64,
+            rounding: super::penalty_items::PenaltyRounding::WholePesos,
+            // The calendar's annual deadline is for a full calendar year.
+            deadline_period: |d: &Self| {
+                (d.filing_basis == Form1702RTFilingBasis::Calendar
+                    && !d.is_short_period
+                    && d.month == 12)
+                    .then(|| super::penalty_items::calendar_period(d))
+                    .flatten()
+            },
+        )
+    }
+}
+
 impl QueueableForm for Form1702RTDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1702RT";
     const FORM_TYPE: &'static str = FORM_1702RT_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1702RT_LAYOUT_ID;
@@ -1231,6 +1269,8 @@ mod tests {
         p4.tax_credits.item_48_previous_quarter_withholding = WholePeso(120_000);
         draft.schedule_1.salaries_wages_allowances = WholePeso(1_200_000);
         draft.schedule_1.rental = WholePeso(240_000);
+        // This sample enters its penalties by hand.
+        draft.keep_entered_penalties();
         draft.recompute();
         let net = draft.part_iv.item_39_net_taxable_income_or_loss;
         draft.schedule_5.item_1_net_income_or_loss_per_books = net;
@@ -1558,6 +1598,7 @@ mod tests {
         assert_eq!(draft.lifecycle.status, FilingStatus::Queued);
         assert!(draft.clone().revalidate_queued_before_submission().is_ok());
         draft.part_ii.item_17_surcharge = WholePeso(99);
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

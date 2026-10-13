@@ -7,6 +7,7 @@
 //! transport configuration at runtime and delegates encryption/upload to
 //! omitted executables. Submission stays manual/external.
 
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -219,6 +220,10 @@ pub struct Form0619FDraft {
     pub item_18b_interest: f64,
     #[serde(alias = "txt_tax18c")]
     pub item_18c_compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(alias = "txt_tax18d")]
     pub item_18d_total_penalties: f64,
     #[serde(alias = "txt_tax19")]
@@ -277,6 +282,7 @@ where
 impl Form0619FDraft {
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             taxable_year: year,
@@ -457,6 +463,7 @@ mod tests {
         draft.item_18a_surcharge = 100.0;
         draft.item_18b_interest = 30.0;
         draft.item_18c_compromise = 100.0;
+        crate::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         draft.recompute();
         draft
     }
@@ -493,16 +500,55 @@ mod tests {
     }
 
     #[test]
-    fn manual_penalties_are_never_replaced_by_a_clock_based_engine() {
-        let mut draft = valid_draft();
-        draft.item_18a_surcharge = 7.0;
-        draft.item_18b_interest = 8.0;
-        draft.item_18c_compromise = 9.0;
-        draft.recompute();
+    fn legacy_manual_penalties_load_as_overrides_and_keep_their_totals() {
+        // Before the computed-default model, Items 18A-18C were typed by
+        // hand and never replaced by a clock-based engine. A draft saved then
+        // (no `penalty_model_version`) keeps every non-zero hand-typed value
+        // as an override, so nothing it carried changes value; a zero item
+        // follows the engine like any other.
+        let mut current = valid_draft();
+        current.item_18a_surcharge = 7.0;
+        current.item_18b_interest = 0.0;
+        current.item_18c_compromise = 9.0;
+        let mut json = serde_json::to_value(&current).unwrap();
+        let object = json.as_object_mut().unwrap();
+        for key in [
+            "penalty_model_version",
+            "penalty_due_date",
+            "penalty_taxpayer_class",
+            "computed_penalties",
+            "penalty_overrides",
+        ] {
+            object.remove(key);
+        }
+        let mut draft: Form0619FDraft = serde_json::from_value(json).unwrap();
+        assert_eq!(draft.penalty.penalty_model_version, 0);
+
+        let late = chrono::NaiveDate::from_ymd_opt(2026, 10, 13).unwrap();
+        crate::forms::penalty_items::with_clock(late, || draft.recompute());
+
+        let overrides = &draft.penalty.penalty_overrides;
+        assert_eq!(overrides.surcharge, Some(7.0));
+        assert_eq!(overrides.interest, None);
+        assert_eq!(overrides.compromise, Some(9.0));
         assert_eq!(draft.item_18a_surcharge, 7.0);
-        assert_eq!(draft.item_18b_interest, 8.0);
         assert_eq!(draft.item_18c_compromise, 9.0);
-        assert_eq!(draft.item_18d_total_penalties, 24.0);
+        let computed = draft
+            .penalty
+            .computed_penalties
+            .clone()
+            .expect("the late period's computed values are still shown");
+        assert_eq!(draft.item_18b_interest, computed.interest);
+        assert_eq!(
+            draft.item_18d_total_penalties,
+            ((7.0 + computed.interest + 9.0) * 100.0_f64).round() / 100.0
+        );
+
+        // Later recomputes keep the overrides.
+        let next_day = chrono::NaiveDate::from_ymd_opt(2026, 10, 14).unwrap();
+        crate::forms::penalty_items::with_clock(next_day, || draft.recompute());
+        assert_eq!(draft.item_18a_surcharge, 7.0);
+        assert_eq!(draft.item_18c_compromise, 9.0);
     }
 
     #[test]

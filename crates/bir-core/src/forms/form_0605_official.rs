@@ -13,6 +13,7 @@
 //! writes them there. [`QueueableForm::official_payload`] adds them the same
 //! way.
 
+use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_0605::{
@@ -524,6 +525,8 @@ impl Form0605Draft {
             self.year_end_month = 12;
         }
         self.item_19_basic_tax_or_payment = cents(self.item_19_basic_tax_or_payment);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.item_20a_surcharge = cents(self.item_20a_surcharge);
         self.item_20b_interest = cents(self.item_20b_interest);
         self.item_20c_compromise = cents(self.item_20c_compromise);
@@ -796,7 +799,9 @@ impl Form0605Draft {
 
         let mut expected = self.clone();
         expected.official_recompute();
+        let penalties = Self::penalty_declaration();
         if expected.item_21_total_amount_payable != self.item_21_total_amount_payable
+            || penalties.filed(&expected) != penalties.filed(self)
             || expected.item_20d_total_penalties != self.item_20d_total_penalties
             || expected.item_19_basic_tax_or_payment != self.item_19_basic_tax_or_payment
         {
@@ -986,7 +991,32 @@ fn is_popup_radio(key: &str) -> bool {
     })
 }
 
+impl Form0605Draft {
+    /// Items 20A-20C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                item_20a_surcharge: "20A Surcharge",
+                item_20b_interest: "20B Interest",
+                item_20c_compromise: "20C Compromise",
+            ],
+            controls: [
+                "frm0605:txtTax20A",
+                "frm0605:txtTax20B",
+                "frm0605:txtTax20C",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 19", |d| d.item_19_basic_tax_or_payment,
+        )
+    }
+}
+
 impl QueueableForm for Form0605Draft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "0605";
     const FORM_TYPE: &'static str = FORM_0605_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_0605_LAYOUT_ID;
@@ -1129,6 +1159,7 @@ mod tests {
         draft.type_of_payment = Some(Form0605TypeOfPayment::FullPayment);
         draft.item_19_basic_tax_or_payment = 12_345.675;
         draft.item_20a_surcharge = 25.5;
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1340,6 +1371,7 @@ mod tests {
         draft.queue(QueueAuthSource::Gui).unwrap();
         assert!(draft.clone().revalidate_queued_before_submission().is_ok());
         draft.item_20b_interest = 9.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
         assert_eq!(draft.lifecycle.status, FilingStatus::Draft);
         assert_eq!(draft.period_column(), 1);

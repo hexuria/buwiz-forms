@@ -21,7 +21,11 @@ use super::event_form_kit::{
     computed, computed_text, field, format_tin, grid, money_text, section,
 };
 use crate::components::form_engine::FormViewTrait;
+use crate::components::penalty_section::{
+    self, PenaltyPartyView, PenaltySection, PenaltySectionEvent,
+};
 use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use bir_core::penalties::PenaltyComponent;
 
 /// Plain inputs: (key, label, placeholder).
 const TEXT_INPUTS: &[(&str, &str, &str)] = &[
@@ -71,6 +75,9 @@ pub struct Form1707AView {
     draft: Form1707ADraft,
     db: Arc<Mutex<Database>>,
     kit: EditorState,
+    /// The shared penalty section (computed values, overrides, note).
+    penalty: Entity<PenaltySection>,
+    _penalty_subscription: Subscription,
     /// Schedule 1 / 2 rows on screen: never fewer than the draft holds.
     gain_rows: usize,
     loss_rows: usize,
@@ -94,9 +101,11 @@ impl Form1707AView {
             "email" => d.email.clone(),
             "relief" => d.tax_relief.clone().unwrap_or_default(),
             "less" => money_text(d.tax_paid_previous),
-            "surcharge" => money_text(d.surcharge),
-            "interest" => money_text(d.interest),
-            "compromise" => money_text(d.compromise),
+            "surcharge" => penalty_section::override_text(&d.penalty, PenaltyComponent::Surcharge),
+            "interest" => penalty_section::override_text(&d.penalty, PenaltyComponent::Interest),
+            "compromise" => {
+                penalty_section::override_text(&d.penalty, PenaltyComponent::Compromise)
+            }
             _ => {
                 for (schedule, rows) in [(1u8, &d.gains), (2u8, &d.losses)] {
                     for index in 0..rows.len() {
@@ -433,9 +442,18 @@ impl Form1707AView {
             self.f("less", layout, !d.is_amended),
             computed("18C — Total tax credits/payments", d.total_tax_paid, cx),
             computed("19 — Net tax payable (overpayment)", d.tax_payable, cx),
-            self.f("surcharge", layout, false),
-            self.f("interest", layout, false),
-            self.f("compromise", layout, false),
+            penalty_section::render(
+                &self.penalty,
+                &PenaltyPartyView::all(&self.draft),
+                &self
+                    .kit
+                    .validation_errors
+                    .iter()
+                    .chain(&self.kit.parse_errors)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cx,
+            ),
             computed("20D — Total penalties", d.total_penalties, cx),
             computed(
                 "21 — Total amount payable (overpayment)",
@@ -560,7 +578,15 @@ impl KitView for Form1707AView {
                 d.losses = rows;
             }
         }
-        r.errors
+        let mut errors = r.errors;
+        // An empty penalty box means "use computed"; any amount overrides it.
+        errors.extend(penalty_section::apply_overrides(
+            &self.penalty,
+            &<Form1707ADraft as bir_core::forms::queueable::QueueableForm>::penalty_items(),
+            &mut self.draft,
+            cx,
+        ));
+        errors
     }
 }
 
@@ -596,10 +622,24 @@ impl QueueableFormView for Form1707AView {
             window,
             cx,
         );
+        // The penalty boxes are overrides (empty means "use computed").
+        let penalty_views = PenaltyPartyView::all(&draft);
+        let penalty_inputs =
+            vec![["surcharge", "interest", "compromise"].map(|key| kit.inputs[key].clone())];
+        let penalty = cx.new(|cx| PenaltySection::wrap(&penalty_views, penalty_inputs, window, cx));
+        let _penalty_subscription = cx.subscribe_in(
+            &penalty,
+            window,
+            |this: &mut Self, _, _: &PenaltySectionEvent, _, cx| {
+                super::event_form_kit::sync(this, cx);
+            },
+        );
         Self {
             draft,
             db,
             kit,
+            penalty,
+            _penalty_subscription,
             gain_rows,
             loss_rows,
         }

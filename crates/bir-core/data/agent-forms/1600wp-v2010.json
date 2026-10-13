@@ -56,9 +56,9 @@
 "frm1600WP:txtRDOCode": {"lock":"profile","path":"/rdo_code","type":"text"},
 "frm1600WP:txtSheets": {"path":"/number_of_attached_sheets","type":"whole"},
 "frm1600WP:txtTax13": {"path":"/tax_remitted_previous","type":"amount"},
-"frm1600WP:txtTax15A": {"path":"/surcharge","type":"amount"},
-"frm1600WP:txtTax15B": {"path":"/interest","type":"amount"},
-"frm1600WP:txtTax15C": {"path":"/compromise","type":"amount"},
+"frm1600WP:txtTax15A": {"path":"/penalty_overrides/surcharge","type":"amount"},
+"frm1600WP:txtTax15B": {"path":"/penalty_overrides/interest","type":"amount"},
+"frm1600WP:txtTax15C": {"path":"/penalty_overrides/compromise","type":"amount"},
 "frm1600WP:txtTaxpayerName": {"lock":"profile","path":"/agent_name","type":"text"},
 "frm1600WP:txtZipCode": {"lock":"profile","path":"/zip_code","type":"text"},
 "txtEmail": {"lock":"profile","path":"/email","type":"text"}

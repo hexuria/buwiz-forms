@@ -1,8 +1,10 @@
+use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1602q::{
     Form1602QCategory, Form1602QDraft, Form1602QPreferentialRow, Form1602QTaxRelief,
     Form1602QTreatyRow,
 };
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_1602q() -> Form1602QDraft {
     let mut draft =
@@ -36,6 +38,7 @@ fn sample_1602q() -> Form1602QDraft {
     draft.over_remittance_previous_quarter = 500.0;
     draft.surcharge = 25.5;
     draft.interest_penalty = 10.0;
+    draft.keep_entered_penalties();
     draft.recompute();
     draft
 }
@@ -52,6 +55,12 @@ fn form_1602q_sample_payload_is_current() {
         &payload,
         "807e6dbd23ee19917162dbd068f726b9f417db9251bd5d804c0618b63c563f8b",
     );
+}
+
+/// Q3 2025: due the last day of October 2025.
+#[test]
+fn form_1602q_penalty_items_follow_the_shared_model() {
+    penalty_items::check(sample_1602q, Deadline::Calendar(day(2025, 10, 31)));
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

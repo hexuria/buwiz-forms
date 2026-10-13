@@ -18,6 +18,8 @@
 //! `NumWithComma` cannot parse, wiping out Items 17 and 18. The model follows
 //! the legacy engine, as `validateFiscalMonth`'s `getYear()` also assumes.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use chrono::{Datelike, NaiveDate};
@@ -491,6 +493,10 @@ pub struct Form1702qDraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     #[serde(default)]
@@ -648,6 +654,7 @@ impl Form1702qDraft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, quarter: u8) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             tin: profile.tin.full(),
             tax_period_basis: TaxPeriodBasis::Calendar,
@@ -947,6 +954,12 @@ impl Form1702qDraft {
         self.regular_tax_still_due = self.income_tax_due - self.prior_year_mcit_excess;
         self.aggregate_tax_due = self.regular_tax_still_due + self.special_net_tax_due;
         self.net_tax_payable = self.aggregate_tax_due - self.total_credits;
+        // The penalty items file their override, else the computed value,
+        // held in whole pesos like every typed amount (`removeDecimal`).
+        Self::penalty_declaration().apply(self);
+        self.surcharge = js_round(self.surcharge);
+        self.interest = js_round(self.interest);
+        self.compromise = js_round(self.compromise);
         self.total_penalties = self.surcharge + self.interest + self.compromise;
         self.total_amount_payable = if self.net_tax_payable < 0.0 && self.total_penalties > 0.0 {
             self.total_penalties
@@ -1458,7 +1471,42 @@ impl FormValidator for Form1702qDraft {
     }
 }
 
+impl Form1702qDraft {
+    /// Items 21-23 on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "21 Surcharge",
+                interest: "22 Interest",
+                compromise: "23 Compromise",
+            ],
+            controls: [
+                "frm1702q:txtTax21",
+                "frm1702q:txtTax22",
+                "frm1702q:txtTax23",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 20", |d| d.net_tax_payable,
+            // Every amount on this page is whole pesos.
+            rounding: super::penalty_items::PenaltyRounding::WholePesos,
+            // The calendar's 1702Q deadlines follow calendar quarters; a
+            // fiscal-year filer's quarter has none there.
+            deadline_period: |d: &Self| {
+                (d.tax_period_basis == super::form_2551q::TaxPeriodBasis::Calendar
+                    && d.year_end_month == 12)
+                    .then(|| super::penalty_items::calendar_period(d))
+                    .flatten()
+            },
+        )
+    }
+}
+
 impl QueueableForm for Form1702qDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1702Q";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1702Qv2018C']`).
     const FORM_TYPE: &'static str = "1702Qv2018C";
@@ -1538,6 +1586,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form1702qDraft {
         let mut d = Form1702qDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             tin: "12345678800000".to_string(),
             tax_period_basis: TaxPeriodBasis::Calendar,
@@ -1610,6 +1659,8 @@ mod tests {
             number_of_attachments: 0,
             lifecycle: SubmissionLifecycle::default(),
         };
+        // This sample enters its penalties by hand.
+        d.keep_entered_penalties();
         d.recompute();
         d
     }
@@ -1851,6 +1902,7 @@ mod tests {
         d.queue(crate::filing_queue::QueueAuthSource::Gui).unwrap();
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.surcharge = 99.0;
+        d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
     }
 

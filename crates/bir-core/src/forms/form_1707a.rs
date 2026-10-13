@@ -17,6 +17,8 @@
 //! pop-up rows are written where the page keeps them (see
 //! [`Form1707ADraft::official_layout`]).
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use chrono::{Datelike, NaiveDate};
@@ -150,6 +152,10 @@ pub struct Form1707ADraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// 19.
@@ -278,6 +284,7 @@ impl Form1707ADraft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             filing_year: year,
             open_ended_key,
@@ -422,6 +429,8 @@ impl Form1707ADraft {
         self.tax_paid_previous = typed(self.tax_paid_previous);
         self.total_tax_paid = shown(precise(self.s1_total_tax_paid + self.tax_paid_previous));
         self.tax_payable = shown(precise(self.tax_due - self.total_tax_paid));
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = typed(self.surcharge);
         self.interest = typed(self.interest);
         self.compromise = typed(self.compromise);
@@ -1074,7 +1083,41 @@ impl FormValidator for Form1707ADraft {
     }
 }
 
+impl Form1707ADraft {
+    /// Items 20A-20C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "20A Surcharge",
+                interest: "20B Interest",
+                compromise: "20C Compromise",
+            ],
+            controls: [
+                "frm1707Av2021:txtI18ASurcharge",
+                "frm1707Av2021:txtI18BInterest",
+                "frm1707Av2021:txtI18CCompromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 19", |d| d.tax_payable,
+            // Calendar-year returns (year ended 31 December) use the
+            // calendar's annual 1707-A deadline; a fiscal year has none there.
+            deadline_period: |d: &Self| {
+                (!d.fiscal && d.year_end_month == 12 && d.year_end_day == 31).then(|| {
+                    crate::calendar_rules::DeadlinePeriod::Annual {
+                        taxable_year: i32::from(d.year_end_year),
+                    }
+                })
+            },
+        )
+    }
+}
+
 impl QueueableForm for Form1707ADraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "1707A";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1707Av2021']`).
     const FORM_TYPE: &'static str = "1707Av2021";
@@ -1190,6 +1233,7 @@ mod tests {
 
     pub(crate) fn sample() -> Form1707ADraft {
         let mut draft = Form1707ADraft {
+            penalty: crate::forms::penalty_items::PenaltyState::new(None),
             id: None,
             filing_year: 2025,
             open_ended_key: 1,
@@ -1247,6 +1291,8 @@ mod tests {
             total_amount_payable: 0.0,
             lifecycle: SubmissionLifecycle::default(),
         };
+        // This sample enters its penalties by hand.
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }
@@ -1416,6 +1462,7 @@ mod tests {
         d.queue(crate::filing_queue::QueueAuthSource::Gui).unwrap();
         assert!(d.revalidate_queued_before_submission().is_ok());
         d.surcharge = 99.0;
+        d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
     }
 }

@@ -2025,6 +2025,8 @@ mod tests {
             surcharge: 1_000.0,
             ..Form1700Column::default()
         };
+        // The fixture enters its penalties by hand.
+        bir_core::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         let employer = |name: &str, regular: f64, withheld: f64| Form1700Employer {
             for_spouse: false,
             name: name.into(),
@@ -2322,6 +2324,8 @@ mod tests {
         row.local_value_taxable = Some(100_000.0);
         row.local_tax_due = Some(4_000.0);
         draft.surcharge = 25.5;
+        // The fixture enters its penalties by hand.
+        bir_core::forms::queueable::QueueableForm::keep_entered_penalties(&mut draft);
         draft.recompute();
         draft.tax_deposit = draft.tax_still_due;
         draft.recompute();
@@ -2533,12 +2537,62 @@ mod tests {
     }
 
     #[test]
+    fn print_carries_the_used_penalty_values() {
+        // A late June 2025 1600-VT filed 13 October 2026: the print shows the
+        // computed surcharge and interest and the compromise override, the
+        // same values the XML and the queue fingerprint carry.
+        use bir_core::forms::form_1600vt::{Form1600VtAgentCategory, Form1600VtDraft};
+        use bir_core::forms::penalty_items::with_clock;
+        use bir_core::forms::queueable::QueueableForm;
+        use bir_core::penalties::PenaltyComponent;
+        let mut vt = Form1600VtDraft::new_from_profile(&withholding_profile("1600VT"), 2025, 6);
+        vt.set_agent_category(Form1600VtAgentCategory::Government);
+        vt.set_taxes_withheld(true);
+        vt.toggle_atc(2).unwrap();
+        vt.atc_rows[0].tax_base = 100_000.0;
+        vt.set_penalty_override(PenaltyComponent::Compromise, Some(500.0));
+        let filed = serde_json::from_value(serde_json::json!("2026-10-13")).unwrap();
+        with_clock(filed, || vt.recompute());
+        let computed = vt.penalty.computed_penalties.clone().unwrap();
+        assert!(computed.surcharge > 0.0 && computed.interest > 0.0);
+        assert_eq!(vt.surcharge, computed.surcharge);
+        assert_eq!(vt.interest, computed.interest);
+        assert_eq!(vt.compromise, 500.0);
+
+        let fields = vt.to_print_field_map();
+        let amount = bir_core::official_xml::official_amount;
+        assert_eq!(
+            fields["frm1600VT:txtPg1P2I23Surcharge"],
+            amount(computed.surcharge)
+        );
+        assert_eq!(
+            fields["frm1600VT:txtPg1P2I24Interest"],
+            amount(computed.interest)
+        );
+        assert_eq!(fields["frm1600VT:txtPg1P2I25Compromise"], amount(500.0));
+        assert_eq!(fields, {
+            let mut xml = vt.field_map();
+            xml.extend(fields.iter().map(|(k, v)| (k.clone(), v.clone())));
+            xml
+        });
+        let html = filled_document("1600-vt-2018", &fields).unwrap();
+        let total_penalties = amount(vt.total_penalties);
+        assert!(
+            html.contains(&total_penalties) || html.contains(&total_penalties.replace(',', "")),
+            "the print shows Item 26 = {total_penalties}"
+        );
+    }
+
+    #[test]
     fn filled_document_1600vt_and_1600pt_fill_identity_part_ii_and_schedule() {
         use bir_core::forms::form_1600pt::{Form1600PtAgentCategory, Form1600PtDraft};
         use bir_core::forms::form_1600vt::{
             Form1600VtAgentCategory, Form1600VtDraft, Form1600VtScheduleRow,
         };
         let mut vt = Form1600VtDraft::new_from_profile(&withholding_profile("1600VT"), 2025, 6);
+        // The fixture enters its penalties by hand (none), so the late
+        // period's computed penalties do not move the printed totals.
+        bir_core::forms::queueable::QueueableForm::keep_entered_penalties(&mut vt);
         vt.set_agent_category(Form1600VtAgentCategory::Government);
         vt.set_taxes_withheld(true);
         vt.toggle_atc(2).unwrap();
@@ -2569,6 +2623,7 @@ mod tests {
         assert!(!html.contains("name=\"frm1600VT:"));
 
         let mut pt = Form1600PtDraft::new_from_profile(&withholding_profile("1600PT"), 2025, 6);
+        bir_core::forms::queueable::QueueableForm::keep_entered_penalties(&mut pt);
         pt.set_agent_category(Form1600PtAgentCategory::Government);
         pt.set_taxes_withheld(true);
         let wb200 = bir_core::forms::form_1600pt::form_1600pt_atc_index("WB200", "0.6").unwrap();

@@ -267,6 +267,7 @@ impl Form0619FDraft {
         }
 
         let mut draft = Form0619FDraft {
+            penalty: crate::forms::penalty_items::PenaltyState::imported(),
             id: None,
             tin: format!(
                 "{}{}{}{}",
@@ -353,6 +354,9 @@ impl Form0619FDraft {
         let source_17 = parse_money(fields, "frm0619F:txtTax17", false, &mut errors);
         let source_18d = parse_money(fields, "frm0619F:txtTax18D", false, &mut errors);
         let source_19 = parse_money(fields, "frm0619F:txtTax19", false, &mut errors);
+        // An imported return carries the penalties it was prepared with:
+        // keep each one as an override so the source amounts round-trip.
+        Form0619FDraft::penalty_declaration().adopt_imported(&mut draft);
         draft.recompute();
         verify_computed_source(
             "frm0619F:txtTax15",
@@ -1231,5 +1235,26 @@ mod tests {
         let encrypted_reimport = Form0619FDraft::from_bir_field_map(&encrypted_replay)
             .expect("normalized encrypted replay must re-import");
         assert_eq!(encrypted_reimport.to_bir_field_map(), encrypted_replay);
+    }
+
+    #[test]
+    fn imported_penalties_are_kept_as_overrides() {
+        // The return was prepared for a period now long past its deadline:
+        // the imported penalty items are kept as overrides, so recomputing
+        // today files exactly what the source carried.
+        let mut draft = Form0619FDraft::from_bir_xml_payload(&reviewed_sample("1", true))
+            .expect("reviewed save must parse");
+        let fields = draft.to_bir_field_map();
+        let items = Form0619FDraft::penalty_declaration();
+        let state = &draft.penalty.penalty_overrides;
+        assert_eq!(
+            [state.surcharge, state.interest, state.compromise],
+            items.filed(&draft).map(Some)
+        );
+        crate::forms::penalty_items::with_clock(
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 13).unwrap(),
+            || draft.recompute(),
+        );
+        assert_eq!(draft.to_bir_field_map(), fields);
     }
 }

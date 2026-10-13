@@ -17,6 +17,8 @@
 //! (name, address) are submitted as loaded, so the field map keeps them as
 //! stored.
 
+use super::penalty_items::PenaltyItems;
+use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
 
 use chrono::{Datelike, NaiveDate};
@@ -615,6 +617,10 @@ pub struct Form2200TDraft {
     pub interest: f64,
     #[serde(default)]
     pub compromise: f64,
+    /// The penalty items' computed values, overrides, note and engine
+    /// inputs (the shared model in [`super::penalty_items`]).
+    #[serde(flatten)]
+    pub penalty: PenaltyState,
     #[serde(default)]
     pub total_penalties: f64,
     /// Item 22.
@@ -708,6 +714,7 @@ impl Form2200TDraft {
             last_day_of_month(year, month)
         };
         let mut draft = Self {
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
             id: None,
             month,
             day,
@@ -826,6 +833,8 @@ impl Form2200TDraft {
         self.net_tax_due = cents(self.excise_tax_due - self.total_credits);
         self.previous_payment = cents(self.previous_payment);
         self.tax_still_due = cents(self.net_tax_due - self.previous_payment);
+        // The penalty items file their override, else the computed value.
+        Self::penalty_declaration().apply(self);
         self.surcharge = cents(self.surcharge);
         self.interest = cents(self.interest);
         self.compromise = cents(self.compromise);
@@ -1184,7 +1193,32 @@ impl FormValidator for Form2200TDraft {
     }
 }
 
+impl Form2200TDraft {
+    /// Items 21A-21C on the shared penalty model ([`super::penalty_items`]).
+    pub fn penalty_declaration() -> PenaltyItems<Self> {
+        super::penalty_items::queueable_penalty_items!(
+            Self,
+            schedule: StandardFiling,
+            items: [
+                surcharge: "21A Surcharge",
+                interest: "21B Interest",
+                compromise: "21C Compromise",
+            ],
+            controls: [
+                "frm2200Tv2020:txtPen_Surcharge",
+                "frm2200Tv2020:txtPen_Interest",
+                "frm2200Tv2020:txtPen_Compromise",
+            ],
+            state: penalty,
+            basic_tax_due: "Item 20", |d| d.tax_still_due,
+        )
+    }
+}
+
 impl QueueableForm for Form2200TDraft {
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        vec![Self::penalty_declaration()]
+    }
     const FORM_CODE: &'static str = "2200T";
     /// Official `formType`, filename segment and PROD SFTP folder
     /// (`ftpTargetFolder.PROD['2200Tv2020']`).
@@ -1285,6 +1319,7 @@ mod tests {
         row.taxable = 1_000.0;
         row.tax_due = 60_000.005;
         draft.surcharge = 25.5;
+        draft.keep_entered_penalties();
         draft.tax_deposit = 50_000.0;
         draft.recompute();
         draft
@@ -1465,6 +1500,7 @@ mod tests {
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.surcharge = 99.0;
+        draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
     }
 }

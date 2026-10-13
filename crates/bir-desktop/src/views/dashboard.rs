@@ -94,6 +94,45 @@ fn deadline_heading_visible(upcoming: usize, action_required: usize, overdue: us
     upcoming + action_required + overdue > 0
 }
 
+/// Which Overdue card a penalty estimate belongs to: form code, taxable
+/// year, and the month, quarter or annual period.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct PenaltyEstimateKey {
+    form_code: String,
+    taxable_year: i32,
+    month: Option<u8>,
+    quarter: Option<u8>,
+}
+
+impl PenaltyEstimateKey {
+    /// A saved return's period (an annual return has neither month nor
+    /// quarter).
+    fn of_summary(summary: &bir_core::forms::FormDraftSummary) -> Self {
+        Self {
+            form_code: summary.form_code.clone(),
+            taxable_year: i32::from(summary.taxable_year),
+            month: summary.month,
+            quarter: summary.quarter,
+        }
+    }
+
+    /// A dated deadline's period; `None` for an event-based obligation.
+    fn of_deadline(deadline: &ResolvedTaxDeadline) -> Option<Self> {
+        let (month, quarter) = match deadline.period {
+            DeadlinePeriod::Monthly { month, .. } => (Some(month), None),
+            DeadlinePeriod::Quarterly { quarter, .. } => (None, Some(quarter)),
+            DeadlinePeriod::Annual { .. } => (None, None),
+            DeadlinePeriod::EventBased => return None,
+        };
+        Some(Self {
+            form_code: deadline.form_code.clone(),
+            taxable_year: deadline.period.taxable_year()?,
+            month,
+            quarter,
+        })
+    }
+}
+
 /// A saved return the Calendar may list, with the total amount payable it
 /// computed for itself (`None` when that total cannot be read).
 #[derive(Debug, Clone)]
@@ -181,7 +220,7 @@ pub struct DashboardView {
     actionable_forms: Vec<CalendarReturn>,
     /// Total penalties an unfiled 1601-C would carry if filed today, keyed by
     /// (form code, taxable year, month). Only periods it can be computed for.
-    penalty_estimates: std::collections::HashMap<(String, i32, u8), f64>,
+    penalty_estimates: std::collections::HashMap<PenaltyEstimateKey, f64>,
     upcoming_deadlines_list:
         Entity<crate::components::upcoming_deadlines_list::UpcomingDeadlinesList>,
     /// Consistency issues from the last resolve_profile_obligations_for_year call
@@ -512,45 +551,30 @@ impl DashboardView {
         }
     }
 
-    /// "If filed today" penalty totals for unfiled 1601-C returns, computed
-    /// the same way the form computes them (deadline overrides and the
-    /// profile's EOPT class applied, per-component overrides honoured).
+    /// "If filed today" penalty totals for unfiled returns of every form with
+    /// penalty items on the shared model, computed the way the form computes
+    /// them (deadline overrides and the profile's EOPT class applied,
+    /// per-component overrides honoured).
     fn penalty_estimates(
         db: &Database,
         profile: &TaxpayerProfile,
         returns: &[CalendarReturn],
         global_overrides: &[bir_core::calendar_rules::DeadlineOverride],
-    ) -> std::collections::HashMap<(String, i32, u8), f64> {
+    ) -> std::collections::HashMap<PenaltyEstimateKey, f64> {
         let today = Local::now().date_naive();
         let mut estimates = std::collections::HashMap::new();
         for item in returns {
             let summary = &item.summary;
-            if summary.form_code != "1601C"
-                || !matches!(summary.status, FilingStatus::Draft | FilingStatus::Queued)
-            {
+            if !matches!(summary.status, FilingStatus::Draft | FilingStatus::Queued) {
                 continue;
             }
-            let Some(month) = summary.month else {
-                continue;
-            };
-            let Ok(Some(mut draft)) =
-                db.get_1601c_draft(&profile.tin.full(), summary.taxable_year, month)
+            let Ok(Some(total)) =
+                db.draft_penalties_if_filed_on(summary.id, profile, global_overrides, today)
             else {
                 continue;
             };
-            draft.apply_penalty_profile(profile, global_overrides);
-            if let Some(total) = draft
-                .penalties_payable_if_filed_on(today)
-                .filter(|total| *total > 0.0)
-            {
-                estimates.insert(
-                    (
-                        summary.form_code.clone(),
-                        i32::from(summary.taxable_year),
-                        month,
-                    ),
-                    total,
-                );
+            if total > 0.0 {
+                estimates.insert(PenaltyEstimateKey::of_summary(summary), total);
             }
         }
         estimates
@@ -1730,16 +1754,8 @@ impl Render for DashboardView {
                             .map(|date| date.format("%d").to_string())
                             .unwrap_or_else(|| "--".to_string());
 
-                        let penalty_estimate = match d.period {
-                            DeadlinePeriod::Monthly {
-                                taxable_year,
-                                month,
-                            } => self
-                                .penalty_estimates
-                                .get(&(d.form_code.clone(), taxable_year, month))
-                                .copied(),
-                            _ => None,
-                        };
+                        let penalty_estimate = PenaltyEstimateKey::of_deadline(d)
+                            .and_then(|key| self.penalty_estimates.get(&key).copied());
                         let penalty_line = match penalty_estimate {
                             Some(total) => div()
                                 .text_xs()
