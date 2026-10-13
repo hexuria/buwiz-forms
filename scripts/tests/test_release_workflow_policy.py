@@ -7,18 +7,26 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release.yml"
+CI_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/ci.yml"
 DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-desktop/Cargo.toml"
 INSTALLER_WXS_PATH = REPOSITORY_ROOT / "installer.wxs"
 JUSTFILE_PATH = REPOSITORY_ROOT / "justfile"
+LINUX_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-linux.sh"
+WINDOWS_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-windows.ps1"
+FINAL_SETUP_AUDIT_PATH = REPOSITORY_ROOT / "scripts/audit_final_setup.ps1"
 
 
 class ReleaseWorkflowPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.ci_workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.desktop_manifest = DESKTOP_MANIFEST_PATH.read_text(encoding="utf-8")
         cls.installer_wxs = INSTALLER_WXS_PATH.read_text(encoding="utf-8")
         cls.justfile = JUSTFILE_PATH.read_text(encoding="utf-8")
+        cls.linux_setup = LINUX_SETUP_PATH.read_text(encoding="utf-8")
+        cls.windows_setup = WINDOWS_SETUP_PATH.read_text(encoding="utf-8")
+        cls.final_setup_audit = FINAL_SETUP_AUDIT_PATH.read_text(encoding="utf-8")
 
     def job(self, name: str) -> str:
         match = re.search(
@@ -43,10 +51,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             "cargo fmt --all -- --check",
             "cargo clippy --locked --workspace -- -D warnings",
             "cargo test --locked --workspace",
-            "npm run test:forms",
-            "python3 -m unittest discover -s scripts/tests -v",
-            "npm run verify:forms:offline",
-            "npm run test:forms:visual",
+            "python -m unittest discover -s scripts/tests -v",
+            "freeze_html.py --verify --out crates/bir-print/html-frozen --index rules/index.json",
+            "stamp_frozen_names.py --self-test",
+            "stamp_frozen_names.py --check-all",
+            "python3 scripts/audit_no_legacy.py",
         ):
             self.assertIn(required_gate, preflight)
         for job_name in ("build-macos", "build-windows", "build-linux"):
@@ -93,13 +102,19 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("secrets.WINDOWS_CERTIFICATE_PASSWORD", windows)
         self.assertIn("WINDOWS_SIGNTOOL sign /fd SHA256", windows)
         self.assertIn("WINDOWS_SIGNTOOL verify /pa /all /v", windows)
-        self.assertIn("choco install openssl innosetup 7zip -y", windows)
+        self.assertIn("choco install openssl innosetup -y", windows)
         self.assertIn("Audit final Windows installer payloads", windows)
-        self.assertIn("7z.exe", windows)
+        self.assertNotIn("7z", windows.lower())
         self.assertIn("Start-Process msiexec.exe", windows)
-        self.assertGreaterEqual(
-            windows.count("python scripts/audit_no_legacy.py --package-root"),
-            3,
+        self.assertIn('WINDOWS_STAGE=$PKG', windows)
+        self.assertGreaterEqual(windows.count("$PKG = $env:WINDOWS_STAGE"), 2)
+        source_gate = windows.index("scripts/audit_installer_sources.py")
+        compile_installer = windows.index("& $ISCC")
+        self.assertLess(source_gate, compile_installer)
+        self.assertIn("scripts/audit_final_setup.ps1", windows)
+        self.assertIn(
+            "python scripts/audit_no_legacy.py --package-root $msiRoot",
+            windows,
         )
         self.assertIn(
             "Expected exactly one EXE and one MSI public release artifact",
@@ -121,20 +136,123 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         public_release = self.job("release")
         self.assertNotIn("artifacts/**/*.msix", public_release)
 
-    def test_local_setup_recipe_audits_the_extracted_final_installer(self) -> None:
+    def test_local_setup_recipe_checks_prerequisites_and_sources_before_iscc(
+        self,
+    ) -> None:
         exe_recipe = self.justfile.split(
             "# Build the Inno Setup executable installer (Windows only)", maxsplit=1
         )[1].split("# Build a Store-only MSIX candidate", maxsplit=1)[0]
-        self.assertIn("Get-Command 7z.exe -ErrorAction Stop", exe_recipe)
-        self.assertIn('& $sevenZip x -y "-o$auditRoot" $installer.Path', exe_recipe)
+        self.assertIn("check-exe-prerequisites build-frozen-html-identity", exe_recipe)
         self.assertIn(
-            "python scripts/audit_no_legacy.py --package-root $auditRoot",
+            "Configured Python is not a usable CPython interpreter",
             exe_recipe,
         )
+        self.assertIn("Inno Setup compiler was not found", exe_recipe)
         self.assertIn(
-            "Remove-Item $auditRoot -Recurse -Force -ErrorAction SilentlyContinue",
-            exe_recipe,
+            'ISCC := "C:\\\\Program Files (x86)\\\\Inno Setup 6\\\\ISCC.exe"',
+            self.justfile,
         )
+        self.assertIn('$iscc = "{{ISCC}}"', exe_recipe)
+        self.assertIn('$ISCC = "{{ISCC}}"', exe_recipe)
+        source_gate = exe_recipe.index("scripts/audit_installer_sources.py")
+        compile_installer = exe_recipe.index("& $ISCC")
+        self.assertLess(source_gate, compile_installer)
+        self.assertNotIn("7z", exe_recipe.lower())
+        self.assertNotIn("audit_final_setup.ps1", exe_recipe)
+
+    def test_exe_recipe_and_prerequisite_are_windows_only(self) -> None:
+        self.assertRegex(self.justfile, r"(?m)^\[windows\]\r?\nexe \*args=")
+        self.assertRegex(
+            self.justfile,
+            r"(?m)^\[private\]\r?\n\[windows\]\r?\ncheck-exe-prerequisites:",
+        )
+
+    def test_final_setup_audit_checks_registration_name_and_after_uninstall(
+        self,
+    ) -> None:
+        self.assertIn("$name -ieq 'eBIRForms_is1'", self.final_setup_audit)
+        self.assertIn(
+            "$remaining = Find-EbirFormsUninstallEntry",
+            self.final_setup_audit,
+        )
+        self.assertIn("if ($remaining)", self.final_setup_audit)
+        uninstall = self.final_setup_audit.index(
+            "Start-Process -FilePath $uninstaller"
+        )
+        registration_check = self.final_setup_audit.index(
+            "$remaining = Find-EbirFormsUninstallEntry"
+        )
+        self.assertLess(uninstall, registration_check)
+
+    def test_ci_tests_python_policy_and_audits_a_real_unsigned_setup(self) -> None:
+        self.assertIn(
+            "python -m unittest discover -s scripts/tests -v",
+            self.ci_workflow,
+        )
+        check = self.ci_workflow.split("  validation-rules-v1:", maxsplit=1)[0]
+        matrix = check.split("  check:", maxsplit=1)[1].split(
+            "    runs-on:", maxsplit=1
+        )[0]
+        matrix_os = re.findall(r"(?m)^\s+- os: ([^\s]+)\s*$", matrix)
+        self.assertEqual(
+            matrix_os,
+            ["macos-14", "ubuntu-22.04", "windows-latest"],
+        )
+        self.assertEqual(
+            check.count("cargo install just --version 1.45.0 --locked"),
+            1,
+        )
+        self.assertEqual(check.count("run: just --summary"), 1)
+        just_install = re.search(
+            r"(?ms)^    - name: Install just\n(.*?)(?=^    - |\Z)",
+            check,
+        )
+        just_step = re.search(
+            r"(?ms)^    - name: Validate justfile\n(.*?)(?=^    - |\Z)",
+            check,
+        )
+        self.assertIsNotNone(just_install)
+        self.assertIsNotNone(just_step)
+        if just_install is not None:
+            self.assertNotRegex(just_install.group(1), r"(?m)^\s+if:")
+        if just_step is not None:
+            self.assertNotRegex(just_step.group(1), r"(?m)^\s+if:")
+        self.assertLess(
+            check.index("    - name: Install Rust Toolchain"),
+            check.index("    - name: Rust Cache"),
+        )
+        self.assertLess(
+            check.index("    - name: Rust Cache"),
+            check.index("    - name: Install just"),
+        )
+        self.assertLess(
+            check.index("run: just --summary"),
+            check.index("    - name: Test\n"),
+        )
+        for match in re.finditer(
+            r"(?m)^\s*(?:run:\s*)?cargo (?:check|test)\b",
+            check,
+        ):
+            self.assertGreater(match.start(), check.index("run: just --summary"))
+        self.assertNotIn("choco install just -y", check)
+        self.assertIn("choco install innosetup -y", check)
+        self.assertIn("3010", check)
+        self.assertIn("just exe", check)
+        self.assertIn("scripts/audit_final_setup.ps1", check)
+
+    def test_setup_scripts_keep_the_gpui_agent_revision_pinned(self) -> None:
+        self.assertIn('local manifest="$SCRIPT_DIR/../Cargo.toml"', self.linux_setup)
+        self.assertIn(
+            "gpui-agent rev pin not found in repository-root Cargo.toml",
+            self.linux_setup,
+        )
+        self.assertIn('cargo install --list 2>/dev/null', self.linux_setup)
+        self.assertIn('--rev "$rev" gpui-agent-cli', self.linux_setup)
+        self.assertNotIn("crates/bir-desktop/Cargo.toml", self.linux_setup)
+        self.assertNotIn("--locked gpui-agent-cli", self.linux_setup)
+        self.assertNotIn("installing from main", self.linux_setup)
+        self.assertIn("'Cargo.toml'", self.windows_setup)
+        self.assertIn("3010", self.windows_setup)
 
     def test_package_builds_are_deterministic_and_scope_consistent(self) -> None:
         windows = self.job("build-windows")

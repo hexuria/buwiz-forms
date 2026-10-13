@@ -20,6 +20,8 @@ VERSION := if os_family() == "windows" {
 } else {
     `grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'`
 }
+PYTHON := if os_family() == "windows" { "python" } else { "python3" }
+ISCC := "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe"
 BUILD_NUMBER := env_var_or_default("BUILD_NUMBER", "26")
 
 # Default task: format, lint, and type check
@@ -135,7 +137,7 @@ test:
 # module's own docstring for what green/red mean and, just as importantly,
 # what this walk cannot see.
 tab-check slug="":
-    python3 tools/formgen/tab_check.py {{slug}}
+    {{PYTHON}} tools/formgen/tab_check.py {{slug}}
 
 # Clear tab_check's review artifacts. forms/review is tracked-tree-adjacent
 # but not gitignored, and the migration audit gate requires a clean tree, so
@@ -159,12 +161,12 @@ review-clean:
 # artifacts and forms/review/index.html without tabbing anything and without
 # a file:// path -- from a phone on the same network if need be.
 review-serve:
-    cd forms && python3 -m http.server 4190 --bind 127.0.0.1
+    cd forms && {{PYTHON}} -m http.server 4190 --bind 127.0.0.1
 
 # Confirm committed freeze HTML and write the non-promotional identity
 # copied into packaged assets/. Preview sheets are also embedded at compile time.
 build-frozen-html-identity:
-    python3 scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision "$(git rev-parse HEAD)" --out assets/form-renderer-build-identity.json
+    {{PYTHON}} scripts/write_frozen_html_identity.py --html-frozen crates/bir-print/html-frozen --source-revision "$(git rev-parse HEAD)" --out assets/form-renderer-build-identity.json
 
 # React native-evidence recipes were removed with the form-renderer.
 # Frozen HTML preview is the print path. These names stay so operators
@@ -231,7 +233,16 @@ install format="":
         "msix" {
             Write-Host "Installing MSIX package: $path" -ForegroundColor Cyan
             Write-Host "⚠️  MSIX must be signed before sideloading. Run 'just sign-dev' first if you haven't." -ForegroundColor Yellow
-            Add-AppxPackage -Path $path
+            # PowerShell 7 cannot load Appx on this Server host; use Windows PowerShell 5.1 (#93).
+            $env:EBIRFORMS_MSIX_PATH = $path
+            powershell.exe -NoProfile -NonInteractive -Command 'Add-AppxPackage -Path $env:EBIRFORMS_MSIX_PATH'
+            $msixExitCode = $LASTEXITCODE
+            Remove-Item Env:EBIRFORMS_MSIX_PATH -ErrorAction SilentlyContinue
+            if ($msixExitCode -ne 0) {
+                [Console]::Error.WriteLine("MSIX installation failed (exit code $msixExitCode).")
+                Write-Host 'If a different build with the same version is already installed, remove it first: powershell.exe -NoProfile -Command "Get-AppxPackage GOLDCODERSCORP.ebirforms | Remove-AppxPackage"'
+                exit $msixExitCode
+            }
             Write-Host "✅ MSIX installed successfully!"
         }
         "exe" {
@@ -341,9 +352,34 @@ app *args="":
     fi
 
 # Build the Inno Setup executable installer (Windows only)
-exe *args="": build-frozen-html-identity
+[private]
+[windows]
+check-exe-prerequisites:
+    #!pwsh -NoProfile
+    $python = "{{PYTHON}}"
+    $iscc = "{{ISCC}}"
+    if (-not (Get-Command $python -ErrorAction SilentlyContinue)) {
+        [Console]::Error.WriteLine("Configured Python executable was not found: $python")
+        exit 1
+    }
+    $versionOutput = & $python --version 2>&1
+    $pythonExitCode = $LASTEXITCODE
+    if ($pythonExitCode -ne 0 -or ($versionOutput -notmatch '^Python \d+\.\d+')) {
+        [Console]::Error.WriteLine("Configured Python is not a usable CPython interpreter: $python")
+        if ($pythonExitCode -ne 0) { exit $pythonExitCode }
+        exit 1
+    }
+    if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+        [Console]::Error.WriteLine("Inno Setup compiler was not found: $iscc")
+        exit 1
+    }
+
+[windows]
+exe *args="": check-exe-prerequisites build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
+
+    $ISCC = "{{ISCC}}"
     
     $features = @()
     foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
@@ -357,49 +393,43 @@ exe *args="": build-frozen-html-identity
         cargo build --locked --release --target {{WIN_TARGET}}
     }
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting EXE packaging."
-        exit $LASTEXITCODE
+        $cargoExitCode = $LASTEXITCODE
+        [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting EXE packaging.")
+        exit $cargoExitCode
     }
-    python scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
+    {{PYTHON}} scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
     $VERSION = "{{VERSION}}"
     
-    $ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-    if (Test-Path $ISCC) {
-        Write-Host "Building installer with Inno Setup..."
-        & $ISCC /DMyAppVersion=$VERSION installer.iss
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "❌ Inno Setup failed (exit code $LASTEXITCODE)."
-            exit $LASTEXITCODE
-        }
+    $stageDir = "target\installer-stage"
+    if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+    Copy-Item "target\{{WIN_TARGET}}\release\bir.exe" "$stageDir\bir.exe"
+    Copy-Item "assets" "$stageDir\assets" -Recurse
 
-        # Audit the bytes that the final installer actually contains. Auditing
-        # only the pre-installer staging tree would allow installer-specific
-        # additions to bypass the HTML-only/no-legacy package gate.
-        $installer = Resolve-Path "target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
-        $sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
-        $auditRoot = Join-Path ([System.IO.Path]::GetTempPath()) "ebirforms-final-exe-$([guid]::NewGuid())"
-        try {
-            New-Item -ItemType Directory -Force -Path $auditRoot | Out-Null
-            & $sevenZip x -y "-o$auditRoot" $installer.Path | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "❌ Could not extract the final Setup EXE for audit."
-                exit $LASTEXITCODE
-            }
-            python scripts/audit_no_legacy.py --package-root $auditRoot
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "❌ Final Setup EXE failed the HTML-only/no-legacy audit."
-                exit $LASTEXITCODE
-            }
-        } finally {
-            Remove-Item $auditRoot -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
-    } else {
-        Write-Warning "⚠️ ISCC.exe not found at $ISCC. Please install Inno Setup 6 (https://jrsoftware.org/isinfo.php)."
-        exit 1
+    {{PYTHON}} scripts/audit_no_legacy.py --package-root $stageDir
+    if ($LASTEXITCODE -ne 0) {
+        $auditExitCode = $LASTEXITCODE
+        [Console]::Error.WriteLine("Installer staging tree failed the HTML-only/no-legacy audit.")
+        exit $auditExitCode
     }
+
+    {{PYTHON}} scripts/audit_installer_sources.py --installer installer.iss --stage-dir $stageDir
+    if ($LASTEXITCODE -ne 0) {
+        $sourceExitCode = $LASTEXITCODE
+        [Console]::Error.WriteLine("Installer [Files] source validation failed.")
+        exit $sourceExitCode
+    }
+
+    Write-Host "Building installer with Inno Setup..."
+    & $ISCC "/DMyAppVersion=$VERSION" "/DStageDir=$stageDir" installer.iss
+    if ($LASTEXITCODE -ne 0) {
+        $isccExitCode = $LASTEXITCODE
+        [Console]::Error.WriteLine("Inno Setup failed (exit code $isccExitCode).")
+        exit $isccExitCode
+    }
+    Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
 
 # Build a Store-only MSIX candidate (Windows only).
 # This artifact is intentionally excluded from public GitHub releases. Store
@@ -423,10 +453,11 @@ msix *args="": build-frozen-html-identity
         cargo build --locked --release --target {{WIN_TARGET}}
     }
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "❌ cargo build failed (exit code $LASTEXITCODE). Aborting MSIX packaging."
-        exit $LASTEXITCODE
+        $cargoExitCode = $LASTEXITCODE
+        [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting MSIX packaging.")
+        exit $cargoExitCode
     }
-    python scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
+    {{PYTHON}} scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
     $VERSION = "{{VERSION}}"
@@ -446,7 +477,7 @@ msix *args="": build-frozen-html-identity
     if (Test-Path $msvcp) { Copy-Item $msvcp "$MSIX_DIR\" }
 
     Copy-Item "assets" "$MSIX_DIR\assets" -Recurse
-    python scripts/audit_no_legacy.py --package-root $MSIX_DIR
+    {{PYTHON}} scripts/audit_no_legacy.py --package-root $MSIX_DIR
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     
     # Use the shared BUILD_NUMBER from the justfile (synced with App Store Connect via bump-build).
@@ -497,7 +528,7 @@ sign-dev:
     $PUBLISHER = "CN=04F86D81-D5D3-4477-A363-0CAE79356A84"
 
     if (-not (Test-Path $MSIX_PATH)) {
-        Write-Error "MSIX file not found! Run 'just msix' first."
+        [Console]::Error.WriteLine("MSIX file not found! Run 'just msix' first.")
         exit 1
     }
 
@@ -581,9 +612,9 @@ publish-bir version="":
         exit 1
     fi
     if [ -n "${ver}" ]; then
-        python3 scripts/publish_bir.py "${ver}"
+        {{PYTHON}} scripts/publish_bir.py "${ver}"
     else
-        python3 scripts/publish_bir.py
+        {{PYTHON}} scripts/publish_bir.py
     fi
 
 [windows]
@@ -592,12 +623,13 @@ publish-bir version="":
     $ErrorActionPreference = 'Stop'
     $ver = '{{version}}'
     if ($ver -and $ver -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
-        Write-Error "version must be MAJOR.MINOR.PATCH, got $ver"
+        [Console]::Error.WriteLine("version must be MAJOR.MINOR.PATCH, got $ver")
+        exit 1
     }
     if ($ver) {
-        python scripts/publish_bir.py $ver
+        {{PYTHON}} scripts/publish_bir.py $ver
     } else {
-        python scripts/publish_bir.py
+        {{PYTHON}} scripts/publish_bir.py
     }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -633,8 +665,8 @@ _package-mac args="": build-frozen-html-identity
     cargo build --locked --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
     echo "Building for x86_64..."
     cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
-    python3 scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
-    python3 scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
+    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
+    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
@@ -656,7 +688,7 @@ _package-mac args="": build-frozen-html-identity
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "{{MAC_APP}}/Contents/Info.plist" || true
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment:DEVELOPER_MODE string true" "{{MAC_APP}}/Contents/Info.plist" || true
     fi
-    python3 scripts/audit_no_legacy.py --package-root "{{MAC_APP}}"
+    {{PYTHON}} scripts/audit_no_legacy.py --package-root "{{MAC_APP}}"
     touch "{{MAC_APP}}"
     
     echo "Ad-hoc codesigning application..."
@@ -693,8 +725,8 @@ _package-mac-appstore args="": build-frozen-html-identity
     echo "Building for x86_64..."
     cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
     
-    python3 scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
-    python3 scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
+    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
+    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
@@ -732,7 +764,7 @@ _package-mac-appstore args="": build-frozen-html-identity
     else
         echo "⚠️  No embedded.provisionprofile found in assets/macos/. TestFlight builds require this."
     fi
-    python3 scripts/audit_no_legacy.py --package-root "{{MAC_APP}}"
+    {{PYTHON}} scripts/audit_no_legacy.py --package-root "{{MAC_APP}}"
     
     touch "{{MAC_APP}}"
     
@@ -787,7 +819,7 @@ _package-linux args="": build-frozen-html-identity
     FEATURES_FLAG=""
     if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
     cargo build --locked --release --target {{LINUX_TARGET}} $FEATURES_FLAG
-    python3 scripts/alias_desktop_bin.py target/{{LINUX_TARGET}}/release
+    {{PYTHON}} scripts/alias_desktop_bin.py target/{{LINUX_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     if command -v cargo-deb >/dev/null 2>&1; then
         DEB="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb"
@@ -795,7 +827,7 @@ _package-linux args="": build-frozen-html-identity
         AUDIT_ROOT="$(mktemp -d)"
         trap 'rm -rf "$AUDIT_ROOT"' EXIT
         dpkg-deb --extract "$DEB" "$AUDIT_ROOT"
-        python3 scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
+        {{PYTHON}} scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
         {{just_executable()}} _check-linux-launcher "$AUDIT_ROOT/usr/share/applications" "$AUDIT_ROOT/usr/share/icons/hicolor"
         rm -rf "$AUDIT_ROOT"
         trap - EXIT
@@ -808,7 +840,7 @@ _package-linux args="": build-frozen-html-identity
         cp target/{{LINUX_TARGET}}/release/bir "$PKG/"
         cp -R assets "$PKG/"
         cp assets/linux/install-desktop-entry.sh "$PKG/"
-        python3 scripts/audit_no_legacy.py --package-root "$PKG"
+        {{PYTHON}} scripts/audit_no_legacy.py --package-root "$PKG"
         if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then
             echo "DEVELOPER_MODE=true" > "$PKG/.env"
         fi
@@ -816,7 +848,7 @@ _package-linux args="": build-frozen-html-identity
         AUDIT_ROOT="$(mktemp -d)"
         trap 'rm -rf "$AUDIT_ROOT"' EXIT
         tar xzf "$TARBALL" -C "$AUDIT_ROOT"
-        python3 scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
+        {{PYTHON}} scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
         PKG_ROOT="$AUDIT_ROOT/{{APP_NAME}}-Linux-{{VERSION}}"
         test -x "$PKG_ROOT/install-desktop-entry.sh" || { echo "❌ tarball is missing install-desktop-entry.sh"; exit 1; }
         {{just_executable()}} _check-linux-launcher "$PKG_ROOT/assets/linux" "$PKG_ROOT/assets/linux/icons/hicolor"

@@ -68,15 +68,13 @@ host with env vars, then talk to it with `gpui-agent`.
 The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
 and is installed automatically by every setup script — `setup-windows.ps1`,
 `setup-linux.sh`, and `setup-macos.sh` all resolve the rev the app pins
-(`crates/bir-desktop/Cargo.toml` / `Cargo.lock`) so driver and host can never
+(`Cargo.toml` / `Cargo.lock`) so driver and host can never
 drift on protocol version. Manually:
 `cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
 
-**Windows note:** the HMAC token handshake fails closed on Windows at the
-current pin — gpui-agent's nonce source is `/dev/urandom` (Unix-only), so the
-host drops connections before the challenge. For local-only driving on
-Windows, set `GPUI_AGENT_INSECURE_NO_TOKEN=1` instead of `GPUI_AGENT_TOKEN`
-(never on shared machines).
+**Windows note:** the HMAC token handshake works at the current pinned
+revision. Set `GPUI_AGENT_TOKEN` for secure driving. For local-only driving,
+`GPUI_AGENT_INSECURE_NO_TOKEN=1` remains available (never on shared machines).
 
 ```bash
 # Build the painted app with the control plane. `dev-tools` is not required;
