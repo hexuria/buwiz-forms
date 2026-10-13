@@ -73,6 +73,8 @@ pub const FORM_1601C_RELEASE_CLAIM_CONFIRM: &str = "form-1601c-release-claim-con
 pub const FORM_1601C_SCROLL: &str = "form-1601c-scroll";
 /// Frozen HTML print-preview window scroller (secondary window when painted).
 pub const PRINT_PREVIEW_SCROLL: &str = "print-preview-scroll";
+/// Frozen HTML print-preview construction state.
+pub const PRINT_PREVIEW_STATE: &str = "print-preview-state";
 
 /// Focused keymap Action: toggle the sidebar (`cmd-b` / `ctrl-b`).
 pub const KEY_TOGGLE_SIDEBAR: &str = "app.toggle_sidebar";
@@ -499,6 +501,7 @@ mod tests {
         );
         assert_eq!(FORM_1601C_SCROLL, "form-1601c-scroll");
         assert_eq!(PRINT_PREVIEW_SCROLL, "print-preview-scroll");
+        assert_eq!(PRINT_PREVIEW_STATE, "print-preview-state");
         assert_eq!(KEY_TOGGLE_SIDEBAR, "app.toggle_sidebar");
         assert_eq!(KEY_MINIMIZE, "window.minimize");
         assert_eq!(KEY_TOGGLE_VISIBILITY, "app.toggle_visibility");
