@@ -275,6 +275,10 @@ jobs:
       if: needs.changes.outputs.code != 'false'
       run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
 
+    - name: Agent mailbox scheduling regression
+      if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
+      run: cargo test --locked -p bir-desktop --features dev-tools,agent --lib agent::drain::tests::agent_mailbox_drains_without_rendering_app_state -- --exact
+
     - name: Install Windows packaging tools
       if: runner.os == 'Windows' && needs.changes.outputs.code != 'false'
       shell: pwsh
@@ -587,3 +591,109 @@ jobs:
         else
           gh issue create --title "$title" --body "$body"
         fi
+
+  # Rust CI was green while normal Windows use still crashed (#90). This
+  # report-only runtime owner launches the painted app and exercises the
+  # agent-observable preview, tray, and dry-run submit paths. Both fixes have
+  # merged: the §2/#97 WebView fix (#107) and §3/#96 stack fix (#119).
+  # Promotion to a required check is an owner decision; keep continue-on-error.
+  # Hosted runners use WARP, do not exercise real
+  # foreground-window rules, and 2200M is not agent-reachable.
+  windows-smoke:
+    # Same docs-only skip as `check`: a docs-only change builds nothing.
+    needs: changes
+    if: needs.changes.outputs.code != 'false'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [debug, release]
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+
+    # Reader only. `check` is the sole writer of workspace-${{ runner.os }};
+    # see the cache ownership comment in that job.
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: workspace-${{ runner.os }}
+        save-if: false
+
+    - name: Cache OpenSSL
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: openssl-${{ runner.os }}-choco-v1
+
+    - name: Install Windows Dependencies
+      shell: pwsh
+      run: |
+        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
+            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
+            Write-Host "OpenSSL restored from cache; skipping choco install"
+        } else {
+            choco install openssl -y
+        }
+        $openssl_dir = ""
+        if (Test-Path "C:\Program Files\OpenSSL\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL"
+        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
+        } else {
+            Write-Error "OpenSSL include directory not found!"
+            exit 1
+        }
+        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+        if ($lib_file) {
+            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+            if ($lib_file.Name -ne "libcrypto.lib") {
+                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+            }
+        } else {
+            Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+        }
+
+    - name: Build bir
+      shell: pwsh
+      run: |
+        $cargo_args = @("build", "--locked", "-p", "bir-desktop", "--bin", "bir-desktop", "--features", "dev-tools,agent")
+        if ("${{ matrix.profile }}" -eq "release") { $cargo_args += "--release" }
+        cargo @cargo_args
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $target_dir = if ("${{ matrix.profile }}" -eq "release") { "target\release" } else { "target\debug" }
+        python scripts/alias_desktop_bin.py $target_dir
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Run Windows smoke
+      shell: pwsh
+      run: |
+        $binary = if ("${{ matrix.profile }}" -eq "release") { "target\release\bir.exe" } else { "target\debug\bir.exe" }
+        $work = "windows-smoke\${{ matrix.profile }}"
+        python scripts/windows_smoke.py --bin $binary --work $work --json-out "$work\results.json"
+
+    - name: Upload Windows smoke evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-smoke-${{ matrix.profile }}
+        path: windows-smoke/${{ matrix.profile }}
+        retention-days: 7

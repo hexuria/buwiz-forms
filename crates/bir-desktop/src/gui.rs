@@ -383,6 +383,7 @@ pub fn run_gui() {
                             session.mailbox,
                             session.token,
                             session.shutdown,
+                            window,
                             cx,
                         );
                         state.agent_discovery = session.discovery;

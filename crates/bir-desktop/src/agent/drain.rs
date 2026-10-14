@@ -34,7 +34,19 @@ pub fn apply_agent(app: &mut AppState, window: &mut Window, cx: &mut Context<App
     if app.pending_keybinding.is_some() {
         return;
     }
-    while let Some(posted) = app.agent_request_backlog.pop_front() {
+    loop {
+        // A form opened by an earlier request is built on the next frame
+        // (it needs a `Window`). Until then the next request would read state
+        // without that form, so a `form.fill` right after `filing.start`
+        // failed with "form … is not open". Ask for the frame and resume
+        // after it; the requests stay queued in order.
+        if app.has_pending_form_mount() {
+            cx.notify();
+            break;
+        }
+        let Some(posted) = app.agent_request_backlog.pop_front() else {
+            break;
+        };
         let shutdown = matches!(posted.request.op, Op::Shutdown);
         let mutating = matches!(
             posted.request.op,
@@ -1451,28 +1463,29 @@ impl AppState {
         mailbox: gpui_agent::mailbox::AgentMailbox,
         token: Option<String>,
         shutdown: Arc<AtomicBool>,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         self.agent_mailbox = Some(mailbox);
         self.agent_token = token;
         self.agent_shutdown = Some(shutdown);
-        // Wake the UI thread only when the TCP thread actually posted work.
-        // `apply_agent` runs inside `AppState::render`, so an unconditional
-        // notify here re-laid out and repainted the whole window 60 times a
-        // second for as long as the agent was attached (~50% of a core at idle
-        // against ~1% without it), leaving no main-thread headroom for input.
-        self.agent_refresh = Some(cx.spawn(async move |this, cx| {
+        // Drain on the UI thread, not from render: idle/hidden windows may
+        // receive no frames. Only screenshot jobs need paint-driven progress.
+        self.agent_refresh = Some(cx.spawn_in(window, async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(16))
                     .await;
-                let alive = this.update(cx, |app, cx| {
-                    if app
-                        .agent_mailbox
-                        .as_ref()
-                        .is_some_and(|mailbox| !mailbox.is_empty())
-                    {
+                let alive = this.update_in(cx, |app, window, cx| {
+                    if app.scrolled_job.is_some() || app.has_pending_form_mount() {
                         cx.notify();
+                    } else if !app.agent_request_backlog.is_empty()
+                        || app
+                            .agent_mailbox
+                            .as_ref()
+                            .is_some_and(|mailbox| !mailbox.is_empty())
+                    {
+                        apply_agent(app, window, cx);
                     }
                 });
                 if alive.is_err() {
@@ -1492,6 +1505,128 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::{ActiveView, profile_to_adopt, saved_profile_to_load};
+
+    #[gpui::test]
+    fn agent_mailbox_drains_without_rendering_app_state(cx: &mut gpui::TestAppContext) {
+        use gpui::*;
+        use gpui_agent::mailbox::AgentMailbox;
+        use gpui_agent::protocol::{Op, Request};
+        use std::sync::{Arc, Mutex, atomic::AtomicBool};
+        use std::time::Duration;
+
+        cx.update(gpui_kit::init);
+        let db = Arc::new(Mutex::new(
+            bir_core::db::Database::open_ephemeral().unwrap(),
+        ));
+        let mailbox = AgentMailbox::new();
+        // The window renders Empty, never AppState: replies cannot rely on a frame.
+        let window = cx.add_window(|_, _| Empty);
+        let _app = window
+            .update(cx, |_, window, cx| {
+                cx.new(|cx| {
+                    let mut app = super::AppState::new(db, Vec::new(), window, cx);
+                    app.attach_agent(
+                        mailbox.clone(),
+                        None,
+                        Arc::new(AtomicBool::new(false)),
+                        window,
+                        cx,
+                    );
+                    app
+                })
+            })
+            .unwrap();
+        cx.run_until_parked();
+
+        for (index, op) in [
+            Op::Hello,
+            Op::Invoke {
+                name: "profile.create".into(),
+                args: serde_json::json!({}),
+            },
+            Op::SetValue {
+                target: "profile-tin".into(),
+                value: "12345678800000".into(),
+            },
+            Op::Hello,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let id = format!("probe-{index}");
+            let reply = mailbox.push(Request::new(id.clone(), op));
+            cx.background_executor
+                .advance_clock(Duration::from_millis(32));
+            cx.run_until_parked();
+            let response = reply
+                .try_recv()
+                .expect("request must drain without rendering");
+            assert_eq!(response.id, id);
+            assert!(response.ok, "{:?}", response.error);
+        }
+    }
+
+    #[gpui::test]
+    fn agent_requests_wait_for_a_pending_form_to_mount(cx: &mut gpui::TestAppContext) {
+        use gpui::*;
+        use gpui_agent::mailbox::AgentMailbox;
+        use gpui_agent::protocol::{Op, Request};
+        use std::sync::{Arc, Mutex, atomic::AtomicBool};
+        use std::time::Duration;
+
+        cx.update(gpui_kit::init);
+        let db = Arc::new(Mutex::new(
+            bir_core::db::Database::open_ephemeral().unwrap(),
+        ));
+        let mailbox = AgentMailbox::new();
+        // Renders Empty, so the pending form is never mounted by a frame here.
+        let window = cx.add_window(|_, _| Empty);
+        let app = window
+            .update(cx, |_, window, cx| {
+                cx.new(|cx| {
+                    let mut app = super::AppState::new(db, Vec::new(), window, cx);
+                    app.attach_agent(
+                        mailbox.clone(),
+                        None,
+                        Arc::new(AtomicBool::new(false)),
+                        window,
+                        cx,
+                    );
+                    app
+                })
+            })
+            .unwrap();
+        cx.run_until_parked();
+
+        let profile = crate::agent::host::fixture_profile();
+        cx.update(|cx| {
+            app.update(cx, |app, _| {
+                app.pending_form_1601c_draft = Some(
+                    bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
+                        &profile, 2026, 12,
+                    ),
+                );
+            })
+        });
+        let reply = mailbox.push(Request::new("after-open", Op::Hello));
+        cx.background_executor
+            .advance_clock(Duration::from_millis(64));
+        cx.run_until_parked();
+        assert!(
+            reply.try_recv().is_err(),
+            "a request must not run while the form it follows is unmounted"
+        );
+
+        cx.update(|cx| app.update(cx, |app, _| app.pending_form_1601c_draft = None));
+        cx.background_executor
+            .advance_clock(Duration::from_millis(64));
+        cx.run_until_parked();
+        let response = reply
+            .try_recv()
+            .expect("the queued request runs once mounted");
+        assert_eq!(response.id, "after-open");
+        assert!(response.ok, "{:?}", response.error);
+    }
 
     #[test]
     fn agent_save_reloads_the_saved_profile_into_the_manager() {

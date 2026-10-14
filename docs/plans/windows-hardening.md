@@ -91,7 +91,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 **Blind spots, written down:**
 - GitHub runners have no GPU (WARP renderer).
 - Foreground-window rules on a service desktop differ from a real session.
-- The mailbox drains while `AppState::render` runs; a hidden app cannot reliably receive agent operations. Tray show/graceful exit stay explicit manual acceptance, not claims made from the hide-only phase.
+- Normal mailbox requests drain from a work-gated UI-thread timer, independently of painting. The tray phase checks hello while hidden, show/hide via the real global action handlers, and graceful shutdown while hidden. Clicking the OS tray menu remains manual acceptance. Scrolled screenshot jobs retain paint-driven progress.
 - So §5's foreground check stays a manual VM step.
 
 ---
@@ -396,6 +396,11 @@ baseline that names remaining manual/credential/hardware skips.
 
 ## 14. Changelog
 - Plan created from the #90/#89 Windows verification. Corrected the #99 assessment: diffs 2 and 3 come from different official save paths.
+- **2026-10-12** — Added the Python Windows smoke design and report-only
+  `stack_reserve` measurement. Initial `main` results: release previews both
+  panic with `RefCell already borrowed` (#97); debug 1601C panics and 2551Q
+  overflows its stack (`0xC00000FD`, #96); submit passes in both profiles;
+  `stack_reserve` is 1 MiB.
 - 2026-10-13 | Replaced 7-Zip payload inspection with strict source validation and actual installed-Setup auditing; implementation is distinct from pending clean-VM and signed-release acceptance.
 - 2026-10-13 | Re-review follow-up: CI parses the justfile on all three OSes, the source auditor rejects unsupported ISPP directives including StageDir overrides, and AGENT.md follows the repository-root gpui-agent pin. Clean-VM and signed-release acceptance remain unverified.
 - 2026-10-13 | Restricted inline ISPP expressions across the entire installer to the exact MyAppVersion and StageDir tokens; assignment and Define expressions outside the Files section now fail the source gate.
