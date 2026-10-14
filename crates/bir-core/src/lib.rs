@@ -34,6 +34,8 @@ pub mod import;
 pub mod integration;
 pub mod ipc;
 pub mod job_display;
+#[cfg(target_os = "macos")]
+mod keychain;
 pub mod log_files;
 pub mod naming;
 pub mod news_fetcher;
