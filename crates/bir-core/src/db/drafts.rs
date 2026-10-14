@@ -131,6 +131,90 @@ fn counts_as_started_or_filed(state: &QuarterState) -> bool {
     )
 }
 
+/// Record one return's state on the tile its period owns; several rows can
+/// name one period (a NULL-quarter row next to one with a legacy quarter), so
+/// the most advanced return wins rather than whichever row came last.
+fn apply_period_state(
+    progress: &mut FormFilingProgress,
+    monthly: bool,
+    period: FilingPeriod,
+    state: QuarterState,
+) {
+    let keep_most_advanced = |slot: &mut QuarterState, state: QuarterState| {
+        if state_rank(&state) > state_rank(slot) {
+            *slot = state;
+        }
+    };
+    match period {
+        FilingPeriod::Monthly(month) => {
+            let idx = usize::from(month.clamp(1, 12) - 1);
+            keep_most_advanced(&mut progress.months[idx], state);
+        }
+        FilingPeriod::Quarterly(quarter) => {
+            let idx = usize::from(quarter.clamp(1, 4) - 1);
+            keep_most_advanced(&mut progress.quarters[idx], state);
+        }
+        FilingPeriod::Annual => {
+            keep_most_advanced(&mut progress.annual_status, state);
+        }
+        // A monthly form keyed by its Item 1 date (`MMDD`, e.g. 2200-AN) shows
+        // on its month's tile; the most advanced return of that month wins.
+        FilingPeriod::OpenEnded(mmdd) if monthly && (1..=12).contains(&(mmdd / 100)) => {
+            let idx = (mmdd / 100 - 1) as usize;
+            if state_rank(&state) > state_rank(&progress.months[idx]) {
+                progress.months[idx] = state;
+            }
+        }
+        FilingPeriod::OpenEnded(_) => {
+            if counts_as_started_or_filed(&state) {
+                progress.open_ended_count = progress.open_ended_count.saturating_add(1);
+            }
+        }
+    }
+}
+
+/// Map a legacy filename period (`062025`, `2026Q1`, `122026Q1`, `2025`) onto
+/// the progress slot this form uses. `None` when it cannot name a period of
+/// this form, so an unmatched record never shows as filed.
+fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<FilingPeriod> {
+    let (digits, quarter) = match period.find(['Q', 'q']) {
+        Some(index) => (
+            period.get(..index)?,
+            period[index + 1..]
+                .parse::<u8>()
+                .ok()
+                .filter(|quarter| (1..=4).contains(quarter)),
+        ),
+        None => (period, None),
+    };
+    if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let (period_year, month) = match digits.len() {
+        4 => (digits.parse::<u16>().ok()?, None),
+        6 => (
+            digits[2..].parse::<u16>().ok()?,
+            digits[..2]
+                .parse::<u8>()
+                .ok()
+                .filter(|month| (1..=12).contains(month)),
+        ),
+        _ => return None,
+    };
+    if period_year != year {
+        return None;
+    }
+    match (frequency_for_form(form_code), quarter, month) {
+        (FilingFrequency::Monthly, _, Some(month)) => Some(FilingPeriod::Monthly(month)),
+        (FilingFrequency::Quarterly, Some(quarter), _) => Some(FilingPeriod::Quarterly(quarter)),
+        (FilingFrequency::Quarterly, None, Some(month)) => {
+            Some(FilingPeriod::Quarterly(month.div_ceil(3)))
+        }
+        (FilingFrequency::Annual, _, _) => Some(FilingPeriod::Annual),
+        _ => None,
+    }
+}
+
 const AUDITED_2551Q_RECEIPT_FORM: &str = "2551Qv2018";
 
 fn matches_2551q_receipt_filename(submitted_filename: &str, receipt_filename: &str) -> bool {
@@ -2787,40 +2871,34 @@ impl Database {
             let (legacy_slot, period_key, status_str) = row?;
             let state = quarter_state_from_db(&status_str);
             let period = period_from_row(form_code, legacy_slot, period_key.as_deref());
-            // Several rows can name one period (a NULL-quarter row next to
-            // one with a legacy quarter); the row scan order is unspecified, so the most
-            // advanced return wins rather than whichever row came last.
-            let keep_most_advanced = |slot: &mut QuarterState, state: QuarterState| {
-                if state_rank(&state) > state_rank(slot) {
-                    *slot = state;
-                }
+            apply_period_state(&mut progress, monthly, period, state);
+        }
+
+        // A Final Copy migrated from the old eBIRForms app counts as filed.
+        let mut legacy_stmt = self.conn.prepare(
+            "SELECT form_id, form_identity, period FROM legacy_filed_returns WHERE tin = ?1",
+        )?;
+        let legacy_rows = legacy_stmt.query_map(params![tin], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        for row in legacy_rows {
+            let (form_id, form_identity, period) = row?;
+            let capability = form_id
+                .as_deref()
+                .and_then(crate::official_import::find_capability_identity)
+                .or_else(|| crate::official_import::find_capability_identity(&form_identity));
+            let Some(capability) = capability else {
+                continue;
             };
-            match period {
-                FilingPeriod::Monthly(month) => {
-                    let idx = usize::from(month.clamp(1, 12) - 1);
-                    keep_most_advanced(&mut progress.months[idx], state);
-                }
-                FilingPeriod::Quarterly(quarter) => {
-                    let idx = usize::from(quarter.clamp(1, 4) - 1);
-                    keep_most_advanced(&mut progress.quarters[idx], state);
-                }
-                FilingPeriod::Annual => {
-                    keep_most_advanced(&mut progress.annual_status, state);
-                }
-                // A monthly form keyed by its Item 1 date (`MMDD`, e.g.
-                // 2200-AN) shows on its month's tile; the most advanced
-                // return of that month wins.
-                FilingPeriod::OpenEnded(mmdd) if monthly && (1..=12).contains(&(mmdd / 100)) => {
-                    let idx = (mmdd / 100 - 1) as usize;
-                    if state_rank(&state) > state_rank(&progress.months[idx]) {
-                        progress.months[idx] = state;
-                    }
-                }
-                FilingPeriod::OpenEnded(_) => {
-                    if counts_as_started_or_filed(&state) {
-                        progress.open_ended_count = progress.open_ended_count.saturating_add(1);
-                    }
-                }
+            if capability.code != form_code {
+                continue;
+            }
+            if let Some(period) = legacy_return_period(form_code, &period, year) {
+                apply_period_state(&mut progress, monthly, period, QuarterState::Submitted);
             }
         }
 
@@ -6139,6 +6217,56 @@ mod tests {
         assert_eq!(progress.months[0], QuarterState::NotStarted);
         assert_eq!(progress.open_ended_count, 0);
         assert!(state_rank(&QuarterState::Queued) > state_rank(&QuarterState::Draft));
+    }
+
+    #[test]
+    fn legacy_filed_returns_count_as_filed_in_filing_progress() {
+        let db = test_db();
+        let tin = "12345678900000";
+        for (form_id, period) in [
+            ("1601Cv2018", "062025"),
+            ("2551Qv2018", "2026Q1"),
+            ("2551Qv2018", "122026Q4"),
+            ("1701v2018", "122025"),
+            ("1601Cv2018", "012024"),
+        ] {
+            db.conn
+                .execute(
+                    "INSERT INTO legacy_filed_returns
+                        (sha256, tin, form_identity, form_id, period, encrypted,
+                         source_filename, raw_file, fields_json)
+                     VALUES (?1, ?2, ?3, ?3, ?4, 1, 'final.xml', X'00', '{}')",
+                    params![format!("sha-{form_id}-{period}"), tin, form_id, period],
+                )
+                .unwrap();
+        }
+
+        // Monthly 1601C June 2025 is filed; the 2024 record does not leak in.
+        let monthly = db.get_form_filing_progress(tin, "1601C", 2025).unwrap();
+        assert_eq!(monthly.months[5], QuarterState::Submitted);
+        assert_eq!(monthly.months[0], QuarterState::NotStarted);
+
+        // Quarterly 2551Q: `2026Q1` and fiscal-year `122026Q4` both file.
+        let quarterly = db.get_form_filing_progress(tin, "2551Q", 2026).unwrap();
+        assert_eq!(quarterly.quarters[0], QuarterState::Submitted);
+        assert_eq!(quarterly.quarters[3], QuarterState::Submitted);
+        assert_eq!(quarterly.quarters[1], QuarterState::NotStarted);
+
+        let annual = db.get_form_filing_progress(tin, "1701", 2025).unwrap();
+        assert_eq!(annual.annual_status, QuarterState::Submitted);
+
+        // A local draft does not downgrade the migrated filed state.
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, period_key, status, data_json)
+                 VALUES (?1, '1601C', 2025, 'M07', 'Draft', '{}')",
+                params![tin],
+            )
+            .unwrap();
+        let monthly = db.get_form_filing_progress(tin, "1601C", 2025).unwrap();
+        assert_eq!(monthly.months[5], QuarterState::Submitted);
+        assert_eq!(monthly.months[6], QuarterState::Draft);
     }
 
     #[test]
