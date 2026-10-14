@@ -28,6 +28,7 @@ mod google_calendar;
 mod inbox_oauth;
 mod jobs;
 mod legacy_amendment;
+mod legacy_filed_returns;
 mod migrations;
 mod notices;
 mod profiles;
@@ -39,6 +40,7 @@ pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
 mod taxpayers;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
+pub use legacy_filed_returns::LegacyFiledReturn;
 pub use submissions::SubmissionSummary;
 pub use taxpayers::{BulkCopyReport, MissingFormPolicy, TemplateConflictPolicy};
 
@@ -873,6 +875,7 @@ impl Database {
              DELETE FROM profile_calendar_links;
              DELETE FROM profiles;
              DELETE FROM submissions;
+             DELETE FROM legacy_filed_returns;
              DELETE FROM form_drafts;
              DELETE FROM data_providers;
              DELETE FROM submission_receipts;

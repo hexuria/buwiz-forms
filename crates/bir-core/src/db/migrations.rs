@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 20;
+const CURRENT_MIGRATION_VERSION: i32 = 21;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -331,6 +331,29 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // 9-digit root; a `profiles` row stays the branch. Tables and the
         // grouping are created in Rust so they can be healed every startup.
         "SELECT 1; -- v20 marker: taxpayers, branch settings, form templates (Rust-side)",
+        // v21: Preserve imported historical eBIRForms returns as opaque files.
+        "
+        CREATE TABLE IF NOT EXISTS legacy_filed_returns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sha256 TEXT NOT NULL,
+            tin TEXT NOT NULL,
+            form_identity TEXT NOT NULL,
+            form_id TEXT,
+            period TEXT NOT NULL,
+            amendment_version INTEGER,
+            email_copy TEXT,
+            encrypted INTEGER NOT NULL,
+            source_filename TEXT NOT NULL,
+            raw_file BLOB NOT NULL,
+            fields_json TEXT NOT NULL,
+            imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+            -- Same bytes under a different filename (email copy, new
+            -- amendment version) is its own filing record.
+            UNIQUE(sha256, source_filename)
+        );
+        CREATE INDEX IF NOT EXISTS idx_legacy_filed_returns_tin
+            ON legacy_filed_returns(tin);
+        ",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -2817,6 +2840,79 @@ mod tests {
     }
 
     #[test]
+    fn test_v21_creates_legacy_filed_returns() {
+        let conn = test_conn();
+        conn.pragma_update(None, "user_version", 19i32).unwrap();
+
+        migrate_database(&conn).unwrap();
+
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
+        let columns = {
+            let mut statement = conn
+                .prepare("PRAGMA table_info(legacy_filed_returns)")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                .unwrap()
+        };
+        for column in [
+            "sha256",
+            "tin",
+            "form_identity",
+            "form_id",
+            "period",
+            "amendment_version",
+            "email_copy",
+            "encrypted",
+            "source_filename",
+            "raw_file",
+            "fields_json",
+            "imported_at",
+        ] {
+            assert!(columns.contains(column), "missing column {column}");
+        }
+        // sha256 + filename dedupes a re-import of the same file, but the
+        // same bytes under a different filename is a distinct record.
+        conn.execute(
+            "INSERT INTO legacy_filed_returns (
+                sha256, tin, form_identity, period, encrypted,
+                source_filename, raw_file, fields_json
+             ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                       'file.xml', X'01', '{}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO legacy_filed_returns (
+                sha256, tin, form_identity, period, encrypted,
+                source_filename, raw_file, fields_json
+             ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                       'file#copy.xml', X'01', '{}')",
+            [],
+        )
+        .expect("same bytes under a new filename must insert");
+        let err = conn
+            .execute(
+                "INSERT INTO legacy_filed_returns (
+                    sha256, tin, form_identity, period, encrypted,
+                    source_filename, raw_file, fields_json
+                 ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                           'file.xml', X'01', '{}')",
+                [],
+            )
+            .expect_err("duplicate sha256+filename must be rejected");
+        assert!(
+            err.to_string().contains("UNIQUE"),
+            "expected UNIQUE violation, got {err}"
+        );
+    }
+
+    #[test]
     fn test_v4_promotes_8pct_compat_flag() {
         use crate::profile::{IncomeTaxElection, TaxpayerProfile};
 
@@ -3357,7 +3453,7 @@ mod tests {
         let version: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 20);
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
         let after: Vec<_> = protected.iter().map(|sql| all_rows(&conn, sql)).collect();
         assert_eq!(before, after, "v20 must not rewrite profiles or returns");
 

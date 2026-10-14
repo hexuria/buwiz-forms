@@ -36,6 +36,7 @@ pub mod ipc;
 pub mod job_display;
 #[cfg(target_os = "macos")]
 mod keychain;
+pub mod legacy_migration;
 pub mod log_files;
 pub mod naming;
 pub mod news_fetcher;

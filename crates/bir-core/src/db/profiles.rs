@@ -302,6 +302,20 @@ fn validate_reviewed_confirmation_plan(
     Ok(())
 }
 
+fn canonical_legacy_filed_return_tin(tin: &str) -> String {
+    crate::naming::Tin::parse_digits(tin)
+        .map(|parsed| {
+            format!(
+                "{}{}{}{:05}",
+                parsed.segment1,
+                parsed.segment2,
+                parsed.segment3,
+                parsed.branch.parse::<u32>().unwrap_or_default()
+            )
+        })
+        .unwrap_or_else(|| tin.to_string())
+}
+
 impl Database {
     fn migrate_profile_tin_references(
         conn: &rusqlite::Connection,
@@ -315,6 +329,7 @@ impl Database {
         for (table, column) in [
             ("penalties_cache", "tin"),
             ("submissions", "tin"),
+            ("legacy_filed_returns", "tin"),
             ("form_drafts", "tin"),
             ("submission_receipts", "tin"),
             ("data_providers", "profile_tin"),
@@ -323,10 +338,20 @@ impl Database {
             ("profile_calendar_links", "profile_tin"),
             ("form_templates", "tin"),
         ] {
-            conn.execute(
-                &format!("UPDATE {table} SET {column} = ?1 WHERE {column} = ?2"),
-                params![new_tin, old_tin],
-            )?;
+            if table == "legacy_filed_returns" {
+                conn.execute(
+                    &format!("UPDATE {table} SET {column} = ?1 WHERE {column} = ?2"),
+                    params![
+                        canonical_legacy_filed_return_tin(new_tin),
+                        canonical_legacy_filed_return_tin(old_tin)
+                    ],
+                )?;
+            } else {
+                conn.execute(
+                    &format!("UPDATE {table} SET {column} = ?1 WHERE {column} = ?2"),
+                    params![new_tin, old_tin],
+                )?;
+            }
         }
         Ok(())
     }
@@ -594,6 +619,7 @@ impl Database {
         for (table, column) in [
             ("penalties_cache", "tin"),
             ("submissions", "tin"),
+            ("legacy_filed_returns", "tin"),
             ("form_drafts", "tin"),
             ("submission_receipts", "tin"),
             ("data_providers", "profile_tin"),
@@ -601,10 +627,17 @@ impl Database {
             ("profile_calendar_events", "profile_tin"),
             ("form_templates", "tin"),
         ] {
-            tx.execute(
-                &format!("DELETE FROM {table} WHERE {column} = ?1"),
-                params![tin],
-            )?;
+            if table == "legacy_filed_returns" {
+                tx.execute(
+                    &format!("DELETE FROM {table} WHERE {column} = ?1 OR {column} = ?2"),
+                    params![tin, canonical_legacy_filed_return_tin(tin)],
+                )?;
+            } else {
+                tx.execute(
+                    &format!("DELETE FROM {table} WHERE {column} = ?1"),
+                    params![tin],
+                )?;
+            }
         }
         tx.execute("DELETE FROM profiles WHERE tin = ?1", params![tin])?;
         super::taxpayers::sync_taxpayer_rows(&tx)?;

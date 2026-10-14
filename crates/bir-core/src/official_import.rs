@@ -251,7 +251,7 @@ fn parse_imported_filename(
         .ok_or_else(|| OfficialImportError::InvalidFileName(file_name.to_string()))
 }
 
-fn find_capability_identity(identity: &str) -> Option<&'static FormCapabilityRecord> {
+pub(crate) fn find_capability_identity(identity: &str) -> Option<&'static FormCapabilityRecord> {
     FORM_CAPABILITY_REGISTRY.iter().find(|capability| {
         capability.code.eq_ignore_ascii_case(identity)
             || capability.form_id.eq_ignore_ascii_case(identity)
