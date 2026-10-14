@@ -5,7 +5,10 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gpui::{App, Bounds, Window, WindowBounds, WindowOptions, px, size};
+use gpui::{
+    App, Bounds, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowOptions, point,
+    px, size,
+};
 use gpui_shell::{
     AppAssets, Capabilities, ShellRuntime, export_module, init_with_components, on_exit_request,
     resolve_app_root, set_bundle_id, set_capabilities, set_development_mode,
@@ -96,10 +99,49 @@ fn open_main_window(cx: &mut App, runtime: Rc<ShellRuntime>, root: PathBuf) {
             cx,
         ))),
         app_id: Some("com.buwiz.bir".to_owned()),
+        // The redesign draws its own 40 px title bar (DESIGN_SYSTEM.md "Shell
+        // layout"): the system bar is hidden, the macOS traffic lights sit
+        // vertically centred in it (12 px lights at y 14), and Linux gets
+        // client-side decorations so the same bar is drawn there.
+        titlebar: Some(TitlebarOptions {
+            title: Some("eBIRForms".into()),
+            appears_transparent: true,
+            traffic_light_position: Some(point(px(14.0), px(14.0))),
+        }),
+        window_decorations: Some(WindowDecorations::Client),
+        window_min_size: Some(size(px(420.0), px(480.0))),
         ..Default::default()
     };
     cx.open_window(options, move |window: &mut Window, cx: &mut App| {
+        if let Some(size) = requested_window_size() {
+            hold_window_size(window, cx, size);
+        }
         runtime.load(&root, window, cx)
     })
     .expect("main window must open");
+}
+
+/// Development aid for side-by-side checks against the design prototype:
+/// `BIR_SHELL_WINDOW_SIZE=800x900` sizes the window. A tiling window manager
+/// may re-tile it when it opens, so the size is re-applied for a few seconds
+/// (long enough to float the window there).
+fn requested_window_size() -> Option<gpui::Size<gpui::Pixels>> {
+    let raw = std::env::var("BIR_SHELL_WINDOW_SIZE").ok()?;
+    let (w, h) = raw.split_once('x')?;
+    Some(size(px(w.trim().parse().ok()?), px(h.trim().parse().ok()?)))
+}
+
+fn hold_window_size(window: &mut Window, cx: &mut App, target: gpui::Size<gpui::Pixels>) {
+    window
+        .spawn(cx, async move |cx| {
+            for _ in 0..12 {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(500))
+                    .await;
+                if cx.update(|window, _| window.resize(target)).is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
 }

@@ -27839,6 +27839,169 @@ declare module "bir" {
       content: string;
   }
   export function job_log_tail(): JobLogTail;
+
+  export type BranchFieldName = "rdo_code" | "registered_address" | "zip_code" | "phone" | "email";
+  export interface BranchFacts {
+      rdo_code: string;
+      registered_address: string;
+      zip_code: string;
+      phone: string;
+      email: string;
+  }
+  export interface Branch {
+      tin: string;
+      tin_display: string;
+      tin_root: string;
+      code: string;
+      name: string;
+      is_head_office: boolean;
+      facts: BranchFacts;
+      inherited: BranchFieldName[];
+  }
+  export interface Taxpayer {
+      tin_root: string;
+      tin_display: string;
+      name: string;
+      taxpayer_type: "Individual" | "Corporation" | "Partnership" | "Cooperative" | "Estate" | "Trust";
+      birth_date: string | null;
+      needs_grouping_review: boolean;
+      branches: Branch[];
+  }
+  export interface NewTaxpayerInput {
+      tin_root: string;
+      name: string;
+      taxpayer_type: Taxpayer["taxpayer_type"];
+      birth_date?: string | null;
+      head_office: Partial<BranchFacts>;
+  }
+  export interface TaxpayerUpdateInput {
+      name?: string;
+      taxpayer_type?: Taxpayer["taxpayer_type"];
+  }
+  export interface NewBranchInput {
+      branch_code: string;
+      name: string;
+      fields?: Partial<Record<BranchFieldName, string | null>>;
+  }
+  export interface BranchUpdateInput {
+      name?: string;
+      fields?: Partial<Record<BranchFieldName, string | null>>;
+  }
+  export interface TaxYearBounds { min: number; max: number; }
+  export interface AddedTaxYear { year: number; copied_from: number | null; forms: string[]; }
+  export interface YearlyFormsChange { added: string[]; removed: string[]; forms: string[]; }
+  export interface StarterPackInfo { id: string; label: string; forms: string[]; }
+  export interface FormTemplateSummary {
+      form_code: string;
+      updated_at: string;
+      answers_kept: number;
+      marked: number;
+      source: string;
+  }
+  export function list_taxpayers(): Taxpayer[];
+  export function get_taxpayer(tin_root: string): Taxpayer | null;
+  export function create_taxpayer(input: NewTaxpayerInput): Taxpayer;
+  export function update_taxpayer(tin_root: string, update: TaxpayerUpdateInput): Taxpayer;
+  export function move_taxpayer_tin(old_root: string, new_root: string): Taxpayer;
+  export function create_branch(tin_root: string, input: NewBranchInput): Branch;
+  export function update_branch(tin: string, update: BranchUpdateInput): Branch;
+  export function move_branch_code(tin: string, new_code: string): Branch;
+  export function suggest_next_branch_code(tin_root: string): string;
+  export function tax_year_bounds(): TaxYearBounds;
+  export function list_tax_years(tin: string): number[];
+  export function add_tax_year(tin: string, year: number, copy_forms: boolean): AddedTaxYear;
+  export function yearly_forms(tin: string, year: number): string[];
+  export function set_yearly_forms(tin: string, year: number, form_codes: string[]): YearlyFormsChange;
+  export function starter_packs(tin: string): StarterPackInfo[];
+  export function list_form_templates(tin: string): FormTemplateSummary[];
+  export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
+  export function create_template_from_return(draft_id: number): FormTemplateSummary;
+  export function delete_form_template(tin: string, form_code: string): boolean;
+
+  export interface ScreenFormIndexEntry {
+      c: string;
+      t: string;
+      rev: string;
+      freq: string;
+      pages: number;
+      n: number;
+      q: number;
+  }
+  export interface ScreenFormError {
+      field: string;
+      message: string;
+      keys: string[];
+  }
+  export type ScreenFormStatus = "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
+  export interface ScreenFormOpened {
+      form_code: string;
+      year: number;
+      period: number;
+      status: ScreenFormStatus;
+      editable: boolean;
+      draft: object;
+      values: Record<string, string>;
+      locks: Record<string, string>;
+      errors: ScreenFormError[];
+  }
+  export interface ScreenFormFilled {
+      draft: object;
+      values: Record<string, string>;
+      rejected: Record<string, string>;
+  }
+  export interface ScreenFormValidated {
+      draft: object;
+      values: Record<string, string>;
+      errors: ScreenFormError[];
+  }
+  export interface ScreenFormSaved {
+      id: number;
+      status: ScreenFormStatus;
+      draft: object;
+  }
+  export function screen_form_schema(form_code: string): object;
+  export function screen_forms_index(): ScreenFormIndexEntry[];
+  export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
+  export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
+  export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
+  export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
+
+  export interface DeadlineRow {
+      tin: string;
+      tin_root: string;
+      branch_code: string;
+      branch_name: string;
+      taxpayer_name: string;
+      branch_count: number;
+      form_code: string;
+      form_name: string;
+      frequency: "Monthly" | "Quarterly" | "Annual";
+      taxable_year: number;
+      /** Month 1-12, quarter 1-4, or 0 for an annual return. */
+      period: number;
+      period_label: string;
+      due_date: string;
+      /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
+      status: string;
+      draft_id: number | null;
+  }
+  export function deadlines_between(from: string, to: string): DeadlineRow[];
+  export interface ReturnRow {
+      id: number;
+      tin: string;
+      tin_root: string;
+      branch_code: string;
+      branch_name: string;
+      taxpayer_name: string;
+      branch_count: number;
+      form_code: string;
+      taxable_year: number;
+      period: number;
+      period_label: string;
+      status: string;
+      updated_at: string;
+  }
+  export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 }
 
 /**

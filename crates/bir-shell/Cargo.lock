@@ -829,6 +829,7 @@ dependencies = [
  "anyhow",
  "bir-core",
  "bir-print",
+ "chrono",
  "gpui-component",
  "gpui-kit",
  "gpui-pre",

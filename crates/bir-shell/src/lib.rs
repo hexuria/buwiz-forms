@@ -9,6 +9,9 @@
 //! slice plan.
 
 mod bir_module;
+mod dashboard_module;
 mod host;
+mod screen_form_module;
+mod tax_profile_module;
 
 pub use host::{app_root, run};

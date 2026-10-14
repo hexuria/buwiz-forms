@@ -19,7 +19,9 @@ thread_local! {
 
 /// One connection for the process — the same owner-lock discipline as painted
 /// `bir` (a second app instance cannot take it while we hold it).
-fn with_database<R>(f: impl FnOnce(&Database) -> Result<R, HostError>) -> Result<R, HostError> {
+pub(crate) fn with_database<R>(
+    f: impl FnOnce(&Database) -> Result<R, HostError>,
+) -> Result<R, HostError> {
     DATABASE.with(|slot| {
         let mut slot = slot.borrow_mut();
         if slot.is_none() {
@@ -31,9 +33,19 @@ fn with_database<R>(f: impl FnOnce(&Database) -> Result<R, HostError>) -> Result
     })
 }
 
+/// Tests install a fresh ephemeral database in this thread's slot, so each
+/// test (one thread each) runs against its own scratch data and never opens
+/// the live database through `BIR_DATABASE_PATH`.
+#[cfg(test)]
+pub(crate) fn use_ephemeral_database() {
+    DATABASE.with(|slot| {
+        *slot.borrow_mut() = Some(Database::open_ephemeral().expect("ephemeral database opens"));
+    });
+}
+
 /// `serde_json::Value` → `HostValue`. bir-core serializes cleanly; the
 /// boundary keeps JSON's six shapes exactly.
-fn json(value: serde_json::Value) -> HostValue {
+pub(crate) fn json(value: serde_json::Value) -> HostValue {
     match value {
         serde_json::Value::Null => HostValue::Null,
         serde_json::Value::Bool(v) => HostValue::Bool(v),
@@ -48,7 +60,7 @@ fn json(value: serde_json::Value) -> HostValue {
     }
 }
 
-fn serialize<T: serde::Serialize>(value: &T) -> Result<HostValue, HostError> {
+pub(crate) fn serialize<T: serde::Serialize>(value: &T) -> Result<HostValue, HostError> {
     serde_json::to_value(value)
         .map(json)
         .map_err(|error| HostError::new(error.to_string()))
@@ -56,7 +68,7 @@ fn serialize<T: serde::Serialize>(value: &T) -> Result<HostValue, HostError> {
 
 /// `HostValue` → `serde_json::Value`: the inverse of `json`, for functions
 /// that take structured arguments (a whole profile record, a draft).
-fn to_json(value: &HostValue) -> serde_json::Value {
+pub(crate) fn to_json(value: &HostValue) -> serde_json::Value {
     match value {
         HostValue::Null => serde_json::Value::Null,
         HostValue::Bool(v) => serde_json::Value::Bool(*v),
@@ -1061,7 +1073,7 @@ fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
-    HostModule::new("bir")
+    let module = HostModule::new("bir")
         .function("system_info", |_| system_info())
         .function("list_profiles", |_| list_profiles())
         .function("forms_catalog", |_| forms_catalog())
@@ -1095,9 +1107,22 @@ pub fn module() -> HostModule {
         .function("delete_background_job", delete_background_job)
         .function("archive_background_job", archive_background_job)
         .function("purge_archived_jobs", |_| purge_archived_jobs())
-        .function("job_log_tail", |_| job_log_tail())
-        .declarations(
-            r#"
+        .function("job_log_tail", |_| job_log_tail());
+    let module = crate::tax_profile_module::register(module);
+    let module = crate::screen_form_module::register(module);
+    let module = crate::dashboard_module::register(module);
+    module.declarations(format!(
+        "{BASE_DECLARATIONS}{}{}{}",
+        crate::tax_profile_module::DECLARATIONS,
+        crate::screen_form_module::DECLARATIONS,
+        crate::dashboard_module::DECLARATIONS,
+    ))
+}
+
+/// TypeScript for the functions registered in this file. The tax-profile and
+/// screen-form files append their own (`declarations` replaces, so `module`
+/// concatenates them).
+const BASE_DECLARATIONS: &str = r#"
 export interface SystemInfo {
     os: string;
     arch: string;
@@ -1228,6 +1253,4 @@ export interface JobLogTail {
     content: string;
 }
 export function job_log_tail(): JobLogTail;
-"#,
-        )
-}
+"#;
