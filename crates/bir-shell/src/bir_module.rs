@@ -85,6 +85,7 @@ fn list_profiles() -> HostResult {
                     .field("email", profile.email.as_str())
                     .field("taxpayer_type", format!("{:?}", profile.taxpayer_type))
                     .field("is_vat_registered", profile.is_vat_registered)
+                    .field("is_archived", profile.is_archived)
                     .field("default_form_type", profile.default_form_type.as_str())
                     .field(
                         "applicable_forms",
@@ -162,6 +163,7 @@ export interface ProfileSummary {
     email: string;
     taxpayer_type: string;
     is_vat_registered: boolean;
+    is_archived: boolean;
     default_form_type: string;
     applicable_forms: string[];
 }

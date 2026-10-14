@@ -1,228 +1,275 @@
-// buwiz-forms on gpui-shell — S0 skeleton.
+// buwiz BIR eFiling — gpui-shell application entry.
 //
-// The navigation chrome and data plumbing are real (the `bir` host module
-// reads the live SQLCipher database through bir-core, same owner-lock rules as
-// painted `bir`); the visual port happens in slices S1+ per
-// docs/plans/gpui-shell-migration.md / issue #135.
+// The app shell ported from bir-desktop's AppState::render: a collapsible
+// profile sidebar, a 36px top strip (bell + theme), a routed page area, the
+// right-edge notifications drawer, and the seal footer. Page bodies live in
+// shell/pages.js; chrome in shell/chrome.js; theme in shell/theme.js.
+//
+// Migration plan + tracking: docs/plans/gpui-shell-migration.md, issue #135.
 
 import { View, div } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
-import { TitleBar } from "gpui-component";
-/** @import { Context } from "gpui-kit */
+import { InputState, v_flex } from "gpui-base";
 import {
   system_info,
   list_profiles,
   forms_catalog,
+  get_setting,
+  set_setting,
 } from "bir";
+import {
+  applyThemePreference,
+  nextThemePreference,
+  parseThemePreference,
+  THEME_PREF_KEY,
+} from "./shell/theme.js";
+import {
+  renderSidebar,
+  renderTopBar,
+  renderNotificationsDrawer,
+  renderFooter,
+} from "./shell/chrome.js";
+import {
+  renderGlobalDashboard,
+  renderDashboard,
+  renderStub,
+} from "./shell/pages.js";
 
-const SPACE = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
-
-/** @param {import("gpui-kit").Context} cx */
-const muted = (value, cx) =>
-  div().text_size(12).text_color(cx.theme().colors.muted_foreground).child(value);
-
-/** @param {import("gpui-kit").Context} cx */
-const heading = (value, cx) =>
-  div().text_size(13).font_semibold().text_color(cx.theme().colors.foreground).child(value);
-
-export default class BirShell extends View {
-  /** @param {unknown} _props @param {import("gpui-kit").AsyncContext} _cx */
-  init(_props, _cx) {
+export default class BirApp extends View {
+  init(_props, cx) {
     /** @type {import("bir").SystemInfo} */
     this.info = system_info();
-    /** @type {import("bir").ProfileSummary[]} */
-    this.profiles = [];
-    /** @type {string | null} */
-    this.profilesError = null;
+
     try {
+      /** @type {import("bir").ProfileSummary[]} */
       this.profiles = list_profiles();
-    } catch (error) {
-      this.profilesError = `${error}`;
+    } catch (e) {
+      this.profiles = [];
+      this.profilesError = String(e);
     }
-    /** @type {import("bir").FormCatalogEntry[]} */
-    this.forms = forms_catalog().filter((form) => !form.is_deprecated);
-    /** @type {string} */
-    this.category = this.categories()[0] ?? "all";
-    /** @type {number | null} */
-    this.selectedProfile = this.profiles[0]?.id ?? null;
+    this.forms = forms_catalog();
+
+    // Painted AppState starts on the global dashboard when there is no
+    // profile, on the first profile's dashboard when there is.
+    this.view = "global_dashboard";
+    this.activeProfileTin = null;
+    this.activeSessionTin = null;
+
+    this.isSidebarHidden = false;
+    this.isMiniSidebar = false;
+    this.showArchived = false;
+    this.profileFilter = "";
+    this.notificationsOpen = false;
+    this.notificationCount = 0;
+    this.formLaunchNotice = null;
+
+    this.searchInput = InputState.new({ placeholder: "Search profiles" });
+    this.searchInput.on("change", (_event, cx) => {
+      this.profileFilter = this.searchInput.value();
+      cx.notify();
+    });
+
+    this.themePref = parseThemePreference(get_setting(THEME_PREF_KEY));
+    applyThemePreference(cx, this.themePref);
+
+    this.focusRoot = cx.focus_handle();
+
+    // Mirrors the painted app's platform keymap (platform/windows.rs;
+    // cmd- variants are added by the host on macOS).
+    cx.bind_keys([
+      { keystroke: "ctrl-b", action: "toggle-sidebar" },
+      { keystroke: "ctrl-shift-b", action: "toggle-sidebar-mini" },
+      { keystroke: "ctrl-f", action: "focus-search" },
+      { keystroke: "ctrl-n", action: "create-profile" },
+      { keystroke: "ctrl-shift-t", action: "toggle-theme" },
+      { keystroke: "ctrl-shift-x", action: "open-cron-tasks" },
+      { keystroke: "ctrl-,", action: "open-settings" },
+      { keystroke: "escape", action: "close-drawer" },
+    ]);
   }
 
-  categories() {
-    const seen = new Set(this.forms.map((form) => form.category));
-    return [...seen].sort();
+  navigate(view, cx) {
+    this.view = view;
+    // Every page change closes the drawer (top_bar.rs drawer_on_page_change).
+    this.notificationsOpen = false;
+    if (cx) cx.notify();
   }
 
-  visibleForms() {
-    return this.forms.filter((form) => form.category === this.category);
+  selectProfile(profile, cx) {
+    this.activeProfileTin = profile.tin;
+    // S1: selection opens the dashboard directly. The painted app's unlock
+    // gate (PIN/session auth) arrives with the auth slice.
+    this.activeSessionTin = profile.is_archived ? null : profile.tin;
+    this.navigate(profile.is_archived ? "profile_manager" : "dashboard", cx);
   }
 
-  /** @param {number} id @param {Context} cx */
-  selectProfile(id, cx) {
-    this.selectedProfile = id;
+  logout(cx) {
+    this.activeSessionTin = null;
+    this.activeProfileTin = null;
+    this.navigate("global_dashboard", cx);
+  }
+
+  toggleMiniSidebar(cx) {
+    this.isMiniSidebar = !this.isMiniSidebar;
     cx.notify();
   }
 
-  /** @param {string} category @param {Context} cx */
-  selectCategory(category, cx) {
-    this.category = category;
+  toggleSidebarHidden(cx) {
+    this.isSidebarHidden = !this.isSidebarHidden;
     cx.notify();
   }
 
-  /** @param {import("bir").ProfileSummary} profile @param {Context} cx */
-  profileRow(profile, cx) {
-    const active = profile.id === this.selectedProfile;
-    return v_flex()
-      .id(`profile-${profile.id}`)
-      .w_full()
-      .px(SPACE.md)
-      .py(SPACE.sm)
-      .gap(SPACE.xxs)
-      .bg(active ? cx.theme().colors.muted : cx.theme().colors.surface)
-      .hover((style) => style.bg(cx.theme().colors.muted))
-      .on_click((_event, cx) => this.selectProfile(profile.id, cx))
-      .child(heading(profile.full_name || profile.tin, cx))
-      .child(
-        muted(`TIN ${profile.tin} · RDO ${profile.rdo_code} · ${profile.taxpayer_type}`, cx),
-      );
+  toggleArchived(cx) {
+    this.showArchived = !this.showArchived;
+    cx.notify();
   }
 
-  /** @param {string} category @param {Context} cx */
-  categoryRow(category, cx) {
-    const active = category === this.category;
-    return div()
-      .id(`cat-${category}`)
-      .w_full()
-      .px(SPACE.md)
-      .py(SPACE.xs)
-      .text_size(12)
-      .text_color(
-        active
-          ? cx.theme().colors.foreground
-          : cx.theme().colors.muted_foreground,
-      )
-      .hover((style) => style.bg(cx.theme().colors.muted))
-      .on_click((_event, cx) => this.selectCategory(category, cx))
-      .child(category);
+  toggleDrawer(cx) {
+    this.notificationsOpen = !this.notificationsOpen;
+    cx.notify();
   }
 
-  /** @param {import("bir").FormCatalogEntry} form @param {Context} cx */
-  formRow(form, cx) {
-    return h_flex()
-      .w_full()
-      .px(SPACE.lg)
-      .py(SPACE.sm)
-      .gap(SPACE.lg)
-      .items_baseline()
-      .child(
-        div()
-          .w(72)
-          .flex_none()
-          .text_size(13)
-          .font_medium()
-          .text_color(cx.theme().colors.foreground)
-          .child(form.code),
-      )
-      .child(
-        v_flex()
-          .flex_1()
-          .gap(SPACE.xxs)
-          .child(heading(form.title, cx))
-          .child(muted(form.frequency, cx)),
-      );
+  expandSidebarAndFocusSearch(cx) {
+    this.isMiniSidebar = false;
+    this.isSidebarHidden = false;
+    cx.notify();
   }
 
-  /** @param {Context} cx */
-  sidebar(cx) {
-    const profiles = this.profilesError
-      ? muted(`database: ${this.profilesError}`, cx)
-      : this.profiles.length === 0
-        ? muted("No taxpayer profiles yet", cx)
-        : v_flex().children(this.profiles.map((p) => this.profileRow(p, cx)));
-
-    return v_flex()
-      .w(280)
-      .flex_none()
-      .h_full()
-      .bg(cx.theme().colors.surface)
-      .border_r(1)
-      .border_color(cx.theme().colors.border)
-      .child(
-        v_flex()
-          .px(SPACE.lg)
-          .py(SPACE.md)
-          .gap(SPACE.xs)
-          .child(heading("Profiles", cx))
-          .child(muted(`${this.profiles.length} registered`, cx)),
-      )
-      .child(div().h(1).w_full().bg(cx.theme().colors.border))
-      .child(v_flex().py(SPACE.sm).child(profiles))
-      .child(div().h(1).w_full().bg(cx.theme().colors.border))
-      .child(
-        v_flex()
-          .px(SPACE.lg)
-          .py(SPACE.md)
-          .gap(SPACE.xs)
-          .child(heading("Forms", cx))
-          .child(muted(`${this.forms.length} in catalog`, cx)),
-      )
-      .child(
-        v_flex()
-          .flex_1()
-          .min_h_0()
-          .overflow_y_scroll()
-          .pb(SPACE.md)
-          .children(this.categories().map((category) => this.categoryRow(category, cx))),
-      );
+  cycleTheme(cx) {
+    this.themePref = nextThemePreference(this.themePref);
+    // Stored as the painted app's serde variant spelling so the two
+    // binaries read each other's preference.
+    set_setting(THEME_PREF_KEY, this.themePref[0].toUpperCase() + this.themePref.slice(1));
+    applyThemePreference(cx, this.themePref);
+    cx.notify();
   }
 
-  /** @param {Context} cx */
-  content(cx) {
-    const forms = this.visibleForms();
-    return v_flex()
-      .flex_1()
-      .min_w_0()
-      .h_full()
-      .child(
-        h_flex()
-          .w_full()
-          .px(SPACE.xl)
-          .py(SPACE.md)
-          .items_center()
-          .justify_between()
-          .child(heading(this.category, cx))
-          .child(muted(`${forms.length} forms`, cx)),
-      )
-      .child(div().h(1).w_full().bg(cx.theme().colors.border))
-      .child(
-        v_flex()
-          .flex_1()
-          .min_h_0()
-          .overflow_y_scroll()
-          .py(SPACE.sm)
-          .children(forms.map((form) => this.formRow(form, cx))),
-      );
+  openFormCatalogEntry(form, cx) {
+    // Form views port in S4 — the catalog row is live data now, the view is
+    // announced but not mounted yet.
+    this.formLaunchNotice = `Form ${form.code} — view ports in the form-views slice (S4)`;
+    cx.notify();
   }
 
-  /** @param {Context} cx */
+  activeProfile() {
+    return this.profiles.find((p) => p.tin === this.activeProfileTin) || null;
+  }
+
+  renderActiveView(cx) {
+    switch (this.view) {
+      case "global_dashboard":
+        return renderGlobalDashboard(cx, this);
+      case "dashboard": {
+        const profile = this.activeProfile();
+        return profile
+          ? renderDashboard(cx, this, profile)
+          : renderStub(cx, "Dashboard", "No taxpayer selected", "S3");
+      }
+      case "profile_manager":
+        return renderStub(
+          cx,
+          "Taxpayer Profile",
+          "Create and edit taxpayer profiles — unlock + editor port in S2",
+          "S2",
+        );
+      case "import_export":
+        return renderStub(
+          cx,
+          "Import Data",
+          "Backup import/export — ports in S5",
+          "S5",
+        );
+      case "cron_tasks":
+        return renderStub(
+          cx,
+          "Background Tasks",
+          "Queue and receipt-fetching tasks — ports in S6",
+          "S6",
+        );
+      case "admin_calendar":
+        return renderStub(
+          cx,
+          "Tax Calendars",
+          "Admin calendar dashboard — ports in S5",
+          "S5",
+        );
+      case "settings":
+        return renderStub(cx, "Settings", "App settings — ports in S2", "S2");
+      case "dev_mode":
+        return renderStub(
+          cx,
+          "Dev Mode",
+          "Dev switches and diagnostics — debug builds only",
+          "S5",
+        );
+      default:
+        return renderGlobalDashboard(cx, this);
+    }
+  }
+
   render(cx) {
     return v_flex()
       .size_full()
+      .track_focus(this.focusRoot)
       .bg(cx.theme().colors.background)
+      .on_action("toggle-sidebar", (_e, cx) => this.toggleSidebarHidden(cx))
+      .on_action("toggle-sidebar-mini", (_e, cx) => this.toggleMiniSidebar(cx))
+      .on_action("focus-search", (_e, cx) => this.expandSidebarAndFocusSearch(cx))
+      .on_action("create-profile", (_e, cx) => this.navigate("profile_manager", cx))
+      .on_action("toggle-theme", (_e, cx) => this.cycleTheme(cx))
+      .on_action("open-cron-tasks", (_e, cx) => this.navigate("cron_tasks", cx))
+      .on_action("open-settings", (_e, cx) => this.navigate("settings", cx))
+      .on_action("close-drawer", (_e, cx) => {
+        if (this.notificationsOpen) {
+          this.notificationsOpen = false;
+          cx.notify();
+        }
+      })
       .child(
-        new TitleBar().child(
-          h_flex()
-            .items_center()
-            .gap(SPACE.md)
+        div()
+          .flex()
+          .flex_row()
+          .flex_1()
+          .min_h_0()
+          .when(!this.isSidebarHidden, (el) =>
+            el.child(
+              div()
+                .relative()
+                .flex_none()
+                .h_full()
+                .child(renderSidebar(cx, this)),
+            ),
+          )
+          .child(
+            div()
+              .flex_1()
+              .flex()
+              .flex_col()
+              .h_full()
+              .overflow_hidden()
+              .relative()
+              .child(renderTopBar(cx, this))
+              .child(
+                div().flex_1().min_h_0().w_full().child(this.renderActiveView(cx)),
+              )
+              .child(renderNotificationsDrawer(cx, this)),
+          ),
+      )
+      .when(Boolean(this.formLaunchNotice), (el) =>
+        el.child(
+          div()
+            .px(16)
+            .py(8)
+            .border_t(1)
+            .border_color(cx.theme().colors.border)
+            .bg(cx.theme().colors.muted)
             .child(
               div()
-                .text_size(13)
-                .font_semibold()
-                .text_color(cx.theme().colors.foreground)
-                .child("buwiz BIR eFiling"),
-            )
-            .child(muted(`${this.info.runtime} · ${this.info.os}/${this.info.arch}`, cx)),
+                .text_size(12)
+                .text_color(cx.theme().colors.muted_foreground)
+                .child(this.formLaunchNotice),
+            ),
         ),
       )
-      .child(h_flex().flex_1().min_h_0().child(this.sidebar(cx)).child(this.content(cx)));
+      .child(renderFooter(cx));
   }
 }
