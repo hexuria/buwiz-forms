@@ -230,12 +230,17 @@ impl AppState {
         cx.notify();
     }
 
-    /// Cmd+Q / the menu's Quit (macOS) and Alt+F4 (Windows) put the app in
-    /// the tray, like Cmd+W and the close button there. The background cron
-    /// keeps polling for BIR confirmations, which is the point of staying
-    /// resident; the real quit is the tray menu's Quit (and the agent's
-    /// `shutdown`). On Linux (`close_button_quits`), Ctrl+Q and Alt+F4 quit
-    /// like the close button, through the guarded `request_application_quit`.
+    /// `QuitApplication`: Cmd+Q / the app menu's "Quit eBIRForms" / agent
+    /// `app.quit` on macOS, Ctrl+Q and Alt+F4 on Linux, Alt+F4 on Windows.
+    ///
+    /// macOS quits by default through the guarded `request_application_quit`,
+    /// exactly like tray Quit (drops the tray icon, releases the agent bind
+    /// and the live-DB owner lock; unsaved Profile compliance changes keep the
+    /// window open). With the "Cmd+Q hides to menu bar" setting on it instead
+    /// hides to the menu bar and the background cron keeps polling; the real
+    /// quit is then tray Quit or the agent's `shutdown`. Linux always quits;
+    /// Windows hides to the tray like its close button.
+    /// See `quit_shortcut::quit_shortcut_route`.
     pub(crate) fn handle_quit_application(
         &mut self,
         _action: &QuitApplication,
@@ -244,15 +249,26 @@ impl AppState {
     ) {
         #[cfg(feature = "agent")]
         self.note_keybinding_fired(crate::agent::ids::KEY_QUIT, "global");
-        if crate::platform::close_button_quits() {
-            let hook = self.quit_hook.clone();
-            self.request_application_quit(window, cx, move || {
-                if let Some(hook) = hook {
-                    hook();
-                }
-            });
-        } else {
-            crate::platform::hide_from_dock();
+        let hides = self
+            .db
+            .lock()
+            .map(|db| crate::quit_shortcut::quit_shortcut_hides(&db))
+            .unwrap_or(false);
+        match crate::quit_shortcut::quit_shortcut_route(
+            crate::quit_shortcut::QuitShortcutPlatform::current(),
+            hides,
+        ) {
+            crate::quit_shortcut::QuitShortcutRoute::Quit => {
+                let hook = self.quit_hook.clone();
+                self.request_application_quit(window, cx, move || {
+                    if let Some(hook) = hook {
+                        hook();
+                    }
+                });
+            }
+            crate::quit_shortcut::QuitShortcutRoute::HideToTray => {
+                crate::platform::hide_from_dock()
+            }
         }
     }
 

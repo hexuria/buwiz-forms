@@ -414,9 +414,16 @@ pub fn run_gui() {
                         cx,
                     );
                 }
-                // Shared so both the tray Quit item and the Linux close button
-                // can drop the tray icon before quitting.
+                // Shared so the tray Quit item, QuitApplication (Cmd+Q / the
+                // app menu's Quit on macOS, Ctrl+Q / Alt+F4 on Linux) and the
+                // Linux close button can drop the tray icon before quitting.
                 let tray = std::rc::Rc::new(std::cell::RefCell::new(tray));
+                let hook_tray = tray.clone();
+                view.update(cx, |state, _| {
+                    state.quit_hook = Some(std::rc::Rc::new(move || {
+                        drop(hook_tray.borrow_mut().take());
+                    }));
+                });
                 if platform::close_button_quits() {
                     // Linux: there is often no StatusNotifier tray host (GNOME,
                     // fluxbox) and no reliable way to hide a window (xdotool is
@@ -425,13 +432,6 @@ pub fn run_gui() {
                     // only when unsaved Profile compliance changes block quitting.
                     let entity = view.downgrade();
                     let close_tray = tray.clone();
-                    // Ctrl+Q / Alt+F4 (QuitApplication) take the same path.
-                    let hook_tray = tray.clone();
-                    view.update(cx, |state, _| {
-                        state.quit_hook = Some(std::rc::Rc::new(move || {
-                            drop(hook_tray.borrow_mut().take());
-                        }));
-                    });
                     window.on_window_should_close(cx, move |window, cx| {
                         entity
                             .update(cx, |state, cx| {
@@ -443,10 +443,11 @@ pub fn run_gui() {
                     });
                 } else {
                     window.on_window_should_close(cx, |_, _cx| {
-                        // macOS/Windows: hide is not quit. Bind + live-DB owner lock
-                        // stay held until tray Quit / `gpui-agent shutdown`
-                        // (request_application_quit). Cmd+Q / the menu's Quit (macOS)
-                        // and Alt+F4 (Windows) also hide rather than quit.
+                        // macOS/Windows: closing the window hides, it does not quit.
+                        // Bind + live-DB owner lock stay held until a real quit
+                        // (request_application_quit): tray Quit, `gpui-agent
+                        // shutdown`, or on macOS Cmd+Q / the menu's Quit unless
+                        // "Cmd+Q hides to menu bar" is on. Alt+F4 (Windows) hides.
                         platform::hide_from_dock();
                         false // Prevent window destruction
                     });
@@ -461,6 +462,16 @@ pub fn run_gui() {
                     view.clone(),
                     cx,
                 );
+                #[cfg(target_os = "macos")]
+                {
+                    let quit_hides = view
+                        .read(cx)
+                        .db
+                        .lock()
+                        .map(|db| crate::quit_shortcut::quit_shortcut_hides(&db))
+                        .unwrap_or(false);
+                    platform::set_quit_menu_label(cx, quit_hides);
+                }
 
                 // Listen to tray events
                 let menu_channel = tray_icon::menu::MenuEvent::receiver();
