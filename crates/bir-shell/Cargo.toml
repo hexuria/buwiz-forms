@@ -43,7 +43,9 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = 
 bir-core = { path = "../bir-core" }
 
 anyhow = "1"
+rfd = "0.17.2"
 serde = { version = "1", features = ["derive"] }
+zip = { version = "2", default-features = false, features = ["deflate", "time"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

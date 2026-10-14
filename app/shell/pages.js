@@ -320,18 +320,56 @@ export function renderStub(cx, title, subtitle, slice) {
  * notification store; until the store port lands (S2) it is an honest empty
  * state — the badge stays hidden at zero either way.
  */
-export function renderNotifications(cx) {
+export function renderNotifications(cx, state) {
+  let announcements = [];
+  try {
+    announcements = state.announcements ? state.announcements() : [];
+  } catch (_e) {
+    announcements = [];
+  }
   return v_flex()
     .size_full()
     .px(16)
     .py(16)
     .gap(8)
     .child(pageHeading("Notifications", cx))
-    .child(
-      v_flex()
-        .py(24)
-        .w_full()
-        .items_center()
-        .child(div().text_size(13).text_color(muted(cx)).child("No notifications")),
+    .when(announcements.length === 0, (el) =>
+      el.child(
+        v_flex()
+          .py(24)
+          .w_full()
+          .items_center()
+          .child(div().text_size(13).text_color(muted(cx)).child("No notifications")),
+      ),
+    )
+    .children(
+      announcements.map((ann) =>
+        v_flex()
+          .w_full()
+          .gap(2)
+          .p(10)
+          .rounded_md()
+          .border(1)
+          .border_color(cx.theme().colors.border)
+          .child(
+            div()
+              .text_size(13)
+              .font_semibold()
+              .text_color(cx.theme().colors.foreground)
+              .child(ann.title),
+          )
+          .child(
+            div()
+              .text_size(11)
+              .text_color(muted(cx))
+              .child(`${ann.source} · ${ann.published_at}`),
+          )
+          .child(
+            div()
+              .text_size(12)
+              .text_color(cx.theme().colors.foreground)
+              .child(ann.content),
+          ),
+      ),
     );
 }

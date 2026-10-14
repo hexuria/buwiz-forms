@@ -646,6 +646,96 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+/// Drop the cached connection — used after a database-replace import so the
+/// next `with_database` reopens the freshly extracted file (and re-acquires
+/// the owner lock the dropped handle was holding).
+fn reset_database() {
+    DATABASE.with(|slot| {
+        slot.borrow_mut().take();
+    });
+}
+
+/// Native file picker + archive handling stay host-side: the script has no
+/// file dialog. Mirrors `ImportExportView`: a zip with `bir_data.db` is a
+/// full database backup, one with a top-level `profile.json` is a profile
+/// export, anything else is invalid. Optional `path` argument skips the
+/// dialog (used by tests and scripted imports).
+fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let path = arguments
+        .value(0)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            rfd::FileDialog::new()
+                .set_title("Select an exported .zip archive")
+                .add_filter("Export Archive", &["zip"])
+                .pick_file()
+        });
+    let Some(path) = path else {
+        return Ok(HostObject::new().field("kind", "cancelled").into());
+    };
+
+    let zip_has = |name: &str| -> bool {
+        std::fs::File::open(&path)
+            .ok()
+            .and_then(|file| zip::ZipArchive::new(file).ok())
+            .map(|mut archive| archive.by_name(name).is_ok())
+            .unwrap_or(false)
+    };
+    let is_db = zip_has("bir_data.db");
+    let is_profile = zip_has("profile.json");
+
+    if is_db {
+        // Painted flow (import_export.rs): safety-backup the live file, then
+        // extract the archive over it. Drop the cached connection first — it
+        // holds the owner lock and an open handle on the file being replaced.
+        let db_path = db::app_database_path();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs())
+            .unwrap_or(0);
+        if db_path.exists() {
+            if let Some(parent) = db_path.parent() {
+                let _ =
+                    std::fs::copy(&db_path, parent.join(format!("bir_data.safety-{timestamp}.db")));
+            }
+        }
+        reset_database();
+        return match bir_core::import::extract_database_zip(&path, &db_path) {
+            Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
+            Err(error) => Err(HostError::new(error.to_string())),
+        };
+    }
+
+    if is_profile {
+        return with_database(|db| match bir_core::import::import_profile_data(db, &path) {
+            Ok(()) => Ok(HostObject::new().field("kind", "profile").into()),
+            Err(error) => Err(HostError::new(error.to_string())),
+        });
+    }
+
+    Ok(HostObject::new().field("kind", "invalid").into())
+}
+
+/// Tax deadlines feed for the calendar page.
+fn list_deadlines() -> HostResult {
+    with_database(|db| {
+        db.list_tax_deadlines()
+            .map_err(|error| HostError::new(error.to_string()))
+            .and_then(|deadlines| serialize(&deadlines))
+    })
+}
+
+/// BIR announcements feed — the notifications drawer content.
+fn list_announcements() -> HostResult {
+    with_database(|db| {
+        db.list_announcements()
+            .map_err(|error| HostError::new(error.to_string()))
+            .and_then(|announcements| serialize(&announcements))
+    })
+}
+
 /// Admin PIN lives only as its hash (`app_lock_pin_hash`); hashing stays
 /// host-side so the script never sees the stored digest.
 fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -688,6 +778,9 @@ pub fn module() -> HostModule {
         .function("list_queued", |_| list_queued())
         .function("queue_form_draft", queue_form_draft)
         .function("cancel_queued", cancel_queued)
+        .function("list_deadlines", |_| list_deadlines())
+        .function("list_announcements", |_| list_announcements())
+        .function("import_archive", import_archive)
         .declarations(
             r#"
 export interface SystemInfo {
@@ -768,6 +861,26 @@ export function save_form_draft(tin: string, form_code: string, year: number, qu
 export function list_queued(): DraftSummary[];
 export function queue_form_draft(tin: string, form_code: string, year: number, quarter: number | null): number;
 export function cancel_queued(tin: string, form_code: string, year: number, quarter: number | null): null;
+export interface TaxDeadline {
+    id: number | null;
+    form_type: string;
+    due_date: string;
+    description: string;
+}
+export function list_deadlines(): TaxDeadline[];
+export interface Announcement {
+    id: number | null;
+    source: string;
+    title: string;
+    content: string;
+    published_at: string;
+    read_status: boolean;
+}
+export function list_announcements(): Announcement[];
+export interface ImportResult {
+    kind: "database" | "profile" | "invalid" | "cancelled";
+}
+export function import_archive(path?: string): ImportResult;
 "#,
         )
 }

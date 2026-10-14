@@ -117,7 +117,7 @@ export function renderNotificationsDrawer(cx, state) {
     .border_l(1)
     .border_color(cx.theme().colors.border)
     .shadow_lg()
-    .child(renderNotifications(cx));
+    .child(renderNotifications(cx, state));
 }
 
 function menuRow(cx, state, { id, iconPath, label, view }) {

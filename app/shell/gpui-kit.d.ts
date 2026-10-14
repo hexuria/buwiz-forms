@@ -27787,6 +27787,26 @@ declare module "bir" {
   export function list_queued(): DraftSummary[];
   export function queue_form_draft(tin: string, form_code: string, year: number, quarter: number | null): number;
   export function cancel_queued(tin: string, form_code: string, year: number, quarter: number | null): null;
+  export interface TaxDeadline {
+      id: number | null;
+      form_type: string;
+      due_date: string;
+      description: string;
+  }
+  export function list_deadlines(): TaxDeadline[];
+  export interface Announcement {
+      id: number | null;
+      source: string;
+      title: string;
+      content: string;
+      published_at: string;
+      read_status: boolean;
+  }
+  export function list_announcements(): Announcement[];
+  export interface ImportResult {
+      kind: "database" | "profile" | "invalid" | "cancelled";
+  }
+  export function import_archive(path?: string): ImportResult;
 }
 
 /**

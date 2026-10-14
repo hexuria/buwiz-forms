@@ -35,6 +35,9 @@ import {
   list_queued,
   queue_form_draft,
   cancel_queued,
+  list_deadlines,
+  list_announcements,
+  import_archive,
 } from "bir";
 import {
   applyThemePreference,
@@ -64,6 +67,8 @@ import {
 } from "./shell/profile_manager.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderQueuePage } from "./shell/queue.js";
+import { renderCalendarPage } from "./shell/calendar.js";
+import { renderImportPage } from "./shell/import_page.js";
 import { renderFormView, FORM_SPECS } from "./shell/form_view.js";
 
 export default class BirApp extends View {
@@ -574,6 +579,39 @@ export default class BirApp extends View {
     return list_queued();
   }
 
+  taxDeadlines() {
+    return list_deadlines();
+  }
+
+  announcements() {
+    return list_announcements();
+  }
+
+  /** Smart Import — painted import_export.rs flow; the zip is handled host-side. */
+  runImport(cx) {
+    this.importNotice = null;
+    this.importNoticeIsError = false;
+    try {
+      const result = import_archive();
+      if (result.kind === "database") {
+        this.reloadProfiles();
+        this.importNotice =
+          "Database imported. Application state has been reloaded.";
+      } else if (result.kind === "profile") {
+        this.reloadProfiles();
+        this.importNotice = "Profile data successfully restored.";
+      } else if (result.kind === "invalid") {
+        this.importNoticeIsError = true;
+        this.importNotice =
+          "The selected zip file does not contain a recognizable profile or database export.";
+      }
+    } catch (e) {
+      this.importNoticeIsError = true;
+      this.importNotice = `Import failed: ${e}`;
+    }
+    cx.notify();
+  }
+
   cancelQueuedEntry(entry, cx) {
     try {
       this.queueError = null;
@@ -791,21 +829,11 @@ export default class BirApp extends View {
           : renderStub(cx, "Unlock", "No profile selected", "S2");
       }
       case "import_export":
-        return renderStub(
-          cx,
-          "Import Data",
-          "Backup import/export — ports in S5",
-          "S5",
-        );
+        return renderImportPage(cx, this);
       case "cron_tasks":
         return renderQueuePage(cx, this);
       case "admin_calendar":
-        return renderStub(
-          cx,
-          "Tax Calendars",
-          "Admin calendar dashboard — ports in S5",
-          "S5",
-        );
+        return renderCalendarPage(cx, this);
       case "form_view":
         return this.formSpec
           ? renderFormView(cx, this)
