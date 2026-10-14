@@ -848,12 +848,35 @@ fn return_period_order(legacy_return: &LegacyReturn) -> (u32, u32, Option<u32>) 
             digits.parse::<u32>().unwrap_or_default(),
             quarter.map(|quarter| quarter * 3).unwrap_or(13),
         ),
-        6 => (
-            digits[2..].parse::<u32>().unwrap_or_default(),
-            quarter
-                .map(|quarter| quarter * 3)
-                .unwrap_or_else(|| digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13)),
-        ),
+        6 => match quarter {
+            Some(quarter) => {
+                let end_month = match digits[..2].parse::<u32>() {
+                    Ok(month) if (1..=12).contains(&month) => month,
+                    _ => return (0, 0, legacy_return.amendment_version),
+                };
+                let end_year = match digits[2..].parse::<u32>() {
+                    Ok(year) if year > 0 => year,
+                    _ => return (0, 0, legacy_return.amendment_version),
+                };
+                // MMYYYYQn counts backward from its fiscal year-end month.
+                let Some(end_month_index) = end_year
+                    .checked_mul(12)
+                    .and_then(|year_month| year_month.checked_add(end_month - 1))
+                else {
+                    return (0, 0, legacy_return.amendment_version);
+                };
+                let months_before_year_end = (4 - quarter) * 3;
+                let Some(quarter_end_index) = end_month_index.checked_sub(months_before_year_end)
+                else {
+                    return (0, 0, legacy_return.amendment_version);
+                };
+                (quarter_end_index / 12, quarter_end_index % 12 + 1)
+            }
+            None => (
+                digits[2..].parse::<u32>().unwrap_or_default(),
+                digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13),
+            ),
+        },
         8 => (
             digits[4..].parse::<u32>().unwrap_or_default(),
             digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13),
@@ -1280,12 +1303,60 @@ mod tests {
 
     #[test]
     fn quarterly_return_order_rejects_invalid_quarters() {
-        for period in ["2025Q4294967295", "2025Q0", "2025Q5", "2025Qx"] {
+        for period in [
+            "2025Q4294967295",
+            "2025Q0",
+            "2025Q5",
+            "2025Qx",
+            "002025Q1",
+            "132025Q4",
+            "010000Q1",
+        ] {
             let legacy_return = synthetic_return(period, "Invalid quarter", "invalid-quarter");
             assert_eq!(
                 return_period_order(&legacy_return),
                 (0, 0, None),
                 "{period}"
+            );
+        }
+    }
+
+    #[test]
+    fn six_digit_quarter_order_counts_back_from_year_end_month() {
+        for (period, expected) in [
+            ("062025Q4", (2025, 6)),
+            ("062025Q1", (2024, 9)),
+            ("062025Q2", (2024, 12)),
+            ("062025Q3", (2025, 3)),
+        ] {
+            let legacy_return = synthetic_return(period, "Fiscal quarter", period);
+            assert_eq!(
+                return_period_order(&legacy_return),
+                (expected.0, expected.1, None),
+                "{period}"
+            );
+        }
+    }
+
+    #[test]
+    fn fiscal_quarter_order_derives_profile_from_latest_endpoint() {
+        for (quarter_period, quarter_name, comparison_period, comparison_name, expected_name) in [
+            ("062025Q4", "Fiscal Q4", "072025", "July", "July"),
+            ("062025Q1", "Fiscal Q1", "122024", "December", "December"),
+        ] {
+            let db = Database::open_ephemeral().unwrap();
+            let scan = LegacyScan {
+                returns: vec![
+                    synthetic_return(quarter_period, quarter_name, "fiscal-quarter"),
+                    synthetic_return(comparison_period, comparison_name, "comparison-period"),
+                ],
+                ..LegacyScan::default()
+            };
+            apply_legacy_migration(&db, &scan).unwrap();
+            assert_eq!(
+                db.list_profiles().unwrap()[0].full_name,
+                expected_name,
+                "{quarter_period} versus {comparison_period}"
             );
         }
     }
