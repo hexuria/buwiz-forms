@@ -694,7 +694,8 @@ jobs:
           libvulkan-dev \
           libfontconfig1-dev \
           libfreetype-dev \
-          libssl-dev
+          libssl-dev \
+          libdbus-1-dev
 
     # Same OpenSSL provisioning as `check`: bir-shell links bir-core, whose
     # SFTP/reqwest deps need it on Windows.
