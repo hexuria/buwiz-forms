@@ -73,6 +73,31 @@ check:
     cargo clippy --locked --workspace -- -D warnings
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+# Build and run the painted Windows runtime smoke gate in isolated phases.
+[windows]
+smoke-windows profile="release":
+    #!pwsh -NoProfile
+    $ErrorActionPreference = 'Stop'
+    $profileName = "{{profile}}"
+    if ($profileName -notin @("debug", "release")) {
+        throw "profile must be debug or release"
+    }
+    $cargoArgs = @("build", "--locked", "-p", "bir-desktop", "--bin", "bir-desktop", "--features", "dev-tools,agent")
+    if ($profileName -eq "release") { $cargoArgs += "--release" }
+    & cargo @cargoArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $targetDir = if ($profileName -eq "release") { "target\release" } else { "target\debug" }
+    & {{PYTHON}} scripts/alias_desktop_bin.py $targetDir
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $binary = if ($profileName -eq "release") {
+        "target\release\bir.exe"
+    } else {
+        "target\debug\bir.exe"
+    }
+    $work = "target\windows-smoke\$profileName"
+    & {{PYTHON}} scripts/windows_smoke.py --bin $binary --work $work --json-out "$work\results.json"
+    exit $LASTEXITCODE
+
 # Check for vulnerability advisories (requires: cargo install cargo-audit)
 [unix]
 audit:
