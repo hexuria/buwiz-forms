@@ -15,7 +15,8 @@ impl EventEmitter<ImportExportEvent> for ImportExportView {}
 
 pub struct ImportExportView {
     db: Arc<Mutex<Database>>,
-    legacy_root: Option<PathBuf>,
+    legacy_detected_root: Option<PathBuf>,
+    legacy_selected_root: Option<PathBuf>,
     legacy_scan: Option<bir_core::legacy_migration::LegacyScan>,
     legacy_status: String,
 }
@@ -28,9 +29,10 @@ impl ImportExportView {
     ) -> Self {
         Self {
             db,
-            legacy_root: bir_core::legacy_migration::discover_legacy_roots()
+            legacy_detected_root: bir_core::legacy_migration::discover_legacy_roots()
                 .into_iter()
                 .next(),
+            legacy_selected_root: None,
             legacy_scan: None,
             legacy_status: String::new(),
         }
@@ -78,13 +80,13 @@ impl ImportExportView {
             .map_err(|error| error.to_string())?;
         Ok((
             format!(
-                "Migration complete: {} profiles created, {} updated, {} unchanged; {} returns imported, {} already present; {} issues.",
-                report.profiles_created,
-                report.profiles_updated,
-                report.profiles_unchanged,
-                report.returns_imported,
-                report.returns_already_present,
-                report.issues.len()
+                "Migration complete: {} created, {} updated, {} unchanged; {} imported, {} already present; {}.",
+                pluralized_count(report.profiles_created, "profile"),
+                pluralized_count(report.profiles_updated, "profile"),
+                pluralized_count(report.profiles_unchanged, "profile"),
+                pluralized_count(report.returns_imported, "return"),
+                pluralized_count(report.returns_already_present, "return"),
+                pluralized_count(report.issues.len(), "issue")
             ),
             report.profiles_created + report.profiles_updated > 0,
         ))
@@ -95,21 +97,50 @@ impl Render for ImportExportView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let bg = cx.theme().background;
         let border = cx.theme().border;
-        let legacy_root_label = if cfg!(target_os = "windows") {
-            self.legacy_root
-                .as_ref()
-                .map(|path| format!("Detected: {}", path.display()))
-                .unwrap_or_else(|| "No standard eBIRForms install was detected.".to_string())
-        } else {
-            self.legacy_root
-                .as_ref()
-                .map(|path| format!("Selected: {}", path.display()))
-                .unwrap_or_else(|| "No folder selected.".to_string())
-        };
+        let legacy_root_label = self
+            .legacy_selected_root
+            .as_ref()
+            .map(|path| format!("Selected: {}", path.display()))
+            .or_else(|| {
+                self.legacy_detected_root
+                    .as_ref()
+                    .map(|path| format!("Detected: {}", path.display()))
+            })
+            .unwrap_or_else(|| {
+                if cfg!(target_os = "windows") {
+                    "No standard eBIRForms install was detected.".to_string()
+                } else {
+                    "No folder selected.".to_string()
+                }
+            });
         let legacy_summary = self
             .legacy_scan
             .as_ref()
             .map(legacy_scan_summary)
+            .unwrap_or_default();
+        let legacy_issue_lines = self
+            .legacy_scan
+            .as_ref()
+            .map(|scan| {
+                let mut lines = scan
+                    .issues
+                    .iter()
+                    .take(5)
+                    .map(|issue| {
+                        let file_name = issue
+                            .path
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| issue.path.display().to_string());
+                        format!("{file_name}: {}", issue.reason)
+                    })
+                    .collect::<Vec<_>>();
+                let remaining = scan.issues.len().saturating_sub(5);
+                if remaining > 0 {
+                    lines.push(format!("…and {remaining} more"));
+                }
+                lines
+            })
             .unwrap_or_default();
         let legacy_can_apply = self
             .legacy_scan
@@ -117,14 +148,18 @@ impl Render for ImportExportView {
             .is_some_and(|scan| !scan.profiles.is_empty() || !scan.returns.is_empty());
         let legacy_status = self.legacy_status.clone();
         let mut legacy_actions = div().flex().flex_row().gap_2();
-        if cfg!(target_os = "windows") {
+        if self.legacy_detected_root.is_some() {
             legacy_actions = legacy_actions.child(
                 gpui_component::button::Button::new("legacy_migration_scan_btn")
                     .label("Scan")
                     .on_click(cx.listener(|this, _ev, _window, cx| {
-                        let Some(path) = this.legacy_root.clone() else {
+                        let Some(path) = this.legacy_detected_root.clone() else {
                             return;
                         };
+                        this.legacy_selected_root = None;
+                        this.legacy_scan = None;
+                        this.legacy_status.clear();
+                        cx.notify();
                         cx.spawn(async move |this, cx| {
                             let scan_path = path.clone();
                             let result = smol::unblock(move || {
@@ -132,7 +167,6 @@ impl Render for ImportExportView {
                             })
                             .await;
                             let _ = this.update(cx, |this, cx| {
-                                this.legacy_root = Some(path);
                                 match result {
                                     Ok(scan) => {
                                         this.legacy_scan = Some(scan);
@@ -163,13 +197,18 @@ impl Render for ImportExportView {
                             return;
                         };
                         let path = folder.path().to_path_buf();
-                        let scan_path = path.clone();
+                        let _ = this.update(cx, |this, cx| {
+                            this.legacy_selected_root = Some(path.clone());
+                            this.legacy_scan = None;
+                            this.legacy_status.clear();
+                            cx.notify();
+                        });
+                        let scan_path = path;
                         let result = smol::unblock(move || {
                             bir_core::legacy_migration::scan_legacy_folder(&scan_path)
                         })
                         .await;
                         let _ = this.update(cx, |this, cx| {
-                            this.legacy_root = Some(path);
                             match result {
                                 Ok(scan) => {
                                     this.legacy_scan = Some(scan);
@@ -208,6 +247,11 @@ impl Render for ImportExportView {
         if !legacy_summary.is_empty() {
             legacy_details = legacy_details.child(rsx! {
                 <div text_sm>{legacy_summary}</div>
+            });
+        }
+        for line in legacy_issue_lines {
+            legacy_details = legacy_details.child(rsx! {
+                <div text_sm text_color={cx.theme().muted_foreground}>{line}</div>
             });
         }
         if !legacy_status.is_empty() {
@@ -320,6 +364,10 @@ impl Render for ImportExportView {
     }
 }
 
+fn pluralized_count(count: usize, item: &str) -> String {
+    format!("{count} {item}{}", if count == 1 { "" } else { "s" })
+}
+
 fn legacy_scan_summary(scan: &bir_core::legacy_migration::LegacyScan) -> String {
     let mut returns_by_tin = BTreeMap::<String, usize>::new();
     for legacy_return in &scan.returns {
@@ -334,15 +382,15 @@ fn legacy_scan_summary(scan: &bir_core::legacy_migration::LegacyScan) -> String 
         .collect::<Vec<_>>()
         .join(", ");
     format!(
-        "{} profiles; {} returns by TIN{}; {} issues; {} savefiles not migrated.",
-        scan.profiles.len(),
-        scan.returns.len(),
+        "{}; {} by TIN{}; {}; {} not migrated.",
+        pluralized_count(scan.profiles.len(), "profile"),
+        pluralized_count(scan.returns.len(), "return"),
         if by_tin.is_empty() {
             String::new()
         } else {
             format!(" ({by_tin})")
         },
-        scan.issues.len(),
-        scan.savefile_count
+        pluralized_count(scan.issues.len(), "issue"),
+        pluralized_count(scan.savefile_count, "savefile")
     )
 }
