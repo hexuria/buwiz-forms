@@ -27,6 +27,7 @@ from file_tax_smoke import AgentClient, SmokeError
 PHASES = ("preview-1601c", "preview-2551q", "tray", "submit")
 SMOKE_TIN = "12345678800000"
 PANIC_MARKERS = ("panicked at", "overflowed its stack")
+MAILBOX_DRAIN_TIMEOUT = "timed out waiting for the UI thread to drain the agent mailbox"
 TRAY_NOTE = (
     "Hide/show uses the real global keybinding handlers; clicking the OS "
     "tray menu remains a manual VM step (#98)."
@@ -438,6 +439,9 @@ def wait_preview(client: AgentClient, proc: subprocess.Popen, timeout: float = 3
                     ).strip()
                 detail = toolbar_text or "the preview reported a construction failure"
                 raise SmokeError(f"preview failed: {detail}")
+        except SmokeError as exc:
+            if MAILBOX_DRAIN_TIMEOUT not in str(exc):
+                raise
         except (OSError, ValueError, json.JSONDecodeError):
             pass
         time.sleep(0.5)
