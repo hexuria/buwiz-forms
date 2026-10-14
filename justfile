@@ -400,23 +400,13 @@ check-exe-prerequisites:
     }
 
 [windows]
-exe *args="": check-exe-prerequisites build-frozen-html-identity
+exe: check-exe-prerequisites build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
 
     $ISCC = "{{ISCC}}"
     
-    $features = @()
-    foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
-        if ($arg -eq '--inspector') { $features += 'inspector' }
-    }
-    
-    if ($features.Count -gt 0) {
-        $featureList = $features -join ','
-        cargo build --locked --release --target {{WIN_TARGET}} --features $featureList
-    } else {
-        cargo build --locked --release --target {{WIN_TARGET}}
-    }
+    cargo build --locked --release --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
         $cargoExitCode = $LASTEXITCODE
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting EXE packaging.")
@@ -460,23 +450,13 @@ exe *args="": check-exe-prerequisites build-frozen-html-identity
 # This artifact is intentionally excluded from public GitHub releases. Store
 # promotion remains blocked until the manifest artwork dimensions and packaged
 # MSVC runtime behavior pass their separate Windows certification checks.
-msix *args="": build-frozen-html-identity
+msix: build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"
     Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"
     
-    $features = @()
-    foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
-        if ($arg -eq '--inspector') { $features += 'inspector' }
-    }
-    
-    if ($features.Count -gt 0) {
-        $featureList = $features -join ','
-        cargo build --locked --release --target {{WIN_TARGET}} --features $featureList
-    } else {
-        cargo build --locked --release --target {{WIN_TARGET}}
-    }
+    cargo build --locked --release --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
         $cargoExitCode = $LASTEXITCODE
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting MSIX packaging.")
@@ -635,7 +615,6 @@ _package-mac args="": build-frozen-html-identity
     FEATURES=""
     for arg in {{args}}; do
         case "$arg" in
-            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
             --native-evidence) FEATURES="${FEATURES:+$FEATURES,}dev-tools" ;;
             --agent)         FEATURES="${FEATURES:+$FEATURES,}agent" ; AGENT=1 ;;
         esac
@@ -696,7 +675,6 @@ _package-mac-appstore args="": build-frozen-html-identity
     FEATURES="mas_build"
     for arg in {{args}}; do
         case "$arg" in
-            --inspector)     FEATURES="${FEATURES},inspector" ;;
         esac
     done
     FEATURES_FLAG="--features $FEATURES"
@@ -788,18 +766,10 @@ _check-linux-launcher apps_dir icons_dir:
     if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate "$ENTRY"; fi
     echo "✅ Linux launcher + icons present"
 
-_package-linux args="": build-frozen-html-identity
+_package-linux: build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
-    FEATURES=""
-    for arg in {{args}}; do
-        case "$arg" in
-            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
-        esac
-    done
-    FEATURES_FLAG=""
-    if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
-    cargo build --locked --release --target {{LINUX_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --target {{LINUX_TARGET}}
     {{PYTHON}} scripts/alias_desktop_bin.py target/{{LINUX_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     if command -v cargo-deb >/dev/null 2>&1; then

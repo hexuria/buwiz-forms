@@ -22,7 +22,6 @@ required-features = ["agent"]
 
 [features]
 dev-tools = []
-inspector = []
 # Opt-in gpui-agent control plane. Default off. Runtime still requires
 # `GPUI_AGENT=1` (and `GPUI_AGENT_ALLOW_RELEASE=1` for release binaries).
 agent = ["dep:gpui-agent", "dep:clap", "dep:socket2"]
