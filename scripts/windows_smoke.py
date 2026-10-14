@@ -439,6 +439,8 @@ def wait_preview(client: AgentClient, proc: subprocess.Popen, timeout: float = 3
                     ).strip()
                 detail = toolbar_text or "the preview reported a construction failure"
                 raise SmokeError(f"preview failed: {detail}")
+        # Only the transient mailbox timeout is retried; phase order, readiness
+        # criteria, paint checks, and the existing deadline remain unchanged.
         except SmokeError as exc:
             if MAILBOX_DRAIN_TIMEOUT not in str(exc):
                 raise
