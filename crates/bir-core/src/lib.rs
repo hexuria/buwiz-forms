@@ -34,6 +34,7 @@ pub mod import;
 pub mod integration;
 pub mod ipc;
 pub mod job_display;
+pub mod legacy_migration;
 pub mod log_files;
 pub mod naming;
 pub mod news_fetcher;

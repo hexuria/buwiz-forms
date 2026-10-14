@@ -2,6 +2,7 @@ use bir_core::db::Database;
 use gpui::*;
 use gpui_component::*;
 use gpui_rsx::rsx;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -13,6 +14,9 @@ impl EventEmitter<ImportExportEvent> for ImportExportView {}
 
 pub struct ImportExportView {
     db: Arc<Mutex<Database>>,
+    legacy_root: Option<PathBuf>,
+    legacy_scan: Option<bir_core::legacy_migration::LegacyScan>,
+    legacy_status: String,
 }
 
 impl ImportExportView {
@@ -21,7 +25,14 @@ impl ImportExportView {
         _window: &mut Window,
         _cx: &mut Context<'_, Self>,
     ) -> Self {
-        Self { db }
+        Self {
+            db,
+            legacy_root: bir_core::legacy_migration::discover_legacy_roots()
+                .into_iter()
+                .next(),
+            legacy_scan: None,
+            legacy_status: String::new(),
+        }
     }
 
     fn import_database(&mut self, new_db_path: PathBuf) -> Result<(), String> {
@@ -52,12 +63,149 @@ impl ImportExportView {
             Err("Failed to acquire database lock".to_string())
         }
     }
+
+    fn apply_legacy_migration(&mut self) -> Result<String, String> {
+        let scan = self
+            .legacy_scan
+            .as_ref()
+            .ok_or_else(|| "Scan a legacy eBIRForms folder first.".to_string())?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| "Failed to acquire database lock".to_string())?;
+        let report = bir_core::legacy_migration::apply_legacy_migration(&db, scan)
+            .map_err(|error| error.to_string())?;
+        Ok(format!(
+            "Migration complete: {} profiles created, {} updated, {} unchanged; {} returns imported, {} already present; {} issues.",
+            report.profiles_created,
+            report.profiles_updated,
+            report.profiles_unchanged,
+            report.returns_imported,
+            report.returns_already_present,
+            report.issues.len()
+        ))
+    }
 }
 
 impl Render for ImportExportView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let bg = cx.theme().background;
         let border = cx.theme().border;
+        let legacy_root_label = if cfg!(target_os = "windows") {
+            self.legacy_root
+                .as_ref()
+                .map(|path| format!("Detected: {}", path.display()))
+                .unwrap_or_else(|| "No standard eBIRForms install was detected.".to_string())
+        } else {
+            self.legacy_root
+                .as_ref()
+                .map(|path| format!("Selected: {}", path.display()))
+                .unwrap_or_else(|| "No folder selected.".to_string())
+        };
+        let legacy_summary = self
+            .legacy_scan
+            .as_ref()
+            .map(legacy_scan_summary)
+            .unwrap_or_default();
+        let legacy_can_apply = self
+            .legacy_scan
+            .as_ref()
+            .is_some_and(|scan| !scan.profiles.is_empty() || !scan.returns.is_empty());
+        let legacy_status = self.legacy_status.clone();
+        let mut legacy_actions = div().flex().flex_row().gap_2();
+        if cfg!(target_os = "windows") {
+            legacy_actions = legacy_actions.child(
+                gpui_component::button::Button::new("legacy_migration_scan_btn")
+                    .label("Scan")
+                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                        let Some(path) = this.legacy_root.clone() else {
+                            return;
+                        };
+                        cx.spawn(async move |this, cx| {
+                            let scan_path = path.clone();
+                            let result = smol::unblock(move || {
+                                bir_core::legacy_migration::scan_legacy_folder(&scan_path)
+                            })
+                            .await;
+                            let _ = this.update(cx, |this, cx| {
+                                this.legacy_root = Some(path);
+                                match result {
+                                    Ok(scan) => {
+                                        this.legacy_scan = Some(scan);
+                                        this.legacy_status.clear();
+                                    }
+                                    Err(error) => {
+                                        this.legacy_scan = None;
+                                        this.legacy_status = error.to_string();
+                                    }
+                                }
+                                cx.notify();
+                            });
+                        })
+                        .detach();
+                    })),
+            );
+        }
+        legacy_actions = legacy_actions.child(
+            gpui_component::button::Button::new("legacy_migration_choose_btn")
+                .label("Choose folder…")
+                .on_click(cx.listener(|_this, _ev, _window, cx| {
+                    cx.spawn(async move |this, cx| {
+                        let Some(folder) = rfd::AsyncFileDialog::new()
+                            .set_title("Choose an old eBIRForms folder")
+                            .pick_folder()
+                            .await
+                        else {
+                            return;
+                        };
+                        let path = folder.path().to_path_buf();
+                        let scan_path = path.clone();
+                        let result = smol::unblock(move || {
+                            bir_core::legacy_migration::scan_legacy_folder(&scan_path)
+                        })
+                        .await;
+                        let _ = this.update(cx, |this, cx| {
+                            this.legacy_root = Some(path);
+                            match result {
+                                Ok(scan) => {
+                                    this.legacy_scan = Some(scan);
+                                    this.legacy_status.clear();
+                                }
+                                Err(error) => {
+                                    this.legacy_scan = None;
+                                    this.legacy_status = error.to_string();
+                                }
+                            }
+                            cx.notify();
+                        });
+                    })
+                    .detach();
+                })),
+        );
+        if legacy_can_apply {
+            legacy_actions = legacy_actions.child(
+                gpui_component::button::Button::new("legacy_migration_apply_btn")
+                    .label("Migrate")
+                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                        match this.apply_legacy_migration() {
+                            Ok(result) => this.legacy_status = result,
+                            Err(error) => this.legacy_status = error,
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        let mut legacy_details = div().flex().flex_col().gap_1();
+        if !legacy_summary.is_empty() {
+            legacy_details = legacy_details.child(rsx! {
+                <div text_sm>{legacy_summary}</div>
+            });
+        }
+        if !legacy_status.is_empty() {
+            legacy_details = legacy_details.child(rsx! {
+                <div text_sm text_color={cx.theme().muted_foreground}>{legacy_status}</div>
+            });
+        }
 
         let root = rsx! {
             <div id={"import_export_scroll"} flex flex_col p_8 gap_6 overflow_y_scroll>
@@ -144,8 +292,48 @@ impl Render for ImportExportView {
                         }
                     </div>
                 </div>
+                <div flex flex_col flex_shrink_0 bg={bg} border_1 border_color={border} rounded_xl overflow_hidden>
+                    <div flex flex_col items_start p_6 gap_3>
+                        <div flex flex_col gap_1>
+                            <div font_weight={FontWeight::SEMIBOLD}>{"Migrate from old eBIRForms"}</div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {"Import taxpayer profiles and filed Final Copies. Plain savefiles are counted but not migrated; source files are never changed."}
+                            </div>
+                        </div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>{legacy_root_label}</div>
+                        {legacy_actions}
+                        {legacy_details}
+                    </div>
+                </div>
             </div>
         };
         root.into_any_element()
     }
+}
+
+fn legacy_scan_summary(scan: &bir_core::legacy_migration::LegacyScan) -> String {
+    let mut returns_by_tin = BTreeMap::<String, usize>::new();
+    for legacy_return in &scan.returns {
+        let branch = legacy_return.branch.parse::<u32>().unwrap_or_default();
+        *returns_by_tin
+            .entry(format!("{}-{:05}", legacy_return.tin, branch))
+            .or_default() += 1;
+    }
+    let by_tin = returns_by_tin
+        .iter()
+        .map(|(tin, count)| format!("{tin}: {count}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "{} profiles; {} returns by TIN{}; {} issues; {} savefiles not migrated.",
+        scan.profiles.len(),
+        scan.returns.len(),
+        if by_tin.is_empty() {
+            String::new()
+        } else {
+            format!(" ({by_tin})")
+        },
+        scan.issues.len(),
+        scan.savefile_count
+    )
 }

@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 19;
+const CURRENT_MIGRATION_VERSION: i32 = 20;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -38,14 +38,14 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v1: The complete current schema
         "
         CREATE TABLE IF NOT EXISTS tax_deadlines (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             form_type TEXT NOT NULL,
             due_date TEXT NOT NULL,
             description TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS announcements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             source TEXT NOT NULL,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
@@ -326,6 +326,26 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v19: Read-only copies of what BIR received, kept when a Submitted or
         // Confirmed return is reverted to Draft for an amendment.
         "SELECT 1; -- v19 marker: amendment snapshots (Rust-side)",
+        // v20: Preserve imported historical eBIRForms returns as opaque files.
+        "
+        CREATE TABLE IF NOT EXISTS legacy_filed_returns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sha256 TEXT UNIQUE NOT NULL,
+            tin TEXT NOT NULL,
+            form_identity TEXT NOT NULL,
+            form_id TEXT,
+            period TEXT NOT NULL,
+            amendment_version INTEGER,
+            email_copy TEXT,
+            encrypted INTEGER NOT NULL,
+            source_filename TEXT NOT NULL,
+            raw_file BLOB NOT NULL,
+            fields_json TEXT NOT NULL,
+            imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_legacy_filed_returns_tin
+            ON legacy_filed_returns(tin);
+        ",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -2740,6 +2760,54 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(v, CURRENT_MIGRATION_VERSION);
+    }
+
+    #[test]
+    fn test_v20_creates_legacy_filed_returns() {
+        let conn = test_conn();
+        conn.pragma_update(None, "user_version", 19i32).unwrap();
+
+        migrate_database(&conn).unwrap();
+
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 20);
+        let columns = {
+            let mut statement = conn
+                .prepare("PRAGMA table_info(legacy_filed_returns)")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                .unwrap()
+        };
+        for column in [
+            "sha256",
+            "tin",
+            "form_identity",
+            "form_id",
+            "period",
+            "amendment_version",
+            "email_copy",
+            "encrypted",
+            "source_filename",
+            "raw_file",
+            "fields_json",
+            "imported_at",
+        ] {
+            assert!(columns.contains(column), "missing column {column}");
+        }
+        let unique_sha256: bool = conn
+            .query_row(
+                "SELECT \"unique\" FROM pragma_index_list('legacy_filed_returns')
+                 WHERE name = 'sqlite_autoindex_legacy_filed_returns_1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(unique_sha256);
     }
 
     #[test]
