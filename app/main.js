@@ -29,6 +29,9 @@ import {
   verify_admin_pin,
   verify_admin_totp,
   generate_totp_secret,
+  list_drafts,
+  get_form_draft,
+  save_form_draft,
 } from "bir";
 import {
   applyThemePreference,
@@ -57,6 +60,7 @@ import {
   parseTin,
 } from "./shell/profile_manager.js";
 import { renderSettings } from "./shell/settings.js";
+import { renderFormView, FORM_SPECS } from "./shell/form_view.js";
 
 export default class BirApp extends View {
   init(_props, cx) {
@@ -117,13 +121,14 @@ export default class BirApp extends View {
     this.adminTotpOtp = OtpState.new(6);
     this.profilePinOtp = OtpState.new(4, { masked: true });
     this.profileTotpOtp = OtpState.new(6);
+    // OTP callbacks get their own cx at fire time — never capture init's.
     for (const [otp, handler] of [
-      [this.adminPinOtp, () => this.tryUnlockApp(cx)],
-      [this.adminTotpOtp, () => this.tryUnlockApp(cx)],
-      [this.profilePinOtp, () => this.tryUnlockProfile(cx)],
-      [this.profileTotpOtp, () => this.tryUnlockProfile(cx)],
+      [this.adminPinOtp, (cx) => this.tryUnlockApp(cx)],
+      [this.adminTotpOtp, (cx) => this.tryUnlockApp(cx)],
+      [this.profilePinOtp, (cx) => this.tryUnlockProfile(cx)],
+      [this.profileTotpOtp, (cx) => this.tryUnlockProfile(cx)],
     ]) {
-      otp.on("complete", () => handler());
+      otp.on("complete", (_event, cx) => handler(cx));
     }
 
     this.pendingUnlockTin = null;
@@ -544,10 +549,119 @@ export default class BirApp extends View {
   }
 
   openFormCatalogEntry(form, cx) {
-    // Form views port in S4 — the catalog row is live data now, the view is
-    // announced but not mounted yet.
-    this.formLaunchNotice = `Form ${form.code} — view ports in the form-views slice (S4)`;
-    cx.notify();
+    const spec = FORM_SPECS[form.code];
+    if (!spec) {
+      // Form specs grow in S4 — announce instead of faking a view.
+      this.formLaunchNotice = `Form ${form.code} — view spec ports in the form-views slice (S4)`;
+      cx.notify();
+      return;
+    }
+    if (!this.activeProfileTin) {
+      this.formLaunchNotice = "Pick a taxpayer profile first.";
+      cx.notify();
+      return;
+    }
+    this.openFormView(spec, cx);
+  }
+
+  openFormView(spec, cx) {
+    this.formSpec = spec;
+    const now = new Date();
+    this.formYear = now.getFullYear();
+    this.formQuarter =
+      spec.periods === "quarterly" ? Math.ceil((now.getMonth() + 1) / 3) : null;
+    this.formError = null;
+    this.formNotice = null;
+    let draft = null;
+    this.formDraftStatus = "Draft";
+    try {
+      draft = get_form_draft(
+        this.activeProfileTin,
+        spec.code,
+        this.formYear,
+        this.formQuarter,
+      );
+      const summaries = list_drafts(this.activeProfileTin, this.formYear);
+      const existing = summaries.find(
+        (s) => s.form_code === spec.code && s.quarter === this.formQuarter,
+      );
+      if (existing) this.formDraftStatus = existing.status;
+    } catch (e) {
+      this.formError = String(e);
+    }
+    const profile = this.activeProfile() || {};
+    this.formDraft = draft || {};
+    this.formInputs = {};
+    for (const field of spec.fields) {
+      if (field.kind === "bool") continue;
+      let value = this.formDraft[field.key];
+      if ((value === undefined || value === null || value === "") && spec.profileDefaults?.[field.key]) {
+        value = profile[spec.profileDefaults[field.key]] || "";
+      }
+      if (field.kind === "money" || field.kind === "number") {
+        value = value === undefined || value === null ? "" : String(value);
+      }
+      this.formInputs[field.key] = InputState.new({
+        value: value == null ? "" : String(value),
+      });
+    }
+    this.formLaunchNotice = null;
+    this.navigate("form_view", cx);
+  }
+
+  saveFormDraft(cx) {
+    const spec = this.formSpec;
+    const data = { ...this.formDraft };
+    for (const field of spec.fields) {
+      if (field.kind === "bool") {
+        data[field.key] = Boolean(data[field.key]);
+      } else if (field.kind === "money") {
+        const raw = this.formInputs[field.key].value().trim();
+        data[field.key] = raw === "" ? 0 : Number(raw);
+        if (Number.isNaN(data[field.key])) {
+          this.formError = `${field.label} must be a number.`;
+          cx.notify();
+          return;
+        }
+      } else if (field.kind === "number") {
+        const raw = this.formInputs[field.key].value().trim();
+        data[field.key] = raw === "" ? 0 : Math.trunc(Number(raw));
+        if (Number.isNaN(data[field.key])) {
+          this.formError = `${field.label} must be a whole number.`;
+          cx.notify();
+          return;
+        }
+      } else {
+        data[field.key] = this.formInputs[field.key].value().trim();
+      }
+    }
+    try {
+      save_form_draft(
+        this.activeProfileTin,
+        spec.code,
+        this.formYear,
+        this.formQuarter,
+        "Draft",
+        data,
+      );
+      this.formDraft = data;
+      this.formDraftStatus = "Draft";
+      this.formError = null;
+      this.formNotice = "Draft saved.";
+      cx.notify();
+    } catch (e) {
+      this.formError = String(e);
+      cx.notify();
+    }
+  }
+
+  draftsForProfile(year) {
+    if (!this.activeProfileTin) return [];
+    try {
+      return list_drafts(this.activeProfileTin, year);
+    } catch (_e) {
+      return [];
+    }
   }
 
   activeProfile() {
@@ -595,6 +709,10 @@ export default class BirApp extends View {
           "Admin calendar dashboard — ports in S5",
           "S5",
         );
+      case "form_view":
+        return this.formSpec
+          ? renderFormView(cx, this)
+          : renderStub(cx, "Form", "No form selected", "S4");
       case "settings":
         return renderSettings(cx, this);
       case "dev_mode":

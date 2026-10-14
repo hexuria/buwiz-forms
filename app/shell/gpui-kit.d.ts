@@ -27770,6 +27770,20 @@ declare module "bir" {
   export function generate_totp_secret(account: string): TotpSecret;
   export function delete_setting(key: string): null;
   export function set_admin_pin(pin: string | null): null;
+
+  export interface DraftSummary {
+      id: number;
+      tin: string;
+      form_code: string;
+      taxable_year: number;
+      quarter: number | null;
+      month: number | null;
+      status: "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
+      updated_at: string;
+  }
+  export function list_drafts(tin: string, year: number): DraftSummary[];
+  export function get_form_draft(tin: string, form_code: string, year: number, quarter: number | null): object | null;
+  export function save_form_draft(tin: string, form_code: string, year: number, quarter: number | null, status: string, data: object): number;
 }
 
 /**

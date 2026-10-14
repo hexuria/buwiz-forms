@@ -59,7 +59,16 @@ fn to_json(value: &HostValue) -> serde_json::Value {
     match value {
         HostValue::Null => serde_json::Value::Null,
         HostValue::Bool(v) => serde_json::Value::Bool(*v),
-        HostValue::Number(v) => serde_json::json!(v),
+        // Script numbers arrive as f64, but typed drafts declare ints — an
+        // integral double must round-trip as a JSON integer or serde rejects
+        // `0.0` for `u16` fields.
+        HostValue::Number(v) => {
+            if v.fract() == 0.0 && *v >= i64::MIN as f64 && *v <= i64::MAX as f64 {
+                serde_json::json!(*v as i64)
+            } else {
+                serde_json::json!(v)
+            }
+        }
         HostValue::Str(v) => serde_json::Value::String(v.clone()),
         HostValue::Array(v) => serde_json::Value::Array(v.iter().map(to_json).collect()),
         HostValue::Object(v) => serde_json::Value::Object(
@@ -307,6 +316,169 @@ fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+// ---------- S3: form drafts ----------
+
+fn list_drafts(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let year = arguments.integer(1)? as u16;
+    with_database(|db| {
+        let rows = db
+            .list_draft_summaries(&tin, year)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        Ok(HostValue::Array(
+            rows.iter()
+                .map(|row| {
+                    HostValue::from(
+                        HostObject::new()
+                            .field("id", row.id)
+                            .field("tin", row.tin.as_str())
+                            .field("form_code", row.form_code.as_str())
+                            .field("taxable_year", row.taxable_year as i64)
+                            .field(
+                                "quarter",
+                                row.quarter.map_or(HostValue::Null, HostValue::from),
+                            )
+                            .field(
+                                "month",
+                                row.month.map_or(HostValue::Null, HostValue::from),
+                            )
+                            .field("status", format!("{:?}", row.status))
+                            .field("updated_at", row.updated_at.as_str()),
+                    )
+                })
+                .collect(),
+        ))
+    })
+}
+
+fn filing_status(name: &str) -> Result<bir_core::forms::FilingStatus, HostError> {
+    use bir_core::forms::FilingStatus::*;
+    match name {
+        "Draft" => Ok(Draft),
+        "Queued" => Ok(Queued),
+        "Submitted" | "Filed" => Ok(Submitted),
+        "Confirmed" => Ok(Confirmed),
+        "Paid" => Ok(Paid),
+        other => Err(HostError::new(format!("unknown filing status {other:?}"))),
+    }
+}
+
+/// `quarter` argument is `Option<u8>`: pass null for annual/open-ended slots
+/// and 0 for the first open-ended period (the DB auto-numbers those).
+fn optional_quarter(arguments: &gpui_shell::HostArguments, index: usize) -> Result<Option<u8>, HostError> {
+    match arguments.get(index) {
+        Some(HostValue::Null) | None => Ok(None),
+        Some(HostValue::Number(q)) => Ok(Some(*q as u8)),
+        Some(other) => Err(HostError::new(format!(
+            "quarter must be a number or null, got {}",
+            other.describe()
+        ))),
+    }
+}
+
+fn get_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form_code = arguments.string(1)?.to_owned();
+    let year = arguments.integer(2)? as u16;
+    let quarter = optional_quarter(arguments, 3)?;
+    with_database(|db| {
+        let draft: Option<serde_json::Value> = match form_code.as_str() {
+            "2551Q" => {
+                let q = quarter.unwrap_or(1);
+                db.get_2551q_draft(&tin, year, q)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .map(|d| {
+                        serde_json::to_value(&d)
+                            .map_err(|error| HostError::new(error.to_string()))
+                    })
+                    .transpose()?
+            }
+            "1601C" => {
+                let month = quarter.unwrap_or(1);
+                db.get_1601c_draft(&tin, year, month)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .map(|d| {
+                        serde_json::to_value(&d)
+                            .map_err(|error| HostError::new(error.to_string()))
+                    })
+                    .transpose()?
+            }
+            _ => db
+                .get_form_draft(&tin, &form_code, year, quarter)
+                .map_err(|error| HostError::new(error.to_string()))?,
+        };
+        match draft {
+            Some(value) => serialize(&value),
+            None => Ok(HostValue::Null),
+        }
+    })
+}
+
+/// Fields the script reports merge over a profile-derived draft before the
+/// typed save — the same overlay shape the painted app uses, so the draft
+/// keeps every engine-required field even when the UI edits a subset.
+fn overlay_fields<T: serde::Serialize + serde::de::DeserializeOwned>(
+    base: T,
+    data: &serde_json::Value,
+) -> Result<T, HostError> {
+    let mut merged =
+        serde_json::to_value(&base).map_err(|error| HostError::new(error.to_string()))?;
+    if let (Some(target), Some(source)) = (merged.as_object_mut(), data.as_object()) {
+        for (key, value) in source {
+            target.insert(key.clone(), value.clone());
+        }
+    }
+    serde_json::from_value(merged).map_err(|error| HostError::new(error.to_string()))
+}
+
+fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form_code = arguments.string(1)?.to_owned();
+    let year = arguments.integer(2)? as u16;
+    let quarter = optional_quarter(arguments, 3)?;
+    let status = filing_status(arguments.string(4)?)?;
+    let data = to_json(arguments.value(5)?);
+    with_database(|db| {
+        // The engine requires dedicated typed persistence for these two forms;
+        // route them inside the host so the script keeps one uniform call.
+        match form_code.as_str() {
+            "2551Q" => {
+                let profile = db
+                    .get_profile(&tin)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new(format!("no profile for TIN {tin}")))?;
+                let q = quarter.ok_or_else(|| {
+                    HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
+                })?;
+                let base = bir_core::forms::Form2551QDraft::new_from_profile(&profile, year, q);
+                let draft = overlay_fields(base, &data)?;
+                db.save_2551q_draft(&draft)
+                    .map(|id| HostValue::Number(id as f64))
+                    .map_err(|error| HostError::new(error.to_string()))
+            }
+            "1601C" => {
+                let profile = db
+                    .get_profile(&tin)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new(format!("no profile for TIN {tin}")))?;
+                let month = quarter.ok_or_else(|| {
+                    HostError::new("1601C drafts are monthly: pass the month in the quarter slot")
+                })?;
+                let base =
+                    bir_core::forms::Form1601CDraft::new_from_profile(&profile, year, month);
+                let draft = overlay_fields(base, &data)?;
+                db.save_1601c_draft(&draft)
+                    .map(|id| HostValue::Number(id as f64))
+                    .map_err(|error| HostError::new(error.to_string()))
+            }
+            _ => db
+                .save_form_draft(&tin, &form_code, year, quarter, &status, &data)
+                .map(|id| HostValue::Number(id as f64))
+                .map_err(|error| HostError::new(error.to_string())),
+        }
+    })
+}
+
 /// Admin PIN lives only as its hash (`app_lock_pin_hash`); hashing stays
 /// host-side so the script never sees the stored digest.
 fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -343,6 +515,9 @@ pub fn module() -> HostModule {
         .function("generate_totp_secret", generate_totp_secret)
         .function("delete_setting", delete_setting)
         .function("set_admin_pin", set_admin_pin)
+        .function("list_drafts", list_drafts)
+        .function("get_form_draft", get_form_draft)
+        .function("save_form_draft", save_form_draft)
         .declarations(
             r#"
 export interface SystemInfo {
@@ -406,6 +581,20 @@ export function verify_admin_totp(token: string): boolean;
 export function generate_totp_secret(account: string): TotpSecret;
 export function delete_setting(key: string): null;
 export function set_admin_pin(pin: string | null): null;
+
+export interface DraftSummary {
+    id: number;
+    tin: string;
+    form_code: string;
+    taxable_year: number;
+    quarter: number | null;
+    month: number | null;
+    status: "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
+    updated_at: string;
+}
+export function list_drafts(tin: string, year: number): DraftSummary[];
+export function get_form_draft(tin: string, form_code: string, year: number, quarter: number | null): object | null;
+export function save_form_draft(tin: string, form_code: string, year: number, quarter: number | null, status: string, data: object): number;
 "#,
         )
 }

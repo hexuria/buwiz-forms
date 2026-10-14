@@ -161,7 +161,7 @@ export function renderGlobalDashboard(cx, state) {
               )
               .children(
                 members.map((form) =>
-                  formRow(cx, form, () => state.openFormCatalogEntry(form, cx)),
+                  formRow(cx, form, (f, clickCx) => state.openFormCatalogEntry(f, clickCx)),
                 ),
               ),
           ),
@@ -218,7 +218,59 @@ export function renderDashboard(cx, state, profile) {
         .pb(16)
         .gap(12)
         .children(
-          groups.map(([category, members]) =>
+          [
+            ...(() => {
+              const drafts = state.draftsForProfile
+                ? state.draftsForProfile(new Date().getFullYear())
+                : [];
+              if (drafts.length === 0) return [];
+              return [
+                v_flex()
+                  .gap(2)
+                  .child(
+                    div()
+                      .px(12)
+                      .pt(6)
+                      .pb(2)
+                      .text_size(11)
+                      .font_semibold()
+                      .text_color(muted(cx))
+                      .child(`IN PROGRESS · ${drafts.length}`),
+                  )
+                  .children(
+                    drafts.map((draft) =>
+                      h_flex()
+                        .w_full()
+                        .px(12)
+                        .py(8)
+                        .gap(10)
+                        .items_center()
+                        .rounded_md()
+                        .hover((s) => s.bg(cx.theme().colors.muted))
+                        .child(
+                          div()
+                            .w(FORM_CODE_W)
+                            .flex_none()
+                            .text_size(13)
+                            .font_semibold()
+                            .text_color(cx.theme().colors.primary)
+                            .child(draft.form_code),
+                        )
+                        .child(
+                          div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(13)
+                            .text_color(cx.theme().colors.foreground)
+                            .child(
+                              `${draft.taxable_year}${draft.quarter ? ` Q${draft.quarter}` : ""}${draft.month ? ` M${draft.month}` : ""} · ${draft.status} · updated ${draft.updated_at}`,
+                            ),
+                        ),
+                    ),
+                  ),
+              ];
+            })(),
+            ...groups.map(([category, members]) =>
             v_flex()
               .gap(2)
               .child(
@@ -233,10 +285,11 @@ export function renderDashboard(cx, state, profile) {
               )
               .children(
                 members.map((form) =>
-                  formRow(cx, form, () => state.openFormCatalogEntry(form, cx)),
+                  formRow(cx, form, (f, clickCx) => state.openFormCatalogEntry(f, clickCx)),
                 ),
               ),
           ),
+          ],
         ),
     ],
     cx,
