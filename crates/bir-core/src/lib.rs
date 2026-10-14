@@ -49,6 +49,7 @@ pub mod profile;
 pub mod receipt;
 pub mod reference;
 pub mod schema;
+pub mod tax_profile;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;

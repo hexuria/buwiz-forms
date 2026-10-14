@@ -336,6 +336,7 @@ impl Database {
             ("per_year_forms", "tin"),
             ("profile_calendar_events", "profile_tin"),
             ("profile_calendar_links", "profile_tin"),
+            ("form_templates", "tin"),
         ] {
             if table == "legacy_filed_returns" {
                 conn.execute(
@@ -504,6 +505,9 @@ impl Database {
             profile.per_year_forms.insert(year, result.forms_set);
         }
 
+        // Group a newly created (or re-keyed) profile under its taxpayer.
+        super::taxpayers::sync_taxpayer_rows(&tx)?;
+
         tx.commit()?;
         Ok(self.finish_post_commit_write(profile, "Taxpayer profile save"))
     }
@@ -621,6 +625,7 @@ impl Database {
             ("data_providers", "profile_tin"),
             ("per_year_forms", "tin"),
             ("profile_calendar_events", "profile_tin"),
+            ("form_templates", "tin"),
         ] {
             if table == "legacy_filed_returns" {
                 tx.execute(
@@ -635,6 +640,7 @@ impl Database {
             }
         }
         tx.execute("DELETE FROM profiles WHERE tin = ?1", params![tin])?;
+        super::taxpayers::sync_taxpayer_rows(&tx)?;
         tx.commit()?;
         Ok(())
     }
