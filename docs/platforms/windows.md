@@ -43,9 +43,26 @@ there, but nobody has run it on that platform.
 
 ## Install and run
 
-- The release workflow builds `eBIRForms-Windows-x64-<version>-Setup.exe`
-  (Inno Setup) and `eBIRForms-Windows-x64-<version>.msi` (WiX). Run either. The
-  installer adds a Start menu entry and offers an optional desktop icon.
+- Run the Windows release from GitHub Actions → **Release (Windows)** →
+  **Run workflow**. It also runs on pull requests that touch Windows packaging
+  files.
+- `windows-release` contains `eBIRForms-Windows-x64-<version>-Setup.exe`
+  (Inno Setup) and `eBIRForms-Windows-x64-<version>.msi` (WiX). The installer
+  adds a Start menu entry and offers an optional desktop icon.
+- `windows-msix` contains the sideload `.msix` and the `-store.msix` package for
+  Partner Center. An unsigned run also includes a `.cer` test certificate.
+- The CI MSIX smoke verifies registration, packaged VC runtime files, and an
+  isolated unpacked-layout launch with a visible window and 10-second process
+  persistence. On GitHub's `windows-latest` runner (UAC enabled) all three
+  stages run, including packaged `shell:AppsFolder` activation. On a host with
+  UAC disabled (`EnableLUA=0`) activation is skipped with a warning;
+  `-RequireActivation` turns that into a failure. To check activation locally,
+  run `powershell.exe -NoProfile -File scripts\smoke_msix.ps1 -Package <msix> -RequireActivation`
+  on Windows 11 with UAC enabled; add `-Certificate <cer>` when testing an
+  unsigned package.
+- To install an unsigned tester package, import its `.cer` into **Local
+  Machine → Trusted People** (administrator required), then double-click the
+  sideload `.msix`. An MSIX will not start on a machine with UAC disabled.
 - From source: run `scripts\setup-windows.ps1`, then `just run`. Build the
   installers with `just exe` or `just msix`. The `justfile` uses PowerShell 7
   (`pwsh`) on Windows.
@@ -117,8 +134,14 @@ there, but nobody has run it on that platform.
 
 ## Packaging
 
-- CI signs `bir.exe`, the Setup program and the MSI. The workflow stops if the
-  signing inputs are missing.
+- The `Release (Windows)` workflow is defined in
+  `.github/workflows/release-windows.yml`. Release runs require
+  `WINDOWS_CERTIFICATE_PFX` (base64-encoded `.pfx`) and
+  `WINDOWS_CERTIFICATE_PASSWORD`; pull-request and manually dispatched builds
+  may be unsigned. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are optional.
+- `windows-release` contains only the Setup program and MSI for public GitHub
+  releases. The MSIX packages are CI artifacts for testers and Store upload,
+  not public release attachments.
 - `just msix` makes an MSIX from `assets\windows\AppxManifest.xml`. The MSIX
   version is `Major.Minor.BuildNumber.0`; see
   [Versioning](../DEVELOPMENT.md#versioning--build-numbers).
