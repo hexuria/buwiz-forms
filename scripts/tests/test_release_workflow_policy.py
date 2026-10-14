@@ -12,11 +12,15 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release.yml"
+LINUX_RELEASE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-linux.yml"
 WINDOWS_RELEASE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-windows.yml"
 MACOS_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-macos.yml"
 MACOS_PACKAGE_SCRIPT_PATH = REPOSITORY_ROOT / "scripts/package_macos_release.sh"
 CI_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/ci.yml"
 DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-desktop/Cargo.toml"
+LINUX_BUILD_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/build-packages.sh"
+LINUX_SMOKE_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/smoke-test.sh"
+LINUX_INSTALL_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/install-linux.sh"
 INSTALLER_WXS_PATH = REPOSITORY_ROOT / "installer.wxs"
 JUSTFILE_PATH = REPOSITORY_ROOT / "justfile"
 LINUX_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-linux.sh"
@@ -30,6 +34,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.linux_release_workflow = LINUX_RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.windows_workflow = WINDOWS_RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.macos_workflow = MACOS_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.macos_package_script = MACOS_PACKAGE_SCRIPT_PATH.read_text(
@@ -37,6 +42,9 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )
         cls.ci_workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.desktop_manifest = DESKTOP_MANIFEST_PATH.read_text(encoding="utf-8")
+        cls.linux_build_script = LINUX_BUILD_SCRIPT_PATH.read_text(encoding="utf-8")
+        cls.linux_smoke_script = LINUX_SMOKE_SCRIPT_PATH.read_text(encoding="utf-8")
+        cls.linux_install_script = LINUX_INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
         cls.installer_wxs = INSTALLER_WXS_PATH.read_text(encoding="utf-8")
         cls.justfile = JUSTFILE_PATH.read_text(encoding="utf-8")
         cls.linux_setup = LINUX_SETUP_PATH.read_text(encoding="utf-8")
@@ -436,29 +444,48 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn('Root="HKCU"', self.installer_wxs)
         self.assertIn('Win64="yes"', self.installer_wxs)
 
-        linux = self.job("build-linux")
+        linux_job = self.job("build-linux")
+        self.assertIn("uses: ./.github/workflows/release-linux.yml", linux_job)
+        self.assertIn("tag: ${{ github.ref_name }}", linux_job)
+        linux = self.linux_release_workflow
+        self.assertIn('if [[ -n "$RELEASE_TAG" ]]; then', linux)
+        self.assertNotIn('GITHUB_EVENT_NAME" == workflow_call', linux)
         self.assertIn(
-            "cargo install --locked cargo-deb --version 3.7.0",
+            "group: release-linux-${{ github.event_name }}-${{ github.ref }}",
             linux,
         )
+        self.assertIn("ubuntu-22.04-arm", linux)
+        self.assertIn("x86_64-unknown-linux-gnu", linux)
+        self.assertIn("aarch64-unknown-linux-gnu", linux)
+        self.assertIn("cargo build --locked --release --target", linux)
+        self.assertIn("build-packages.sh --version", linux)
+        self.assertIn("smoke-test.sh --out", linux)
+        self.assertIn("name: linux-release-${{ matrix.arch }}", linux)
+        self.assertIn("cargo install --locked", self.linux_build_script)
+        self.assertIn("cargo-deb 3.7.0", self.linux_build_script)
+        self.assertIn("cargo-generate-rpm 0.21.0", self.linux_build_script)
         self.assertLess(
-            linux.index("mkdir -p target/release-artifacts"),
-            linux.index("cargo deb --locked"),
+            self.linux_build_script.index('mkdir -p "$OUT"'),
+            self.linux_build_script.index("cargo deb --locked"),
         )
         self.assertIn(
             'maintainer = "Goldcoders Corp <support@goldcoders.dev>"',
             self.desktop_manifest,
         )
-        self.assertIn("dpkg-deb --extract", linux)
-        self.assertIn('tar xzf "$TARBALL"', linux)
+        self.assertIn("dpkg-deb --extract", self.linux_build_script)
+        self.assertIn("tar -xzf", self.linux_build_script)
         self.assertIn(
-            'python3 scripts/audit_no_legacy.py --package-root "$DEB_ROOT"',
-            linux,
+            '--package-root "$deb_root"',
+            self.linux_build_script,
         )
         self.assertIn(
-            'python3 scripts/audit_no_legacy.py --package-root "$TAR_ROOT"',
-            linux,
+            '--package-root "$rpm_root"',
+            self.linux_build_script,
         )
+        self.assertIn("--from-dir /packages", self.linux_smoke_script)
+        self.assertIn("SHA256SUMS-linux-${ARCH}.txt", self.linux_install_script)
+        self.assertIn("ebirforms-bin.PKGBUILD", self.linux_build_script)
+        self.assertIn("https://github.com/hexuria/buwiz-forms/releases/download/v", self.linux_build_script)
         self.assertIn('dpkg-deb --extract "$DEB" "$AUDIT_ROOT"', self.justfile)
         self.assertIn('tar xzf "$TARBALL" -C "$AUDIT_ROOT"', self.justfile)
 

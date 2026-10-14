@@ -130,114 +130,9 @@ jobs:
 
   build-linux:
     needs: preflight
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libx11-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            libwayland-dev \
-            libwayland-client0 \
-            libasound2-dev \
-            libudev-dev \
-            libvulkan-dev \
-            libfontconfig1-dev \
-            libfreetype-dev \
-            libssl-dev \
-            libpolkit-gobject-1-dev \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            mesa-vulkan-drivers
-
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.99.0
-          targets: x86_64-unknown-linux-gnu
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Check out formgen scripts from buwiz-forms-html
-        uses: actions/checkout@v4
-        with:
-          repository: hexuria/buwiz-forms-html
-          path: .ci-html
-          persist-credentials: false
-
-      - name: Verify frozen HTML
-        run: |
-          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
-          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
-          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
-
-      - name: Build
-        run: cargo build --locked --release --target x86_64-unknown-linux-gnu
-
-      - name: Stage desktop executable name
-        run: python3 scripts/alias_desktop_bin.py target/x86_64-unknown-linux-gnu/release
-
-      - name: Install cargo-deb
-        run: cargo install --locked cargo-deb --version 3.7.0
-
-      - name: Create .deb Package
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          mkdir -p target/release-artifacts
-          cargo deb --locked -p bir-desktop --no-build --target x86_64-unknown-linux-gnu \
-            -o "target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}.deb"
-
-      - name: Create Tarball Fallback
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          PKG="target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}"
-          mkdir -p "$PKG"
-          cp target/x86_64-unknown-linux-gnu/release/bir "$PKG/"
-          cp -R assets "$PKG/"
-          python3 scripts/audit_no_legacy.py --package-root "$PKG"
-          cd target/release-artifacts
-          tar czf "${{ env.APP_NAME }}-Linux-x64-${VERSION}.tar.gz" \
-            "${{ env.APP_NAME }}-Linux-x64-${VERSION}"
-
-      - name: Audit final Linux package payloads
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          DEB="target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}.deb"
-          TARBALL="target/release-artifacts/${{ env.APP_NAME }}-Linux-x64-${VERSION}.tar.gz"
-          DEB_ROOT="$(mktemp -d)"
-          TAR_ROOT="$(mktemp -d)"
-          cleanup_packages() {
-            rm -rf "$DEB_ROOT" "$TAR_ROOT"
-          }
-          trap cleanup_packages EXIT
-          dpkg-deb --extract "$DEB" "$DEB_ROOT"
-          tar xzf "$TARBALL" -C "$TAR_ROOT"
-          python3 scripts/audit_no_legacy.py --package-root "$DEB_ROOT"
-          python3 scripts/audit_no_legacy.py --package-root "$TAR_ROOT"
-
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-release
-          if-no-files-found: error
-          path: |
-            target/release-artifacts/*.deb
-            target/release-artifacts/*.tar.gz
+    uses: ./.github/workflows/release-linux.yml
+    with:
+      tag: ${{ github.ref_name }}
 
   # ── Create GitHub Release ───────────────────────────────────────────────
   release:
@@ -258,5 +153,10 @@ jobs:
           files: |
             artifacts/**/*.deb
             artifacts/**/*.tar.gz
+            artifacts/**/*.rpm
+            artifacts/**/*.pkg.tar.zst
+            artifacts/**/*.PKGBUILD
+            artifacts/**/SHA256SUMS-linux-*.txt
+            artifacts/**/install-linux.sh
             artifacts/**/*-Setup.exe
             artifacts/**/*.msi
