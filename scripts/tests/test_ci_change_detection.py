@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -153,13 +154,18 @@ class CiChangeDetectionTests(unittest.TestCase):
             )
             return outputs, summary_path.read_text(encoding="utf-8")
 
+    ALL_SYSTEMS = ("macos-14", "ubuntu-22.04", "windows-latest")
+
     def assert_decisions(
         self,
         *,
-        code: str,
-        validation: str,
-        code_reason: str,
-        validation_reason: str,
+        systems: tuple[str, ...],
+        check_reason: str,
+        validation: str = "false",
+        validation_reason: str = "no validation-rules path changed",
+        scripts: str = "false",
+        app: str | None = None,
+        packaging: tuple[str, ...] = (),
         event: str = "pull_request",
         changed: tuple[str, ...] = (),
         git_fails: bool = False,
@@ -181,22 +187,35 @@ class CiChangeDetectionTests(unittest.TestCase):
             push_before=push_before,
             push_after=push_after,
         )
-        self.assertEqual(outputs, {"validation": validation, "code": code})
+        matrix = json.loads(outputs.pop("check_matrix"))
+        self.assertEqual(tuple(entry["os"] for entry in matrix["include"]), systems)
+        if app is None:
+            app = "true" if systems == self.ALL_SYSTEMS else "false"
+        self.assertEqual(
+            outputs,
+            {
+                "validation": validation,
+                "check": "true" if systems else "false",
+                "app": app,
+                "scripts": scripts,
+                "linux_pkg": "true" if "linux" in packaging else "false",
+                "windows_pkg": "true" if "windows" in packaging else "false",
+                "macos_pkg": "true" if "macos" in packaging else "false",
+            },
+        )
         self.assertIn(
             f"validation-rules audits: {validation} ({validation_reason})",
             summary,
         )
         self.assertIn(
-            f"full build and tests: {code} ({code_reason})",
+            f"app check on: {', '.join(systems) or 'none'} ({check_reason})",
             summary,
         )
 
-    def test_docs_only_pull_request_skips_build_and_tests(self) -> None:
+    def test_docs_only_pull_request_tests_nothing(self) -> None:
         self.assert_decisions(
-            code="false",
-            validation="false",
-            code_reason="docs-only changes",
-            validation_reason="no validation-rules path changed",
+            systems=(),
+            check_reason="docs-only changes",
             changed=(
                 "docs/plans/x.md",
                 "README.md",
@@ -205,176 +224,274 @@ class CiChangeDetectionTests(unittest.TestCase):
             ),
         )
 
-    def test_docs_only_push_skips_build_and_tests(self) -> None:
+    def test_docs_only_push_tests_nothing(self) -> None:
         self.assert_decisions(
-            code="false",
-            validation="false",
-            code_reason="docs-only changes",
-            validation_reason="no validation-rules path changed",
+            systems=(),
+            check_reason="docs-only changes",
             event="push",
             changed=("docs/plans/x.md", "README.md"),
         )
 
-    def test_code_change_keeps_full_ci(self) -> None:
+    def test_app_change_tests_all_three_systems(self) -> None:
         self.assert_decisions(
-            code="true",
-            validation="false",
-            code_reason="non-docs file changed",
-            validation_reason="no validation-rules path changed",
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: crates/bir-core/src/lib.rs",
             changed=("docs/plans/x.md", "crates/bir-core/src/lib.rs"),
         )
 
-    def test_rules_markdown_is_full_ci_and_validation_input(self) -> None:
+    def test_rules_markdown_is_app_code_and_validation_input(self) -> None:
         self.assert_decisions(
-            code="true",
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: rules/forms/x/gaps.md",
             validation="true",
-            code_reason="non-docs file changed",
             validation_reason="validation-rules paths changed",
             changed=("rules/forms/x/gaps.md",),
         )
 
-    def test_script_markdown_keeps_full_ci(self) -> None:
+    def test_script_markdown_is_app_code(self) -> None:
         self.assert_decisions(
-            code="true",
-            validation="false",
-            code_reason="non-docs file changed",
-            validation_reason="no validation-rules path changed",
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: scripts/linux_candidate_certification.md",
             changed=("scripts/linux_candidate_certification.md",),
         )
 
-    def test_crate_readme_keeps_full_ci(self) -> None:
+    def test_crate_readme_is_app_code(self) -> None:
         self.assert_decisions(
-            code="true",
-            validation="false",
-            code_reason="non-docs file changed",
-            validation_reason="no validation-rules path changed",
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: crates/bir/README.md",
             changed=("crates/bir/README.md",),
         )
 
-    def test_workflow_change_keeps_full_ci_and_validation_audit(self) -> None:
+    def test_ci_workflow_change_tests_everything_and_audits(self) -> None:
         self.assert_decisions(
-            code="true",
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: .github/workflows/ci.yml",
             validation="true",
-            code_reason="non-docs file changed",
             validation_reason="validation-rules paths changed",
             changed=(".github/workflows/ci.yml",),
         )
 
-    def test_schedule_runs_full_ci_and_validation_audits(self) -> None:
+    def test_windows_installer_change_tests_windows_only(self) -> None:
         self.assert_decisions(
-            code="true",
+            systems=("windows-latest",),
+            check_reason="Windows installer files changed",
+            packaging=("windows",),
+            changed=(
+                "installer.iss",
+                "installer.wxs",
+                "assets/windows/Square44x44Logo.png",
+                "scripts/audit_final_setup.ps1",
+                "scripts/audit_installer_sources.py",
+                "scripts/package_msix.ps1",
+                "docs/platforms/windows.md",
+            ),
+        )
+
+    def test_windows_installer_with_app_code_tests_all_three(self) -> None:
+        self.assert_decisions(
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: crates/bir-desktop/src/gui.rs",
+            app="true",
+            packaging=("windows",),
+            changed=("installer.iss", "crates/bir-desktop/src/gui.rs"),
+        )
+
+    def test_linux_packaging_runs_only_the_script_tests(self) -> None:
+        self.assert_decisions(
+            systems=(),
+            check_reason="no app code changed",
+            scripts="true",
+            packaging=("linux",),
+            changed=("packaging/linux/build-packages.sh", "docs/platforms/linux.md"),
+        )
+
+    def test_macos_packaging_runs_only_the_script_tests(self) -> None:
+        self.assert_decisions(
+            systems=(),
+            check_reason="no app code changed",
+            scripts="true",
+            packaging=("macos",),
+            changed=(
+                "entitlements.plist",
+                "daemon.entitlements.plist",
+                "assets/macos/AppIcon.iconset/icon_16x16.png",
+                "scripts/dev_bundle_macos.sh",
+            ),
+        )
+
+    def test_linux_desktop_entry_is_app_code(self) -> None:
+        # bir-desktop's tests read assets/linux/, so it is not packaging-only.
+        self.assert_decisions(
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: assets/linux/dev.goldcoders.bir.desktop",
+            changed=("assets/linux/dev.goldcoders.bir.desktop",),
+        )
+
+    def test_release_workflows_setup_scripts_and_tests_run_only_the_script_tests(self) -> None:
+        self.assert_decisions(
+            systems=(),
+            check_reason="no app code changed",
+            scripts="true",
+            changed=(
+                ".github/workflows/release.yml",
+                ".github/workflows/release-linux.yml",
+                ".github/workflows/bir.yml",
+                ".github/workflows/html-candidate-certification.yml",
+                "scripts/setup-linux.sh",
+                "scripts/setup-windows.ps1",
+                "scripts/tests/test_release_workflow_policy.py",
+            ),
+        )
+
+    def test_windows_and_linux_packaging_together_test_windows_only(self) -> None:
+        self.assert_decisions(
+            systems=("windows-latest",),
+            check_reason="Windows installer files changed",
+            packaging=("linux", "windows"),
+            changed=("packaging/linux/smoke-test.sh", "installer.iss"),
+        )
+
+    def test_look_alike_paths_are_app_code(self) -> None:
+        for path in (
+            "installer.iss.bak",
+            "assets/windowsfoo/x.png",
+            "packaging/linux2/x.sh",
+            "scripts/tests_helper.py",
+            "scripts/setup-linux.sh.orig",
+            ".github/workflows/cirelease.yml",
+        ):
+            with self.subTest(path=path):
+                self.assert_decisions(
+                    systems=self.ALL_SYSTEMS,
+                    check_reason=f"app file changed: {path}",
+                    changed=(path,),
+                )
+
+    def test_schedule_tests_everything_and_audits(self) -> None:
+        self.assert_decisions(
+            systems=self.ALL_SYSTEMS,
+            check_reason="event schedule tests everything",
             validation="true",
-            code_reason="event schedule requires full CI",
             validation_reason="nightly run",
             event="schedule",
         )
 
-    def test_unticked_manual_run_keeps_full_ci(self) -> None:
+    def test_unticked_manual_run_tests_everything(self) -> None:
         self.assert_decisions(
-            code="true",
-            validation="false",
-            code_reason="event workflow_dispatch requires full CI",
+            systems=self.ALL_SYSTEMS,
+            check_reason="event workflow_dispatch tests everything",
             validation_reason="manual run, box not ticked",
             event="workflow_dispatch",
         )
 
     def test_ticked_manual_run_keeps_validation_audit(self) -> None:
         self.assert_decisions(
-            code="true",
+            systems=self.ALL_SYSTEMS,
+            check_reason="event workflow_dispatch tests everything",
             validation="true",
-            code_reason="event workflow_dispatch requires full CI",
             validation_reason="manual run",
             event="workflow_dispatch",
             force="true",
         )
 
-    def test_push_with_zero_before_runs_full_ci(self) -> None:
+    def test_push_with_zero_before_tests_everything(self) -> None:
         self.assert_decisions(
-            code="true",
+            systems=self.ALL_SYSTEMS,
+            check_reason="change range unknown",
             validation="true",
-            code_reason="change range unknown",
             validation_reason="change range unknown",
             event="push",
             push_before="0000000000000000000000000000000000000000",
         )
 
-    def test_pull_request_with_unknown_range_runs_full_ci(self) -> None:
+    def test_pull_request_with_unknown_range_tests_everything(self) -> None:
         self.assert_decisions(
-            code="true",
+            systems=self.ALL_SYSTEMS,
+            check_reason="change range unknown",
             validation="true",
-            code_reason="change range unknown",
             validation_reason="change range unknown",
             pr_base="",
         )
 
-    def test_diff_failure_runs_full_ci(self) -> None:
+    def test_diff_failure_tests_everything(self) -> None:
         self.assert_decisions(
-            code="true",
+            systems=self.ALL_SYSTEMS,
+            check_reason="change range unknown",
             validation="true",
-            code_reason="change range unknown",
             validation_reason="change range unknown",
             git_fails=True,
         )
 
-    def test_empty_diff_runs_full_ci(self) -> None:
+    def test_empty_diff_tests_everything(self) -> None:
         self.assert_decisions(
-            code="true",
-            validation="false",
-            code_reason="no changed files",
-            validation_reason="no validation-rules path changed",
+            systems=self.ALL_SYSTEMS,
+            check_reason="no changed files",
         )
 
     def test_docs_only_pull_request_with_validation_label_keeps_audit(self) -> None:
         self.assert_decisions(
-            code="false",
+            systems=(),
+            check_reason="docs-only changes",
             validation="true",
-            code_reason="docs-only changes",
             validation_reason="run-validation label",
             changed=("docs/plans/x.md",),
             labels="run-validation",
         )
 
-    def test_check_matrix_reports_and_gates_every_step_after_checkout(self) -> None:
+    def test_check_runs_only_on_the_decided_systems(self) -> None:
         check = extract_job(self.workflow, "check")
         header, steps_text = check.split("    steps:\n", maxsplit=1)
         self.assertRegex(header, r"(?m)^    needs:\s*changes\s*$")
-        self.assertRegex(header, r"(?m)^    if:\s*\$\{\{\s*always\(\)\s*\}\}\s*$")
-        self.assertEqual(
-            re.findall(r"(?m)^\s+- os: ([^\s]+)\s*$", check),
-            ["macos-14", "ubuntu-22.04", "windows-latest"],
-        )
-
-        steps = re.split(r"(?m)^    - ", steps_text)
-        steps = [step for step in steps if step.strip()]
-        checkout_index = next(
-            index
-            for index, step in enumerate(steps)
-            if "uses: actions/checkout@v4" in step
-        )
-        docs_notice_index = next(
-            index
-            for index, step in enumerate(steps)
-            if step.startswith('name: "Docs-only change: skipping build and tests"')
-        )
-        self.assertEqual(docs_notice_index, checkout_index + 1)
+        self.assertRegex(header, r"(?m)^    if: needs\.changes\.outputs\.check == 'true'\s*$")
         self.assertRegex(
-            steps[docs_notice_index],
-            r"(?m)^      if: needs\.changes\.outputs\.code == 'false'$",
+            header,
+            r"(?m)^      matrix: \$\{\{ fromJSON\(needs\.changes\.outputs\.check_matrix\) \}\}\s*$",
         )
-        self.assertNotRegex(steps[checkout_index], r"(?m)^      if:")
+        # The decision is made once, for the whole job: no step re-reads it.
+        self.assertNotIn("needs.changes.outputs", steps_text)
 
-        for index, step in enumerate(steps):
-            if index <= checkout_index or index == docs_notice_index:
-                continue
-            condition = re.search(r"(?m)^      if:\s*(.*)$", step)
-            self.assertIsNotNone(condition, msg=f"step {index} has no if guard")
-            if condition is not None:
-                self.assertIn(
-                    "needs.changes.outputs.code != 'false'",
-                    condition.group(1),
-                    msg=f"step {index} is not gated",
-                )
+    def test_all_systems_matrix_keeps_each_host_triple(self) -> None:
+        outputs, _ = self.run_decide(changed=("crates/bir-core/src/lib.rs",))
+        self.assertEqual(
+            json.loads(outputs["check_matrix"]),
+            {
+                "include": [
+                    {"os": "macos-14", "target": "aarch64-apple-darwin"},
+                    {"os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu"},
+                    {"os": "windows-latest", "target": "x86_64-pc-windows-msvc"},
+                ]
+            },
+        )
 
+    def test_ci_ok_is_the_single_gate(self) -> None:
+        gate = extract_job(self.workflow, "ci-ok")
+        self.assertRegex(gate, r"(?m)^    if: always\(\)\s*$")
+        needs = re.search(r"(?m)^    needs: \[(.*)\]\s*$", gate)
+        self.assertIsNotNone(needs)
+        if needs is not None:
+            self.assertEqual(
+                [name.strip() for name in needs.group(1).split(",")],
+                ["changes", "check", "scripts", "validation-rules"],
+            )
+        # A skip caused by a failed `changes` must fail the gate.
+        self.assertIn('[[ "$CHANGES" == success ]]', gate)
+        # windows-smoke is report-only and must not hold the gate.
+        self.assertNotIn("windows-smoke", gate.split("    steps:", 1)[0])
+
+    def test_scripts_job_runs_the_python_tests(self) -> None:
+        scripts = extract_job(self.workflow, "scripts")
+        self.assertRegex(scripts, r"(?m)^    if: needs\.changes\.outputs\.scripts == 'true'\s*$")
+        self.assertIn("python -m unittest discover -s scripts/tests -v", scripts)
+
+    def test_windows_smoke_follows_app_changes(self) -> None:
+        smoke = extract_job(self.workflow, "windows-smoke")
+        self.assertRegex(smoke, r"(?m)^    if: needs\.changes\.outputs\.app == 'true'\s*$")
+
+    def test_main_failures_open_an_issue_but_cancellations_do_not(self) -> None:
+        report = extract_job(self.workflow, "main-report")
+        self.assertRegex(report, r"(?m)^    needs: \[ ci-ok \]\s*$")
+        self.assertIn("needs.ci-ok.result == 'failure'", report)
+        self.assertIn("github.ref == 'refs/heads/main'", report)
 
 if __name__ == "__main__":
     unittest.main()
