@@ -145,10 +145,14 @@ jobs:
         with:
           fail_on_unmatched_files: true
           generate_release_notes: false
+          # The repository's "latest release" must stay the desktop app: the
+          # Linux installer and download links resolve /releases/latest. A
+          # CLI release published with GitHub's default would take it over.
+          make_latest: false
           body: |
             `bir` headless CLI.
 
-            `cargo install bir` once this tag has published the crate.
+            `cargo install --git https://github.com/hexuria/buwiz-forms bir --locked`
             `cargo binstall bir` uses the `.tgz` assets on this `bir-v*` release.
 
             The desktop app is still the `vMAJOR.MINOR.PATCH` release (dmg/deb/exe).
