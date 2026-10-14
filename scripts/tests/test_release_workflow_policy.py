@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release.yml"
+WINDOWS_RELEASE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-windows.yml"
 CI_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/ci.yml"
 DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-desktop/Cargo.toml"
 INSTALLER_WXS_PATH = REPOSITORY_ROOT / "installer.wxs"
@@ -14,12 +15,15 @@ JUSTFILE_PATH = REPOSITORY_ROOT / "justfile"
 LINUX_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-linux.sh"
 WINDOWS_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-windows.ps1"
 FINAL_SETUP_AUDIT_PATH = REPOSITORY_ROOT / "scripts/audit_final_setup.ps1"
+PACKAGE_MSIX_PATH = REPOSITORY_ROOT / "scripts/package_msix.ps1"
+SMOKE_MSIX_PATH = REPOSITORY_ROOT / "scripts/smoke_msix.ps1"
 
 
 class ReleaseWorkflowPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.windows_workflow = WINDOWS_RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.ci_workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.desktop_manifest = DESKTOP_MANIFEST_PATH.read_text(encoding="utf-8")
         cls.installer_wxs = INSTALLER_WXS_PATH.read_text(encoding="utf-8")
@@ -27,6 +31,8 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         cls.linux_setup = LINUX_SETUP_PATH.read_text(encoding="utf-8")
         cls.windows_setup = WINDOWS_SETUP_PATH.read_text(encoding="utf-8")
         cls.final_setup_audit = FINAL_SETUP_AUDIT_PATH.read_text(encoding="utf-8")
+        cls.package_msix = PACKAGE_MSIX_PATH.read_text(encoding="utf-8")
+        cls.smoke_msix = SMOKE_MSIX_PATH.read_text(encoding="utf-8")
 
     def job(self, name: str) -> str:
         match = re.search(
@@ -34,6 +40,14 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             self.workflow,
         )
         self.assertIsNotNone(match, f"missing release job: {name}")
+        return match.group(0) if match is not None else ""
+
+    def windows_job(self, name: str) -> str:
+        match = re.search(
+            rf"(?ms)^  {re.escape(name)}:\n(.*?)(?=^  [a-z][a-z0-9-]*:\n|\Z)",
+            self.windows_workflow,
+        )
+        self.assertIsNotNone(match, f"missing Windows release job: {name}")
         return match.group(0) if match is not None else ""
 
     def test_every_publishable_build_depends_on_exact_tag_preflight(self) -> None:
@@ -97,7 +111,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("target/release-artifacts/*.zip", macos)
 
     def test_windows_public_artifacts_require_authenticode_signatures(self) -> None:
-        windows = self.job("build-windows")
+        windows = self.windows_job("installers")
         self.assertIn("secrets.WINDOWS_CERTIFICATE_PFX", windows)
         self.assertIn("secrets.WINDOWS_CERTIFICATE_PASSWORD", windows)
         self.assertIn("WINDOWS_SIGNTOOL sign /fd SHA256", windows)
@@ -133,8 +147,47 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("target/release-artifacts/*.msi", upload)
         self.assertNotIn("target/release-artifacts/*.msix", upload)
 
+        public_windows_job = self.job("build-windows")
+        self.assertIn("uses: ./.github/workflows/release-windows.yml", public_windows_job)
+        self.assertIn("release: true", public_windows_job)
+        self.assertIn("secrets: inherit", public_windows_job)
+        self.assertIn("needs: preflight", public_windows_job)
+
         public_release = self.job("release")
         self.assertNotIn("artifacts/**/*.msix", public_release)
+
+    def test_reusable_windows_workflow_gates_signing_and_keeps_msix_private(self) -> None:
+        windows = self.windows_job("installers")
+        signing = windows.split("- name: Resolve Windows signing mode", maxsplit=1)[1].split(
+            "\n      - name:", maxsplit=1
+        )[0]
+        self.assertIn("inputs.release", signing)
+        self.assertIn("Missing required Windows release secret", signing)
+        self.assertIn("WINDOWS_CERTIFICATE_PFX", signing)
+        self.assertIn("WINDOWS_CERTIFICATE_PASSWORD", signing)
+
+        msix = self.windows_job("msix")
+        self.assertIn("continue-on-error: ${{ inputs.release == true }}", msix)
+        self.assertIn("powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package_msix.ps1", msix)
+        self.assertIn("powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/smoke_msix.ps1", msix)
+        self.assertIn("name: windows-msix", msix)
+        self.assertNotIn("name: windows-release", msix)
+        self.assertIn("if: always()", msix)
+
+    def test_msix_packaging_and_smoke_scripts_enforce_runtime_and_registration_policies(
+        self,
+    ) -> None:
+        self.assertIn("dumpbin", self.package_msix)
+        self.assertIn("/dependents", self.package_msix)
+        self.assertIn("Get-AppxPackage -Name $identityName", self.smoke_msix)
+        self.assertIn("Refusing to smoke-test because", self.smoke_msix)
+        self.assertIn("EnableLUA", self.smoke_msix)
+        self.assertIn(
+            "& $makeAppx unpack /p $packagePath /d $layoutPath /o",
+            self.smoke_msix,
+        )
+        self.assertIn("RequireActivation", self.smoke_msix)
+        self.assertIn("smoke-msix-layout-stderr.log", self.windows_job("msix"))
 
     def test_local_setup_recipe_checks_prerequisites_and_sources_before_iscc(
         self,
@@ -159,6 +212,20 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertLess(source_gate, compile_installer)
         self.assertNotIn("7z", exe_recipe.lower())
         self.assertNotIn("audit_final_setup.ps1", exe_recipe)
+
+    def test_msix_recipe_uses_shared_packaging_script(self) -> None:
+        msix_recipe = self.justfile.split(
+            "# Build a Store-only MSIX candidate", maxsplit=1
+        )[1].split("# Sign the Store-identity MSIX", maxsplit=1)[0]
+        self.assertIn(
+            'Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"',
+            msix_recipe,
+        )
+        self.assertIn(
+            'Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"',
+            msix_recipe,
+        )
+        self.assertIn("scripts/package_msix.ps1", msix_recipe)
 
     def test_exe_recipe_and_prerequisite_are_windows_only(self) -> None:
         self.assertRegex(self.justfile, r"(?m)^\[windows\]\r?\nexe \*args=")
@@ -261,12 +328,30 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("3010", self.windows_setup)
 
     def test_package_builds_are_deterministic_and_scope_consistent(self) -> None:
-        windows = self.job("build-windows")
+        windows = self.windows_job("installers")
         self.assertIn("choco install wixtoolset --version=3.11.2 -y", windows)
+        self.assertIn("function Find-WixBin", windows)
+        self.assertIn('"WIX_BIN=$wixBin" >> $env:GITHUB_ENV', windows)
+        self.assertIn("$env:WIX_BIN", windows)
+        self.assertIn("heat.exe", windows)
         self.assertIn("-cg HarvestedComponents -ag ", windows)
         self.assertNotIn("-cg HarvestedComponents -gg ", windows)
         self.assertIn("candle.exe installer.wxs harvest.wxs -arch x64", windows)
-        self.assertNotIn(" -sval", windows)
+        light_commands = [
+            line.strip()
+            for line in windows.splitlines()
+            if line.strip().startswith("light.exe ")
+        ]
+        self.assertEqual(len(light_commands), 1)
+        self.assertIn(
+            "-sice:ICE38 -sice:ICE43 -sice:ICE57",
+            light_commands[0],
+        )
+        self.assertEqual(
+            re.findall(r"-sice:\S+", self.windows_workflow),
+            ["-sice:ICE38", "-sice:ICE43", "-sice:ICE57"],
+        )
+        self.assertNotIn("-sval", self.windows_workflow)
         self.assertIn('Root="HKLM"', self.installer_wxs)
         self.assertNotIn('Root="HKCU"', self.installer_wxs)
         self.assertIn('Win64="yes"', self.installer_wxs)
