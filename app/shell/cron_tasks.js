@@ -1,259 +1,178 @@
-// Background Tasks: the painted CronTasksView — one merged feed of queued
-// filing submissions + scheduled job_queue rows, and a Logs tab tailing
-// today's rotated ebirforms.*.log.
+// Background tasks: queued filing submissions and scheduled jobs in one
+// feed, and a Logs tab tailing today's ebirforms.*.log. Built from the
+// redesign's wrappers; the log wraps inside its box rather than running
+// sideways (the only sideways scroller in the app is a schedule table).
+
 import { div } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
-import { Button } from "gpui-component";
-import { pageHeading, pageSub } from "./pages.js";
+import {
+  tokens,
+  SPACE,
+  RADIUS,
+  Text,
+  AppButton,
+  Segmented,
+  Chip,
+  ListGroup,
+  ListRow,
+  NameCell,
+  EmptyRow,
+  PageHeader,
+} from "./ui.js";
 
 const STATUS_FILTERS = ["All Jobs", "Queued", "Failed", "Completed", "Archived"];
+/** Lines drawn from the tail of the log; older ones stay in the file. */
+const LOG_LINES = 200;
 
-function statusColor(cx, status) {
-  if (status === "Queued" || status === "Running") return [cx.theme().colors.accent, cx.theme().colors.accent_foreground];
-  if (status === "Failed") return [cx.theme().colors.danger, cx.theme().colors.danger_foreground];
-  if (status === "Completed" || status === "Submitted" || status === "Confirmed" || status === "Paid")
-    return [cx.theme().colors.success, cx.theme().colors.success_foreground];
-  return [cx.theme().colors.muted, cx.theme().colors.muted_foreground];
+function statusChip(cx, status) {
+  if (status === "Queued" || status === "Running") return Chip(cx, status, "accent");
+  if (status === "Failed") return Chip(cx, status, "danger");
+  if (["Completed", "Submitted", "Confirmed", "Paid"].includes(status)) return Chip(cx, status, "success");
+  return Chip(cx, status || "Unknown");
 }
 
-function jobRow(cx, state, job) {
-  const [bg, fg] = statusColor(cx, job.status);
-  const schedule = job.cron_expr ? `cron ${job.cron_expr}` : job.job_type === "System" ? "on queue" : "manual";
-  const runs = [
-    job.last_run_at ? `last ${job.last_run_at}` : null,
-    job.next_run_at ? `next ${job.next_run_at}` : null,
-  ]
+function jobRow(cx, app, job, width) {
+  const schedule = job.cron_expr ? `Schedule: ${job.cron_expr}` : job.job_type === "System" ? "Runs when the queue wakes" : "Manual";
+  const runs = [job.last_run_at ? `last ${job.last_run_at}` : null, job.next_run_at ? `next ${job.next_run_at}` : null]
     .filter(Boolean)
     .join(" · ");
-  return h_flex()
-    .w_full()
-    .px(12)
-    .py(8)
-    .gap(10)
-    .items_center()
-    .rounded_md()
-    .hover((s) => s.bg(cx.theme().colors.muted))
-    .child(
-      div()
-        .w(90)
-        .flex_none()
-        .text_size(11)
-        .font_semibold()
-        .text_color(cx.theme().colors.muted_foreground)
-        .child(job.kind === "submission" ? "SUBMISSION" : job.job_type.toUpperCase()),
-    )
-    .child(
-      v_flex()
-        .flex_1()
-        .min_w_0()
-        .gap(2)
-        .child(
-          div()
-            .text_size(13)
-            .text_color(cx.theme().colors.foreground)
-            .child(job.name),
-        )
-        .child(
-          div()
-            .text_size(11)
-            .text_color(cx.theme().colors.muted_foreground)
-            .child([schedule, runs].filter(Boolean).join(" · ") || " "),
-        ),
-    )
-    .child(
-      div()
-        .px(8)
-        .py(2)
-        .rounded_md()
-        .text_size(11)
-        .font_semibold()
-        .bg(bg)
-        .text_color(fg)
-        .child(job.status),
-    )
-    .when(job.kind === "submission" && job.status === "Queued", (el) =>
-      el.child(
-        Button.new(`cron_cancel_${job.id}`)
-          .label("Cancel")
-          .outline()
-          .compact()
-          .on_click((_ev, clickCx) => state.cancelQueuedEntry(job, clickCx)),
-      ),
-    )
-    .when(job.kind === "job" && job.id != null && job.status !== "Archived", (el) =>
-      el.child(
-        Button.new(`cron_archive_${job.id}`)
-          .label("Archive")
-          .ghost()
-          .compact()
-          .on_click((_ev, clickCx) => state.archiveJob(job.id, clickCx)),
-      ),
-    )
-    .when(job.kind === "job" && job.id != null, (el) =>
-      el.child(
-        Button.new(`cron_delete_${job.id}`)
-          .label("Delete")
-          .ghost()
-          .compact()
-          .on_click((_ev, clickCx) => state.deleteJob(job.id, clickCx)),
-      ),
-    );
+  const row = ListRow(cx, `job-${job.kind}-${job.id}`)
+    .child(NameCell(cx, job.name, [schedule, runs].filter(Boolean).join(" · ")))
+    .child(div().flex().flex_row().flex_none().child(statusChip(cx, job.status)));
+  const actions = div().flex().flex_row().flex_none().gap(SPACE[1]);
+  if (job.kind === "submission" && job.status === "Queued") {
+    actions.child(AppButton(cx, `job-${job.id}-cancel`, "Cancel queue", { size: "sm", onClick: (_e, cx) => app.cancelQueuedEntry(job, cx) }));
+  }
+  if (job.kind === "job" && job.id != null && job.status !== "Archived") {
+    actions.child(AppButton(cx, `job-${job.id}-archive`, "Archive", { variant: "ghost", size: "sm", onClick: (_e, cx) => app.archiveJob(job.id, cx) }));
+  }
+  if (job.kind === "job" && job.id != null) {
+    actions.child(AppButton(cx, `job-${job.id}-delete`, "Delete", { variant: "ghost", size: "sm", onClick: (_e, cx) => app.deleteJob(job.id, cx) }));
+  }
+  if (width >= 560) row.child(actions);
+  return row;
 }
 
-function renderJobs(cx, state) {
+function jobsTab(cx, app, width) {
   let jobs = [];
   let error = null;
   try {
-    jobs = state.backgroundJobs();
+    jobs = app.backgroundJobs();
   } catch (e) {
     error = String(e);
   }
-  const filter = state.cronFilter || "All Jobs";
-  const visible =
-    filter === "All Jobs" ? jobs : jobs.filter((j) => j.status === filter);
-  return v_flex()
-    .gap(10)
+  const filter = app.cronFilter || "All Jobs";
+  const visible = filter === "All Jobs" ? jobs : jobs.filter((j) => j.status === filter);
+  const page = div()
+    .flex()
+    .flex_col()
     .child(
-      h_flex()
-        .gap(6)
+      div()
+        .flex()
+        .flex_row()
         .flex_wrap()
-        .children(
-          STATUS_FILTERS.map((name) =>
-            Button.new(`cron_filter_${name.replace(/\s/g, "_")}`)
-              .label(name)
-              .when(name === filter, (b) => b.secondary())
-              .when(name !== filter, (b) => b.ghost())
-              .compact()
-              .on_click((_ev, clickCx) => state.setCronFilter(name, clickCx)),
+        .items_center()
+        .gap(SPACE[2])
+        .mb(SPACE[4])
+        .child(
+          Segmented(
+            cx,
+            "jobs-filter",
+            STATUS_FILTERS.map((x) => ({ value: x, label: x })),
+            filter,
+            (v, cx) => app.setCronFilter(v, cx),
+            { label: "Status" },
           ),
-        ),
-    )
-    .when(Boolean(error || state.cronError), (el) =>
-      el.child(
-        div()
-          .text_size(13)
-          .text_color("#EF4444")
-          .child(String(error || state.cronError)),
-      ),
-    )
-    .when(!error && visible.length === 0, (el) =>
-      el.child(
-        div()
-          .text_size(13)
-          .text_color(cx.theme().colors.muted_foreground)
-          .child("No background jobs in this view."),
-      ),
-    )
-    .children(visible.map((job) => jobRow(cx, state, job)));
+        )
+        .child(div().flex_1())
+        .child(AppButton(cx, "jobs-purge", "Purge archived", { variant: "ghost", size: "sm", onClick: (_e, cx) => app.purgeArchivedJobs(cx) })),
+    );
+  if (error || app.cronError) page.child(Text(cx, "meta", String(error || app.cronError), "danger").mb(SPACE[3]).whitespace_normal());
+  return page.child(
+    ListGroup(
+      cx,
+      "jobs-list",
+      visible.length ? visible.map((job) => jobRow(cx, app, job, width)) : [EmptyRow(cx, "jobs-empty", "No background jobs in this view.")],
+    ),
+  );
 }
 
-function renderLogs(cx, state) {
+function logsTab(cx, app, width) {
+  const t = tokens(cx);
   let log = { file_name: "", lines: 0, content: "" };
   let error = null;
   try {
-    log = state.jobLogTail();
+    log = app.jobLogTail();
   } catch (e) {
     error = String(e);
   }
-  return v_flex()
-    .gap(10)
-    .child(
-      h_flex()
-        .items_center()
-        .gap(10)
-        .child(
-          div()
-            .text_size(12)
-            .text_color(cx.theme().colors.muted_foreground)
-            .child(`${log.file_name || "no log file"} · ${log.lines} lines`),
-        )
-        .child(
-          Button.new("cron_logs_refresh")
-            .label("Refresh")
-            .outline()
-            .compact()
-            .on_click((_ev, clickCx) => state.refreshJobLog(clickCx)),
-        ),
-    )
-    .when(Boolean(error), (el) =>
-      el.child(
-        div()
-          .text_size(13)
-          .text_color("#EF4444")
-          .child(String(error)),
-      ),
-    )
+  const lines = String(log.content || "").split("\n");
+  const shown = lines.slice(-LOG_LINES);
+  // One wrapped text block: a separate element per line costs a text layout
+  // each and took render past gpui-shell's 2 s limit.
+  const box = div()
+    .id("log-box")
+    .w(width)
+    .p(SPACE[3])
+    .rounded(RADIUS.card)
+    .border(1)
+    .border_color(t.border)
+    .bg(t.bg)
+    .overflow_hidden()
     .child(
       div()
-        .w_full()
-        .rounded_md()
-        .border(1)
-        .border_color(cx.theme().colors.border)
-        .bg(cx.theme().colors.muted)
-        .p(12)
+        .w(width - 2 * SPACE[3] - 2)
         .text_size(11)
+        .line_height("16px")
         .font_family(cx.theme().typography.mono)
-        .whitespace_nowrap()
-        .child(log.content || " "),
+        .text_color(t.fg2)
+        .whitespace_normal()
+        .child(shown.join("\n") || " "),
     );
+  const head = div()
+    .flex()
+    .flex_row()
+    .flex_wrap()
+    .items_center()
+    .gap(SPACE[3])
+    .mb(SPACE[4])
+    .child(
+      Text(
+        cx,
+        "meta",
+        `${log.file_name || "No log file yet"} · ${log.lines} lines${lines.length > LOG_LINES ? ` · showing the last ${LOG_LINES}` : ""}`,
+        "fg2",
+      ),
+    )
+    .child(div().flex_1())
+    .child(AppButton(cx, "logs-refresh", "Refresh", { size: "sm", onClick: (_e, cx) => app.refreshJobLog(cx) }));
+  const page = div().flex().flex_col().child(head);
+  if (error) page.child(Text(cx, "meta", error, "danger").mb(SPACE[3]).whitespace_normal());
+  return page.child(box);
 }
 
-export function renderCronTasksPage(cx, state) {
-  const tab = state.cronTab || "jobs";
+export function renderCronTasksPage(cx, app, width) {
+  const tab = app.cronTab || "jobs";
   return div()
-    .size_full()
-    .overflow_y_scroll()
-    .p(24)
+    .flex()
+    .flex_col()
     .child(
-      v_flex()
-        .gap(12)
-        .max_w_full()
-        .child(
-          h_flex()
-            .items_center()
-            .justify_between()
-            .child(pageHeading("Background Tasks", cx))
-            .child(
-              h_flex()
-                .gap(6)
-                .child(
-                  Button.new("cron_tab_jobs")
-                    .label("Jobs")
-                    .when(tab === "jobs", (b) => b.secondary())
-                    .when(tab !== "jobs", (b) => b.ghost())
-                    .compact()
-                    .on_click((_ev, clickCx) => state.setCronTab("jobs", clickCx)),
-                )
-                .child(
-                  Button.new("cron_tab_logs")
-                    .label("Logs")
-                    .when(tab === "logs", (b) => b.secondary())
-                    .when(tab !== "logs", (b) => b.ghost())
-                    .compact()
-                    .on_click((_ev, clickCx) => state.setCronTab("logs", clickCx)),
-                ),
-            ),
-        )
-        .when(tab === "jobs", (el) =>
-          el.child(
-            h_flex()
-              .justify_between()
-              .items_center()
-              .child(
-                pageSub(
-                  "Queued filings and scheduled jobs — same merged feed as the desktop app",
-                  cx,
-                ),
-              )
-              .child(
-                Button.new("cron_purge")
-                  .label("Purge archived")
-                  .ghost()
-                  .compact()
-                  .on_click((_ev, clickCx) => state.purgeArchivedJobs(clickCx)),
-              ),
+      PageHeader(cx, {
+        title: "Background tasks",
+        lede: "Queued filings, scheduled jobs and today's log.",
+        actions: [
+          Segmented(
+            cx,
+            "jobs-tabs",
+            [
+              { value: "jobs", label: "Jobs" },
+              { value: "logs", label: "Logs" },
+            ],
+            tab,
+            (v, cx) => app.setCronTab(v, cx),
+            { label: "Background tasks view" },
           ),
-        )
-        .child(tab === "logs" ? renderLogs(cx, state) : renderJobs(cx, state)),
-    );
+        ],
+      }),
+    )
+    .child(div().mt(28).child(tab === "logs" ? logsTab(cx, app, width) : jobsTab(cx, app, width)));
 }
