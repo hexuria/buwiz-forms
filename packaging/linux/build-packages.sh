@@ -209,8 +209,11 @@ PKGBUILD
             { print }
         ' > "$OUT/ebirforms-bin.PKGBUILD"
     docker run --rm --platform linux/amd64 \
+        -e HOST_UID="$(id -u)" \
+        -e HOST_GID="$(id -g)" \
         -v "$arch_build:/work" archlinux:base-devel \
         bash -euc '
+            trap "chown -R $HOST_UID:$HOST_GID /work" EXIT
             pacman -Syu --noconfirm --needed base-devel gtk3 webkit2gtk-4.1 \
                 vulkan-icd-loader libxkbcommon libxkbcommon-x11 wayland \
                 fontconfig freetype2 noto-fonts
