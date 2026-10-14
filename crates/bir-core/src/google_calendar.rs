@@ -20,7 +20,7 @@ const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.app.creat
 const KEYCHAIN_SERVICE: &str = "dev.goldcoders.ebirforms.google-calendar";
 const KEYCHAIN_ACCOUNT: &str = "global-oauth";
 const CONNECTED_EMAIL_SETTING: &str = "google_calendar_connected_email";
-const FORM_SELECTION_SETTING_PREFIX: &str = "google_calendar_form_selection:";
+pub(crate) const FORM_SELECTION_SETTING_PREFIX: &str = "google_calendar_form_selection:";
 
 #[derive(Debug, Error)]
 #[error("Google Calendar resource was not found")]

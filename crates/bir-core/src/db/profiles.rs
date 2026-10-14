@@ -302,7 +302,7 @@ fn validate_reviewed_confirmation_plan(
     Ok(())
 }
 
-fn canonical_legacy_filed_return_tin(tin: &str) -> String {
+pub(super) fn canonical_legacy_filed_return_tin(tin: &str) -> String {
     crate::naming::Tin::parse_digits(tin)
         .map(|parsed| {
             format!(
