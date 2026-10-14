@@ -314,6 +314,10 @@ export class FormPageActions {
           if (hit) id = hit.id;
         }
       }
+      if (!id && /\bTIN\b/.test(e.message)) {
+        const hit = items.find((x) => isTinItem(x.it));
+        if (hit) id = hit.id;
+      }
       if (!id) {
         const w = new Set(words(`${e.field} ${e.message}`));
         let best = 0;
