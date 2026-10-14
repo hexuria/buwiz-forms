@@ -3,6 +3,104 @@
 Tracking issue: [#135](https://github.com/hexuria/buwiz-forms/issues/135).
 Tick items there and here in the same PR.
 
+## Cutover gate: failed headed parity comparison
+
+**Packaging stays on the painted application. Do not retire its views or
+dependencies.** The shell workspace builds on all three CI platforms, but
+compilation and generic field-spec coverage do not establish product parity.
+The earlier S1–S6 completion claims are superseded by this comparison.
+`just run` currently selects the development shell; `just run-painted` remains
+the reference. This development default is not approval to ship the shell.
+
+Both Linux applications were rebuilt and compared at equal window geometry,
+using separate synthetic scratch databases. All inherited `BIR_SFTP_*`
+variables were removed before setting `BIR_SFTP_DRY_RUN=1`. No live submission
+was attempted. Queue creation is not completed transport.
+
+### Blocking repair checklist
+
+Each item remains open until its reference interaction and persistence
+acceptance pass. These are required migration work, not a visual redesign.
+
+- [ ] **P1 — Replace unsafe generated form bindings.**
+  `tools/extract_specs.py` flattens field arrays and falls back to raw UI keys;
+  `app/shell/specs.js` gives both 1700 employer name and taxpayer name the key
+  `name`. `app/main.js::openFormView` stores inputs by that key. Headed
+  verification showed both labels changing together and retaining the shared
+  value after save/reopen. The native `form_1700_view.rs` instead binds
+  `taxpayer_name` separately from indexed employer rows. Use explicit typed
+  paths and indexed schedule bindings, with unique-input-key assertions and
+  roundtrip tests. Acceptance: independently edit taxpayer and two employers;
+  each value must remain distinct after reopening and in print output.
+- [ ] **P1 — Align period controls, typed data and storage keys.**
+  The extracted 1700 `year` field is not `taxable_year`, while
+  `app/main.js::saveFormDraft` indexes by `formYear`. The UI allowed Item 1 =
+  2025 while the header and saved row stayed 2026. Add reference-equivalent
+  period selection with one canonical period; do not silently migrate existing
+  drafts by editing an identity field. Acceptance: create/open two years and
+  verify header, database summary, typed draft and print agree independently.
+- [ ] **P1 — Initialize and validate typed drafts before reporting Save success.**
+  `bir_module.rs::save_form_draft` builds typed defaults only for 2551Q/1601C;
+  the generic branch persists arbitrary JSON. Headed 1604C Save succeeded but
+  Queue failed on missing `amended_return`; 1604E Queue/Print failed on missing
+  `taxable_year`. Use the same typed draft constructors and persistence contracts
+  as native views, preserving existing state. Acceptance: new and reopened
+  annual drafts deserialize successfully before Save reports success; invalid
+  fields produce actionable validation rather than deferred serialization errors.
+- [ ] **P1 — Port schedules and required filing controls.**
+  1604C/E expose scalar identity fields but omit the native schedules and
+  repeating rows. 2551Q lacks ATC rows and election controls required by queue
+  validation. Flat specs are partial editors, not completed form ports.
+  Acceptance: repeat the native row add/edit/remove flow, save/reopen, validate
+  and print with identical synthetic data; verify calculations and row order.
+- [ ] **P1 — Preserve fresh 1601C defaults without preventing intentional edits.**
+  `openFormView` receives null for a new draft and starts from `{}`.
+  `saveFormDraft` writes empty text when a field is undefined, so the host
+  overlay replaces constructor defaults. Untouched ATC/category still failed
+  queue validation; explicitly entering WW010/P permitted queueing. Initialize
+  the UI from canonical defaults and distinguish untouched from cleared fields.
+  Acceptance: fresh untouched defaults survive save/reopen; intentional changes
+  are preserved and invalid values remain rejected.
+- [ ] **P1 — Restore reachable taxpayer management and the period library.**
+  `app/shell/chrome.js` profile rows only call `selectProfile`; the reference
+  profile editing/history/branch/archive flow is not reachable through them.
+  The profile dashboard also lacks the reference Forms Set/period grid and
+  year navigation. Acceptance: create, edit, reopen, branch, archive/unarchive
+  and unlock a synthetic taxpayer; select form periods through the library.
+- [ ] **P1 — Repair admin PIN input and prove authentication roundtrips.**
+  Headed Settings remained “Admin PIN not set”; paste, numeric typing and
+  individual-cell entry left the PIN cells empty. The attempted save said
+  “Enter the new 4-digit PIN first.” Input-level root cause remains unconfirmed.
+  Logout only deselected a taxpayer and is not authentication evidence.
+  Acceptance: set PIN, restart, reject a wrong PIN, accept the correct PIN,
+  change/remove PIN; independently test per-profile credentials and TOTP.
+- [ ] **P2 — Complete remaining page controls and theme/keyboard parity.**
+  Global dashboard compliance/news content, calendar override editing, richer
+  settings and job/log controls are missing or reduced; Dev Mode is an explicit
+  stub. Privacy checkbox labels disappear in dark mode. Ctrl+F did not focus
+  profile search. Acceptance: compare each reference action in both themes,
+  including restart persistence and keyboard navigation.
+- [ ] **P1 — Demonstrate the complete dry-run filing lifecycle.**
+  The comparison proved queue insertion and reopening only. Host queue APIs
+  are not evidence that a worker dispatched a payload. Verify worker integration,
+  dry-run artifacts and state transitions independently; confirmation/payment
+  require their own reference acceptance and must not be inferred from Queued.
+
+### Verified behaviors and coverage limits
+
+Profile creation and visible input frames passed. A reopened monthly 1601C
+correctly remains Queued without an unsafe duplicate Queue action, and appears
+in Background Tasks. Numeric validation rejected `abc`; a 2551Q amount of 300
+survived save/reopen. Sidebar hide/mini and Settings shortcuts, scrolling,
+notifications opening, and import chooser opening/cancellation worked.
+
+Six painted forms were inspected and five shell forms exercised: 1601C,
+2551Q, 1700, 1604C and 1604E. Shell 2550Q, restart persistence, full
+branch/archive/authentication flows, complete import/export and completed
+submission transport remain unverified. Testing stopped after establishing the
+failed gate; this is not certification of the remaining catalog or of Windows
+and macOS runtime behavior.
+
 ## Goal and evidence classification (2026-10-14)
 
 Migrate `bir-desktop`'s native GPUI UI (~95k LOC under `src/views/` plus the app
@@ -32,9 +130,10 @@ official application's upload path. All test runs use a fresh
 | Lockfile pins (via `cargo update -p <c> --precise`) | `rsa 0.10.0-rc.18`, `pkcs1 0.8.0-rc.4`, `spki 0.8.0`, `der 0.8.1`, `signature 3.0.0`, `ecdsa 0.17.0`, `elliptic-curve 0.14.1`, `ed25519-dalek 3.0.0` | crates.io RCs newer than upstream's lock break `llrt_crypto`/`rsa` inference. Matches upstream `Cargo.lock` at the pinned rev. |
 | gpui-agent | unchanged (git rev dab85991) | No gpui deps (hmac/png/serde/sha2/thiserror); works on either graph. |
 
-Two gpui-pre versions (0.3.4 for bir-desktop, 0.3.9 for bir-shell) coexist in
-the workspace lockfile — verified via `cargo metadata`. bir-desktop's dep graph
-stays untouched until the final cutover slice.
+The two gpui-pre generations (0.3.4 for bir-desktop, 0.3.9 for bir-shell) use
+separate workspace lockfiles: `gpui-kit-assets` declares `links`, which prevents
+resolving both generations in one graph. The shell has a standalone workspace;
+the painted dependency graph remains until the cutover gate passes.
 
 ## Architecture
 
@@ -78,8 +177,10 @@ widen them.
 
 - `gpui-shell check app/` (or `runtime.check`) validates the JS bundle headlessly.
 - `just check` / `just test` keep the Rust crates green.
-- Visual: run bir-shell next to native bir-desktop on the same seeded
-  `BIR_DATABASE_PATH`; compare navigation, field values, and validation output.
+- Visual: run bir-shell next to native bir-desktop using separate scratch
+  `BIR_DATABASE_PATH` values with equivalent synthetic data. Never open one
+  live database concurrently in both applications (owner lock). Compare
+  navigation, field values, validation output and persisted state.
 - Agent tooling: rebuild `--features agent` parity for the shell host later in
   the series (agent plane stays in bir-desktop until then).
 
