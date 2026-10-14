@@ -173,21 +173,6 @@ fn apply_period_state(
     }
 }
 
-/// The taxable year a legacy filename period names, from its digit part
-/// before any `Q` marker: `YYYY`, `MMYYYY` or `MMDDYYYY`.
-fn legacy_period_year(period: &str) -> Option<u16> {
-    let digits = period.split(['Q', 'q']).next()?;
-    if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    match digits.len() {
-        4 => digits.parse().ok(),
-        6 => digits[2..].parse().ok(),
-        8 => digits[4..].parse().ok(),
-        _ => None,
-    }
-}
-
 /// Map a legacy filename period (`062025`, `2026Q1`, `122026Q1`, `2025`,
 /// `03152026`) onto the progress slot this form uses. `None` when it cannot
 /// name a period of this form, so an unmatched record never shows as filed.
@@ -195,10 +180,12 @@ fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<Fili
     let (digits, quarter) = match period.find(['Q', 'q']) {
         Some(index) => (
             period.get(..index)?,
-            period[index + 1..]
-                .parse::<u8>()
-                .ok()
-                .filter(|quarter| (1..=4).contains(quarter)),
+            Some(
+                period[index + 1..]
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|quarter| (1..=4).contains(quarter))?,
+            ),
         ),
         None => (period, None),
     };
@@ -206,6 +193,9 @@ fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<Fili
         return None;
     }
     if digits.len() == 8 {
+        if quarter.is_some() {
+            return None;
+        }
         let month = digits[..2]
             .parse::<u8>()
             .ok()
@@ -217,6 +207,7 @@ fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<Fili
         if digits[4..].parse::<u16>().ok()? != year {
             return None;
         }
+        chrono::NaiveDate::from_ymd_opt(i32::from(year), u32::from(month), u32::from(day))?;
         return match frequency_for_form(form_code) {
             FilingFrequency::Monthly | FilingFrequency::OpenEnded => Some(FilingPeriod::OpenEnded(
                 u32::from(month) * 100 + u32::from(day),
@@ -228,10 +219,12 @@ fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<Fili
         4 => (digits.parse::<u16>().ok()?, None),
         6 => (
             digits[2..].parse::<u16>().ok()?,
-            digits[..2]
-                .parse::<u8>()
-                .ok()
-                .filter(|month| (1..=12).contains(month)),
+            Some(
+                digits[..2]
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|month| (1..=12).contains(month))?,
+            ),
         ),
         _ => return None,
     };
@@ -245,6 +238,9 @@ fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<Fili
             Some(FilingPeriod::Quarterly(month.div_ceil(3)))
         }
         (FilingFrequency::Annual, _, _) => Some(FilingPeriod::Annual),
+        (FilingFrequency::OpenEnded, quarter, month) => Some(FilingPeriod::OpenEnded(
+            u32::from(quarter.map(|quarter| quarter * 3).or(month).unwrap_or(0)) * 100,
+        )),
         _ => None,
     }
 }
@@ -2935,9 +2931,8 @@ impl Database {
                 continue;
             }
             match legacy_return_period(form_code, &period, year) {
-                Some(FilingPeriod::OpenEnded(_)) | None
-                    if matches!(frequency, FilingFrequency::OpenEnded)
-                        && legacy_period_year(&period) == Some(year) =>
+                Some(FilingPeriod::OpenEnded(_))
+                    if matches!(frequency, FilingFrequency::OpenEnded) =>
                 {
                     // An open-ended form has no period tiles; each distinct
                     // filed period of the year counts once (amendments and
@@ -6269,6 +6264,67 @@ mod tests {
         assert_eq!(progress.months[0], QuarterState::NotStarted);
         assert_eq!(progress.open_ended_count, 0);
         assert!(state_rank(&QuarterState::Queued) > state_rank(&QuarterState::Draft));
+    }
+
+    #[test]
+    fn legacy_open_ended_progress_rejects_invalid_periods() {
+        let db = test_db();
+        let tin = "12345678900000";
+        for period in [
+            "002025",
+            "132025",
+            "2025Q0",
+            "2025Q5",
+            "122025Qx",
+            "12322025",
+            "02312025",
+            "02292025",
+            "03152025Q1",
+            "2025Q1Q2",
+            "122024",
+        ] {
+            assert_eq!(legacy_return_period("0605", period, 2025), None, "{period}");
+            db.conn
+                .execute(
+                    "INSERT INTO legacy_filed_returns
+                    (sha256, tin, form_identity, form_id, period, encrypted,
+                     source_filename, raw_file, fields_json)
+                 VALUES (?1, ?2, '0605', '0605', ?1, 1, ?1, X'00', '{}')",
+                    params![period, tin],
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            db.get_form_filing_progress(tin, "0605", 2025)
+                .unwrap()
+                .open_ended_count,
+            0
+        );
+        for (index, period) in ["122025", "2025", "2025Q1", "122025Q2", "03152025", "122025"]
+            .iter()
+            .enumerate()
+        {
+            assert!(matches!(
+                legacy_return_period("0605", period, 2025),
+                Some(FilingPeriod::OpenEnded(_))
+            ));
+            db.conn
+                .execute(
+                    "INSERT INTO legacy_filed_returns
+                    (sha256, tin, form_identity, form_id, period, encrypted,
+                     source_filename, raw_file, fields_json)
+                 VALUES (?1, ?2, '0605', '0605', ?3, 1, ?1, X'00', '{}')",
+                    params![format!("valid-{index}"), tin, period],
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            db.get_form_filing_progress(tin, "0605", 2025)
+                .unwrap()
+                .open_ended_count,
+            5
+        );
+        assert!(legacy_return_period("0605", "02292024", 2024).is_some());
     }
 
     #[test]

@@ -796,7 +796,10 @@ fn fill_empty_fields(profile: &mut TaxpayerProfile, values: &ProfileValues) -> u
     // Forms resolve identity through each version's COR facts, so an import
     // that only filled the flat fields would otherwise stay invisible there.
     for version in &mut profile.profile_versions {
-        if version.status == TaxProfileVersionStatus::Archived {
+        if matches!(
+            version.status,
+            TaxProfileVersionStatus::Confirmed | TaxProfileVersionStatus::Archived
+        ) {
             continue;
         }
         let cor = &mut version.cor;
@@ -828,10 +831,13 @@ fn fill_empty_fields(profile: &mut TaxpayerProfile, values: &ProfileValues) -> u
 fn return_period_order(legacy_return: &LegacyReturn) -> (u32, u32, Option<u32>) {
     let period = &legacy_return.period;
     let (digits, quarter) = match period.find(['Q', 'q']) {
-        Some(index) => (
-            period.get(..index).unwrap_or_default(),
-            period[index + 1..].parse::<u32>().ok(),
-        ),
+        Some(index) => {
+            let quarter = match period[index + 1..].parse::<u32>() {
+                Ok(quarter) if (1..=4).contains(&quarter) => quarter,
+                _ => return (0, 0, legacy_return.amendment_version),
+            };
+            (period.get(..index).unwrap_or_default(), Some(quarter))
+        }
         None => (period.as_str(), None),
     };
     if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -840,12 +846,37 @@ fn return_period_order(legacy_return: &LegacyReturn) -> (u32, u32, Option<u32>) 
     let (year, sub_period) = match digits.len() {
         4 => (
             digits.parse::<u32>().unwrap_or_default(),
-            quarter.unwrap_or(13),
+            quarter.map(|quarter| quarter * 3).unwrap_or(13),
         ),
-        6 => (
-            digits[2..].parse::<u32>().unwrap_or_default(),
-            quarter.unwrap_or_else(|| digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13)),
-        ),
+        6 => match quarter {
+            Some(quarter) => {
+                let end_month = match digits[..2].parse::<u32>() {
+                    Ok(month) if (1..=12).contains(&month) => month,
+                    _ => return (0, 0, legacy_return.amendment_version),
+                };
+                let end_year = match digits[2..].parse::<u32>() {
+                    Ok(year) if year > 0 => year,
+                    _ => return (0, 0, legacy_return.amendment_version),
+                };
+                // MMYYYYQn counts backward from its fiscal year-end month.
+                let Some(end_month_index) = end_year
+                    .checked_mul(12)
+                    .and_then(|year_month| year_month.checked_add(end_month - 1))
+                else {
+                    return (0, 0, legacy_return.amendment_version);
+                };
+                let months_before_year_end = (4 - quarter) * 3;
+                let Some(quarter_end_index) = end_month_index.checked_sub(months_before_year_end)
+                else {
+                    return (0, 0, legacy_return.amendment_version);
+                };
+                (quarter_end_index / 12, quarter_end_index % 12 + 1)
+            }
+            None => (
+                digits[2..].parse::<u32>().unwrap_or_default(),
+                digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13),
+            ),
+        },
         8 => (
             digits[4..].parse::<u32>().unwrap_or_default(),
             digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13),
@@ -1207,6 +1238,127 @@ mod tests {
         assert_eq!(saved.rdo_code, "039");
         assert_eq!(saved.registered_address, "123 Test Street \u{00D1}");
         assert_eq!(saved.email, "legacy@example.test");
+    }
+
+    #[test]
+    fn apply_preserves_confirmed_cor_facts_and_imports_returns() {
+        let scan = scan_legacy_folder(&fixture_root()).unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let mut profile = db.save_profile(test_profile("00000")).unwrap();
+        profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
+        profile.profile_versions[0].effective_from = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
+        profile.profile_versions[0].needs_effective_date_review = false;
+        let versions = profile.profile_versions.clone();
+        assert!(versions[0].cor.rdo_code.is_empty());
+        // Seed an existing confirmed record without going through confirmation UI.
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::to_string(&profile).unwrap(), profile.id],
+            )
+            .unwrap();
+
+        let report = apply_legacy_migration(&db, &scan).unwrap();
+        assert_eq!(report.returns_imported, 3);
+        assert_eq!(report.profiles_updated, 1);
+        let saved = db.list_profiles().unwrap().remove(0);
+        assert_eq!(
+            serde_json::to_value(&saved.profile_versions).unwrap(),
+            serde_json::to_value(&versions).unwrap()
+        );
+        assert_eq!(saved.rdo_code, "039");
+        assert_eq!(
+            apply_legacy_migration(&db, &scan).unwrap().returns_imported,
+            0
+        );
+    }
+
+    #[test]
+    fn quarterly_return_order_uses_quarter_end_month() {
+        for quarter in 1..=4 {
+            for period in [format!("2025Q{quarter}"), format!("122025Q{quarter}")] {
+                let quarterly = synthetic_return(&period, "Quarterly", "quarterly");
+                for month in 1..=12 {
+                    let monthly =
+                        synthetic_return(&format!("{month:02}2025"), "Monthly", "monthly");
+                    assert_eq!(
+                        return_period_order(&quarterly).cmp(&return_period_order(&monthly)),
+                        (quarter * 3).cmp(&month),
+                        "{period} versus month {month}"
+                    );
+                }
+            }
+        }
+        let db = Database::open_ephemeral().unwrap();
+        let scan = LegacyScan {
+            returns: vec![
+                synthetic_return("022025", "February", "february"),
+                synthetic_return("2025Q1", "Quarter One", "quarter-one"),
+            ],
+            ..LegacyScan::default()
+        };
+        apply_legacy_migration(&db, &scan).unwrap();
+        assert_eq!(db.list_profiles().unwrap()[0].full_name, "Quarter One");
+    }
+
+    #[test]
+    fn quarterly_return_order_rejects_invalid_quarters() {
+        for period in [
+            "2025Q4294967295",
+            "2025Q0",
+            "2025Q5",
+            "2025Qx",
+            "002025Q1",
+            "132025Q4",
+            "010000Q1",
+        ] {
+            let legacy_return = synthetic_return(period, "Invalid quarter", "invalid-quarter");
+            assert_eq!(
+                return_period_order(&legacy_return),
+                (0, 0, None),
+                "{period}"
+            );
+        }
+    }
+
+    #[test]
+    fn six_digit_quarter_order_counts_back_from_year_end_month() {
+        for (period, expected) in [
+            ("062025Q4", (2025, 6)),
+            ("062025Q1", (2024, 9)),
+            ("062025Q2", (2024, 12)),
+            ("062025Q3", (2025, 3)),
+        ] {
+            let legacy_return = synthetic_return(period, "Fiscal quarter", period);
+            assert_eq!(
+                return_period_order(&legacy_return),
+                (expected.0, expected.1, None),
+                "{period}"
+            );
+        }
+    }
+
+    #[test]
+    fn fiscal_quarter_order_derives_profile_from_latest_endpoint() {
+        for (quarter_period, quarter_name, comparison_period, comparison_name, expected_name) in [
+            ("062025Q4", "Fiscal Q4", "072025", "July", "July"),
+            ("062025Q1", "Fiscal Q1", "122024", "December", "December"),
+        ] {
+            let db = Database::open_ephemeral().unwrap();
+            let scan = LegacyScan {
+                returns: vec![
+                    synthetic_return(quarter_period, quarter_name, "fiscal-quarter"),
+                    synthetic_return(comparison_period, comparison_name, "comparison-period"),
+                ],
+                ..LegacyScan::default()
+            };
+            apply_legacy_migration(&db, &scan).unwrap();
+            assert_eq!(
+                db.list_profiles().unwrap()[0].full_name,
+                expected_name,
+                "{quarter_period} versus {comparison_period}"
+            );
+        }
     }
 
     #[test]
