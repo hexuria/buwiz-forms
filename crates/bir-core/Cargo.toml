@@ -10,6 +10,13 @@ build = "build.rs"
 [lints.rust]
 unexpected_cfgs = "allow"
 
+[features]
+# Mac App Store build, enabled by `bir-desktop/mas_build`. Compiles out the
+# `sh -c` runner for user cron jobs (arbitrary code execution is rejected by
+# App Review 2.5.2 and cannot run under the App Sandbox); such jobs are marked
+# unavailable instead of executed.
+mas_build = []
+
 [dependencies]
 bir-rules = { path = "../bir-rules", version = "0.1.0" }
 serde = { workspace = true }
@@ -59,6 +66,16 @@ libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { workspace = true, features = ["apple-native"] }
+# Native keychain access for the SQLCipher master key and Google Calendar
+# credentials (see src/keychain.rs). Already in the graph via keyring.
+security-framework = "3"
+# Native desktop notifications (UNUserNotificationCenter) for processes that
+# run from an app bundle; see src/notification.rs. All already in the graph
+# through gpui-pre-macos.
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSBundle", "NSError", "NSString"] }
+objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "UNNotificationContent", "UNNotificationRequest", "UNNotificationTrigger", "UNUserNotificationCenter"] }
 
 # windows-native is required: keyring 3.x has no default credential store, so
 # a featureless build silently falls back to an in-memory mock. The SQLCipher

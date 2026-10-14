@@ -3,10 +3,13 @@
 /// This is the `bir-headless` (and Linux) path. Painted `bir` does **not**
 /// enable delivery here: it watches the same alert rows and posts through
 /// GPUI's `UNUserNotificationCenter` support, which gives the banner the
-/// app's identity, icon, permission prompt and click-to-open. A headless
-/// daemon can never be a `.app`, and the deprecated `NSUserNotificationCenter`
-/// silently drops posts from anything that is not one, so on macOS it goes
-/// through `osascript`, labelled eBIRForms in the subtitle.
+/// app's identity, icon, permission prompt and click-to-open.
+///
+/// On macOS a process with a bundle identifier (a binary inside a `.app`)
+/// posts through `UNUserNotificationCenter` too. `osascript` is only the
+/// fallback for a bare binary (`cargo run`, a loose `bir-headless`): the
+/// notification center aborts the process when there is no bundle, and the
+/// App Sandbox blocks `osascript`, which only matters for bundled builds.
 pub fn send_notification(title: &str, body: &str) {
     if !delivery_enabled() {
         tracing::debug!(
@@ -17,7 +20,11 @@ pub fn send_notification(title: &str, body: &str) {
     }
     #[cfg(target_os = "macos")]
     {
-        display_via_osascript(title, body);
+        if macos_native::has_bundle_identifier() {
+            macos_native::post(title, body);
+        } else {
+            display_via_osascript(title, body);
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -43,6 +50,78 @@ pub fn enable_desktop_delivery() {
 
 pub fn delivery_enabled() -> bool {
     DELIVERY_ENABLED.load(Ordering::SeqCst)
+}
+
+/// `UNUserNotificationCenter` delivery for bundled processes.
+#[cfg(target_os = "macos")]
+mod macos_native {
+    use block2::RcBlock;
+    use objc2::runtime::Bool;
+    use objc2_foundation::{NSBundle, NSError, NSString};
+    use objc2_user_notifications::{
+        UNAuthorizationOptions, UNMutableNotificationContent, UNNotificationRequest,
+        UNUserNotificationCenter,
+    };
+    use std::sync::Once;
+
+    /// `UNUserNotificationCenter` raises (and aborts the process) when the
+    /// main bundle has no identifier, which is how a bare binary runs.
+    pub(super) fn has_bundle_identifier() -> bool {
+        objc2::rc::autoreleasepool(|_| NSBundle::mainBundle().bundleIdentifier().is_some())
+    }
+
+    /// Ask for permission once per process. macOS shows the prompt only the
+    /// first time; afterwards this just reports the stored choice.
+    fn request_authorization_once(center: &UNUserNotificationCenter) {
+        static REQUESTED: Once = Once::new();
+        REQUESTED.call_once(|| {
+            let completion = RcBlock::new(|granted: Bool, error: *mut NSError| {
+                // SAFETY: when non-null, `error` is a valid NSError for the
+                // duration of the callback.
+                if let Some(error) = unsafe { error.as_ref() } {
+                    tracing::warn!(
+                        "notification authorization failed: {}",
+                        error.localizedDescription()
+                    );
+                } else if !granted.as_bool() {
+                    tracing::info!("notification authorization denied");
+                }
+            });
+            center.requestAuthorizationWithOptions_completionHandler(
+                UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
+                &completion,
+            );
+        });
+    }
+
+    pub(super) fn post(title: &str, body: &str) {
+        // Callers include tokio worker threads, which have no autorelease
+        // pool of their own.
+        objc2::rc::autoreleasepool(|_| {
+            let center = UNUserNotificationCenter::currentNotificationCenter();
+            request_authorization_once(&center);
+
+            let content = UNMutableNotificationContent::new();
+            content.setTitle(&NSString::from_str(title));
+            content.setBody(&NSString::from_str(body));
+            // A nil trigger delivers immediately.
+            let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
+                &NSString::from_str(&uuid::Uuid::new_v4().to_string()),
+                &content,
+                None,
+            );
+            let completion = RcBlock::new(|error: *mut NSError| {
+                // SAFETY: as above.
+                if let Some(error) = unsafe { error.as_ref() } {
+                    tracing::warn!(
+                        "desktop notification not delivered: {}",
+                        error.localizedDescription()
+                    );
+                }
+            });
+            center.addNotificationRequest_withCompletionHandler(&request, Some(&completion));
+        });
+    }
 }
 
 #[cfg(target_os = "macos")]

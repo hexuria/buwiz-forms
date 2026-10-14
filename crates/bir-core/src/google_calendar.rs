@@ -985,70 +985,49 @@ fn delete_credentials() -> Result<(), anyhow::Error> {
     keychain_delete()
 }
 
+// macOS: Security.framework first, the `security` CLI as a fallback for
+// items earlier releases created with it (see `crate::keychain`).
+
 #[cfg(target_os = "macos")]
 fn keychain_set(value: &str) -> Result<(), anyhow::Error> {
-    let output = std::process::Command::new("security")
-        .args([
-            "add-generic-password",
-            "-s",
-            KEYCHAIN_SERVICE,
-            "-a",
-            KEYCHAIN_ACCOUNT,
-            "-w",
-            value,
-            "-U",
-        ])
-        .output()?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!(
-            "Failed to save Google Calendar credentials: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
-    }
+    use crate::keychain::{NativeKeychain, SecurityCli, upsert_with_fallback};
+    upsert_with_fallback(
+        &NativeKeychain,
+        &SecurityCli,
+        KEYCHAIN_SERVICE,
+        KEYCHAIN_ACCOUNT,
+        value,
+    )
+    .map_err(|error| anyhow::anyhow!("Failed to save Google Calendar credentials: {error}"))
 }
 
 #[cfg(target_os = "macos")]
 fn keychain_get() -> Result<String, anyhow::Error> {
-    let output = std::process::Command::new("security")
-        .args([
-            "find-generic-password",
-            "-s",
-            KEYCHAIN_SERVICE,
-            "-a",
-            KEYCHAIN_ACCOUNT,
-            "-w",
-        ])
-        .output()?;
-    if output.status.success() {
-        Ok(String::from_utf8(output.stdout)?.trim().to_string())
-    } else {
-        Err(anyhow::anyhow!("Google Calendar account is not connected"))
+    use crate::keychain::{Lookup, NativeKeychain, SecurityCli, read_with_fallback};
+    match read_with_fallback(
+        &NativeKeychain,
+        &SecurityCli,
+        KEYCHAIN_SERVICE,
+        KEYCHAIN_ACCOUNT,
+    ) {
+        Lookup::Found(value) => Ok(value),
+        Lookup::Missing => Err(anyhow::anyhow!("Google Calendar account is not connected")),
+        Lookup::Unreadable(error) | Lookup::Unavailable(error) => Err(anyhow::anyhow!(
+            "Could not read Google Calendar credentials from the keychain: {error}"
+        )),
     }
 }
 
 #[cfg(target_os = "macos")]
 fn keychain_delete() -> Result<(), anyhow::Error> {
-    let output = std::process::Command::new("security")
-        .args([
-            "delete-generic-password",
-            "-s",
-            KEYCHAIN_SERVICE,
-            "-a",
-            KEYCHAIN_ACCOUNT,
-        ])
-        .output()?;
-    if output.status.success()
-        || String::from_utf8_lossy(&output.stderr).contains("could not be found")
-    {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!(
-            "Failed to remove Google Calendar credentials: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
-    }
+    use crate::keychain::{NativeKeychain, SecurityCli, delete_with_fallback};
+    delete_with_fallback(
+        &NativeKeychain,
+        &SecurityCli,
+        KEYCHAIN_SERVICE,
+        KEYCHAIN_ACCOUNT,
+    )
+    .map_err(|error| anyhow::anyhow!("Failed to remove Google Calendar credentials: {error}"))
 }
 
 #[cfg(not(target_os = "macos"))]

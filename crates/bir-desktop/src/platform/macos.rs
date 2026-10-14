@@ -286,67 +286,80 @@ pub fn open_in_system(path: &std::path::Path) {
 
 // ── Native Print ─────────────────────────────────────────────────────────────
 
-/// Print a PDF using macOS native AppKit/PDFKit via a Swift helper script.
+/// Print a PDF in-process through PDFKit and AppKit.
 ///
-/// Falls back to `open::that` if the Swift runtime is unavailable.
+/// `PDFDocument` builds the `NSPrintOperation`, which runs as a sheet on the
+/// key window so GPUI's run loop is never re-entered from inside the click
+/// handler that called this. A modal `runOperation` is used only when no
+/// window is available to host the sheet.
+///
+/// This used to pipe a Swift script into the `swift` CLI. On a Mac without
+/// developer tools that asks the user to install them, and the App Store
+/// sandbox cannot launch it at all, so printing silently did nothing.
+///
+/// Must be called on the main thread (AppKit requirement); GPUI view handlers
+/// already run there.
 pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
-    let path = path.to_path_buf();
+    use objc2_app_kit_modern::{NSApplication, NSPrintInfo};
+    use objc2_foundation_modern::{MainThreadMarker, NSData};
+    use objc2_modern::AnyThread as _;
+    use objc2_pdf_kit::{PDFDocument, PDFPrintScalingMode};
 
-    std::thread::spawn(move || {
-        use std::io::Write;
+    let Some(mtm) = MainThreadMarker::new() else {
+        tracing::error!("print_pdf called off the main thread");
+        return Err("Printing must start from the main thread.");
+    };
 
-        let script = r#"
-import AppKit
-import PDFKit
+    // Read the bytes here rather than handing PDFKit a file URL: the caller
+    // deletes the temp file shortly afterwards, and the document must not
+    // depend on it outliving the print dialog.
+    let bytes = std::fs::read(path).map_err(|error| {
+        tracing::error!("print_pdf: could not read {}: {error}", path.display());
+        "Could not read the PDF to print."
+    })?;
+    let data = NSData::with_bytes(&bytes);
 
-func printPDF(path: String) {
-    let url = URL(fileURLWithPath: path)
-    guard let pdfDoc = PDFDocument(url: url) else { exit(1) }
+    // SAFETY: `initWithData:` takes any NSData and returns nil for bytes it
+    // cannot parse, which is handled below.
+    let document = unsafe { PDFDocument::initWithData(PDFDocument::alloc(), &data) }
+        .ok_or("The PDF could not be opened for printing.")?;
 
-    let printInfo = NSPrintInfo.shared
-    printInfo.isHorizontallyCentered = true
-    printInfo.isVerticallyCentered = true
+    let print_info = NSPrintInfo::sharedPrintInfo();
+    print_info.setHorizontallyCentered(true);
+    print_info.setVerticallyCentered(true);
 
-    let printOp = pdfDoc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true)
+    // SAFETY: `print_info` is a valid NSPrintInfo and we are on the main
+    // thread (`mtm`).
+    let operation = unsafe {
+        document.printOperationForPrintInfo_scalingMode_autoRotate(
+            Some(&print_info),
+            PDFPrintScalingMode::PageScaleDownToFit,
+            true,
+            mtm,
+        )
+    }
+    .ok_or("Could not prepare the print job.")?;
+    operation.setShowsPrintPanel(true);
+    operation.setShowsProgressPanel(true);
 
-    let app = NSApplication.shared
-    app.setActivationPolicy(.accessory)
-    app.activate(ignoringOtherApps: true)
-
-    printOp?.showsPrintPanel = true
-    printOp?.showsProgressPanel = true
-    printOp?.run()
-}
-
-let args = CommandLine.arguments
-if args.count > 1 {
-    printPDF(path: args[1])
-}
-"#;
-
-        let mut child = match std::process::Command::new("swift")
-            .arg("-")
-            .arg(&path)
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(_) => {
-                let _ = open::that(&path);
-                return;
+    let app = NSApplication::sharedApplication(mtm);
+    match app.keyWindow().or_else(|| app.mainWindow()) {
+        Some(window) => {
+            // SAFETY: no delegate and no selector, so the context pointer is
+            // never read.
+            unsafe {
+                operation.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
+                    &window,
+                    None,
+                    None,
+                    std::ptr::null_mut(),
+                );
             }
-        };
-
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(script.as_bytes());
         }
-
-        let output = child.wait();
-        if output.is_err() || !output.unwrap().success() {
-            // Silent fallback to standard open if the Swift script fails
-            let _ = open::that(&path);
+        None => {
+            operation.runOperation();
         }
-    });
+    }
 
     Ok(())
 }
