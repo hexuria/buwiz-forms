@@ -796,7 +796,10 @@ fn fill_empty_fields(profile: &mut TaxpayerProfile, values: &ProfileValues) -> u
     // Forms resolve identity through each version's COR facts, so an import
     // that only filled the flat fields would otherwise stay invisible there.
     for version in &mut profile.profile_versions {
-        if version.status == TaxProfileVersionStatus::Archived {
+        if matches!(
+            version.status,
+            TaxProfileVersionStatus::Confirmed | TaxProfileVersionStatus::Archived
+        ) {
             continue;
         }
         let cor = &mut version.cor;
@@ -840,11 +843,13 @@ fn return_period_order(legacy_return: &LegacyReturn) -> (u32, u32, Option<u32>) 
     let (year, sub_period) = match digits.len() {
         4 => (
             digits.parse::<u32>().unwrap_or_default(),
-            quarter.unwrap_or(13),
+            quarter.map(|quarter| quarter * 3).unwrap_or(13),
         ),
         6 => (
             digits[2..].parse::<u32>().unwrap_or_default(),
-            quarter.unwrap_or_else(|| digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13)),
+            quarter
+                .map(|quarter| quarter * 3)
+                .unwrap_or_else(|| digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13)),
         ),
         8 => (
             digits[4..].parse::<u32>().unwrap_or_default(),
@@ -1207,6 +1212,67 @@ mod tests {
         assert_eq!(saved.rdo_code, "039");
         assert_eq!(saved.registered_address, "123 Test Street \u{00D1}");
         assert_eq!(saved.email, "legacy@example.test");
+    }
+
+    #[test]
+    fn apply_preserves_confirmed_cor_facts_and_imports_returns() {
+        let scan = scan_legacy_folder(&fixture_root()).unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let mut profile = db.save_profile(test_profile("00000")).unwrap();
+        profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
+        profile.profile_versions[0].effective_from = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
+        profile.profile_versions[0].needs_effective_date_review = false;
+        let versions = profile.profile_versions.clone();
+        assert!(versions[0].cor.rdo_code.is_empty());
+        // Seed an existing confirmed record without going through confirmation UI.
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::to_string(&profile).unwrap(), profile.id],
+            )
+            .unwrap();
+
+        let report = apply_legacy_migration(&db, &scan).unwrap();
+        assert_eq!(report.returns_imported, 3);
+        assert_eq!(report.profiles_updated, 1);
+        let saved = db.list_profiles().unwrap().remove(0);
+        assert_eq!(
+            serde_json::to_value(&saved.profile_versions).unwrap(),
+            serde_json::to_value(&versions).unwrap()
+        );
+        assert_eq!(saved.rdo_code, "039");
+        assert_eq!(
+            apply_legacy_migration(&db, &scan).unwrap().returns_imported,
+            0
+        );
+    }
+
+    #[test]
+    fn quarterly_return_order_uses_quarter_end_month() {
+        for quarter in 1..=4 {
+            for period in [format!("2025Q{quarter}"), format!("122025Q{quarter}")] {
+                let quarterly = synthetic_return(&period, "Quarterly", "quarterly");
+                for month in 1..=12 {
+                    let monthly =
+                        synthetic_return(&format!("{month:02}2025"), "Monthly", "monthly");
+                    assert_eq!(
+                        return_period_order(&quarterly).cmp(&return_period_order(&monthly)),
+                        (quarter * 3).cmp(&month),
+                        "{period} versus month {month}"
+                    );
+                }
+            }
+        }
+        let db = Database::open_ephemeral().unwrap();
+        let scan = LegacyScan {
+            returns: vec![
+                synthetic_return("022025", "February", "february"),
+                synthetic_return("2025Q1", "Quarter One", "quarter-one"),
+            ],
+            ..LegacyScan::default()
+        };
+        apply_legacy_migration(&db, &scan).unwrap();
+        assert_eq!(db.list_profiles().unwrap()[0].full_name, "Quarter One");
     }
 
     #[test]
