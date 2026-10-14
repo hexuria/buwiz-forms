@@ -2837,7 +2837,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v20_creates_legacy_filed_returns() {
+    fn test_v21_creates_legacy_filed_returns() {
         let conn = test_conn();
         conn.pragma_update(None, "user_version", 19i32).unwrap();
 
@@ -2846,7 +2846,7 @@ mod tests {
         let version: i32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 20);
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
         let columns = {
             let mut statement = conn
                 .prepare("PRAGMA table_info(legacy_filed_returns)")
@@ -3425,7 +3425,7 @@ mod tests {
         let version: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 20);
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
         let after: Vec<_> = protected.iter().map(|sql| all_rows(&conn, sql)).collect();
         assert_eq!(before, after, "v20 must not rewrite profiles or returns");
 
