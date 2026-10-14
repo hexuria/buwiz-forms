@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml)
 [![Release](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml)
+[![Release (macOS)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml)
 
 E-BIRForms is an offline-first desktop app to prepare, validate, print and
 submit Philippine BIR returns. It is a native Rust app built with the
@@ -38,8 +39,9 @@ document renderer.
 
 **Install:** download the `.dmg` from the
 [Releases](https://github.com/hexuria/buwiz-forms/releases) page and drag
-`eBIRForms.app` to Applications. The release workflow signs and notarizes the
-DMG, and stops if the Apple secrets are missing.
+`eBIRForms.app` to Applications. The macOS release workflow signs and
+notarizes the DMG, and stops if the Apple secrets are missing. Maintainers
+provision those secrets once with `scripts/setup_macos_release_secrets.sh`.
 
 **Build and run from source:**
 

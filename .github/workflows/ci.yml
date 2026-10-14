@@ -382,7 +382,7 @@ jobs:
 
         docs_re='^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$)'
         windows_pkg_re='^(installer\.(iss|wxs)$|assets/windows/|scripts/(audit_final_setup|package_msix|smoke_msix)\.ps1$|scripts/audit_installer_sources\.py$)'
-        macos_pkg_re='^(assets/macos/|scripts/dev_bundle_macos\.sh$|[^/]*entitlements[^/]*\.plist$)'
+        macos_pkg_re='^(assets/macos/|scripts/(dev_bundle_macos|package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)'
         linux_pkg_re='^packaging/linux/'
         scripts_only_re='^(scripts/tests/|scripts/setup-(linux|macos)\.sh$|scripts/setup-windows\.ps1$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
 
