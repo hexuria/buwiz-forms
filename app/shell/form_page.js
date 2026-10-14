@@ -1,0 +1,862 @@
+// The on-screen return (DESIGN_SYSTEM.md "Form page"): one renderer for all
+// 43 forms, drawn from app/forms/forms-schema.json (served by the host as
+// `screen_form_schema`). Every control binds to its rules-corpus field key
+// `k`; values travel through bir-core's typed drafts via the screen_form_*
+// host functions, so Save, Queue and Print keep using the same stored rows.
+//
+// Never block the UI on form work: opening and validating are async host
+// calls; edits show at once and validation runs 300 ms after the last edit,
+// with a "Checking…" chip while it runs. The html-frozen/ sheets stay the
+// print output and are not touched here.
+
+import { div } from "gpui-kit";
+import { InputState } from "gpui-base";
+import {
+  tokens,
+  SPACE,
+  RADIUS,
+  SIZE,
+  BREAK,
+  Text,
+  Line,
+  Code,
+  Icon,
+  AppButton,
+  Avatar,
+  Chip,
+  Switch,
+  Checkbox,
+  TextField,
+  Dropdown,
+  NavRow,
+  PageHeader,
+  MetaLine,
+} from "./ui.js";
+import { formatTin } from "./store.js";
+import { periodLabel } from "./periods.js";
+
+const VALIDATE_DELAY = 300;
+
+function message(e) {
+  // Host errors arrive as "`bir.fn`: text"; the person needs only the text.
+  return String(e && e.message ? e.message : e)
+    .replace(/^Error:\s*/, "")
+    .replace(/^`[^`]+`:\s*/, "");
+}
+
+/** Items whose four text boxes are the TIN (3-3-3-5), shown as locked boxes. */
+function isTinItem(it) {
+  const fs = it.f || [];
+  return /\bTIN\b|Identification Number/i.test(it.l) && fs.length >= 3 && fs.length <= 5 && fs.every((x) => x.t === "text" || x.t === "int");
+}
+
+function partName(p, i) {
+  return i === 0 && /^Page \d+$/.test(p.n) ? "Return details" : p.n;
+}
+
+/** Every key an item binds: its fields, or every cell of its table. */
+function itemKeys(it) {
+  if (it.rows) return it.keys.flat();
+  return (it.f || []).map((f) => f.k);
+}
+
+/** "1,234.50" from a number-ish string; empty stays empty. */
+function formatMoney(text) {
+  const n = Number(String(text).replace(/[₱,\s]/g, ""));
+  if (String(text).trim() === "" || Number.isNaN(n)) return String(text);
+  // QuickJS has no Intl, so group the digits by hand.
+  const [whole, frac] = Math.abs(n).toFixed(2).split(".");
+  return `${n < 0 ? "-" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${frac}`;
+}
+
+export class FormPageActions {
+  constructor(app) {
+    this.app = app;
+    this.state = null;
+    this.token = 0;
+  }
+
+  /** Load the schema now and the return in the background. */
+  open(opts, cx) {
+    const app = this.app;
+    const token = ++this.token;
+    let schema = null;
+    let error = null;
+    try {
+      schema = app.store.call("screen_form_schema", opts.code);
+    } catch (e) {
+      error = message(e);
+    }
+    this.state = {
+      ...opts,
+      schema,
+      loading: true,
+      error,
+      draft: null,
+      status: "Draft",
+      editable: true,
+      values: {},
+      locks: {},
+      errors: [],
+      messages: {},
+      formErrors: [],
+      checking: false,
+      openParts: new Set([0]),
+      inputs: new Map(),
+      pending: {},
+      dirty: false,
+      saved: false,
+      openSelect: null,
+      moreOpen: new Set(),
+      guided: false,
+    };
+    if (!schema) return;
+    cx.spawn(async (acx) => {
+      try {
+        const r = await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
+        if (token !== this.token) return;
+        const s = this.state;
+        s.loading = false;
+        s.draft = r.draft;
+        s.status = r.status;
+        s.editable = r.editable;
+        s.values = r.values;
+        s.locks = r.locks;
+        s.saved = Boolean(r.draft && r.draft.id);
+        this.setErrors(r.errors);
+        this.ensureInputs(0);
+        acx.notify();
+      } catch (e) {
+        if (token !== this.token) return;
+        this.state.loading = false;
+        this.state.error = message(e);
+        acx.notify();
+      }
+    });
+  }
+
+  /** Create InputStates for one part's text-like controls (only once). */
+  ensureInputs(partIndex) {
+    const s = this.state;
+    if (!s || !s.schema || !s.draft) return;
+    const part = s.schema.parts[partIndex];
+    if (!part) return;
+    const make = (k, t) => {
+      if (s.inputs.has(k)) return;
+      let value = s.values[k] ?? "";
+      if (t === "money" && value !== "") value = formatMoney(value);
+      const input = InputState.new({ value: String(value) });
+      input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
+      input.on("blur", (_e, cx) => {
+        if (t === "money") input.set_value(formatMoney(input.value()));
+        this.flush(cx);
+      });
+      s.inputs.set(k, input);
+    };
+    for (const it of part.items) {
+      if (it.rows) {
+        it.keys.forEach((row) => row.forEach((k, c) => make(k, it.cols[c].t)));
+      } else {
+        for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, f.t);
+      }
+    }
+  }
+
+  togglePart(i, cx) {
+    const s = this.state;
+    if (s.openParts.has(i)) s.openParts.delete(i);
+    else {
+      this.ensureInputs(i);
+      s.openParts.add(i);
+    }
+    cx.notify();
+  }
+
+  /** Navigator: open the chosen part and fold the others, so it sits near the top. */
+  jumpTo(i, cx) {
+    const s = this.state;
+    this.ensureInputs(i);
+    s.openParts = new Set([i]);
+    cx.notify();
+  }
+
+  /** Stage an edit; the draft takes it on the next flush (300 ms after the last edit). */
+  edit(k, value, cx) {
+    const s = this.state;
+    if (!s || !s.editable) return;
+    s.pending[k] = value;
+    s.dirty = true;
+    const token = this.token;
+    s.editSeq = (s.editSeq || 0) + 1;
+    const seq = s.editSeq;
+    cx.timer.after(VALIDATE_DELAY, (acx) => {
+      if (token !== this.token || seq !== this.state.editSeq) return;
+      this.flush(acx);
+    });
+  }
+
+  /** Choice controls commit at once. */
+  choose(edits, cx) {
+    const s = this.state;
+    if (!s || !s.editable) return;
+    Object.assign(s.pending, edits);
+    s.dirty = true;
+    for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
+    this.flush(cx);
+  }
+
+  /** Apply staged edits to the typed draft (fast, no database), then validate off-thread. */
+  flush(cx) {
+    const s = this.state;
+    if (!s || !s.draft) return;
+    const edits = s.pending;
+    s.pending = {};
+    if (Object.keys(edits).length) {
+      try {
+        const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
+        s.draft = r.draft;
+        s.values = r.values;
+        this.syncComputed();
+        const rejected = Object.entries(r.rejected || {});
+        if (rejected.length) {
+          for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
+        }
+      } catch (e) {
+        this.app.toast(message(e), cx, "triangle-alert");
+      }
+    }
+    this.validate(cx);
+  }
+
+  /** Computed and locked boxes follow the draft; user boxes keep what was typed. */
+  syncComputed() {
+    const s = this.state;
+    for (const [k, input] of s.inputs) {
+      if (!(s.locks[k] !== undefined || this.isComputed(k))) continue;
+      const v = s.values[k] ?? "";
+      if (input.value() !== v) input.set_value(String(v));
+    }
+  }
+
+  isComputed(k) {
+    const s = this.state;
+    if (!s.computedKeys) {
+      s.computedKeys = new Set();
+      for (const p of s.schema.parts) {
+        for (const it of p.items) {
+          if (it.rows) it.cols.forEach((c, ci) => c.c && it.keys.forEach((row) => s.computedKeys.add(row[ci])));
+          else for (const f of it.f || []) if (f.c) s.computedKeys.add(f.k);
+        }
+      }
+    }
+    return s.computedKeys.has(k);
+  }
+
+  validate(cx) {
+    const s = this.state;
+    if (!s || !s.draft) return;
+    const token = this.token;
+    s.checking = true;
+    s.validateSeq = (s.validateSeq || 0) + 1;
+    const seq = s.validateSeq;
+    const draft = s.draft;
+    cx.spawn(async (acx) => {
+      try {
+        const r = await this.app.store.call("screen_form_validate", s.code, draft);
+        if (token !== this.token || seq !== this.state.validateSeq) return;
+        // Keep a newer local draft if the user typed meanwhile; take values/errors.
+        if (this.state.draft === draft) this.state.draft = r.draft;
+        this.state.values = { ...this.state.values, ...r.values };
+        this.syncComputed();
+        this.setErrors(r.errors);
+      } catch (e) {
+        if (token !== this.token) return;
+        this.state.formErrors = [message(e)];
+      }
+      if (token === this.token && seq === this.state.validateSeq) this.state.checking = false;
+      acx.notify();
+    });
+    cx.notify();
+  }
+
+  /** Item id for a key ("p:i") from the schema. */
+  itemIdForKey(k) {
+    const s = this.state;
+    if (!s.keyIndex) {
+      s.keyIndex = new Map();
+      s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => itemKeys(it).forEach((key) => s.keyIndex.set(key, `${pi}:${ii}`))));
+    }
+    return s.keyIndex.get(k);
+  }
+
+  /**
+   * Bind each validation message to an item: by field key, then by the item
+   * number in the message ("Item 06" matches item 6), then by label words;
+   * one that matches nothing goes on the first item.
+   */
+  setErrors(errors) {
+    const s = this.state;
+    s.errors = errors || [];
+    s.messages = {};
+    const items = [];
+    s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
+    const words = (t) => String(t).toLowerCase().match(/[a-z]{4,}/g) || [];
+    for (const e of s.errors) {
+      let id = null;
+      for (const k of e.keys || []) {
+        id = this.itemIdForKey(k);
+        if (id) break;
+      }
+      if (!id) {
+        const m = /\bItem\s+0*(\d+[A-Z]?)\b/i.exec(e.message);
+        if (m) {
+          const hit = items.find((x) => String(x.it.no || "").replace(/^0+/, "").toUpperCase() === m[1].toUpperCase());
+          if (hit) id = hit.id;
+        }
+      }
+      if (!id) {
+        const w = new Set(words(`${e.field} ${e.message}`));
+        let best = 0;
+        for (const x of items) {
+          const n = words(x.it.l).filter((v) => w.has(v)).length;
+          if (n > best) {
+            best = n;
+            id = x.id;
+          }
+        }
+      }
+      id = id || (items[0] && items[0].id);
+      if (id) s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
+    }
+  }
+
+  check(cx) {
+    const s = this.state;
+    this.flush(cx);
+    s.announce = true;
+    const token = this.token;
+    cx.timer.after(50, (acx) => {
+      if (token !== this.token) return;
+      const wait = () => {
+        if (this.state.checking) return acx.timer.after(100, () => wait());
+        const n = this.state.errors.length;
+        this.app.toast(n ? `${n} item${n > 1 ? "s need" : " needs"} attention.` : "No problems found.", acx, n ? "triangle-alert" : "circle-check");
+      };
+      wait();
+    });
+  }
+
+  save(cx) {
+    const s = this.state;
+    if (!s || !s.draft) return;
+    // Take whatever is staged before saving, without waiting for the debounce.
+    const edits = s.pending;
+    s.pending = {};
+    try {
+      if (Object.keys(edits).length) {
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
+        s.draft = f.draft;
+        s.values = f.values;
+      }
+      const r = this.app.store.write("screen_form_save", s.code, s.draft);
+      s.draft = r.draft;
+      s.status = r.status;
+      s.dirty = false;
+      s.saved = true;
+      this.app.toast("Draft saved.", cx, "save");
+      this.validate(cx);
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  queue(cx) {
+    const s = this.state;
+    if (s.dirty || !s.saved) this.save(cx);
+    try {
+      this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
+      s.status = "Queued";
+      s.editable = false;
+      this.app.toast("Queued for background submission.", cx, "send");
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  cancelQueue(cx) {
+    const s = this.state;
+    try {
+      this.app.store.write("cancel_queued", s.tin, s.code, s.year, s.period || null);
+      this.app.toast("Queue cancelled. The return is an editable draft again.", cx);
+      this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period }, cx);
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  print(cx) {
+    const s = this.state;
+    if (s.dirty || !s.saved) this.save(cx);
+    try {
+      this.app.store.call("form_print_html", s.tin, s.code, s.year, s.period || null);
+      this.app.toast("Print preview opened in your browser.", cx, "printer");
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+}
+
+// ---------------------------------------------------------------- controls
+
+function controlWidth(f, available) {
+  if (f.t === "money") return Math.min(230, available);
+  if (f.t === "pct") return 88;
+  if (f.t === "date") return 140;
+  if (f.t === "int") return f.m && f.m <= 4 ? 88 : 140;
+  if (f.t === "sel") return Math.min(260, available);
+  if (f.t === "text" && f.m && f.m <= 4) return 88;
+  return Math.min(320, available);
+}
+
+function lockedBox(cx, value, width, opts = {}) {
+  const t = tokens(cx);
+  return div()
+    .flex()
+    .flex_row()
+    .items_center()
+    .h(SIZE.control)
+    .w(width)
+    .px(10)
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.border)
+    .bg(t.hover)
+    .when(opts.right, (el) => el.justify_end())
+    .when(opts.center, (el) => el.justify_center())
+    .child(Line(cx, "body", value || "", "fg2"));
+}
+
+function control(cx, ui, f, itemLabel, multi, available) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const width = controlWidth(f, available);
+  const showSub = multi && f.l && f.l !== itemLabel && !/^\d+[A-Z]?$/.test(f.l);
+  const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+  const value = s.values[f.k] ?? "";
+  let el;
+  if (f.t === "sel") {
+    const options = [{ value: "", label: "Choose…" }, ...(f.o || []).filter((o) => !/^"/.test(o)).map((o) => ({ value: o, label: o }))];
+    if (value && !options.some((o) => o.value === value)) options.push({ value, label: value });
+    el = locked
+      ? lockedBox(cx, value, width)
+      : Dropdown(cx, `fp-${f.k}`, {
+          label: f.l,
+          width,
+          options,
+          value,
+          open: s.openSelect === f.k,
+          onOpenChange: (open, cx) => {
+            s.openSelect = open ? f.k : null;
+            cx.notify();
+          },
+          onChange: (v, cx) => ui.choose({ [f.k]: v }, cx),
+        });
+  } else if (f.t === "chk") {
+    const on = value === "true" || value === "1" || value === "Y";
+    return div()
+      .id(`fp-${f.k}-row`)
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(SPACE[2])
+      .child(Checkbox(cx, `fp-${f.k}`, on, (v, cx) => (locked ? null : ui.choose({ [f.k]: v ? "true" : "false" }, cx)), f.l || itemLabel))
+      .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal());
+  } else if (locked) {
+    const shown = f.t === "money" ? formatMoney(value || (f.c ? "0" : "")) : value;
+    el = lockedBox(cx, shown, width, { right: f.t === "money" || f.t === "pct" });
+  } else {
+    const input = s.inputs.get(f.k);
+    if (!input) el = lockedBox(cx, value, width);
+    else {
+      const box = TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }).when(
+        f.t === "money" || f.t === "pct",
+        (b) => b.text_right(),
+      );
+      if (f.t === "money" || f.t === "pct") {
+        el = div()
+          .relative()
+          .w(width)
+          .child(box.when(f.t === "money", (b) => b.pl(24)).when(f.t === "pct", (b) => b.pr(24)))
+          .child(
+            div()
+              .absolute()
+              .top(0)
+              .bottom(0)
+              .when(f.t === "money", (d) => d.left(10))
+              .when(f.t === "pct", (d) => d.right(10))
+              .flex()
+              .items_center()
+              .child(Text(cx, "meta", f.t === "money" ? "₱" : "%", "fg3")),
+          );
+      } else el = box;
+    }
+  }
+  const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0);
+  if (showSub) wrap.child(Text(cx, "meta", f.l, "fg2").max_w(width).whitespace_normal());
+  void t;
+  return wrap.child(el);
+}
+
+function radioGroup(cx, ui, it, radios) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const row = div().flex().flex_row().flex_wrap().gap(6);
+  for (const f of radios) {
+    const on = s.values[f.k] === "true";
+    const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+    const pill = div()
+      .id(`fp-${f.k}`)
+      .flex()
+      .items_center()
+      .h(SIZE.controlSm)
+      .px(SPACE[3])
+      .rounded(RADIUS.full)
+      .border(1)
+      .border_color(on ? t.primary : t.borderStrong)
+      .bg(on ? t.primary : t.surface)
+      .accessibility_label(f.l)
+      .child(Text(cx, "metaStrong", f.l.replace(/^.*?:\s*/, ""), on ? "primaryFg" : "fg2").whitespace_nowrap());
+    if (!locked) {
+      pill.cursor_pointer().hover((st) => (on ? st : st.border_color(t.fg3))).on_click((_e, cx) => {
+        const edits = {};
+        for (const r of radios) edits[r.k] = r.k === f.k ? "true" : "false";
+        ui.choose(edits, cx);
+      });
+    } else pill.opacity(0.7);
+    row.child(pill);
+  }
+  void it;
+  return row;
+}
+
+function tinBoxes(cx, ui, it) {
+  const s = ui.state;
+  const row = div().flex().flex_row().flex_wrap().items_center().gap(6);
+  (it.f || []).forEach((f, j) => {
+    if (j) row.child(Text(cx, "body", "-", "fg3"));
+    row.child(lockedBox(cx, s.values[f.k] ?? "", j === 3 ? 76 : 58, { center: true }));
+  });
+  return row;
+}
+
+function scheduleTable(cx, ui, it, width) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const colW = 140;
+  const numW = 36;
+  const tableW = numW + it.cols.length * colW;
+  const head = div().flex().flex_row().items_end().bg(t.bg).border_b(1).border_color(t.border);
+  head.child(div().w(numW).flex_none().py(SPACE[2]).flex().justify_center().child(Text(cx, "meta", "#", "fg3")));
+  for (const c of it.cols) head.child(div().w(colW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", c.l, "fg3").whitespace_normal()));
+  const body = div().flex().flex_col();
+  it.keys.forEach((row, r) => {
+    const tr = div().flex().flex_row().items_center().when(r > 0, (el) => el.border_t(1).border_color(t.border));
+    tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(r + 1), "fg3")));
+    row.forEach((k, c) => {
+      const col = it.cols[c];
+      const locked = !s.editable || col.c || s.locks[k] !== undefined;
+      const value = s.values[k] ?? "";
+      let cell;
+      if (col.t === "radio" || col.t === "chk") {
+        const on = value === "true";
+        cell = Checkbox(cx, `fp-${k}`, on, (v, cx) => (locked ? null : ui.choose({ [k]: v ? "true" : "false" }, cx)), `${col.l}, row ${r + 1}`);
+      } else if (locked || !s.inputs.get(k)) {
+        cell = lockedBox(cx, col.t === "money" ? formatMoney(value) : value, colW - 16, { right: col.t === "money" });
+      } else {
+        cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${r + 1}`, width: colW - 16 }).h(30);
+      }
+      tr.child(div().w(colW).flex_none().py(6).px(SPACE[2]).child(cell));
+    });
+    body.child(tr);
+  });
+  // The one sideways scroller in the app: a schedule wider than its box.
+  return div()
+    .id(`fp-table-${it.keys[0][0]}`)
+    .w(width)
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.border)
+    .overflow_x_scroll()
+    .overflow_y_hidden()
+    .child(div().flex().flex_col().w(tableW).child(head).child(body));
+}
+
+function itemRow(cx, ui, it, pi, ii, width) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const id = `${pi}:${ii}`;
+  const fs = it.f || [];
+  const inner = width - 44 - 12 - 20 - 12;
+  const allCalc = !it.rows && fs.length > 0 && fs.every((x) => x.c);
+  const req = fs.some((x) => x.r);
+  const tin = isTinItem(it);
+  const fromProfile = tin || fs.some((x) => x.a && !x.c);
+  const label = div()
+    .flex()
+    .flex_row()
+    .flex_wrap()
+    .items_start()
+    .gap(SPACE[2])
+    .mb(10)
+    .min_h(22)
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .flex_1()
+        .min_w(0)
+        .gap(2)
+        .child(Text(cx, "control", it.l).whitespace_normal())
+        .when(req, (el) => el.child(Text(cx, "control", "*", "danger"))),
+    );
+  if (it.rows) label.child(Chip(cx, `${it.rows} rows`));
+  if (fromProfile) label.child(Chip(cx, "From tax profile", "neutral", "user"));
+  if (allCalc) label.child(Chip(cx, "Computed", "neutral", "lock"));
+
+  let controls;
+  if (it.rows) {
+    controls = scheduleTable(cx, ui, it, inner);
+  } else if (it.l === "Additional details") {
+    const open = s.moreOpen.has(id);
+    controls = div()
+      .flex()
+      .flex_col()
+      .child(
+        div()
+          .id(`fp-more-${id}`)
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(6)
+          .h(SIZE.controlSm)
+          .cursor_pointer()
+          .on_click((_e, cx) => {
+            if (open) s.moreOpen.delete(id);
+            else s.moreOpen.add(id);
+            cx.notify();
+          })
+          .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
+          .child(Text(cx, "metaStrong", `${fs.length} more field${fs.length > 1 ? "s" : ""} not yet placed on the paper layout`, "fg2")),
+      );
+    if (open) {
+      const wrap = div().flex().flex_row().flex_wrap().gap_x(SPACE[4]).gap_y(SPACE[3]).items_end().mt(10);
+      for (const f of fs) wrap.child(control(cx, ui, f, f.l, true, inner));
+      controls.child(wrap);
+    }
+  } else if (tin) {
+    controls = tinBoxes(cx, ui, it);
+  } else {
+    controls = div().flex().flex_row().flex_wrap().gap_x(SPACE[4]).gap_y(SPACE[3]).items_end();
+    const radios = fs.filter((f) => f.t === "radio");
+    if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
+    for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
+  }
+
+  const msg = s.messages[id] || "";
+  return div()
+    .id(`fp-item-${id}`)
+    .flex()
+    .flex_row()
+    .gap(SPACE[3])
+    .pt(14)
+    .pr(SPACE[5])
+    .pb(SPACE[2])
+    .pl(SPACE[3])
+    .when(allCalc, (el) => el.bg(t.bg))
+    .child(
+      div()
+        .w(44)
+        .flex_none()
+        .child(
+          it.no
+            ? div().flex().items_center().justify_center().h(22).min_w(30).px(6).rounded(RADIUS.ctl).bg(t.hover).child(Code(cx, it.no, "fg2"))
+            : div(),
+        ),
+    )
+    .child(
+      div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_w(0)
+        .child(label)
+        .child(controls)
+        // Reserved 18 px validation line, present with or without a message.
+        .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " "))),
+    );
+}
+
+// ---------------------------------------------------------------- page
+
+export function renderFormPage(cx, app, width) {
+  const ui = app.formUi;
+  const s = ui.state;
+  const t = tokens(cx);
+  if (!s) return div();
+  const f = s.schema;
+  if (!f) {
+    return PageHeader(cx, { title: `Form ${s.code}`, lede: s.error || "This form has no on-screen layout." });
+  }
+  const tp = app.taxpayers().find((x) => x.tin_root === String(s.tin).slice(0, 9)) || app.taxpayer();
+  const branchCode = String(s.tin).slice(9) || "00000";
+  const branch = tp ? tp.branches.find((b) => b.code === branchCode) : null;
+  const draftLayout = f.q < 0.8;
+
+  const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
+  if (s.status === "Queued") {
+    actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
+  } else if (s.editable) {
+    actions.push(AppButton(cx, "fp-check", "Check", { size: "sm", icon: "circle-check", onClick: (_e, cx) => ui.check(cx) }));
+    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
+    actions.push(AppButton(cx, "fp-save", "Save draft", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
+  }
+
+  const chips = div().flex().flex_row().flex_wrap().items_center().gap(SPACE[2]).mt(SPACE[2]);
+  chips.child(Chip(cx, f.freq)).child(Chip(cx, `${f.pages} page${f.pages > 1 ? "s" : ""}`)).child(Chip(cx, `${f.n} fields`));
+  if (draftLayout) chips.child(Chip(cx, "Draft layout", "warning", "triangle-alert"));
+  if (s.status !== "Draft") chips.child(Chip(cx, s.status, s.status === "Queued" ? "accent" : "success"));
+
+  const head = div()
+    .flex()
+    .flex_row()
+    .flex_wrap()
+    .items_start()
+    .gap(14)
+    .child(
+      div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_w(0)
+        .child(MetaLine(cx, [Code(cx, `BIR Form ${f.c}`), `Revision ${f.rev}`]))
+        .child(Text(cx, "page", f.t).mt(SPACE[1]).whitespace_normal())
+        .child(chips),
+    )
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .gap(SPACE[2])
+        .children(actions),
+    );
+
+  const bar = div()
+    .flex()
+    .flex_row()
+    .flex_wrap()
+    .items_center()
+    .gap_x(SPACE[3])
+    .gap_y(SPACE[2])
+    .my(SPACE[5])
+    .py(10)
+    .px(SPACE[3])
+    .rounded(RADIUS.card)
+    .border(1)
+    .border_color(t.border)
+    .bg(t.bg);
+  if (tp) {
+    bar
+      .child(Avatar(cx, tp.name, 20, tp.tin_root))
+      .child(Text(cx, "control", tp.name).font_weight(600))
+      .child(Code(cx, formatTin(tp.tin_root, branchCode), "fg2").font_weight(400))
+      .child(Text(cx, "meta", branch ? branch.name : "", "fg2"));
+  }
+  bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
+  bar.child(Text(cx, "meta", `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
+  if (s.checking || s.loading) bar.child(Chip(cx, s.loading ? "Opening…" : "Checking…", "accent"));
+  bar.child(div().flex_1());
+  bar.child(
+    div()
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(SPACE[2])
+      .child(Text(cx, "meta", "Guided mode", "fg2"))
+      .child(
+        Switch(cx, "fp-guided", s.guided, (v, cx) => {
+          s.guided = v;
+          app.toast(v ? "Guided mode stops at the fields a template marks. Templates do not mark fields yet." : "Guided mode off.", cx);
+        }, "Guided mode"),
+      ),
+  );
+
+  const page = div().flex().flex_col().child(head).child(bar);
+  if (s.error) {
+    return page.child(div().p(SPACE[4]).rounded(RADIUS.card).bg(t.dangerSoft).child(Text(cx, "body", s.error, "danger").whitespace_normal()));
+  }
+  if (s.loading) {
+    return page.child(div().py(40).flex().justify_center().child(Text(cx, "body", `Opening ${f.c}…`, "fg3")));
+  }
+
+  // Part navigator: 208 px beside the parts, a chip row below 760 px.
+  const sideNav = width >= BREAK.formNav;
+  const partsW = sideNav ? width - 208 - 28 : width;
+  const nav = sideNav ? div().flex().flex_col().gap(2).w(208).flex_none() : div().flex().flex_row().flex_wrap().gap(SPACE[1]).mb(SPACE[4]);
+  if (sideNav) nav.child(div().px(SPACE[2]).pb(6).child(Text(cx, "metaStrong", "On this form", "fg3")));
+  f.parts.forEach((p, i) => {
+    nav.child(
+      sideNav
+        ? NavRow(cx, `fp-nav-${i}`, null, partName(p, i), { count: p.items.length, current: s.openParts.has(i) && s.openParts.size === 1, onClick: (_e, cx) => ui.jumpTo(i, cx) })
+        : div()
+            .id(`fp-nav-${i}`)
+            .cursor_pointer()
+            .on_click((_e, cx) => ui.jumpTo(i, cx))
+            .child(Chip(cx, `${partName(p, i)} · ${p.items.length}`, s.openParts.has(i) ? "accent" : "neutral")),
+    );
+  });
+
+  const parts = div().flex().flex_col().gap(SPACE[4]).w(partsW);
+  f.parts.forEach((p, pi) => {
+    const open = s.openParts.has(pi);
+    const card = div()
+      .id(`fp-part-${pi}`)
+      .flex()
+      .flex_col()
+      .rounded(RADIUS.card)
+      .border(1)
+      .border_color(t.border)
+      .bg(t.surface)
+      .overflow_hidden()
+      .child(
+        div()
+          .id(`fp-part-${pi}-toggle`)
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(SPACE[2])
+          .min_h(48)
+          .pl(SPACE[3])
+          .pr(SPACE[4])
+          .cursor_pointer()
+          .accessibility_label(partName(p, pi))
+          .on_click((_e, cx) => ui.togglePart(pi, cx))
+          .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
+          .child(Text(cx, "control", partName(p, pi)).font_weight(600).flex_1().whitespace_normal())
+          .child(Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg3")),
+      );
+    if (open) {
+      const body = div().flex().flex_col().border_t(1).border_color(t.border);
+      p.items.forEach((it, ii) => {
+        const row = itemRow(cx, ui, it, pi, ii, partsW);
+        if (ii > 0) row.border_t(1).border_color(t.border);
+        body.child(row);
+      });
+      card.child(body);
+    }
+    parts.child(card);
+  });
+
+  if (sideNav) return page.child(div().flex().flex_row().items_start().gap(28).child(nav).child(parts));
+  return page.child(nav).child(parts);
+}
