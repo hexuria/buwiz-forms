@@ -372,6 +372,15 @@ fn parse_profile_contents(
             fields.insert(key.to_string(), value.to_string());
         }
     }
+    if tin.bytes().all(|byte| byte == b'0') {
+        return Err("placeholder profile: TIN is all zeros".to_string());
+    }
+    // The official app writes the literal "undefined" for fields its JS never set.
+    for value in fields.values_mut() {
+        if value == "undefined" {
+            value.clear();
+        }
+    }
     let read = |key: &str| fields.get(key).cloned().unwrap_or_default();
     let mut full_name = read("fn");
     let mut line_of_business = read("lob");
@@ -554,6 +563,9 @@ pub fn apply_legacy_migration(
         .collect::<BTreeSet<_>>();
     let mut latest_return_by_key = BTreeMap::<ProfileKey, &LegacyReturn>::new();
     for legacy_return in &scan.returns {
+        if legacy_return.tin.bytes().all(|byte| byte == b'0') {
+            continue;
+        }
         let key = profile_key(&legacy_return.tin, &legacy_return.branch)?;
         if profile_file_keys.contains(&key) {
             continue;
@@ -994,6 +1006,34 @@ mod tests {
             plain_scan.issues
         );
         assert!(!plain_scan.returns[0].encrypted);
+    }
+
+    #[test]
+    fn profile_reads_undefined_fields_as_empty_and_rejects_zero_tin() {
+        let path = Path::new("profile/12345678800000.xml");
+        let contents = "<?xml version='1.0'?>\n\
+            <div>fn=DELA%20CRUZ%20JUAN%20TAMADfn=</div>\n\
+            <div>tin1=000tin1=</div><div>tin2=000tin2=</div><div>tin3=000tin3=</div><div>tin4=00000tin4=</div>\n\
+            <div>rdo=018rdo=</div>\n\
+            <div>lob=undefinedlob=</div>\n\
+            <div>regAddr=OLONGAPOregAddr=</div>\n\
+            <div>zip=2200zip=</div><div>telNo=09123456789telNo=</div>\n\
+            <div>email=a@b.testemail=</div><div>formType=2200Tv2020formType=</div>\n\
+            All Rights Reserved BIR 2014.";
+        let profile =
+            parse_profile_contents(contents, path, "123456788".to_string(), "00000".to_string())
+                .unwrap();
+        assert_eq!(profile.full_name, "DELA CRUZ JUAN TAMAD");
+        assert_eq!(profile.line_of_business, "");
+        assert_eq!(profile.registered_address, "OLONGAPO");
+
+        let zero = parse_profile_contents(
+            contents,
+            Path::new("profile/00000000000000.xml"),
+            "000000000".to_string(),
+            "00000".to_string(),
+        );
+        assert!(zero.is_err_and(|reason| reason.contains("all zeros")));
     }
 
     #[test]
