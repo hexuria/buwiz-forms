@@ -1657,6 +1657,9 @@ fn zero_nolco() -> Form1701NolcoRow {
 }
 
 impl QueueableForm for Form1701Draft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     const FORM_CODE: &'static str = "1701";
     const FORM_TYPE: &'static str = FORM_1701_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1701_LAYOUT_ID;

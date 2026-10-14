@@ -41,6 +41,7 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = 
 ] }
 
 bir-core = { path = "../bir-core" }
+bir-print = { path = "../bir-print" }
 
 anyhow = "1"
 rfd = "0.17.2"

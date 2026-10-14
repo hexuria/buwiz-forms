@@ -1189,6 +1189,9 @@ impl Form2200SDraft {
 }
 
 impl QueueableForm for Form2200SDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }

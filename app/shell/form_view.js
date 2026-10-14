@@ -381,6 +381,7 @@ export function renderFormView(cx, state) {
   const spec = state.formSpec;
   const draft = state.formDraft;
   const status = state.formDraftStatus || "Draft";
+  const hasDraft = state.formHasDraft === true;
 
   return div()
     .size_full()
@@ -436,6 +437,14 @@ export function renderFormView(cx, state) {
                 .label("Back to dashboard")
                 .ghost()
                 .on_click((_ev, cx) => state.navigate("dashboard", cx)),
+            )
+            .when(hasDraft, (el) =>
+              el.child(
+                Button.new("form_print")
+                  .label("Print preview")
+                  .ghost()
+                  .on_click((_ev, cx) => state.printCurrentForm(cx)),
+              ),
             )
             .when(status === "Queued", (el) =>
               el.child(

@@ -2712,6 +2712,9 @@ fn computed_money_fields(draft: &Form2550QDraft) -> Vec<(&'static str, Option<f6
 pub const FORM_2550Q_LAYOUT_ID: &str = "2550q-v2024";
 
 impl super::queueable::QueueableForm for Form2550QDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     const FORM_CODE: &'static str = FORM_CODE;
     /// Official `formType`, as `createXMLFileName()` writes it.
     const FORM_TYPE: &'static str = FORM_TYPE_ID;

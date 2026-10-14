@@ -1795,6 +1795,9 @@ impl FormValidator for Form1702ExDraft {
 }
 
 impl QueueableForm for Form1702ExDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     const FORM_CODE: &'static str = "1702EX";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1702EXv2018C']`).
     const FORM_TYPE: &'static str = "1702EXv2018C";

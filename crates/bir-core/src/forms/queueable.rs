@@ -293,6 +293,12 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
     /// Official control ids and values (see [`crate::official_xml::write`]).
     fn field_map(&self) -> BTreeMap<String, String>;
 
+    /// The field map the form's Print preview fills its frozen sheet with —
+    /// `to_print_field_map` where the draft has print-only `derived:` keys,
+    /// otherwise `to_bir_field_map` (the same map each desktop view's
+    /// `print_fields` builds for `bir_print::frozen_html::filled_document`).
+    fn print_field_map(&self) -> BTreeMap<String, String>;
+
     /// Set the form's "Amended Return?" item to Yes the way its own editor
     /// does. Returns false for a form that has no such item.
     fn mark_amended(&mut self) -> bool {
@@ -878,6 +884,9 @@ pub(crate) mod test_support {
     }
 
     impl QueueableForm for TestForm {
+        fn print_field_map(&self) -> BTreeMap<String, String> {
+            self.field_map()
+        }
         const FORM_CODE: &'static str = Self::CODE;
         const FORM_TYPE: &'static str = Self::TYPE;
         const LAYOUT_ID: &'static str = "1601c-v2018";

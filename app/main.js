@@ -38,6 +38,7 @@ import {
   list_deadlines,
   list_announcements,
   import_archive,
+  form_print_html,
 } from "bir";
 import {
   applyThemePreference,
@@ -647,6 +648,25 @@ export default class BirApp extends View {
     cx.notify();
   }
 
+  printCurrentForm(cx) {
+    const spec = this.formSpec;
+    if (!spec) return;
+    try {
+      form_print_html(
+        this.activeProfileTin,
+        spec.code,
+        this.formYear,
+        this.formQuarter,
+      );
+      this.formNotice = "Print preview opened in your browser.";
+      this.formError = null;
+    } catch (e) {
+      this.formError = String(e);
+      this.formNotice = null;
+    }
+    cx.notify();
+  }
+
   cancelCurrentQueue(cx) {
     const spec = this.formSpec;
     if (!spec) return;
@@ -724,6 +744,7 @@ export default class BirApp extends View {
       this.formError = String(e);
     }
     const profile = this.activeProfile() || {};
+    this.formHasDraft = draft !== null;
     this.formDraft = draft || {};
     this.formInputs = {};
     for (const field of spec.fields) {
@@ -785,6 +806,7 @@ export default class BirApp extends View {
         data,
       );
       this.formDraft = data;
+      this.formHasDraft = true;
       this.formDraftStatus = "Draft";
       this.formError = null;
       this.formNotice = "Draft saved.";

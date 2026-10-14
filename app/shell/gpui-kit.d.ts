@@ -27807,6 +27807,10 @@ declare module "bir" {
       kind: "database" | "profile" | "invalid" | "cancelled";
   }
   export function import_archive(path?: string): ImportResult;
+  export interface PrintPreview {
+      path: string;
+  }
+  export function form_print_html(tin: string, form_code: string, year: number, quarter: number | null): PrintPreview;
 }
 
 /**

@@ -9,8 +9,8 @@
 use std::cell::RefCell;
 
 use bir_core::db::{self, Database};
-use bir_core::forms::queueable::QueueableForm as _;
 use bir_core::forms::FORM_REGISTRY;
+use bir_core::forms::queueable::QueueableForm as _;
 use gpui_shell::{HostError, HostModule, HostObject, HostResult, HostValue};
 
 thread_local! {
@@ -165,7 +165,10 @@ fn set_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 // ---------- S2: auth + profile management ----------
 
-fn get_profile_by_tin(db: &Database, tin: &str) -> Result<bir_core::profile::TaxpayerProfile, HostError> {
+fn get_profile_by_tin(
+    db: &Database,
+    tin: &str,
+) -> Result<bir_core::profile::TaxpayerProfile, HostError> {
     db.get_profile_by_tin(tin)
         .map_err(|error| HostError::new(error.to_string()))?
         .ok_or_else(|| HostError::new(format!("no taxpayer profile with TIN {tin}")))
@@ -257,7 +260,9 @@ fn verify_profile_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let hashed = bir_core::crypto::hash_pin(pin);
     with_database(|db| {
         let profile = get_profile_by_tin(db, tin)?;
-        Ok(HostValue::Bool(profile.profile_pin_hash.as_deref() == Some(hashed.as_str())))
+        Ok(HostValue::Bool(
+            profile.profile_pin_hash.as_deref() == Some(hashed.as_str()),
+        ))
     })
 }
 
@@ -339,10 +344,7 @@ fn list_drafts(arguments: &gpui_shell::HostArguments) -> HostResult {
                                 "quarter",
                                 row.quarter.map_or(HostValue::Null, HostValue::from),
                             )
-                            .field(
-                                "month",
-                                row.month.map_or(HostValue::Null, HostValue::from),
-                            )
+                            .field("month", row.month.map_or(HostValue::Null, HostValue::from))
                             .field("status", format!("{:?}", row.status))
                             .field("updated_at", row.updated_at.as_str()),
                     )
@@ -366,7 +368,10 @@ fn filing_status(name: &str) -> Result<bir_core::forms::FilingStatus, HostError>
 
 /// `quarter` argument is `Option<u8>`: pass null for annual/open-ended slots
 /// and 0 for the first open-ended period (the DB auto-numbers those).
-fn optional_quarter(arguments: &gpui_shell::HostArguments, index: usize) -> Result<Option<u8>, HostError> {
+fn optional_quarter(
+    arguments: &gpui_shell::HostArguments,
+    index: usize,
+) -> Result<Option<u8>, HostError> {
     match arguments.get(index) {
         Some(HostValue::Null) | None => Ok(None),
         Some(HostValue::Number(q)) => Ok(Some(*q as u8)),
@@ -389,8 +394,7 @@ fn get_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 db.get_2551q_draft(&tin, year, q)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .map(|d| {
-                        serde_json::to_value(&d)
-                            .map_err(|error| HostError::new(error.to_string()))
+                        serde_json::to_value(&d).map_err(|error| HostError::new(error.to_string()))
                     })
                     .transpose()?
             }
@@ -399,8 +403,7 @@ fn get_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 db.get_1601c_draft(&tin, year, month)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .map(|d| {
-                        serde_json::to_value(&d)
-                            .map_err(|error| HostError::new(error.to_string()))
+                        serde_json::to_value(&d).map_err(|error| HostError::new(error.to_string()))
                     })
                     .transpose()?
             }
@@ -465,8 +468,7 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 let month = quarter.ok_or_else(|| {
                     HostError::new("1601C drafts are monthly: pass the month in the quarter slot")
                 })?;
-                let base =
-                    bir_core::forms::Form1601CDraft::new_from_profile(&profile, year, month);
+                let base = bir_core::forms::Form1601CDraft::new_from_profile(&profile, year, month);
                 let draft = overlay_fields(base, &data)?;
                 db.save_1601c_draft(&draft)
                     .map(|id| HostValue::Number(id as f64))
@@ -514,75 +516,71 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let year = arguments.integer(2)? as u16;
     let quarter = optional_quarter(arguments, 3)?;
     with_database(|db| {
-        let queued: Result<i64, HostError> = (|| {
-            match form_code.as_str() {
-                "2551Q" => {
-                    let q = quarter.ok_or_else(|| {
-                        HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
-                    })?;
-                    let mut draft = db
-                        .get_2551q_draft(&tin, year, q)
+        let queued: Result<i64, HostError> = (|| match form_code.as_str() {
+            "2551Q" => {
+                let q = quarter.ok_or_else(|| {
+                    HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
+                })?;
+                let mut draft = db
+                    .get_2551q_draft(&tin, year, q)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
+                draft.transition_to_queued().map_err(|errors| {
+                    HostError::new(
+                        errors
+                            .iter()
+                            .map(|(field, msg)| format!("{field}: {msg}"))
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                    )
+                })?;
+                db.save_queued_2551q_draft_and_election(&draft)
+                    .map_err(|error| HostError::new(error.to_string()))
+            }
+            "1601C" => {
+                let month = quarter
+                    .ok_or_else(|| HostError::new("1601C drafts are monthly: pass the month"))?;
+                let mut draft = db
+                    .get_1601c_draft(&tin, year, month)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
+                draft.transition_to_queued().map_err(|errors| {
+                    HostError::new(
+                        errors
+                            .iter()
+                            .map(|(field, msg)| format!("{field}: {msg}"))
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                    )
+                })?;
+                db.save_queued_1601c_draft(&draft)
+                    .map_err(|error| HostError::new(error.to_string()))
+            }
+            _ => {
+                use bir_core::forms::queueable::QueueableKind;
+                let kind = QueueableKind::from_form_code(&form_code)
+                    .ok_or_else(|| HostError::new(format!("Form {form_code} is not queueable")))?;
+                bir_core::with_queueable_kind!(kind, F => {
+                    let mut draft: F = db
+                        .get_form_draft(&tin, &form_code, year, quarter)
                         .map_err(|error| HostError::new(error.to_string()))?
-                        .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
-                    draft.transition_to_queued().map_err(|errors| {
-                        HostError::new(
-                            errors
-                                .iter()
-                                .map(|(field, msg)| format!("{field}: {msg}"))
-                                .collect::<Vec<_>>()
-                                .join("; "),
-                        )
-                    })?;
-                    db.save_queued_2551q_draft_and_election(&draft)
+                        .ok_or_else(|| {
+                            HostError::new(format!("No saved {form_code} draft for that period"))
+                        })?;
+                    draft
+                        .queue(bir_core::filing_queue::QueueAuthSource::Gui)
+                        .map_err(|errors| {
+                            HostError::new(
+                                errors
+                                    .iter()
+                                    .map(|(field, msg)| format!("{field}: {msg}"))
+                                    .collect::<Vec<_>>()
+                                    .join("; "),
+                            )
+                        })?;
+                    db.save_queued_queueable(&draft)
                         .map_err(|error| HostError::new(error.to_string()))
-                }
-                "1601C" => {
-                    let month = quarter.ok_or_else(|| {
-                        HostError::new("1601C drafts are monthly: pass the month")
-                    })?;
-                    let mut draft = db
-                        .get_1601c_draft(&tin, year, month)
-                        .map_err(|error| HostError::new(error.to_string()))?
-                        .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
-                    draft.transition_to_queued().map_err(|errors| {
-                        HostError::new(
-                            errors
-                                .iter()
-                                .map(|(field, msg)| format!("{field}: {msg}"))
-                                .collect::<Vec<_>>()
-                                .join("; "),
-                        )
-                    })?;
-                    db.save_queued_1601c_draft(&draft)
-                        .map_err(|error| HostError::new(error.to_string()))
-                }
-                _ => {
-                    use bir_core::forms::queueable::QueueableKind;
-                    let kind = QueueableKind::from_form_code(&form_code).ok_or_else(|| {
-                        HostError::new(format!("Form {form_code} is not queueable"))
-                    })?;
-                    bir_core::with_queueable_kind!(kind, F => {
-                        let mut draft: F = db
-                            .get_form_draft(&tin, &form_code, year, quarter)
-                            .map_err(|error| HostError::new(error.to_string()))?
-                            .ok_or_else(|| {
-                                HostError::new(format!("No saved {form_code} draft for that period"))
-                            })?;
-                        draft
-                            .queue(bir_core::filing_queue::QueueAuthSource::Gui)
-                            .map_err(|errors| {
-                                HostError::new(
-                                    errors
-                                        .iter()
-                                        .map(|(field, msg)| format!("{field}: {msg}"))
-                                        .collect::<Vec<_>>()
-                                        .join("; "),
-                                )
-                            })?;
-                        db.save_queued_queueable(&draft)
-                            .map_err(|error| HostError::new(error.to_string()))
-                    })
-                }
+                })
             }
         })();
         queued.map(|id| HostValue::Number(id as f64))
@@ -597,53 +595,232 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     let year = arguments.integer(2)? as u16;
     let quarter = optional_quarter(arguments, 3)?;
     with_database(|db| {
-        let result: Result<(), HostError> = (|| {
-            match form_code.as_str() {
-                "2551Q" => {
-                    let q = quarter.ok_or_else(|| {
-                        HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
-                    })?;
-                    let draft = db
-                        .get_2551q_draft(&tin, year, q)
+        let result: Result<(), HostError> = (|| match form_code.as_str() {
+            "2551Q" => {
+                let q = quarter.ok_or_else(|| {
+                    HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
+                })?;
+                let draft = db
+                    .get_2551q_draft(&tin, year, q)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No queued 2551Q draft for that period"))?;
+                db.cancel_queued_2551q_submission(&draft)
+                    .map_err(|error| HostError::new(error.to_string()))?;
+                Ok(())
+            }
+            "1601C" => {
+                let month = quarter
+                    .ok_or_else(|| HostError::new("1601C drafts are monthly: pass the month"))?;
+                let draft = db
+                    .get_1601c_draft(&tin, year, month)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No queued 1601C draft for that period"))?;
+                db.cancel_queued_1601c_submission(&draft)
+                    .map_err(|error| HostError::new(error.to_string()))?;
+                Ok(())
+            }
+            _ => {
+                use bir_core::forms::queueable::QueueableKind;
+                let kind = QueueableKind::from_form_code(&form_code)
+                    .ok_or_else(|| HostError::new(format!("Form {form_code} is not queueable")))?;
+                bir_core::with_queueable_kind!(kind, F => {
+                    let draft: F = db
+                        .get_form_draft(&tin, &form_code, year, quarter)
                         .map_err(|error| HostError::new(error.to_string()))?
-                        .ok_or_else(|| HostError::new("No queued 2551Q draft for that period"))?;
-                    db.cancel_queued_2551q_submission(&draft)
+                        .ok_or_else(|| {
+                            HostError::new(format!("No queued {form_code} draft for that period"))
+                        })?;
+                    db.cancel_queued_queueable(&draft)
                         .map_err(|error| HostError::new(error.to_string()))?;
                     Ok(())
-                }
-                "1601C" => {
-                    let month = quarter.ok_or_else(|| {
-                        HostError::new("1601C drafts are monthly: pass the month")
-                    })?;
-                    let draft = db
-                        .get_1601c_draft(&tin, year, month)
-                        .map_err(|error| HostError::new(error.to_string()))?
-                        .ok_or_else(|| HostError::new("No queued 1601C draft for that period"))?;
-                    db.cancel_queued_1601c_submission(&draft)
-                        .map_err(|error| HostError::new(error.to_string()))?;
-                    Ok(())
-                }
-                _ => {
-                    use bir_core::forms::queueable::QueueableKind;
-                    let kind = QueueableKind::from_form_code(&form_code).ok_or_else(|| {
-                        HostError::new(format!("Form {form_code} is not queueable"))
-                    })?;
-                    bir_core::with_queueable_kind!(kind, F => {
-                        let draft: F = db
-                            .get_form_draft(&tin, &form_code, year, quarter)
-                            .map_err(|error| HostError::new(error.to_string()))?
-                            .ok_or_else(|| {
-                                HostError::new(format!("No queued {form_code} draft for that period"))
-                            })?;
-                        db.cancel_queued_queueable(&draft)
-                            .map_err(|error| HostError::new(error.to_string()))?;
-                        Ok(())
-                    })
-                }
+                })
             }
         })();
         result.map(|_| HostValue::Null)
     })
+}
+
+/// The frozen print-sheet slug each form's painted `PRINT_SLUG` names.
+fn print_slug_for(form_code: &str) -> Option<&'static str> {
+    Some(match form_code {
+        "0605" => "0605-1999",
+        "0619E" => "0619e-2018",
+        "0619F" => "0619f-2018",
+        "1600PT" => "1600-pt-2018",
+        "1600VT" => "1600-vt-2018",
+        "1600WP" => "1600wp-2010",
+        "1601C" => "1601c-2018",
+        "1601EQ" => "1601eq-2019",
+        "1601FQ" => "1601-fq-2020",
+        "1602Q" => "1602q-2019",
+        "1603Q" => "1603q-2018",
+        "1604C" => "1604c-2018",
+        "1604E" => "1604e-2018",
+        "1604F" => "1604f-2018",
+        "1606" => "1606-2018",
+        "1700" => "1700-2018",
+        "1701" => "1701-2018",
+        "1701A" => "1701a-2018",
+        "1701MS" => "1701ms-2024",
+        "1701Q" => "1701q-2018",
+        "1702EX" => "1702ex-2018",
+        "1702MX" => "1702mx-2018c",
+        "1702Q" => "1702q-2018",
+        "1702RT" => "1702rt-2018c",
+        "1706" => "1706-2018",
+        "1707" => "1707-2021",
+        "1707A" => "1707a-2021",
+        "1800" => "1800-2018",
+        "1801" => "1801-2018",
+        "2000" => "2000-dst-2018",
+        "2000OT" => "2000-ot-2018",
+        "2200A" => "2200a-2020",
+        "2200AN" => "2200an-2018",
+        "2200C" => "2200c-2018",
+        "2200M" => "2200m-2018",
+        "2200P" => "2200p-2020",
+        "2200S" => "2200s-2018",
+        "2200T" => "2200t-2022",
+        "2550M" => "2550m-2007",
+        "2550Q" => "2550q-2024",
+        "2551Q" => "2551q-2018",
+        "2552" => "2552-2018",
+        "2553" => "2553-1999",
+        _ => return None,
+    })
+}
+
+/// The receipt page a confirmed draft appends — the shell port of the painted
+/// `form_html_preview_launcher::receipt_page_for`.
+fn receipt_page(
+    db: &Database,
+    receipt_id: Option<i64>,
+    mailbox: &str,
+) -> Option<bir_print::frozen_html::ReceiptPage> {
+    let receipt_id = receipt_id?;
+    let receipt = db.get_submission_receipt_by_id(receipt_id).ok().flatten()?;
+    Some(bir_print::frozen_html::ReceiptPage {
+        filename: receipt.filename.clone(),
+        subject: "Tax Return Receipt Confirmation".to_string(),
+        from: receipt
+            .source_from
+            .clone()
+            .unwrap_or_else(|| "ebirforms-noreply@bir.gov.ph".to_string()),
+        to: mailbox.to_string(),
+        received_at: bir_core::background_cron::display_received_at(
+            &receipt.received_date,
+            &receipt.received_time,
+        ),
+        email_received_at: receipt
+            .email_received_at
+            .as_deref()
+            .and_then(bir_core::receipt::display_email_received_at),
+        body_text: receipt.raw_text.clone(),
+        body_html: receipt
+            .raw_html
+            .as_deref()
+            .map(bir_core::receipt::sanitized_receipt_html),
+    })
+}
+
+/// Fill the form's frozen print sheet, write it to a temp HTML file, and open
+/// it with the platform's default handler (the painted app shows it in a wry
+/// preview window — the shell has no wry, and `cx.open_url` is HTTP-only, so
+/// the printable equivalent is the system browser via xdg-open/open/start).
+fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form_code = arguments.string(1)?.to_owned();
+    let year = arguments.integer(2)? as u16;
+    let quarter = optional_quarter(arguments, 3)?;
+    let slug = print_slug_for(&form_code)
+        .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
+    with_database(|db| {
+        let (fields, receipt) = match form_code.as_str() {
+            "2551Q" => {
+                let q = quarter.ok_or_else(|| HostError::new("2551Q drafts are quarterly"))?;
+                let draft = db
+                    .get_2551q_draft(&tin, year, q)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
+                let page = receipt_page(db, draft.receipt_id, &draft.email);
+                (draft.to_print_field_map(), page)
+            }
+            "1601C" => {
+                let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
+                let draft = db
+                    .get_1601c_draft(&tin, year, month)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
+                let page = receipt_page(db, draft.receipt_id, &draft.email_address);
+                (draft.to_print_field_map(), page)
+            }
+            _ => {
+                use bir_core::forms::queueable::QueueableKind;
+                let kind = QueueableKind::from_form_code(&form_code)
+                    .ok_or_else(|| HostError::new(format!("Form {form_code} is not printable")))?;
+                bir_core::with_queueable_kind!(kind, F => {
+                    let draft: F = db
+                        .get_form_draft(&tin, &form_code, year, quarter)
+                        .map_err(|error| HostError::new(error.to_string()))?
+                        .ok_or_else(|| {
+                            HostError::new(format!("No saved {form_code} draft for that period"))
+                        })?;
+                    let page = receipt_page(
+                        db,
+                        draft.lifecycle().receipt_id,
+                        draft.submission_email(),
+                    );
+                    (draft.print_field_map(), page)
+                })
+            }
+        };
+        let html =
+            bir_print::frozen_html::filled_document_with_receipt(slug, &fields, receipt.as_ref())
+                .map_err(HostError::new)?;
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs())
+            .unwrap_or(0);
+        let path =
+            std::env::temp_dir().join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
+        std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
+        open_in_system_browser(&path)?;
+        Ok(HostObject::new()
+            .field("path", path.display().to_string())
+            .into())
+    })
+}
+
+/// Launch the platform's default HTML viewer on `path` — detached, so the
+/// host call returns immediately like the painted preview window does.
+fn open_in_system_browser(path: &std::path::Path) -> Result<(), HostError> {
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args([
+            "/c",
+            "start",
+            "",
+            path.as_os_str().to_string_lossy().as_ref(),
+        ]);
+        cmd
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("open");
+        cmd.arg(path);
+        cmd
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(path);
+        cmd
+    };
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| HostError::new(error.to_string()))
 }
 
 /// Drop the cached connection — used after a database-replace import so the
@@ -697,8 +874,10 @@ fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
             .unwrap_or(0);
         if db_path.exists() {
             if let Some(parent) = db_path.parent() {
-                let _ =
-                    std::fs::copy(&db_path, parent.join(format!("bir_data.safety-{timestamp}.db")));
+                let _ = std::fs::copy(
+                    &db_path,
+                    parent.join(format!("bir_data.safety-{timestamp}.db")),
+                );
             }
         }
         reset_database();
@@ -709,10 +888,12 @@ fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
     }
 
     if is_profile {
-        return with_database(|db| match bir_core::import::import_profile_data(db, &path) {
-            Ok(()) => Ok(HostObject::new().field("kind", "profile").into()),
-            Err(error) => Err(HostError::new(error.to_string())),
-        });
+        return with_database(
+            |db| match bir_core::import::import_profile_data(db, &path) {
+                Ok(()) => Ok(HostObject::new().field("kind", "profile").into()),
+                Err(error) => Err(HostError::new(error.to_string())),
+            },
+        );
     }
 
     Ok(HostObject::new().field("kind", "invalid").into())
@@ -781,6 +962,7 @@ pub fn module() -> HostModule {
         .function("list_deadlines", |_| list_deadlines())
         .function("list_announcements", |_| list_announcements())
         .function("import_archive", import_archive)
+        .function("form_print_html", form_print_html)
         .declarations(
             r#"
 export interface SystemInfo {
@@ -881,6 +1063,10 @@ export interface ImportResult {
     kind: "database" | "profile" | "invalid" | "cancelled";
 }
 export function import_archive(path?: string): ImportResult;
+export interface PrintPreview {
+    path: string;
+}
+export function form_print_html(tin: string, form_code: string, year: number, quarter: number | null): PrintPreview;
 "#,
         )
 }

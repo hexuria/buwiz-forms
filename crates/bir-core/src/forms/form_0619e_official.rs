@@ -377,6 +377,9 @@ impl Form0619EDraft {
 }
 
 impl QueueableForm for Form0619EDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_bir_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }
