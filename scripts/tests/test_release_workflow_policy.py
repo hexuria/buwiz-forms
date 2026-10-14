@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -190,14 +191,14 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             self.ci_workflow,
         )
         check = self.ci_workflow.split("  validation-rules-v1:", maxsplit=1)[0]
-        matrix = check.split("  check:", maxsplit=1)[1].split(
-            "    runs-on:", maxsplit=1
-        )[0]
-        matrix_os = re.findall(r"(?m)^\s+- os: ([^\s]+)\s*$", matrix)
-        self.assertEqual(
-            matrix_os,
-            ["macos-14", "ubuntu-22.04", "windows-latest"],
-        )
+        # `changes` picks the systems; an app change runs all three.
+        all_systems = re.search(r"(?m)^\s+all_systems='([^']+)'\s*$", self.ci_workflow)
+        self.assertIsNotNone(all_systems)
+        if all_systems is not None:
+            self.assertEqual(
+                [entry["os"] for entry in json.loads(all_systems.group(1))["include"]],
+                ["macos-14", "ubuntu-22.04", "windows-latest"],
+            )
         self.assertEqual(
             check.count("cargo install just --version 1.45.0 --locked"),
             1,
@@ -213,16 +214,6 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )
         self.assertIsNotNone(just_install)
         self.assertIsNotNone(just_step)
-        if just_install is not None:
-            self.assertRegex(
-                just_install.group(1),
-                r"(?m)^\s+if: needs\.changes\.outputs\.code != 'false'$",
-            )
-        if just_step is not None:
-            self.assertRegex(
-                just_step.group(1),
-                r"(?m)^\s+if: needs\.changes\.outputs\.code != 'false'$",
-            )
         self.assertLess(
             check.index("    - name: Install Rust Toolchain"),
             check.index("    - name: Rust Cache"),
