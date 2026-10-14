@@ -1,0 +1,316 @@
+name: Release (macOS)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialise per ref, but never cancel: a release job that is signing,
+# notarizing or publishing must be allowed to finish. workflow_dispatch runs
+# are dry runs — they build, sign, notarize and upload an artifact but never
+# publish to a GitHub Release.
+concurrency:
+  group: release-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  APP_NAME: eBIRForms
+  MACOSX_DEPLOYMENT_TARGET: '13.0'
+
+jobs:
+  # The public release jobs may consume only this exact, tested tag commit.
+  # A successful branch workflow is not accepted as a substitute because the
+  # tag may point at a different SHA. On workflow_dispatch the exact-tag rules
+  # are relaxed to "clean tree at this commit" and publish stays false.
+  preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact tagged SHA, version, and lockfiles
+        id: version
+        shell: bash
+        run: |
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          git ls-files --error-unmatch Cargo.lock package-lock.json
+
+          CARGO_VERSION="$(awk -F '"' '
+            /^\[workspace\.package\]$/ { in_workspace_package = 1; next }
+            in_workspace_package && /^\[/ { exit }
+            in_workspace_package && /^version[[:space:]]*=/ { print $2; exit }
+          ' Cargo.toml)"
+
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            test "$GITHUB_REF_TYPE" = "tag"
+            test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
+            test "$(git tag --points-at "$GITHUB_SHA" --list "$GITHUB_REF_NAME")" = "$GITHUB_REF_NAME"
+
+            if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Release tag must use exact vMAJOR.MINOR.PATCH syntax: $GITHUB_REF_NAME" >&2
+              exit 1
+            fi
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [ -z "$CARGO_VERSION" ] || [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+              echo "Release tag version $TAG_VERSION does not match Cargo workspace version $CARGO_VERSION" >&2
+              exit 1
+            fi
+            echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            if [ -z "$CARGO_VERSION" ]; then
+              echo "Could not read Cargo workspace version from Cargo.toml" >&2
+              exit 1
+            fi
+            echo "version=$CARGO_VERSION" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libx11-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libwayland-dev \
+            libwayland-client0 \
+            libasound2-dev \
+            libudev-dev \
+            libvulkan-dev \
+            libfontconfig1-dev \
+            libfreetype-dev \
+            libssl-dev \
+            libpolkit-gobject-1-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            mesa-vulkan-drivers
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: clippy, rustfmt
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Test Python scripts
+        run: python -m unittest discover -s scripts/tests -v
+
+      - name: Verify Rust workspace
+        run: |
+          cargo fmt --all -- --check
+          cargo check --locked --workspace
+          cargo clippy --locked --workspace -- -D warnings
+          cargo test --locked --workspace
+
+      - name: Verify frozen HTML inventory and TIN name stamps
+        run: |
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/audit_no_legacy.py
+
+  # ── macOS Universal ───────────────────────────────────────────────────────
+  build-macos:
+    needs: preflight
+    runs-on: macos-14  # M1 runner — can build both arm64 and x86_64
+    timeout-minutes: 180
+    env:
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      EXPECTED_SIGNING_IDENTITY: "Developer ID Application: Goldcoders Corp (5KZ8MD34QW)"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require macOS signing and notarization inputs
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          for name in APPLE_CERTIFICATE_P12 APPLE_CERTIFICATE_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required macOS release secret: $name" >&2
+              exit 1
+            fi
+          done
+          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::optional secret $name is not set; the build will ship without Google OAuth credentials"
+            fi
+          done
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Verify frozen HTML
+        run: |
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
+
+      - name: Build ARM64
+        run: cargo build --locked --release --target aarch64-apple-darwin
+
+      - name: Build x86_64
+        run: cargo build --locked --release --target x86_64-apple-darwin
+
+      - name: Import signing certificate into temporary keychain
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          printf '%s' "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          IDENTITIES="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")"
+          IDENTITY_COUNT="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { count++ } END { print count + 0 }')"
+          if [ "$IDENTITY_COUNT" -ne 1 ]; then
+            echo "Expected exactly one imported Developer ID Application identity" >&2
+            printf '%s\n' "$IDENTITIES" >&2
+            exit 1
+          fi
+          IDENTITY_LINE="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { print; exit }')"
+          case "$IDENTITY_LINE" in
+            *"$EXPECTED_SIGNING_IDENTITY"*) ;;
+            *)
+              echo "Imported Developer ID identity is not $EXPECTED_SIGNING_IDENTITY" >&2
+              printf '%s\n' "$IDENTITY_LINE" >&2
+              exit 1
+              ;;
+          esac
+          SIGNING_IDENTITY="$(printf '%s\n' "$IDENTITY_LINE" | awk '{ print $2 }')"
+
+          echo "SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Write App Store Connect API key
+        shell: bash
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Package signed and notarized DMG
+        shell: bash
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          REQUIRE_NOTARIZATION=1 bash scripts/package_macos_release.sh
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          if-no-files-found: error
+          path: |
+            target/release-artifacts/*.dmg
+            target/release-artifacts/*.sha256
+
+      - name: Clean up signing material
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/AuthKey.p8"
+
+  # ── Publish to the tag's GitHub Release ───────────────────────────────────
+  # release.yml's softprops job may create the same tag's release concurrently,
+  # so this job creates it only when missing and then uploads the DMG.
+  publish:
+    needs: [preflight, build-macos]
+    if: github.event_name == 'push' && needs.preflight.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-release
+          path: artifacts
+
+      - name: Verify checksums
+        working-directory: artifacts
+        run: sha256sum -c ./*.sha256
+
+      - name: Publish to GitHub Release
+        working-directory: artifacts
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes \
+            || gh release view "$TAG" >/dev/null 2>&1
+          gh release upload "$TAG" ./*.dmg ./*.sha256 --clobber

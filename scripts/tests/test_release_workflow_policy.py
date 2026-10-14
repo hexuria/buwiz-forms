@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,6 +13,8 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release.yml"
 WINDOWS_RELEASE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-windows.yml"
+MACOS_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-macos.yml"
+MACOS_PACKAGE_SCRIPT_PATH = REPOSITORY_ROOT / "scripts/package_macos_release.sh"
 CI_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/ci.yml"
 DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-desktop/Cargo.toml"
 INSTALLER_WXS_PATH = REPOSITORY_ROOT / "installer.wxs"
@@ -24,6 +31,10 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.windows_workflow = WINDOWS_RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.macos_workflow = MACOS_WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.macos_package_script = MACOS_PACKAGE_SCRIPT_PATH.read_text(
+            encoding="utf-8"
+        )
         cls.ci_workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.desktop_manifest = DESKTOP_MANIFEST_PATH.read_text(encoding="utf-8")
         cls.installer_wxs = INSTALLER_WXS_PATH.read_text(encoding="utf-8")
@@ -34,10 +45,10 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         cls.package_msix = PACKAGE_MSIX_PATH.read_text(encoding="utf-8")
         cls.smoke_msix = SMOKE_MSIX_PATH.read_text(encoding="utf-8")
 
-    def job(self, name: str) -> str:
+    def job(self, name: str, workflow: str | None = None) -> str:
         match = re.search(
             rf"(?ms)^  {re.escape(name)}:\n(.*?)(?=^  [a-z][a-z0-9-]*:\n|\Z)",
-            self.workflow,
+            self.workflow if workflow is None else workflow,
         )
         self.assertIsNotNone(match, f"missing release job: {name}")
         return match.group(0) if match is not None else ""
@@ -50,8 +61,8 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIsNotNone(match, f"missing Windows release job: {name}")
         return match.group(0) if match is not None else ""
 
-    def test_every_publishable_build_depends_on_exact_tag_preflight(self) -> None:
-        preflight = self.job("preflight")
+    def assert_preflight_gates(self, workflow: str) -> None:
+        preflight = self.job("preflight", workflow)
         self.assertIn('git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}"', preflight)
         self.assertIn('= "$GITHUB_SHA"', preflight)
         self.assertIn(
@@ -72,43 +83,112 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             "python3 scripts/audit_no_legacy.py",
         ):
             self.assertIn(required_gate, preflight)
-        for job_name in ("build-macos", "build-windows", "build-linux"):
+
+    def test_every_publishable_build_depends_on_exact_tag_preflight(self) -> None:
+        self.assert_preflight_gates(self.workflow)
+        for job_name in ("build-windows", "build-linux"):
             self.assertIn("needs: preflight", self.job(job_name))
         self.assertIn(
-            "needs: [preflight, build-macos, build-windows, build-linux]",
+            "needs: [preflight, build-windows, build-linux]",
             self.job("release"),
         )
+        self.assertNotIn("build-macos:", self.workflow)
+        self.assertNotIn("*.dmg", self.workflow)
+
+    def test_macos_workflow_preflight_and_publish_shape(self) -> None:
+        self.assert_preflight_gates(self.macos_workflow)
+        self.assertIn(
+            "needs: preflight",
+            self.job("build-macos", self.macos_workflow),
+        )
+        publish = self.job("publish", self.macos_workflow)
+        self.assertIn("needs: [preflight, build-macos]", publish)
+        self.assertIn("github.event_name == 'push'", publish)
+        self.assertIn("contents: write", publish)
+        without_publish = self.macos_workflow.replace(publish, "")
+        self.assertNotIn("contents: write", without_publish)
+        self.assertIn("contents: read", self.macos_workflow)
 
     def test_macos_public_artifact_is_signed_notarized_and_verified(self) -> None:
-        macos = self.job("build-macos")
+        macos = self.job("build-macos", self.macos_workflow)
+        script = self.macos_package_script
         for secret in (
             "APPLE_CERTIFICATE_P12",
             "APPLE_CERTIFICATE_PASSWORD",
-            "APPLE_TEAM_ID",
-            "APPLE_ID",
-            "APPLE_APP_PASSWORD",
+            "APPLE_API_KEY_P8",
+            "APPLE_API_KEY_ID",
+            "APPLE_API_ISSUER_ID",
         ):
             self.assertIn(f"secrets.{secret}", macos)
         self.assertNotIn("if: env.APPLE_", macos)
-        self.assertIn("codesign --force --options runtime", macos)
-        self.assertIn("xcrun notarytool submit", macos)
-        self.assertIn("xcrun stapler staple", macos)
-        self.assertIn("xcrun stapler validate", macos)
-        self.assertIn('cp assets/AppIcon.icns "$APP/Contents/Resources/"', macos)
-        self.assertIn('hdiutil attach "$DMG" -nobrowse -readonly', macos)
-        self.assertIn(
-            'python3 scripts/audit_no_legacy.py --package-root "$MOUNTED_APP"',
-            macos,
-        )
+        self.assertIn("REQUIRE_NOTARIZATION=1", self.macos_workflow)
         self.assertIn("security set-key-partition-list", macos)
         self.assertIn("security find-identity -v -p codesigning", macos)
-        self.assertIn('--keychain "$KEYCHAIN_PATH"', macos)
+        self.assertIn('--keychain "$KEYCHAIN_PATH"', script)
         self.assertNotIn(
             'SIGNING_IDENTITY="Developer ID Application:',
-            macos,
+            macos + script,
+        )
+        self.assertIn("Goldcoders Corp (5KZ8MD34QW)", macos)
+        self.assertIn("codesign --force --options runtime", script)
+        self.assertIn(
+            "--entitlements assets/macos/entitlements.mac.plist", script
+        )
+        self.assertIn("xcrun notarytool submit", script)
+        self.assertIn("--output-format json", script)
+        self.assertIn('result.get("status") == "Accepted"', script)
+        self.assertIn('xcrun stapler staple "$APP"', script)
+        self.assertIn('xcrun stapler staple "$DMG"', script)
+        self.assertIn('xcrun stapler validate "$DMG"', script)
+        self.assertIn('spctl --assess --type execute --verbose=2 "$APP"', script)
+        self.assertIn('cp assets/AppIcon.icns "$APP/Contents/Resources/"', script)
+        self.assertIn('hdiutil attach "$DMG" -nobrowse -readonly', script)
+        self.assertIn(
+            'python3 scripts/audit_no_legacy.py --package-root "$MOUNTED_APP"',
+            script,
         )
         self.assertIn("if-no-files-found: error", macos)
-        self.assertNotIn("target/release-artifacts/*.zip", macos)
+        self.assertNotIn("*.zip", macos)
+
+    def test_package_script_refuses_adhoc_when_notarization_is_required(
+        self,
+    ) -> None:
+        if sys.platform == "win32":
+            self.skipTest("bash on Windows may resolve to WSL's System32 bash")
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("bash is required to exercise package_macos_release.sh")
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "release-artifacts"
+            env = dict(os.environ)
+            env.update(
+                {
+                    "VERSION": "1.2.3",
+                    "REQUIRE_NOTARIZATION": "1",
+                    "SIGNING_IDENTITY": "-",
+                    "OUT_DIR": str(out_dir),
+                }
+            )
+            for name in (
+                "NOTARY_KEY_PATH",
+                "NOTARY_KEY_ID",
+                "NOTARY_ISSUER_ID",
+            ):
+                env.pop(name, None)
+            result = subprocess.run(
+                [bash, str(MACOS_PACKAGE_SCRIPT_PATH)],
+                env=env,
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("REQUIRE_NOTARIZATION", result.stderr)
+            self.assertFalse(
+                out_dir.exists(),
+                "script must fail before creating any output",
+            )
 
     def test_windows_public_artifacts_require_authenticode_signatures(self) -> None:
         windows = self.windows_job("installers")
