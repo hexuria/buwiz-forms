@@ -1,5 +1,5 @@
 use crate::Tin;
-use crate::bir_xml::parse_bir_xml_checked;
+use crate::bir_xml::{decode_bir_value, parse_bir_xml_encoded_occurrences_checked};
 use crate::crypto::{BIR_IAF_PASSPHRASE, decrypt_and_decompress};
 use crate::db::{Database, DbError, LegacyFiledReturn};
 use crate::official_import::find_capability_identity;
@@ -300,8 +300,17 @@ fn scan_returns(folder: &Path, scan: &mut LegacyScan) -> Result<(), LegacyMigrat
                 .push(issue(&path, "final copy trailer is missing"));
             continue;
         }
-        let fields = match parse_bir_xml_checked(contents) {
-            Ok(fields) => fields,
+        let fields = match parse_bir_xml_encoded_occurrences_checked(contents) {
+            Ok(occurrences) => occurrences
+                .into_iter()
+                // Official exports are not guaranteed to use one codec; keep the
+                // raw body when neither decoder applies rather than dropping it.
+                .map(|field| {
+                    let value = decode_bir_value(&field.encoded_value)
+                        .unwrap_or_else(|| field.encoded_value.clone());
+                    (field.field_id, value)
+                })
+                .collect(),
             Err(error) => {
                 scan.issues
                     .push(issue(&path, &format!("invalid return XML: {error}")));
@@ -355,16 +364,21 @@ fn parse_profile_contents(
     tin: String,
     branch: String,
 ) -> Result<LegacyProfile, String> {
+    // Tag-oriented: official profile files put the XML declaration and every
+    // div on a single line.
     let mut fields = BTreeMap::new();
-    for line in contents.lines() {
-        let line = line.trim();
-        let Some(div_contents) = line.strip_prefix("<div>") else {
-            continue;
+    let mut rest = contents;
+    while let Some(start) = rest.find("<div>") {
+        rest = &rest[start + "<div>".len()..];
+        let Some(end) = rest.find("</div>") else {
+            break;
         };
+        let div_contents = &rest[..end];
+        rest = &rest[end..];
         let Some((key, value)) = div_contents.split_once('=') else {
             continue;
         };
-        let terminator = format!("{key}=</div>");
+        let terminator = format!("{key}=");
         let Some(value) = value.strip_suffix(&terminator) else {
             continue;
         };
@@ -1011,15 +1025,8 @@ mod tests {
     #[test]
     fn profile_reads_undefined_fields_as_empty_and_rejects_zero_tin() {
         let path = Path::new("profile/12345678800000.xml");
-        let contents = "<?xml version='1.0'?>\n\
-            <div>fn=DELA%20CRUZ%20JUAN%20TAMADfn=</div>\n\
-            <div>tin1=000tin1=</div><div>tin2=000tin2=</div><div>tin3=000tin3=</div><div>tin4=00000tin4=</div>\n\
-            <div>rdo=018rdo=</div>\n\
-            <div>lob=undefinedlob=</div>\n\
-            <div>regAddr=OLONGAPOregAddr=</div>\n\
-            <div>zip=2200zip=</div><div>telNo=09123456789telNo=</div>\n\
-            <div>email=a@b.testemail=</div><div>formType=2200Tv2020formType=</div>\n\
-            All Rights Reserved BIR 2014.";
+        // Real official profile: XML declaration and every div on one line.
+        let contents = "<?xml version='1.0'?>        <div>fn=DELA%20CRUZ%20JUAN%20TAMADfn=</div>        <div>tin1=000tin1=</div>        <div>tin2=000tin2=</div>        <div>tin3=000tin3=</div>        <div>tin4=00000tin4=</div>        <div>rdo=018rdo=</div>        <div>lob=undefinedlob=</div>        <div>regAddr=OLONGAPOregAddr=</div>        <div>zip=2200zip=</div>        <div>telNo=09123456789telNo=</div>        <div>email=a@b.testemail=</div>        <div>confirmtin1=000confirmtin1=</div>        <div>formType=2200Tv2020formType=</div>                All Rights Reserved BIR 2014.";
         let profile =
             parse_profile_contents(contents, path, "123456788".to_string(), "00000".to_string())
                 .unwrap();
