@@ -831,10 +831,13 @@ fn fill_empty_fields(profile: &mut TaxpayerProfile, values: &ProfileValues) -> u
 fn return_period_order(legacy_return: &LegacyReturn) -> (u32, u32, Option<u32>) {
     let period = &legacy_return.period;
     let (digits, quarter) = match period.find(['Q', 'q']) {
-        Some(index) => (
-            period.get(..index).unwrap_or_default(),
-            period[index + 1..].parse::<u32>().ok(),
-        ),
+        Some(index) => {
+            let quarter = match period[index + 1..].parse::<u32>() {
+                Ok(quarter) if (1..=4).contains(&quarter) => quarter,
+                _ => return (0, 0, legacy_return.amendment_version),
+            };
+            (period.get(..index).unwrap_or_default(), Some(quarter))
+        }
         None => (period.as_str(), None),
     };
     if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -1273,6 +1276,18 @@ mod tests {
         };
         apply_legacy_migration(&db, &scan).unwrap();
         assert_eq!(db.list_profiles().unwrap()[0].full_name, "Quarter One");
+    }
+
+    #[test]
+    fn quarterly_return_order_rejects_invalid_quarters() {
+        for period in ["2025Q4294967295", "2025Q0", "2025Q5", "2025Qx"] {
+            let legacy_return = synthetic_return(period, "Invalid quarter", "invalid-quarter");
+            assert_eq!(
+                return_period_order(&legacy_return),
+                (0, 0, None),
+                "{period}"
+            );
+        }
     }
 
     #[test]
