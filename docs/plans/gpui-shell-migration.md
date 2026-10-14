@@ -86,6 +86,75 @@ acceptance pass. These are required migration work, not a visual redesign.
   dry-run artifacts and state transitions independently; confirmation/payment
   require their own reference acceptance and must not be inferred from Queued.
 
+### Shell UI redesign (2026-10-15) — separate from the parity checklist
+
+The JS shell now follows the buwiz UI redesign (hexuria/buwiz-ui-redesign
+`DESIGN_SYSTEM.md` and prototype, commit 3cfc037). This is a visual and
+tax-profile redesign. **It closes none of the P1/P2 items above**; each stays
+open until its own reference acceptance passes.
+
+Covered:
+
+- `app/shell/ui.js`: the design tokens (light and dark), type, 4 px grid,
+  radii, and the ten wrappers (IconButton, AppButton, NavRow, ContextPill,
+  Avatar, Disclosure, Field, StatusChip, SidePanel, Segmented). The
+  Components page (command palette → Components) renders them.
+- Shell: 40 px title bar drawn by the app (system bar hidden; macOS traffic
+  lights at y 14), context pill, sidebar with Recent and the account menu,
+  tax-profile and notifications panels closed by their own trigger or Esc,
+  command palette, start-a-return dialog, toasts, overlays below 860 px and
+  the compact pill below 600 px.
+- Screens: Home (with the fresh-install welcome), Form library, Calendar,
+  Filings, Settings, the taxpayer page (Profile, Forms, Templates tabs), New
+  taxpayer, New branch.
+- Tax-profile data layer exposed to JS (`crates/bir-shell/src/tax_profile_module.rs`);
+  the tax-year bound and the one-transaction TIN move (and branch-code move)
+  live in bir-core with unit tests.
+- Form page rendered from `app/forms/forms-schema.json` for all 43 forms,
+  bound by rules-corpus key through bir-core's agent seam
+  (`crates/bir-shell/src/screen_form_module.rs`); open and validation run off
+  the UI thread. Headed check: 0619E, 1601C, 1601EQ and 2550Q opened, took
+  input, saved and reopened intact across an app restart, with validation in
+  place; one 0619E return was queued (queue insertion only, no transport).
+
+Files the redesign touches that the P1 items also touch: `app/main.js`
+(`openFormView`/`saveFormDraft` are gone; the form page uses
+`screen_form_*`), `app/shell/specs.js` and `form_view.js` (removed),
+`app/shell/periods.js` (period choice in the start-a-return dialog),
+`crates/bir-shell/src/screen_form_module.rs` (typed draft construction per
+form, including 1601C's unanswered constructor), `app/shell/form_page.js`
+(schedule tables, Save/Queue/Print), `app/shell/taxpayer.js` and the retained
+`profile_manager.js` (taxpayer management), `app/shell/settings.js` (admin
+PIN, the same `OtpInput` as before), and the key bindings in `app/main.js`.
+`bir_module.rs` `save_form_draft`/`get_form_draft` are unchanged.
+
+Not done, or different from the prototype, and why:
+
+- 1601EQ's ATC schedule cells show read-only: bir-core's pinned agent
+  definition marks them "derived by the app" (the painted page has its own
+  ATC row editor). This is the open P1 schedules item.
+- Templates snapshot only 1601C and 2551Q returns; other forms have no field
+  classification in bir-core yet, and the toast says so.
+- Template mode, guided stops and the "Update template?" prompt (D10) are
+  not built, as `DESIGN_SYSTEM.md` notes; the Guided mode switch explains this.
+- Settings rows the prototype shows for features this build lacks (lock after
+  inactivity, back up now, update-template prompt, filing confirmation
+  emails) are left out rather than drawn as dead controls.
+- The app account row reads "Local account": there is no account record.
+- Archive, delete and the per-taxpayer PIN stay on the pre-redesign profile
+  editor, linked from Profile › "Email, security and export", so they remain
+  reachable.
+- GPUI exposes no tabular-figures feature, no `sticky` position and no way
+  for a script to focus an Input. TIN and form codes use the UI face with
+  default figures; the part navigator opens the chosen part and folds the
+  others instead of scrolling to it; the palette routes keys typed at the
+  root into its field until the field is clicked. Editable amount fields stay
+  left-aligned (the base Input ignores text alignment).
+- gpui-shell re-renders only on state change and has no resize event, so the
+  app polls the viewport every 200 ms to keep pixel widths current.
+- Checked on macOS only (light and dark, 1440 and 800 px). Windows caption
+  buttons are drawn but not run on Windows.
+
 ### Verified behaviors and coverage limits
 
 Profile creation and visible input frames passed. A reopened monthly 1601C
@@ -119,6 +188,9 @@ proof of toolchain only, not product parity.
 **This plan is not authorization** to merge, publish, submit to BIR, or run the
 official application's upload path. All test runs use a fresh
 `BIR_DATABASE_PATH`, test TIN `123-456-788-00000`, and `BIR_SFTP_DRY_RUN=1`.
+Also set `EBIR_TEST_ENV=1`: without it a scratch database still asks the
+macOS keychain for the live master key (`com.ebir.rust`), which must not be
+granted to a test run.
 
 ## Dependency pins (verified resolving; keep exact)
 
