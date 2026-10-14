@@ -1,580 +1,717 @@
-// Sidebar + top bar + notifications drawer + footer — the chrome of the app
-// shell, ported from bir-desktop/src/sidebar.rs, top_bar.rs and
-// components/footer.rs. Layout constants mirror the painted values so the
-// frame is visually identical: 280px sidebar (72px mini), 36px top strip,
-// 380px notifications drawer, 32px menu rows, 72px footer.
+// The shell chrome (DESIGN_SYSTEM.md "Shell layout"): the 40 px title bar,
+// the 248 px sidebar with the account menu, the 320 px right panel (tax
+// profile or notifications), the command palette and the start-a-return
+// dialog. No separators in the title bar or the panels: spacing groups.
 
-import { div, svg, image } from "gpui-kit";
-import { v_flex, h_flex, Input } from "gpui-base";
-import { renderNotifications } from "./pages.js";
-import { DEV_ORANGE, LOGOUT_RED } from "./theme.js";
+import { div } from "gpui-kit";
+import process from "process";
+import {
+  tokens,
+  SIZE,
+  SPACE,
+  RADIUS,
+  BREAK,
+  Text,
+  Line,
+  Code,
+  Icon,
+  IconButton,
+  AppButton,
+  NavRow,
+  GroupLabel,
+  Kbd,
+  Avatar,
+  StepCircle,
+  ContextPill,
+  Chip,
+  SidePanel,
+  Overlay,
+  Dropdown,
+  TextField,
+} from "./ui.js";
+import { themeIcon } from "./theme.js";
+import { formatTin, shortDate } from "./store.js";
+import { periodOptions, periodLabel, frequencyOf } from "./periods.js";
 
-const TOP_BAR_HEIGHT = 36;
-const DRAWER_WIDTH = 380;
-const MENU_ROW_HEIGHT = 32;
-const MENU_MINI_SIZE = 36;
-const SIDEBAR_W = 280;
-const SIDEBAR_MINI_W = 72;
+// ---------------------------------------------------------------- title bar
 
-function icon(cx, path, size, color) {
-  return svg(path).size(size).text_color(color || cx.theme().colors.foreground);
+function captionButtons(cx) {
+  const t = tokens(cx);
+  const button = (id, icon, label, onClick, close, area) =>
+    div()
+      .id(id)
+      .window_control_area(area)
+      .flex()
+      .items_center()
+      .justify_center()
+      .w(SIZE.captionButton)
+      .h_full()
+      .accessibility_label(label)
+      .hover((s) => (close ? s.bg(t.captionClose) : s.bg(t.hover)))
+      .on_click((_e, cx) => onClick(cx))
+      .child(Icon(cx, icon, { size: 10, color: "fg" }));
+  return div()
+    .flex()
+    .flex_row()
+    .h_full()
+    .ml(SPACE[1])
+    .child(button("caption-minimize", "minus", "Minimize", () => window.minimize_window(), false, "min"))
+    .child(button("caption-maximize", "square", "Maximize", () => window.zoom_window(), false, "max"))
+    .child(
+      button(
+        "caption-close",
+        "x",
+        "Close",
+        () => process.exit(0),
+        true,
+        "close",
+      ),
+    );
 }
 
-/** 36px header strip: dev pills area left, bell + theme buttons right. */
-export function renderTopBar(cx, state) {
-  const badge =
-    state.notificationCount >= 10
-      ? "9+"
-      : state.notificationCount > 0
-        ? String(state.notificationCount)
-        : null;
-
-  const bell = div()
-    .id("nav_notifications")
-    .relative()
-    .flex()
-    .items_center()
-    .justify_center()
-    .size(28)
-    .rounded_md()
-    .when(state.notificationsOpen, (el) => el.bg(cx.theme().colors.accent))
-    .hover((s) => s.bg(cx.theme().colors.muted))
-    .on_click((_ev, cx) => state.toggleDrawer(cx))
-    .child(icon(cx, "icons/bell.svg", 18));
-
-  if (badge) {
-    bell.child(
-      div()
-        .absolute()
-        .top(-2)
-        .right(-4)
-        .min_w(16)
-        .h(16)
-        .px(3)
-        .rounded_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .bg(LOGOUT_RED)
-        .text_color("#ffffff")
-        .text_size(10)
-        .font_semibold()
-        .child(badge),
+/** Title bar: left controls, the context pill centred, notifications + theme right. */
+export function renderTitleBar(cx, app, L) {
+  const compact = L.vp.width < BREAK.compactPill;
+  const left = div().flex().flex_row().flex_1().flex_basis(0).min_w(0).items_center().gap(SPACE[1]).pl(10);
+  if (app.isMac) left.child(div().w(52 + 14).flex_none()); // traffic lights (system-drawn)
+  left.child(
+    IconButton(cx, "tb-sidebar", "panel-left", {
+      tooltip: app.sidebarOpen ? "Hide sidebar" : "Show sidebar",
+      pressed: false,
+      onClick: (_e, cx) => app.toggleSidebar(cx),
+    }),
+  );
+  if (!compact) {
+    left.child(
+      IconButton(cx, "tb-back", "arrow-left", {
+        tooltip: "Back",
+        disabled: !app.history.length,
+        onClick: (_e, cx) => app.goBack(cx),
+      }),
+    );
+    left.child(
+      IconButton(cx, "tb-forward", "arrow-right", {
+        tooltip: "Forward",
+        disabled: !app.forward.length,
+        onClick: (_e, cx) => app.goForward(cx),
+      }),
     );
   }
+  // Search and new-return show here only while the sidebar is hidden.
+  if (!app.sidebarOpen || L.narrow) {
+    left.child(IconButton(cx, "tb-search", "search", { tooltip: "Search", onClick: (_e, cx) => app.openPalette(cx) }));
+    left.child(IconButton(cx, "tb-new", "plus", { tooltip: "New return", onClick: (_e, cx) => app.startNewReturn(cx) }));
+  }
 
-  const themeBtn = div()
-    .id("theme_toggle_btn")
-    .relative()
+  const t = app.taxpayer();
+  const b = app.branch();
+  const pill = ContextPill(cx, "context-pill", {
+    empty: !t,
+    open: app.panel === "profile",
+    compact,
+    name: t ? t.name : "",
+    hueKey: t ? t.tin_root : "",
+    tin: t && b ? formatTin(t.tin_root, b.code) : "",
+    branchCode: b ? b.code : "",
+    onClick: (_e, cx) => app.togglePanel("profile", cx),
+  });
+
+  const unread = app.notifications().some((n) => n.unread);
+  const right = div()
     .flex()
+    .flex_row()
+    .flex_1()
+    .flex_basis(0)
+    .min_w(0)
+    .justify_end()
     .items_center()
-    .justify_center()
-    .size(28)
-    .rounded_md()
-    .hover((s) => s.bg(cx.theme().colors.muted))
-    .on_click((_ev, cx) => state.cycleTheme(cx))
-    .child(icon(cx, cx.theme().is_dark ? "icons/moon.svg" : "icons/sun.svg", 18));
+    .gap(SPACE[1])
+    .h_full()
+    .when(app.isMac, (el) => el.pr(10))
+    .child(
+      IconButton(cx, "tb-notifications", "bell", {
+        tooltip: "Notifications",
+        pressed: app.panel === "notifs",
+        dot: unread,
+        onClick: (_e, cx) => app.togglePanel("notifs", cx),
+      }),
+    )
+    .child(
+      IconButton(cx, "tb-theme", themeIcon(app.themePref), {
+        tooltip: `Theme: ${app.themePref} (click to change)`,
+        onClick: (_e, cx) => app.cycleTheme(cx),
+      }),
+    );
+  if (!app.isMac) right.child(captionButtons(cx));
 
   return div()
-    .id("top_bar")
+    .id("title-bar")
     .flex()
     .flex_row()
     .flex_none()
     .items_center()
     .w_full()
-    .h(TOP_BAR_HEIGHT)
-    .pr_2()
-    .border_b(1)
-    .border_color(cx.theme().colors.border)
-    .bg(cx.theme().colors.background)
-    .child(div().flex_1().min_w_0().overflow_hidden())
+    .h(SIZE.titleBar)
+    // Native drag area: pressing and dragging moves the window, and a
+    // double-click zooms it (or what the user set on macOS).
+    .window_control_area("drag")
+    .child(left)
+    .child(div().flex().flex_none().min_w(0).max_w(compact ? 160 : 460).child(pill))
+    .child(right);
+}
+
+// ---------------------------------------------------------------- sidebar
+
+export function renderSidebar(cx, app) {
+  const t = tokens(cx);
+  const kbd = app.isMac ? "⌘K" : "Ctrl K";
+  const search = div()
+    .id("sb-search")
+    .flex()
+    .flex_row()
+    .flex_1()
+    .min_w(0)
+    .items_center()
+    .gap(SPACE[2])
+    .h(SIZE.control)
+    .pl(10)
+    .pr(SPACE[2])
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.border)
+    .bg(t.surface)
+    .cursor_pointer()
+    .hover((s) => s.border_color(t.borderStrong))
+    .accessibility_label("Search")
+    .on_click((_e, cx) => app.openPalette(cx))
+    .child(Icon(cx, "search", { color: "fg3" }))
+    .child(Line(cx, "body", "Search", "fg3").flex_1())
+    .child(Kbd(cx, kbd));
+
+  const top = div()
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(SPACE[1])
+    .child(search)
+    .child(IconButton(cx, "sb-new", "plus", { tooltip: "New return", onClick: (_e, cx) => app.startNewReturn(cx) }));
+
+  const nav = div().id("sb-nav").flex().flex_col().gap(2).pt(SPACE[3]);
+  for (const [view, icon, label] of [
+    ["home", "house", "Home"],
+    ["library", "file-text", "Form library"],
+    ["calendar", "calendar", "Calendar"],
+    ["filings", "history", "Filings"],
+  ]) {
+    nav.child(NavRow(cx, `nav-${view}`, icon, label, { current: app.view === view, onClick: (_e, cx) => app.go(view, cx) }));
+  }
+  if (app.prefs.showRecent && !app.isFresh() && app.recent.length) {
+    nav.child(GroupLabel(cx, "Recent"));
+    app.recent.forEach((r) => {
+      const name = (app.taxpayers().find((x) => x.tin_root === String(r.tin).slice(0, 9)) || {}).name || "";
+      const label = `${r.code} ${periodLabel(frequencyOf(app.store.screenIndex(), r.code), r.year, r.period, true)} · ${name}`;
+      nav.child(
+        NavRow(cx, `recent-${r.key.replace(/[^A-Za-z0-9]/g, "-")}`, "file-text", label, {
+          tooltip: label,
+          onClick: (_e, cx) => app.openForm({ tin: r.tin, code: r.code, year: r.year, period: r.period }, cx),
+        }),
+      );
+    });
+  }
+
+  const foot = div().id("sb-foot").relative().flex().flex_col().gap(2).pt(SPACE[2]);
+  foot.child(
+    NavRow(cx, "nav-settings", "settings", "Settings", {
+      current: app.view === "settings",
+      onClick: (_e, cx) => app.go("settings", cx),
+    }),
+  );
+  foot.child(accountRow(cx, app));
+
+  return div()
+    .id("sidebar")
+    .flex()
+    .flex_col()
+    .flex_none()
+    .w(SIZE.sidebar)
+    .h_full()
+    .min_h(0)
+    .pt(SPACE[1])
+    .px(SPACE[2])
+    .pb(SPACE[2])
+    .child(top)
+    .child(div().id("sb-scroll").flex_1().min_h(0).overflow_y_scroll().overflow_x_hidden().child(nav))
+    .child(foot);
+}
+
+/** The app account row and its menu (Lock app, Account settings, Log out). */
+function accountRow(cx, app) {
+  const t = tokens(cx);
+  // The app account is separate from tax profiles (DESIGN_SYSTEM.md "Left
+  // sidebar"). This build has no account record yet, so the row names the
+  // local account rather than guessing a person's name.
+  const name = "Local account";
+  const sub = "This computer";
+  const row = div()
+    .id("account-row")
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(10)
+    .w_full()
+    .py(6)
+    .px(SPACE[2])
+    .rounded(RADIUS.row)
+    .cursor_pointer()
+    .when(app.accountMenu, (el) => el.bg(t.hover))
+    .hover((s) => s.bg(t.hover))
+    .accessibility_label("Account menu")
+    .on_click((_e, cx) => {
+      app.accountMenu = !app.accountMenu;
+      cx.notify();
+    })
+    .child(Avatar(cx, "Local Account", 28, "account"))
+    .child(
+      div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_w(0)
+        .child(Line(cx, "control", name))
+        .child(Line(cx, "meta", sub, "fg3")),
+    )
+    .child(Icon(cx, "chevrons-up-down", { color: "fg3" }));
+
+  const wrap = div().relative().w_full().child(row);
+  if (app.accountMenu) {
+    // Paints above everything in the sidebar footer, Settings included.
+    wrap.child(
+      div()
+        .id("account-menu")
+        .absolute()
+        .bottom(56 + 4)
+        .left(0)
+        .right(0)
+        .flex()
+        .flex_col()
+        .gap(2)
+        .p(SPACE[1])
+        .rounded(RADIUS.card)
+        .border(1)
+        .border_color(t.border)
+        .bg(t.raised)
+        .shadow_xl()
+        .on_mouse_down_out((_e, cx) => {
+          app.accountMenu = false;
+          cx.notify();
+        })
+        .child(div().px(SPACE[2]).py(SPACE[2]).mb(SPACE[1]).border_b(1).border_color(t.border).child(Text(cx, "meta", "Signed in on this computer", "fg3")))
+        .child(NavRow(cx, "menu-lock", "lock", "Lock app", { kbd: app.isMac ? "⌘L" : "Ctrl L", onClick: (_e, cx) => app.lockApp(cx) }))
+        .child(NavRow(cx, "menu-account", "user", "Account settings", { onClick: (_e, cx) => app.go("settings", cx) }))
+        .child(NavRow(cx, "menu-logout", "log-out", "Log out", { onClick: (_e, cx) => app.logOut(cx) })),
+    );
+  }
+  return wrap;
+}
+
+// ---------------------------------------------------------------- right panel
+
+export function renderRightPanel(cx, app) {
+  return app.panel === "notifs" ? notificationsPanel(cx, app) : profilePanel(cx, app);
+}
+
+function notificationsPanel(cx, app) {
+  const list = app.notifications();
+  const body = div().flex().flex_col().gap(2);
+  if (!list.length) {
+    body.child(div().py(40).flex().justify_center().child(Text(cx, "body", "No notifications yet.", "fg3")));
+  }
+  list.forEach((n, i) => {
+    const t = tokens(cx);
+    const tone = n.tone === "warning" ? { bg: t.warningSoft, fg: "warning" } : n.tone === "success" ? { bg: t.successSoft, fg: "success" } : { bg: t.hover, fg: "fg2" };
+    const when = div().flex().flex_col().items_end().gap(6).flex_none().child(Text(cx, "cap", shortDate(n.when), "fg3"));
+    if (n.unread) when.child(div().size(6).rounded(RADIUS.full).bg(t.accent));
+    body.child(
+      div()
+        .id(`notif-${i}`)
+        .flex()
+        .flex_row()
+        .gap(SPACE[3])
+        .py(10)
+        .px(SPACE[2])
+        .rounded(RADIUS.row)
+        .hover((s) => s.bg(t.hover))
+        .child(div().flex().flex_none().items_center().justify_center().size(28).rounded(RADIUS.full).bg(tone.bg).child(Icon(cx, n.icon, { color: tone.fg })))
+        .child(
+          div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_w(0)
+            .child(Text(cx, "control", n.title).whitespace_normal())
+            .child(Text(cx, "meta", n.sub, "fg3").whitespace_normal()),
+        )
+        .child(when),
+    );
+  });
+  return SidePanel(cx, "panel-notifications", {
+    title: "Notifications",
+    action: AppButton(cx, "notif-mark-all", "Mark all read", {
+      variant: "ghost",
+      size: "sm",
+      disabled: !list.some((n) => n.unread),
+      onClick: (_e, cx) => app.markAllRead(cx),
+    }),
+    body,
+  });
+}
+
+function profilePanel(cx, app) {
+  const t = tokens(cx);
+  const tp = app.taxpayer();
+  if (!tp) {
+    const body = div()
+      .flex()
+      .flex_col()
+      .items_center()
+      .gap(SPACE[2])
+      .pt(SPACE[8])
+      .px(SPACE[2])
+      .child(StepCircle(cx, Icon(cx, "user", { color: "fg2" }), 56))
+      .child(Text(cx, "title", "No taxpayer yet").mt(SPACE[1]))
+      .child(
+        Text(cx, "meta", "The taxpayer you file for shows here, with its branches, tax years, forms and templates.", "fg2")
+          .text_center()
+          .max_w(240)
+          .whitespace_normal(),
+      )
+      .child(
+        AppButton(cx, "panel-new-taxpayer", "New taxpayer", {
+          variant: "primary",
+          size: "sm",
+          icon: "plus",
+          onClick: (_e, cx) => app.taxpayerUi.openNewTaxpayer(cx),
+        }).mt(SPACE[2]),
+      );
+    return SidePanel(cx, "panel-profile", { body });
+  }
+  const b = app.branch();
+  const ui = app.taxpayerUi;
+  const body = div().flex().flex_col().gap(2);
+
+  if (ui.panelEdit) {
+    const e = ui.panelEdit;
+    const label = (text, el, err) => {
+      const box = div().flex().flex_col().gap(SPACE[1]).child(Text(cx, "meta", text, "fg2")).child(el);
+      if (err) box.child(Text(cx, "meta", err, "danger"));
+      return box;
+    };
+    body.child(
+      div()
+        .id("panel-edit")
+        .flex()
+        .flex_col()
+        .gap(SPACE[3])
+        .pt(SPACE[1])
+        .px(SPACE[2])
+        .pb(SPACE[2])
+        .child(label("Registered name", TextField(cx, e.name, { id: "pe-name", label: "Registered name" })))
+        .child(
+          label(
+            "Branch code",
+            TextField(cx, e.code, { id: "pe-code", label: "Branch code", disabled: b.is_head_office, error: Boolean(e.error) }),
+            e.error,
+          ),
+        )
+        .child(label("Branch name", TextField(cx, e.branchName, { id: "pe-bname", label: "Branch name" })))
+        .child(label("Registered address", TextField(cx, e.address, { id: "pe-address", label: "Registered address" })))
+        .child(
+          div()
+            .flex()
+            .flex_row()
+            .justify_end()
+            .gap(SPACE[2])
+            .mt(SPACE[1])
+            .child(AppButton(cx, "pe-cancel", "Cancel", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.cancelPanelEdit(cx) }))
+            .child(AppButton(cx, "pe-save", "Save", { variant: "primary", size: "sm", onClick: (_e, cx) => ui.savePanelEdit(cx) })),
+        ),
+    );
+  } else {
+    body.child(
+      div()
+        .relative()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(SPACE[2])
+        .pt(SPACE[3])
+        .px(SPACE[2])
+        .pb(SPACE[4])
+        .child(Avatar(cx, tp.name, 56, tp.tin_root))
+        .child(Text(cx, "title", tp.name).text_center().mt(SPACE[1]).whitespace_normal())
+        .child(Code(cx, formatTin(tp.tin_root, b.code), "fg2").font_weight(400))
+        .child(
+          div()
+            .absolute()
+            .top(SPACE[2])
+            .right(0)
+            .child(
+              IconButton(cx, "panel-edit-btn", "pencil", {
+                tooltip: "Edit name, branch and address",
+                onClick: (_e, cx) => ui.startPanelEdit(cx),
+              }),
+            ),
+        ),
+    );
+    const fact = (icon, label, value) =>
+      div()
+        .flex()
+        .flex_row()
+        .gap(SPACE[3])
+        .child(div().flex().flex_row().items_center().gap(6).w(84).flex_none().child(Icon(cx, icon, { size: SIZE.iconSmall, color: "fg3" })).child(Text(cx, "meta", label, "fg3")))
+        .child(div().flex_1().min_w(0).child(typeof value === "string" ? Text(cx, "body", value).whitespace_normal() : value));
+    body.child(
+      div()
+        .flex()
+        .flex_col()
+        .gap(SPACE[2])
+        .mx(SPACE[2])
+        .mb(SPACE[1])
+        .py(SPACE[3])
+        .border_t(1)
+        .border_b(1)
+        .border_color(t.border)
+        .child(fact("git-branch", "Branch", div().flex().flex_row().gap(SPACE[1]).child(Code(cx, b.code)).child(Text(cx, "body", `· ${b.name}`))))
+        .child(fact("map-pin", "Address", b.facts.registered_address || "Not set"))
+        .child(fact("building", "RDO", b.facts.rdo_code || "Not set")),
+    );
+  }
+
+  body.child(GroupLabel(cx, "Open"));
+  const open = [
+    ["profile", "user", "Profile", ""],
+    ["forms", "file-text", "Forms", app.yearForms().length],
+    ["templates", "layout-template", "Templates", app.templates().length],
+  ];
+  for (const [view, icon, label, count] of open) {
+    body.child(NavRow(cx, `panel-open-${view}`, icon, label, { current: app.view === view, count, onClick: (_e, cx) => app.go(view, cx) }));
+  }
+  body.child(GroupLabel(cx, tp.branches.length > 1 ? "Branches" : "Branch"));
+  for (const br of tp.branches) {
+    const current = br.code === b.code;
+    body.child(
+      NavRow(cx, `panel-branch-${br.code}`, Code(cx, br.code).w(44), br.name, {
+        current,
+        trailing: current ? Icon(cx, "check", { color: "fg3" }) : null,
+        onClick: (_e, cx) => app.selectBranch(br.code, cx),
+      }),
+    );
+  }
+  body.child(NavRow(cx, "panel-add-branch", "plus", "Add branch", { onClick: (_e, cx) => ui.openNewBranch(cx) }));
+  const others = app.store.authState().hide_tax_profiles ? [] : app.taxpayers().filter((x) => x.tin_root !== tp.tin_root);
+  body.child(GroupLabel(cx, "Switch taxpayer"));
+  for (const x of others) {
+    body.child(
+      NavRow(cx, `panel-tp-${x.tin_root}`, Avatar(cx, x.name, 20, x.tin_root), x.name, {
+        count: x.tin_root.slice(0, 3),
+        onClick: (_e, cx) => app.selectTaxpayer(x.tin_root, cx),
+      }),
+    );
+  }
+  body.child(NavRow(cx, "panel-new-tp", "plus", "New taxpayer", { onClick: (_e, cx) => ui.openNewTaxpayer(cx) }));
+  return SidePanel(cx, "panel-profile", { body });
+}
+
+// ---------------------------------------------------------------- palette
+
+export function renderPalette(cx, app) {
+  const t = tokens(cx);
+  const items = app.paletteItems();
+  app.palette.index = Math.min(app.palette.index, Math.max(0, items.length - 1));
+  const list = div().id("palette-list").flex().flex_col().gap(2).p(SPACE[3]).max_h(420).overflow_y_scroll().overflow_x_hidden();
+  let group = "";
+  items.forEach((item, i) => {
+    if (item.group !== group) {
+      group = item.group;
+      // The palette keeps small uppercase group headings (the one exception).
+      list.child(div().pt(10).pb(SPACE[1]).px(10).child(Text(cx, "cap", group.toUpperCase(), "fg3").font_weight(600)));
+    }
+    const on = i === app.palette.index;
+    const row = div()
+      .id(`palette-item-${i}`)
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(10)
+      .min_h(36)
+      .py(6)
+      .px(10)
+      .rounded(RADIUS.row)
+      .cursor_pointer()
+      .when(on, (el) => el.bg(t.hover))
+      .hover((s) => s.bg(t.hover))
+      .on_click((_e, cx) => app.runPaletteItem(i, cx))
+      .child(item.avatar ? Avatar(cx, item.avatar.name, 20, item.avatar.tin_root) : Icon(cx, item.icon))
+      .child(Line(cx, "body", item.label).flex_1());
+    if (item.hint) row.child(Text(cx, "meta", item.hint, "fg3"));
+    list.child(row);
+  });
+  if (!items.length) list.child(div().py(40).flex().justify_center().child(Text(cx, "body", "No matches. Try a form code like 2550Q.", "fg3")));
+  const card = div()
+    .flex()
+    .flex_col()
+    .on_key_down((e, cx) => {
+      if (e.key === "down") {
+        app.movePalette(1, cx);
+        cx.stop_propagation();
+      } else if (e.key === "up") {
+        app.movePalette(-1, cx);
+        cx.stop_propagation();
+      }
+    })
     .child(
       div()
         .flex()
         .flex_row()
-        .flex_none()
         .items_center()
-        .gap(4)
-        .child(bell)
-        .child(themeBtn),
-    );
-}
-
-/** Right-edge drawer over the content area (notifications). */
-export function renderNotificationsDrawer(cx, state) {
-  if (!state.notificationsOpen) return div();
-  return div()
-    .id("page_notifications")
-    .absolute()
-    .top(TOP_BAR_HEIGHT)
-    .right(0)
-    .bottom(0)
-    .w(DRAWER_WIDTH)
-    .max_w_full()
-    .flex()
-    .flex_col()
-    .bg(cx.theme().colors.background)
-    .border_l(1)
-    .border_color(cx.theme().colors.border)
-    .shadow_lg()
-    .child(renderNotifications(cx, state));
-}
-
-function menuRow(cx, state, { id, iconPath, label, view }) {
-  const isMini = state.isMiniSidebar;
-  const active = state.view === view;
-  const row = div()
-    .id(id)
-    .flex()
-    .items_center()
-    .w_full()
-    .hover((s) => s.bg(cx.theme().colors.muted))
-    .when(isMini, (el) =>
-      el.justify_center().size(MENU_MINI_SIZE).flex_none().rounded_full().bg(cx.theme().colors.secondary),
-    )
-    .when(!isMini, (el) =>
-      el
-        .justify_start()
-        .h(MENU_ROW_HEIGHT)
-        .px(12)
-        .gap(12)
-        .rounded_md()
-        .bg(cx.theme().colors.secondary),
-    )
-    .when(active, (el) => el.bg(cx.theme().colors.accent))
-    .on_click((_ev, cx) => state.navigate(view, cx))
-    .child(icon(cx, iconPath, 20));
-  if (!isMini) {
-    row.child(
-      div().text_size(14).text_color(cx.theme().colors.foreground).child(label),
-    );
-  }
-  return row;
-}
-
-/** Orange "Dev" chip beside Settings — debug builds only in the painted app. */
-function devModeChip(cx, state) {
-  const isMini = state.isMiniSidebar;
-  const active = state.view === "dev_mode";
-  const chip = div()
-    .id("dev_mode_sidebar_btn")
-    .flex()
-    .flex_none()
-    .items_center()
-    .justify_center()
-    .gap(4)
-    .h(isMini ? 24 : MENU_ROW_HEIGHT)
-    .px(8)
-    .rounded_full()
-    .border(1)
-    .border_color(DEV_ORANGE)
-    .when(active, (el) => el.bg("#EA580C40"))
-    .hover((s) => s.bg("#EA580C26"))
-    .on_click((_ev, cx) => state.navigate("dev_mode", cx))
-    .child(
-      div()
-        .text_size(12)
-        .font_semibold()
-        .text_color(DEV_ORANGE)
-        .child("Dev"),
-    );
-  if (!isMini) {
-    chip.child(icon(cx, "icons/square-terminal.svg", 14, DEV_ORANGE));
-  }
-  return chip;
-}
-
-function profileRow(cx, state, profile) {
-  const isMini = state.isMiniSidebar;
-  const active = state.activeProfileTin === profile.tin;
-  const row = div()
-    .id(`profile-${profile.id}`)
-    .w_full()
-    .when(!isMini, (el) => el.py(8).px(24))
-    .when(isMini, (el) => el.py(8).px(12))
-    .bg(active ? cx.theme().colors.accent : "#00000000")
-    .border(1)
-    .border_color(active ? cx.theme().colors.border : "#00000000")
-    .flex()
-    .flex_col()
-    .hover((s) => (active ? s : s.bg(cx.theme().colors.muted)))
-    .on_click((_ev, cx) => state.selectProfile(profile, cx));
-
-  if (isMini) {
-    const initials = (profile.full_name || "?")
-      .split(/\s+/)
-      .map((w) => w[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
-    return row.child(
-      div()
-        .size(48)
-        .flex_none()
-        .rounded_full()
-        .bg(cx.theme().colors.secondary)
-        .flex()
-        .items_center()
-        .justify_center()
+        .gap(10)
+        .px(SPACE[4])
+        .h(48)
+        .border_b(1)
+        .border_color(t.border)
+        .child(Icon(cx, "search", { color: "fg3" }))
         .child(
-          div()
+          TextField(cx, app.palette.input, { id: "palette-input", label: "Search" })
+            .border(0)
+            .bg(t.surface)
+            .px(0)
             .text_size(14)
-            .font_semibold()
-            .text_color(cx.theme().colors.primary)
-            .child(initials),
-        ),
+            .flex_1(),
+        )
+        .child(Kbd(cx, "Esc")),
+    )
+    .child(list);
+  return Overlay(cx, "palette", card, (cx) => app.closeOverlay(cx));
+}
+
+// ---------------------------------------------------------------- new return
+
+export function renderNewReturn(cx, app) {
+  const t = tokens(cx);
+  const tp = app.taxpayer();
+  const b = app.branch();
+  const year = app.year();
+  const forms = app.yearForms();
+  const index = app.store.screenIndex();
+  const nr = app.newReturn;
+  if (!forms.includes(nr.code)) nr.code = forms[0];
+  const entry = (code) => index.find((f) => f.c === code) || { c: code, t: code, freq: "" };
+  const options = periodOptions(nr.code, entry(nr.code).freq, year);
+  if (!options.some((o) => o.value === nr.period)) nr.period = options.length ? options[0].value : 0;
+  const tpl = app.templates().find((x) => x.form_code === nr.code);
+
+  const list = div().id("new-return-list").flex().flex_col().gap(2).p(SPACE[3]).max_h(360).overflow_y_scroll().overflow_x_hidden();
+  for (const code of forms) {
+    const f = entry(code);
+    const on = code === nr.code;
+    list.child(
+      div()
+        .id(`new-return-${code}`)
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(10)
+        .min_h(36)
+        .py(6)
+        .px(10)
+        .rounded(RADIUS.row)
+        .cursor_pointer()
+        .when(on, (el) => el.bg(t.selected))
+        .hover((s) => (on ? s : s.bg(t.hover)))
+        .on_click((_e, cx) => {
+          nr.code = code;
+          nr.period = null;
+          cx.notify();
+        })
+        .child(Code(cx, code).w(60))
+        .child(Line(cx, "body", f.t).flex_1())
+        .child(Text(cx, "meta", f.freq, "fg3")),
     );
   }
 
-  return row.child(
-    v_flex()
-      .child(
-        div()
-          .font_semibold()
-          .text_color(
-            profile.is_archived
-              ? cx.theme().colors.muted_foreground
-              : cx.theme().colors.foreground,
-          )
-          .child(
-            profile.is_archived
-              ? `${profile.full_name} (Archived)`
-              : profile.full_name || "(unnamed)",
-          ),
-      )
-      .child(
-        div()
-          .text_size(14)
-          .text_color(cx.theme().colors.muted_foreground)
-          .child(`TIN: ${profile.tin}`),
-      ),
-  );
-}
-
-/** Full sidebar: logo, profiles list, search, archived toggle, menu rows. */
-export function renderSidebar(cx, state) {
-  const isMini = state.isMiniSidebar;
-  const filter = (state.profileFilter || "").trim().toLowerCase();
-  const archivedCount = state.profiles.filter((p) => p.is_archived).length;
-  const visible = state.profiles.filter((p) => {
-    if (state.showArchived !== p.is_archived) return false;
-    if (!filter) return true;
-    return (
-      (p.full_name || "").toLowerCase().includes(filter) ||
-      (p.tin || "").toLowerCase().includes(filter)
-    );
-  });
-
-  const toggleIcon = isMini ? "icons/chevron-right.svg" : "icons/chevron-left.svg";
-
-  const headerRow = h_flex()
-    .w_full()
-    .when(!isMini, (el) => el.px(24))
-    .when(isMini, (el) => el.px(12))
-    .items_center()
-    .justify_between()
-    .when(!isMini, (el) =>
-      el.child(
-        div()
-          .text_size(12)
-          .font_semibold()
-          .text_color(cx.theme().colors.muted_foreground)
-          .child("TAXPAYER PROFILES"),
-      ),
-    )
-    .when(isMini, (el) => el.justify_center())
+  const card = div()
+    .flex()
+    .flex_col()
     .child(
       div()
-        .id("add_profile_mini_btn")
-        .flex()
-        .items_center()
-        .justify_center()
-        .size(40)
-        .flex_none()
-        .hover((s) => s.bg(cx.theme().colors.muted).rounded_md())
-        .on_click((_ev, cx) => state.openNewProfile(cx))
+        .pt(SPACE[4])
+        .px(SPACE[5])
+        .pb(SPACE[1])
+        .child(Text(cx, "title", "Start a return"))
         .child(
           div()
-            .text_size(20)
-            .font_semibold()
-            .text_color(cx.theme().colors.foreground)
-            .child("+"),
-        ),
-    );
-
-  const searchArea = isMini
-    ? div()
-        .px(12)
-        .flex()
-        .justify_center()
-        .w_full()
-        .child(
-          div()
-            .id("sidebar_search_mini_btn")
             .flex()
-            .items_center()
-            .justify_center()
-            .size(48)
-            .rounded_full()
-            .bg(cx.theme().colors.secondary)
-            .flex_none()
-            .hover((s) => s.bg(cx.theme().colors.muted))
-            .on_click((_ev, cx) => state.expandSidebarAndFocusSearch(cx))
-            .child(icon(cx, "icons/search.svg", 20)),
-        )
-    : div().px(24).w_full().child(
-        Input.new(state.searchInput)
-          .w_full()
-          .h(28)
-          .px(8)
-          .border(1)
-          .border_color(cx.theme().colors.input)
-          .bg(cx.theme().colors.surface)
-          .text_size(12),
-      );
-
-  const logout = state.activeSessionTin
-    ? div()
-        .id("logout_btn_full")
+            .flex_row()
+            .gap(SPACE[1])
+            .mt(2)
+            .child(Text(cx, "meta", `${tp.name} ·`, "fg2"))
+            .child(Code(cx, formatTin(tp.tin_root, b.code), "fg2").font_weight(400))
+            .child(Text(cx, "meta", b.name, "fg2")),
+        ),
+    )
+    .child(list)
+    .child(
+      div()
         .flex()
+        .flex_row()
+        .flex_wrap()
         .items_center()
-        .gap(12)
-        .mx(24)
-        .px(12)
-        .h(MENU_ROW_HEIGHT)
-        .rounded_md()
-        .bg("#EF444421")
-        .hover((s) => s.bg("#EF444440"))
-        .on_click((_ev, cx) => state.logout(cx))
-        .child(icon(cx, "icons/power.svg", 18, LOGOUT_RED))
+        .justify_between()
+        .gap(SPACE[2])
+        .pt(SPACE[3])
+        .px(SPACE[5])
+        .pb(SPACE[4])
+        .border_t(1)
+        .border_color(t.border)
         .child(
           div()
-            .text_size(14)
-            .font_semibold()
-            .text_color(LOGOUT_RED)
-            .child("Logout"),
-        )
-    : div();
-
-  const archivedToggle =
-    archivedCount > 0 || state.showArchived
-      ? div()
-          .w_full()
-          .py(8)
-          .when(!isMini, (el) => el.px(24))
-          .when(isMini, (el) => el.px(12))
-          .flex()
-          .justify_center()
-          .child(
-            isMini
-              ? div()
-                  .id("toggle_archived_mini_btn")
-                  .flex()
-                  .items_center()
-                  .justify_center()
-                  .size(48)
-                  .flex_none()
-                  .rounded_full()
-                  .bg(cx.theme().colors.secondary)
-                  .hover((s) => s.bg(cx.theme().colors.muted))
-                  .on_click((_ev, cx) => state.toggleArchived(cx))
-                  .child(
-                    icon(
-                      cx,
-                      state.showArchived ? "icons/eye-off.svg" : "icons/eye.svg",
-                      20,
-                    ),
-                  )
-              : div()
-                  .id("toggle_archived")
-                  .flex()
-                  .items_center()
-                  .justify_center()
-                  .h(MENU_ROW_HEIGHT)
-                  .px(12)
-                  .rounded_md()
-                  .bg(cx.theme().colors.secondary)
-                  .text_size(13)
-                  .text_color(cx.theme().colors.secondary_foreground)
-                  .hover((s) => s.bg(cx.theme().colors.muted))
-                  .on_click((_ev, cx) => state.toggleArchived(cx))
-                  .child(
-                    state.showArchived
-                      ? "Hide Archived Profiles"
-                      : `Show ${archivedCount} Archived`,
-                  ),
-          )
-      : div();
-
-  return div()
-    .id("sidebar")
-    .w(isMini ? SIDEBAR_MINI_W : SIDEBAR_W)
-    .h_full()
-    .bg(cx.theme().colors.background)
-    .border_r(1)
-    .border_color(cx.theme().colors.border)
-    .when(!isMini, (el) => el.py(16))
-    .when(isMini, (el) => el.py(12))
-    .flex()
-    .flex_col()
-    .justify_between()
-    .child(
-      v_flex()
-        .gap(8)
-        .flex_1()
-        .overflow_hidden()
-        .child(
-          v_flex()
-            .w_full()
-            .when(!isMini, (el) => el.px(24))
-            .when(isMini, (el) => el.px(12))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(SPACE[2])
             .child(
-              h_flex()
-                .w_full()
-                .when(!isMini, (el) => el.justify_end())
-                .when(isMini, (el) => el.justify_center())
-                .mb(4)
-                .child(
-                  div()
-                    .id("sidebar_toggle_btn")
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .size(40)
-                    .flex_none()
-                    .hover((s) => s.bg(cx.theme().colors.muted).rounded_md())
-                    .on_click((_ev, cx) => state.toggleMiniSidebar(cx))
-                    .child(icon(cx, toggleIcon, 28)),
-                ),
+              Dropdown(cx, "new-return-period", {
+                label: "Period",
+                width: 160,
+                options,
+                value: nr.period,
+                open: nr.periodOpen,
+                onOpenChange: (open, cx) => {
+                  nr.periodOpen = open;
+                  cx.notify();
+                },
+                onChange: (value, cx) => {
+                  nr.period = value;
+                  cx.notify();
+                },
+              }),
             )
-            .child(
-              div()
-                .id("global_dashboard_btn")
-                .w_full()
-                .on_click((_ev, cx) => state.navigate("global_dashboard", cx))
-                .child(
-                  isMini
-                    ? svg("icons/e_logo.svg").w_full().h(32)
-                    : image("images/ebirforms.png").w_full().h(40),
-                ),
-            ),
-        )
-        .child(headerRow)
-        .child(searchArea)
-        .child(div().w_full().h(1).bg(cx.theme().colors.border))
-        .child(
-          v_flex()
-            .id("sidebar_profile_list")
-            .flex_1()
-            .overflow_y_scroll()
-            .pt(8)
-            .gap(8)
-            .children(visible.map((p) => profileRow(cx, state, p)))
-            .child(archivedToggle),
-        )
-        .child(logout)
-        .child(div().w_full().h(1).bg(cx.theme().colors.border)),
-    )
-    .child(
-      v_flex()
-        .gap(4)
-        .w_full()
-        .when(!isMini, (el) => el.px(24))
-        .when(isMini, (el) => el.px(12))
-        .child(
-          menuRow(cx, state, {
-            id: "import_export_sidebar_btn",
-            iconPath: "icons/hard-drive.svg",
-            label: "Import Data",
-            view: "import_export",
-          }),
-        )
-        .child(
-          menuRow(cx, state, {
-            id: "cron_tasks_sidebar_btn",
-            iconPath: "icons/square-terminal.svg",
-            label: "Background Tasks",
-            view: "cron_tasks",
-          }),
-        )
-        .child(
-          menuRow(cx, state, {
-            id: "admin_calendar_sidebar_btn",
-            iconPath: "icons/calendar.svg",
-            label: "Tax Calendars",
-            view: "admin_calendar",
-          }),
-        )
-        .child(
-          h_flex()
-            .w_full()
-            .gap(4)
-            .when(isMini, (el) => el.flex_col().items_center())
-            .when(!isMini, (el) => el.items_center())
-            .child(
-              div()
-                .when(!isMini, (el) => el.flex_1())
-                .child(
-                  menuRow(cx, state, {
-                    id: "settings_sidebar_btn",
-                    iconPath: "icons/settings.svg",
-                    label: "Settings",
-                    view: "settings",
-                  }),
-                ),
-            )
-            .child(devModeChip(cx, state)),
-        ),
-    );
-}
-
-/** Footer strip: Bagong Pilipinas + BIR seals left, copyright + logo right. */
-export function renderFooter(cx) {
-  return div()
-    .w_full()
-    .min_h(72)
-    .px(16)
-    .py(8)
-    .flex()
-    .flex_row()
-    .flex_wrap()
-    .gap(8)
-    .items_center()
-    .justify_between()
-    .bg(cx.theme().colors.background)
-    .border_t(1)
-    .border_color(cx.theme().colors.border)
-    .child(
-      h_flex()
-        .flex_none()
-        .items_center()
-        .gap(16)
-        .child(svg("icons/bagong-pilipinas.svg").w(48).h(48))
-        .child(image("images/bir-new-logo.png").w(48).h(48)),
-    )
-    .child(
-      h_flex()
-        .items_center()
-        .gap(8)
-        .min_w_0()
-        .max_w_full()
-        .child(
-          div()
-            .flex_1()
-            .min_w_0()
-            .text_size(12)
-            .text_color(cx.theme().colors.muted_foreground)
-            .child("© 2026 Goldcoders Corp. goldcoders.dev"),
+            .child(tpl ? Chip(cx, "Template", "success", "layout-template") : Chip(cx, "No template")),
         )
         .child(
           div()
-            .id("goldcoders_logo")
-            .flex_none()
-            .on_click((_ev, cx2) => cx2.open_url("https://www.facebook.com/goldcoders.corp"))
+            .flex()
+            .flex_row()
+            .gap(SPACE[2])
+            .child(AppButton(cx, "new-return-cancel", "Cancel", { variant: "ghost", onClick: (_e, cx) => app.closeOverlay(cx) }))
             .child(
-              image("images/goldcoders_logo.png").w(48).h(48),
+              AppButton(cx, "new-return-open", "Open form", {
+                variant: "primary",
+                onClick: (_e, cx) => app.openForm({ tin: b.tin, code: nr.code, year, period: nr.period }, cx),
+              }),
             ),
         ),
     );
+  return Overlay(cx, "new-return", card, (cx) => app.closeOverlay(cx));
 }
+

@@ -1,143 +1,526 @@
-// buwiz BIR eFiling — gpui-shell application entry.
+// buwiz BIR eFiling — gpui-shell application entry (shell redesign).
 //
-// The app shell ported from bir-desktop's AppState::render: a collapsible
-// profile sidebar, a 36px top strip (bell + theme), a routed page area, the
-// right-edge notifications drawer, and the seal footer. Page bodies live in
-// shell/pages.js; chrome in shell/chrome.js; theme in shell/theme.js.
+// Layout and behaviour follow DESIGN_SYSTEM.md in hexuria/buwiz-ui-redesign:
+// a 40 px title bar with the context pill, a 248 px sidebar, the main
+// surface inset 8 px with radius 12, and a 320 px right panel that is either
+// the tax profile or notifications. Screens live in shell/*.js and build from
+// the wrappers in shell/ui.js; reads go through the cached Store.
 //
 // Migration plan + tracking: docs/plans/gpui-shell-migration.md, issue #135.
 
 import { View, div } from "gpui-kit";
-import { InputState, OtpState, v_flex } from "gpui-base";
-import {
-  system_info,
-  list_profiles,
-  forms_catalog,
-  get_setting,
-  set_setting,
-  delete_setting,
-  profile_detail,
-  save_profile,
-  set_profile_archived,
-  delete_profile,
-  set_profile_pin,
-  set_admin_pin,
-  auth_state,
-  profile_auth,
-  verify_profile_pin,
-  verify_profile_totp,
-  verify_admin_pin,
-  verify_admin_totp,
-  generate_totp_secret,
-  list_drafts,
-  get_form_draft,
-  save_form_draft,
-  list_queued,
-  queue_form_draft,
-  cancel_queued,
-  list_deadlines,
-  list_announcements,
-  import_archive,
-  form_print_html,
-  list_background_jobs,
-  delete_background_job,
-  archive_background_job,
-  purge_archived_jobs,
-  job_log_tail,
-} from "bir";
+import { InputState, OtpState } from "gpui-base";
+import { Store, isoDate, shortDate } from "./shell/store.js";
 import {
   applyThemePreference,
   nextThemePreference,
   parseThemePreference,
+  storedThemePreference,
   THEME_PREF_KEY,
 } from "./shell/theme.js";
+import { tokens, SIZE, BREAK, RADIUS, Toast } from "./shell/ui.js";
 import {
+  renderTitleBar,
   renderSidebar,
-  renderTopBar,
-  renderNotificationsDrawer,
-  renderFooter,
+  renderRightPanel,
+  renderPalette,
+  renderNewReturn,
 } from "./shell/chrome.js";
-import {
-  renderGlobalDashboard,
-  renderDashboard,
-  renderStub,
-} from "./shell/pages.js";
-import {
-  renderLockScreen,
-  renderUnlockGate,
-} from "./shell/auth.js";
-import {
-  renderProfileManager,
-  blankProfile,
-  parseTin,
-} from "./shell/profile_manager.js";
+import { renderHome } from "./shell/home.js";
+import { renderLibrary } from "./shell/library.js";
+import { renderCalendar } from "./shell/calendar_page.js";
+import { renderFilings } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
-import { renderQueuePage } from "./shell/queue.js";
+import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
+import { renderFormPage, FormPageActions } from "./shell/form_page.js";
+import { renderGallery } from "./shell/gallery.js";
+import { renderLockScreen, renderUnlockGate } from "./shell/auth.js";
+import { renderProfileManager, blankProfile, parseTin } from "./shell/profile_manager.js";
 import { renderCronTasksPage } from "./shell/cron_tasks.js";
-import { renderCalendarPage } from "./shell/calendar.js";
-import { renderImportPage } from "./shell/import_page.js";
-import { renderFormView, FORM_SPECS } from "./shell/form_view.js";
+
+/** Views that need a taxpayer; with none they fall back to Home. */
+const TAXPAYER_VIEWS = new Set(["profile", "forms", "templates", "form"]);
+const RECENT_KEY = "redesign.recent";
+const SELECTION_KEY = "redesign.selection";
+const READ_KEY = "redesign.read_notifications";
+const PREFS_KEY = "redesign.prefs";
 
 export default class BirApp extends View {
   init(_props, cx) {
-    /** @type {import("bir").SystemInfo} */
-    this.info = system_info();
+    this.store = new Store();
+    this.info = this.store.systemInfo();
+    this.isMac = this.info.os === "macos";
 
-    try {
-      /** @type {import("bir").ProfileSummary[]} */
-      this.profiles = list_profiles();
-    } catch (e) {
-      this.profiles = [];
-      this.profilesError = String(e);
-    }
-    this.forms = forms_catalog();
-
-    // Painted AppState starts on the global dashboard when there is no
-    // profile, on the first profile's dashboard when there is.
-    this.view = "global_dashboard";
-    this.activeProfileTin = null;
-    this.activeSessionTin = null;
-
-    this.isSidebarHidden = false;
-    this.isMiniSidebar = false;
-    this.showArchived = false;
-    this.profileFilter = "";
-    this.notificationsOpen = false;
-    this.notificationCount = 0;
-    this.formLaunchNotice = null;
-
-    this.searchInput = InputState.new({ placeholder: "Search profiles" });
-    this.searchInput.on("change", (_event, cx) => {
-      this.profileFilter = this.searchInput.value();
-      cx.notify();
-    });
-
-    this.themePref = parseThemePreference(get_setting(THEME_PREF_KEY));
+    this.themePref = parseThemePreference(this.store.setting(THEME_PREF_KEY));
     applyThemePreference(cx, this.themePref);
 
-    // App-lock + per-profile credential state (mirrors the painted app's
-    // startup reads at app.rs:268).
-    try {
-      /** @type {import("bir").AuthState} */
-      this.auth = auth_state();
-    } catch (_e) {
-      this.auth = {
-        enable_profile_pins: false,
-        has_admin_totp: false,
-        has_admin_pin: false,
-        hide_tax_profiles: false,
-      };
-    }
-    this.appLocked =
-      (this.auth.enable_profile_pins && this.auth.has_admin_pin) ||
-      this.auth.has_admin_totp;
-    this.authError = null;
+    // Navigation: one view, a back stack and a forward stack.
+    this.view = "home";
+    this.history = [];
+    this.forward = [];
+    this.sidebarOpen = true;
+    /** null | "profile" | "notifs" */
+    this.panel = null;
+    /** null | "palette" | "new" */
+    this.overlay = null;
+    this.accountMenu = false;
+    this.toastState = null;
 
+    const stored = this.readLocal(SELECTION_KEY, {});
+    this.selRoot = stored.root || null;
+    this.selCode = stored.code || null;
+    this.selYear = null;
+    this.recent = this.readLocal(RECENT_KEY, []);
+    this.readIds = new Set(this.readLocal(READ_KEY, []));
+    this.prefs = { showRecent: true, ...this.readLocal(PREFS_KEY, {}) };
+
+    // Screen state.
+    this.palette = { input: InputState.new({ placeholder: "Search taxpayers, forms and pages" }), index: 0 };
+    this.palette.input.on("change", (_e, cx) => {
+      this.palette.index = 0;
+      cx.notify();
+    });
+    this.palette.input.on("submit", (_e, cx) => this.runPaletteItem(this.palette.index, cx));
+    this.palette.input.on("focus", () => (this.palette.focused = true));
+    this.palette.input.on("blur", () => (this.palette.focused = false));
+    this.newReturn = { code: null, period: null, periodOpen: false };
+    this.library = { query: InputState.new({ placeholder: "Find a form, like 1601C or VAT" }), freq: "All" };
+    this.library.query.on("change", (_e, cx) => cx.notify());
+    this.taxpayerUi = new TaxpayerActions(this);
+    this.formUi = new FormPageActions(this);
+
+    this.initAuth();
+    this.focusRoot = cx.focus_handle();
+    // Key bindings travel the focus path; give the root the keyboard at
+    // launch so shortcuts work before anything else is clicked.
+    cx.timer.after(50, () => this.focusRoot.focus());
+
+    // gpui-shell re-runs `render` only when script state changes, and gives
+    // scripts no resize event, so layout widths computed from the window size
+    // (pixel widths keep text layout cheap) would go stale after a resize.
+    // Poll the viewport and re-render when it changes.
+    this.lastViewport = "";
+    this.wasNarrow = null;
+    cx.timer.every(200, (cx) => {
+      const vp = window.viewport_size();
+      const key = `${Math.round(vp.width)}x${Math.round(vp.height)}`;
+      if (key !== this.lastViewport) {
+        // Crossing below 860 px turns the sidebar and panel into overlays;
+        // they start closed there rather than covering the page.
+        const narrow = vp.width < BREAK.overlays;
+        if (narrow && this.wasNarrow === false) {
+          this.sidebarOpen = false;
+          this.panel = null;
+        }
+        if (!narrow && this.wasNarrow === true) this.sidebarOpen = true;
+        this.wasNarrow = narrow;
+        this.lastViewport = key;
+        cx.notify();
+      }
+    });
+
+    // Shortcuts use Cmd on macOS and Ctrl elsewhere; both chords are bound
+    // so the keymap is the same on every platform.
+    const chords = [
+      ["b", "toggle-sidebar"],
+      ["k", "open-palette"],
+      ["n", "new-return"],
+      ["shift-t", "toggle-theme"],
+      [",", "open-settings"],
+      ["l", "lock-app"],
+      ["[", "go-back"],
+      ["]", "go-forward"],
+    ];
+    cx.bind_keys([
+      ...chords.flatMap(([key, action]) => [
+        { keystroke: `ctrl-${key}`, action },
+        { keystroke: `cmd-${key}`, action },
+      ]),
+      { keystroke: "escape", action: "dismiss" },
+    ]);
+  }
+
+  // ---------------------------------------------------------------- local storage
+
+  readLocal(key, fallback) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (_e) {
+      return fallback;
+    }
+  }
+
+  writeLocal(key, value) {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (_e) {}
+  }
+
+  // ---------------------------------------------------------------- selection
+
+  taxpayers() {
+    return this.store.taxpayers();
+  }
+
+  taxpayer() {
+    const list = this.taxpayers();
+    return list.find((t) => t.tin_root === this.selRoot) || list[0] || null;
+  }
+
+  branch() {
+    const t = this.taxpayer();
+    if (!t) return null;
+    return t.branches.find((b) => b.code === this.selCode) || t.branches[0] || null;
+  }
+
+  isFresh() {
+    return this.taxpayers().length === 0;
+  }
+
+  /** The branch's tax years, oldest first. */
+  years() {
+    const b = this.branch();
+    return b ? this.store.taxYears(b.tin) : [];
+  }
+
+  /** The selected year, kept valid: this year if the branch has it, else its latest. */
+  year() {
+    const ys = this.years();
+    if (!ys.includes(this.selYear)) {
+      const now = new Date().getFullYear();
+      this.selYear = ys.includes(now) ? now : ys.length ? ys[ys.length - 1] : null;
+    }
+    return this.selYear;
+  }
+
+  yearForms() {
+    const b = this.branch();
+    const y = this.year();
+    return b && y ? this.store.yearlyForms(b.tin, y) : [];
+  }
+
+  templates() {
+    const b = this.branch();
+    return b ? this.store.templates(b.tin) : [];
+  }
+
+  selectTaxpayer(root, cx, opts = {}) {
+    const t = this.taxpayers().find((x) => x.tin_root === root);
+    if (!t) return;
+    this.selRoot = root;
+    this.selCode = t.branches[0] ? t.branches[0].code : null;
+    this.selYear = null;
+    this.taxpayerUi.reset();
+    this.writeLocal(SELECTION_KEY, { root: this.selRoot, code: this.selCode });
+    if (!this.gateProfile(cx)) return;
+    if (!opts.quiet) this.toast(`Switched to ${t.name}`, cx);
+    cx.notify();
+  }
+
+  selectBranch(code, cx) {
+    this.selCode = code;
+    this.selYear = null;
+    this.taxpayerUi.reset();
+    this.writeLocal(SELECTION_KEY, { root: this.selRoot, code: this.selCode });
+    cx.notify();
+  }
+
+  selectYear(year, cx) {
+    this.selYear = year;
+    this.taxpayerUi.leaveYear();
+    cx.notify();
+  }
+
+  // ---------------------------------------------------------------- navigation
+
+  narrow() {
+    return window.viewport_size().width < BREAK.overlays;
+  }
+
+  go(view, cx) {
+    if (view !== this.view) {
+      this.history.push(this.view);
+      this.forward = [];
+      this.view = view;
+      this.taxpayerUi.leaveView();
+    }
+    this.accountMenu = false;
+    if (this.narrow()) {
+      this.sidebarOpen = false;
+      this.panel = null;
+    }
+    cx.notify();
+  }
+
+  goBack(cx) {
+    if (!this.history.length) return;
+    this.forward.push(this.view);
+    this.view = this.history.pop();
+    cx.notify();
+  }
+
+  goForward(cx) {
+    if (!this.forward.length) return;
+    this.history.push(this.view);
+    this.view = this.forward.pop();
+    cx.notify();
+  }
+
+  toggleSidebar(cx) {
+    this.sidebarOpen = !this.sidebarOpen;
+    if (this.sidebarOpen && this.narrow()) this.panel = null;
+    this.accountMenu = false;
+    cx.notify();
+  }
+
+  /** A panel closes from its own trigger (the pill or the bell) and Esc. */
+  togglePanel(which, cx) {
+    this.panel = this.panel === which ? null : which;
+    if (this.panel && this.narrow()) this.sidebarOpen = false;
+    this.taxpayerUi.panelEdit = null;
+    cx.notify();
+  }
+
+  openPalette(cx) {
+    this.overlay = "palette";
+    this.palette.index = 0;
+    this.palette.input.set_value("");
+    cx.notify();
+  }
+
+  closeOverlay(cx) {
+    this.overlay = null;
+    this.newReturn.periodOpen = false;
+    this.focusRoot.focus();
+    cx.notify();
+  }
+
+  /** Esc: the topmost thing closes — an overlay, then a menu, then a panel. */
+  dismiss(cx) {
+    if (this.overlay) return this.closeOverlay(cx);
+    if (this.accountMenu) {
+      this.accountMenu = false;
+      return cx.notify();
+    }
+    if (this.panel) {
+      this.panel = null;
+      return cx.notify();
+    }
+    if (this.narrow() && this.sidebarOpen) {
+      this.sidebarOpen = false;
+      cx.notify();
+    }
+  }
+
+  // ---------------------------------------------------------------- new return
+
+  /** The title-bar / sidebar "+": the start-a-return dialog for the branch's year. */
+  startNewReturn(cx, code) {
+    if (this.isFresh()) return this.toast("Add a taxpayer first, then open a form for them.", cx);
+    const b = this.branch();
+    if (!this.years().length) {
+      return this.toast(`${b.name} has no tax year yet. Add one to choose the forms it files.`, cx);
+    }
+    const forms = this.yearForms();
+    if (!forms.length) return this.toast(`No forms for ${this.year()} yet. Choose them under Forms first.`, cx);
+    if (code && !forms.includes(code)) {
+      return this.toast(`${this.taxpayer().name} does not file ${code} in ${this.year()}. Add it under Forms first.`, cx);
+    }
+    this.newReturn = { code: code || forms[0], period: null, periodOpen: false };
+    this.overlay = "new";
+    cx.notify();
+  }
+
+  // ---------------------------------------------------------------- forms
+
+  /** Open a return on the form page. `period`: month, quarter or 0 for annual. */
+  openForm(opts, cx) {
+    if (this.isFresh()) return this.toast("Add a taxpayer first, then open a form for them.", cx);
+    this.overlay = null;
+    this.formUi.open(opts, cx);
+    this.pushRecent(opts);
+    this.go("form", cx);
+  }
+
+  /** Rewrite Recent after a TIN or branch-code move, so the entries still open. */
+  remapRecent(map) {
+    this.recent = this.recent.map((r) => {
+      const tin = map(String(r.tin));
+      return { ...r, tin, key: `${tin}|${r.code}|${r.year}|${r.period}` };
+    });
+    this.writeLocal(RECENT_KEY, this.recent);
+  }
+
+  pushRecent(opts) {
+    const key = `${opts.tin}|${opts.code}|${opts.year}|${opts.period}`;
+    this.recent = [{ key, ...opts }, ...this.recent.filter((r) => r.key !== key)].slice(0, 4);
+    this.writeLocal(RECENT_KEY, this.recent);
+  }
+
+  // ---------------------------------------------------------------- theme
+
+  setThemePreference(pref, cx) {
+    this.themePref = pref;
+    try {
+      this.store.write("set_setting", THEME_PREF_KEY, storedThemePreference(pref));
+    } catch (_e) {}
+    applyThemePreference(cx, pref);
+    cx.notify();
+  }
+
+  cycleTheme(cx) {
+    this.setThemePreference(nextThemePreference(this.themePref), cx);
+  }
+
+  setPref(key, value, cx) {
+    this.prefs[key] = value;
+    this.writeLocal(PREFS_KEY, this.prefs);
+    cx.notify();
+  }
+
+  // ---------------------------------------------------------------- notifications
+
+  notifications() {
+    const items = [];
+    const today = new Date();
+    const soon = this.store.deadlines(isoDate(today), isoDate(new Date(today.getTime() + 14 * 86400000)));
+    for (const d of soon) {
+      if (d.status !== "Not started" && d.status !== "Draft") continue;
+      const id = `due:${d.tin}:${d.form_code}:${d.taxable_year}:${d.period}`;
+      items.push({
+        id,
+        title: `${d.form_code} for ${d.period_label} is due ${shortDate(d.due_date)}`,
+        sub: d.branch_count > 1 ? `${d.taxpayer_name} · ${d.branch_name}` : d.taxpayer_name,
+        icon: "triangle-alert",
+        tone: "warning",
+        when: d.due_date,
+        unread: !this.readIds.has(id),
+      });
+    }
+    for (const a of this.store.announcements()) {
+      const id = `ann:${a.id}`;
+      items.push({
+        id,
+        title: a.title,
+        sub: a.source,
+        icon: "info",
+        tone: "neutral",
+        when: a.published_at,
+        unread: !a.read_status && !this.readIds.has(id),
+      });
+    }
+    return items;
+  }
+
+  markAllRead(cx) {
+    for (const n of this.notifications()) this.readIds.add(n.id);
+    this.writeLocal(READ_KEY, [...this.readIds]);
+    cx.notify();
+  }
+
+  // ---------------------------------------------------------------- toast
+
+  toast(message, cx, icon) {
+    const id = (this.toastState ? this.toastState.id : 0) + 1;
+    this.toastState = { id, message, icon };
+    cx.timer.after(2600, (cx) => {
+      if (this.toastState && this.toastState.id === id) {
+        this.toastState = null;
+        cx.notify();
+      }
+    });
+    cx.notify();
+  }
+
+  // ---------------------------------------------------------------- palette
+
+  paletteItems() {
+    const q = this.palette.input.value().trim().toLowerCase();
+    const fresh = this.isFresh();
+    const items = [];
+    const hidden = this.store.authState().hide_tax_profiles;
+    for (const t of hidden ? [] : this.taxpayers()) {
+      items.push({ group: "Taxpayers", label: t.name, hint: t.tin_display, avatar: t, run: (cx) => this.selectTaxpayer(t.tin_root, cx) });
+    }
+    const pages = [
+      ["home", "house", "Home"],
+      ["library", "file-text", "Form library"],
+      ["calendar", "calendar", "Calendar"],
+      ["filings", "history", "Filings"],
+      ["profile", "user", "Tax profile"],
+      ["forms", "file-text", "Forms"],
+      ["templates", "layout-template", "Templates"],
+      ["settings", "settings", "Settings"],
+    ];
+    for (const [view, icon, label] of pages) {
+      if (fresh && TAXPAYER_VIEWS.has(view)) continue;
+      items.push({ group: "Go to", label, icon, run: (cx) => this.go(view, cx) });
+    }
+    if (q) {
+      for (const f of this.store.screenIndex()) {
+        items.push({ group: "Forms", label: `${f.c} · ${f.t}`, icon: "file-text", run: (cx) => this.startNewReturn(cx, f.c) });
+      }
+    }
+    items.push({
+      group: "Actions",
+      label: "Toggle sidebar",
+      icon: "panel-left",
+      hint: this.isMac ? "⌘B" : "Ctrl B",
+      run: (cx) => this.toggleSidebar(cx),
+    });
+    items.push({ group: "Actions", label: "Change theme", icon: "moon", run: (cx) => this.cycleTheme(cx) });
+    items.push({ group: "Actions", label: "Components", icon: "layout-template", run: (cx) => this.go("gallery", cx) });
+    if (!q) return items;
+    return items.filter((x) => `${x.label} ${x.hint || ""}`.toLowerCase().includes(q));
+  }
+
+  runPaletteItem(index, cx) {
+    const items = this.paletteItems();
+    const item = items[index];
+    this.overlay = null;
+    this.focusRoot.focus();
+    if (item) item.run(cx);
+    else cx.notify();
+  }
+
+  /**
+   * Scripts cannot move the keyboard into an Input, so the palette opens with
+   * the root focused; until the field is clicked, the root feeds it typed
+   * characters and handles the arrows and Enter.
+   */
+  paletteKey(e, cx) {
+    if (this.overlay !== "palette" || this.palette.focused) return;
+    const input = this.palette.input;
+    if (e.key === "down" || e.key === "up") return this.movePalette(e.key === "down" ? 1 : -1, cx);
+    if (e.key === "enter") return this.runPaletteItem(this.palette.index, cx);
+    if (e.key === "backspace") {
+      input.set_value(input.value().slice(0, -1));
+    } else if (e.key_char && !e.modifiers.platform && !e.modifiers.control) {
+      input.set_value(input.value() + e.key_char);
+    } else return;
+    this.palette.index = 0;
+    cx.notify();
+  }
+
+  movePalette(delta, cx) {
+    const n = this.paletteItems().length;
+    if (!n) return;
+    this.palette.index = (this.palette.index + delta + n) % n;
+    cx.notify();
+  }
+
+  // ---------------------------------------------------------------- auth (retained)
+
+  initAuth() {
+    this.auth = this.store.authState();
+    this.appLocked =
+      (this.auth.enable_profile_pins && this.auth.has_admin_pin) || this.auth.has_admin_totp;
+    this.authError = null;
     this.adminPinOtp = OtpState.new(4, { masked: true });
     this.adminTotpOtp = OtpState.new(6);
     this.profilePinOtp = OtpState.new(4, { masked: true });
     this.profileTotpOtp = OtpState.new(6);
-    // OTP callbacks get their own cx at fire time — never capture init's.
     for (const [otp, handler] of [
       [this.adminPinOtp, (cx) => this.tryUnlockApp(cx)],
       [this.adminTotpOtp, (cx) => this.tryUnlockApp(cx)],
@@ -146,9 +529,12 @@ export default class BirApp extends View {
     ]) {
       otp.on("complete", (_event, cx) => handler(cx));
     }
-
     this.pendingUnlockTin = null;
+    this.unlockedTins = new Set();
     this.profileAuthCache = null;
+    this.settingsNotice = null;
+    this.newTotpSecret = null;
+    // Legacy profile editor state (shell/profile_manager.js).
     this.editing = null;
     this.editingTinDisplay = "";
     this.editorInputs = {};
@@ -156,87 +542,74 @@ export default class BirApp extends View {
     this.editorError = null;
     this.editorNotice = null;
     this.deleteArmed = false;
-    this.settingsNotice = null;
-    this.newTotpSecret = null;
-
-    this.focusRoot = cx.focus_handle();
-
-    // Mirrors the painted app's platform keymap (platform/windows.rs;
-    // cmd- variants are added by the host on macOS).
-    cx.bind_keys([
-      { keystroke: "ctrl-b", action: "toggle-sidebar" },
-      { keystroke: "ctrl-shift-b", action: "toggle-sidebar-mini" },
-      { keystroke: "ctrl-f", action: "focus-search" },
-      { keystroke: "ctrl-n", action: "create-profile" },
-      { keystroke: "ctrl-shift-t", action: "toggle-theme" },
-      { keystroke: "ctrl-shift-x", action: "open-cron-tasks" },
-      { keystroke: "ctrl-,", action: "open-settings" },
-      { keystroke: "escape", action: "close-drawer" },
-    ]);
   }
 
-  navigate(view, cx) {
-    this.view = view;
-    // Every page change closes the drawer (top_bar.rs drawer_on_page_change).
-    this.notificationsOpen = false;
-    if (cx) cx.notify();
-  }
-
-  selectProfile(profile, cx) {
-    this.activeProfileTin = profile.tin;
-    if (profile.is_archived) {
-      // Archived profiles can't hold a session — straight to the editor.
-      this.activeSessionTin = null;
-      this.openProfileEditor(profile, cx);
-      return;
-    }
-    // The painted app gates on enable_profile_pins plus this profile
-    // actually carrying credentials (app.rs needs_auth).
+  /** Per-profile PIN/TOTP gate, as the painted app's needs_auth. Returns true when open. */
+  gateProfile(cx) {
+    const b = this.branch();
+    if (!b || !this.auth.enable_profile_pins || this.unlockedTins.has(b.tin)) return true;
     let auth = { has_pin: false, has_totp: false };
     try {
-      auth = profile_auth(profile.tin);
+      auth = this.store.call("profile_auth", b.tin);
     } catch (_e) {}
-    if (this.auth.enable_profile_pins && (auth.has_pin || auth.has_totp)) {
-      this.pendingUnlockTin = profile.tin;
-      this.profileAuthCache = auth;
-      this.profilePinOtp.set_value("");
-      this.profileTotpOtp.set_value("");
-      this.authError = null;
-      this.navigate("unlock_profile", cx);
-      return;
-    }
-    this.activeSessionTin = profile.tin;
-    this.navigate("dashboard", cx);
+    if (!auth.has_pin && !auth.has_totp) return true;
+    this.pendingUnlockTin = b.tin;
+    this.profileAuthCache = auth;
+    this.profilePinOtp.set_value("");
+    this.profileTotpOtp.set_value("");
+    this.authError = null;
+    this.go("unlock_profile", cx);
+    return false;
   }
 
-  // ---------- app lock ----------
+  lockApp(cx) {
+    const auth = this.store.authState();
+    if (!auth.has_admin_pin && !auth.has_admin_totp) {
+      this.accountMenu = false;
+      return this.toast("Set an admin PIN in Settings to lock the app.", cx, "lock");
+    }
+    this.auth = auth;
+    this.accountMenu = false;
+    this.appLocked = true;
+    cx.notify();
+  }
+
+  logOut(cx) {
+    this.unlockedTins.clear();
+    this.accountMenu = false;
+    const auth = this.store.authState();
+    if (auth.has_admin_pin || auth.has_admin_totp) {
+      this.auth = auth;
+      this.appLocked = true;
+    }
+    this.view = "home";
+    this.history = [];
+    this.forward = [];
+    this.toast("Signed out.", cx, "log-out");
+  }
 
   tryUnlockApp(cx) {
     let ok = false;
     try {
       if (this.auth.has_admin_pin && this.adminPinOtp.value().length === 4) {
-        ok = verify_admin_pin(this.adminPinOtp.value());
+        ok = this.store.call("verify_admin_pin", this.adminPinOtp.value());
       }
       if (!ok && this.auth.has_admin_totp && this.adminTotpOtp.value().length === 6) {
-        ok = verify_admin_totp(this.adminTotpOtp.value());
+        ok = this.store.call("verify_admin_totp", this.adminTotpOtp.value());
       }
     } catch (e) {
       this.authError = String(e);
     }
+    this.adminPinOtp.set_value("");
+    this.adminTotpOtp.set_value("");
     if (ok) {
       this.appLocked = false;
       this.authError = null;
-      this.adminPinOtp.set_value("");
-      this.adminTotpOtp.set_value("");
     } else {
-      this.authError = "Wrong PIN or code — try again.";
-      this.adminPinOtp.set_value("");
-      this.adminTotpOtp.set_value("");
+      this.authError = "Wrong PIN or code. Try again.";
     }
     cx.notify();
   }
-
-  // ---------- profile unlock ----------
 
   tryUnlockProfile(cx) {
     const tin = this.pendingUnlockTin;
@@ -245,22 +618,22 @@ export default class BirApp extends View {
     let ok = false;
     try {
       if (auth.has_pin && this.profilePinOtp.value().length === 4) {
-        ok = verify_profile_pin(tin, this.profilePinOtp.value());
+        ok = this.store.call("verify_profile_pin", tin, this.profilePinOtp.value());
       }
       if (!ok && auth.has_totp && this.profileTotpOtp.value().length === 6) {
-        ok = verify_profile_totp(tin, this.profileTotpOtp.value());
+        ok = this.store.call("verify_profile_totp", tin, this.profileTotpOtp.value());
       }
     } catch (e) {
       this.authError = String(e);
     }
     if (ok) {
-      this.activeSessionTin = tin;
+      this.unlockedTins.add(tin);
       this.pendingUnlockTin = null;
       this.profileAuthCache = null;
       this.authError = null;
-      this.navigate("dashboard", cx);
+      this.go("profile", cx);
     } else {
-      this.authError = "Wrong PIN or code — try again.";
+      this.authError = "Wrong PIN or code. Try again.";
       this.profilePinOtp.set_value("");
       this.profileTotpOtp.set_value("");
       cx.notify();
@@ -271,356 +644,79 @@ export default class BirApp extends View {
     this.pendingUnlockTin = null;
     this.profileAuthCache = null;
     this.authError = null;
-    this.navigate("global_dashboard", cx);
+    this.go("home", cx);
   }
 
-  // ---------- profile editor ----------
-
-  openProfileEditor(profile, cx) {
-    let record;
-    try {
-      record = profile_detail(profile.tin);
-    } catch (e) {
-      this.editorError = String(e);
-      record = null;
-    }
-    this.editing = record || blankProfile();
-    this.editingTinDisplay = profile.tin;
-    this.editingAuth = { has_pin: false, has_totp: false };
-    try {
-      this.editingAuth = profile_auth(profile.tin);
-    } catch (_e) {}
-    this.deleteArmed = false;
-    this.editorError = null;
-    this.editorNotice = null;
-    this.buildEditorInputs(this.editing);
-    this.navigate("profile_manager", cx);
-  }
-
-  openNewProfile(cx) {
-    this.editing = blankProfile();
-    this.editingTinDisplay = "";
-    this.editingAuth = null;
-    this.deleteArmed = false;
-    this.editorError = null;
-    this.editorNotice = null;
-    this.buildEditorInputs(this.editing);
-    this.navigate("profile_manager", cx);
-  }
-
-  buildEditorInputs(profile) {
-    const tinStr =
-      profile.tin && profile.tin.segment1
-        ? `${profile.tin.segment1}${profile.tin.segment2}${profile.tin.segment3}${profile.tin.branch}`
-        : "";
-    const values = {
-      full_name: profile.full_name || "",
-      tin: tinStr,
-      rdo_code: profile.rdo_code || "",
-      email: profile.email || "",
-      phone: profile.phone || "",
-      line_of_business: profile.line_of_business || "",
-      registered_address: profile.registered_address || "",
-      zip_code: profile.zip_code || "",
-    };
-    this.editorInputs = {};
-    for (const [key, value] of Object.entries(values)) {
-      this.editorInputs[key] = InputState.new({ value });
-    }
-  }
-
-  saveEditingProfile(cx) {
-    const tin = parseTin(this.editorInputs.tin.value());
-    if (!tin) {
-      this.editorError = "TIN must be 12–14 digits (dashes optional).";
-      cx.notify();
-      return;
-    }
-    const payload = {
-      ...this.editing,
-      full_name: this.editorInputs.full_name.value().trim(),
-      tin,
-      rdo_code: this.editorInputs.rdo_code.value().trim(),
-      email: this.editorInputs.email.value().trim(),
-      phone: this.editorInputs.phone.value().trim(),
-      line_of_business: this.editorInputs.line_of_business.value().trim(),
-      registered_address: this.editorInputs.registered_address.value().trim(),
-      zip_code: this.editorInputs.zip_code.value().trim(),
-    };
-    if (!payload.full_name) {
-      this.editorError = "Full name is required.";
-      cx.notify();
-      return;
-    }
-    try {
-      const saved = save_profile(payload);
-      this.reloadProfiles();
-      const tinFull = `${tin.segment1}${tin.segment2}${tin.segment3}${tin.branch}`;
-      this.activeProfileTin = tinFull;
-      if (!this.editing.is_archived) {
-        this.activeSessionTin = this.activeSessionTin || tinFull;
-      }
-      this.editing = null;
-      this.navigate("dashboard", cx);
-      void saved;
-    } catch (e) {
-      this.editorError = String(e);
-      cx.notify();
-    }
-  }
-
-  toggleArchiveProfile(cx) {
-    try {
-      set_profile_archived(this.editingTin(), !this.editing.is_archived);
-      this.editing.is_archived = !this.editing.is_archived;
-      this.reloadProfiles();
-      this.editorNotice = this.editing.is_archived
-        ? "Profile archived."
-        : "Profile unarchived.";
-      cx.notify();
-    } catch (e) {
-      this.editorError = String(e);
-      cx.notify();
-    }
-  }
-
-  editingTin() {
-    const t = this.editing.tin;
-    return `${t.segment1}${t.segment2}${t.segment3}${t.branch}`;
-  }
-
-  deleteProfile(cx) {
-    if (!this.deleteArmed) {
-      this.deleteArmed = true;
-      cx.notify();
-      return;
-    }
-    try {
-      delete_profile(this.editingTin());
-      this.deleteArmed = false;
-      this.editing = null;
-      this.activeProfileTin = null;
-      this.activeSessionTin = null;
-      this.reloadProfiles();
-      this.navigate("global_dashboard", cx);
-    } catch (e) {
-      this.editorError = String(e);
-      cx.notify();
-    }
-  }
-
-  setProfilePin(cx) {
-    const pin = this.profilePinOtp.value();
-    if (pin.length !== 4) {
-      this.editorError = "Enter the new 4-digit PIN first.";
-      cx.notify();
-      return;
-    }
-    try {
-      set_profile_pin(this.editingTin(), pin);
-      this.profilePinOtp.set_value("");
-      this.editingAuth = profile_auth(this.editingTin());
-      this.editorError = null;
-      this.editorNotice = "PIN saved.";
-      cx.notify();
-    } catch (e) {
-      this.editorError = String(e);
-      cx.notify();
-    }
-  }
-
-  clearProfilePin(cx) {
-    try {
-      set_profile_pin(this.editingTin(), null);
-      this.editingAuth = profile_auth(this.editingTin());
-      this.editorNotice = "PIN cleared.";
-      cx.notify();
-    } catch (e) {
-      this.editorError = String(e);
-      cx.notify();
-    }
-  }
-
-  // ---------- settings ----------
-
-  setThemePreference(pref, cx) {
-    this.themePref = pref;
-    set_setting(THEME_PREF_KEY, pref[0].toUpperCase() + pref.slice(1));
-    applyThemePreference(cx, pref);
-    cx.notify();
-  }
+  // ---------------------------------------------------------------- settings actions (retained)
 
   setAuthFlag(key, checked, cx) {
     try {
-      set_setting(key, String(checked));
-      this.auth[key] = checked;
-      cx.notify();
+      this.store.write("set_setting", key, String(checked));
+      this.auth = this.store.authState();
     } catch (e) {
       this.settingsNotice = String(e);
-      cx.notify();
     }
+    cx.notify();
   }
 
   setAdminPin(cx) {
     const pin = this.adminPinOtp.value();
-    if (pin.length !== 4) {
-      this.settingsNotice = "Enter the new 4-digit PIN first.";
-      cx.notify();
-      return;
-    }
+    if (pin.length !== 4) return this.toast("Enter the new 4-digit PIN first.", cx, "lock");
     try {
-      set_admin_pin(pin);
+      this.store.write("set_admin_pin", pin);
       this.adminPinOtp.set_value("");
-      this.auth.has_admin_pin = true;
-      this.settingsNotice = "Admin PIN saved.";
-      cx.notify();
+      this.auth = this.store.authState();
+      this.toast("Admin PIN saved.", cx, "lock");
     } catch (e) {
-      this.settingsNotice = String(e);
-      cx.notify();
+      this.toast(String(e), cx, "triangle-alert");
     }
   }
 
   clearAdminPin(cx) {
     try {
-      set_admin_pin(null);
-      this.auth.has_admin_pin = false;
-      this.settingsNotice = "Admin PIN cleared.";
-      cx.notify();
+      this.store.write("set_admin_pin", null);
+      this.auth = this.store.authState();
+      this.toast("Admin PIN removed.", cx, "lock");
     } catch (e) {
-      this.settingsNotice = String(e);
-      cx.notify();
+      this.toast(String(e), cx, "triangle-alert");
     }
   }
 
   toggleAdminTotp(cx) {
     try {
-      if (this.auth.has_admin_totp) {
-        delete_setting("app_totp_secret");
-        this.auth.has_admin_totp = false;
+      if (this.store.authState().has_admin_totp) {
+        this.store.write("delete_setting", "app_totp_secret");
         this.newTotpSecret = null;
-        this.settingsNotice = "Authenticator removed.";
+        this.toast("Authenticator removed.", cx, "lock");
       } else {
-        const { secret } = generate_totp_secret("e-BIRForms admin");
-        set_setting("app_totp_secret", secret);
-        this.auth.has_admin_totp = true;
+        const { secret } = this.store.call("generate_totp_secret", "e-BIRForms admin");
+        this.store.write("set_setting", "app_totp_secret", secret);
         this.newTotpSecret = secret;
-        this.settingsNotice =
-          "Authenticator enrolled — add the secret to your app now.";
+        this.toast("Authenticator added. Copy the secret into your app now.", cx, "lock");
       }
-      cx.notify();
+      this.auth = this.store.authState();
     } catch (e) {
-      this.settingsNotice = String(e);
-      cx.notify();
+      this.toast(String(e), cx, "triangle-alert");
     }
   }
 
-  reloadProfiles() {
-    try {
-      this.profiles = list_profiles();
-      this.profilesError = null;
-    } catch (e) {
-      this.profilesError = String(e);
-    }
-  }
-
-  logout(cx) {
-    this.activeSessionTin = null;
-    this.activeProfileTin = null;
-    this.navigate("global_dashboard", cx);
-  }
-
-  toggleMiniSidebar(cx) {
-    this.isMiniSidebar = !this.isMiniSidebar;
-    cx.notify();
-  }
-
-  toggleSidebarHidden(cx) {
-    this.isSidebarHidden = !this.isSidebarHidden;
-    cx.notify();
-  }
-
-  toggleArchived(cx) {
-    this.showArchived = !this.showArchived;
-    cx.notify();
-  }
-
-  toggleDrawer(cx) {
-    this.notificationsOpen = !this.notificationsOpen;
-    cx.notify();
-  }
-
-  expandSidebarAndFocusSearch(cx) {
-    this.isMiniSidebar = false;
-    this.isSidebarHidden = false;
-    cx.notify();
-  }
-
-  cycleTheme(cx) {
-    this.themePref = nextThemePreference(this.themePref);
-    // Stored as the painted app's serde variant spelling so the two
-    // binaries read each other's preference.
-    set_setting(THEME_PREF_KEY, this.themePref[0].toUpperCase() + this.themePref.slice(1));
-    applyThemePreference(cx, this.themePref);
-    cx.notify();
-  }
-
-  openFormCatalogEntry(form, cx) {
-    const base = FORM_SPECS[form.code];
-    if (!base) {
-      // Form specs grow in S4 — announce instead of faking a view.
-      this.formLaunchNotice = `Form ${form.code} — view spec ports in the form-views slice (S4)`;
-      cx.notify();
-      return;
-    }
-    if (!this.activeProfileTin) {
-      this.formLaunchNotice = "Pick a taxpayer profile first.";
-      cx.notify();
-      return;
-    }
-    // Extracted specs carry only fields/periods — the catalog row supplies
-    // title + period cadence.
-    this.openFormView({ title: form.title, ...base }, cx);
-  }
-
-  queuedSubmissions() {
-    return list_queued();
-  }
-
-  taxDeadlines() {
-    return list_deadlines();
-  }
-
-  announcements() {
-    return list_announcements();
-  }
-
-  /** Smart Import — painted import_export.rs flow; the zip is handled host-side. */
   runImport(cx) {
-    this.importNotice = null;
-    this.importNoticeIsError = false;
     try {
-      const result = import_archive();
-      if (result.kind === "database") {
-        this.reloadProfiles();
-        this.importNotice =
-          "Database imported. Application state has been reloaded.";
-      } else if (result.kind === "profile") {
-        this.reloadProfiles();
-        this.importNotice = "Profile data successfully restored.";
-      } else if (result.kind === "invalid") {
-        this.importNoticeIsError = true;
-        this.importNotice =
-          "The selected zip file does not contain a recognizable profile or database export.";
-      }
+      const result = this.store.write("import_archive");
+      if (result.kind === "database") this.toast("Database imported.", cx, "upload");
+      else if (result.kind === "profile") this.toast("Taxpayer data restored.", cx, "upload");
+      else if (result.kind === "invalid") {
+        this.toast("That zip has no taxpayer or database export in it.", cx, "triangle-alert");
+      } else cx.notify();
     } catch (e) {
-      this.importNoticeIsError = true;
-      this.importNotice = `Import failed: ${e}`;
+      this.toast(`Import failed: ${e}`, cx, "triangle-alert");
     }
-    cx.notify();
   }
+
+  // ---------------------------------------------------------------- background tasks (retained page)
 
   backgroundJobs() {
-    return list_background_jobs();
+    return this.store.backgroundJobs();
   }
 
   setCronTab(tab, cx) {
@@ -636,7 +732,7 @@ export default class BirApp extends View {
 
   deleteJob(id, cx) {
     try {
-      delete_background_job(id);
+      this.store.write("delete_background_job", id);
     } catch (e) {
       this.cronError = String(e);
     }
@@ -645,7 +741,7 @@ export default class BirApp extends View {
 
   archiveJob(id, cx) {
     try {
-      archive_background_job(id);
+      this.store.write("archive_background_job", id);
     } catch (e) {
       this.cronError = String(e);
     }
@@ -654,7 +750,7 @@ export default class BirApp extends View {
 
   purgeArchivedJobs(cx) {
     try {
-      purge_archived_jobs();
+      this.store.write("purge_archived_jobs");
       this.cronFilter = "All Jobs";
     } catch (e) {
       this.cronError = String(e);
@@ -664,7 +760,11 @@ export default class BirApp extends View {
 
   jobLogTail() {
     if (this.jobLogCache === null || this.jobLogCache === undefined) {
-      this.jobLogCache = job_log_tail();
+      try {
+        this.jobLogCache = this.store.call("job_log_tail");
+      } catch (e) {
+        this.jobLogCache = { path: "", lines: [String(e)] };
+      }
     }
     return this.jobLogCache;
   }
@@ -676,339 +776,311 @@ export default class BirApp extends View {
 
   cancelQueuedEntry(entry, cx) {
     try {
-      this.queueError = null;
-      cancel_queued(
-        entry.tin,
-        entry.form_code,
-        entry.taxable_year,
-        entry.quarter ?? entry.month ?? null,
-      );
+      this.store.write("cancel_queued", entry.tin, entry.form_code, entry.taxable_year, entry.quarter ?? entry.month ?? null);
+      this.toast("Queue cancelled. The return is an editable draft again.", cx);
     } catch (e) {
-      this.queueError = String(e);
+      this.toast(String(e), cx, "triangle-alert");
     }
-    cx.notify();
   }
 
-  queueCurrentForm(cx) {
-    const spec = this.formSpec;
-    if (!spec) return;
+  // ---------------------------------------------------------------- legacy profile editor (retained)
+  // Archive, delete and per-profile PIN live on the pre-redesign editor until
+  // the tax-profile screens absorb them; Profile › "Email, security and
+  // export" links here so none of them becomes unreachable.
+
+  openLegacyEditor(cx) {
+    const b = this.branch();
+    if (!b) return;
+    let record = null;
     try {
-      queue_form_draft(
-        this.activeProfileTin,
-        spec.code,
-        this.formYear,
-        this.formQuarter,
-      );
-      this.formDraftStatus = "Queued";
-      this.formNotice = "Queued for background submission.";
-      this.formError = null;
+      record = this.store.call("profile_detail", b.tin);
     } catch (e) {
-      this.formError = String(e);
-      this.formNotice = null;
+      this.editorError = String(e);
     }
-    cx.notify();
-  }
-
-  printCurrentForm(cx) {
-    const spec = this.formSpec;
-    if (!spec) return;
+    this.editing = record || blankProfile();
+    this.editingTinDisplay = b.tin;
+    this.editingAuth = { has_pin: false, has_totp: false };
     try {
-      form_print_html(
-        this.activeProfileTin,
-        spec.code,
-        this.formYear,
-        this.formQuarter,
-      );
-      this.formNotice = "Print preview opened in your browser.";
-      this.formError = null;
-    } catch (e) {
-      this.formError = String(e);
-      this.formNotice = null;
+      this.editingAuth = this.store.call("profile_auth", b.tin);
+    } catch (_e) {}
+    this.deleteArmed = false;
+    this.editorError = null;
+    this.editorNotice = null;
+    const tin = this.editing.tin;
+    const values = {
+      full_name: this.editing.full_name || "",
+      tin: tin && tin.segment1 ? `${tin.segment1}${tin.segment2}${tin.segment3}${tin.branch}` : "",
+      rdo_code: this.editing.rdo_code || "",
+      email: this.editing.email || "",
+      phone: this.editing.phone || "",
+      line_of_business: this.editing.line_of_business || "",
+      registered_address: this.editing.registered_address || "",
+      zip_code: this.editing.zip_code || "",
+    };
+    this.editorInputs = {};
+    for (const [key, value] of Object.entries(values)) this.editorInputs[key] = InputState.new({ value });
+    this.go("profile_manager", cx);
+  }
+
+  navigate(view, cx) {
+    this.go(view === "global_dashboard" ? "home" : view === "dashboard" ? "profile" : view, cx);
+  }
+
+  editingTin() {
+    const t = this.editing.tin;
+    return `${t.segment1}${t.segment2}${t.segment3}${t.branch}`;
+  }
+
+  saveEditingProfile(cx) {
+    const tin = parseTin(this.editorInputs.tin.value());
+    if (!tin) {
+      this.editorError = "TIN must be 12–14 digits (dashes optional).";
+      return cx.notify();
     }
-    cx.notify();
-  }
-
-  cancelCurrentQueue(cx) {
-    const spec = this.formSpec;
-    if (!spec) return;
-    try {
-      cancel_queued(
-        this.activeProfileTin,
-        spec.code,
-        this.formYear,
-        this.formQuarter,
-      );
-      this.formDraftStatus = "Draft";
-      this.formNotice = "Queue canceled — draft is editable again.";
-      this.formError = null;
-    } catch (e) {
-      this.formError = String(e);
-      this.formNotice = null;
+    const payload = { ...this.editing, tin };
+    for (const key of ["full_name", "rdo_code", "email", "phone", "line_of_business", "registered_address", "zip_code"]) {
+      payload[key] = this.editorInputs[key].value().trim();
     }
-    cx.notify();
-  }
-
-  openDraftSummary(draft, cx) {
-    const form = this.forms.find((f) => f.code === draft.form_code);
-    const base = FORM_SPECS[draft.form_code];
-    if (!form || !base) return;
-    this.openFormView(
-      { title: form.title, ...base },
-      cx,
-      draft.taxable_year,
-      draft.quarter ?? draft.month ?? null,
-    );
-  }
-
-  formFieldGet(obj, key) {
-    return key.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
-  }
-
-  formFieldSet(obj, key, value) {
-    const parts = key.split(".");
-    let node = obj;
-    for (const part of parts.slice(0, -1)) {
-      if (node[part] == null || typeof node[part] !== "object") node[part] = {};
-      node = node[part];
-    }
-    node[parts[parts.length - 1]] = value;
-  }
-
-  openFormView(spec, cx, year, period) {
-    this.formSpec = spec;
-    const now = new Date();
-    this.formYear = year ?? now.getFullYear();
-    this.formQuarter =
-      period ??
-      (spec.periods === "quarterly"
-        ? Math.ceil((now.getMonth() + 1) / 3)
-        : spec.periods === "monthly"
-          ? now.getMonth() + 1
-          : null);
-    this.formError = null;
-    this.formNotice = null;
-    let draft = null;
-    this.formDraftStatus = "Draft";
-    try {
-      draft = get_form_draft(
-        this.activeProfileTin,
-        spec.code,
-        this.formYear,
-        this.formQuarter,
-      );
-      const summaries = list_drafts(this.activeProfileTin, this.formYear);
-      const existing = summaries.find(
-        (s) =>
-          s.form_code === spec.code &&
-          (s.quarter ?? s.month ?? null) === this.formQuarter,
-      );
-      if (existing) this.formDraftStatus = existing.status;
-    } catch (e) {
-      this.formError = String(e);
-    }
-    const profile = this.activeProfile() || {};
-    this.formHasDraft = draft !== null;
-    this.formDraft = draft || {};
-    this.formInputs = {};
-    for (const field of spec.fields) {
-      if (field.kind === "bool") continue;
-      let value = this.formFieldGet(this.formDraft, field.key);
-      if ((value === undefined || value === null || value === "") && spec.profileDefaults?.[field.key]) {
-        value = profile[spec.profileDefaults[field.key]] || "";
-      }
-      if (field.kind === "money" || field.kind === "number") {
-        value = value === undefined || value === null ? "" : String(value);
-      }
-      this.formInputs[field.key] = InputState.new({
-        value: value == null ? "" : String(value),
-      });
-    }
-    this.formLaunchNotice = null;
-    this.navigate("form_view", cx);
-  }
-
-  saveFormDraft(cx) {
-    const spec = this.formSpec;
-    const data = { ...this.formDraft };
-    for (const field of spec.fields) {
-      if (field.kind === "bool") {
-        this.formFieldSet(
-          data,
-          field.key,
-          Boolean(this.formFieldGet(data, field.key)),
-        );
-      } else if (field.kind === "money") {
-        const raw = this.formInputs[field.key].value().trim();
-        const value = raw === "" ? 0 : Number(raw);
-        if (Number.isNaN(value)) {
-          this.formError = `${field.label} must be a number.`;
-          cx.notify();
-          return;
-        }
-        this.formFieldSet(data, field.key, value);
-      } else if (field.kind === "number") {
-        const raw = this.formInputs[field.key].value().trim();
-        const value = raw === "" ? 0 : Math.trunc(Number(raw));
-        if (Number.isNaN(value)) {
-          this.formError = `${field.label} must be a whole number.`;
-          cx.notify();
-          return;
-        }
-        this.formFieldSet(data, field.key, value);
-      } else {
-        const text = this.formInputs[field.key].value().trim();
-        // An untouched free-text field must not blank out a value the draft
-        // (or the engine's defaults) already carries.
-        if (text !== "" || this.formFieldGet(data, field.key) === undefined) {
-          this.formFieldSet(data, field.key, text);
-        }
-      }
+    if (!payload.full_name) {
+      this.editorError = "Full name is required.";
+      return cx.notify();
     }
     try {
-      save_form_draft(
-        this.activeProfileTin,
-        spec.code,
-        this.formYear,
-        this.formQuarter,
-        "Draft",
-        data,
-      );
-      this.formDraft = data;
-      this.formHasDraft = true;
-      this.formDraftStatus = "Draft";
-      this.formError = null;
-      this.formNotice = "Draft saved.";
-      cx.notify();
+      this.store.write("save_profile", payload);
+      this.editing = null;
+      this.toast("Changes saved", cx);
+      this.go("profile", cx);
     } catch (e) {
-      this.formError = String(e);
+      this.editorError = String(e);
       cx.notify();
     }
   }
 
-  draftsForProfile(year) {
-    if (!this.activeProfileTin) return [];
+  toggleArchiveProfile(cx) {
     try {
-      return list_drafts(this.activeProfileTin, year);
-    } catch (_e) {
-      return [];
+      this.store.write("set_profile_archived", this.editingTin(), !this.editing.is_archived);
+      this.editing.is_archived = !this.editing.is_archived;
+      this.editorNotice = this.editing.is_archived ? "Profile archived." : "Profile unarchived.";
+    } catch (e) {
+      this.editorError = String(e);
+    }
+    cx.notify();
+  }
+
+  deleteProfile(cx) {
+    if (!this.deleteArmed) {
+      this.deleteArmed = true;
+      return cx.notify();
+    }
+    try {
+      this.store.write("delete_profile", this.editingTin());
+      this.deleteArmed = false;
+      this.editing = null;
+      this.selRoot = null;
+      this.selCode = null;
+      this.go("home", cx);
+    } catch (e) {
+      this.editorError = String(e);
+      cx.notify();
     }
   }
 
-  activeProfile() {
-    return this.profiles.find((p) => p.tin === this.activeProfileTin) || null;
+  setProfilePin(cx) {
+    const pin = this.profilePinOtp.value();
+    if (pin.length !== 4) {
+      this.editorError = "Enter the new 4-digit PIN first.";
+      return cx.notify();
+    }
+    try {
+      this.store.write("set_profile_pin", this.editingTin(), pin);
+      this.profilePinOtp.set_value("");
+      this.editingAuth = this.store.call("profile_auth", this.editingTin());
+      this.editorError = null;
+      this.editorNotice = "PIN saved.";
+    } catch (e) {
+      this.editorError = String(e);
+    }
+    cx.notify();
   }
 
-  renderActiveView(cx) {
-    switch (this.view) {
-      case "global_dashboard":
-        return renderGlobalDashboard(cx, this);
-      case "dashboard": {
-        const profile = this.activeProfile();
-        return profile
-          ? renderDashboard(cx, this, profile)
-          : renderStub(cx, "Dashboard", "No taxpayer selected", "S3");
+  clearProfilePin(cx) {
+    try {
+      this.store.write("set_profile_pin", this.editingTin(), null);
+      this.editingAuth = this.store.call("profile_auth", this.editingTin());
+      this.editorNotice = "PIN cleared.";
+    } catch (e) {
+      this.editorError = String(e);
+    }
+    cx.notify();
+  }
+
+  // ---------------------------------------------------------------- render
+
+  renderView(cx, width) {
+    let view = this.view;
+    if (this.isFresh() && TAXPAYER_VIEWS.has(view)) view = "home";
+    switch (view) {
+      case "home":
+        return renderHome(cx, this, width);
+      case "library":
+        return renderLibrary(cx, this, width);
+      case "calendar":
+        return renderCalendar(cx, this, width);
+      case "filings":
+        return renderFilings(cx, this, width);
+      case "settings":
+        return renderSettings(cx, this, width);
+      case "profile":
+      case "forms":
+      case "templates":
+        return renderTaxpayerPage(cx, this, view, width);
+      case "new_taxpayer":
+      case "new_branch":
+        return renderNewTaxpayer(cx, this, width);
+      case "form":
+        return renderFormPage(cx, this, width);
+      case "gallery":
+        return renderGallery(cx, this, width);
+      case "unlock_profile": {
+        const b = this.branch();
+        return renderUnlockGate(cx, this, { full_name: this.taxpayer()?.name || "", tin: b ? b.tin : "" });
       }
       case "profile_manager":
-        return this.editing
-          ? renderProfileManager(cx, this)
-          : renderStub(cx, "Taxpayer Profile", "No profile loaded", "S2");
-      case "unlock_profile": {
-        const profile = this.activeProfile();
-        return profile
-          ? renderUnlockGate(cx, this, profile)
-          : renderStub(cx, "Unlock", "No profile selected", "S2");
-      }
-      case "import_export":
-        return renderImportPage(cx, this);
+        return this.editing ? renderProfileManager(cx, this) : renderHome(cx, this, width);
       case "cron_tasks":
         return renderCronTasksPage(cx, this);
-      case "admin_calendar":
-        return renderCalendarPage(cx, this);
-      case "form_view":
-        return this.formSpec
-          ? renderFormView(cx, this)
-          : renderStub(cx, "Form", "No form selected", "S4");
-      case "settings":
-        return renderSettings(cx, this);
-      case "dev_mode":
-        return renderStub(
-          cx,
-          "Dev Mode",
-          "Dev switches and diagnostics — debug builds only",
-          "S5",
-        );
       default:
-        return renderGlobalDashboard(cx, this);
+        return renderHome(cx, this, width);
     }
+  }
+
+  /** Width of the main surface's content column, from the window size. */
+  layout() {
+    const vp = window.viewport_size();
+    const narrow = vp.width < BREAK.overlays;
+    const sidebarDocked = this.sidebarOpen && !narrow;
+    const panelDocked = Boolean(this.panel) && !narrow;
+    const left = sidebarDocked ? SIZE.sidebar : SIZE.mainInset;
+    const right = panelDocked ? SIZE.panel : SIZE.mainInset;
+    const mainWidth = Math.max(240, vp.width - left - right - 2);
+    const wide = this.view === "form" || this.view === "library";
+    const padX = mainWidth < BREAK.narrowContent ? 16 : 32;
+    const column = Math.min(wide ? 1120 : SIZE.contentMax, mainWidth) - padX * 2;
+    return { vp, narrow, sidebarDocked, panelDocked, mainWidth, padX, column: Math.max(200, column) };
   }
 
   render(cx) {
-    if (this.appLocked) {
-      return renderLockScreen(cx, this);
-    }
-    return v_flex()
-      .size_full()
-      .track_focus(this.focusRoot)
-      .bg(cx.theme().colors.background)
-      .on_action("toggle-sidebar", (_e, cx) => this.toggleSidebarHidden(cx))
-      .on_action("toggle-sidebar-mini", (_e, cx) => this.toggleMiniSidebar(cx))
-      .on_action("focus-search", (_e, cx) => this.expandSidebarAndFocusSearch(cx))
-      .on_action("create-profile", (_e, cx) => this.openNewProfile(cx))
-      .on_action("toggle-theme", (_e, cx) => this.cycleTheme(cx))
-      .on_action("open-cron-tasks", (_e, cx) => this.navigate("cron_tasks", cx))
-      .on_action("open-settings", (_e, cx) => this.navigate("settings", cx))
-      .on_action("close-drawer", (_e, cx) => {
-        if (this.notificationsOpen) {
-          this.notificationsOpen = false;
-          cx.notify();
-        }
-      })
+    const t = tokens(cx);
+    if (this.appLocked) return renderLockScreen(cx, this);
+    const L = this.layout();
+
+    const main = div()
+      .id("main-surface")
+      .flex()
+      .flex_col()
+      .flex_1()
+      .min_w(0)
+      .min_h(0)
+      .mb(SIZE.mainInset)
+      .when(!L.sidebarDocked, (el) => el.ml(SIZE.mainInset))
+      .when(!L.panelDocked, (el) => el.mr(SIZE.mainInset))
+      .rounded(RADIUS.card)
+      .border(1)
+      .border_color(t.border)
+      .bg(t.surface)
+      .overflow_hidden()
       .child(
         div()
-          .flex()
-          .flex_row()
+          .id("main-scroll")
           .flex_1()
-          .min_h_0()
-          .when(!this.isSidebarHidden, (el) =>
-            el.child(
-              div()
-                .relative()
-                .flex_none()
-                .h_full()
-                .child(renderSidebar(cx, this)),
-            ),
-          )
+          .min_h(0)
+          .overflow_y_scroll()
+          .overflow_x_hidden()
           .child(
             div()
-              .flex_1()
               .flex()
               .flex_col()
-              .h_full()
-              .overflow_hidden()
-              .relative()
-              .child(renderTopBar(cx, this))
-              .child(
-                div().flex_1().min_h_0().w_full().child(this.renderActiveView(cx)),
-              )
-              .child(renderNotificationsDrawer(cx, this)),
+              .items_center()
+              .w_full()
+              .px(L.padX)
+              .pt(L.mainWidth < BREAK.narrowContent ? 20 : 28)
+              .pb(56)
+              .child(div().flex().flex_col().w(L.column).child(this.renderView(cx, L.column))),
           ),
-      )
-      .when(Boolean(this.formLaunchNotice), (el) =>
-        el.child(
+      );
+
+    const body = div().flex().flex_row().flex_1().min_h(0).w_full();
+    if (L.sidebarDocked) body.child(renderSidebar(cx, this));
+    body.child(main);
+    if (L.panelDocked) body.child(renderRightPanel(cx, this));
+
+    const root = div()
+      .id("app-root")
+      .relative()
+      .flex()
+      .flex_col()
+      .size_full()
+      .bg(t.bg)
+      .text_color(t.fg)
+      .track_focus(this.focusRoot)
+      .on_action("toggle-sidebar", (_e, cx) => this.toggleSidebar(cx))
+      .on_action("open-palette", (_e, cx) => this.openPalette(cx))
+      .on_action("new-return", (_e, cx) => this.startNewReturn(cx))
+      .on_action("toggle-theme", (_e, cx) => this.cycleTheme(cx))
+      .on_action("open-settings", (_e, cx) => this.go("settings", cx))
+      .on_action("lock-app", (_e, cx) => this.lockApp(cx))
+      .on_action("go-back", (_e, cx) => this.goBack(cx))
+      .on_action("go-forward", (_e, cx) => this.goForward(cx))
+      .on_action("dismiss", (_e, cx) => this.dismiss(cx))
+      .on_key_down((e, cx) => this.paletteKey(e, cx))
+      .child(renderTitleBar(cx, this, L))
+      .child(body);
+
+    // Below 860 px the sidebar and the panel float over the main surface.
+    if (L.narrow && (this.sidebarOpen || this.panel)) {
+      root.child(
+        div()
+          .id("overlay-scrim")
+          .absolute()
+          .top(SIZE.titleBar)
+          .left(0)
+          .right(0)
+          .bottom(0)
+          .bg(t.scrim)
+          .on_mouse_down("left", (_e, cx) => {
+            this.sidebarOpen = false;
+            this.panel = null;
+            cx.notify();
+          }),
+      );
+      if (this.sidebarOpen) {
+        root.child(
           div()
-            .px(16)
-            .py(8)
-            .border_t(1)
-            .border_color(cx.theme().colors.border)
-            .bg(cx.theme().colors.muted)
-            .child(
-              div()
-                .text_size(12)
-                .text_color(cx.theme().colors.muted_foreground)
-                .child(this.formLaunchNotice),
-            ),
-        ),
-      )
-      .child(renderFooter(cx));
+            .absolute()
+            .top(SIZE.titleBar)
+            .left(0)
+            .bottom(0)
+            .bg(t.bg)
+            .shadow_xl()
+            .child(renderSidebar(cx, this)),
+        );
+      }
+      if (this.panel) {
+        root.child(
+          div()
+            .absolute()
+            .top(SIZE.titleBar)
+            .right(0)
+            .bottom(0)
+            .bg(t.bg)
+            .shadow_xl()
+            .child(renderRightPanel(cx, this)),
+        );
+      }
+    }
+    if (this.overlay === "palette") root.child(renderPalette(cx, this));
+    if (this.overlay === "new") root.child(renderNewReturn(cx, this));
+    if (this.toastState) root.child(Toast(cx, this.toastState.message, this.toastState.icon));
+    return root;
   }
 }
