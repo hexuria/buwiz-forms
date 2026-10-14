@@ -32,6 +32,9 @@ import {
   list_drafts,
   get_form_draft,
   save_form_draft,
+  list_queued,
+  queue_form_draft,
+  cancel_queued,
 } from "bir";
 import {
   applyThemePreference,
@@ -60,6 +63,7 @@ import {
   parseTin,
 } from "./shell/profile_manager.js";
 import { renderSettings } from "./shell/settings.js";
+import { renderQueuePage } from "./shell/queue.js";
 import { renderFormView, FORM_SPECS } from "./shell/form_view.js";
 
 export default class BirApp extends View {
@@ -566,6 +570,65 @@ export default class BirApp extends View {
     this.openFormView({ title: form.title, ...base }, cx);
   }
 
+  queuedSubmissions() {
+    return list_queued();
+  }
+
+  cancelQueuedEntry(entry, cx) {
+    try {
+      this.queueError = null;
+      cancel_queued(
+        entry.tin,
+        entry.form_code,
+        entry.taxable_year,
+        entry.quarter ?? entry.month ?? null,
+      );
+    } catch (e) {
+      this.queueError = String(e);
+    }
+    cx.notify();
+  }
+
+  queueCurrentForm(cx) {
+    const spec = this.formSpec;
+    if (!spec) return;
+    try {
+      queue_form_draft(
+        this.activeProfileTin,
+        spec.code,
+        this.formYear,
+        this.formQuarter,
+      );
+      this.formDraftStatus = "Queued";
+      this.formNotice = "Queued for background submission.";
+      this.formError = null;
+    } catch (e) {
+      this.formError = String(e);
+      this.formNotice = null;
+    }
+    cx.notify();
+  }
+
+  cancelCurrentQueue(cx) {
+    const spec = this.formSpec;
+    if (!spec) return;
+    try {
+      cancel_queued(
+        this.activeProfileTin,
+        spec.code,
+        this.formYear,
+        this.formQuarter,
+      );
+      this.formDraftStatus = "Draft";
+      this.formNotice = "Queue canceled — draft is editable again.";
+      this.formError = null;
+    } catch (e) {
+      this.formError = String(e);
+      this.formNotice = null;
+    }
+    cx.notify();
+  }
+
   openDraftSummary(draft, cx) {
     const form = this.forms.find((f) => f.code === draft.form_code);
     const base = FORM_SPECS[draft.form_code];
@@ -735,12 +798,7 @@ export default class BirApp extends View {
           "S5",
         );
       case "cron_tasks":
-        return renderStub(
-          cx,
-          "Background Tasks",
-          "Queue and receipt-fetching tasks — ports in S6",
-          "S6",
-        );
+        return renderQueuePage(cx, this);
       case "admin_calendar":
         return renderStub(
           cx,

@@ -9,6 +9,7 @@
 use std::cell::RefCell;
 
 use bir_core::db::{self, Database};
+use bir_core::forms::queueable::QueueableForm as _;
 use bir_core::forms::FORM_REGISTRY;
 use gpui_shell::{HostError, HostModule, HostObject, HostResult, HostValue};
 
@@ -479,6 +480,172 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+/// Every queued submission across profiles — the queue page's feed.
+fn list_queued() -> HostResult {
+    with_database(|db| {
+        let summaries = db
+            .list_all_queued_submissions()
+            .map_err(|error| HostError::new(error.to_string()))?;
+        let items: Vec<serde_json::Value> = summaries
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "id": s.id,
+                    "tin": s.tin,
+                    "form_code": s.form_code,
+                    "taxable_year": s.taxable_year,
+                    "quarter": s.quarter,
+                    "month": s.month,
+                    "status": format!("{:?}", s.status),
+                    "updated_at": s.updated_at,
+                })
+            })
+            .collect();
+        serialize(&items)
+    })
+}
+
+/// Move a saved draft into the queue. Generic forms go through
+/// `QueueableKind` + `save_queued_queueable`; the two engine-guarded forms
+/// use their dedicated transition + persistence, mirroring the painted views.
+fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form_code = arguments.string(1)?.to_owned();
+    let year = arguments.integer(2)? as u16;
+    let quarter = optional_quarter(arguments, 3)?;
+    with_database(|db| {
+        let queued: Result<i64, HostError> = (|| {
+            match form_code.as_str() {
+                "2551Q" => {
+                    let q = quarter.ok_or_else(|| {
+                        HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
+                    })?;
+                    let mut draft = db
+                        .get_2551q_draft(&tin, year, q)
+                        .map_err(|error| HostError::new(error.to_string()))?
+                        .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
+                    draft.transition_to_queued().map_err(|errors| {
+                        HostError::new(
+                            errors
+                                .iter()
+                                .map(|(field, msg)| format!("{field}: {msg}"))
+                                .collect::<Vec<_>>()
+                                .join("; "),
+                        )
+                    })?;
+                    db.save_queued_2551q_draft_and_election(&draft)
+                        .map_err(|error| HostError::new(error.to_string()))
+                }
+                "1601C" => {
+                    let month = quarter.ok_or_else(|| {
+                        HostError::new("1601C drafts are monthly: pass the month")
+                    })?;
+                    let mut draft = db
+                        .get_1601c_draft(&tin, year, month)
+                        .map_err(|error| HostError::new(error.to_string()))?
+                        .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
+                    draft.transition_to_queued().map_err(|errors| {
+                        HostError::new(
+                            errors
+                                .iter()
+                                .map(|(field, msg)| format!("{field}: {msg}"))
+                                .collect::<Vec<_>>()
+                                .join("; "),
+                        )
+                    })?;
+                    db.save_queued_1601c_draft(&draft)
+                        .map_err(|error| HostError::new(error.to_string()))
+                }
+                _ => {
+                    use bir_core::forms::queueable::QueueableKind;
+                    let kind = QueueableKind::from_form_code(&form_code).ok_or_else(|| {
+                        HostError::new(format!("Form {form_code} is not queueable"))
+                    })?;
+                    bir_core::with_queueable_kind!(kind, F => {
+                        let mut draft: F = db
+                            .get_form_draft(&tin, &form_code, year, quarter)
+                            .map_err(|error| HostError::new(error.to_string()))?
+                            .ok_or_else(|| {
+                                HostError::new(format!("No saved {form_code} draft for that period"))
+                            })?;
+                        draft
+                            .queue(bir_core::filing_queue::QueueAuthSource::Gui)
+                            .map_err(|errors| {
+                                HostError::new(
+                                    errors
+                                        .iter()
+                                        .map(|(field, msg)| format!("{field}: {msg}"))
+                                        .collect::<Vec<_>>()
+                                        .join("; "),
+                                )
+                            })?;
+                        db.save_queued_queueable(&draft)
+                            .map_err(|error| HostError::new(error.to_string()))
+                    })
+                }
+            }
+        })();
+        queued.map(|id| HostValue::Number(id as f64))
+    })
+}
+
+/// Cancel an unclaimed queued submission back to Draft (same guards as the
+/// painted views: claimed or submitted work cannot be canceled this way).
+fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form_code = arguments.string(1)?.to_owned();
+    let year = arguments.integer(2)? as u16;
+    let quarter = optional_quarter(arguments, 3)?;
+    with_database(|db| {
+        let result: Result<(), HostError> = (|| {
+            match form_code.as_str() {
+                "2551Q" => {
+                    let q = quarter.ok_or_else(|| {
+                        HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
+                    })?;
+                    let draft = db
+                        .get_2551q_draft(&tin, year, q)
+                        .map_err(|error| HostError::new(error.to_string()))?
+                        .ok_or_else(|| HostError::new("No queued 2551Q draft for that period"))?;
+                    db.cancel_queued_2551q_submission(&draft)
+                        .map_err(|error| HostError::new(error.to_string()))?;
+                    Ok(())
+                }
+                "1601C" => {
+                    let month = quarter.ok_or_else(|| {
+                        HostError::new("1601C drafts are monthly: pass the month")
+                    })?;
+                    let draft = db
+                        .get_1601c_draft(&tin, year, month)
+                        .map_err(|error| HostError::new(error.to_string()))?
+                        .ok_or_else(|| HostError::new("No queued 1601C draft for that period"))?;
+                    db.cancel_queued_1601c_submission(&draft)
+                        .map_err(|error| HostError::new(error.to_string()))?;
+                    Ok(())
+                }
+                _ => {
+                    use bir_core::forms::queueable::QueueableKind;
+                    let kind = QueueableKind::from_form_code(&form_code).ok_or_else(|| {
+                        HostError::new(format!("Form {form_code} is not queueable"))
+                    })?;
+                    bir_core::with_queueable_kind!(kind, F => {
+                        let draft: F = db
+                            .get_form_draft(&tin, &form_code, year, quarter)
+                            .map_err(|error| HostError::new(error.to_string()))?
+                            .ok_or_else(|| {
+                                HostError::new(format!("No queued {form_code} draft for that period"))
+                            })?;
+                        db.cancel_queued_queueable(&draft)
+                            .map_err(|error| HostError::new(error.to_string()))?;
+                        Ok(())
+                    })
+                }
+            }
+        })();
+        result.map(|_| HostValue::Null)
+    })
+}
+
 /// Admin PIN lives only as its hash (`app_lock_pin_hash`); hashing stays
 /// host-side so the script never sees the stored digest.
 fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -518,6 +685,9 @@ pub fn module() -> HostModule {
         .function("list_drafts", list_drafts)
         .function("get_form_draft", get_form_draft)
         .function("save_form_draft", save_form_draft)
+        .function("list_queued", |_| list_queued())
+        .function("queue_form_draft", queue_form_draft)
+        .function("cancel_queued", cancel_queued)
         .declarations(
             r#"
 export interface SystemInfo {
@@ -595,6 +765,9 @@ export interface DraftSummary {
 export function list_drafts(tin: string, year: number): DraftSummary[];
 export function get_form_draft(tin: string, form_code: string, year: number, quarter: number | null): object | null;
 export function save_form_draft(tin: string, form_code: string, year: number, quarter: number | null, status: string, data: object): number;
+export function list_queued(): DraftSummary[];
+export function queue_form_draft(tin: string, form_code: string, year: number, quarter: number | null): number;
+export function cancel_queued(tin: string, form_code: string, year: number, quarter: number | null): null;
 "#,
         )
 }

@@ -27784,6 +27784,9 @@ declare module "bir" {
   export function list_drafts(tin: string, year: number): DraftSummary[];
   export function get_form_draft(tin: string, form_code: string, year: number, quarter: number | null): object | null;
   export function save_form_draft(tin: string, form_code: string, year: number, quarter: number | null, status: string, data: object): number;
+  export function list_queued(): DraftSummary[];
+  export function queue_form_draft(tin: string, form_code: string, year: number, quarter: number | null): number;
+  export function cancel_queued(tin: string, form_code: string, year: number, quarter: number | null): null;
 }
 
 /**

@@ -437,11 +437,29 @@ export function renderFormView(cx, state) {
                 .ghost()
                 .on_click((_ev, cx) => state.navigate("dashboard", cx)),
             )
-            .child(
-              Button.new("form_save_draft")
-                .label("Save draft")
-                .primary()
-                .on_click((_ev, cx) => state.saveFormDraft(cx)),
+            .when(status === "Queued", (el) =>
+              el.child(
+                Button.new("form_cancel_queue")
+                  .label("Cancel queue")
+                  .danger()
+                  .on_click((_ev, cx) => state.cancelCurrentQueue(cx)),
+              ),
+            )
+            .when(status === "Draft", (el) =>
+              el.child(
+                Button.new("form_queue")
+                  .label("Queue for submission")
+                  .secondary()
+                  .on_click((_ev, cx) => state.queueCurrentForm(cx)),
+              ),
+            )
+            .when(status === "Draft", (el) =>
+              el.child(
+                Button.new("form_save_draft")
+                  .label("Save draft")
+                  .primary()
+                  .on_click((_ev, cx) => state.saveFormDraft(cx)),
+              ),
             ),
         ),
     );
