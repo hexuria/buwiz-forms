@@ -66,7 +66,8 @@ zip = { version = "2", default-features = false, features = ["deflate", "time"] 
 uuid = { version = "1.23.1", features = ["v4"] }
 sha2 = { workspace = true }
 cron = "0.16.0"
-tray-icon = "0.24.0"
+# The tray has no predefined clipboard items, so avoid libxdo.so.3, which is unavailable in Arch's official repos.
+tray-icon = { version = "0.24.0", default-features = false, features = ["gtk"] }
 image = "0.25.10"
 smol = "2.0.2"
 global-hotkey = "0.8"
@@ -154,6 +155,17 @@ assets = [
     # all equal the app id the windows set (src/window_identity.rs).
     ["../../assets/linux/dev.goldcoders.bir.desktop", "usr/share/applications/", "644"],
     ["../../assets/linux/icons/hicolor/**/*", "usr/share/icons/hicolor/", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "ebirforms"
+auto-req = "auto"
+requires = { "libvulkan.so.1()(64bit)" = "", "libwebkit2gtk-4.1.so.0()(64bit)" = "" }
+assets = [
+    { source = "target/release/bir", dest = "/usr/bin/ebirforms", mode = "755" },
+    { source = "../../assets/**/*", dest = "/usr/share/ebirforms/assets/", mode = "644" },
+    { source = "../../assets/linux/dev.goldcoders.bir.desktop", dest = "/usr/share/applications/dev.goldcoders.bir.desktop", mode = "644" },
+    { source = "../../assets/linux/icons/hicolor/**/*", dest = "/usr/share/icons/hicolor/", mode = "644" },
 ]
 
 [package.metadata.bundle]
