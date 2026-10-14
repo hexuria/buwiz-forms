@@ -1,181 +1,176 @@
-// Settings page: theme preference + app-lock credentials.
-// Keys are shared verbatim with the painted app (theme_preference,
-// enable_profile_pins, hide_tax_profiles, app_lock_pin_hash, app_totp_secret).
-import { View, div } from "gpui-kit";
-import { v_flex, h_flex, OtpInput } from "gpui-base";
-import { Button, Checkbox } from "gpui-component";
-import { pageHeading, pageSub } from "./pages.js";
+// Settings: app-wide preferences for this computer. Taxpayer details live in
+// each tax profile. Every control the pre-redesign page had is kept (theme,
+// admin PIN, authenticator, profile PINs, import, background tasks); rows the
+// prototype shows for features this build does not have yet are left out
+// rather than drawn as dead switches (see docs/plans/gpui-shell-migration.md).
 
-function section(cx, title, children) {
-  return v_flex()
-    .gap(12)
-    .p(16)
-    .w_full()
-    .bg(cx.theme().colors.surface)
-    .border(1)
-    .border_color(cx.theme().colors.border)
-    .rounded_md()
-    .child(
-      div()
-        .text_size(14)
-        .font_semibold()
-        .text_color(cx.theme().colors.foreground)
-        .child(title),
+import { div } from "gpui-kit";
+import { OtpInput } from "gpui-base";
+import {
+  tokens,
+  SPACE,
+  RADIUS,
+  SIZE,
+  Text,
+  AppButton,
+  Segmented,
+  Switch,
+  Chip,
+  Card,
+  SettingRow,
+  PageHeader,
+  SectionTitle,
+} from "./ui.js";
+
+function pinCells(cx, state, id) {
+  const t = tokens(cx);
+  return OtpInput.new(state)
+    .id(id)
+    .flex()
+    .gap(6)
+    .cell_style((cell) =>
+      cell
+        .size(SIZE.control)
+        .flex()
+        .items_center()
+        .justify_center()
+        .border(1)
+        .border_color(t.borderStrong)
+        .bg(t.surface)
+        .rounded(RADIUS.row),
     )
-    .children(children.filter(Boolean));
+    .cell_active_style((cell) => cell.border_color(t.accent))
+    .caret_style((caret) => caret.w(2).h(16).bg(t.fg));
 }
 
-function switchRow(cx, id, label, checked, onChange) {
-  return h_flex()
+function jobChip(cx, status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "running" || s === "active" || s === "scheduled") return Chip(cx, "Running", "success");
+  if (s === "failed" || s === "error") return Chip(cx, "Failed", "danger");
+  if (s === "queued" || s === "pending") return Chip(cx, "Waiting", "accent");
+  return Chip(cx, status ? status[0].toUpperCase() + status.slice(1).toLowerCase() : "Paused");
+}
+
+export function renderSettings(cx, app, _width) {
+  const auth = app.store.authState();
+  const os = app.isMac ? "macOS" : app.info.os === "windows" ? "Windows" : "system";
+
+  const appearance = Card(cx, "settings-appearance", [
+    SettingRow(
+      cx,
+      "settings-theme",
+      "Theme",
+      `System follows your ${os} setting`,
+      Segmented(
+        cx,
+        "settings-theme-seg",
+        [
+          { value: "light", label: "Light" },
+          { value: "dark", label: "Dark" },
+          { value: "system", label: "System" },
+        ],
+        app.themePref,
+        (v, cx) => app.setThemePreference(v, cx),
+        { label: "Theme" },
+      ),
+    ),
+    SettingRow(
+      cx,
+      "settings-recent",
+      "Show recent returns in the sidebar",
+      "The last four returns you opened",
+      Switch(cx, "settings-recent-switch", app.prefs.showRecent, (v, cx) => app.setPref("showRecent", v, cx), "Show recent returns"),
+    ),
+  ]);
+
+  const data = Card(cx, "settings-data", [
+    SettingRow(
+      cx,
+      "settings-import",
+      "Import data",
+      "Restore a taxpayer or database export (.zip)",
+      AppButton(cx, "settings-import-btn", "Import", { size: "sm", icon: "upload", onClick: (_e, cx) => app.runImport(cx) }),
+    ),
+  ]);
+
+  const jobs = app.backgroundJobs().filter((j) => j.kind === "job").slice(0, 5);
+  const jobRows = jobs.map((j, i) =>
+    SettingRow(cx, `settings-job-${i}`, j.name, j.cron_expr ? `Schedule: ${j.cron_expr}` : j.job_type, jobChip(cx, j.status)),
+  );
+  jobRows.push(
+    SettingRow(
+      cx,
+      "settings-jobs-open",
+      jobs.length ? "All background tasks" : "No background tasks yet",
+      "Jobs, submissions and the task log",
+      AppButton(cx, "settings-jobs-btn", "Open", { size: "sm", onClick: (_e, cx) => app.go("cron_tasks", cx) }),
+    ),
+  );
+  const tasks = Card(cx, "settings-tasks", jobRows);
+
+  const pinControls = div()
+    .flex()
+    .flex_row()
+    .flex_wrap()
     .items_center()
-    .w_full()
+    .gap(SPACE[2])
+    .child(pinCells(cx, app.adminPinOtp, "settings-admin-pin"))
     .child(
-      Checkbox.new(id)
-        .label(label)
-        .checked(checked)
-        .on_change(onChange),
+      AppButton(cx, "settings-admin-pin-save", auth.has_admin_pin ? "Change PIN" : "Set PIN", {
+        size: "sm",
+        onClick: (_e, cx) => app.setAdminPin(cx),
+      }),
     );
-}
-
-function themeChip(cx, state, label, value) {
-  const selected = state.themePref === value;
-  return div()
-    .id(`theme-${value}`)
-    .px(16)
-    .py(8)
-    .border(1)
-    .rounded_md()
-    .border_color(selected ? cx.theme().colors.primary : cx.theme().colors.border)
-    .bg(selected ? cx.theme().colors.accent : cx.theme().colors.surface)
-    .text_size(13)
-    .font_medium()
-    .text_color(
-      selected ? cx.theme().colors.primary : cx.theme().colors.muted_foreground,
-    )
-    .hover((s) => !selected && s.bg(cx.theme().colors.muted))
-    .on_click((_ev, cx) => state.setThemePreference(value, cx))
-    .child(label);
-}
-
-export function renderSettings(cx, state) {
-  return div()
-    .size_full()
-    .overflow_y_scroll()
-    .p(24)
-    .child(
-      v_flex()
-        .gap(16)
-        .max_w_full()
-        .child(pageHeading("Settings", cx))
-        .child(
-          pageSub(
-            "Preferences share the painted app's setting keys, so both apps agree.",
-            cx,
-          ),
-        )
-        .child(
-          section(cx, "Appearance", [
-            h_flex()
-              .gap(8)
-              .children([
-                themeChip(cx, state, "System", "system"),
-                themeChip(cx, state, "Dark", "dark"),
-                themeChip(cx, state, "Light", "light"),
-              ]),
-          ]),
-        )
-        .child(
-          section(cx, "Privacy", [
-            switchRow(
-              cx,
-              "set_enable_pins",
-              "Require profile PIN / authenticator to unlock",
-              state.auth.enable_profile_pins,
-              (checked, cx) => state.setAuthFlag("enable_profile_pins", checked, cx),
-            ),
-            switchRow(
-              cx,
-              "set_hide_profiles",
-              "Hide taxpayer profiles in the sidebar",
-              state.auth.hide_tax_profiles,
-              (checked, cx) => state.setAuthFlag("hide_tax_profiles", checked, cx),
-            ),
-          ]),
-        )
-        .child(
-          section(cx, "App lock", [
-            div()
-              .text_size(13)
-              .text_color(cx.theme().colors.muted_foreground)
-              .child(
-                `Admin PIN ${state.auth.has_admin_pin ? "set" : "not set"} · authenticator ${state.auth.has_admin_totp ? "enrolled" : "not enrolled"}`,
-              ),
-            h_flex()
-              .gap(8)
-              .items_center()
-              .child(
-                OtpInput.new(state.adminPinOtp)
-                  .flex()
-                  .gap(6)
-                  .cell_style((cell) =>
-                    cell
-                      .size(36)
-                      .flex()
-                      .items_center()
-                      .justify_center()
-                      .border(1)
-                      .border_color(cx.theme().colors.input)
-                      .rounded_md(),
-                  )
-                  .cell_active_style((cell) =>
-                    cell.border_color(cx.theme().colors.primary),
-                  )
-                  .caret_style((caret) =>
-                    caret.w(2).h(16).bg(cx.theme().colors.foreground),
-                  ),
-              )
-              .child(
-                Button.new("set_admin_pin")
-                  .label(state.auth.has_admin_pin ? "Change admin PIN" : "Set admin PIN")
-                  .outline()
-                  .on_click((_ev, cx) => state.setAdminPin(cx)),
-              )
-              .when(state.auth.has_admin_pin, (el) =>
-                el.child(
-                  Button.new("clear_admin_pin")
-                    .label("Clear")
-                    .ghost()
-                    .on_click((_ev, cx) => state.clearAdminPin(cx)),
-                ),
-              ),
-            h_flex()
-              .gap(8)
-              .items_center()
-              .child(
-                Button.new("set_totp")
-                  .label(
-                    state.auth.has_admin_totp
-                      ? "Remove authenticator"
-                      : "Enroll authenticator",
-                  )
-                  .outline()
-                  .on_click((_ev, cx) => state.toggleAdminTotp(cx)),
-              )
-              .when(state.newTotpSecret, (el) =>
-                el.child(
-                  div()
-                    .text_size(13)
-                    .text_color(cx.theme().colors.muted_foreground)
-                    .child(`Secret: ${state.newTotpSecret}`),
-                ),
-              ),
-            state.settingsNotice
-              ? div()
-                  .text_size(13)
-                  .text_color(cx.theme().colors.muted_foreground)
-                  .child(state.settingsNotice)
-              : null,
-          ]),
-        ),
+  if (auth.has_admin_pin) {
+    pinControls.child(
+      AppButton(cx, "settings-admin-pin-clear", "Remove", { variant: "ghost", size: "sm", onClick: (_e, cx) => app.clearAdminPin(cx) }),
     );
+  }
+  const totpHint = app.newTotpSecret
+    ? `Secret: ${app.newTotpSecret}`
+    : auth.has_admin_totp
+      ? "Codes from your authenticator app unlock the app"
+      : "Use a 6-digit code from an authenticator app";
+  const security = Card(cx, "settings-security", [
+    SettingRow(cx, "settings-admin-pin-row", "Admin PIN", auth.has_admin_pin ? "Asks for this PIN to unlock the app" : "Not set", pinControls),
+    SettingRow(
+      cx,
+      "settings-totp",
+      "Authenticator",
+      totpHint,
+      AppButton(cx, "settings-totp-btn", auth.has_admin_totp ? "Remove" : "Add", {
+        variant: auth.has_admin_totp ? "ghost" : "secondary",
+        size: "sm",
+        onClick: (_e, cx) => app.toggleAdminTotp(cx),
+      }),
+    ),
+    SettingRow(
+      cx,
+      "settings-profile-pins",
+      "Taxpayer PINs",
+      "Ask for a taxpayer's PIN before opening it",
+      Switch(cx, "settings-profile-pins-switch", auth.enable_profile_pins, (v, cx) => app.setAuthFlag("enable_profile_pins", v, cx), "Taxpayer PINs"),
+    ),
+    SettingRow(
+      cx,
+      "settings-hide-taxpayers",
+      "Hide other taxpayers",
+      "Leave them out of Switch taxpayer and Search",
+      Switch(cx, "settings-hide-taxpayers-switch", auth.hide_tax_profiles, (v, cx) => app.setAuthFlag("hide_tax_profiles", v, cx), "Hide other taxpayers"),
+    ),
+  ]);
+
+  return div()
+    .flex()
+    .flex_col()
+    .child(PageHeader(cx, { title: "Settings", lede: "App-wide preferences for this computer. Taxpayer details live in each tax profile." }))
+    .child(div().mt(28).child(SectionTitle(cx, "Appearance", true)))
+    .child(appearance)
+    .child(SectionTitle(cx, "Data"))
+    .child(data)
+    .child(SectionTitle(cx, "Background tasks"))
+    .child(tasks)
+    .child(SectionTitle(cx, "Security"))
+    .child(security)
+    .child(Text(cx, "meta", `eBIRForms ${app.info.app_version || ""} · ${app.info.database_path || ""}`, "fg3").mt(SPACE[6]).whitespace_normal());
 }
