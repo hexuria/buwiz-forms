@@ -37,8 +37,10 @@ mod receipts;
 pub use queueable::{ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
+mod taxpayers;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
 pub use submissions::SubmissionSummary;
+pub use taxpayers::{BulkCopyReport, MissingFormPolicy, TemplateConflictPolicy};
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};
 use std::fs::{File, OpenOptions};
@@ -294,6 +296,12 @@ pub struct Database {
     /// Sidecar exclusive lock for painted `bir` / `bir-headless serve`.
     /// `None` for ephemeral fixtures and `Database::open` test helpers.
     _owner_lock: Option<File>,
+}
+
+/// The filing period a Tax Form Library selection (`FileForm { form_code,
+/// year, quarter }`) names, with the same slot semantics the draft store uses.
+pub(crate) fn period_from_library_slot(form_code: &str, slot: u8) -> crate::forms::FilingPeriod {
+    drafts::period_from_legacy_slot(form_code, Some(slot), 1)
 }
 
 pub fn default_database_path() -> std::path::PathBuf {
