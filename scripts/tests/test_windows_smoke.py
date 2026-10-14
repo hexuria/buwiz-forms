@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from scripts import windows_smoke
 
@@ -79,6 +79,47 @@ class WindowsSmokeTests(unittest.TestCase):
         windows_smoke.ensure_preview_capture_visible(user32, 8, rect)
         points = [(call.args[0].x, call.args[0].y) for call in user32.WindowFromPoint.call_args_list]
         self.assertEqual(points, [(10, 20), (29, 20), (10, 39), (29, 39), (20, 30)])
+
+    def test_wait_preview_retries_mailbox_drain_timeout(self):
+        proc = Mock()
+        proc.poll.return_value = None
+        client = Mock()
+        client.request.side_effect = [
+            {"ok": False, "error": windows_smoke.MAILBOX_DRAIN_TIMEOUT},
+            {
+                "ok": True,
+                "tree": {
+                    "id": "root",
+                    "nodes": [{"id": "print-preview-state", "value": "ready"}],
+                },
+            },
+        ]
+        with patch.object(windows_smoke.time, "sleep"):
+            windows_smoke.wait_preview(client, proc)
+        self.assertEqual(client.request.call_count, 2)
+
+    def test_wait_preview_does_not_retry_other_agent_errors(self):
+        proc = Mock()
+        proc.poll.return_value = None
+        client = Mock()
+        client.request.return_value = {"ok": False, "error": "bad request"}
+        with self.assertRaisesRegex(windows_smoke.SmokeError, "snapshot returned no tree"):
+            windows_smoke.wait_preview(client, proc)
+
+    def test_wait_preview_still_has_a_bounded_deadline(self):
+        proc = Mock()
+        proc.poll.return_value = None
+        client = Mock()
+        client.request.return_value = {
+            "ok": False,
+            "error": windows_smoke.MAILBOX_DRAIN_TIMEOUT,
+        }
+        with (
+            patch.object(windows_smoke.time, "monotonic", side_effect=[0, 0, 31]),
+            patch.object(windows_smoke.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(windows_smoke.SmokeError, "within 30s"):
+                windows_smoke.wait_preview(client, proc)
 
     def test_smoke_env_strips_sftp(self):
         with tempfile.TemporaryDirectory() as directory:
