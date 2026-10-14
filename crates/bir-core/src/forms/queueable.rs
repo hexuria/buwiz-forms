@@ -664,10 +664,36 @@ impl QueueableKind {
 }
 
 /// Run `$body` with `$ty` bound to the draft type of a [`QueueableKind`].
+#[cfg(test)]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __queueable_kind_match {
+    ($kind:expr, $ty:ident => $body:expr; $($arms:tt)*) => {
+        match $kind {
+            $($arms)*
+            $crate::forms::queueable::QueueableKind::Test => {
+                type $ty = $crate::forms::queueable::test_support::TestForm;
+                $body
+            }
+        }
+    };
+}
+
+#[cfg(not(test))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __queueable_kind_match {
+    ($kind:expr, $ty:ident => $body:expr; $($arms:tt)*) => {
+        match $kind {
+            $($arms)*
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! with_queueable_kind {
     ($kind:expr, $ty:ident => $body:expr) => {
-        match $kind {
+        $crate::__queueable_kind_match!($kind, $ty => $body;
             $crate::forms::queueable::QueueableKind::Form2553 => {
                 type $ty = $crate::forms::form_2553::Form2553Draft;
                 $body
@@ -832,12 +858,7 @@ macro_rules! with_queueable_kind {
                 type $ty = $crate::forms::form_2550q::Form2550QDraft;
                 $body
             }
-            #[cfg(test)]
-            $crate::forms::queueable::QueueableKind::Test => {
-                type $ty = $crate::forms::queueable::test_support::TestForm;
-                $body
-            }
-        }
+        )
     };
 }
 

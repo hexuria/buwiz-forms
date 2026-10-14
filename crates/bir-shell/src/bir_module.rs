@@ -281,7 +281,7 @@ fn verify_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let pin = arguments.string(0)?;
-    let hashed = bir_core::crypto::hash_pin(&pin);
+    let hashed = bir_core::crypto::hash_pin(pin);
     with_database(|db| {
         let ok = db
             .get_setting("app_lock_pin_hash")
@@ -1000,13 +1000,13 @@ fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|elapsed| elapsed.as_secs())
             .unwrap_or(0);
-        if db_path.exists() {
-            if let Some(parent) = db_path.parent() {
-                let _ = std::fs::copy(
-                    &db_path,
-                    parent.join(format!("bir_data.safety-{timestamp}.db")),
-                );
-            }
+        if db_path.exists()
+            && let Some(parent) = db_path.parent()
+        {
+            let _ = std::fs::copy(
+                &db_path,
+                parent.join(format!("bir_data.safety-{timestamp}.db")),
+            );
         }
         reset_database();
         return match bir_core::import::extract_database_zip(&path, &db_path) {
