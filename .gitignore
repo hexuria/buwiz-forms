@@ -53,8 +53,17 @@ Desktop.ini
 
 # Generated PDF files
 *.pdf
+
+# Written by the gpui-shell runtime on every launch (set_editor_files); the
+# declarations always describe the engine actually running, never an editor's
+# stale copy.
+app/gpui-kit.d.ts
 *.lock
 !/Cargo.lock
+# bir-shell is a standalone workspace (gpui-kit-assets `links` conflict keeps
+# it out of the root one); its lockfile carries the transitive pins the
+# LLRT/quickjs graph needs, so it is committed like the root one.
+!/crates/bir-shell/Cargo.lock
 
 # AI Agent Artifacts & Scratchpads
 .scratch/

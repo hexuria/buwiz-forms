@@ -56,6 +56,19 @@ help:
 run:
     cargo run --locked --bin bir-desktop --features dev-tools
 
+# gpui-shell host — a standalone workspace under crates/bir-shell (its own
+# lockfile carries the LLRT/quickjs pins; see its Cargo.toml). `just check`
+# covers the root workspace only, so the shell gets its own targets.
+[unix]
+shell-run:
+    cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell
+
+[unix]
+shell-check:
+    cargo fmt --manifest-path crates/bir-shell/Cargo.toml
+    cargo check --locked --manifest-path crates/bir-shell/Cargo.toml
+    cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets -- -D warnings
+
 # Run code formatting, linting, and type checking
 [unix]
 check:

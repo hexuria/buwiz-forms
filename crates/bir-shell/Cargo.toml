@@ -1,0 +1,56 @@
+# Standalone workspace on purpose: `gpui-kit-assets` declares
+# `links = "gpui-kit-default-icons"`, and Cargo allows only one version of a
+# links crate per resolution graph. bir-desktop (gpui-kit 0.6) and this crate
+# (gpui-kit 0.7.3) therefore cannot share the repository workspace lockfile.
+# This manifest is its own root; it still path-depends on bir-core.
+[workspace]
+
+[package]
+name = "bir-shell"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "gpui-shell host: mounts the JavaScript app/ UI on the QuickJS runtime"
+
+[lib]
+name = "bir_shell"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bir-shell"
+path = "src/main.rs"
+
+[dependencies]
+# gpui-shell is published only via the monorepo git (the crates.io `gpui-shell`
+# 0.1.0 is an empty placeholder). All monorepo crates share ONE rev so the
+# shell, kit, and component catalogs see the same gpui-pre 0.3.9 graph.
+# `rev = a0230db` is master past tag v0.7.3 — the tag predates the `components`
+# feature and the gpui-component script catalog.
+gpui-shell = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
+gpui-kit = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
+# Exact `=` pins: bir-desktop keeps gpui-pre 0.3.4 in the same lockfile, so both
+# must resolve side by side.
+gpui = { package = "gpui-pre", version = "=0.3.9" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = [
+    "font-kit",
+    "x11",
+    "wayland",
+    "runtime_shaders",
+] }
+
+bir-core = { path = "../bir-core" }
+
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# The monorepo's crates/shell/rquickjs-compat facade (a package named
+# `rquickjs`) routes LLRT stdlib's crates.io rquickjs dependency onto the
+# quickjs-jit VM gpui-shell actually runs. Without it two rquickjs_core
+# versions collide (`ModuleDef` trait conflict).
+[patch.crates-io]
+rquickjs = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
