@@ -28,6 +28,7 @@ mod ipc;
 pub(crate) mod layout_probe;
 mod platform;
 mod quit_guard;
+mod quit_shortcut;
 mod sidebar;
 mod theme;
 mod top_bar;
