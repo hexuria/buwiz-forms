@@ -76,7 +76,16 @@ function inputRow(cx, label, inputState) {
         .text_color(cx.theme().colors.muted_foreground)
         .child(label),
     )
-    .child(Input.new(inputState).w_full());
+    .child(
+      Input.new(inputState)
+        .w_full()
+        .h(28)
+        .px(8)
+        .border(1)
+        .border_color(cx.theme().colors.input)
+        .bg(cx.theme().colors.surface)
+        .text_size(12),
+    );
 }
 
 function typeChip(cx, state, value) {

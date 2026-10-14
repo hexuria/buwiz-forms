@@ -323,7 +323,16 @@ export function renderSidebar(cx, state) {
             .on_click((_ev, cx) => state.expandSidebarAndFocusSearch(cx))
             .child(icon(cx, "icons/search.svg", 20)),
         )
-    : div().px(24).w_full().child(Input.new(state.searchInput));
+    : div().px(24).w_full().child(
+        Input.new(state.searchInput)
+          .w_full()
+          .h(28)
+          .px(8)
+          .border(1)
+          .border_color(cx.theme().colors.input)
+          .bg(cx.theme().colors.surface)
+          .text_size(12),
+      );
 
   const logout = state.activeSessionTin
     ? div()
