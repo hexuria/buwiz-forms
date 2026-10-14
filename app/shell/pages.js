@@ -247,6 +247,9 @@ export function renderDashboard(cx, state, profile) {
                         .items_center()
                         .rounded_md()
                         .hover((s) => s.bg(cx.theme().colors.muted))
+                        .on_click((_ev, clickCx) =>
+                          state.openDraftSummary(draft, clickCx),
+                        )
                         .child(
                           div()
                             .w(FORM_CODE_W)

@@ -566,6 +566,18 @@ export default class BirApp extends View {
     this.openFormView({ title: form.title, ...base }, cx);
   }
 
+  openDraftSummary(draft, cx) {
+    const form = this.forms.find((f) => f.code === draft.form_code);
+    const base = FORM_SPECS[draft.form_code];
+    if (!form || !base) return;
+    this.openFormView(
+      { title: form.title, ...base },
+      cx,
+      draft.taxable_year,
+      draft.quarter ?? draft.month ?? null,
+    );
+  }
+
   formFieldGet(obj, key) {
     return key.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
   }
@@ -580,16 +592,17 @@ export default class BirApp extends View {
     node[parts[parts.length - 1]] = value;
   }
 
-  openFormView(spec, cx) {
+  openFormView(spec, cx, year, period) {
     this.formSpec = spec;
     const now = new Date();
-    this.formYear = now.getFullYear();
+    this.formYear = year ?? now.getFullYear();
     this.formQuarter =
-      spec.periods === "quarterly"
+      period ??
+      (spec.periods === "quarterly"
         ? Math.ceil((now.getMonth() + 1) / 3)
         : spec.periods === "monthly"
           ? now.getMonth() + 1
-          : null;
+          : null);
     this.formError = null;
     this.formNotice = null;
     let draft = null;
