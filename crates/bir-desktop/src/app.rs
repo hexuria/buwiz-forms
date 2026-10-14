@@ -605,6 +605,20 @@ impl AppState {
 
                     cx.notify();
                 }
+                ImportExportEvent::ProfilesChanged => {
+                    let profiles = this
+                        .db
+                        .lock()
+                        .map(|db| db.list_profiles().unwrap_or_default())
+                        .unwrap_or_default();
+                    this.profiles = profiles.clone();
+                    this.global_dashboard_view.update(cx, |view, cx| {
+                        view.hide_tax_profiles = this.hide_tax_profiles;
+                        view.active_session_tin = this.active_session_tin.clone();
+                        view.set_profiles(profiles.clone(), cx);
+                    });
+                    cx.notify();
+                }
             },
         )
         .detach();

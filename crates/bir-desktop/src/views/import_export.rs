@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 pub enum ImportExportEvent {
     ReloadApp, // Fired when we replace the db file completely and need a cold reload
+    ProfilesChanged,
 }
 
 impl EventEmitter<ImportExportEvent> for ImportExportView {}
@@ -64,7 +65,7 @@ impl ImportExportView {
         }
     }
 
-    fn apply_legacy_migration(&mut self) -> Result<String, String> {
+    fn apply_legacy_migration(&mut self) -> Result<(String, bool), String> {
         let scan = self
             .legacy_scan
             .as_ref()
@@ -75,14 +76,17 @@ impl ImportExportView {
             .map_err(|_| "Failed to acquire database lock".to_string())?;
         let report = bir_core::legacy_migration::apply_legacy_migration(&db, scan)
             .map_err(|error| error.to_string())?;
-        Ok(format!(
-            "Migration complete: {} profiles created, {} updated, {} unchanged; {} returns imported, {} already present; {} issues.",
-            report.profiles_created,
-            report.profiles_updated,
-            report.profiles_unchanged,
-            report.returns_imported,
-            report.returns_already_present,
-            report.issues.len()
+        Ok((
+            format!(
+                "Migration complete: {} profiles created, {} updated, {} unchanged; {} returns imported, {} already present; {} issues.",
+                report.profiles_created,
+                report.profiles_updated,
+                report.profiles_unchanged,
+                report.returns_imported,
+                report.returns_already_present,
+                report.issues.len()
+            ),
+            report.profiles_created + report.profiles_updated > 0,
         ))
     }
 }
@@ -188,7 +192,12 @@ impl Render for ImportExportView {
                     .label("Migrate")
                     .on_click(cx.listener(|this, _ev, _window, cx| {
                         match this.apply_legacy_migration() {
-                            Ok(result) => this.legacy_status = result,
+                            Ok((result, profiles_changed)) => {
+                                this.legacy_status = result;
+                                if profiles_changed {
+                                    cx.emit(ImportExportEvent::ProfilesChanged);
+                                }
+                            }
                             Err(error) => this.legacy_status = error,
                         }
                         cx.notify();

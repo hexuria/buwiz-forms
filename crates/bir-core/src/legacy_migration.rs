@@ -4,7 +4,6 @@ use crate::crypto::{BIR_IAF_PASSPHRASE, decrypt_and_decompress};
 use crate::db::{Database, DbError, LegacyFiledReturn};
 use crate::official_import::find_capability_identity;
 use crate::profile::TaxpayerProfile;
-use rusqlite::params;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -19,6 +18,8 @@ const FINAL_COPY_TRAILERS: [&str; 2] = [
 pub enum LegacyMigrationError {
     #[error("not an eBIRForms folder: {0}")]
     NotALegacyFolder(PathBuf),
+    #[error("invalid legacy TIN: {0}")]
+    InvalidTin(String),
     #[error("could not read legacy folder: {0}")]
     Io(#[from] std::io::Error),
     #[error("database migration failed: {0}")]
@@ -582,39 +583,21 @@ pub fn apply_legacy_migration(
         )?);
     }
 
-    let transaction = db.conn.unchecked_transaction().map_err(DbError::from)?;
+    // Profiles commit separately; re-running the idempotent migration recovers partial failure.
     for profile in &existing_profiles {
         let tin = profile.tin.full();
-        if !modified_existing.contains(&tin) {
-            continue;
-        }
-        let data_json = serde_json::to_string(profile)?;
-        let changed = transaction
-            .execute(
-                "UPDATE profiles SET data_json = ?1 WHERE id = ?2",
-                params![data_json, profile.id],
-            )
-            .map_err(DbError::from)?;
-        if changed != 1 {
-            return Err(LegacyMigrationError::Database(DbError::Other(
-                "profile changed while applying legacy migration".to_string(),
-            )));
+        if modified_existing.contains(&tin) {
+            db.save_profile(profile.clone())?;
         }
     }
     for profile in &created_profiles {
-        let mut profile = profile.clone();
-        profile.ensure_profile_version_ledger();
-        transaction
-            .execute(
-                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
-                params![profile.tin.full(), serde_json::to_string(&profile)?],
-            )
-            .map_err(DbError::from)?;
+        db.save_profile(profile.clone())?;
     }
     report.profiles_created = created_profiles.len();
     report.profiles_updated = updated_keys.len();
     report.profiles_unchanged = unchanged_keys.difference(&updated_keys).count();
 
+    let transaction = db.conn.unchecked_transaction().map_err(DbError::from)?;
     for legacy_return in &scan.returns {
         let branch = format!(
             "{:05}",
@@ -714,9 +697,9 @@ fn field_suffix(fields: &BTreeMap<String, String>, suffix: &str) -> Option<Strin
 
 fn profile_key(tin: &str, branch: &str) -> Result<ProfileKey, LegacyMigrationError> {
     if tin.len() != 9 || !tin.bytes().all(|byte| byte.is_ascii_digit()) {
-        return Err(LegacyMigrationError::Database(DbError::Other(
-            "legacy TIN must contain nine digits".to_string(),
-        )));
+        return Err(LegacyMigrationError::InvalidTin(
+            "must contain nine digits".to_string(),
+        ));
     }
     if !(3..=5).contains(&branch.len()) || !branch.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(LegacyMigrationError::Database(DbError::Other(
@@ -1045,6 +1028,14 @@ mod tests {
     }
 
     #[test]
+    fn profile_key_reports_invalid_tin() {
+        assert!(matches!(
+            profile_key("12345678a", "000"),
+            Err(LegacyMigrationError::InvalidTin(_))
+        ));
+    }
+
+    #[test]
     fn apply_imports_raw_returns_idempotently_without_creating_drafts_or_submissions() {
         let scan = scan_legacy_folder(&fixture_root()).unwrap();
         let db = Database::open_ephemeral().unwrap();
@@ -1059,6 +1050,35 @@ mod tests {
         assert_eq!(profile.tin.branch, "00000");
         assert_eq!(profile.registered_address, "123 Test Street \u{00D1}");
         assert_eq!(profile.default_form_type, "1601Cv2018");
+        assert!(profile.id.is_some(), "the migrated profile should be saved");
+        let version = profile
+            .profile_versions
+            .first()
+            .expect("the migrated profile should have a version");
+        assert_eq!(version.effective_from, None);
+        assert_eq!(
+            version.status,
+            crate::profile::TaxProfileVersionStatus::NeedsReview
+        );
+
+        // The user confirms the effective date in Profile Manager; Forms Sets follow from that.
+        let current_year = chrono::Local::now()
+            .format("%Y")
+            .to_string()
+            .parse::<i32>()
+            .unwrap();
+        let forms_set_rows: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
+                rusqlite::params![profile.tin.full(), current_year],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            forms_set_rows == 0,
+            "an undated profile must not have a current-year Forms Set yet"
+        );
 
         let rows = db
             .list_legacy_filed_returns_for_tin("123456788000")
@@ -1094,14 +1114,8 @@ mod tests {
     fn apply_fills_only_empty_fields_and_matches_numeric_branches() {
         let scan = scan_legacy_folder(&fixture_root()).unwrap();
         let db = Database::open_ephemeral().unwrap();
-        let mut profile = test_profile("00000");
-        profile.ensure_profile_version_ledger();
-        db.conn
-            .execute(
-                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
-                params![profile.tin.full(), serde_json::to_string(&profile).unwrap()],
-            )
-            .unwrap();
+        let profile = test_profile("00000");
+        db.save_profile(profile).unwrap();
 
         let report = apply_legacy_migration(&db, &scan).unwrap();
         assert_eq!(report.profiles_created, 0);
@@ -1119,14 +1133,8 @@ mod tests {
     fn profile_tin_rename_and_delete_cascade_to_legacy_returns() {
         let scan = scan_legacy_folder(&fixture_root()).unwrap();
         let db = Database::open_ephemeral().unwrap();
-        let mut profile = test_profile("000");
-        profile.ensure_profile_version_ledger();
-        db.conn
-            .execute(
-                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
-                params![profile.tin.full(), serde_json::to_string(&profile).unwrap()],
-            )
-            .unwrap();
+        let profile = test_profile("000");
+        db.save_profile(profile).unwrap();
 
         apply_legacy_migration(&db, &scan).unwrap();
         let mut profile = db.list_profiles().unwrap().remove(0);

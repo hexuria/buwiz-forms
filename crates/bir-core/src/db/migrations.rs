@@ -38,14 +38,14 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v1: The complete current schema
         "
         CREATE TABLE IF NOT EXISTS tax_deadlines (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             form_type TEXT NOT NULL,
             due_date TEXT NOT NULL,
             description TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS announcements (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             source TEXT NOT NULL,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
