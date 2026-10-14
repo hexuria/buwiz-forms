@@ -45,6 +45,11 @@ export class Store {
     return value;
   }
 
+  /** Drop one cached read so the next render reads it again. */
+  forget(key) {
+    this.cache.delete(key);
+  }
+
   /** A write: runs the call, bumps the version, rethrows errors as Error. */
   write(name, ...args) {
     try {
@@ -89,9 +94,6 @@ export class Store {
   }
   returns(which) {
     return this.read(`returns:${which}`, "list_returns", [which], []);
-  }
-  announcements() {
-    return this.read("announcements", "list_announcements", [], []);
   }
   authState() {
     return this.read("auth_state", "auth_state", [], {

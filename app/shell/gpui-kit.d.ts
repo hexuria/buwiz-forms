@@ -27794,15 +27794,6 @@ declare module "bir" {
       description: string;
   }
   export function list_deadlines(): TaxDeadline[];
-  export interface Announcement {
-      id: number | null;
-      source: string;
-      title: string;
-      content: string;
-      published_at: string;
-      read_status: boolean;
-  }
-  export function list_announcements(): Announcement[];
   export interface ImportResult {
       kind: "database" | "profile" | "invalid" | "cancelled";
   }

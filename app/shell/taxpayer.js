@@ -43,6 +43,7 @@ import {
 import { formatTin, shortDate, daysUntil } from "./store.js";
 import { searchText } from "./library.js";
 
+const SELECTION_KEY = "redesign.selection";
 const TAXPAYER_TYPES = ["Individual", "Corporation", "Partnership", "Cooperative", "Estate", "Trust"];
 const FREQS = ["All", "Monthly", "Quarterly", "Annual", "As needed"];
 const ADDRESS_FIELDS = [
@@ -172,7 +173,7 @@ export class TaxpayerActions {
           toastText = `TIN changed to ${formatTin(digits)}. Every branch, tax year, return and template moved with it.`;
         }
         app.store.write("update_taxpayer", digits, { name: name || t.name, taxpayer_type: this.typeValue || t.taxpayer_type });
-        app.writeLocal("redesign.selection", { root: app.selRoot, code: app.selCode });
+        app.writeLocal(SELECTION_KEY, { root: app.selRoot, code: app.selCode });
         this.editSec = null;
         this.tinError = null;
         return app.toast(toastText, cx);
@@ -246,7 +247,7 @@ export class TaxpayerActions {
         b = app.store.write("move_branch_code", b.tin, code);
         app.remapRecent((tin) => (tin === oldTin ? t.tin_root + code : tin));
         app.selCode = code;
-        app.writeLocal("redesign.selection", { root: app.selRoot, code });
+        app.writeLocal(SELECTION_KEY, { root: app.selRoot, code });
       }
       const name = e.name.value().trim();
       if (name && name !== t.name) app.store.write("update_taxpayer", t.tin_root, { name });
@@ -433,7 +434,7 @@ export class TaxpayerActions {
       app.selRoot = digits;
       app.selCode = "00000";
       app.selYear = null;
-      app.writeLocal("redesign.selection", { root: digits, code: "00000" });
+      app.writeLocal(SELECTION_KEY, { root: digits, code: "00000" });
       this.reset();
       this.addYear = true;
       app.go("forms", cx);
@@ -486,7 +487,7 @@ export class TaxpayerActions {
       this.newBranch = null;
       app.selCode = code;
       app.selYear = null;
-      app.writeLocal("redesign.selection", { root: app.selRoot, code });
+      app.writeLocal(SELECTION_KEY, { root: app.selRoot, code });
       app.go("profile", cx);
       app.toast(`${name} added.`, cx);
     } catch (e) {

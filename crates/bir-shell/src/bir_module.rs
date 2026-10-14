@@ -1048,15 +1048,6 @@ fn list_deadlines() -> HostResult {
     })
 }
 
-/// BIR announcements feed — the notifications drawer content.
-fn list_announcements() -> HostResult {
-    with_database(|db| {
-        db.list_announcements()
-            .map_err(|error| HostError::new(error.to_string()))
-            .and_then(|announcements| serialize(&announcements))
-    })
-}
-
 /// Admin PIN lives only as its hash (`app_lock_pin_hash`); hashing stays
 /// host-side so the script never sees the stored digest.
 fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -1100,7 +1091,6 @@ pub fn module() -> HostModule {
         .function("queue_form_draft", queue_form_draft)
         .function("cancel_queued", cancel_queued)
         .function("list_deadlines", |_| list_deadlines())
-        .function("list_announcements", |_| list_announcements())
         .function("import_archive", import_archive)
         .function("form_print_html", form_print_html)
         .function("list_background_jobs", |_| list_background_jobs())
@@ -1208,15 +1198,6 @@ export interface TaxDeadline {
     description: string;
 }
 export function list_deadlines(): TaxDeadline[];
-export interface Announcement {
-    id: number | null;
-    source: string;
-    title: string;
-    content: string;
-    published_at: string;
-    read_status: boolean;
-}
-export function list_announcements(): Announcement[];
 export interface ImportResult {
     kind: "database" | "profile" | "invalid" | "cancelled";
 }

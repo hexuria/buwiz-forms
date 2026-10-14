@@ -10,7 +10,7 @@
 
 import { View, div } from "gpui-kit";
 import { InputState, OtpState } from "gpui-base";
-import { Store, isoDate, shortDate } from "./shell/store.js";
+import { Store } from "./shell/store.js";
 import {
   applyThemePreference,
   nextThemePreference,
@@ -71,7 +71,12 @@ export default class BirApp extends View {
     this.selCode = stored.code || null;
     this.selYear = null;
     this.recent = this.readLocal(RECENT_KEY, []);
-    this.readIds = new Set(this.readLocal(READ_KEY, []));
+    // First run against this database: what already happened is not news.
+    this.readIds = new Set();
+    const storedRead = this.readLocal(READ_KEY, null);
+    this.readIds = new Set(storedRead || this.notifications().map((n) => n.id));
+    if (!storedRead) this.writeLocal(READ_KEY, [...this.readIds]);
+    this.knownEvents = new Set(this.notifications().map((n) => n.id));
     this.prefs = { showRecent: true, ...this.readLocal(PREFS_KEY, {}) };
 
     // Screen state.
@@ -91,6 +96,12 @@ export default class BirApp extends View {
 
     this.initAuth();
     this.focusRoot = cx.focus_handle();
+    // In-app notifications work while the app runs: the submission worker
+    // (painted app or bir-headless) shares this database, so new
+    // submissions and BIR confirmations are picked up by polling and shown
+    // as a toast plus an unread dot on the bell.
+    cx.timer.every(30000, (cx) => this.pollEvents(cx));
+
     // Key bindings travel the focus path; give the root the keyboard at
     // launch so shortcuts work before anything else is clicked.
     cx.timer.after(50, () => this.focusRoot.focus());
@@ -142,9 +153,18 @@ export default class BirApp extends View {
 
   // ---------------------------------------------------------------- local storage
 
+  /**
+   * Local state that names taxpayers (selection, Recent, read notifications)
+   * is kept per database: localStorage belongs to the app, and a scratch
+   * database must not inherit another database's taxpayers.
+   */
+  localKey(key) {
+    return key === PREFS_KEY ? key : `${key}@${this.info.database_path || ""}`;
+  }
+
   readLocal(key, fallback) {
     try {
-      const raw = window.localStorage.getItem(key);
+      const raw = window.localStorage.getItem(this.localKey(key));
       return raw ? JSON.parse(raw) : fallback;
     } catch (_e) {
       return fallback;
@@ -153,7 +173,7 @@ export default class BirApp extends View {
 
   writeLocal(key, value) {
     try {
-      window.localStorage.setItem(key, JSON.stringify(value));
+      window.localStorage.setItem(this.localKey(key), JSON.stringify(value));
     } catch (_e) {}
   }
 
@@ -335,8 +355,17 @@ export default class BirApp extends View {
   // ---------------------------------------------------------------- forms
 
   /** Open a return on the form page. `period`: month, quarter or 0 for annual. */
+  /** The branch a full TIN names in this database, if any. */
+  branchFor(tin) {
+    const t = this.taxpayers().find((x) => x.tin_root === String(tin).slice(0, 9));
+    return t ? t.branches.find((b) => b.tin === String(tin)) || null : null;
+  }
+
   openForm(opts, cx) {
     if (this.isFresh()) return this.toast("Add a taxpayer first, then open a form for them.", cx);
+    if (!this.branchFor(opts.tin)) {
+      return this.toast("That return belongs to a taxpayer that is not in this database.", cx, "triangle-alert");
+    }
     this.overlay = null;
     this.formUi.open(opts, cx);
     this.pushRecent(opts);
@@ -381,36 +410,40 @@ export default class BirApp extends View {
 
   // ---------------------------------------------------------------- notifications
 
+  /**
+   * Submissions sent and confirmation emails received, newest first. The
+   * return's own status is the record: Submitted when the worker sent it,
+   * Confirmed (or Paid) once BIR's confirmation email was matched to it.
+   */
   notifications() {
     const items = [];
-    const today = new Date();
-    const soon = this.store.deadlines(isoDate(today), isoDate(new Date(today.getTime() + 14 * 86400000)));
-    for (const d of soon) {
-      if (d.status !== "Not started" && d.status !== "Draft") continue;
-      const id = `due:${d.tin}:${d.form_code}:${d.taxable_year}:${d.period}`;
+    for (const r of this.store.returns("filed")) {
+      const confirmed = r.status === "Confirmed" || r.status === "Paid";
+      if (!confirmed && r.status !== "Submitted") continue;
+      const id = `return:${r.id}:${confirmed ? "confirmed" : "submitted"}`;
+      const who = r.branch_count > 1 ? `${r.taxpayer_name} · ${r.branch_name}` : r.taxpayer_name;
       items.push({
         id,
-        title: `${d.form_code} for ${d.period_label} is due ${shortDate(d.due_date)}`,
-        sub: d.branch_count > 1 ? `${d.taxpayer_name} · ${d.branch_name}` : d.taxpayer_name,
-        icon: "triangle-alert",
-        tone: "warning",
-        when: d.due_date,
+        title: confirmed
+          ? `BIR confirmed ${r.form_code} for ${r.period_label}`
+          : `${r.form_code} for ${r.period_label} was submitted`,
+        sub: confirmed ? `Confirmation email received · ${who}` : `Waiting for BIR's confirmation email · ${who}`,
+        icon: confirmed ? "circle-check" : "send",
+        tone: confirmed ? "success" : "neutral",
+        when: r.updated_at,
         unread: !this.readIds.has(id),
       });
     }
-    for (const a of this.store.announcements()) {
-      const id = `ann:${a.id}`;
-      items.push({
-        id,
-        title: a.title,
-        sub: a.source,
-        icon: "info",
-        tone: "neutral",
-        when: a.published_at,
-        unread: !a.read_status && !this.readIds.has(id),
-      });
-    }
     return items;
+  }
+
+  /** Re-read filed returns and announce events that appeared since the last look. */
+  pollEvents(cx) {
+    this.store.forget("returns:filed");
+    const fresh = this.notifications().filter((n) => !this.knownEvents.has(n.id));
+    if (!fresh.length) return;
+    for (const n of fresh) this.knownEvents.add(n.id);
+    this.toast(fresh.length === 1 ? fresh[0].title : `${fresh.length} filing updates. Open notifications to see them.`, cx, fresh[0].icon);
   }
 
   markAllRead(cx) {
@@ -948,7 +981,7 @@ export default class BirApp extends View {
       case "profile_manager":
         return this.editing ? renderProfileManager(cx, this) : renderHome(cx, this, width);
       case "cron_tasks":
-        return renderCronTasksPage(cx, this);
+        return renderCronTasksPage(cx, this, width);
       default:
         return renderHome(cx, this, width);
     }

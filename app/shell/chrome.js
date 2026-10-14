@@ -205,9 +205,10 @@ export function renderSidebar(cx, app) {
   ]) {
     nav.child(NavRow(cx, `nav-${view}`, icon, label, { current: app.view === view, onClick: (_e, cx) => app.go(view, cx) }));
   }
-  if (app.prefs.showRecent && !app.isFresh() && app.recent.length) {
+  if (app.prefs.showRecent && !app.isFresh() && app.recent.some((r) => app.branchFor(r.tin))) {
     nav.child(GroupLabel(cx, "Recent"));
-    app.recent.forEach((r) => {
+    // Only returns whose TIN and branch exist in this database.
+    app.recent.filter((r) => app.branchFor(r.tin)).forEach((r) => {
       const name = (app.taxpayers().find((x) => x.tin_root === String(r.tin).slice(0, 9)) || {}).name || "";
       const label = `${r.code} ${periodLabel(frequencyOf(app.store.screenIndex(), r.code), r.year, r.period, true)} · ${name}`;
       nav.child(

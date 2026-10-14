@@ -255,25 +255,40 @@ fn return_rows(db: &Database, which: &str) -> Result<Vec<Value>, HostError> {
         )));
     }
     let branches = branches(db)?;
-    let mut rows = Vec::new();
-    for branch in &branches {
-        for year in FIRST_TAX_YEAR..=current_year() + 1 {
-            for summary in db.list_draft_summaries(&branch.tin, year).map_err(error)? {
-                let filed = summary.status != FilingStatus::Draft;
-                if (filed && !want_filed) || (!filed && !want_saved) {
-                    continue;
-                }
-                let mut row = branch_fields(branch);
-                row.insert("id".into(), json!(summary.id));
-                row.insert("form_code".into(), json!(summary.form_code));
-                row.insert("taxable_year".into(), json!(summary.taxable_year));
-                row.insert("period".into(), json!(summary_period(&summary)));
-                row.insert("period_label".into(), json!(summary_label(&summary)));
-                row.insert("status".into(), json!(status_name(&summary.status)));
-                row.insert("updated_at".into(), json!(summary.updated_at));
-                rows.push(Value::Object(row));
+    // Filed returns come from one query (the notifications poll reads them
+    // every 30 s); saved drafts are listed per branch and year.
+    let mut summaries: Vec<FormDraftSummary> = Vec::new();
+    if want_filed {
+        summaries.extend(db.list_all_filed_submissions().map_err(error)?);
+    }
+    if want_saved {
+        for branch in &branches {
+            for year in FIRST_TAX_YEAR..=current_year() + 1 {
+                summaries.extend(
+                    db.list_draft_summaries(&branch.tin, year)
+                        .map_err(error)?
+                        .into_iter()
+                        .filter(|summary| summary.status == FilingStatus::Draft),
+                );
             }
         }
+    }
+    let mut rows = Vec::new();
+    for summary in summaries {
+        // A return whose TIN no longer matches a branch (a removed profile)
+        // has nobody to show it under.
+        let Some(branch) = branches.iter().find(|branch| branch.tin == summary.tin) else {
+            continue;
+        };
+        let mut row = branch_fields(branch);
+        row.insert("id".into(), json!(summary.id));
+        row.insert("form_code".into(), json!(summary.form_code));
+        row.insert("taxable_year".into(), json!(summary.taxable_year));
+        row.insert("period".into(), json!(summary_period(&summary)));
+        row.insert("period_label".into(), json!(summary_label(&summary)));
+        row.insert("status".into(), json!(status_name(&summary.status)));
+        row.insert("updated_at".into(), json!(summary.updated_at));
+        rows.push(Value::Object(row));
     }
     rows.sort_by(|a, b| b["updated_at"].as_str().cmp(&a["updated_at"].as_str()));
     Ok(rows)
@@ -303,7 +318,11 @@ mod tests {
     const HEAD: &str = "12345678800000";
 
     fn args(values: &[&str]) -> HostArguments {
-        HostArguments::new(values.iter().map(|v| gpui_shell::HostValue::Str(v.to_string())))
+        HostArguments::new(
+            values
+                .iter()
+                .map(|v| gpui_shell::HostValue::Str(v.to_string())),
+        )
     }
 
     /// "Example Trading Corp" filing 1601C in 2026, with a saved January draft.
@@ -339,7 +358,10 @@ mod tests {
         let rows = to_json(&deadlines_between(&args(&["2026-01-01", "2026-12-31"])).unwrap());
         let rows = rows.as_array().unwrap();
         assert!(!rows.is_empty());
-        assert!(rows.iter().all(|r| r["form_code"] == "1601C" && r["tin"] == HEAD));
+        assert!(
+            rows.iter()
+                .all(|r| r["form_code"] == "1601C" && r["tin"] == HEAD)
+        );
         let january = rows
             .iter()
             .find(|r| r["taxable_year"] == 2026 && r["period"] == 1)
@@ -349,7 +371,10 @@ mod tests {
         assert_eq!(january["taxpayer_name"], "Example Trading Corp");
         let february = rows.iter().find(|r| r["period"] == 2).unwrap();
         assert_eq!(february["status"], "Not started");
-        let dates: Vec<&str> = rows.iter().map(|r| r["due_date"].as_str().unwrap()).collect();
+        let dates: Vec<&str> = rows
+            .iter()
+            .map(|r| r["due_date"].as_str().unwrap())
+            .collect();
         let mut sorted = dates.clone();
         sorted.sort_unstable();
         assert_eq!(dates, sorted, "rows come oldest deadline first");
