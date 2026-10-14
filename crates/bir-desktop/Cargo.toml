@@ -22,7 +22,6 @@ required-features = ["agent"]
 
 [features]
 dev-tools = []
-inspector = []
 # Opt-in gpui-agent control plane. Default off. Runtime still requires
 # `GPUI_AGENT=1` (and `GPUI_AGENT_ALLOW_RELEASE=1` for release binaries).
 agent = ["dep:gpui-agent", "dep:clap", "dep:socket2"]
@@ -32,11 +31,11 @@ agent = ["dep:gpui-agent", "dep:clap", "dep:socket2"]
 # gives up the `global_hotkey` subsystem because App Store sandboxing forbids
 # the entitlements it needs.
 #
-# The list is empty by design. `bir-core/mas_build` was a passthrough to an
-# empty feature with no `cfg` behind it. Kit's gpui-pre snapshot does not
-# expose a renderer-side `macos_app_store` feature, so there is nothing left
-# to enable here.
-mas_build = []
+# `bir-core/mas_build` compiles out the `sh -c` runner for user cron jobs:
+# arbitrary code execution is rejected by App Review (2.5.2) and cannot run
+# under the App Sandbox. Kit's gpui-pre snapshot does not expose a
+# renderer-side `macos_app_store` feature, so nothing else is enabled here.
+mas_build = ["bir-core/mas_build"]
 
 
 [dependencies]
@@ -94,8 +93,12 @@ objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSMenu", "NSR
 block2 = "0.6.2"
 objc2-modern = { package = "objc2", version = "0.6.4" }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
-objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString", "NSValue"] }
-objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+objc2-foundation-modern = { package = "objc2-foundation", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSData", "NSError", "NSString", "NSURL", "NSValue"] }
+objc2-app-kit-modern = { package = "objc2-app-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "NSApplication", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSWindow", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+# In-process PDF printing (`PDFDocument` -> `NSPrintOperation`). Replaces a
+# Swift script piped into the `swift` CLI, which asks a Mac without developer
+# tools to install them and cannot run under the App Store sandbox.
+objc2-pdf-kit = { version = "0.3.2", default-features = false, features = ["std", "objc2-app-kit", "PDFDocument"] }
 objc2-web-kit-modern = { package = "objc2-web-kit", version = "0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-app-kit", "block2", "WKWebView", "WKPDFConfiguration", "WKSnapshotConfiguration"] }
 objc = "0.2"
 

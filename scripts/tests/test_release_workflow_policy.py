@@ -322,7 +322,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("scripts/package_msix.ps1", msix_recipe)
 
     def test_exe_recipe_and_prerequisite_are_windows_only(self) -> None:
-        self.assertRegex(self.justfile, r"(?m)^\[windows\]\r?\nexe \*args=")
+        self.assertRegex(self.justfile, r"(?m)^\[windows\]\r?\nexe:")
         self.assertRegex(
             self.justfile,
             r"(?m)^\[private\]\r?\n\[windows\]\r?\ncheck-exe-prerequisites:",

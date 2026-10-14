@@ -134,8 +134,11 @@ These are host constraints. They do not fork protocol v2.
   contract as gpui-agent todo). A deferred finish still fail-closes if the
   handler never ran. `gpui-agent keybindings` lists
   `{ id, chord, scope, dangerous }`. Destructive ids (`app.quit`) need
-  `confirm=true`. Painted `app.quit` / Cmd+Q hides to the tray (same Action as
-  the menu); process exit is `gpui-agent shutdown` or tray Quit.
+  `confirm=true`. Painted `app.quit` / Cmd+Q (same Action as the app menu's
+  Quit) really quits on macOS by default, through the same guarded path as
+  tray Quit; with the macOS setting "Cmd+Q hides to menu bar" on it hides to
+  the tray instead. Windows hides to the tray; Linux quits. `gpui-agent
+  shutdown` and tray Quit always exit.
   `scope=focused` does not auto-activate unless `--activate` (OS-activate plus
   GPUI focus on the app handle); without it, a bir that is not the frontmost
   application answers `keybinding_unavailable: app not focused`, so scripts
@@ -150,10 +153,15 @@ These are host constraints. They do not fork protocol v2.
 
 ## Two hosts, one agent port
 
-> Cmd+Q (Ctrl+Q / Alt+F4 on Linux and Windows) and the app menu's Quit **hide
-> painted `bir` to the tray**; the cron keeps polling and the agent bind and
-> live-DB owner lock stay held. The only real quit is the tray menu's Quit or
-> `gpui-agent shutdown`.
+> Quit has two modes on macOS. **Default:** Cmd+Q and the app menu's "Quit
+> eBIRForms" quit painted `bir` exactly like tray Quit, releasing the agent
+> bind and the live-DB owner lock (unsaved Profile compliance changes keep it
+> open). **Settings → "Cmd+Q hides to menu bar" on:** Cmd+Q and the menu item
+> (then labelled "Close to Menu Bar") **hide painted `bir` to the tray**; the
+> cron keeps polling and the bind and owner lock stay held. Ctrl+Q / Alt+F4
+> quit on Linux; Alt+F4 hides to the tray on Windows. Closing the window
+> (red button, Cmd+W) always hides on macOS and Windows. Tray Quit and
+> `gpui-agent shutdown` always quit.
 
 Painted GUI `bir` (`--features …,agent`, in-process mailbox on the GPUI window)
 and daemon `bir-headless serve` (no GPU) both speak the **same**
@@ -204,8 +212,9 @@ semantic yield.
   same rules, then backgrounds the child. A second `--detach` while a live
   pid or bind/lock is held **fails immediately** (exit 2). `--detach --wait`
   starts a background waiter that takes over after the owner releases both.
-- Clean GUI **Quit** (tray menu Quit / `gpui-agent shutdown`) releases bind
-  + owner lock. Hiding or closing the window does **not**.
+- Clean GUI **Quit** (tray menu Quit / `gpui-agent shutdown`, or Cmd+Q on
+  macOS unless "Cmd+Q hides to menu bar" is on) releases bind + owner lock.
+  Hiding or closing the window does **not**.
 
 ```bash
 # GUI already up on 17421 with the live app-group DB
@@ -786,8 +795,9 @@ SHA `f273eec7` is `--wait` + `GPUI_AGENT_LOG_REQUESTS` on this branch.
 
 Painted `bir` must already be running with the same KEY=VALUE (agent on
 `127.0.0.1:17421`, live app-group DB). **Quit means tray Quit /
-`gpui-agent shutdown`**, not hide or the red window-close button (those keep
-bind + owner lock). CLI always talks to whoever currently holds the port.
+`gpui-agent shutdown`** (or Cmd+Q with "Cmd+Q hides to menu bar" off, the
+default), not hide or the red window-close button (those keep bind + owner
+lock). CLI always talks to whoever currently holds the port.
 
 ```bash
 export GPUI_AGENT=1
@@ -1009,7 +1019,7 @@ Keybinding ids (Action-only; `confirm=true` for `app.quit`):
 | `app.toggle_sidebar` | `cmd-b` | focused |
 | `window.minimize` | `cmd-m` | focused |
 | `app.toggle_visibility` | `ctrl-alt-e` default (Settings / Option+F12 custom). Not a GPUI keymap; fire still dispatches `ToggleAppVisibility`. | global |
-| `app.quit` | `cmd-q` | global, dangerous (`confirm=true`). Hides to tray; process exit is `shutdown`. |
+| `app.quit` | `cmd-q` | global, dangerous (`confirm=true`). Quits like tray Quit by default; hides to tray when Settings "Cmd+Q hides to menu bar" is on. `shutdown` always exits. |
 
 Scroll targets: `form-1601c-scroll` (1601-C page), `print-preview-scroll` (frozen HTML preview window after `form.print`). Unknown target → `scroll_unavailable`.
 

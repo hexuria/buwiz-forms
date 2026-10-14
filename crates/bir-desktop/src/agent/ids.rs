@@ -85,9 +85,11 @@ pub const KEY_MINIMIZE: &str = "window.minimize";
 /// dispatches `ToggleAppVisibility` — not OS HID.
 pub const KEY_TOGGLE_VISIBILITY: &str = "app.toggle_visibility";
 /// Listed dangerous (`confirm=true`) because protocol `is_quit_binding`.
-/// Painted GUI maps this to `QuitApplication`, which hides to the tray
-/// (same as Cmd+Q). Process exit is `Op::Shutdown` / tray Quit. Headless
-/// still sets shutdown.
+/// Painted GUI maps this to `QuitApplication` (same as Cmd+Q). On macOS that
+/// quits through the guarded path like tray Quit, unless the user turned on
+/// "Cmd+Q hides to menu bar", in which case it hides to the tray; Windows
+/// hides to the tray; Linux quits. `Op::Shutdown` / tray Quit always exit.
+/// Headless still sets shutdown.
 pub const KEY_QUIT: &str = "app.quit";
 
 pub fn toggle_sidebar_chord() -> &'static str {

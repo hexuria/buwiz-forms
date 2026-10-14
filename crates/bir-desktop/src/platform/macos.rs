@@ -10,11 +10,9 @@ use std::rc::Rc;
 /// macOS enforces this natively via the application bundle, so this is a no-op.
 pub fn enforce_single_instance() {}
 
-/// Install the standard macOS application menus before opening the main window.
-///
-/// GPUI does not create a native `NSApplication.mainMenu` unless `set_menus`
-/// is called. Without it, the application name appears in the macOS menu bar
-/// but highlights without opening a menu.
+/// Routes app-level `QuitApplication` (menu Quit / Cmd+Q while no window of
+/// ours handles it, e.g. with the main window hidden) to the main window's
+/// `AppState`, so every Quit takes the same `handle_quit_application` path.
 #[derive(Clone, Default)]
 pub struct MacosQuitRouter {
     target: Rc<RefCell<Option<MacosQuitTarget>>>,
@@ -28,24 +26,41 @@ impl MacosQuitRouter {
             .replace(Some((main_window, app_state.downgrade())));
     }
 
-    /// Menu Quit / Cmd+Q from any window: hide to the menu bar. A real quit
-    /// is the tray menu's Quit or the agent's `shutdown`. Before the main
-    /// window exists there is nothing to keep resident, so quit outright.
+    /// Before the main window exists there is nothing to keep resident or
+    /// save, so quit outright. Otherwise defer (the action may be dispatched
+    /// from inside the main window, which cannot be re-entered) and let
+    /// `AppState::handle_quit_application` apply the user's Cmd+Q setting.
     fn request_quit(&self, cx: &mut App) {
         let target = self.target.borrow().clone();
-        let Some((_main_window, app_state)) = target else {
+        let Some((main_window, app_state)) = target else {
             cx.quit();
             return;
         };
-        if app_state.upgrade().is_none() {
-            cx.quit();
-            return;
-        }
-        hide_from_dock();
+        cx.defer(move |cx| {
+            let Some(app_state) = app_state.upgrade() else {
+                cx.quit();
+                return;
+            };
+            let routed = main_window.update(cx, |_, window, cx| {
+                app_state.update(cx, |state, cx| {
+                    state.handle_quit_application(
+                        &crate::global_actions::QuitApplication,
+                        window,
+                        cx,
+                    );
+                });
+            });
+            if let Err(error) = routed {
+                tracing::warn!(%error, "Main window gone; quitting from the application menu");
+                cx.quit();
+            }
+        });
     }
 }
 
-pub fn install_app_menu(cx: &mut App) -> MacosQuitRouter {
+/// App-level handlers for the application menu, so its items work even when
+/// no window of ours is key (window hidden to the menu bar).
+fn register_app_menu_actions(cx: &mut App) -> MacosQuitRouter {
     use crate::global_actions::*;
 
     let quit_router = MacosQuitRouter::default();
@@ -62,10 +77,35 @@ pub fn install_app_menu(cx: &mut App) -> MacosQuitRouter {
         .on_action(|_: &OpenCompanyWebsite, cx| {
             cx.open_url("https://goldcoders.dev");
         });
+    quit_router
+}
 
-    cx.set_menus(app_menus());
+/// Install the standard macOS application menus before opening the main window.
+///
+/// GPUI does not create a native `NSApplication.mainMenu` unless `set_menus`
+/// is called. Without it, the application name appears in the macOS menu bar
+/// but highlights without opening a menu. The Quit label starts as the
+/// default (real quit); `set_quit_menu_label` updates it once the database
+/// (and with it the user's Cmd+Q setting) is open.
+pub fn install_app_menu(cx: &mut App) -> MacosQuitRouter {
+    let quit_router = register_app_menu_actions(cx);
+    cx.set_menus(app_menus(false));
     log_native_menu_installation();
     quit_router
+}
+
+/// Rebuild the menu bar so the Quit item names what Cmd+Q does:
+/// "Quit eBIRForms", or "Close to Menu Bar" with "Cmd+Q hides to menu bar" on.
+pub fn set_quit_menu_label(cx: &mut App, quit_hides: bool) {
+    cx.set_menus(app_menus(quit_hides));
+}
+
+fn quit_menu_label(quit_hides: bool) -> &'static str {
+    if quit_hides {
+        "Close to Menu Bar"
+    } else {
+        "Quit eBIRForms"
+    }
 }
 
 /// Keep Settings enabled in the native application menu and forward it to the
@@ -93,7 +133,7 @@ pub fn register_settings_menu_action(
     });
 }
 
-fn app_menus() -> Vec<Menu> {
+fn app_menus(quit_hides: bool) -> Vec<Menu> {
     use crate::global_actions::*;
 
     vec![
@@ -108,7 +148,7 @@ fn app_menus() -> Vec<Menu> {
             MenuItem::action("Hide Others", HideOthers),
             MenuItem::action("Show All", ShowAllApplications),
             MenuItem::separator(),
-            MenuItem::action("Close to Menu Bar", QuitApplication),
+            MenuItem::action(quit_menu_label(quit_hides), QuitApplication),
         ]),
         Menu::new("File").items([
             MenuItem::action("New Profile", CreateProfile),
@@ -246,67 +286,80 @@ pub fn open_in_system(path: &std::path::Path) {
 
 // ── Native Print ─────────────────────────────────────────────────────────────
 
-/// Print a PDF using macOS native AppKit/PDFKit via a Swift helper script.
+/// Print a PDF in-process through PDFKit and AppKit.
 ///
-/// Falls back to `open::that` if the Swift runtime is unavailable.
+/// `PDFDocument` builds the `NSPrintOperation`, which runs as a sheet on the
+/// key window so GPUI's run loop is never re-entered from inside the click
+/// handler that called this. A modal `runOperation` is used only when no
+/// window is available to host the sheet.
+///
+/// This used to pipe a Swift script into the `swift` CLI. On a Mac without
+/// developer tools that asks the user to install them, and the App Store
+/// sandbox cannot launch it at all, so printing silently did nothing.
+///
+/// Must be called on the main thread (AppKit requirement); GPUI view handlers
+/// already run there.
 pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
-    let path = path.to_path_buf();
+    use objc2_app_kit_modern::{NSApplication, NSPrintInfo};
+    use objc2_foundation_modern::{MainThreadMarker, NSData};
+    use objc2_modern::AnyThread as _;
+    use objc2_pdf_kit::{PDFDocument, PDFPrintScalingMode};
 
-    std::thread::spawn(move || {
-        use std::io::Write;
+    let Some(mtm) = MainThreadMarker::new() else {
+        tracing::error!("print_pdf called off the main thread");
+        return Err("Printing must start from the main thread.");
+    };
 
-        let script = r#"
-import AppKit
-import PDFKit
+    // Read the bytes here rather than handing PDFKit a file URL: the caller
+    // deletes the temp file shortly afterwards, and the document must not
+    // depend on it outliving the print dialog.
+    let bytes = std::fs::read(path).map_err(|error| {
+        tracing::error!("print_pdf: could not read {}: {error}", path.display());
+        "Could not read the PDF to print."
+    })?;
+    let data = NSData::with_bytes(&bytes);
 
-func printPDF(path: String) {
-    let url = URL(fileURLWithPath: path)
-    guard let pdfDoc = PDFDocument(url: url) else { exit(1) }
+    // SAFETY: `initWithData:` takes any NSData and returns nil for bytes it
+    // cannot parse, which is handled below.
+    let document = unsafe { PDFDocument::initWithData(PDFDocument::alloc(), &data) }
+        .ok_or("The PDF could not be opened for printing.")?;
 
-    let printInfo = NSPrintInfo.shared
-    printInfo.isHorizontallyCentered = true
-    printInfo.isVerticallyCentered = true
+    let print_info = NSPrintInfo::sharedPrintInfo();
+    print_info.setHorizontallyCentered(true);
+    print_info.setVerticallyCentered(true);
 
-    let printOp = pdfDoc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true)
+    // SAFETY: `print_info` is a valid NSPrintInfo and we are on the main
+    // thread (`mtm`).
+    let operation = unsafe {
+        document.printOperationForPrintInfo_scalingMode_autoRotate(
+            Some(&print_info),
+            PDFPrintScalingMode::PageScaleDownToFit,
+            true,
+            mtm,
+        )
+    }
+    .ok_or("Could not prepare the print job.")?;
+    operation.setShowsPrintPanel(true);
+    operation.setShowsProgressPanel(true);
 
-    let app = NSApplication.shared
-    app.setActivationPolicy(.accessory)
-    app.activate(ignoringOtherApps: true)
-
-    printOp?.showsPrintPanel = true
-    printOp?.showsProgressPanel = true
-    printOp?.run()
-}
-
-let args = CommandLine.arguments
-if args.count > 1 {
-    printPDF(path: args[1])
-}
-"#;
-
-        let mut child = match std::process::Command::new("swift")
-            .arg("-")
-            .arg(&path)
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(_) => {
-                let _ = open::that(&path);
-                return;
+    let app = NSApplication::sharedApplication(mtm);
+    match app.keyWindow().or_else(|| app.mainWindow()) {
+        Some(window) => {
+            // SAFETY: no delegate and no selector, so the context pointer is
+            // never read.
+            unsafe {
+                operation.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
+                    &window,
+                    None,
+                    None,
+                    std::ptr::null_mut(),
+                );
             }
-        };
-
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(script.as_bytes());
         }
-
-        let output = child.wait();
-        if output.is_err() || !output.unwrap().success() {
-            // Silent fallback to standard open if the Swift script fails
-            let _ = open::that(&path);
+        None => {
+            operation.runOperation();
         }
-    });
+    }
 
     Ok(())
 }
@@ -352,6 +405,15 @@ pub fn hide_from_dock() {
 }
 
 /// Restores the application to the macOS Dock and brings all windows back.
+///
+/// Switching an already-running app from `Accessory` back to `Regular` leaves
+/// AppKit's menu bar in a known broken state: the app name shows in the menu
+/// bar and highlights when clicked, but no menu opens until the app is
+/// deactivated and activated again. Every hide-to-menu-bar path (close
+/// button, Cmd+W, tray Hide, Cmd+Q with "hides to menu bar" on) followed by
+/// any show path (tray Show, Dock/Finder relaunch, the global hotkey) hits
+/// it. After such a switch, hand activation to the Dock and take it back on
+/// the next main-queue turn, which makes the menu bar ours again.
 pub fn show_in_dock() {
     #[cfg(target_os = "macos")]
     {
@@ -362,19 +424,99 @@ pub fn show_in_dock() {
         let mtm = unsafe { MainThreadMarker::new_unchecked() };
         let app = NSApplication::sharedApplication(mtm);
 
+        // SAFETY: reading the policy has no side effects (see `toggle_app_visibility`).
+        let was_regular =
+            unsafe { app.activationPolicy() } == NSApplicationActivationPolicy::Regular;
+
         // 1. Restore Dock icon first.
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
 
-        // SAFETY: Activation is safe as it's a standard NSApplication method
-        unsafe { app.activate() };
+        // 2. Restore all windows.
+        bring_windows_to_front(&app);
 
-        // 3. Restore all windows.
-        let windows = app.windows();
-        for i in 0..windows.len() {
-            if let Some(window) = windows.get(i) {
-                window.makeKeyAndOrderFront(None);
-            }
+        // 3. Activate. `activateIgnoringOtherApps` rather than `activate`:
+        // the latter does not exist before macOS 14 (the minimum is 13) and is
+        // only a cooperative request that is refused when, e.g., Show comes
+        // from the tray menu while another app is frontmost.
+        if was_regular {
+            #[allow(deprecated)]
+            app.activateIgnoringOtherApps(true);
+        } else {
+            reclaim_menu_bar();
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn bring_windows_to_front(app: &objc2_app_kit::NSApplication) {
+    let windows = app.windows();
+    for i in 0..windows.len() {
+        if let Some(window) = windows.get(i) {
+            window.makeKeyAndOrderFront(None);
+        }
+    }
+}
+
+/// See `show_in_dock`: activate the Dock, then re-activate this app after
+/// ~100 ms on the main queue. Without a running Dock, activate directly.
+#[cfg(target_os = "macos")]
+fn reclaim_menu_bar() {
+    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+    use objc2_foundation::NSString;
+    use std::ffi::c_void;
+
+    unsafe extern "C" {
+        static _dispatch_main_q: c_void;
+        fn dispatch_time(when: u64, delta: i64) -> u64;
+        fn dispatch_after_f(
+            when: u64,
+            queue: *const c_void,
+            context: *mut c_void,
+            work: extern "C" fn(*mut c_void),
+        );
+    }
+
+    extern "C" fn activate_self(_context: *mut c_void) {
+        use objc2_app_kit::NSApplication;
+        use objc2_foundation::MainThreadMarker;
+
+        // SAFETY: dispatched onto the main queue below.
+        let mtm = unsafe { MainThreadMarker::new_unchecked() };
+        let app = NSApplication::sharedApplication(mtm);
+        #[allow(deprecated)]
+        app.activateIgnoringOtherApps(true);
+        bring_windows_to_front(&app);
+    }
+
+    // SAFETY: plain AppKit class methods on the main thread.
+    let dock = unsafe {
+        NSRunningApplication::runningApplicationsWithBundleIdentifier(&NSString::from_str(
+            "com.apple.dock",
+        ))
+    };
+    let handed_off = match dock.first() {
+        #[allow(deprecated)]
+        Some(dock) => unsafe {
+            dock.activateWithOptions(
+                NSApplicationActivationOptions::NSApplicationActivateIgnoringOtherApps,
+            )
+        },
+        None => false,
+    };
+    if !handed_off {
+        activate_self(std::ptr::null_mut());
+        return;
+    }
+    // SAFETY: `_dispatch_main_q` is libdispatch's main queue object (what
+    // `dispatch_get_main_queue()` returns); DISPATCH_TIME_NOW is 0. The work
+    // function ignores its null context.
+    unsafe {
+        dispatch_after_f(
+            dispatch_time(0, 100_000_000),
+            &raw const _dispatch_main_q,
+            std::ptr::null_mut(),
+            activate_self,
+        );
     }
 }
 
@@ -400,5 +542,121 @@ pub fn toggle_app_visibility() {
         } else {
             show_in_dock();
         }
+    }
+}
+
+#[cfg(test)]
+mod menu_tests {
+    use super::{app_menus, register_app_menu_actions};
+    use gpui::{Action, Menu, MenuItem, OsAction};
+
+    fn menu<'a>(menus: &'a [Menu], name: &str) -> &'a Menu {
+        menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == name)
+            .unwrap_or_else(|| panic!("no {name} menu"))
+    }
+
+    /// Item titles; separators as "-", the Services submenu as "Services".
+    fn titles(menu: &Menu) -> Vec<String> {
+        menu.items
+            .iter()
+            .map(|item| match item {
+                MenuItem::Separator => "-".to_string(),
+                MenuItem::Action { name, .. } => name.to_string(),
+                MenuItem::SystemMenu(os_menu) => os_menu.name.to_string(),
+                MenuItem::Submenu(submenu) => submenu.name.to_string(),
+            })
+            .collect()
+    }
+
+    fn actions(menu: &Menu) -> Vec<(&str, &dyn Action, Option<OsAction>)> {
+        menu.items
+            .iter()
+            .filter_map(|item| match item {
+                MenuItem::Action {
+                    name,
+                    action,
+                    os_action,
+                    ..
+                } => Some((name.as_ref(), action.as_ref(), *os_action)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn application_menu_is_standard_and_quit_names_what_cmd_q_does() {
+        for (quit_hides, quit_title) in [(false, "Quit eBIRForms"), (true, "Close to Menu Bar")] {
+            let menus = app_menus(quit_hides);
+            assert_eq!(
+                titles(menu(&menus, "eBIRForms")),
+                [
+                    "About eBIRForms",
+                    "-",
+                    "Settings...",
+                    "-",
+                    "Services",
+                    "-",
+                    "Hide eBIRForms",
+                    "Hide Others",
+                    "Show All",
+                    "-",
+                    quit_title,
+                ]
+            );
+            let quit = actions(menu(&menus, "eBIRForms"))
+                .into_iter()
+                .find(|(name, ..)| *name == quit_title)
+                .unwrap();
+            assert_eq!(quit.1.name(), crate::global_actions::QuitApplication.name());
+        }
+    }
+
+    #[test]
+    fn edit_items_use_the_native_text_selectors() {
+        let menus = app_menus(false);
+        let edit = actions(menu(&menus, "Edit"));
+        for (title, os_action) in [
+            ("Undo", OsAction::Undo),
+            ("Redo", OsAction::Redo),
+            ("Cut", OsAction::Cut),
+            ("Copy", OsAction::Copy),
+            ("Paste", OsAction::Paste),
+            ("Select All", OsAction::SelectAll),
+        ] {
+            let (_, action, os) = edit
+                .iter()
+                .find(|(name, ..)| *name == title)
+                .unwrap_or_else(|| panic!("Edit menu lacks {title}"));
+            assert!(*os == Some(os_action), "{title} has the wrong OS action");
+            assert!(
+                action.name().starts_with("input::"),
+                "{title} must reach the text input, got {}",
+                action.name()
+            );
+        }
+    }
+
+    /// The app and Help menus must work with the main window hidden to the
+    /// menu bar, so each of their actions needs an app-level handler. Settings
+    /// gets its handler once the main window exists (`register_settings_menu_action`).
+    #[gpui::test]
+    fn app_and_help_items_are_enabled_with_no_window(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            let _router = register_app_menu_actions(cx);
+            let menus = app_menus(false);
+            for menu_name in ["eBIRForms", "Help"] {
+                for (title, action, _) in actions(menu(&menus, menu_name)) {
+                    if title == "Settings..." {
+                        continue;
+                    }
+                    assert!(
+                        cx.is_action_available(action),
+                        "{menu_name} > {title} has no app-level handler"
+                    );
+                }
+            }
+        });
     }
 }

@@ -376,6 +376,61 @@ app *args="":
         echo "⚠️ App Store builds are only supported on macOS."; \
     fi
 
+# Usage: just testflight [--agent]
+# Build the App Store package and upload it to App Store Connect for TestFlight
+[unix]
+testflight *args="": (app args) testflight-upload
+
+# The control plane stays off until launched with GPUI_AGENT=1,
+# GPUI_AGENT_ALLOW_RELEASE=1 and GPUI_AGENT_TOKEN. Internal testing only: never
+# submit an agent build for App Store review.
+# Build with the gpui-agent control plane and upload it for internal TestFlight
+[unix]
+testflight-agent *args="": (testflight "--agent" args)
+
+# Authenticates with APP_STORE_KEY_ID, APP_STORE_ISSUER_ID and APP_STORE_P8_PATH
+# from .env. Set TRANSPORTER to override the iTMSTransporter path.
+# Upload the already-built App Store .pkg to App Store Connect (no rebuild)
+[unix]
+testflight-upload:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{os()}}" != "macos" ]; then
+        echo "⚠️ TestFlight uploads are only supported on macOS." >&2; exit 1
+    fi
+    set -a && source .env && set +a
+    for var in APP_STORE_KEY_ID APP_STORE_ISSUER_ID APP_STORE_P8_PATH; do
+        if [ -z "${!var:-}" ]; then echo "❌ $var is not set in .env" >&2; exit 1; fi
+    done
+    if [ ! -f "$APP_STORE_P8_PATH" ]; then
+        echo "❌ APP_STORE_P8_PATH does not point to a file: $APP_STORE_P8_PATH" >&2; exit 1
+    fi
+    TRANSPORTER="${TRANSPORTER:-/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter}"
+    if [ ! -x "$TRANSPORTER" ]; then
+        echo "❌ iTMSTransporter not found at $TRANSPORTER" >&2
+        echo "   Install Transporter from the Mac App Store, or set TRANSPORTER." >&2
+        exit 1
+    fi
+    PKG_PATH="$(pwd)/{{RELEASE_DIR}}/{{APP_NAME}}-macOS-MAS-{{VERSION}}.pkg"
+    if [ ! -f "$PKG_PATH" ]; then
+        echo "❌ $PKG_PATH not found. Build it first with: just app" >&2; exit 1
+    fi
+    if ! pkgutil --check-signature "$PKG_PATH" >/dev/null 2>&1; then
+        echo "❌ $PKG_PATH is unsigned. Set INSTALLER_IDENTITY in .env and rebuild with: just app" >&2; exit 1
+    fi
+    BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "{{MAC_APP}}/Contents/Info.plist" 2>/dev/null || echo '?')"
+    # iTMSTransporter only reads the key from a fixed set of private_keys
+    # directories; stage it in a throwaway one instead of touching $HOME.
+    KEY_DIR="$(mktemp -d)"
+    trap 'rm -rf "$KEY_DIR"' EXIT
+    mkdir "$KEY_DIR/private_keys"
+    ln -s "$(cd "$(dirname "$APP_STORE_P8_PATH")" && pwd)/$(basename "$APP_STORE_P8_PATH")" \
+        "$KEY_DIR/private_keys/AuthKey_${APP_STORE_KEY_ID}.p8"
+    echo "Uploading {{APP_NAME}} {{VERSION}} (build $BUILD) to App Store Connect..."
+    (cd "$KEY_DIR" && "$TRANSPORTER" -m upload -assetFile "$PKG_PATH" \
+        -apiKey "$APP_STORE_KEY_ID" -apiIssuer "$APP_STORE_ISSUER_ID" -v informational)
+    echo "✅ Uploaded. Processing takes ~10–30 min; then add the build to a TestFlight group in App Store Connect."
+
 # Build the Inno Setup executable installer (Windows only)
 [private]
 [windows]
@@ -400,23 +455,13 @@ check-exe-prerequisites:
     }
 
 [windows]
-exe *args="": check-exe-prerequisites build-frozen-html-identity
+exe: check-exe-prerequisites build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
 
     $ISCC = "{{ISCC}}"
     
-    $features = @()
-    foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
-        if ($arg -eq '--inspector') { $features += 'inspector' }
-    }
-    
-    if ($features.Count -gt 0) {
-        $featureList = $features -join ','
-        cargo build --locked --release --target {{WIN_TARGET}} --features $featureList
-    } else {
-        cargo build --locked --release --target {{WIN_TARGET}}
-    }
+    cargo build --locked --release --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
         $cargoExitCode = $LASTEXITCODE
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting EXE packaging.")
@@ -460,23 +505,13 @@ exe *args="": check-exe-prerequisites build-frozen-html-identity
 # This artifact is intentionally excluded from public GitHub releases. Store
 # promotion remains blocked until the manifest artwork dimensions and packaged
 # MSVC runtime behavior pass their separate Windows certification checks.
-msix *args="": build-frozen-html-identity
+msix: build-frozen-html-identity
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
     Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"
     Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"
     
-    $features = @()
-    foreach ($arg in '{{args}}'.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
-        if ($arg -eq '--inspector') { $features += 'inspector' }
-    }
-    
-    if ($features.Count -gt 0) {
-        $featureList = $features -join ','
-        cargo build --locked --release --target {{WIN_TARGET}} --features $featureList
-    } else {
-        cargo build --locked --release --target {{WIN_TARGET}}
-    }
+    cargo build --locked --release --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
         $cargoExitCode = $LASTEXITCODE
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting MSIX packaging.")
@@ -635,7 +670,6 @@ _package-mac args="": build-frozen-html-identity
     FEATURES=""
     for arg in {{args}}; do
         case "$arg" in
-            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
             --native-evidence) FEATURES="${FEATURES:+$FEATURES,}dev-tools" ;;
             --agent)         FEATURES="${FEATURES:+$FEATURES,}agent" ; AGENT=1 ;;
         esac
@@ -696,7 +730,7 @@ _package-mac-appstore args="": build-frozen-html-identity
     FEATURES="mas_build"
     for arg in {{args}}; do
         case "$arg" in
-            --inspector)     FEATURES="${FEATURES},inspector" ;;
+            --agent)         FEATURES="${FEATURES},agent" ;;
         esac
     done
     FEATURES_FLAG="--features $FEATURES"
@@ -788,18 +822,10 @@ _check-linux-launcher apps_dir icons_dir:
     if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate "$ENTRY"; fi
     echo "✅ Linux launcher + icons present"
 
-_package-linux args="": build-frozen-html-identity
+_package-linux: build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
-    FEATURES=""
-    for arg in {{args}}; do
-        case "$arg" in
-            --inspector)     FEATURES="${FEATURES:+$FEATURES,}inspector" ;;
-        esac
-    done
-    FEATURES_FLAG=""
-    if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
-    cargo build --locked --release --target {{LINUX_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --target {{LINUX_TARGET}}
     {{PYTHON}} scripts/alias_desktop_bin.py target/{{LINUX_TARGET}}/release
     mkdir -p {{RELEASE_DIR}}
     if command -v cargo-deb >/dev/null 2>&1; then

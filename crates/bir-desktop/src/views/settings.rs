@@ -34,6 +34,8 @@ pub struct SettingsView {
     enable_profile_pins: bool,
     /// D2A "Separate Validate button" (default On).
     separate_validate: bool,
+    /// "Cmd+Q hides to menu bar" (macOS, default Off: Cmd+Q quits).
+    quit_shortcut_hides: bool,
     hotkey_recorder: Entity<HotkeyRecorder>,
     /// "30 days" etc.; the stored value is `log_retention_days`.
     log_retention: Entity<ComboboxState>,
@@ -100,6 +102,10 @@ impl SettingsView {
         });
 
         let separate_validate = crate::views::form_header::separate_validate_button(&db);
+        let quit_shortcut_hides = db
+            .lock()
+            .map(|db| crate::quit_shortcut::quit_shortcut_hides(&db))
+            .unwrap_or(false);
         let hotkey_recorder = cx.new(|cx| HotkeyRecorder::new(global_hotkey, window, cx));
         let retention_days = db
             .lock()
@@ -128,6 +134,7 @@ impl SettingsView {
             hide_tax_profiles,
             enable_profile_pins,
             separate_validate,
+            quit_shortcut_hides,
             hotkey_recorder: hotkey_recorder.clone(),
             log_retention: log_retention.clone(),
             log_retention_days: retention_days,
@@ -666,6 +673,27 @@ impl Render for SettingsView {
                                 })),
                         ),
                     ))
+                    .when(cfg!(target_os = "macos"), |page| {
+                        page.child(section(border).child(
+                            SettingRow::new(
+                                "Cmd+Q hides to menu bar",
+                                "Off: Cmd+Q and Quit eBIRForms quit the app. On: they hide it to the menu bar and background tasks keep running; quit from the menu bar icon's Quit.",
+                            )
+                            .control(
+                                Switch::new("quit_shortcut_hides_switch")
+                                    .checked(self.quit_shortcut_hides)
+                                    .on_click(cx.listener(|this, checked, _window, cx| {
+                                        this.quit_shortcut_hides = *checked;
+                                        if let Ok(db) = this.db.lock() {
+                                            crate::quit_shortcut::set_quit_shortcut_hides(&db, *checked);
+                                        }
+                                        #[cfg(target_os = "macos")]
+                                        crate::platform::set_quit_menu_label(cx, *checked);
+                                        cx.notify();
+                                    })),
+                            ),
+                        ))
+                    })
                     // Global Toggle Hotkey
                     .child(section(border).child(
                         SettingRow::new(

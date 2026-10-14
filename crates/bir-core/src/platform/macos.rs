@@ -32,6 +32,10 @@ pub fn temp_dir() -> PathBuf {
 // ── Shell Execution ──────────────────────────────────────────────────────────
 
 /// Execute a shell command using the platform's native shell.
+///
+/// Absent from the Mac App Store build (`mas_build`): App Review rejects
+/// arbitrary code execution and the sandbox would block it anyway.
+#[cfg(not(feature = "mas_build"))]
 pub async fn run_shell_command(cmd: &str) -> Result<std::process::Output, std::io::Error> {
     tokio::process::Command::new("sh")
         .arg("-c")
