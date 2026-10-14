@@ -105,9 +105,14 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
 
     def test_macos_workflow_preflight_and_publish_shape(self) -> None:
         self.assert_preflight_gates(self.macos_workflow)
+        self.assertIn("pull_request:", self.macos_workflow)
+        self.assertIn(".github/workflows/release-macos.yml", self.macos_workflow)
+        self.assertIn("scripts/package_macos_release.sh", self.macos_workflow)
+        build_macos = self.job("build-macos", self.macos_workflow)
+        self.assertIn("needs: preflight", build_macos)
         self.assertIn(
-            "needs: preflight",
-            self.job("build-macos", self.macos_workflow),
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            build_macos,
         )
         publish = self.job("publish", self.macos_workflow)
         self.assertIn("needs: [preflight, build-macos]", publish)

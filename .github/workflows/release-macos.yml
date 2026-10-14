@@ -5,17 +5,22 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release-macos.yml
+      - scripts/package_macos_release.sh
+      - assets/macos/**
 
 permissions:
   contents: read
 
-# Serialise per ref, but never cancel: a release job that is signing,
-# notarizing or publishing must be allowed to finish. workflow_dispatch runs
-# are dry runs — they build, sign, notarize and upload an artifact but never
-# publish to a GitHub Release.
+# Serialise per ref. Tag pushes and workflow_dispatch runs are never
+# cancelled: a release job that is signing, notarizing or publishing must be
+# allowed to finish. pull_request runs may be cancelled by a newer push to the
+# same PR — they are dry runs and safe to restart.
 concurrency:
   group: release-macos-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -25,8 +30,9 @@ env:
 jobs:
   # The public release jobs may consume only this exact, tested tag commit.
   # A successful branch workflow is not accepted as a substitute because the
-  # tag may point at a different SHA. On workflow_dispatch the exact-tag rules
-  # are relaxed to "clean tree at this commit" and publish stays false.
+  # tag may point at a different SHA. On workflow_dispatch / pull_request the
+  # exact-tag rules are relaxed to "clean tree at this commit" and publish
+  # stays false — those events are dry runs that never publish.
   preflight:
     runs-on: ubuntu-22.04
     timeout-minutes: 90
@@ -142,6 +148,10 @@ jobs:
   # ── macOS Universal ───────────────────────────────────────────────────────
   build-macos:
     needs: preflight
+    # Fork PRs receive no secrets and would only fail closed on the missing
+    # signing material; skip them. Same-repo PRs keep failing closed if a
+    # required secret is absent.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-14  # M1 runner — can build both arm64 and x86_64
     timeout-minutes: 180
     env:
