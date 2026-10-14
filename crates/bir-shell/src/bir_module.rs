@@ -32,7 +32,6 @@ fn with_database<R>(f: impl FnOnce(&Database) -> Result<R, HostError>) -> Result
 
 /// `serde_json::Value` → `HostValue`. bir-core serializes cleanly; the
 /// boundary keeps JSON's six shapes exactly.
-#[allow(dead_code)] // used by module functions landing in slices S2+ (settings, drafts)
 fn json(value: serde_json::Value) -> HostValue {
     match value {
         serde_json::Value::Null => HostValue::Null,
@@ -48,11 +47,27 @@ fn json(value: serde_json::Value) -> HostValue {
     }
 }
 
-#[allow(dead_code)] // used by module functions landing in slices S2+
 fn serialize<T: serde::Serialize>(value: &T) -> Result<HostValue, HostError> {
     serde_json::to_value(value)
         .map(json)
         .map_err(|error| HostError::new(error.to_string()))
+}
+
+/// `HostValue` → `serde_json::Value`: the inverse of `json`, for functions
+/// that take structured arguments (a whole profile record, a draft).
+fn to_json(value: &HostValue) -> serde_json::Value {
+    match value {
+        HostValue::Null => serde_json::Value::Null,
+        HostValue::Bool(v) => serde_json::Value::Bool(*v),
+        HostValue::Number(v) => serde_json::json!(v),
+        HostValue::Str(v) => serde_json::Value::String(v.clone()),
+        HostValue::Array(v) => serde_json::Value::Array(v.iter().map(to_json).collect()),
+        HostValue::Object(v) => serde_json::Value::Object(
+            v.iter()
+                .map(|(key, value)| (key.clone(), to_json(value)))
+                .collect(),
+        ),
+    }
 }
 
 fn system_info() -> HostResult {
@@ -138,6 +153,174 @@ fn set_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+// ---------- S2: auth + profile management ----------
+
+fn get_profile_by_tin(db: &Database, tin: &str) -> Result<bir_core::profile::TaxpayerProfile, HostError> {
+    db.get_profile_by_tin(tin)
+        .map_err(|error| HostError::new(error.to_string()))?
+        .ok_or_else(|| HostError::new(format!("no taxpayer profile with TIN {tin}")))
+}
+
+fn profile_detail(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    with_database(|db| serialize(&get_profile_by_tin(db, tin)?))
+}
+
+fn save_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let profile: bir_core::profile::TaxpayerProfile =
+        serde_json::from_value(to_json(arguments.value(0)?))
+            .map_err(|error| HostError::new(format!("profile payload: {error}")))?;
+    with_database(|db| {
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))
+            .and_then(|saved| serialize(&saved))
+    })
+}
+
+fn set_profile_archived(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let archived = arguments.boolean(1)?;
+    with_database(|db| {
+        let mut profile = get_profile_by_tin(db, &tin)?;
+        profile.is_archived = archived;
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))
+            .and_then(|saved| serialize(&saved))
+    })
+}
+
+fn delete_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    with_database(|db| {
+        db.delete_profile(tin)
+            .map(|_| HostValue::Null)
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+}
+
+fn set_profile_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let pin = arguments.value(1)?.as_str().map(str::to_owned); // null clears
+    with_database(|db| {
+        let mut profile = get_profile_by_tin(db, &tin)?;
+        profile.profile_pin_hash = pin.map(|pin| bir_core::crypto::hash_pin(&pin));
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))
+            .map(|_| HostValue::Null)
+    })
+}
+
+/// App-wide auth toggles the lock screen and profile unlock gate read once
+/// per render (same settings keys as the painted app reads at startup).
+fn auth_state() -> HostResult {
+    with_database(|db| {
+        let flag = |key: &str| {
+            db.get_setting(key)
+                .ok()
+                .flatten()
+                .is_some_and(|v| v == "true")
+        };
+        let set = |key: &str| db.get_setting(key).ok().flatten().is_some();
+        Ok(HostObject::new()
+            .field("enable_profile_pins", flag("enable_profile_pins"))
+            .field("has_admin_totp", set("app_totp_secret"))
+            .field("has_admin_pin", set("app_lock_pin_hash"))
+            .field("hide_tax_profiles", flag("hide_tax_profiles"))
+            .into())
+    })
+}
+
+fn profile_auth(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    with_database(|db| {
+        let profile = get_profile_by_tin(db, tin)?;
+        Ok(HostObject::new()
+            .field("has_pin", profile.profile_pin_hash.is_some())
+            .field("has_totp", profile.totp_secret.is_some())
+            .into())
+    })
+}
+
+fn verify_profile_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let pin = arguments.string(1)?;
+    let hashed = bir_core::crypto::hash_pin(pin);
+    with_database(|db| {
+        let profile = get_profile_by_tin(db, tin)?;
+        Ok(HostValue::Bool(profile.profile_pin_hash.as_deref() == Some(hashed.as_str())))
+    })
+}
+
+fn verify_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let token = arguments.string(1)?;
+    with_database(|db| {
+        let profile = get_profile_by_tin(db, tin)?;
+        let ok = profile
+            .totp_secret
+            .as_deref()
+            .is_some_and(|secret| bir_core::crypto::validate_totp(secret, token));
+        Ok(HostValue::Bool(ok))
+    })
+}
+
+fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let pin = arguments.string(0)?;
+    let hashed = bir_core::crypto::hash_pin(&pin);
+    with_database(|db| {
+        let ok = db
+            .get_setting("app_lock_pin_hash")
+            .ok()
+            .flatten()
+            .is_some_and(|stored| stored == hashed);
+        Ok(HostValue::Bool(ok))
+    })
+}
+
+fn verify_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let token = arguments.string(0)?;
+    with_database(|db| {
+        let ok = db
+            .get_setting("app_totp_secret")
+            .ok()
+            .flatten()
+            .is_some_and(|secret| bir_core::crypto::validate_totp(&secret, token));
+        Ok(HostValue::Bool(ok))
+    })
+}
+
+fn generate_totp_secret(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let account = arguments.string(0)?;
+    let (secret, qr_path) = bir_core::crypto::generate_totp_secret(account);
+    Ok(HostObject::new()
+        .field("secret", secret)
+        .field("qr_path", qr_path.display().to_string())
+        .into())
+}
+
+fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let key = arguments.string(0)?.to_owned();
+    with_database(|db| {
+        db.delete_setting(&key)
+            .map(|_| HostValue::Null)
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+}
+
+/// Admin PIN lives only as its hash (`app_lock_pin_hash`); hashing stays
+/// host-side so the script never sees the stored digest.
+fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let pin = arguments.value(0)?.as_str().map(str::to_owned); // null clears
+    with_database(|db| {
+        match pin {
+            Some(pin) => db.set_setting("app_lock_pin_hash", &bir_core::crypto::hash_pin(&pin)),
+            None => db.delete_setting("app_lock_pin_hash"),
+        }
+        .map(|_| HostValue::Null)
+        .map_err(|error| HostError::new(error.to_string()))
+    })
+}
+
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
     HostModule::new("bir")
@@ -146,6 +329,20 @@ pub fn module() -> HostModule {
         .function("forms_catalog", |_| forms_catalog())
         .function("get_setting", get_setting)
         .function("set_setting", set_setting)
+        .function("profile_detail", profile_detail)
+        .function("save_profile", save_profile)
+        .function("set_profile_archived", set_profile_archived)
+        .function("delete_profile", delete_profile)
+        .function("set_profile_pin", set_profile_pin)
+        .function("auth_state", |_| auth_state())
+        .function("profile_auth", profile_auth)
+        .function("verify_profile_pin", verify_profile_pin)
+        .function("verify_profile_totp", verify_profile_totp)
+        .function("verify_admin_pin", verify_admin_pin)
+        .function("verify_admin_totp", verify_admin_totp)
+        .function("generate_totp_secret", generate_totp_secret)
+        .function("delete_setting", delete_setting)
+        .function("set_admin_pin", set_admin_pin)
         .declarations(
             r#"
 export interface SystemInfo {
@@ -180,6 +377,35 @@ export function list_profiles(): ProfileSummary[];
 export function forms_catalog(): FormCatalogEntry[];
 export function get_setting(key: string): string | null;
 export function set_setting(key: string, value: string): null;
+
+export interface AuthState {
+    enable_profile_pins: boolean;
+    has_admin_totp: boolean;
+    has_admin_pin: boolean;
+    hide_tax_profiles: boolean;
+}
+export interface ProfileAuth {
+    has_pin: boolean;
+    has_totp: boolean;
+}
+export interface TotpSecret {
+    secret: string;
+    qr_path: string;
+}
+export function profile_detail(tin: string): object;
+export function save_profile(profile: object): object;
+export function set_profile_archived(tin: string, archived: boolean): object;
+export function delete_profile(tin: string): null;
+export function set_profile_pin(tin: string, pin: string | null): null;
+export function auth_state(): AuthState;
+export function profile_auth(tin: string): ProfileAuth;
+export function verify_profile_pin(tin: string, pin: string): boolean;
+export function verify_profile_totp(tin: string, token: string): boolean;
+export function verify_admin_pin(pin: string): boolean;
+export function verify_admin_totp(token: string): boolean;
+export function generate_totp_secret(account: string): TotpSecret;
+export function delete_setting(key: string): null;
+export function set_admin_pin(pin: string | null): null;
 "#,
         )
 }

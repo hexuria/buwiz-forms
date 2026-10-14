@@ -293,7 +293,7 @@ export function renderSidebar(cx, state) {
         .size(40)
         .flex_none()
         .hover((s) => s.bg(cx.theme().colors.muted).rounded_md())
-        .on_click((_ev, cx) => state.navigate("profile_manager", cx))
+        .on_click((_ev, cx) => state.openNewProfile(cx))
         .child(
           div()
             .text_size(20)

@@ -27741,6 +27741,35 @@ declare module "bir" {
   export function forms_catalog(): FormCatalogEntry[];
   export function get_setting(key: string): string | null;
   export function set_setting(key: string, value: string): null;
+
+  export interface AuthState {
+      enable_profile_pins: boolean;
+      has_admin_totp: boolean;
+      has_admin_pin: boolean;
+      hide_tax_profiles: boolean;
+  }
+  export interface ProfileAuth {
+      has_pin: boolean;
+      has_totp: boolean;
+  }
+  export interface TotpSecret {
+      secret: string;
+      qr_path: string;
+  }
+  export function profile_detail(tin: string): object;
+  export function save_profile(profile: object): object;
+  export function set_profile_archived(tin: string, archived: boolean): object;
+  export function delete_profile(tin: string): null;
+  export function set_profile_pin(tin: string, pin: string | null): null;
+  export function auth_state(): AuthState;
+  export function profile_auth(tin: string): ProfileAuth;
+  export function verify_profile_pin(tin: string, pin: string): boolean;
+  export function verify_profile_totp(tin: string, token: string): boolean;
+  export function verify_admin_pin(pin: string): boolean;
+  export function verify_admin_totp(token: string): boolean;
+  export function generate_totp_secret(account: string): TotpSecret;
+  export function delete_setting(key: string): null;
+  export function set_admin_pin(pin: string | null): null;
 }
 
 /**
