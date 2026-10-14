@@ -337,7 +337,21 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("-cg HarvestedComponents -ag ", windows)
         self.assertNotIn("-cg HarvestedComponents -gg ", windows)
         self.assertIn("candle.exe installer.wxs harvest.wxs -arch x64", windows)
-        self.assertNotIn(" -sval", windows)
+        light_commands = [
+            line.strip()
+            for line in windows.splitlines()
+            if line.strip().startswith("light.exe ")
+        ]
+        self.assertEqual(len(light_commands), 1)
+        self.assertIn(
+            "-sice:ICE38 -sice:ICE43 -sice:ICE57",
+            light_commands[0],
+        )
+        self.assertEqual(
+            re.findall(r"-sice:\S+", self.windows_workflow),
+            ["-sice:ICE38", "-sice:ICE43", "-sice:ICE57"],
+        )
+        self.assertNotIn("-sval", self.windows_workflow)
         self.assertIn('Root="HKLM"', self.installer_wxs)
         self.assertNotIn('Root="HKCU"', self.installer_wxs)
         self.assertIn('Win64="yes"', self.installer_wxs)

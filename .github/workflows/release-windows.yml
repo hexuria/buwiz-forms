@@ -276,7 +276,8 @@ jobs:
           candle.exe installer.wxs harvest.wxs -arch x64 -dSourceDir="$PKG" -dVersion="$VERSION" -ext WixUIExtension
           $candleExitCode = $LASTEXITCODE
           if ($candleExitCode -ne 0) { exit $candleExitCode }
-          light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension
+          # These shortcut ICEs are false positives for this per-machine package; the KeyPath intentionally remains HKLM.
+          light.exe installer.wixobj harvest.wixobj -out "target/release-artifacts/${{ env.APP_NAME }}-Windows-x64-${VERSION}.msi" -ext WixUIExtension -sice:ICE38 -sice:ICE43 -sice:ICE57
           $lightExitCode = $LASTEXITCODE
           if ($lightExitCode -ne 0) { exit $lightExitCode }
 
