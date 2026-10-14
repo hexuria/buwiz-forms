@@ -2,6 +2,23 @@ use rusqlite::{Connection, params};
 
 use super::{Database, DbError};
 
+/// Canonical `<TIN9><branch5>` form used by `legacy_filed_returns.tin`:
+/// 9-digit root plus the 3-digit profile branch zero-padded to five digits
+/// (`123-456-789-002` -> `12345678900002`). Unknown shapes pass through.
+pub(crate) fn canonical_legacy_tin(tin: &str) -> String {
+    crate::naming::Tin::parse_digits(tin)
+        .map(|parsed| {
+            format!(
+                "{}{}{}{:05}",
+                parsed.segment1,
+                parsed.segment2,
+                parsed.segment3,
+                parsed.branch.parse::<u32>().unwrap_or_default()
+            )
+        })
+        .unwrap_or_else(|| tin.to_string())
+}
+
 #[derive(Debug, Clone)]
 pub struct LegacyFiledReturn {
     pub id: Option<i64>,
@@ -54,17 +71,7 @@ impl Database {
         &self,
         tin: &str,
     ) -> Result<Vec<LegacyFiledReturn>, DbError> {
-        let canonical_tin = crate::naming::Tin::parse_digits(tin)
-            .map(|parsed| {
-                format!(
-                    "{}{}{}{:05}",
-                    parsed.segment1,
-                    parsed.segment2,
-                    parsed.segment3,
-                    parsed.branch.parse::<u32>().unwrap_or_default()
-                )
-            })
-            .unwrap_or_else(|| tin.to_string());
+        let canonical_tin = canonical_legacy_tin(tin);
         let mut statement = self.conn.prepare(
             "SELECT id, sha256, tin, form_identity, form_id, period,
                     amendment_version, email_copy, encrypted, source_filename,

@@ -335,7 +335,7 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         "
         CREATE TABLE IF NOT EXISTS legacy_filed_returns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sha256 TEXT UNIQUE NOT NULL,
+            sha256 TEXT NOT NULL,
             tin TEXT NOT NULL,
             form_identity TEXT NOT NULL,
             form_id TEXT,
@@ -346,7 +346,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             source_filename TEXT NOT NULL,
             raw_file BLOB NOT NULL,
             fields_json TEXT NOT NULL,
-            imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+            imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+            -- Same bytes under a different filename (email copy, new
+            -- amendment version) is its own filing record.
+            UNIQUE(sha256, source_filename)
         );
         CREATE INDEX IF NOT EXISTS idx_legacy_filed_returns_tin
             ON legacy_filed_returns(tin);
@@ -2873,15 +2876,40 @@ mod tests {
         ] {
             assert!(columns.contains(column), "missing column {column}");
         }
-        let unique_sha256: bool = conn
-            .query_row(
-                "SELECT \"unique\" FROM pragma_index_list('legacy_filed_returns')
-                 WHERE name = 'sqlite_autoindex_legacy_filed_returns_1'",
+        // sha256 + filename dedupes a re-import of the same file, but the
+        // same bytes under a different filename is a distinct record.
+        conn.execute(
+            "INSERT INTO legacy_filed_returns (
+                sha256, tin, form_identity, period, encrypted,
+                source_filename, raw_file, fields_json
+             ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                       'file.xml', X'01', '{}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO legacy_filed_returns (
+                sha256, tin, form_identity, period, encrypted,
+                source_filename, raw_file, fields_json
+             ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                       'file#copy.xml', X'01', '{}')",
+            [],
+        )
+        .expect("same bytes under a new filename must insert");
+        let err = conn
+            .execute(
+                "INSERT INTO legacy_filed_returns (
+                    sha256, tin, form_identity, period, encrypted,
+                    source_filename, raw_file, fields_json
+                 ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                           'file.xml', X'01', '{}')",
                 [],
-                |row| row.get(0),
             )
-            .unwrap();
-        assert!(unique_sha256);
+            .expect_err("duplicate sha256+filename must be rejected");
+        assert!(
+            err.to_string().contains("UNIQUE"),
+            "expected UNIQUE violation, got {err}"
+        );
     }
 
     #[test]

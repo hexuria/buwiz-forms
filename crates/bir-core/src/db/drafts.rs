@@ -173,9 +173,24 @@ fn apply_period_state(
     }
 }
 
-/// Map a legacy filename period (`062025`, `2026Q1`, `122026Q1`, `2025`) onto
-/// the progress slot this form uses. `None` when it cannot name a period of
-/// this form, so an unmatched record never shows as filed.
+/// The taxable year a legacy filename period names, from its digit part
+/// before any `Q` marker: `YYYY`, `MMYYYY` or `MMDDYYYY`.
+fn legacy_period_year(period: &str) -> Option<u16> {
+    let digits = period.split(['Q', 'q']).next()?;
+    if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    match digits.len() {
+        4 => digits.parse().ok(),
+        6 => digits[2..].parse().ok(),
+        8 => digits[4..].parse().ok(),
+        _ => None,
+    }
+}
+
+/// Map a legacy filename period (`062025`, `2026Q1`, `122026Q1`, `2025`,
+/// `03152026`) onto the progress slot this form uses. `None` when it cannot
+/// name a period of this form, so an unmatched record never shows as filed.
 fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<FilingPeriod> {
     let (digits, quarter) = match period.find(['Q', 'q']) {
         Some(index) => (
@@ -189,6 +204,25 @@ fn legacy_return_period(form_code: &str, period: &str, year: u16) -> Option<Fili
     };
     if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
+    }
+    if digits.len() == 8 {
+        let month = digits[..2]
+            .parse::<u8>()
+            .ok()
+            .filter(|month| (1..=12).contains(month))?;
+        let day = digits[2..4]
+            .parse::<u8>()
+            .ok()
+            .filter(|day| (1..=31).contains(day))?;
+        if digits[4..].parse::<u16>().ok()? != year {
+            return None;
+        }
+        return match frequency_for_form(form_code) {
+            FilingFrequency::Monthly | FilingFrequency::OpenEnded => Some(FilingPeriod::OpenEnded(
+                u32::from(month) * 100 + u32::from(day),
+            )),
+            _ => None,
+        };
     }
     let (period_year, month) = match digits.len() {
         4 => (digits.parse::<u16>().ok()?, None),
@@ -2853,7 +2887,8 @@ impl Database {
         year: u16,
     ) -> Result<FormFilingProgress, DbError> {
         let mut progress = FormFilingProgress::new_empty(form_code, year);
-        let monthly = matches!(frequency_for_form(form_code), FilingFrequency::Monthly);
+        let frequency = frequency_for_form(form_code);
+        let monthly = matches!(frequency, FilingFrequency::Monthly);
 
         let mut stmt = self.conn.prepare(
             "SELECT quarter, period_key, status FROM form_drafts
@@ -2875,16 +2910,18 @@ impl Database {
         }
 
         // A Final Copy migrated from the old eBIRForms app counts as filed.
+        let legacy_tin = super::legacy_filed_returns::canonical_legacy_tin(tin);
         let mut legacy_stmt = self.conn.prepare(
             "SELECT form_id, form_identity, period FROM legacy_filed_returns WHERE tin = ?1",
         )?;
-        let legacy_rows = legacy_stmt.query_map(params![tin], |row| {
+        let legacy_rows = legacy_stmt.query_map(params![legacy_tin], |row| {
             Ok((
                 row.get::<_, Option<String>>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
             ))
         })?;
+        let mut legacy_open_ended = std::collections::BTreeSet::new();
         for row in legacy_rows {
             let (form_id, form_identity, period) = row?;
             let capability = form_id
@@ -2897,10 +2934,25 @@ impl Database {
             if capability.code != form_code {
                 continue;
             }
-            if let Some(period) = legacy_return_period(form_code, &period, year) {
-                apply_period_state(&mut progress, monthly, period, QuarterState::Submitted);
+            match legacy_return_period(form_code, &period, year) {
+                Some(FilingPeriod::OpenEnded(_)) | None
+                    if matches!(frequency, FilingFrequency::OpenEnded)
+                        && legacy_period_year(&period) == Some(year) =>
+                {
+                    // An open-ended form has no period tiles; each distinct
+                    // filed period of the year counts once (amendments and
+                    // same-period copies dedupe by period).
+                    legacy_open_ended.insert(period);
+                }
+                Some(period) => {
+                    apply_period_state(&mut progress, monthly, period, QuarterState::Submitted);
+                }
+                None => {}
             }
         }
+        progress.open_ended_count = progress
+            .open_ended_count
+            .saturating_add(legacy_open_ended.len() as u32);
 
         Ok(progress)
     }
@@ -6222,21 +6274,30 @@ mod tests {
     #[test]
     fn legacy_filed_returns_count_as_filed_in_filing_progress() {
         let db = test_db();
+        // Migration stores the 14-digit `<TIN9><branch5>` tin; a profile's
+        // 12-digit `<TIN9><branch3>` tin must still find its returns.
         let tin = "12345678900000";
-        for (form_id, period) in [
-            ("1601Cv2018", "062025"),
-            ("2551Qv2018", "2026Q1"),
-            ("2551Qv2018", "122026Q4"),
-            ("1701v2018", "122025"),
-            ("1601Cv2018", "012024"),
-        ] {
+        for (index, (form_id, period, filename)) in [
+            ("1601Cv2018", "062025", "a.xml"),
+            ("2551Qv2018", "2026Q1", "b.xml"),
+            ("2551Qv2018", "122026Q4", "c.xml"),
+            ("1701v2018", "122025", "d.xml"),
+            ("1601Cv2018", "012024", "e.xml"),
+            ("0605", "122025", "f.xml"),
+            // A same-period copy of the 0605 (e.g. email copy) dedupes.
+            ("0605", "122025", "f#copy.xml"),
+            ("2200ANv2018", "03152025", "g.xml"),
+        ]
+        .iter()
+        .enumerate()
+        {
             db.conn
                 .execute(
                     "INSERT INTO legacy_filed_returns
                         (sha256, tin, form_identity, form_id, period, encrypted,
                          source_filename, raw_file, fields_json)
-                     VALUES (?1, ?2, ?3, ?3, ?4, 1, 'final.xml', X'00', '{}')",
-                    params![format!("sha-{form_id}-{period}"), tin, form_id, period],
+                     VALUES (?1, ?2, ?3, ?3, ?4, 1, ?5, X'00', '{}')",
+                    params![format!("sha-{index}"), tin, form_id, period, filename],
                 )
                 .unwrap();
         }
@@ -6246,6 +6307,12 @@ mod tests {
         assert_eq!(monthly.months[5], QuarterState::Submitted);
         assert_eq!(monthly.months[0], QuarterState::NotStarted);
 
+        // A profile's 3-digit-branch tin resolves to the same stored rows.
+        let monthly = db
+            .get_form_filing_progress("123456789000", "1601C", 2025)
+            .unwrap();
+        assert_eq!(monthly.months[5], QuarterState::Submitted);
+
         // Quarterly 2551Q: `2026Q1` and fiscal-year `122026Q4` both file.
         let quarterly = db.get_form_filing_progress(tin, "2551Q", 2026).unwrap();
         assert_eq!(quarterly.quarters[0], QuarterState::Submitted);
@@ -6254,6 +6321,14 @@ mod tests {
 
         let annual = db.get_form_filing_progress(tin, "1701", 2025).unwrap();
         assert_eq!(annual.annual_status, QuarterState::Submitted);
+
+        // Open-ended 0605: the two same-period rows count once.
+        let open_ended = db.get_form_filing_progress(tin, "0605", 2025).unwrap();
+        assert_eq!(open_ended.open_ended_count, 1);
+
+        // A dated monthly return (2200AN `MMDDYYYY`) files its month.
+        let dated = db.get_form_filing_progress(tin, "2200AN", 2025).unwrap();
+        assert_eq!(dated.months[2], QuarterState::Submitted);
 
         // A local draft does not downgrade the migrated filed state.
         db.conn

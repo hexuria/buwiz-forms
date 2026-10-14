@@ -3,7 +3,7 @@ use crate::bir_xml::{decode_bir_value, parse_bir_xml_encoded_occurrences_checked
 use crate::crypto::{BIR_IAF_PASSPHRASE, decrypt_and_decompress};
 use crate::db::{Database, DbError, LegacyFiledReturn};
 use crate::official_import::find_capability_identity;
-use crate::profile::TaxpayerProfile;
+use crate::profile::{TaxProfileVersionStatus, TaxpayerProfile};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -793,33 +793,66 @@ fn fill_empty_fields(profile: &mut TaxpayerProfile, values: &ProfileValues) -> u
     fill!(phone);
     fill!(email);
     fill!(default_form_type);
+    // Forms resolve identity through each version's COR facts, so an import
+    // that only filled the flat fields would otherwise stay invisible there.
+    for version in &mut profile.profile_versions {
+        if version.status == TaxProfileVersionStatus::Archived {
+            continue;
+        }
+        let cor = &mut version.cor;
+        if cor.registered_name.trim().is_empty() && !values.full_name.trim().is_empty() {
+            cor.registered_name.clone_from(&values.full_name);
+        }
+        if cor.rdo_code.trim().is_empty() && !values.rdo_code.trim().is_empty() {
+            cor.rdo_code.clone_from(&values.rdo_code);
+        }
+        if cor.line_of_business_description.trim().is_empty()
+            && !values.line_of_business.trim().is_empty()
+        {
+            cor.line_of_business_description
+                .clone_from(&values.line_of_business);
+        }
+        if cor.registered_address.trim().is_empty() && !values.registered_address.trim().is_empty()
+        {
+            cor.registered_address
+                .clone_from(&values.registered_address);
+        }
+    }
     filled
 }
 
+/// Ordering key for "latest filing" when a return supplies the profile:
+/// (year, position inside that year, amendment). A bare `YYYY` counts as
+/// filed after December so a newer annual return wins over any earlier
+/// month/quarter of an older year, and quarters map to their last month.
 fn return_period_order(legacy_return: &LegacyReturn) -> (u32, u32, Option<u32>) {
-    let period = legacy_return.period.as_bytes();
-    if period.len() >= 6
-        && period[..2].iter().all(u8::is_ascii_digit)
-        && period[2..6].iter().all(u8::is_ascii_digit)
-    {
-        let month = std::str::from_utf8(&period[..2])
-            .ok()
-            .and_then(|month| month.parse().ok())
-            .unwrap_or_default();
-        let year = std::str::from_utf8(&period[2..6])
-            .ok()
-            .and_then(|year| year.parse().ok())
-            .unwrap_or_default();
-        (year, month, legacy_return.amendment_version)
-    } else {
-        (
-            0,
-            0,
-            legacy_return
-                .amendment_version
-                .or_else(|| legacy_return.period.parse::<u32>().ok()),
-        )
+    let period = &legacy_return.period;
+    let (digits, quarter) = match period.find(['Q', 'q']) {
+        Some(index) => (
+            period.get(..index).unwrap_or_default(),
+            period[index + 1..].parse::<u32>().ok(),
+        ),
+        None => (period.as_str(), None),
+    };
+    if !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return (0, 0, legacy_return.amendment_version);
     }
+    let (year, sub_period) = match digits.len() {
+        4 => (
+            digits.parse::<u32>().unwrap_or_default(),
+            quarter.unwrap_or(13),
+        ),
+        6 => (
+            digits[2..].parse::<u32>().unwrap_or_default(),
+            quarter.unwrap_or_else(|| digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13)),
+        ),
+        8 => (
+            digits[4..].parse::<u32>().unwrap_or_default(),
+            digits[..2].parse::<u32>().unwrap_or_default().clamp(1, 13),
+        ),
+        _ => return (0, 0, legacy_return.amendment_version),
+    };
+    (year, sub_period, legacy_return.amendment_version)
 }
 
 #[cfg(test)]

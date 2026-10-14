@@ -167,6 +167,10 @@ impl Render for ImportExportView {
                             })
                             .await;
                             let _ = this.update(cx, |this, cx| {
+                                // A "Choose folder" pick supersedes this scan.
+                                if this.legacy_selected_root.is_some() {
+                                    return;
+                                }
                                 match result {
                                     Ok(scan) => {
                                         this.legacy_scan = Some(scan);
@@ -204,11 +208,17 @@ impl Render for ImportExportView {
                             cx.notify();
                         });
                         let scan_path = path;
+                        let applied_path = scan_path.clone();
                         let result = smol::unblock(move || {
                             bir_core::legacy_migration::scan_legacy_folder(&scan_path)
                         })
                         .await;
                         let _ = this.update(cx, |this, cx| {
+                            // Only apply the scan of the folder still
+                            // selected; a newer pick supersedes this result.
+                            if this.legacy_selected_root.as_ref() != Some(&applied_path) {
+                                return;
+                            }
                             match result {
                                 Ok(scan) => {
                                     this.legacy_scan = Some(scan);
