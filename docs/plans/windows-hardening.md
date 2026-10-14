@@ -249,6 +249,7 @@ execution was safely refused because a real installation is registered.
 **Facts:**
 - Activation is logged as successful, but no process is ever seen and no app log is written.
 - The packager follows `dumpbin /dependents`; the runtime payload now includes the required `VCRUNTIME140_1.dll`.
+- PR #124 CI (hosted `windows-2025` image, UAC enabled): the MSIX with `VCRUNTIME140.dll` + `VCRUNTIME140_1.dll` registered, activated via `shell:AppsFolder`, painted a window and persisted 10 s.
 - On this Server 2022 VM, with UAC disabled and the built-in Administrator account, the unpacked package layout launches, paints a window and remains alive for 10 seconds. Packaged activation still produces no process.
 - The release build uses `panic = "abort"` and has no console.
 
@@ -256,13 +257,14 @@ execution was safely refused because a real installation is registered.
 - (a) incomplete or mixed packaged VC runtime;
 - (b) package-context startup (CWD `System32`, virtualized AppData) aborts before tracing starts;
 - (c) the Server 2022 SKU.
-- (d) UAC disabled (`EnableLUA=0`) / built-in Administrator blocks packaged activation, matching Start Menu/Search activation failures on this VM.
+- (d) UAC disabled (`EnableLUA=0`) / built-in Administrator blocks packaged activation: supported, since the same package activates on a UAC-enabled hosted runner but not on the UAC-disabled VM.
 
 - [ ] **8.1 Diagnose:** loader snaps (`gflags +sls`) or Procmon on activation, `Invoke-CommandInDesktopPackage` with a console, and a Windows 11 retest. Record the result here.
 - [ ] **8.2** If existing diagnostics are insufficient, add an opt-in early startup breadcrumb before DB/UI initialization. Log only startup stage/error category, never taxpayer fields, DB contents or credentials. A panic hook alone cannot diagnose a loader failure before Rust starts; preserve loader/activation evidence from 8.1.
 - [ ] **8.3** If (a): depend on the `Microsoft.VCLibs.140.00.UWPDesktop` framework in `assets/windows/AppxManifest.xml` instead of copying DLLs. If (b): fix the startup path.
-- **Acceptance remains open:** packaged activation on Windows 11 with UAC enabled, using `smoke_msix.ps1 -RequireActivation`. The UAC-disabled host's registration and unpacked-layout checks do not close #94.
+- **Acceptance:** Server 2025 (hosted, UAC on) passed `smoke_msix.ps1` including packaged activation; remaining: Windows 11 with UAC enabled via `-RequireActivation`.
 - **Progress:** A Server 2022 VM diagnostic (2026-10-13) showed the unpacked layout paints and persists while packaged activation produces no process. The revised smoke gates registration and layout execution, skipping activation only when `EnableLUA=0`; Windows 11 UAC-on activation remains unverified.
+- **Progress:** PR #124 CI on the hosted `windows-2025` image (UAC enabled) passed registration, layout launch and packaged activation; the visible window persisted for 10 seconds ([job](https://github.com/hexuria/buwiz-forms/actions/runs/38494773180/job/115636746744)).
 
 ---
 

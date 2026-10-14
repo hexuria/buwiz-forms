@@ -53,11 +53,13 @@ there, but nobody has run it on that platform.
   Partner Center. An unsigned run also includes a `.cer` test certificate.
 - The CI MSIX smoke verifies registration, packaged VC runtime files, and an
   isolated unpacked-layout launch with a visible window and 10-second process
-  persistence. Hosted runners disable UAC, so packaged activation is skipped
-  there; this does not prove Start Menu or `shell:AppsFolder` activation. Run
-  `powershell.exe -NoProfile -File scripts\smoke_msix.ps1 -Package <msix> -RequireActivation`
-  on Windows 11 with UAC enabled to verify activation; add `-Certificate <cer>`
-  when testing an unsigned package.
+  persistence. On GitHub's `windows-latest` runner (UAC enabled) all three
+  stages run, including packaged `shell:AppsFolder` activation. On a host with
+  UAC disabled (`EnableLUA=0`) activation is skipped with a warning;
+  `-RequireActivation` turns that into a failure. To check activation locally,
+  run `powershell.exe -NoProfile -File scripts\smoke_msix.ps1 -Package <msix> -RequireActivation`
+  on Windows 11 with UAC enabled; add `-Certificate <cer>` when testing an
+  unsigned package.
 - To install an unsigned tester package, import its `.cer` into **Local
   Machine → Trusted People** (administrator required), then double-click the
   sideload `.msix`. An MSIX will not start on a machine with UAC disabled.
