@@ -330,6 +330,105 @@ jobs:
   #   - a PR carrying the run-validation label,
   #   - the nightly run on main,
   #   - a manual run with the "validation" box ticked.
+  # crates/bir-shell is a standalone workspace (its own lockfile), so the
+  # root-workspace `check` legs never compile it. Any change under
+  # crates/bir-shell/ or the JS app dir gets its own fmt/check/clippy run on
+  # all three OSs. Reader-only cache, like validation-rules: `check` stays the
+  # sole writer of the shared workspace-<os> entry, and the shell workspace
+  # gets its own shell-<os> entry so the two target dirs can't evict each
+  # other.
+  shell-check:
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.shell_matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+        components: clippy, rustfmt
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: crates/bir-shell
+        shared-key: shell-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libx11-dev \
+          libxcb1-dev \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libxkbcommon-x11-dev \
+          libwayland-dev \
+          libwayland-client0 \
+          libasound2-dev \
+          libudev-dev \
+          libvulkan-dev \
+          libfontconfig1-dev \
+          libfreetype-dev \
+          libssl-dev
+
+    # Same OpenSSL provisioning as `check`: bir-shell links bir-core, whose
+    # SFTP/reqwest deps need it on Windows.
+    - name: Cache OpenSSL
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: openssl-${{ runner.os }}-choco-v1
+
+    - name: Install Windows Dependencies
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
+            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
+            Write-Host "OpenSSL restored from cache; skipping choco install"
+        } else {
+            choco install openssl -y
+        }
+        $openssl_dir = "C:\Program Files\OpenSSL"
+        if (Test-Path "C:\Program Files\OpenSSL\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL"
+        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
+        } else {
+            [Console]::Error.WriteLine("OpenSSL include directory not found!")
+            exit 1
+        }
+        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+        if ($lib_file) {
+            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+            if ($lib_file.Name -ne "libcrypto.lib") {
+                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+            }
+        } else {
+          Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+        }
+
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
+
+    - name: Check bir-shell workspace
+      run: just shell-check
+
   # The boundary check that guards production filing is NOT gated: it runs in
   # `check` on every PR.
   changes:
@@ -346,6 +445,8 @@ jobs:
       linux_pkg: ${{ steps.decide.outputs.linux_pkg }}
       windows_pkg: ${{ steps.decide.outputs.windows_pkg }}
       macos_pkg: ${{ steps.decide.outputs.macos_pkg }}
+      shell: ${{ steps.decide.outputs.shell }}
+      shell_matrix: ${{ steps.decide.outputs.shell_matrix }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -384,9 +485,10 @@ jobs:
         windows_pkg_re='^(installer\.(iss|wxs)$|assets/windows/|scripts/(audit_final_setup|package_msix|smoke_msix)\.ps1$|scripts/audit_installer_sources\.py$)'
         macos_pkg_re='^(assets/macos/|scripts/(dev_bundle_macos|package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)'
         linux_pkg_re='^packaging/linux/'
+        shell_re='^(crates/bir-shell/|app/)'
         scripts_only_re='^(scripts/tests/|scripts/setup-(linux|macos)\.sh$|scripts/setup-windows\.ps1$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
 
-        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false
+        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; shell=false
         app_reason=""
         if [[ "$EVENT" != pull_request && "$EVENT" != push ]]; then
           app=true; app_reason="event $EVENT tests everything"
@@ -407,6 +509,8 @@ jobs:
               linux_pkg=true
             elif [[ "$path" =~ $scripts_only_re ]]; then
               scripts=true
+            elif [[ "$path" =~ $shell_re ]]; then
+              shell=true
             elif [[ "$app" != true ]]; then
               app=true; app_reason="app file changed: $path"
             fi
@@ -428,6 +532,11 @@ jobs:
           else
             check_reason="docs-only changes"
           fi
+        fi
+
+        shell_matrix='{"include":[]}'
+        if [[ "$shell" == true ]]; then
+          shell_matrix="$all_systems"
         fi
 
         run=false
@@ -460,11 +569,14 @@ jobs:
           echo "linux_pkg=$linux_pkg"
           echo "windows_pkg=$windows_pkg"
           echo "macos_pkg=$macos_pkg"
+          echo "shell=$shell"
+          echo "shell_matrix=$shell_matrix"
         } >> "$GITHUB_OUTPUT"
         echo "validation-rules audits: $run ($reason)" | tee -a "$GITHUB_STEP_SUMMARY"
         echo "app check on: $systems ($check_reason)" | tee -a "$GITHUB_STEP_SUMMARY"
         echo "script tests on their own: $scripts" | tee -a "$GITHUB_STEP_SUMMARY"
         echo "packaging changed: linux=$linux_pkg windows=$windows_pkg macos=$macos_pkg" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "gpui-shell workspace check: $shell" | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The Python script tests on their own, for changes `check` does not run for
   # (packaging, setup scripts, release workflows, the tests themselves). When
@@ -776,7 +888,7 @@ jobs:
   # failed is a failure here, not a skip. windows-smoke is report-only and
   # deliberately not part of it.
   ci-ok:
-    needs: [ changes, check, scripts, validation-rules ]
+    needs: [ changes, check, shell-check, scripts, validation-rules ]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -788,10 +900,12 @@ jobs:
         WANT_CHECK: ${{ needs.changes.outputs.check }}
         SCRIPTS: ${{ needs.scripts.result }}
         WANT_SCRIPTS: ${{ needs.changes.outputs.scripts }}
+        SHELL_CHECK: ${{ needs.shell-check.result }}
+        WANT_SHELL: ${{ needs.changes.outputs.shell }}
         VALIDATION: ${{ needs.validation-rules.result }}
       run: |
         set -euo pipefail
-        echo "changes=$CHANGES check=$CHECK (wanted $WANT_CHECK) scripts=$SCRIPTS (wanted $WANT_SCRIPTS) validation-rules=$VALIDATION"
+        echo "changes=$CHANGES check=$CHECK (wanted $WANT_CHECK) scripts=$SCRIPTS (wanted $WANT_SCRIPTS) shell-check=$SHELL_CHECK (wanted $WANT_SHELL) validation-rules=$VALIDATION"
         fail() { echo "::error::$1"; exit 1; }
         [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
         expect() {
@@ -803,4 +917,5 @@ jobs:
         }
         expect check "$CHECK" "$WANT_CHECK"
         expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
+        expect shell-check "$SHELL_CHECK" "$WANT_SHELL"
         [[ "$VALIDATION" == success ]] || fail "validation-rules finished: $VALIDATION"

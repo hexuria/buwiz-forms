@@ -741,8 +741,7 @@ fn purge_archived_jobs() -> HostResult {
 /// Today's rotated log (`ebirforms.YYYY-MM-DD.log`), tailed like the painted
 /// Logs tab — it keeps at most the newest 5,000 lines.
 fn job_log_tail() -> HostResult {
-    let logs_path =
-        bir_core::log_files::today_log_path(&bir_core::log_files::log_dir());
+    let logs_path = bir_core::log_files::today_log_path(&bir_core::log_files::log_dir());
     let file_name = logs_path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -753,7 +752,10 @@ fn job_log_tail() -> HostResult {
             let tail = if total <= 5_000 {
                 text
             } else {
-                text.lines().skip(total - 5_000).collect::<Vec<_>>().join("\n")
+                text.lines()
+                    .skip(total - 5_000)
+                    .collect::<Vec<_>>()
+                    .join("\n")
             };
             (tail, total)
         }
