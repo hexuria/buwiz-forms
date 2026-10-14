@@ -26,6 +26,12 @@ class LinuxCandidateCertificationPolicyTests(unittest.TestCase):
         cls.release = (REPOSITORY_ROOT / ".github/workflows/release.yml").read_text(
             encoding="utf-8"
         )
+        cls.release_linux = (
+            REPOSITORY_ROOT / ".github/workflows/release-linux.yml"
+        ).read_text(encoding="utf-8")
+        cls.linux_package_builder = (
+            REPOSITORY_ROOT / "packaging/linux/build-packages.sh"
+        ).read_text(encoding="utf-8")
         cls.rust_pdf = (
             REPOSITORY_ROOT
             / "crates/bir-print/src/bin/verify_certification_pdf.rs"
@@ -107,7 +113,9 @@ class LinuxCandidateCertificationPolicyTests(unittest.TestCase):
         self.assertIn("Assemble portable candidate application", linux_job)
         self.assertIn("*.tar.gz", linux_job)
         self.assertNotIn("cargo deb", linux_job)
-        self.assertIn("cargo deb --locked", self.release)
+        self.assertIn("uses: ./.github/workflows/release-linux.yml", self.release)
+        self.assertIn("build-packages.sh --version", self.release_linux)
+        self.assertIn("cargo deb --locked", self.linux_package_builder)
         self.assertIn('"final_release_deb_verified": False', self.verifier)
         self.assertIn('"final_release_tarball_verified": False', self.verifier)
         self.assertIn('"release_package_signature_verified": False', self.verifier)
