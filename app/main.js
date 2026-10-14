@@ -798,7 +798,9 @@ export default class BirApp extends View {
       );
       const summaries = list_drafts(this.activeProfileTin, this.formYear);
       const existing = summaries.find(
-        (s) => s.form_code === spec.code && s.quarter === this.formQuarter,
+        (s) =>
+          s.form_code === spec.code &&
+          (s.quarter ?? s.month ?? null) === this.formQuarter,
       );
       if (existing) this.formDraftStatus = existing.status;
     } catch (e) {
@@ -854,7 +856,12 @@ export default class BirApp extends View {
         }
         this.formFieldSet(data, field.key, value);
       } else {
-        this.formFieldSet(data, field.key, this.formInputs[field.key].value().trim());
+        const text = this.formInputs[field.key].value().trim();
+        // An untouched free-text field must not blank out a value the draft
+        // (or the engine's defaults) already carries.
+        if (text !== "" || this.formFieldGet(data, field.key) === undefined) {
+          this.formFieldSet(data, field.key, text);
+        }
       }
     }
     try {
