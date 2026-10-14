@@ -38,7 +38,6 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 - `just run` — Run the app locally with developer diagnostics.
 - `just install [format]` — Install a package you already built (macOS `.app`/`.pkg`/`.dmg`, Windows `msix`/`exe`, Linux `deb`/`tar`). It looks in `target/release-artifacts` and does not build anything.
 - Build the packages with `just exe` and `just msix` (Windows), `just app` (macOS App Store build), `just _package-mac` (macOS direct `.app` and DMG) and `just _package-linux` (Linux `.deb`, or a tarball when `cargo-deb` is missing). The release workflow builds the same packages.
-- `just exe --inspector`, `just _package-mac --inspector` and `just _package-linux --inspector` — Build a package with the `inspector` feature (internal diagnostics) unlocked.
 - `just _package-mac --agent` — Mac release `.app` with the gpui-agent control plane compiled in. Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
 
