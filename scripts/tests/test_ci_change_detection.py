@@ -165,6 +165,7 @@ class CiChangeDetectionTests(unittest.TestCase):
         validation_reason: str = "no validation-rules path changed",
         scripts: str = "false",
         app: str | None = None,
+        shell: str = "false",
         packaging: tuple[str, ...] = (),
         event: str = "pull_request",
         changed: tuple[str, ...] = (),
@@ -189,6 +190,11 @@ class CiChangeDetectionTests(unittest.TestCase):
         )
         matrix = json.loads(outputs.pop("check_matrix"))
         self.assertEqual(tuple(entry["os"] for entry in matrix["include"]), systems)
+        shell_matrix = json.loads(outputs.pop("shell_matrix"))
+        self.assertEqual(
+            tuple(entry["os"] for entry in shell_matrix["include"]),
+            self.ALL_SYSTEMS if shell == "true" else (),
+        )
         if app is None:
             app = "true" if systems == self.ALL_SYSTEMS else "false"
         self.assertEqual(
@@ -198,6 +204,7 @@ class CiChangeDetectionTests(unittest.TestCase):
                 "check": "true" if systems else "false",
                 "app": app,
                 "scripts": scripts,
+                "shell": shell,
                 "linux_pkg": "true" if "linux" in packaging else "false",
                 "windows_pkg": "true" if "windows" in packaging else "false",
                 "macos_pkg": "true" if "macos" in packaging else "false",
@@ -237,6 +244,23 @@ class CiChangeDetectionTests(unittest.TestCase):
             systems=self.ALL_SYSTEMS,
             check_reason="app file changed: crates/bir-core/src/lib.rs",
             changed=("docs/plans/x.md", "crates/bir-core/src/lib.rs"),
+        )
+
+    def test_shell_workspace_change_runs_shell_check_not_check(self) -> None:
+        self.assert_decisions(
+            systems=(),
+            check_reason="shell workspace changed (covered by shell-check)",
+            app="false",
+            shell="true",
+            changed=("crates/bir-shell/src/host.rs", "app/main.js"),
+        )
+
+    def test_shell_and_app_changes_run_both(self) -> None:
+        self.assert_decisions(
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: crates/bir-core/src/lib.rs",
+            shell="true",
+            changed=("crates/bir-core/src/lib.rs", "app/main.js"),
         )
 
     def test_rules_markdown_is_app_code_and_validation_input(self) -> None:
@@ -473,7 +497,7 @@ class CiChangeDetectionTests(unittest.TestCase):
         if needs is not None:
             self.assertEqual(
                 [name.strip() for name in needs.group(1).split(",")],
-                ["changes", "check", "scripts", "validation-rules"],
+                ["changes", "check", "shell-check", "scripts", "validation-rules"],
             )
         # A skip caused by a failed `changes` must fail the gate.
         self.assertIn('[[ "$CHANGES" == success ]]', gate)

@@ -330,105 +330,6 @@ jobs:
   #   - a PR carrying the run-validation label,
   #   - the nightly run on main,
   #   - a manual run with the "validation" box ticked.
-  # crates/bir-shell is a standalone workspace (its own lockfile), so the
-  # root-workspace `check` legs never compile it. Any change under
-  # crates/bir-shell/ or the JS app dir gets its own fmt/check/clippy run on
-  # all three OSs. Reader-only cache, like validation-rules: `check` stays the
-  # sole writer of the shared workspace-<os> entry, and the shell workspace
-  # gets its own shell-<os> entry so the two target dirs can't evict each
-  # other.
-  shell-check:
-    needs: changes
-    if: needs.changes.outputs.shell == 'true'
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.changes.outputs.shell_matrix) }}
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Rust Toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: 1.99.0
-        components: clippy, rustfmt
-
-    - name: Rust Cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: crates/bir-shell
-        shared-key: shell-${{ runner.os }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-
-    - name: Install Linux Dependencies
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          pkg-config \
-          libx11-dev \
-          libxcb1-dev \
-          libxcb-render0-dev \
-          libxcb-shape0-dev \
-          libxcb-xfixes0-dev \
-          libxkbcommon-dev \
-          libxkbcommon-x11-dev \
-          libwayland-dev \
-          libwayland-client0 \
-          libasound2-dev \
-          libudev-dev \
-          libvulkan-dev \
-          libfontconfig1-dev \
-          libfreetype-dev \
-          libssl-dev
-
-    # Same OpenSSL provisioning as `check`: bir-shell links bir-core, whose
-    # SFTP/reqwest deps need it on Windows.
-    - name: Cache OpenSSL
-      if: runner.os == 'Windows'
-      uses: actions/cache@v4
-      with:
-        path: |
-          C:\Program Files\OpenSSL
-          C:\Program Files\OpenSSL-Win64
-        key: openssl-${{ runner.os }}-choco-v1
-
-    - name: Install Windows Dependencies
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
-            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
-            Write-Host "OpenSSL restored from cache; skipping choco install"
-        } else {
-            choco install openssl -y
-        }
-        $openssl_dir = "C:\Program Files\OpenSSL"
-        if (Test-Path "C:\Program Files\OpenSSL\include") {
-            $openssl_dir = "C:\Program Files\OpenSSL"
-        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
-            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
-        } else {
-            [Console]::Error.WriteLine("OpenSSL include directory not found!")
-            exit 1
-        }
-        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
-        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
-        if ($lib_file) {
-            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
-            if ($lib_file.Name -ne "libcrypto.lib") {
-                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
-            }
-        } else {
-          Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
-        }
-
-    - name: Install just
-      run: cargo install just --version 1.45.0 --locked
-
-    - name: Check bir-shell workspace
-      run: just shell-check
-
   # The boundary check that guards production filing is NOT gated: it runs in
   # `check` on every PR.
   changes:
@@ -529,6 +430,8 @@ jobs:
           check=false; check_matrix='{"include":[]}'; systems="none"
           if [[ "$scripts" == true || "$linux_pkg" == true || "$macos_pkg" == true ]]; then
             scripts=true; check_reason="no app code changed"
+          elif [[ "$shell" == true ]]; then
+            check_reason="shell workspace changed (covered by shell-check)"
           else
             check_reason="docs-only changes"
           fi
@@ -741,10 +644,110 @@ jobs:
           [[ "$r" == success || "$r" == skipped ]] || { echo "::error::validation-rules audit $r"; exit 1; }
         done
 
+  # crates/bir-shell is a standalone workspace (its own lockfile), so the
+  # root-workspace `check` legs never compile it. Any change under
+  # crates/bir-shell/ or the JS app dir gets its own fmt/check/clippy run on
+  # all three OSs. Reader-only cache, like validation-rules: `check` stays the
+  # sole writer of the shared workspace-<os> entry, and the shell workspace
+  # gets its own shell-<os> entry so the two target dirs can't evict each
+  # other.
+  shell-check:
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.shell_matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+        components: clippy, rustfmt
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: crates/bir-shell
+        shared-key: shell-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libx11-dev \
+          libxcb1-dev \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libxkbcommon-x11-dev \
+          libwayland-dev \
+          libwayland-client0 \
+          libasound2-dev \
+          libudev-dev \
+          libvulkan-dev \
+          libfontconfig1-dev \
+          libfreetype-dev \
+          libssl-dev
+
+    # Same OpenSSL provisioning as `check`: bir-shell links bir-core, whose
+    # SFTP/reqwest deps need it on Windows.
+    - name: Cache OpenSSL
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: openssl-${{ runner.os }}-choco-v1
+
+    - name: Install Windows Dependencies
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
+            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
+            Write-Host "OpenSSL restored from cache; skipping choco install"
+        } else {
+            choco install openssl -y
+        }
+        $openssl_dir = "C:\Program Files\OpenSSL"
+        if (Test-Path "C:\Program Files\OpenSSL\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL"
+        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
+        } else {
+            [Console]::Error.WriteLine("OpenSSL include directory not found!")
+            exit 1
+        }
+        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+        if ($lib_file) {
+            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+            if ($lib_file.Name -ne "libcrypto.lib") {
+                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+            }
+        } else {
+          Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+        }
+
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
+
+    - name: Check bir-shell workspace
+      run: just shell-check
+
   # A failed run on main - nightly, or the push a merge makes - opens (or
   # comments on) one tracking issue. Pull requests no longer have to be up to
   # date with main before merging, so two PRs that pass alone but break
   # together show up here instead of going unread.
+
   main-report:
     needs: [ ci-ok ]
     # `failure` only: a run cancelled by a newer push to main is not a break.
