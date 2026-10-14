@@ -549,8 +549,8 @@ export default class BirApp extends View {
   }
 
   openFormCatalogEntry(form, cx) {
-    const spec = FORM_SPECS[form.code];
-    if (!spec) {
+    const base = FORM_SPECS[form.code];
+    if (!base) {
       // Form specs grow in S4 — announce instead of faking a view.
       this.formLaunchNotice = `Form ${form.code} — view spec ports in the form-views slice (S4)`;
       cx.notify();
@@ -561,7 +561,23 @@ export default class BirApp extends View {
       cx.notify();
       return;
     }
-    this.openFormView(spec, cx);
+    // Extracted specs carry only fields/periods — the catalog row supplies
+    // title + period cadence.
+    this.openFormView({ title: form.title, ...base }, cx);
+  }
+
+  formFieldGet(obj, key) {
+    return key.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
+  }
+
+  formFieldSet(obj, key, value) {
+    const parts = key.split(".");
+    let node = obj;
+    for (const part of parts.slice(0, -1)) {
+      if (node[part] == null || typeof node[part] !== "object") node[part] = {};
+      node = node[part];
+    }
+    node[parts[parts.length - 1]] = value;
   }
 
   openFormView(spec, cx) {
@@ -569,7 +585,11 @@ export default class BirApp extends View {
     const now = new Date();
     this.formYear = now.getFullYear();
     this.formQuarter =
-      spec.periods === "quarterly" ? Math.ceil((now.getMonth() + 1) / 3) : null;
+      spec.periods === "quarterly"
+        ? Math.ceil((now.getMonth() + 1) / 3)
+        : spec.periods === "monthly"
+          ? now.getMonth() + 1
+          : null;
     this.formError = null;
     this.formNotice = null;
     let draft = null;
@@ -594,7 +614,7 @@ export default class BirApp extends View {
     this.formInputs = {};
     for (const field of spec.fields) {
       if (field.kind === "bool") continue;
-      let value = this.formDraft[field.key];
+      let value = this.formFieldGet(this.formDraft, field.key);
       if ((value === undefined || value === null || value === "") && spec.profileDefaults?.[field.key]) {
         value = profile[spec.profileDefaults[field.key]] || "";
       }
@@ -614,25 +634,31 @@ export default class BirApp extends View {
     const data = { ...this.formDraft };
     for (const field of spec.fields) {
       if (field.kind === "bool") {
-        data[field.key] = Boolean(data[field.key]);
+        this.formFieldSet(
+          data,
+          field.key,
+          Boolean(this.formFieldGet(data, field.key)),
+        );
       } else if (field.kind === "money") {
         const raw = this.formInputs[field.key].value().trim();
-        data[field.key] = raw === "" ? 0 : Number(raw);
-        if (Number.isNaN(data[field.key])) {
+        const value = raw === "" ? 0 : Number(raw);
+        if (Number.isNaN(value)) {
           this.formError = `${field.label} must be a number.`;
           cx.notify();
           return;
         }
+        this.formFieldSet(data, field.key, value);
       } else if (field.kind === "number") {
         const raw = this.formInputs[field.key].value().trim();
-        data[field.key] = raw === "" ? 0 : Math.trunc(Number(raw));
-        if (Number.isNaN(data[field.key])) {
+        const value = raw === "" ? 0 : Math.trunc(Number(raw));
+        if (Number.isNaN(value)) {
           this.formError = `${field.label} must be a whole number.`;
           cx.notify();
           return;
         }
+        this.formFieldSet(data, field.key, value);
       } else {
-        data[field.key] = this.formInputs[field.key].value().trim();
+        this.formFieldSet(data, field.key, this.formInputs[field.key].value().trim());
       }
     }
     try {

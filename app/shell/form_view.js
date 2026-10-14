@@ -8,9 +8,11 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, Input } from "gpui-base";
 import { Button, Checkbox, VForm, Field } from "gpui-component";
 import { pageHeading, pageSub } from "./pages.js";
+import { EXTRACTED_SPECS } from "./specs.js";
 
 // kind: "text" | "number" | "money" | "bool" | "date"
-export const FORM_SPECS = {
+// Hand-tuned specs override the ones generated from the painted views.
+const HAND_SPECS = {
   "2551Q": {
     code: "2551Q",
     title: "Quarterly Percentage Tax Return",
@@ -71,6 +73,8 @@ export const FORM_SPECS = {
     },
   },
 };
+
+export const FORM_SPECS = { ...EXTRACTED_SPECS, ...HAND_SPECS };
 
 const FILING_STAGES = ["Draft", "Queued", "Submitted", "Confirmed", "Paid"];
 
