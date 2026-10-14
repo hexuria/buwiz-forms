@@ -39,6 +39,11 @@ import {
   list_announcements,
   import_archive,
   form_print_html,
+  list_background_jobs,
+  delete_background_job,
+  archive_background_job,
+  purge_archived_jobs,
+  job_log_tail,
 } from "bir";
 import {
   applyThemePreference,
@@ -68,6 +73,7 @@ import {
 } from "./shell/profile_manager.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderQueuePage } from "./shell/queue.js";
+import { renderCronTasksPage } from "./shell/cron_tasks.js";
 import { renderCalendarPage } from "./shell/calendar.js";
 import { renderImportPage } from "./shell/import_page.js";
 import { renderFormView, FORM_SPECS } from "./shell/form_view.js";
@@ -613,6 +619,61 @@ export default class BirApp extends View {
     cx.notify();
   }
 
+  backgroundJobs() {
+    return list_background_jobs();
+  }
+
+  setCronTab(tab, cx) {
+    this.cronTab = tab;
+    if (tab === "logs") this.jobLogCache = null;
+    cx.notify();
+  }
+
+  setCronFilter(name, cx) {
+    this.cronFilter = name;
+    cx.notify();
+  }
+
+  deleteJob(id, cx) {
+    try {
+      delete_background_job(id);
+    } catch (e) {
+      this.cronError = String(e);
+    }
+    cx.notify();
+  }
+
+  archiveJob(id, cx) {
+    try {
+      archive_background_job(id);
+    } catch (e) {
+      this.cronError = String(e);
+    }
+    cx.notify();
+  }
+
+  purgeArchivedJobs(cx) {
+    try {
+      purge_archived_jobs();
+      this.cronFilter = "All Jobs";
+    } catch (e) {
+      this.cronError = String(e);
+    }
+    cx.notify();
+  }
+
+  jobLogTail() {
+    if (this.jobLogCache === null || this.jobLogCache === undefined) {
+      this.jobLogCache = job_log_tail();
+    }
+    return this.jobLogCache;
+  }
+
+  refreshJobLog(cx) {
+    this.jobLogCache = null;
+    cx.notify();
+  }
+
   cancelQueuedEntry(entry, cx) {
     try {
       this.queueError = null;
@@ -853,7 +914,7 @@ export default class BirApp extends View {
       case "import_export":
         return renderImportPage(cx, this);
       case "cron_tasks":
-        return renderQueuePage(cx, this);
+        return renderCronTasksPage(cx, this);
       case "admin_calendar":
         return renderCalendarPage(cx, this);
       case "form_view":

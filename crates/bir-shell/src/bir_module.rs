@@ -640,6 +640,132 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+/// The painted Background Tasks page merges `job_queue` rows with every
+/// queued filing submission — same two sources, same label via
+/// `FilingJobLabel`.
+fn list_background_jobs() -> HostResult {
+    with_database(|db| {
+        let mut items: Vec<serde_json::Value> = db
+            .list_jobs()
+            .map_err(|error| HostError::new(error.to_string()))?
+            .iter()
+            .map(|job| {
+                serde_json::json!({
+                    "kind": "job",
+                    "id": job.id,
+                    "name": job.name,
+                    "job_type": job.job_type,
+                    "cron_expr": job.cron_expr,
+                    "status": job.status,
+                    "retries": job.retries,
+                    "last_run_at": job.last_run_at,
+                    "next_run_at": job.next_run_at,
+                    "created_at": job.created_at,
+                    "output_log": job.output_log,
+                })
+            })
+            .collect();
+        let emails_by_tin: std::collections::HashMap<String, String> = db
+            .list_profiles()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|profile| {
+                profile
+                    .tracking_mailbox()
+                    .map(|email| (profile.tin.full(), email.to_string()))
+            })
+            .collect();
+        for sum in db
+            .list_all_queued_submissions()
+            .map_err(|error| HostError::new(error.to_string()))?
+        {
+            let email = emails_by_tin.get(&sum.tin).map(String::as_str);
+            items.push(serde_json::json!({
+                "kind": "submission",
+                "id": sum.id,
+                "tin": sum.tin,
+                "form_code": sum.form_code,
+                "taxable_year": sum.taxable_year,
+                "quarter": sum.quarter,
+                "month": sum.month,
+                "name": bir_core::job_display::FilingJobLabel::from_summary(&sum, email)
+                    .submit_name(),
+                "job_type": "System",
+                "cron_expr": null,
+                "status": format!("{:?}", sum.status),
+                "retries": 0,
+                "last_run_at": null,
+                "next_run_at": null,
+                "created_at": sum.updated_at,
+                "output_log": null,
+            }));
+        }
+        serialize(&items)
+    })
+}
+
+fn delete_background_job(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let id = arguments.integer(0)?;
+    with_database(|db| {
+        db.delete_job(id)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        Ok(HostValue::Null)
+    })
+}
+
+/// Archive a job the painted way — status `Archived` via `save_job`.
+fn archive_background_job(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let id = arguments.integer(0)?;
+    with_database(|db| {
+        let mut job = db
+            .list_jobs()
+            .map_err(|error| HostError::new(error.to_string()))?
+            .into_iter()
+            .find(|job| job.id == Some(id))
+            .ok_or_else(|| HostError::new("No job with that id"))?;
+        job.status = "Archived".to_string();
+        db.save_job(job)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        Ok(HostValue::Null)
+    })
+}
+
+fn purge_archived_jobs() -> HostResult {
+    with_database(|db| {
+        db.delete_archived_jobs()
+            .map_err(|error| HostError::new(error.to_string()))?;
+        Ok(HostValue::Null)
+    })
+}
+
+/// Today's rotated log (`ebirforms.YYYY-MM-DD.log`), tailed like the painted
+/// Logs tab — it keeps at most the newest 5,000 lines.
+fn job_log_tail() -> HostResult {
+    let logs_path =
+        bir_core::log_files::today_log_path(&bir_core::log_files::log_dir());
+    let file_name = logs_path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let (content, lines) = match std::fs::read_to_string(&logs_path) {
+        Ok(text) => {
+            let total = text.lines().count();
+            let tail = if total <= 5_000 {
+                text
+            } else {
+                text.lines().skip(total - 5_000).collect::<Vec<_>>().join("\n")
+            };
+            (tail, total)
+        }
+        Err(_) => ("No log entries yet today.".to_string(), 0),
+    };
+    serialize(&serde_json::json!({
+        "file_name": file_name,
+        "lines": lines,
+        "content": content,
+    }))
+}
+
 /// The frozen print-sheet slug each form's painted `PRINT_SLUG` names.
 fn print_slug_for(form_code: &str) -> Option<&'static str> {
     Some(match form_code {
@@ -963,6 +1089,11 @@ pub fn module() -> HostModule {
         .function("list_announcements", |_| list_announcements())
         .function("import_archive", import_archive)
         .function("form_print_html", form_print_html)
+        .function("list_background_jobs", |_| list_background_jobs())
+        .function("delete_background_job", delete_background_job)
+        .function("archive_background_job", archive_background_job)
+        .function("purge_archived_jobs", |_| purge_archived_jobs())
+        .function("job_log_tail", |_| job_log_tail())
         .declarations(
             r#"
 export interface SystemInfo {
@@ -1067,6 +1198,34 @@ export interface PrintPreview {
     path: string;
 }
 export function form_print_html(tin: string, form_code: string, year: number, quarter: number | null): PrintPreview;
+export interface BackgroundJob {
+    kind: "job" | "submission";
+    id: number | null;
+    tin?: string;
+    form_code?: string;
+    taxable_year?: number;
+    quarter?: number | null;
+    month?: number | null;
+    name: string;
+    job_type: string;
+    cron_expr: string | null;
+    status: string;
+    retries: number;
+    last_run_at: string | null;
+    next_run_at: string | null;
+    created_at: string;
+    output_log: string | null;
+}
+export function list_background_jobs(): BackgroundJob[];
+export function delete_background_job(id: number): null;
+export function archive_background_job(id: number): null;
+export function purge_archived_jobs(): null;
+export interface JobLogTail {
+    file_name: string;
+    lines: number;
+    content: string;
+}
+export function job_log_tail(): JobLogTail;
 "#,
         )
 }

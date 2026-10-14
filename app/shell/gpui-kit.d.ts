@@ -27811,6 +27811,34 @@ declare module "bir" {
       path: string;
   }
   export function form_print_html(tin: string, form_code: string, year: number, quarter: number | null): PrintPreview;
+  export interface BackgroundJob {
+      kind: "job" | "submission";
+      id: number | null;
+      tin?: string;
+      form_code?: string;
+      taxable_year?: number;
+      quarter?: number | null;
+      month?: number | null;
+      name: string;
+      job_type: string;
+      cron_expr: string | null;
+      status: string;
+      retries: number;
+      last_run_at: string | null;
+      next_run_at: string | null;
+      created_at: string;
+      output_log: string | null;
+  }
+  export function list_background_jobs(): BackgroundJob[];
+  export function delete_background_job(id: number): null;
+  export function archive_background_job(id: number): null;
+  export function purge_archived_jobs(): null;
+  export interface JobLogTail {
+      file_name: string;
+      lines: number;
+      content: string;
+  }
+  export function job_log_tail(): JobLogTail;
 }
 
 /**
