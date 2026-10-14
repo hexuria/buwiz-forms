@@ -828,6 +828,7 @@ dependencies = [
  "ammonia",
  "anyhow",
  "bir-rules",
+ "block2 0.6.2",
  "cbc 0.1.2",
  "chrono",
  "cron",
@@ -846,6 +847,9 @@ dependencies = [
  "mail-parser",
  "native-tls",
  "notify-rust",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
+ "objc2-user-notifications",
  "open",
  "openssl",
  "pbkdf2 0.12.2",
@@ -856,6 +860,7 @@ dependencies = [
  "rusqlite",
  "russh",
  "russh-sftp",
+ "security-framework 3.7.0",
  "serde",
  "serde_json",
  "sha1 0.10.7",
@@ -908,6 +913,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.2.2",
  "objc2-foundation 0.3.2",
+ "objc2-pdf-kit",
  "objc2-web-kit",
  "open",
  "raw-window-handle",
@@ -6798,6 +6804,17 @@ dependencies = [
  "bitflags 2.13.1",
  "block2 0.6.2",
  "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
+]
+
+[[package]]
+name = "objc2-pdf-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c14ed801ae810c6ba487cedd7616bb48f9a8e37940042f57e862538e2c7db117"
+dependencies = [
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
 ]
 

@@ -28,6 +28,7 @@ mod google_calendar;
 mod inbox_oauth;
 mod jobs;
 mod legacy_amendment;
+mod legacy_filed_returns;
 mod migrations;
 mod notices;
 mod profiles;
@@ -37,8 +38,11 @@ mod receipts;
 pub use queueable::{ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
+mod taxpayers;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
+pub use legacy_filed_returns::LegacyFiledReturn;
 pub use submissions::SubmissionSummary;
+pub use taxpayers::{BulkCopyReport, MissingFormPolicy, TemplateConflictPolicy};
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};
 use std::fs::{File, OpenOptions};
@@ -230,6 +234,13 @@ pub struct PenaltyCache {
 #[cfg(target_os = "macos")]
 const SECURITY_ERR_ITEM_NOT_FOUND: i32 = 44;
 
+/// Keychain service and account of the SQLCipher master key. Unchanged since
+/// the first release: existing installs find their key under these names.
+#[cfg(all(target_os = "macos", not(test)))]
+const MASTER_KEY_SERVICE: &str = "com.ebir.rust";
+#[cfg(all(target_os = "macos", not(test)))]
+const MASTER_KEY_ACCOUNT: &str = "sqlcipher_master_key";
+
 /// Whether a failed keychain read means the master key is genuinely absent.
 ///
 /// This single predicate is what stands between a first run and destroying an
@@ -245,7 +256,7 @@ const SECURITY_ERR_ITEM_NOT_FOUND: i32 = 44;
 /// Defaults to `false` for `None` (terminated by a signal), because an unknown
 /// failure must never be read as "absent".
 #[cfg(target_os = "macos")]
-fn keychain_miss_is_genuine(exit_code: Option<i32>) -> bool {
+pub(crate) fn keychain_miss_is_genuine(exit_code: Option<i32>) -> bool {
     exit_code == Some(SECURITY_ERR_ITEM_NOT_FOUND)
 }
 
@@ -287,6 +298,12 @@ pub struct Database {
     /// Sidecar exclusive lock for painted `bir` / `bir-headless serve`.
     /// `None` for ephemeral fixtures and `Database::open` test helpers.
     _owner_lock: Option<File>,
+}
+
+/// The filing period a Tax Form Library selection (`FileForm { form_code,
+/// year, quarter }`) names, with the same slot semantics the draft store uses.
+pub(crate) fn period_from_library_slot(form_code: &str, slot: u8) -> crate::forms::FilingPeriod {
+    drafts::period_from_legacy_slot(form_code, Some(slot), 1)
 }
 
 pub fn default_database_path() -> std::path::PathBuf {
@@ -581,8 +598,9 @@ impl Database {
                 );
             }
 
-            // Platform dispatch: macOS uses the `security` CLI to avoid deadlocking
-            // the GPUI main RunLoop. Linux/Windows use the `keyring` crate directly.
+            // Platform dispatch: macOS uses Security.framework (off the main
+            // thread) with a `security` CLI fallback; Linux/Windows use the
+            // `keyring` crate directly.
             #[cfg(target_os = "macos")]
             return Self::get_or_create_master_key_macos();
 
@@ -613,30 +631,15 @@ impl Database {
 
     #[cfg(all(target_os = "macos", not(test)))]
     fn get_existing_master_key_macos() -> Result<String, DbError> {
-        let output = std::process::Command::new("security")
-            .args([
-                "find-generic-password",
-                "-s",
-                "com.ebir.rust",
-                "-a",
-                "sqlcipher_master_key",
-                "-w",
-            ])
-            .output()
-            .map_err(|error| {
-                DbError::KeychainCli(format!("Failed to run `security` CLI: {error}"))
-            })?;
-
-        let hex_key = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if output.status.success() && hex_key.len() == 64 {
-            return Ok(hex_key);
-        }
-
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(DbError::KeychainCli(format!(
-            "Existing SQLCipher master key was not available: {}",
-            stderr.trim()
-        )))
+        crate::keychain::resolve_master_key(
+            &crate::keychain::NativeKeychain,
+            &crate::keychain::SecurityCli,
+            MASTER_KEY_SERVICE,
+            MASTER_KEY_ACCOUNT,
+            crate::keychain::KeyMode::ExistingOnly,
+            || unreachable!("ExistingOnly never generates a key"),
+        )
+        .map_err(DbError::KeychainCli)
     }
 
     #[cfg(all(not(target_os = "macos"), not(test)))]
@@ -662,104 +665,35 @@ impl Database {
         )))
     }
 
-    /// macOS: Use the `security` CLI instead of the `keyring` crate's Security.framework FFI.
+    /// macOS: Security.framework in-process, falling back to the `security`
+    /// CLI that earlier releases used exclusively.
     ///
-    /// The `keyring` crate calls `SecKeychainFindGenericPassword` which blocks the calling
-    /// thread waiting for `securityd` to respond. When called from GPUI's main dispatch queue
-    /// (inside `cx.spawn` → `open_window` → `AppState::new`), the Security.framework tries
-    /// to dispatch authorization UI work back onto the same main queue, causing a deadlock.
+    /// Native first because the App Store sandbox may not let a child
+    /// `security` process reach the keychain, and an unreadable key means the
+    /// encrypted database cannot open. The CLI fallback keeps existing installs
+    /// working: their item was created by `security`, so its ACL trusts that
+    /// tool and a native read may be refused. See `crate::keychain` for the
+    /// lookup order and the rules that stop an existing key from ever being
+    /// overwritten or replaced by a freshly generated one.
     ///
-    /// The `security` CLI runs in a separate process with its own event loop, so it can show
-    /// dialogs and communicate with `securityd` without blocking our RunLoop.
-    ///
-    /// The CLI uses the same Keychain Services storage as the `keyring` crate, so existing
-    /// keys created by either method are fully interchangeable.
+    /// Native calls run on a helper thread with a timeout: earlier releases
+    /// observed `SecKeychainFindGenericPassword` deadlocking GPUI's main run
+    /// loop when called on it directly.
     #[cfg(all(target_os = "macos", not(test)))]
     fn get_or_create_master_key_macos() -> Result<String, DbError> {
-        use tracing::info;
-
-        // Try to read existing key from keychain via CLI
-        let output = std::process::Command::new("security")
-            .args([
-                "find-generic-password",
-                "-s",
-                "com.ebir.rust",
-                "-a",
-                "sqlcipher_master_key",
-                "-w",
-            ])
-            .output()
-            .map_err(|e| DbError::KeychainCli(format!("Failed to run `security` CLI: {e}")))?;
-
-        if output.status.success() {
-            let hex_key = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if hex_key.len() == 64 {
-                info!("Loaded existing master key from native keychain (CLI)");
-                return Ok(hex_key);
-            }
-            // A key is present but malformed. Replacing it would destroy the
-            // only means of decrypting an existing database, so stop.
-            return Err(DbError::KeychainCli(format!(
-                "The SQLCipher master key in the keychain is {} characters, expected 64. \
-                 Refusing to replace it - if it were regenerated the existing database \
-                 could never be decrypted again.",
-                hex_key.len()
-            )));
-        }
-
-        // Only exit code 44 means the item is genuinely absent. Every other
-        // failure - authorization denied, keychain locked, securityd
-        // unavailable - means a key may well exist and merely be unreadable
-        // right now. Treating those as "absent" and generating a replacement
-        // would overwrite the real key and render the database permanently
-        // undecryptable. That is not hypothetical: an unsigned local build is
-        // not the signed app, so macOS prompts, and a single dismissed prompt
-        // used to be enough to destroy the database.
-        if !keychain_miss_is_genuine(output.status.code()) {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(DbError::KeychainCli(format!(
-                "Could not read the existing SQLCipher master key (security exit {:?}): {}. \
-                 Refusing to generate a replacement, because that would overwrite the \
-                 existing key and make the database permanently unreadable. If a keychain \
-                 prompt appeared, approve it and retry.",
-                output.status.code(),
-                stderr.trim()
-            )));
-        }
-
-        // Genuinely absent: first run on this machine.
-        info!("No master key in keychain; generating and storing one (CLI)");
-        let key: [u8; 32] = rand::random();
-        let hex_key = hex::encode(key);
-
-        let add_output = std::process::Command::new("security")
-            .args([
-                "add-generic-password",
-                "-s",
-                "com.ebir.rust",
-                "-a",
-                "sqlcipher_master_key",
-                "-w",
-                &hex_key,
-                // Deliberately NOT -U. That flag means "update if exists" and
-                // was the mechanism by which a stale read could clobber a live
-                // key. Without it the add fails rather than overwrites, so this
-                // path cannot destroy an existing key even if it is reached in
-                // error.
-            ])
-            .output()
-            .map_err(|e| DbError::KeychainCli(format!("Failed to run `security` CLI: {e}")))?;
-
-        let add_stderr = String::from_utf8_lossy(&add_output.stderr);
-        // `security add-generic-password` reports an existing item on stderr but
-        // still exits 0, so the status alone cannot be trusted here.
-        if !add_output.status.success() || add_stderr.contains("already exists") {
-            return Err(DbError::KeychainCli(format!(
-                "Failed to store master key in keychain: {}",
-                add_stderr.trim()
-            )));
-        }
-
+        let hex_key = crate::keychain::resolve_master_key(
+            &crate::keychain::NativeKeychain,
+            &crate::keychain::SecurityCli,
+            MASTER_KEY_SERVICE,
+            MASTER_KEY_ACCOUNT,
+            crate::keychain::KeyMode::CreateIfMissing,
+            || {
+                info!("No master key in keychain; generating and storing one");
+                hex::encode(rand::random::<[u8; 32]>())
+            },
+        )
+        .map_err(DbError::KeychainCli)?;
+        info!("Loaded SQLCipher master key from keychain");
         Ok(hex_key)
     }
 
@@ -941,6 +875,7 @@ impl Database {
              DELETE FROM profile_calendar_links;
              DELETE FROM profiles;
              DELETE FROM submissions;
+             DELETE FROM legacy_filed_returns;
              DELETE FROM form_drafts;
              DELETE FROM data_providers;
              DELETE FROM submission_receipts;

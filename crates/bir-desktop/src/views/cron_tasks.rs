@@ -38,6 +38,13 @@ fn jobs_empty_message(total: usize, shown: usize) -> Option<&'static str> {
     }
 }
 
+/// Whether "Run Now" can do anything for a job's command. False for a
+/// shell-command job in the App Store build, which does not run them.
+fn job_can_run(command: Option<&str>) -> bool {
+    bir_core::background_cron::SHELL_JOBS_SUPPORTED
+        || !bir_core::background_cron::is_shell_command_job(command)
+}
+
 fn job_matches_filter(filter: &str, status: &str) -> bool {
     match filter {
         "Queued" => status == "Queued",
@@ -520,6 +527,12 @@ impl CronTasksView {
             return;
         }
 
+        // The App Store build cannot run shell-command jobs; the cron marks
+        // them unavailable, so do not requeue one here.
+        if !job_can_run(job.command.as_deref()) {
+            return;
+        }
+
         // Fallback: for non-email jobs, just mark for daemon pickup
         if let Ok(db) = self.db.lock()
             && let Ok(jobs) = db.list_jobs()
@@ -703,6 +716,7 @@ impl Render for CronTasksView {
                             "Failed" => cx.theme().danger,
                             "Done" => cx.theme().success,
                             "Archived" => cx.theme().muted_foreground,
+                            bir_core::background_cron::SHELL_JOB_UNAVAILABLE_STATUS => cx.theme().warning,
                             _ => cx.theme().primary,
                         };
                         rsx! {
@@ -755,7 +769,7 @@ impl Render for CronTasksView {
                                                 }))
                                         )
                                     })
-                                    .when(job.job_kind == JobKind::EmailPoll && job.status != "Archived", |this| {
+                                    .when(job.job_kind == JobKind::EmailPoll && job.status != "Archived" && job_can_run(job.command.as_deref()), |this| {
                                         this.child(
                                             gpui_component::button::Button::new(format!("run_job_{}", i))
                                                 .label("Run Now")
@@ -1064,7 +1078,16 @@ impl CronTasksView {
 mod tests {
     // Not `use super::*`: that would import gpui's `#[test]` attribute macro
     // over std's.
-    use super::{LogLevel, job_matches_filter, jobs_empty_message, log_line_level, tail_lines};
+    use super::{
+        LogLevel, job_can_run, job_matches_filter, jobs_empty_message, log_line_level, tail_lines,
+    };
+
+    #[test]
+    fn run_now_is_offered_for_shell_jobs_only_outside_the_app_store_build() {
+        assert!(job_can_run(Some("bir_poll_email a@b.c")));
+        assert!(job_can_run(None));
+        assert_eq!(job_can_run(Some("echo hi")), !cfg!(feature = "mas_build"));
+    }
 
     #[test]
     fn empty_state_text_depends_on_whether_any_job_exists() {

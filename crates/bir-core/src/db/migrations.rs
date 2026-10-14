@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 19;
+const CURRENT_MIGRATION_VERSION: i32 = 21;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -326,6 +326,34 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v19: Read-only copies of what BIR received, kept when a Submitted or
         // Confirmed return is reverted to Draft for an amendment.
         "SELECT 1; -- v19 marker: amendment snapshots (Rust-side)",
+        // v20: Taxpayer -> Branch -> form templates (tax-profile redesign,
+        // Phase 1). `taxpayers` groups the existing full-TIN profiles by their
+        // 9-digit root; a `profiles` row stays the branch. Tables and the
+        // grouping are created in Rust so they can be healed every startup.
+        "SELECT 1; -- v20 marker: taxpayers, branch settings, form templates (Rust-side)",
+        // v21: Preserve imported historical eBIRForms returns as opaque files.
+        "
+        CREATE TABLE IF NOT EXISTS legacy_filed_returns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sha256 TEXT NOT NULL,
+            tin TEXT NOT NULL,
+            form_identity TEXT NOT NULL,
+            form_id TEXT,
+            period TEXT NOT NULL,
+            amendment_version INTEGER,
+            email_copy TEXT,
+            encrypted INTEGER NOT NULL,
+            source_filename TEXT NOT NULL,
+            raw_file BLOB NOT NULL,
+            fields_json TEXT NOT NULL,
+            imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+            -- Same bytes under a different filename (email copy, new
+            -- amendment version) is its own filing record.
+            UNIQUE(sha256, source_filename)
+        );
+        CREATE INDEX IF NOT EXISTS idx_legacy_filed_returns_tin
+            ON legacy_filed_returns(tin);
+        ",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -387,6 +415,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 19 {
                 ensure_amendment_snapshots_table(conn)?;
             }
+
+            if version == 20 {
+                migrate_v20_taxpayer_grouping(conn)?;
+            }
         } else {
             break;
         }
@@ -420,6 +452,11 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
 
     // Heal partially upgraded v19 databases. Idempotent.
     ensure_amendment_snapshots_table(conn)?;
+
+    // Heal partially upgraded v20 databases, and group any profile created
+    // since (by an older build or the legacy profile editor) under its
+    // taxpayer. Only missing roots are inserted; existing rows never change.
+    migrate_v20_taxpayer_grouping(conn)?;
 
     Ok(())
 }
@@ -506,6 +543,64 @@ fn migrate_v17_exact_form_rule_identity(conn: &Connection) -> Result<(), DbError
         );
     }
     Ok(())
+}
+
+/// v20: taxpayer grouping, per-branch settings and one template per form per
+/// branch (tax-profile redesign D2, D7, D11).
+///
+/// Schema choice: a `profiles` row stays the branch. Its full TIN is already
+/// the key of every TIN-keyed table, so nothing is re-keyed; the branch name
+/// and the per-field "same as head office" flags live in the nullable
+/// `profiles.branch_json` column (NULL = legacy row: every fact is its own,
+/// default name). Taxpayer-level facts live in `taxpayers`, keyed by root.
+///
+/// `profiles.data_json` is never rewritten here, so confirmed COR versions
+/// and every other stored profile byte stay exactly as they were.
+fn migrate_v20_taxpayer_grouping(conn: &Connection) -> Result<(), DbError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS taxpayers (
+            tin_root TEXT PRIMARY KEY NOT NULL
+                CHECK (length(tin_root) = 9 AND tin_root NOT GLOB '*[^0-9]*'),
+            name TEXT NOT NULL,
+            taxpayer_type TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            data_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS form_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tin TEXT NOT NULL,
+            form_code TEXT NOT NULL,
+            fields_json TEXT NOT NULL,
+            source TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(tin, form_code)
+        );",
+    )?;
+
+    let has_profiles: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='profiles'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if !has_profiles {
+        return Ok(());
+    }
+    let has_branch_json = {
+        let mut stmt = conn.prepare("PRAGMA table_info(profiles)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?
+            .contains("branch_json")
+    };
+    if !has_branch_json {
+        conn.execute("ALTER TABLE profiles ADD COLUMN branch_json TEXT", [])?;
+    }
+
+    super::taxpayers::sync_taxpayer_rows(conn)
 }
 
 /// Shared Gmail / IMAP OAuth credentials keyed by inbox email.
@@ -1625,6 +1720,8 @@ mod tests {
             "form_finalizations",
             "form_rule_migrations",
             "inbox_oauth_tokens",
+            "taxpayers",
+            "form_templates",
         ];
         for table in tables {
             let exists: bool = conn
@@ -2743,6 +2840,79 @@ mod tests {
     }
 
     #[test]
+    fn test_v21_creates_legacy_filed_returns() {
+        let conn = test_conn();
+        conn.pragma_update(None, "user_version", 19i32).unwrap();
+
+        migrate_database(&conn).unwrap();
+
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
+        let columns = {
+            let mut statement = conn
+                .prepare("PRAGMA table_info(legacy_filed_returns)")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                .unwrap()
+        };
+        for column in [
+            "sha256",
+            "tin",
+            "form_identity",
+            "form_id",
+            "period",
+            "amendment_version",
+            "email_copy",
+            "encrypted",
+            "source_filename",
+            "raw_file",
+            "fields_json",
+            "imported_at",
+        ] {
+            assert!(columns.contains(column), "missing column {column}");
+        }
+        // sha256 + filename dedupes a re-import of the same file, but the
+        // same bytes under a different filename is a distinct record.
+        conn.execute(
+            "INSERT INTO legacy_filed_returns (
+                sha256, tin, form_identity, period, encrypted,
+                source_filename, raw_file, fields_json
+             ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                       'file.xml', X'01', '{}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO legacy_filed_returns (
+                sha256, tin, form_identity, period, encrypted,
+                source_filename, raw_file, fields_json
+             ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                       'file#copy.xml', X'01', '{}')",
+            [],
+        )
+        .expect("same bytes under a new filename must insert");
+        let err = conn
+            .execute(
+                "INSERT INTO legacy_filed_returns (
+                    sha256, tin, form_identity, period, encrypted,
+                    source_filename, raw_file, fields_json
+                 ) VALUES ('abc', '123456789000', '2551Qv2018', '2026Q1', 1,
+                           'file.xml', X'01', '{}')",
+                [],
+            )
+            .expect_err("duplicate sha256+filename must be rejected");
+        assert!(
+            err.to_string().contains("UNIQUE"),
+            "expected UNIQUE violation, got {err}"
+        );
+    }
+
+    #[test]
     fn test_v4_promotes_8pct_compat_flag() {
         use crate::profile::{IncomeTaxElection, TaxpayerProfile};
 
@@ -3172,5 +3342,242 @@ mod tests {
         assert!(active);
         assert!(custom);
         assert_eq!(reason.as_deref(), Some("My custom tax form"));
+    }
+
+    /// A database as v19 left it: the current schema minus everything v20
+    /// adds.
+    fn v19_conn() -> Connection {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        conn.execute_batch(
+            "DROP TABLE taxpayers;
+             DROP TABLE form_templates;
+             ALTER TABLE profiles DROP COLUMN branch_json;
+             PRAGMA user_version = 19;",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn v19_profile_json(name: &str, tin: &str) -> String {
+        use crate::profile::{TaxProfileVersionSource, TaxpayerProfile};
+        let mut profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": name,
+            "tin": {
+                "segment1": &tin[0..3],
+                "segment2": &tin[3..6],
+                "segment3": &tin[6..9],
+                "branch": &tin[9..]
+            },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "Quezon City",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "profile@example.com",
+            "default_form_type": "2551Q",
+            "taxpayer_type": "Individual",
+            "eopt_tier": "Micro",
+            "business_start_date": "2020-04-15"
+        }))
+        .unwrap();
+        // A confirmed COR version: D3 says it is never edited or deleted.
+        profile.ensure_profile_version_ledger();
+        profile.profile_versions[0].source = TaxProfileVersionSource::ManualCor;
+        serde_json::to_string(&profile).unwrap()
+    }
+
+    fn all_rows(conn: &Connection, sql: &str) -> Vec<Vec<Option<String>>> {
+        let mut stmt = conn.prepare(sql).unwrap();
+        let columns = stmt.column_count();
+        stmt.query_map([], |row| {
+            (0..columns)
+                .map(|index| {
+                    row.get::<_, rusqlite::types::Value>(index)
+                        .map(|value| match value {
+                            rusqlite::types::Value::Null => None,
+                            rusqlite::types::Value::Integer(v) => Some(v.to_string()),
+                            rusqlite::types::Value::Real(v) => Some(v.to_string()),
+                            rusqlite::types::Value::Text(v) => Some(v),
+                            rusqlite::types::Value::Blob(v) => Some(format!("{v:?}")),
+                        })
+                })
+                .collect()
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+    }
+
+    #[test]
+    fn test_v20_groups_profiles_by_tin_root_without_touching_them() {
+        use crate::tax_profile::{BranchName, GroupingReview};
+
+        let conn = v19_conn();
+        let profiles = [
+            // Single branch.
+            ("Solo Trader", "11111111100000"),
+            // Two branches, same name; legacy 3-digit head-office code.
+            ("Same Name Corp", "222222222000"),
+            ("same  name corp", "22222222200001"),
+            // Different names under one root.
+            ("Juan Dela Cruz", "33333333300000"),
+            ("Juan Dela Cruz Bakery", "33333333300002"),
+            // No head office.
+            ("Branch Only", "44444444400003"),
+        ];
+        for (name, tin) in profiles {
+            conn.execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+                rusqlite::params![tin, v19_profile_json(name, tin)],
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+             VALUES ('11111111100000', '2551Q', 2025, 4, 'Q4', 'Confirmed', '{\"filed\":true}');
+             INSERT INTO per_year_forms (tin, taxable_year, form_code, frequency, source)
+             VALUES ('33333333300002', 2026, '2551Q', 'quarterly', 'reviewed_cor');",
+        )
+        .unwrap();
+        let protected = [
+            "SELECT id, tin, data_json FROM profiles ORDER BY id",
+            "SELECT * FROM form_drafts ORDER BY id",
+            "SELECT * FROM per_year_forms ORDER BY id",
+        ];
+        let before: Vec<_> = protected.iter().map(|sql| all_rows(&conn, sql)).collect();
+
+        migrate_database(&conn).unwrap();
+
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
+        let after: Vec<_> = protected.iter().map(|sql| all_rows(&conn, sql)).collect();
+        assert_eq!(before, after, "v20 must not rewrite profiles or returns");
+
+        let db = crate::db::Database {
+            conn,
+            _owner_lock: None,
+        };
+        let taxpayers = db.list_taxpayers().unwrap();
+        let summary: Vec<_> = taxpayers
+            .iter()
+            .map(|entry| {
+                (
+                    entry.taxpayer.tin_root.as_str(),
+                    entry.taxpayer.name.as_str(),
+                    entry
+                        .branches
+                        .iter()
+                        .map(|branch| (branch.tin.as_str(), branch.is_head_office))
+                        .collect::<Vec<_>>(),
+                    entry.taxpayer.grouping_review.clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                (
+                    "444444444",
+                    "Branch Only",
+                    vec![("44444444400003", false)],
+                    Some(GroupingReview {
+                        missing_head_office: true,
+                        ..GroupingReview::default()
+                    }),
+                ),
+                (
+                    "333333333",
+                    "Juan Dela Cruz",
+                    vec![("33333333300000", true), ("33333333300002", false)],
+                    Some(GroupingReview {
+                        differing_names: vec![
+                            BranchName {
+                                tin: "33333333300000".into(),
+                                name: "Juan Dela Cruz".into(),
+                            },
+                            BranchName {
+                                tin: "33333333300002".into(),
+                                name: "Juan Dela Cruz Bakery".into(),
+                            },
+                        ],
+                        ..GroupingReview::default()
+                    }),
+                ),
+                (
+                    "222222222",
+                    "Same Name Corp",
+                    vec![("222222222000", true), ("22222222200001", false)],
+                    None,
+                ),
+                (
+                    "111111111",
+                    "Solo Trader",
+                    vec![("11111111100000", true)],
+                    None
+                ),
+            ]
+        );
+        assert_eq!(
+            db.list_taxpayers().unwrap()[2].branches[0].branch_code,
+            "00000"
+        );
+
+        // Old JSON, COR versions included, still loads through the normal API.
+        let loaded = db.list_profiles().unwrap();
+        assert_eq!(loaded.len(), profiles.len());
+        assert!(loaded.iter().all(|profile| {
+            profile.profile_versions[0].source == crate::profile::TaxProfileVersionSource::ManualCor
+        }));
+
+        // Idempotent: another startup changes nothing.
+        let taxpayers_before = all_rows(&db.conn, "SELECT * FROM taxpayers ORDER BY tin_root");
+        migrate_database(&db.conn).unwrap();
+        assert_eq!(
+            taxpayers_before,
+            all_rows(&db.conn, "SELECT * FROM taxpayers ORDER BY tin_root")
+        );
+        assert_eq!(
+            after,
+            protected
+                .iter()
+                .map(|sql| all_rows(&db.conn, sql))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_startup_repair_groups_profiles_added_after_v20_and_drops_orphans() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        // An older build (no grouping hook) adds a profile after v20 ran, and
+        // its last profile under another root disappears.
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params![
+                "55555555500000",
+                v19_profile_json("Late Arrival", "55555555500000")
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO taxpayers (tin_root, name, taxpayer_type) VALUES ('666666666', 'Gone', 'Individual')",
+            [],
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+
+        let rows = all_rows(
+            &conn,
+            "SELECT tin_root, name FROM taxpayers ORDER BY tin_root",
+        );
+        assert_eq!(
+            rows,
+            vec![vec![Some("555555555".into()), Some("Late Arrival".into())]]
+        );
     }
 }

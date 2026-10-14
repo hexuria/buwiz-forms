@@ -34,6 +34,9 @@ pub mod import;
 pub mod integration;
 pub mod ipc;
 pub mod job_display;
+#[cfg(target_os = "macos")]
+mod keychain;
+pub mod legacy_migration;
 pub mod log_files;
 pub mod naming;
 pub mod news_fetcher;
@@ -46,6 +49,7 @@ pub mod profile;
 pub mod receipt;
 pub mod reference;
 pub mod schema;
+pub mod tax_profile;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;

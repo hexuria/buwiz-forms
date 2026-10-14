@@ -1859,6 +1859,39 @@ fn fail_draft_1601c(
     }
 }
 
+/// Status given to a shell-command job the App Store build will not run.
+pub const SHELL_JOB_UNAVAILABLE_STATUS: &str = "Unavailable";
+
+/// Recorded in `output_log` of a shell-command job the App Store build will
+/// not run.
+pub const SHELL_JOB_UNAVAILABLE_LOG: &str =
+    "Shell commands are not available in the App Store version";
+
+/// Whether this build can run user shell-command cron jobs. False in the Mac
+/// App Store build, where `platform::run_shell_command` does not exist.
+pub const SHELL_JOBS_SUPPORTED: bool = !cfg!(feature = "mas_build");
+
+/// A job whose command is run through the platform shell, as opposed to the
+/// built-in `bir_poll_email` command handled in-process.
+pub fn is_shell_command_job(command: Option<&str>) -> bool {
+    command.is_some_and(|cmd| !cmd.trim().is_empty() && !cmd.starts_with("bir_poll_email "))
+}
+
+/// Mark a shell-command job unavailable without running or deleting it.
+/// Returns `true` when the job changed and needs saving. The schedule is left
+/// as it was, so a direct-download build that imports this database still
+/// runs the job.
+fn mark_shell_job_unavailable(job: &mut crate::db::Job) -> bool {
+    if job.status == SHELL_JOB_UNAVAILABLE_STATUS
+        && job.output_log.as_deref() == Some(SHELL_JOB_UNAVAILABLE_LOG)
+    {
+        return false;
+    }
+    job.status = SHELL_JOB_UNAVAILABLE_STATUS.to_string();
+    job.output_log = Some(SHELL_JOB_UNAVAILABLE_LOG.to_string());
+    true
+}
+
 async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
     let jobs = {
         let db_guard = match db.lock() {
@@ -1872,6 +1905,19 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
 
     for mut job in jobs {
         if job.status == "Archived" || job.status == "Done" {
+            continue;
+        }
+
+        if !SHELL_JOBS_SUPPORTED && is_shell_command_job(job.command.as_deref()) {
+            if mark_shell_job_unavailable(&mut job) {
+                warn!(
+                    "Cron: job '{}' runs a shell command, which this build does not support",
+                    job.name
+                );
+                if let Ok(db_guard) = db.lock() {
+                    let _ = db_guard.save_job(job.clone());
+                }
+            }
             continue;
         }
 
@@ -1980,6 +2026,14 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                         job.output_log = Some(log);
                     }
                 } else {
+                    // Unreachable in the App Store build (such jobs are
+                    // skipped above); kept so the runner is compiled out.
+                    #[cfg(feature = "mas_build")]
+                    {
+                        job.output_log = Some(SHELL_JOB_UNAVAILABLE_LOG.to_string());
+                        success = false;
+                    }
+                    #[cfg(not(feature = "mas_build"))]
                     match crate::platform::run_shell_command(cmd).await {
                         Ok(output) => {
                             let stdout_str = String::from_utf8_lossy(&output.stdout);
@@ -2076,6 +2130,78 @@ impl Drop for JobCleanup {
 
 #[cfg(test)]
 mod tests {
+    fn shell_job(command: &str) -> crate::db::Job {
+        crate::db::Job {
+            id: None,
+            name: "Nightly script".into(),
+            job_type: "Custom".into(),
+            cron_expr: Some("0 * * * * *".into()),
+            command: Some(command.into()),
+            status: "Queued".into(),
+            retries: 0,
+            last_run_at: None,
+            next_run_at: Some("2000-01-01T00:00:00+00:00".into()),
+            created_at: String::new(),
+            output_log: None,
+        }
+    }
+
+    #[test]
+    fn only_non_builtin_commands_are_shell_jobs() {
+        assert!(super::is_shell_command_job(Some("echo hi")));
+        assert!(!super::is_shell_command_job(Some("bir_poll_email a@b.c")));
+        assert!(!super::is_shell_command_job(Some("   ")));
+        assert!(!super::is_shell_command_job(None));
+    }
+
+    #[test]
+    fn marking_unavailable_keeps_the_schedule_and_is_idempotent() {
+        let mut job = shell_job("echo hi");
+        assert!(super::mark_shell_job_unavailable(&mut job));
+        assert_eq!(job.status, super::SHELL_JOB_UNAVAILABLE_STATUS);
+        assert_eq!(
+            job.output_log.as_deref(),
+            Some(super::SHELL_JOB_UNAVAILABLE_LOG)
+        );
+        assert_eq!(job.cron_expr.as_deref(), Some("0 * * * * *"));
+        assert!(job.next_run_at.is_some());
+        assert!(!super::mark_shell_job_unavailable(&mut job));
+    }
+
+    #[test]
+    fn shell_jobs_are_supported_exactly_when_not_an_app_store_build() {
+        assert_eq!(super::SHELL_JOBS_SUPPORTED, !cfg!(feature = "mas_build"));
+    }
+
+    /// The App Store build must neither run nor delete a due shell job: the
+    /// row stays, marked with the reason.
+    #[cfg(feature = "mas_build")]
+    #[tokio::test]
+    async fn app_store_build_marks_due_shell_job_without_running_it() {
+        use std::sync::{Arc, Mutex};
+        let db = crate::db::Database::open_in_memory_for_tests().expect("db");
+        let marker = tempfile::tempdir().expect("tempdir").path().join("ran");
+        let saved = db
+            .save_job(shell_job(&format!("touch {}", marker.display())))
+            .expect("save");
+        let db = Arc::new(Mutex::new(db));
+
+        super::process_generic_jobs(db.clone()).await;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let jobs = db.lock().unwrap().list_jobs().expect("list");
+        let job = jobs
+            .into_iter()
+            .find(|j| j.id == saved.id)
+            .expect("job row must not be deleted");
+        assert_eq!(job.status, super::SHELL_JOB_UNAVAILABLE_STATUS);
+        assert_eq!(
+            job.output_log.as_deref(),
+            Some(super::SHELL_JOB_UNAVAILABLE_LOG)
+        );
+        assert!(!marker.exists(), "the shell command must not run");
+    }
+
     #[test]
     fn period_labels_read_as_month_or_quarter_over_two_digit_year() {
         assert_eq!(monthly_period_label(2026, 9), "09/26");
