@@ -41,7 +41,7 @@ function formCard(cx, app, f, width) {
       app.openForm({ tin: b.tin, code: f.c, year, period: options.length ? options[0].value : 0 }, cx);
     })
     .child(top)
-    .child(Text(cx, "control", f.t).line_height(18).h(36).overflow_hidden().whitespace_normal())
+    .child(Text(cx, "control", f.t).line_height("18px").h(36).overflow_hidden().whitespace_normal())
     .child(
       div()
         .flex()

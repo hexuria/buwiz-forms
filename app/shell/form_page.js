@@ -28,7 +28,7 @@ import {
   Checkbox,
   TextField,
   Dropdown,
-  NavRow,
+
   PageHeader,
   MetaLine,
 } from "./ui.js";
@@ -47,7 +47,8 @@ function message(e) {
 /** Items whose four text boxes are the TIN (3-3-3-5), shown as locked boxes. */
 function isTinItem(it) {
   const fs = it.f || [];
-  return /\bTIN\b|Identification Number/i.test(it.l) && fs.length >= 3 && fs.length <= 5 && fs.every((x) => x.t === "text" || x.t === "int");
+  const named = /\bTIN\b|Identification/i.test(it.l) || fs.some((x) => /\bTIN\d?\b|txtTIN/i.test(`${x.l} ${x.k}`));
+  return named && fs.length >= 3 && fs.length <= 5 && fs.every((x) => x.t === "text" || x.t === "int");
 }
 
 function partName(p, i) {
@@ -711,9 +712,11 @@ export function renderFormPage(cx, app, width) {
   if (!f) {
     return PageHeader(cx, { title: `Form ${s.code}`, lede: s.error || "This form has no on-screen layout." });
   }
-  const tp = app.taxpayers().find((x) => x.tin_root === String(s.tin).slice(0, 9)) || app.taxpayer();
+  // The return's own TIN and branch decide whose it is; never a name match
+  // or whichever taxpayer happens to be selected.
+  const branch = app.branchFor(s.tin);
+  const tp = branch ? app.taxpayers().find((x) => x.tin_root === branch.tin_root) : null;
   const branchCode = String(s.tin).slice(9) || "00000";
-  const branch = tp ? tp.branches.find((b) => b.code === branchCode) : null;
   const draftLayout = f.q < 0.8;
 
   const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
@@ -775,6 +778,8 @@ export function renderFormPage(cx, app, width) {
       .child(Text(cx, "control", tp.name).font_weight(600))
       .child(Code(cx, formatTin(tp.tin_root, branchCode), "fg2").font_weight(400))
       .child(Text(cx, "meta", branch ? branch.name : "", "fg2"));
+  } else {
+    bar.child(Code(cx, formatTin(String(s.tin).slice(0, 9), branchCode), "fg2").font_weight(400));
   }
   bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
   bar.child(Text(cx, "meta", `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
@@ -803,21 +808,65 @@ export function renderFormPage(cx, app, width) {
     return page.child(div().py(40).flex().justify_center().child(Text(cx, "body", `Opening ${f.c}…`, "fg3")));
   }
 
-  // Part navigator: 208 px beside the parts, a chip row below 760 px.
+  // Part navigator: 208 px beside the parts, a chip row below 760 px. Labels
+  // wrap instead of truncating; each part shows its item count and, in red,
+  // how many of its items have a validation message.
   const sideNav = width >= BREAK.formNav;
   const partsW = sideNav ? width - 208 - 28 : width;
+  const errorsIn = (pi) => Object.keys(s.messages).filter((id) => id.startsWith(`${pi}:`)).length;
+  const badge = (text, danger) =>
+    div()
+      .flex()
+      .flex_none()
+      .items_center()
+      .justify_center()
+      .h(18)
+      .min_w(18)
+      .px(5)
+      .rounded(RADIUS.full)
+      .bg(danger ? t.danger : t.hover)
+      .child(Text(cx, "cap", text, danger ? "primaryFg" : "fg2").when(danger, (el) => el.text_color(t.surface)));
   const nav = sideNav ? div().flex().flex_col().gap(2).w(208).flex_none() : div().flex().flex_row().flex_wrap().gap(SPACE[1]).mb(SPACE[4]);
   if (sideNav) nav.child(div().px(SPACE[2]).pb(6).child(Text(cx, "metaStrong", "On this form", "fg3")));
   f.parts.forEach((p, i) => {
-    nav.child(
-      sideNav
-        ? NavRow(cx, `fp-nav-${i}`, null, partName(p, i), { count: p.items.length, current: s.openParts.has(i) && s.openParts.size === 1, onClick: (_e, cx) => ui.jumpTo(i, cx) })
-        : div()
-            .id(`fp-nav-${i}`)
-            .cursor_pointer()
-            .on_click((_e, cx) => ui.jumpTo(i, cx))
-            .child(Chip(cx, `${partName(p, i)} · ${p.items.length}`, s.openParts.has(i) ? "accent" : "neutral")),
-    );
+    const current = s.openParts.has(i) && s.openParts.size === 1;
+    const errors = errorsIn(i);
+    if (sideNav) {
+      const row = div()
+        .id(`fp-nav-${i}`)
+        .flex()
+        .flex_row()
+        .items_start()
+        .gap(SPACE[2])
+        .w(208)
+        .min_h(32)
+        .py(6)
+        .px(SPACE[2])
+        .rounded(RADIUS.row)
+        .cursor_pointer()
+        .accessibility_label(partName(p, i))
+        .when(current, (el) => el.bg(t.selected))
+        .when(!current, (el) => el.hover((st) => st.bg(t.hover)))
+        .on_click((_e, cx) => ui.jumpTo(i, cx))
+        // Pixel widths, not flex-grow: a grown text cell has no definite width
+        // and GPUI lays the wrapped label out one word per line.
+        .child(Text(cx, "control", partName(p, i), current ? "fg" : "fg2").w(errors > 0 ? 208 - 16 - 8 - 26 - 26 - 4 : 208 - 16 - 8 - 26).line_height("18px").whitespace_normal())
+        .child(div().flex().flex_row().flex_none().gap(SPACE[1]).when(errors > 0, (el) => el.child(badge(String(errors), true))).child(badge(String(p.items.length), false)));
+      nav.child(row);
+    } else {
+      nav.child(
+        div()
+          .id(`fp-nav-${i}`)
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(SPACE[1])
+          .cursor_pointer()
+          .on_click((_e, cx) => ui.jumpTo(i, cx))
+          .child(Chip(cx, `${partName(p, i)} · ${p.items.length}`, s.openParts.has(i) ? "accent" : "neutral"))
+          .when(errors > 0, (el) => el.child(badge(String(errors), true))),
+      );
+    }
   });
 
   const parts = div().flex().flex_col().gap(SPACE[4]).w(partsW);
