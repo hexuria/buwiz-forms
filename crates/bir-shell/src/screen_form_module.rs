@@ -1152,6 +1152,9 @@ fn lock_reason(def: &AgentFormDef, entry: &BoxDef) -> Option<String> {
         }) if *lock != bir_core::forms::agent::Lock::Election => Some(lock.reason().to_string()),
         _ => None,
     };
+    if def.bindings.contains_key(&entry.key) && is_profile_name(&entry.key) {
+        return Some(bir_core::forms::agent::Lock::Profile.reason().to_string());
+    }
     if def.bindings.contains_key(&entry.key) {
         // A radio is locked when its item (group box) is.
         return bound_lock(&entry.key).or_else(|| entry.group.as_deref().and_then(bound_lock));
@@ -1163,6 +1166,25 @@ fn lock_reason(def: &AgentFormDef, entry: &BoxDef) -> Option<String> {
             .map(String::as_str)
             .unwrap_or("it has no field in this app's draft")
     ))
+}
+
+/// The filer's own name or registered name. The open draft copies it from
+/// the taxpayer profile, but the probe compares raw profile strings and the
+/// forms print it in capitals, so it is not always detected as a profile box.
+/// Spouse, payee, buyer and seller names stay typed.
+fn is_profile_name(key: &str) -> bool {
+    let tail = key.rsplit(':').next().unwrap_or(key).to_ascii_lowercase();
+    let Some(rest) = tail.strip_prefix("txt") else {
+        return false;
+    };
+    let stem = rest.trim_end_matches(|c: char| c.is_ascii_digit());
+    ["taxpayername", "registeredname"].iter().any(|name| {
+        stem.strip_suffix(name).is_some_and(|prefix| {
+            prefix
+                .chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, 'p' | 'g' | 't' | 'i' | 'm'))
+        })
+    })
 }
 
 fn locks(kind: AgentFormKind) -> Map<String, Value> {
@@ -1215,7 +1237,9 @@ fn profile_keys(kind: AgentFormKind) -> Vec<String> {
             !entry.computed
                 && entry.is_user_box()
                 && def.bindings.contains_key(&entry.key)
-                && (profile(&entry.key) || entry.group.as_deref().is_some_and(profile))
+                && (profile(&entry.key)
+                    || is_profile_name(&entry.key)
+                    || entry.group.as_deref().is_some_and(profile))
         })
         .map(|entry| entry.key.clone())
         .collect();
@@ -3606,6 +3630,31 @@ mod tests {
         assert!(!has(&q, "frm1603Q:selTreaty"));
         let pt = open("1600PT", 3);
         assert!(!has(&pt, "frm1600PT:Pg2Sc1TIN1"), "a payee TIN is typed");
+    }
+
+    #[test]
+    fn taxpayer_name_boxes_come_from_the_profile() {
+        setup();
+        for (code, key) in [
+            ("1700", "frm1700:txtPg1I7TaxpayerName"),
+            ("1700", "frm1700:txtPg2TaxpayerName"),
+            ("1701A", "frm1701A:txtTaxpayerName"),
+            ("1702Q", "frm1702q:txtTaxpayerName1"),
+        ] {
+            let opened = open(code, if code == "1702Q" { 1 } else { 0 });
+            assert!(opened["locks"].get(key).is_some(), "{key} is read-only");
+            assert!(
+                opened["profile"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|k| k == key),
+                "{key} is marked as from the profile"
+            );
+        }
+        // The spouse's name is typed by the filer.
+        let opened = open("1700", 0);
+        assert!(opened["locks"].get("frm1700:txtPg1I21SpouseName").is_none());
     }
 
     #[test]
