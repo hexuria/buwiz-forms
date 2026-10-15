@@ -101,6 +101,8 @@ export function screen_form_validate(form_code: string, draft: object): Promise<
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
 /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
 export function screen_form_print(form_code: string, draft: object): { path: string };
+/** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
+export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): boolean;
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
 /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
@@ -116,6 +118,7 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
         .function("screen_form_print", screen_form_print)
+        .function("screen_form_preview_sync", screen_form_preview_sync)
         .function("screen_form_queue", screen_form_queue)
         .function("screen_form_cancel_queue", screen_form_cancel_queue)
 }
@@ -1569,6 +1572,44 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
             receipt.as_ref(),
             profile,
         )
+    })
+}
+
+/// Live sync form -> preview: apply the page's staged edits to a copy of the
+/// draft, fill the frozen sheet in memory, staticize it, and hand it to the
+/// open preview window for this form (which re-renders only changed sheets).
+fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
+    let started = std::time::Instant::now();
+    let code = arguments.string(0)?.to_owned();
+    let kind = kind_of(&code)?;
+    if !crate::print_preview_window::has_live(kind.form_code()) {
+        return Ok(HostValue::Bool(false));
+    }
+    let mut draft = draft_argument(arguments, 1)?;
+    if let Some(edits) = arguments.value(2).ok().and_then(|v| v.as_object()) {
+        let mut edits: Vec<_> = edits.iter().collect();
+        edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
+        for (key, value) in edits {
+            let mut next = draft.clone();
+            if catalogs::fill(kind, &mut next, key, &to_json(value)).is_ok() {
+                draft = next;
+            }
+        }
+        let _ = agent::compute(kind, &mut draft);
+    }
+    let slug = crate::bir_module::print_slug_for(kind.form_code())
+        .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
+    with_database(|db| {
+        let (fields, receipt) = print_map(db, kind, &draft)?;
+        let slug = slug.to_string();
+        // Template fill + prepare + staticize run off the UI thread.
+        let produce = Box::new(move || {
+            let html = bir_print::frozen_html::filled_document_with_receipt(&slug, &fields, receipt.as_ref())
+                .unwrap_or_default();
+            crate::static_html::staticize(&crate::print_sheet::prepare_html_for(&slug, &html, true))
+        });
+        crate::print_preview_window::live_update(kind.form_code(), produce, started);
+        Ok(HostValue::Bool(true))
     })
 }
 

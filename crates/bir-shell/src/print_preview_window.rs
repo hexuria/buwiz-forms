@@ -26,13 +26,16 @@ use crate::print_sheet::{PAPER_HEIGHT_PT, PAPER_WIDTH_PT};
 struct Request {
     path: PathBuf,
     title: String,
-    /// Form code this preview shows; re-opening it refreshes the same window.
+    /// Form code this preview mirrors; live edits for it are pushed here.
     key: Option<String>,
 }
 
 thread_local! {
     static QUEUE: RefCell<Vec<Request>> = const { RefCell::new(Vec::new()) };
     static VIEWS: RefCell<Vec<WeakEntity<PreviewView>>> = const { RefCell::new(Vec::new()) };
+    /// Live sync: freshly filled static HTML per form code (latest wins).
+    static LIVE: RefCell<Vec<(String, Producer, Instant)>> = const { RefCell::new(Vec::new()) };
+    static LIVE_KEYS: RefCell<std::collections::HashSet<String>> = RefCell::new(Default::default());
 }
 
 pub fn request(path: PathBuf, title: String) {
@@ -40,7 +43,25 @@ pub fn request(path: PathBuf, title: String) {
 }
 
 pub fn request_keyed(path: PathBuf, title: String, key: String) {
+    LIVE_KEYS.with(|k| k.borrow_mut().insert(key.clone()));
     QUEUE.with(|q| q.borrow_mut().push(Request { path, title, key: Some(key) }));
+}
+
+/// Whether a preview window for `key` (a form code) is open.
+pub fn has_live(key: &str) -> bool {
+    LIVE_KEYS.with(|k| k.borrow().contains(key))
+}
+
+/// Builds the static document for a live update (runs on a background thread).
+pub type Producer = Box<dyn FnOnce() -> String + Send>;
+
+/// Hand a re-fill (as a producer, run off the UI thread) to the open preview for `key`.
+pub fn live_update(key: &str, static_html: Producer, started: Instant) {
+    LIVE.with(|l| {
+        let mut l = l.borrow_mut();
+        l.retain(|(k, _, _)| k != key);
+        l.push((key.to_string(), static_html, started));
+    });
 }
 
 pub fn start(cx: &mut App) {
@@ -49,9 +70,10 @@ pub fn start(cx: &mut App) {
         request(PathBuf::from(p), title);
     }
     cx.spawn(async move |cx| loop {
-        // 16 ms: requests are picked up within one frame.
+        // 16 ms: live edits are picked up within one frame.
         cx.background_executor().timer(Duration::from_millis(16)).await;
         let pending: Vec<Request> = QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()));
+        let live: Vec<_> = LIVE.with(|l| std::mem::take(&mut *l.borrow_mut()));
         cx.update(|cx| {
             for r in pending {
                 // One window per form: reuse it when already open.
@@ -71,9 +93,21 @@ pub fn start(cx: &mut App) {
                 v.borrow_mut().retain(|w| w.upgrade().is_some());
                 v.borrow().clone()
             });
+            let mut live = live;
+            let mut keys = std::collections::HashSet::new();
             for w in &views {
-                let _ = w.update(cx, |view, cx| view.tick(cx));
+                let _ = w.update(cx, |view, cx| {
+                    view.tick(cx);
+                    if let Some(k) = view.key.clone() {
+                        if let Some(i) = live.iter().position(|(lk, _, _)| *lk == k) {
+                            let (_, produce, t) = live.swap_remove(i);
+                            view.produce_live(produce, t, cx);
+                        }
+                        keys.insert(k);
+                    }
+                });
             }
+            LIVE_KEYS.with(|k| *k.borrow_mut() = keys);
         });
     })
     .detach();
@@ -99,6 +133,9 @@ struct PreviewView {
     worker: Arc<crate::blitz_render::Worker>,
     bar: gpui::Entity<TitleBar>,
     print_pending: bool,
+    live_seq: u64,
+    applied_seq: u64,
+    fields: Vec<(String, String)>,
     /// Newest live document that arrived while a render was in flight.
     queued: Option<(String, Instant)>,
     /// Static (script-free) HTML both engines load.
@@ -122,9 +159,25 @@ struct PreviewView {
 }
 
 impl PreviewView {
-    /// Refresh with a new document: re-render only the sheets whose markup
-    /// changed; the scroll container keeps its id so the scroll position is
-    /// preserved.
+    /// Run the producer (template fill) in the background, then apply.
+    fn produce_live(&mut self, produce: Producer, started: Instant, cx: &mut Context<Self>) {
+        self.live_seq += 1;
+        let seq = self.live_seq;
+        cx.spawn(async move |this, cx| {
+            let html = cx.background_executor().spawn(async move { produce() }).await;
+            let _ = this.update(cx, |v: &mut PreviewView, cx| {
+                // Fills can finish out of order; never apply an older one.
+                if seq > v.applied_seq {
+                    v.applied_seq = seq;
+                    v.apply_live(html, started, cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Live sync: re-render only the sheets whose markup changed; the scroll
+    /// container keeps its id so the scroll position is preserved.
     fn apply_live(&mut self, html: String, started: Instant, cx: &mut Context<Self>) {
         if self.rendering {
             self.queued = Some((html, started));
@@ -135,7 +188,23 @@ impl PreviewView {
         if !mask.iter().any(|d| *d) {
             return;
         }
-        let job = crate::blitz_render::Job::Full(html.clone(), Some(mask));
+        let fields = crate::static_html::field_map(&html);
+        // Same fields, same markup otherwise -> text patch; else full rebuild.
+        let same_shape = fields.len() == self.fields.len()
+            && fields.iter().zip(&self.fields).all(|(a, b)| a.0 == b.0)
+            && strip_field_text(&segments) == strip_field_text(&self.segments);
+        let job = if same_shape {
+            let changes: Vec<_> = fields
+                .iter()
+                .zip(&self.fields)
+                .filter(|(a, b)| a.1 != b.1)
+                .map(|(a, _)| a.clone())
+                .collect();
+            crate::blitz_render::Job::Patch(changes, html.clone())
+        } else {
+            crate::blitz_render::Job::Full(html.clone(), Some(mask))
+        };
+        self.fields = fields;
         self.segments = segments;
         self.rendering = true;
         // Regenerated by `tick` once edits settle; Print waits for it.
@@ -551,6 +620,7 @@ fn open(r: Request, cx: &mut App) {
                 TitleBar { title: bar_title, pdf: BarPdf::Busy, zoom: 1.0, print_pending: false, owner }
             });
             let segments = crate::blitz_render::segments(&html);
+            let fields = crate::static_html::field_map(&html);
             let worker = Arc::new(crate::blitz_render::Worker::spawn(BLITZ_SCALE));
             let rx = worker.submit(crate::blitz_render::Job::Full(html, None));
             // Blitz layout + raster on the preview's worker thread.
@@ -577,6 +647,9 @@ fn open(r: Request, cx: &mut App) {
                 worker,
                 bar: bar.clone(),
                 print_pending: false,
+                live_seq: 0,
+                applied_seq: 0,
+                fields,
                 queued: None,
                 html_path,
                 pdf_path,
@@ -600,6 +673,28 @@ fn open(r: Request, cx: &mut App) {
         VIEWS.with(|v| v.borrow_mut().push(view.downgrade()));
         view
     });
+}
+
+/// Markup with field texts blanked, to tell "only values changed" apart.
+fn strip_field_text(segments: &[String]) -> Vec<String> {
+    segments
+        .iter()
+        .map(|seg| {
+            let mut out = String::with_capacity(seg.len());
+            let mut rest = seg.as_str();
+            while let Some(i) = rest.find(" fs\"") {
+                let Some(gt) = rest[i..].find('>') else { break };
+                out.push_str(&rest[..i + gt + 1]);
+                rest = &rest[i + gt + 1..];
+                match rest.find("</span>") {
+                    Some(c) => rest = &rest[c..],
+                    None => break,
+                }
+            }
+            out.push_str(rest);
+            out
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy, PartialEq)]

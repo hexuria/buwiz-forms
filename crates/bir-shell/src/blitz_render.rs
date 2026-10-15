@@ -144,13 +144,62 @@ fn paint_sheets(doc: &mut HtmlDocument, scale: f32, only: Option<&[bool]>) -> Ve
     pages
 }
 
+/// Set the text of field spans in place; `None` if a span is missing (then
+/// the caller rebuilds). Returns which sheets hold a changed span.
+fn patch(doc: &mut HtmlDocument, changes: &[(String, String)]) -> Option<Vec<bool>> {
+    let sheets = sheet_ids(doc);
+    let mut dirty = vec![false; sheets.len()];
+    let base = doc.as_mut();
+    let mut targets = Vec::with_capacity(changes.len());
+    for (id, text) in changes {
+        let node = base.query_selector(&format!("#{id}")).ok().flatten()?;
+        // which sheet?
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if let Some(i) = sheets.iter().position(|s| *s == n) {
+                dirty[i] = true;
+                break;
+            }
+            cur = base.get_node(n).and_then(|n| n.parent);
+        }
+        let child = base.get_node(node)?.children.iter().copied().find(|c| base.get_node(*c).is_some_and(|n| n.is_text_node()));
+        targets.push((node, child, decode_entities(text)));
+    }
+    {
+        let mut m = base.mutate();
+        for (node, child, text) in &targets {
+            match child {
+                Some(c) => m.set_node_text(*c, text),
+                None if !text.is_empty() => {
+                    let t = m.create_text_node(text);
+                    m.append_children(*node, &[t]);
+                }
+                None => {}
+            }
+        }
+    }
+    base.resolve(0.0);
+    Some(dirty)
+}
+
+fn decode_entities(s: &str) -> String {
+    if !s.contains('&') {
+        return s.to_string();
+    }
+    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+}
+
 pub enum Job {
     /// Rebuild from this document; repaint only the sheets marked `true`
     /// (all of them when `None`).
     Full(String, Option<Vec<bool>>),
+    /// Changed `(span id, attribute-escaped text)` pairs, plus the whole
+    /// document as the fallback if patching is impossible.
+    Patch(Vec<(String, String)>, String),
 }
 
-/// One Blitz thread per preview, so layout and raster never block the UI.
+/// Keeps one Blitz document alive per preview so live edits are text
+/// patches + incremental restyle/relayout instead of a reparse.
 pub struct Worker {
     tx: std::sync::mpsc::Sender<(Job, std::sync::mpsc::Sender<Rendered>)>,
 }
@@ -161,10 +210,22 @@ impl Worker {
         std::thread::Builder::new()
             .name("blitz-preview".into())
             .spawn(move || {
+                let mut doc: Option<HtmlDocument> = None;
                 for (job, reply) in rx {
-                    let Job::Full(html, only) = job;
-                    let mut d = build(&html, scale);
-                    let r = Rendered { pages: paint_sheets(&mut d, scale, only.as_deref()) };
+                    let patched = match (&job, doc.as_mut()) {
+                        (Job::Patch(changes, _), Some(d)) => patch(d, changes).map(|mask| (d, mask)),
+                        _ => None,
+                    };
+                    let r = match patched {
+                        Some((d, mask)) => Rendered { pages: paint_sheets(d, scale, Some(&mask)) },
+                        None => {
+                            let (html, only) = match job { Job::Full(h, only) => (h, only), Job::Patch(_, h) => (h, None) };
+                            let mut d = build(&html, scale);
+                            let pages = paint_sheets(&mut d, scale, only.as_deref());
+                            doc = Some(d);
+                            Rendered { pages }
+                        }
+                    };
                     let _ = reply.send(r);
                 }
             })

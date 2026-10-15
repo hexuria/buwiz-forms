@@ -127,6 +127,24 @@ pub fn staticize_if_needed(html: String) -> String {
     if html.contains("<script") || html.contains("<input") { staticize(&html) } else { html }
 }
 
+/// `(span id, text)` for every field span, in document order.
+pub fn field_map(html: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(i) = html[from..].find(" fs\"") {
+        let at = from + i;
+        from = at + 4;
+        let Some(gt) = html[at..].find('>') else { break };
+        let tag = &html[at..at + gt];
+        let padded = format!(" {tag}");
+        let Some(id) = attr(&padded, "id") else { continue };
+        let open = at + gt + 1;
+        let Some(close) = html[open..].find("</span>") else { break };
+        out.push((id.to_string(), html[open..open + close].to_string()));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     const DOC: &str = r##"<html><head></head><body><a class="doc-link" href="guide.html">Guide</a><div class="page page-1"><input type="text" class="fi fh4 fc" id="p1c1-i" style="inset:1pt" value="X"></div><div class="page page-2 page-receipt"><input type="text" class="fi fh22" id="p2c3-s0" data-slot-index="0" value="A&amp;B"></div><script>alert(1)</script></body></html>"##;
