@@ -6848,6 +6848,138 @@
         "order": 20
       },
       "evidence": "P4: html-frozen/1702ex-2018/index.html prints 'Schedule 2 – Special Allowable Itemized Deductions' rows 1-5 then 'Schedule 3 – Reconciliation of Net Income per Books Against Taxable Income' rows 1-10 after Schedule 1; the key names Schedule 3 row 10"
+    },
+    "table:6:s1i17": {
+      "no": "",
+      "label": "Schedule 1 Item 17 – Others (Deductions Subject to Withholding Tax and Other Expenses) – (more...) rows",
+      "templates": [
+        "frm1702EX:txtPg3Pt6S1I17_{N>=1}Col1",
+        "frm1702EX:txtPg3Pt6S1I17_{N>=1}Col2"
+      ],
+      "row_keys": {
+        "frm1702EX:txtPg3Pt6S1I17_{N>=1}Col1": "frm1702EX:txtPg3Pt6S1I17_{index}Col1",
+        "frm1702EX:txtPg3Pt6S1I17_{N>=1}Col2": "frm1702EX:txtPg3Pt6S1I17_{index}Col2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_1702ex.rs: the '(more...)' popup rows are text boxes inside frmMain (frm1702EX:txtPg3Pt6<popup>_<n>Col<k>) that the upload writes ahead of Pg3Pt6<popup>SubTotal; with two or more rows the fixed line reads OTHERS with the popup subtotal, and a row list longer than its fixed lines is filed that way (the last fixed line and every later row are popup rows). The probe binds popup rows 1-12 and more (agent supplement_row_families); popup amounts are whole pesos. Captions from html-frozen/1702ex-2018/index.html."
+    },
+    "table:6:s2i4": {
+      "no": "",
+      "label": "Schedule 2 – Special Allowable Itemized Deductions – (more...) rows",
+      "templates": [
+        "frm1702EX:txtPg3Pt6S2I4_{N>=1}Col1",
+        "frm1702EX:txtPg3Pt6S2I4_{N>=1}Col2",
+        "frm1702EX:txtPg3Pt6S2I4_{N>=1}Col3"
+      ],
+      "row_keys": {
+        "frm1702EX:txtPg3Pt6S2I4_{N>=1}Col1": "frm1702EX:txtPg3Pt6S2I4_{index}Col1",
+        "frm1702EX:txtPg3Pt6S2I4_{N>=1}Col2": "frm1702EX:txtPg3Pt6S2I4_{index}Col2",
+        "frm1702EX:txtPg3Pt6S2I4_{N>=1}Col3": "frm1702EX:txtPg3Pt6S2I4_{index}Col3"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Legal Basis",
+        "Amount"
+      ],
+      "evidence": "N04: form_1702ex.rs: the '(more...)' popup rows are text boxes inside frmMain (frm1702EX:txtPg3Pt6<popup>_<n>Col<k>) that the upload writes ahead of Pg3Pt6<popup>SubTotal; with two or more rows the fixed line reads OTHERS with the popup subtotal, and a row list longer than its fixed lines is filed that way (the last fixed line and every later row are popup rows). The probe binds popup rows 1-12 and more (agent supplement_row_families); popup amounts are whole pesos. Captions from html-frozen/1702ex-2018/index.html."
+    },
+    "table:6:s3i3": {
+      "no": "",
+      "label": "Schedule 3 Items 2–3 – Add: Non-Deductible Expenses/Other Income – (more...) rows",
+      "templates": [
+        "frm1702EX:txtPg3Pt6S3I3_{N>=1}Col1",
+        "frm1702EX:txtPg3Pt6S3I3_{N>=1}Col2"
+      ],
+      "row_keys": {
+        "frm1702EX:txtPg3Pt6S3I3_{N>=1}Col1": "frm1702EX:txtPg3Pt6S3I3_{index}Col1",
+        "frm1702EX:txtPg3Pt6S3I3_{N>=1}Col2": "frm1702EX:txtPg3Pt6S3I3_{index}Col2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_1702ex.rs: the '(more...)' popup rows are text boxes inside frmMain (frm1702EX:txtPg3Pt6<popup>_<n>Col<k>) that the upload writes ahead of Pg3Pt6<popup>SubTotal; with two or more rows the fixed line reads OTHERS with the popup subtotal, and a row list longer than its fixed lines is filed that way (the last fixed line and every later row are popup rows). The probe binds popup rows 1-12 and more (agent supplement_row_families); popup amounts are whole pesos. Captions from html-frozen/1702ex-2018/index.html."
+    },
+    "table:6:s3i6": {
+      "no": "",
+      "label": "Schedule 3 Items 5–6 – Less: Non-Taxable Income and Income Subjected to Final Tax – (more...) rows",
+      "templates": [
+        "frm1702EX:txtPg3Pt6S3I6_{N>=1}Col1",
+        "frm1702EX:txtPg3Pt6S3I6_{N>=1}Col2"
+      ],
+      "row_keys": {
+        "frm1702EX:txtPg3Pt6S3I6_{N>=1}Col1": "frm1702EX:txtPg3Pt6S3I6_{index}Col1",
+        "frm1702EX:txtPg3Pt6S3I6_{N>=1}Col2": "frm1702EX:txtPg3Pt6S3I6_{index}Col2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_1702ex.rs: the '(more...)' popup rows are text boxes inside frmMain (frm1702EX:txtPg3Pt6<popup>_<n>Col<k>) that the upload writes ahead of Pg3Pt6<popup>SubTotal; with two or more rows the fixed line reads OTHERS with the popup subtotal, and a row list longer than its fixed lines is filed that way (the last fixed line and every later row are popup rows). The probe binds popup rows 1-12 and more (agent supplement_row_families); popup amounts are whole pesos. Captions from html-frozen/1702ex-2018/index.html."
+    },
+    "table:6:s3i8": {
+      "no": "",
+      "label": "Schedule 3 Items 7–8 – Special Deductions – (more...) rows",
+      "templates": [
+        "frm1702EX:txtPg3Pt6S3I8_{N>=1}Col1",
+        "frm1702EX:txtPg3Pt6S3I8_{N>=1}Col2"
+      ],
+      "row_keys": {
+        "frm1702EX:txtPg3Pt6S3I8_{N>=1}Col1": "frm1702EX:txtPg3Pt6S3I8_{index}Col1",
+        "frm1702EX:txtPg3Pt6S3I8_{N>=1}Col2": "frm1702EX:txtPg3Pt6S3I8_{index}Col2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_1702ex.rs: the '(more...)' popup rows are text boxes inside frmMain (frm1702EX:txtPg3Pt6<popup>_<n>Col<k>) that the upload writes ahead of Pg3Pt6<popup>SubTotal; with two or more rows the fixed line reads OTHERS with the popup subtotal, and a row list longer than its fixed lines is filed that way (the last fixed line and every later row are popup rows). The probe binds popup rows 1-12 and more (agent supplement_row_families); popup amounts are whole pesos. Captions from html-frozen/1702ex-2018/index.html."
+    },
+    "frm1702EX:txtPg3Pt6S1I17_1Col1": {
+      "kind": "text",
+      "evidence": "N04: a popup row's description (and Schedule 2's legal basis) is text (form_1702ex.rs Form1702ExRow.description / Form1702ExSpecialRow.legal_basis; the agent binds it as text); the extractor typed the whole family money."
+    },
+    "frm1702EX:txtPg3Pt6S2I4_1Col1": {
+      "kind": "text",
+      "evidence": "N04: a popup row's description (and Schedule 2's legal basis) is text (form_1702ex.rs Form1702ExRow.description / Form1702ExSpecialRow.legal_basis; the agent binds it as text); the extractor typed the whole family money."
+    },
+    "frm1702EX:txtPg3Pt6S2I4_1Col2": {
+      "kind": "text",
+      "evidence": "N04: a popup row's description (and Schedule 2's legal basis) is text (form_1702ex.rs Form1702ExRow.description / Form1702ExSpecialRow.legal_basis; the agent binds it as text); the extractor typed the whole family money."
+    },
+    "frm1702EX:txtPg3Pt6S3I3_1Col1": {
+      "kind": "text",
+      "evidence": "N04: a popup row's description (and Schedule 2's legal basis) is text (form_1702ex.rs Form1702ExRow.description / Form1702ExSpecialRow.legal_basis; the agent binds it as text); the extractor typed the whole family money."
+    },
+    "frm1702EX:txtPg3Pt6S3I6_1Col1": {
+      "kind": "text",
+      "evidence": "N04: a popup row's description (and Schedule 2's legal basis) is text (form_1702ex.rs Form1702ExRow.description / Form1702ExSpecialRow.legal_basis; the agent binds it as text); the extractor typed the whole family money."
+    },
+    "frm1702EX:txtPg3Pt6S3I8_1Col1": {
+      "kind": "text",
+      "evidence": "N04: a popup row's description (and Schedule 2's legal basis) is text (form_1702ex.rs Form1702ExRow.description / Form1702ExSpecialRow.legal_basis; the agent binds it as text); the extractor typed the whole family money."
     }
   },
   "1702MX": {
@@ -9643,6 +9775,135 @@
     "frm1702RT:txtPg4Sc5I4Total": {
       "label": "Total (Sum of Items 1 to 3)",
       "evidence": "P4: html-frozen/1702rt-2018c/index.html Schedule V item 4 'Total (Sum of Items 1 to 3)'"
+    },
+    "table:4:item54": {
+      "no": "",
+      "label": "Item 54 — Other tax credits – Add more rows",
+      "templates": [
+        "frm1702RT:txtPg2Pt4I54.{N>=1}C1",
+        "frm1702RT:txtPg2Pt4I54.{N>=1}C2"
+      ],
+      "row_keys": {
+        "frm1702RT:txtPg2Pt4I54.{N>=1}C1": "frm1702RT:txtPg2Pt4I54.{index}C1",
+        "frm1702RT:txtPg2Pt4I54.{N>=1}C2": "frm1702RT:txtPg2Pt4I54.{index}C2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: the official '(Add more...)' modal (rules/forms/1702rt-v2018c/fields.json frm1702RT:txtPg2Pt4I54.{N>=1}C* runtime-indexed-family, source loadModalTable / addRowModalTable / saveModalTable) holds the item's rows; form_1702rt.rs Form1702RTMoreRows keeps them, and form_1702rt_official.rs modal_controls uploads the saved rows (those with a description) once two or more fold the item into OTHERS with their subtotal. The probe binds rows 1-12 and more (agent supplement_row_families); row 1 is the item's own entry, as the page transfers it. Modal title from Form1702RTModal::title."
+    },
+    "table:6:sched1i17i": {
+      "no": "",
+      "label": "Schedule I Item 17i — Other deductions – Add more rows",
+      "templates": [
+        "frm1702RT:txtPg3Sc1I17i.{N>=1}C1",
+        "frm1702RT:txtPg3Sc1I17i.{N>=1}C2"
+      ],
+      "row_keys": {
+        "frm1702RT:txtPg3Sc1I17i.{N>=1}C1": "frm1702RT:txtPg3Sc1I17i.{index}C1",
+        "frm1702RT:txtPg3Sc1I17i.{N>=1}C2": "frm1702RT:txtPg3Sc1I17i.{index}C2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: the official '(Add more...)' modal (rules/forms/1702rt-v2018c/fields.json frm1702RT:txtPg3Sc1I17i.{N>=1}C* runtime-indexed-family, source loadModalTable / addRowModalTable / saveModalTable) holds the item's rows; form_1702rt.rs Form1702RTMoreRows keeps them, and form_1702rt_official.rs modal_controls uploads the saved rows (those with a description) once two or more fold the item into OTHERS with their subtotal. The probe binds rows 1-12 and more (agent supplement_row_families); row 1 is the item's own entry, as the page transfers it. Modal title from Form1702RTModal::title."
+    },
+    "table:7:sched2i4": {
+      "no": "",
+      "label": "Schedule II Item 4 — Special allowable deductions – Add more rows",
+      "templates": [
+        "frm1702RT:txtPg3Sc2I4.{N>=1}C1",
+        "frm1702RT:txtPg3Sc2I4.{N>=1}C2",
+        "frm1702RT:txtPg3Sc2I4.{N>=1}C3"
+      ],
+      "row_keys": {
+        "frm1702RT:txtPg3Sc2I4.{N>=1}C1": "frm1702RT:txtPg3Sc2I4.{index}C1",
+        "frm1702RT:txtPg3Sc2I4.{N>=1}C2": "frm1702RT:txtPg3Sc2I4.{index}C2",
+        "frm1702RT:txtPg3Sc2I4.{N>=1}C3": "frm1702RT:txtPg3Sc2I4.{index}C3"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Legal Basis",
+        "Amount"
+      ],
+      "evidence": "N04: the official '(Add more...)' modal (rules/forms/1702rt-v2018c/fields.json frm1702RT:txtPg3Sc2I4.{N>=1}C* runtime-indexed-family, source loadModalTable / addRowModalTable / saveModalTable) holds the item's rows; form_1702rt.rs Form1702RTMoreRows keeps them, and form_1702rt_official.rs modal_controls uploads the saved rows (those with a description) once two or more fold the item into OTHERS with their subtotal. The probe binds rows 1-12 and more (agent supplement_row_families); row 1 is the item's own entry, as the page transfers it. Modal title from Form1702RTModal::title. Schedule II rows carry a legal basis (has_legal_basis); descriptions hold 26 characters there, 45 elsewhere."
+    },
+    "table:11:sched5i3": {
+      "no": "",
+      "label": "Schedule V Item 3 — Other additions – Add more rows",
+      "templates": [
+        "frm1702RT:txtPg4Sc5I3.{N>=1}C1",
+        "frm1702RT:txtPg4Sc5I3.{N>=1}C2"
+      ],
+      "row_keys": {
+        "frm1702RT:txtPg4Sc5I3.{N>=1}C1": "frm1702RT:txtPg4Sc5I3.{index}C1",
+        "frm1702RT:txtPg4Sc5I3.{N>=1}C2": "frm1702RT:txtPg4Sc5I3.{index}C2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: the official '(Add more...)' modal (rules/forms/1702rt-v2018c/fields.json frm1702RT:txtPg4Sc5I3.{N>=1}C* runtime-indexed-family, source loadModalTable / addRowModalTable / saveModalTable) holds the item's rows; form_1702rt.rs Form1702RTMoreRows keeps them, and form_1702rt_official.rs modal_controls uploads the saved rows (those with a description) once two or more fold the item into OTHERS with their subtotal. The probe binds rows 1-12 and more (agent supplement_row_families); row 1 is the item's own entry, as the page transfers it. Modal title from Form1702RTModal::title."
+    },
+    "table:11:sched5i6": {
+      "no": "",
+      "label": "Schedule V Item 6 — Other non-taxable income – Add more rows",
+      "templates": [
+        "frm1702RT:txtPg4Sc5I6.{N>=1}C1",
+        "frm1702RT:txtPg4Sc5I6.{N>=1}C2"
+      ],
+      "row_keys": {
+        "frm1702RT:txtPg4Sc5I6.{N>=1}C1": "frm1702RT:txtPg4Sc5I6.{index}C1",
+        "frm1702RT:txtPg4Sc5I6.{N>=1}C2": "frm1702RT:txtPg4Sc5I6.{index}C2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: the official '(Add more...)' modal (rules/forms/1702rt-v2018c/fields.json frm1702RT:txtPg4Sc5I6.{N>=1}C* runtime-indexed-family, source loadModalTable / addRowModalTable / saveModalTable) holds the item's rows; form_1702rt.rs Form1702RTMoreRows keeps them, and form_1702rt_official.rs modal_controls uploads the saved rows (those with a description) once two or more fold the item into OTHERS with their subtotal. The probe binds rows 1-12 and more (agent supplement_row_families); row 1 is the item's own entry, as the page transfers it. Modal title from Form1702RTModal::title."
+    },
+    "table:11:sched5i8": {
+      "no": "",
+      "label": "Schedule V Item 8 — Other special deductions – Add more rows",
+      "templates": [
+        "frm1702RT:txtPg4Sc5I8.{N>=1}C1",
+        "frm1702RT:txtPg4Sc5I8.{N>=1}C2"
+      ],
+      "row_keys": {
+        "frm1702RT:txtPg4Sc5I8.{N>=1}C1": "frm1702RT:txtPg4Sc5I8.{index}C1",
+        "frm1702RT:txtPg4Sc5I8.{N>=1}C2": "frm1702RT:txtPg4Sc5I8.{index}C2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: the official '(Add more...)' modal (rules/forms/1702rt-v2018c/fields.json frm1702RT:txtPg4Sc5I8.{N>=1}C* runtime-indexed-family, source loadModalTable / addRowModalTable / saveModalTable) holds the item's rows; form_1702rt.rs Form1702RTMoreRows keeps them, and form_1702rt_official.rs modal_controls uploads the saved rows (those with a description) once two or more fold the item into OTHERS with their subtotal. The probe binds rows 1-12 and more (agent supplement_row_families); row 1 is the item's own entry, as the page transfers it. Modal title from Form1702RTModal::title."
     }
   },
   "1706": {
@@ -10577,6 +10838,56 @@
     "frm1707:txtPg2P4Sch3Particulars4": {
       "label": "Schedule 3 row D Particulars",
       "evidence": "P4: printed caption 'Schedule 3 row D Particulars' (html-frozen/1707-2021/writer-cells.json joins frm1707:txtPg2P4Sch3Particulars4)"
+    },
+    "table:3:s2more": {
+      "no": "",
+      "label": "Schedule 2 – Description of Shares of Stocks, rows D (4) and after",
+      "templates": [
+        "frm1707:txtPg2Pt4S2_{N>=1}Col1",
+        "frm1707:txtPg2Pt4S2_{N>=1}Col2",
+        "frm1707:txtPg2Pt4S2_{N>=1}Col3",
+        "frm1707:txtPg2Pt4S2_{N>=1}Col4"
+      ],
+      "row_keys": {
+        "frm1707:txtPg2Pt4S2_{N>=1}Col1": "frm1707:txtPg2Pt4S2_{index}Col1",
+        "frm1707:txtPg2Pt4S2_{N>=1}Col2": "frm1707:txtPg2Pt4S2_{index}Col2",
+        "frm1707:txtPg2Pt4S2_{N>=1}Col3": "frm1707:txtPg2Pt4S2_{index}Col3",
+        "frm1707:txtPg2Pt4S2_{N>=1}Col4": "frm1707:txtPg2Pt4S2_{index}Col4"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Name of Corporate Stock",
+        "No. of Shares",
+        "Stock Certificate Number",
+        "Taxable Base/Selling Price"
+      ],
+      "evidence": "N04: 'Schedule 2 – Description of Shares of Stocks: Name of Corporate Stock, No. of Shares, Stock Certificate Number, Taxable Base/Selling Price ... Total Taxable Base (To Part II Item 10)'. form_1707.rs: Schedules 2 and 3 take any number of rows; beyond row D the official 'More' pop-up takes D and the rest, row D then reads OTHERS with the pop-up subtotal, and official_layout writes the pop-up rows where the page keeps them. Pop-up row k is draft row D+k-1 (the agent binds _1 to /shares/3 and /expenses/3), so the rows are numbered from 4 (D). The probe binds rows 1-19 and more (agent supplement_row_families). Captions from html-frozen/1707-2021/index.html.",
+      "start": 4
+    },
+    "table:3:s3more": {
+      "no": "",
+      "label": "Schedule 3 – Schedule of Cost and Other Allowable Expenses, rows D (4) and after",
+      "templates": [
+        "frm1707:txtPg2Pt4S3_{N>=1}Col1",
+        "frm1707:txtPg2Pt4S3_{N>=1}Col2"
+      ],
+      "row_keys": {
+        "frm1707:txtPg2Pt4S3_{N>=1}Col1": "frm1707:txtPg2Pt4S3_{index}Col1",
+        "frm1707:txtPg2Pt4S3_{N>=1}Col2": "frm1707:txtPg2Pt4S3_{index}Col2"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Particulars",
+        "Amount"
+      ],
+      "evidence": "N04: 'Schedule 3 – Schedule of Cost and Other Allowable Expenses: Particulars, Amount ... Total (To Part II Item 11)'. form_1707.rs: Schedules 2 and 3 take any number of rows; beyond row D the official 'More' pop-up takes D and the rest, row D then reads OTHERS with the pop-up subtotal, and official_layout writes the pop-up rows where the page keeps them. Pop-up row k is draft row D+k-1 (the agent binds _1 to /shares/3 and /expenses/3), so the rows are numbered from 4 (D). The probe binds rows 1-19 and more (agent supplement_row_families). Captions from html-frozen/1707-2021/index.html.",
+      "start": 4
     }
   },
   "1707A": {
@@ -10998,229 +11309,9 @@
       "label": "No",
       "evidence": "Official .hta: AmendedRtn_1 is Yes, AmendedRtn_2 is No (checked across the eBIRForms forms, 2026-10-15)."
     },
-    "frm1800v2018:schedA:txtParticulars0": {
-      "label": "Schedule A row 1 Particulars",
-      "evidence": "P4: printed caption 'Schedule A row 1 Particulars' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtFairMarketValue0": {
-      "label": "Schedule A row 1 Fair Market Value",
-      "evidence": "P4: printed caption 'Schedule A row 1 Fair Market Value' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtParticulars1": {
-      "label": "Schedule A row 2 Particulars",
-      "evidence": "P4: printed caption 'Schedule A row 2 Particulars' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtFairMarketValue1": {
-      "label": "Schedule A row 2 Fair Market Value",
-      "evidence": "P4: printed caption 'Schedule A row 2 Fair Market Value' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtParticulars2": {
-      "label": "Schedule A row 3 Particulars",
-      "evidence": "P4: printed caption 'Schedule A row 3 Particulars' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtFairMarketValue2": {
-      "label": "Schedule A row 3 Fair Market Value",
-      "evidence": "P4: printed caption 'Schedule A row 3 Fair Market Value' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtParticulars3": {
-      "label": "Schedule A row 4 Particulars",
-      "evidence": "P4: printed caption 'Schedule A row 4 Particulars' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtFairMarketValue3": {
-      "label": "Schedule A row 4 Fair Market Value",
-      "evidence": "P4: printed caption 'Schedule A row 4 Fair Market Value' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtParticulars4": {
-      "label": "Schedule A row 5 Particulars",
-      "evidence": "P4: printed caption 'Schedule A row 5 Particulars' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedA:txtFairMarketValue4": {
-      "label": "Schedule A row 5 Fair Market Value",
-      "evidence": "P4: printed caption 'Schedule A row 5 Fair Market Value' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
     "frm1800v2018:schedA:txtTotalPayment1": {
       "label": "TOTAL (To Part IV Item 25)",
       "evidence": "P4: printed caption 'TOTAL (To Part IV Item 25)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtOCT0": {
-      "label": "Schedule B row 1 OCT/TCT/CCT No.",
-      "evidence": "P4: printed caption 'Schedule B row 1 OCT/TCT/CCT No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtTaxDecNo0": {
-      "label": "Schedule B row 1 Tax Declaration No.",
-      "evidence": "P4: printed caption 'Schedule B row 1 Tax Declaration No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLocation0": {
-      "label": "Schedule B row 1 Location",
-      "evidence": "P4: printed caption 'Schedule B row 1 Location' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLotImprovement0": {
-      "label": "Schedule B row 1 Lot/Improvement",
-      "evidence": "P4: printed caption 'Schedule B row 1 Lot/Improvement' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtClassification0": {
-      "label": "Schedule B row 1 Classification",
-      "evidence": "P4: printed caption 'Schedule B row 1 Classification' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtOCT1": {
-      "label": "Schedule B row 2 OCT/TCT/CCT No.",
-      "evidence": "P4: printed caption 'Schedule B row 2 OCT/TCT/CCT No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtTaxDecNo1": {
-      "label": "Schedule B row 2 Tax Declaration No.",
-      "evidence": "P4: printed caption 'Schedule B row 2 Tax Declaration No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLocation1": {
-      "label": "Schedule B row 2 Location",
-      "evidence": "P4: printed caption 'Schedule B row 2 Location' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLotImprovement1": {
-      "label": "Schedule B row 2 Lot/Improvement",
-      "evidence": "P4: printed caption 'Schedule B row 2 Lot/Improvement' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtClassification1": {
-      "label": "Schedule B row 2 Classification",
-      "evidence": "P4: printed caption 'Schedule B row 2 Classification' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtOCT2": {
-      "label": "Schedule B row 3 OCT/TCT/CCT No.",
-      "evidence": "P4: printed caption 'Schedule B row 3 OCT/TCT/CCT No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtTaxDecNo2": {
-      "label": "Schedule B row 3 Tax Declaration No.",
-      "evidence": "P4: printed caption 'Schedule B row 3 Tax Declaration No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLocation2": {
-      "label": "Schedule B row 3 Location",
-      "evidence": "P4: printed caption 'Schedule B row 3 Location' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLotImprovement2": {
-      "label": "Schedule B row 3 Lot/Improvement",
-      "evidence": "P4: printed caption 'Schedule B row 3 Lot/Improvement' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtClassification2": {
-      "label": "Schedule B row 3 Classification",
-      "evidence": "P4: printed caption 'Schedule B row 3 Classification' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtOCT3": {
-      "label": "Schedule B row 4 OCT/TCT/CCT No.",
-      "evidence": "P4: printed caption 'Schedule B row 4 OCT/TCT/CCT No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtTaxDecNo3": {
-      "label": "Schedule B row 4 Tax Declaration No.",
-      "evidence": "P4: printed caption 'Schedule B row 4 Tax Declaration No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLocation3": {
-      "label": "Schedule B row 4 Location",
-      "evidence": "P4: printed caption 'Schedule B row 4 Location' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLotImprovement3": {
-      "label": "Schedule B row 4 Lot/Improvement",
-      "evidence": "P4: printed caption 'Schedule B row 4 Lot/Improvement' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtClassification3": {
-      "label": "Schedule B row 4 Classification",
-      "evidence": "P4: printed caption 'Schedule B row 4 Classification' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtOCT4": {
-      "label": "Schedule B row 5 OCT/TCT/CCT No.",
-      "evidence": "P4: printed caption 'Schedule B row 5 OCT/TCT/CCT No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtTaxDecNo4": {
-      "label": "Schedule B row 5 Tax Declaration No.",
-      "evidence": "P4: printed caption 'Schedule B row 5 Tax Declaration No.' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLocation4": {
-      "label": "Schedule B row 5 Location",
-      "evidence": "P4: printed caption 'Schedule B row 5 Location' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtLotImprovement4": {
-      "label": "Schedule B row 5 Lot/Improvement",
-      "evidence": "P4: printed caption 'Schedule B row 5 Lot/Improvement' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB1:txtClassification4": {
-      "label": "Schedule B row 5 Classification",
-      "evidence": "P4: printed caption 'Schedule B row 5 Classification' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtArea0": {
-      "label": "Schedule B continuation row 1 Area",
-      "evidence": "P4: printed caption 'Schedule B continuation row 1 Area' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFTD0": {
-      "label": "Schedule B continuation row 1 FMV per TD",
-      "evidence": "P4: printed caption 'Schedule B continuation row 1 FMV per TD' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue0": {
-      "label": "Schedule B continuation row 1 FMV per BIR (Zonal Value)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 1 FMV per BIR (Zonal Value)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFairMarketValue0": {
-      "label": "Schedule B continuation row 1 FMV (whichever is higher)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 1 FMV (whichever is higher)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtArea1": {
-      "label": "Schedule B continuation row 2 Area",
-      "evidence": "P4: printed caption 'Schedule B continuation row 2 Area' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFTD1": {
-      "label": "Schedule B continuation row 2 FMV per TD",
-      "evidence": "P4: printed caption 'Schedule B continuation row 2 FMV per TD' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue1": {
-      "label": "Schedule B continuation row 2 FMV per BIR (Zonal Value)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 2 FMV per BIR (Zonal Value)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFairMarketValue1": {
-      "label": "Schedule B continuation row 2 FMV (whichever is higher)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 2 FMV (whichever is higher)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtArea2": {
-      "label": "Schedule B continuation row 3 Area",
-      "evidence": "P4: printed caption 'Schedule B continuation row 3 Area' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFTD2": {
-      "label": "Schedule B continuation row 3 FMV per TD",
-      "evidence": "P4: printed caption 'Schedule B continuation row 3 FMV per TD' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue2": {
-      "label": "Schedule B continuation row 3 FMV per BIR (Zonal Value)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 3 FMV per BIR (Zonal Value)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFairMarketValue2": {
-      "label": "Schedule B continuation row 3 FMV (whichever is higher)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 3 FMV (whichever is higher)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtArea3": {
-      "label": "Schedule B continuation row 4 Area",
-      "evidence": "P4: printed caption 'Schedule B continuation row 4 Area' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFTD3": {
-      "label": "Schedule B continuation row 4 FMV per TD",
-      "evidence": "P4: printed caption 'Schedule B continuation row 4 FMV per TD' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue3": {
-      "label": "Schedule B continuation row 4 FMV per BIR (Zonal Value)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 4 FMV per BIR (Zonal Value)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFairMarketValue3": {
-      "label": "Schedule B continuation row 4 FMV (whichever is higher)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 4 FMV (whichever is higher)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtArea4": {
-      "label": "Schedule B continuation row 5 Area",
-      "evidence": "P4: printed caption 'Schedule B continuation row 5 Area' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFTD4": {
-      "label": "Schedule B continuation row 5 FMV per TD",
-      "evidence": "P4: printed caption 'Schedule B continuation row 5 FMV per TD' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue4": {
-      "label": "Schedule B continuation row 5 FMV per BIR (Zonal Value)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 5 FMV per BIR (Zonal Value)' (html-frozen/1800-2018/writer-cells.json joins)"
-    },
-    "frm1800v2018:schedB2:txtFairMarketValue4": {
-      "label": "Schedule B continuation row 5 FMV (whichever is higher)",
-      "evidence": "P4: printed caption 'Schedule B continuation row 5 FMV (whichever is higher)' (html-frozen/1800-2018/writer-cells.json joins)"
     },
     "frm1800v2018:schedB2:txtTotal": {
       "label": "TOTAL (To Part IV Item 26)",
@@ -11281,6 +11372,69 @@
     "item:1:10": {
       "label": "Donee’s Name / Donee’s Taxpayer Identification Number",
       "evidence": "P4: html-frozen/1800-2018/index.html prints 'Donee’s Name (Attach additional sheet/s, if necessary)' and 'Donee’s Taxpayer Identification Number' over the donee table"
+    },
+    "table:4:schedA": {
+      "no": "",
+      "label": "Schedule A – Description of Donated Personal Property",
+      "templates": [
+        "frm1800v2018:schedA:txtParticulars{index}",
+        "frm1800v2018:schedA:txtFairMarketValue{index}"
+      ],
+      "row_keys": {
+        "frm1800v2018:schedA:txtParticulars{index}": "frm1800v2018:schedA:txtParticulars{index}",
+        "frm1800v2018:schedA:txtFairMarketValue{index}": "frm1800v2018:schedA:txtFairMarketValue{index}"
+      },
+      "rows": [
+        0,
+        14
+      ],
+      "cols": [
+        "Particulars",
+        "Fair Market Value"
+      ],
+      "evidence": "N04: html-frozen/1800-2018/index.html 'Schedule A – Description of Donated Personal Property ... PARTICULARS, FAIR MARKET VALUE ... TOTAL (To Part IV Item 25)'. The draft keeps every row (form_1800.rs: Schedules A and B open with five rows; addScheduleA/B1/B2 append more without a limit) and the probe binds rows 0-16 and more (agent supplement_row_families); the table offers rows 1-15. The extractor's per-row labels are these column captions now."
+    },
+    "table:4:schedB": {
+      "no": "",
+      "label": "Schedule B – Description of Donated Real Property (with its continuation)",
+      "templates": [
+        "frm1800v2018:schedB1:txtOCT{index}",
+        "frm1800v2018:schedB1:txtTaxDecNo{index}",
+        "frm1800v2018:schedB1:txtLocation{index}",
+        "frm1800v2018:schedB1:txtLotImprovement{index}",
+        "frm1800v2018:schedB1:txtClassification{index}",
+        "frm1800v2018:schedB2:txtArea{index}",
+        "frm1800v2018:schedB2:txtFTD{index}",
+        "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue{index}",
+        "frm1800v2018:schedB2:txtFairMarketValue{index}"
+      ],
+      "row_keys": {
+        "frm1800v2018:schedB1:txtOCT{index}": "frm1800v2018:schedB1:txtOCT{index}",
+        "frm1800v2018:schedB1:txtTaxDecNo{index}": "frm1800v2018:schedB1:txtTaxDecNo{index}",
+        "frm1800v2018:schedB1:txtLocation{index}": "frm1800v2018:schedB1:txtLocation{index}",
+        "frm1800v2018:schedB1:txtLotImprovement{index}": "frm1800v2018:schedB1:txtLotImprovement{index}",
+        "frm1800v2018:schedB1:txtClassification{index}": "frm1800v2018:schedB1:txtClassification{index}",
+        "frm1800v2018:schedB2:txtArea{index}": "frm1800v2018:schedB2:txtArea{index}",
+        "frm1800v2018:schedB2:txtFTD{index}": "frm1800v2018:schedB2:txtFTD{index}",
+        "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue{index}": "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue{index}",
+        "frm1800v2018:schedB2:txtFairMarketValue{index}": "frm1800v2018:schedB2:txtFairMarketValue{index}"
+      },
+      "rows": [
+        0,
+        14
+      ],
+      "cols": [
+        "OCT/TCT/CCT No.",
+        "Tax Declaration No. (TD)",
+        "Location",
+        "Lot/Improvement",
+        "*Classification",
+        "Area",
+        "Fair Market Value (FMV) per TD",
+        "FMV per BIR (Zonal Value)",
+        "Fair Market Value (whichever is higher)"
+      ],
+      "evidence": "N04: html-frozen/1800-2018/index.html 'Schedule B – Description of Donated Real Property: OCT/TCT/CCT NO., TAX DECLARATION NO. (TD), LOCATION, LOT/IMPROVEMENT, *CLASSIFICATION' and 'Schedule B – Continuation ...: AREA, FAIR MARKET VALUE (FMV) PER TD, FMV PER BIR (ZONAL VALUE), FAIR MARKET VALUE (whichever is higher) ... TOTAL (To Part IV Item 26)'; both halves are one draft row (real_properties). The draft keeps every row (form_1800.rs: Schedules A and B open with five rows; addScheduleA/B1/B2 append more without a limit) and the probe binds rows 0-16 and more (agent supplement_row_families); the table offers rows 1-15. The extractor's per-row labels are these column captions now."
     }
   },
   "1801": {
@@ -12095,249 +12249,9 @@
       "label": "Schedule 1C — Others amount",
       "evidence": "painted form_2000ot_view.rs (local:othamt via binding /others_amount): 'Schedule 1C — Others amount'; writer-cells printed caption: 'C Others (Specify) amount'"
     },
-    "frm2000OT:sched1A:txtOCTNo0": {
-      "label": "OCT/TCT/CCT No. (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'OCT/TCT/CCT No. (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtTaxDecNo0": {
-      "label": "Tax Declaration No. (TD) (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Tax Declaration No. (TD) (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLoc0": {
-      "label": "Location (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Location (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtOCTNo1": {
-      "label": "OCT/TCT/CCT No. (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'OCT/TCT/CCT No. (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtTaxDecNo1": {
-      "label": "Tax Declaration No. (TD) (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Tax Declaration No. (TD) (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLoc1": {
-      "label": "Location (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Location (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtOCTNo2": {
-      "label": "OCT/TCT/CCT No. (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'OCT/TCT/CCT No. (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtTaxDecNo2": {
-      "label": "Tax Declaration No. (TD) (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Tax Declaration No. (TD) (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLoc2": {
-      "label": "Location (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Location (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtOCTNo3": {
-      "label": "OCT/TCT/CCT No. (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'OCT/TCT/CCT No. (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtTaxDecNo3": {
-      "label": "Tax Declaration No. (TD) (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Tax Declaration No. (TD) (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLoc3": {
-      "label": "Location (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Location (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtOCTNo4": {
-      "label": "OCT/TCT/CCT No. (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'OCT/TCT/CCT No. (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtTaxDecNo4": {
-      "label": "Tax Declaration No. (TD) (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Tax Declaration No. (TD) (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLoc4": {
-      "label": "Location (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Location (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLot0": {
-      "label": "Lot / Improvement (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Lot / Improvement (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtClassification0": {
-      "label": "Classification (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Classification (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtArea0": {
-      "label": "Area (sq.m.) (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Area (sq.m.) (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol10": {
-      "label": "Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol20": {
-      "label": "Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVSubTot0": {
-      "label": "Sub-total (between Columns 1 & 2) (Schedule 1.A row 1)",
-      "evidence": "P4: printed caption 'Sub-total (between Columns 1 & 2) (Schedule 1.A row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLot1": {
-      "label": "Lot / Improvement (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Lot / Improvement (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtClassification1": {
-      "label": "Classification (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Classification (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtArea1": {
-      "label": "Area (sq.m.) (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Area (sq.m.) (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol11": {
-      "label": "Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol21": {
-      "label": "Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVSubTot1": {
-      "label": "Sub-total (Schedule 1.A row 2)",
-      "evidence": "P4: printed caption 'Sub-total (Schedule 1.A row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLot2": {
-      "label": "Lot / Improvement (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Lot / Improvement (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtClassification2": {
-      "label": "Classification (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Classification (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtArea2": {
-      "label": "Area (sq.m.) (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Area (sq.m.) (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol12": {
-      "label": "Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol22": {
-      "label": "Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVSubTot2": {
-      "label": "Sub-total (Schedule 1.A row 3)",
-      "evidence": "P4: printed caption 'Sub-total (Schedule 1.A row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLot3": {
-      "label": "Lot / Improvement (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Lot / Improvement (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtClassification3": {
-      "label": "Classification (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Classification (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtArea3": {
-      "label": "Area (sq.m.) (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Area (sq.m.) (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol13": {
-      "label": "Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol23": {
-      "label": "Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVSubTot3": {
-      "label": "Sub-total (Schedule 1.A row 4)",
-      "evidence": "P4: printed caption 'Sub-total (Schedule 1.A row 4)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtLot4": {
-      "label": "Lot / Improvement (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Lot / Improvement (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtClassification4": {
-      "label": "Classification (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Classification (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtArea4": {
-      "label": "Area (sq.m.) (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Area (sq.m.) (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol14": {
-      "label": "Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 1) (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVCol24": {
-      "label": "Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Fair Market Value per sq.m. (Column 2) (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1A:txtFMVSubTot4": {
-      "label": "Sub-total (Schedule 1.A row 5)",
-      "evidence": "P4: printed caption 'Sub-total (Schedule 1.A row 5)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
     "frm2000OT:sched1A:txtFMVTotal": {
       "label": "TOTAL (To Schedule 2 Item B)",
       "evidence": "P4: printed caption 'TOTAL (To Schedule 2 Item B)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtNameOfCorpStock0": {
-      "label": "Name of Corporate Stock (a) (Schedule 1.B row 1)",
-      "evidence": "P4: printed caption 'Name of Corporate Stock (a) (Schedule 1.B row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtNoOfSharesSold0": {
-      "label": "Number of Shares Sold (b) (Schedule 1.B row 1)",
-      "evidence": "P4: printed caption 'Number of Shares Sold (b) (Schedule 1.B row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtStockCertNo0": {
-      "label": "Stock Certificate Number (c) (Schedule 1.B row 1)",
-      "evidence": "P4: printed caption 'Stock Certificate Number (c) (Schedule 1.B row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtParValOfShares0": {
-      "label": "Par value of shares (d) (Schedule 1.B row 1)",
-      "evidence": "P4: printed caption 'Par value of shares (d) (Schedule 1.B row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtDSTPaid0": {
-      "label": "DST Paid (e) (Schedule 1.B row 1)",
-      "evidence": "P4: printed caption 'DST Paid (e) (Schedule 1.B row 1)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtNameOfCorpStock1": {
-      "label": "Name of Corporate Stock (a) (Schedule 1.B row 2)",
-      "evidence": "P4: printed caption 'Name of Corporate Stock (a) (Schedule 1.B row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtNoOfSharesSold1": {
-      "label": "Number of Shares Sold (b) (Schedule 1.B row 2)",
-      "evidence": "P4: printed caption 'Number of Shares Sold (b) (Schedule 1.B row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtStockCertNo1": {
-      "label": "Stock Certificate Number (c) (Schedule 1.B row 2)",
-      "evidence": "P4: printed caption 'Stock Certificate Number (c) (Schedule 1.B row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtParValOfShares1": {
-      "label": "Par value of shares (d) (Schedule 1.B row 2)",
-      "evidence": "P4: printed caption 'Par value of shares (d) (Schedule 1.B row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtDSTPaid1": {
-      "label": "DST Paid (e) (Schedule 1.B row 2)",
-      "evidence": "P4: printed caption 'DST Paid (e) (Schedule 1.B row 2)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtNameOfCorpStock2": {
-      "label": "Name of Corporate Stock (a) (Schedule 1.B row 3)",
-      "evidence": "P4: printed caption 'Name of Corporate Stock (a) (Schedule 1.B row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtNoOfSharesSold2": {
-      "label": "Number of Shares Sold (b) (Schedule 1.B row 3)",
-      "evidence": "P4: printed caption 'Number of Shares Sold (b) (Schedule 1.B row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtStockCertNo2": {
-      "label": "Stock Certificate Number (c) (Schedule 1.B row 3)",
-      "evidence": "P4: printed caption 'Stock Certificate Number (c) (Schedule 1.B row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtParValOfShares2": {
-      "label": "Par value of shares (d) (Schedule 1.B row 3)",
-      "evidence": "P4: printed caption 'Par value of shares (d) (Schedule 1.B row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
-    },
-    "frm2000OT:sched1B:txtDSTPaid2": {
-      "label": "DST Paid (e) (Schedule 1.B row 3)",
-      "evidence": "P4: printed caption 'DST Paid (e) (Schedule 1.B row 3)' (html-frozen/2000-ot-2018/writer-cells.json joins)"
     },
     "frm2000OT:Sched2:txtTotalFairMarket": {
       "label": "B Total Fair Market Value of Land and Improvement per Schedule 1.A",
@@ -12386,6 +12300,142 @@
     "frm2000OT:txtTax21": {
       "label": "21 Total Amount Payable/(Overpayment) (Sum of Items 19 and 20D)",
       "evidence": "P4: printed caption '21 Total Amount Payable/(Overpayment) (Sum of Items 19 and 20D)' (html-frozen/2000-ot-2018/writer-cells.json money_joins frm2000OT:txtTax21)"
+    },
+    "table:3:sched1a": {
+      "no": "",
+      "label": "Schedule 1.A – Real Property (with its continuation)",
+      "templates": [
+        "frm2000OT:sched1A:txtOCTNo{index}",
+        "frm2000OT:sched1A:txtTaxDecNo{index}",
+        "frm2000OT:sched1A:txtLoc{index}",
+        "frm2000OT:sched1A:txtLot{index}",
+        "frm2000OT:sched1A:txtClassification{index}",
+        "frm2000OT:sched1A:txtArea{index}",
+        "frm2000OT:sched1A:txtFMVCol1{index}",
+        "frm2000OT:sched1A:txtFMVCol2{index}",
+        "frm2000OT:sched1A:txtFMVSubTot{index}"
+      ],
+      "row_keys": {
+        "frm2000OT:sched1A:txtOCTNo{index}": "frm2000OT:sched1A:txtOCTNo{index}",
+        "frm2000OT:sched1A:txtTaxDecNo{index}": "frm2000OT:sched1A:txtTaxDecNo{index}",
+        "frm2000OT:sched1A:txtLoc{index}": "frm2000OT:sched1A:txtLoc{index}",
+        "frm2000OT:sched1A:txtLot{index}": "frm2000OT:sched1A:txtLot{index}",
+        "frm2000OT:sched1A:txtClassification{index}": "frm2000OT:sched1A:txtClassification{index}",
+        "frm2000OT:sched1A:txtArea{index}": "frm2000OT:sched1A:txtArea{index}",
+        "frm2000OT:sched1A:txtFMVCol1{index}": "frm2000OT:sched1A:txtFMVCol1{index}",
+        "frm2000OT:sched1A:txtFMVCol2{index}": "frm2000OT:sched1A:txtFMVCol2{index}",
+        "frm2000OT:sched1A:txtFMVSubTot{index}": "frm2000OT:sched1A:txtFMVSubTot{index}"
+      },
+      "rows": [
+        0,
+        14
+      ],
+      "cols": [
+        "OCT/TCT/CCT No.",
+        "Tax Declaration No. (TD)",
+        "Location",
+        "Lot / Improvement",
+        "*Classification",
+        "Area (sq.m.)",
+        "FMV per TD (Column 1)",
+        "FMV per BIR (Zonal Value) (Column 2)",
+        "Fair Market Value (whichever is higher)"
+      ],
+      "evidence": "N04: html-frozen/2000-ot-2018/index.html 'Schedule 1 – Brief Description of Property ... 1.A - Real Property: OCT/TCT/CCT No., Tax Declaration No. (TD), Location' and 'Continuation of Schedule 1.A: Lot / Improvement, *Classification, Area (sq.m.), Fair Market Value (FMV) per TD (Column 1), FMV per BIR (Zonal Value) (Column 2), Fair Market Value (whichever is higher between Columns 1 & 2) ... TOTAL (To Schedule 2 Item B)'; the last column is computed (template computed). The draft keeps every row (form_2000ot.rs: Schedule 1.A starts with five rows, 1.B with three; 'Add' appends rows) and the probe binds rows 0-13 and more (agent supplement_row_families). The extractor's per-row labels are these column captions now."
+    },
+    "table:3:sched1b": {
+      "no": "",
+      "label": "Schedule 1.B – Shares of Stock",
+      "templates": [
+        "frm2000OT:sched1B:txtNameOfCorpStock{index}",
+        "frm2000OT:sched1B:txtNoOfSharesSold{index}",
+        "frm2000OT:sched1B:txtStockCertNo{index}",
+        "frm2000OT:sched1B:txtParValOfShares{index}",
+        "frm2000OT:sched1B:txtDSTPaid{index}"
+      ],
+      "row_keys": {
+        "frm2000OT:sched1B:txtNameOfCorpStock{index}": "frm2000OT:sched1B:txtNameOfCorpStock{index}",
+        "frm2000OT:sched1B:txtNoOfSharesSold{index}": "frm2000OT:sched1B:txtNoOfSharesSold{index}",
+        "frm2000OT:sched1B:txtStockCertNo{index}": "frm2000OT:sched1B:txtStockCertNo{index}",
+        "frm2000OT:sched1B:txtParValOfShares{index}": "frm2000OT:sched1B:txtParValOfShares{index}",
+        "frm2000OT:sched1B:txtDSTPaid{index}": "frm2000OT:sched1B:txtDSTPaid{index}"
+      },
+      "rows": [
+        0,
+        12
+      ],
+      "cols": [
+        "(a) Name of Corporate Stock",
+        "(b) Number of Shares Sold",
+        "(c) Stock Certificate Number",
+        "(d) Par Value of Shares (with par value)",
+        "(e) DST Paid Upon Original Issue (without par value)"
+      ],
+      "evidence": "N04: html-frozen/2000-ot-2018/index.html '1.B - Shares of Stock: Name of Corporate Stock, Number of Shares Sold, Stock Certificate Number, Par Value of Shares (for shares of stock with par value), DST Paid Upon Original Issue (for shares of stock without par value) (a)-(e)'. The draft keeps every row (form_2000ot.rs: Schedule 1.A starts with five rows, 1.B with three; 'Add' appends rows) and the probe binds rows 0-13 and more (agent supplement_row_families). The extractor's per-row labels are these column captions now."
+    },
+    "chkSchedule1ADelete{index}": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1A1Delete{index}": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1BDelete{index}": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1ADelete0": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1ADelete1": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1ADelete2": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1ADelete3": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1ADelete4": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1A1Delete0": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1A1Delete1": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1A1Delete2": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1A1Delete3": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1A1Delete4": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1BDelete0": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1BDelete1": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "chkSchedule1BDelete2": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
     }
   },
   "2200A": {
@@ -16016,6 +16066,78 @@
     "ebirOnlineSecret": {
       "kind": "hidden",
       "evidence": "internal workflow/credential key ebirOnlineSecret (not a printed box)"
+    },
+    "table:3:added": {
+      "no": "",
+      "label": "Schedule 1 – Added XM060 rows (11 and after)",
+      "templates": [
+        "frm2200M:txtSched1ATC{n>=11}",
+        "frm2200M:txtSched1_description{n>=11}",
+        "frm2200M:txtSched1_PlaceOfRemoval{n>=11}",
+        "frm2200M:txtSched1_VOMRITaxableA{n>=11}",
+        "frm2200M:txtSched1_VOMRIExemptB{n>=11}",
+        "frm2200M:txtSched1_LocallyExtractedRateC{n>=11}",
+        "frm2200M:txtSched1_LocallyExtractedRateD{n>=11}",
+        "frm2200M:txtSched1_LocallyExtractedTaxRateE{n>=11}",
+        "frm2200M:txtSched1_LocallyExtractedTaxDueF{n>=11}",
+        "frm2200M:txtSched1_descriptionCont{n>=11}",
+        "frm2200M:txtSched1_ImportedTaxableG{n>=11}",
+        "frm2200M:txtSched1_ImportedExemptH{n>=11}",
+        "frm2200M:txtSched1_ImportedTaxRate{n>=11}",
+        "frm2200M:txtSched1_ImportedTaxDue{n>=11}",
+        "frm2200M:txtSched1_TaxDueAdjustment{n>=11}",
+        "frm2200M:txtSched1_TotalTaxDue{n>=11}"
+      ],
+      "row_keys": {
+        "frm2200M:txtSched1ATC{n>=11}": "frm2200M:txtSched1ATC{index}",
+        "frm2200M:txtSched1_description{n>=11}": "frm2200M:txtSched1_description{index}",
+        "frm2200M:txtSched1_PlaceOfRemoval{n>=11}": "frm2200M:txtSched1_PlaceOfRemoval{index}",
+        "frm2200M:txtSched1_VOMRITaxableA{n>=11}": "frm2200M:txtSched1_VOMRITaxableA{index}",
+        "frm2200M:txtSched1_VOMRIExemptB{n>=11}": "frm2200M:txtSched1_VOMRIExemptB{index}",
+        "frm2200M:txtSched1_LocallyExtractedRateC{n>=11}": "frm2200M:txtSched1_LocallyExtractedRateC{index}",
+        "frm2200M:txtSched1_LocallyExtractedRateD{n>=11}": "frm2200M:txtSched1_LocallyExtractedRateD{index}",
+        "frm2200M:txtSched1_LocallyExtractedTaxRateE{n>=11}": "frm2200M:txtSched1_LocallyExtractedTaxRateE{index}",
+        "frm2200M:txtSched1_LocallyExtractedTaxDueF{n>=11}": "frm2200M:txtSched1_LocallyExtractedTaxDueF{index}",
+        "frm2200M:txtSched1_descriptionCont{n>=11}": "frm2200M:txtSched1_descriptionCont{index}",
+        "frm2200M:txtSched1_ImportedTaxableG{n>=11}": "frm2200M:txtSched1_ImportedTaxableG{index}",
+        "frm2200M:txtSched1_ImportedExemptH{n>=11}": "frm2200M:txtSched1_ImportedExemptH{index}",
+        "frm2200M:txtSched1_ImportedTaxRate{n>=11}": "frm2200M:txtSched1_ImportedTaxRate{index}",
+        "frm2200M:txtSched1_ImportedTaxDue{n>=11}": "frm2200M:txtSched1_ImportedTaxDue{index}",
+        "frm2200M:txtSched1_TaxDueAdjustment{n>=11}": "frm2200M:txtSched1_TaxDueAdjustment{index}",
+        "frm2200M:txtSched1_TotalTaxDue{n>=11}": "frm2200M:txtSched1_TotalTaxDue{index}"
+      },
+      "rows": [
+        11,
+        22
+      ],
+      "cols": [
+        "ATC",
+        "Description (specify)",
+        "Place of Removal",
+        "Locally extracted: (A) Volume Removed (MT), Taxable",
+        "(B) Volume Removed (MT), Export",
+        "(C) Actual/Fair Market Value, Taxable",
+        "(D) Actual/Fair Market Value, Export",
+        "(E) Tax Rate",
+        "(F) Tax Due",
+        "Imported: Description",
+        "(G) Value used by BOC, Taxable",
+        "(H) Value used by BOC, Exempt",
+        "(I) Tax Rate",
+        "(J) Tax Due",
+        "(K) Tax Due Adjustment per Final Value",
+        "(L) Total Tax Due (F+J+K)"
+      ],
+      "evidence": "N04: form_2200m.rs: 'Add row' (addRowSched1) appends more XM060 rows, each cell landing at the end of its own column table, and official_layout uploads them there (up to FORM_2200M_MAX_ROWS); sched1RowTemplate gives every added row the XM060 ATC and the imported half repeats the description (txtSched1_descriptionCont), so those two columns are computed. The probe binds rows 11-26 (agent supplement_row_families); the table offers rows 11-22. Captions from html-frozen/2200m-2018/index.html Schedule 1 and its continuation ((A)-(L)).",
+      "start": 11
+    },
+    "frm2200M:txtSched1ATC11": {
+      "computed": true,
+      "evidence": "N04: every added row's ATC is XM060 (form_2200m.rs FORM_2200M_OTHER_ATC, written by the field map); the filer does not type it."
+    },
+    "frm2200M:chkBoxSched1Description{n>=11}": {
+      "kind": "hidden",
+      "evidence": "N04: the added row's tick box only selects it for the page's Delete button; it is not a draft field (the probe finds no binding)."
     }
   },
   "2200P": {
@@ -17399,63 +17521,65 @@
     },
     "frm2200P:chkBoxSched1ATC{n>=28}": {
       "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+      "evidence": "N04: the added row's tick box only selects it for the page's Delete button; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
     },
-    "frm2200P:txtSched1ATC{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1Description{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1UnitOfMeasure{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1ApplicableRate{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1PlaceOfRemoval{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1LocalManuProd{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1Imported{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1TotTaxRemovals{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1TaxPaidImported{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1UnderBond{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1Exports{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1Others{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1TotTaxPaid{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
-    },
-    "frm2200P:txtSched1BasicExciseTaxDue{n>=28}": {
-      "kind": "hidden",
-      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    "table:4:added": {
+      "no": "",
+      "label": "Schedule 1 – Added rows (28 and after)",
+      "templates": [
+        "frm2200P:txtSched1ATC{n>=28}",
+        "frm2200P:txtSched1Description{n>=28}",
+        "frm2200P:txtSched1UnitOfMeasure{n>=28}",
+        "frm2200P:txtSched1ApplicableRate{n>=28}",
+        "frm2200P:txtSched1PlaceOfRemoval{n>=28}",
+        "frm2200P:txtSched1LocalManuProd{n>=28}",
+        "frm2200P:txtSched1Imported{n>=28}",
+        "frm2200P:txtSched1TotTaxRemovals{n>=28}",
+        "frm2200P:txtSched1TaxPaidImported{n>=28}",
+        "frm2200P:txtSched1UnderBond{n>=28}",
+        "frm2200P:txtSched1Exports{n>=28}",
+        "frm2200P:txtSched1Others{n>=28}",
+        "frm2200P:txtSched1TotTaxPaid{n>=28}",
+        "frm2200P:txtSched1BasicExciseTaxDue{n>=28}"
+      ],
+      "row_keys": {
+        "frm2200P:txtSched1ATC{n>=28}": "frm2200P:txtSched1ATC{index}",
+        "frm2200P:txtSched1Description{n>=28}": "frm2200P:txtSched1Description{index}",
+        "frm2200P:txtSched1UnitOfMeasure{n>=28}": "frm2200P:txtSched1UnitOfMeasure{index}",
+        "frm2200P:txtSched1ApplicableRate{n>=28}": "frm2200P:txtSched1ApplicableRate{index}",
+        "frm2200P:txtSched1PlaceOfRemoval{n>=28}": "frm2200P:txtSched1PlaceOfRemoval{index}",
+        "frm2200P:txtSched1LocalManuProd{n>=28}": "frm2200P:txtSched1LocalManuProd{index}",
+        "frm2200P:txtSched1Imported{n>=28}": "frm2200P:txtSched1Imported{index}",
+        "frm2200P:txtSched1TotTaxRemovals{n>=28}": "frm2200P:txtSched1TotTaxRemovals{index}",
+        "frm2200P:txtSched1TaxPaidImported{n>=28}": "frm2200P:txtSched1TaxPaidImported{index}",
+        "frm2200P:txtSched1UnderBond{n>=28}": "frm2200P:txtSched1UnderBond{index}",
+        "frm2200P:txtSched1Exports{n>=28}": "frm2200P:txtSched1Exports{index}",
+        "frm2200P:txtSched1Others{n>=28}": "frm2200P:txtSched1Others{index}",
+        "frm2200P:txtSched1TotTaxPaid{n>=28}": "frm2200P:txtSched1TotTaxPaid{index}",
+        "frm2200P:txtSched1BasicExciseTaxDue{n>=28}": "frm2200P:txtSched1BasicExciseTaxDue{index}"
+      },
+      "rows": [
+        28,
+        41
+      ],
+      "start": 28,
+      "cols": [
+        "ATC (XP + digits)",
+        "Description",
+        "Unit of Measure",
+        "Applicable Rate",
+        "Place of Removal",
+        "Locally Manufactured/Produced",
+        "Imported",
+        "Total Taxable Removals",
+        "Tax-Paid Imported Stocks",
+        "Under Bond",
+        "Exports",
+        "Others (Special Law or International Agreement)",
+        "Total Tax-Paid/Exempt/Conditional Tax-Free Removals",
+        "Basic Excise Tax Due"
+      ],
+      "evidence": "N04: the official page appends Schedule 1 rows past 27 (addRowSched1); form_2200p.rs official_layout splices each added row's controls after the previous row's, up to FORM_2200P_MAX_ROWS (200), and counts them in sched1AddedRowCount. The probe binds rows 28-41 (agent forms supplement_row_families), so the table offers those fourteen. Captions are the printed Schedule 1 column captions (writer-cells, as on rows 1-27)."
     }
   },
   "2200S": {

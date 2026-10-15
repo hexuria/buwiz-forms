@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
 use bir_core::db::Database;
-use bir_core::forms::agent::{self, AgentFormDef, AgentFormKind, BoundBox, BoxDef};
+use bir_core::forms::agent::{self, AgentFormDef, AgentFormKind, Binding, BoundBox, BoxDef};
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::forms::{FilingPeriod, FilingStatus};
@@ -1244,6 +1244,29 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
+    // A row family's row the upload leaves out still shows what the draft
+    // holds: 1702RT writes its "(Add more...)" rows only once two or more
+    // are saved, but a single row is already the filer's entry.
+    let def = kind.definition();
+    for entry in def.boxes.iter().filter(|entry| entry.family.is_some()) {
+        if map.contains_key(&entry.key) {
+            continue;
+        }
+        let path = match def.bindings.get(&entry.key).map(|bound| &bound.binding) {
+            Some(
+                Binding::Text { path, .. }
+                | Binding::Amount { path, .. }
+                | Binding::Whole { path, .. },
+            ) => path,
+            _ => continue,
+        };
+        let shown = match draft.pointer(path) {
+            Some(Value::String(text)) => text.clone(),
+            Some(Value::Number(number)) => number.to_string(),
+            _ => continue,
+        };
+        map.insert(entry.key.clone(), shown);
+    }
     // 1702RT Item 5: the official select keeps IC010 even while "Other" is
     // not selected (the upload keeps that raw default); the page shows the
     // election, as the print does.
@@ -2303,6 +2326,236 @@ mod tests {
             reopened["values"]["frm1601c:sched1:txtMonthYear0"],
             "05/2026"
         );
+    }
+
+    /// N04: 2200P rows added past the 27 official ones save. The page
+    /// appends them (addRowSched1) and the upload carries them; the probe
+    /// now binds rows 28-41, which an "Added rows" table shows.
+    #[test]
+    fn rows_2200p_added_rows_save() {
+        setup();
+        let form = schema_entry("2200P").unwrap();
+        let table = form["parts"][4]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|it| it["keys"][0][0] == "frm2200P:txtSched1ATC28")
+            .expect("added rows table")
+            .clone();
+        assert_eq!(
+            (table["rows"].clone(), table["start"].clone()),
+            (json!(14), json!(28))
+        );
+
+        let opened = open("2200P", 7);
+        let filled = fill(
+            "2200P",
+            &opened["draft"],
+            json!({
+                "frm2200P:txtSched1ATC28": "999",
+                "frm2200P:txtSched1Description28": "Added product",
+                "frm2200P:txtSched1ApplicableRate28": "10",
+                "frm2200P:txtSched1BasicExciseTaxDue28": "500",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(filled["draft"]["schedule"].as_array().unwrap().len(), 28);
+        save("2200P", &filled["draft"]);
+        let reopened = open("2200P", 7);
+        assert_eq!(reopened["values"]["frm2200P:txtSched1ATC28"], "999");
+        let map = with_database(|db| print_map(db, kind_of("2200P")?, &reopened["draft"])).unwrap();
+        assert_eq!(
+            map.0
+                .get("frm2200P:sched1AddedRowCount")
+                .map(String::as_str),
+            Some("1")
+        );
+    }
+
+    /// N04: 1702RT "(Add more...)" rows save. One row shows from the draft
+    /// (the upload carries the modal rows only once two are saved); two
+    /// rows fold the item into OTHERS with their subtotal.
+    #[test]
+    fn rows_1702rt_add_more_rows_save() {
+        setup();
+        let form = schema_entry("1702RT").unwrap();
+        let tables: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .filter(|it| {
+                it["keys"][0][0]
+                    .as_str()
+                    .is_some_and(|k| k.ends_with(".1C1"))
+            })
+            .collect();
+        assert_eq!(tables.len(), 6);
+        assert!(tables.iter().all(|t| t["rows"] == 12));
+
+        let opened = open("1702RT", 0);
+        let one = fill(
+            "1702RT",
+            &opened["draft"],
+            json!({
+                "frm1702RT:txtPg2Pt4I54.1C1": "Credit A",
+                "frm1702RT:txtPg2Pt4I54.1C2": "100",
+            }),
+        );
+        assert_eq!(one["rejected"], json!({}));
+        assert_eq!(one["values"]["frm1702RT:txtPg2Pt4I54.1C1"], "Credit A");
+        let two = fill(
+            "1702RT",
+            &one["draft"],
+            json!({
+                "frm1702RT:txtPg2Pt4I54.2C1": "Credit B",
+                "frm1702RT:txtPg2Pt4I54.2C2": "50",
+            }),
+        );
+        assert_eq!(two["rejected"], json!({}));
+        assert_eq!(two["values"]["frm1702RT:txtPg2Pt4I54C1"], "OTHERS");
+        assert_eq!(amount(&two["values"], "frm1702RT:txtPg2Pt4I54C2"), 150.0);
+
+        save("1702RT", &two["draft"]);
+        let reopened = open("1702RT", 0);
+        assert_eq!(
+            reopened["draft"]["more_rows"]["item_54"],
+            two["draft"]["more_rows"]["item_54"]
+        );
+        assert_eq!(
+            amount(&reopened["values"], "frm1702RT:txtPg2Pt4I54.2C2"),
+            50.0
+        );
+    }
+
+    /// N04: 1800 and 2000OT schedules are tables of every row the draft
+    /// keeps; a row past the five the page opens with saves.
+    #[test]
+    fn rows_1800_and_2000ot_schedule_tables_save() {
+        setup();
+        for (code, first, extra, count) in [
+            (
+                "1800",
+                "frm1800v2018:schedA:txtParticulars0",
+                "frm1800v2018:schedA:txtParticulars6",
+                15,
+            ),
+            (
+                "1800",
+                "frm1800v2018:schedB1:txtOCT0",
+                "frm1800v2018:schedB1:txtOCT6",
+                15,
+            ),
+            (
+                "2000OT",
+                "frm2000OT:sched1A:txtOCTNo0",
+                "frm2000OT:sched1A:txtOCTNo6",
+                15,
+            ),
+            (
+                "2000OT",
+                "frm2000OT:sched1B:txtNameOfCorpStock0",
+                "frm2000OT:sched1B:txtNameOfCorpStock6",
+                13,
+            ),
+        ] {
+            let form = schema_entry(code).unwrap();
+            let items: Vec<&Value> = form["parts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|p| p["items"].as_array().unwrap())
+                .collect();
+            let table = items
+                .iter()
+                .find(|it| it["keys"][0][0] == first)
+                .unwrap_or_else(|| panic!("{code} table at {first}"));
+            assert_eq!(table["rows"], count, "{code} {first}");
+            // A row box sits in the table only.
+            assert!(
+                items
+                    .iter()
+                    .flat_map(|it| it["f"].as_array().into_iter().flatten())
+                    .all(|f| f["k"] != first),
+                "{code} {first} is still a loose box"
+            );
+            let opened = open(code, 1);
+            let filled = fill(code, &opened["draft"], json!({ extra: "Row seven" }));
+            assert_eq!(filled["rejected"], json!({}), "{code} {extra}");
+            save(code, &filled["draft"]);
+            let reopened = open(code, 1);
+            assert_eq!(
+                reopened["values"][extra].as_str().map(str::to_uppercase),
+                Some("ROW SEVEN".to_string()),
+                "{code} {extra}"
+            );
+        }
+    }
+
+    /// N04: "(more...)"/"More"/"Add row" rows of 1702EX, 1707 and 2200M are
+    /// tables, and a continuation row saves through the probed bindings.
+    #[test]
+    fn rows_popup_tables_save() {
+        setup();
+        for (code, period, first, rows, edits, check) in [
+            (
+                "1702EX",
+                0,
+                "frm1702EX:txtPg3Pt6S1I17_1Col1",
+                12,
+                json!({
+                    "frm1702EX:txtPg3Pt6S1I17_1Col1": "Other A",
+                    "frm1702EX:txtPg3Pt6S1I17_1Col2": "100",
+                    "frm1702EX:txtPg3Pt6S1I17_2Col1": "Other B",
+                    "frm1702EX:txtPg3Pt6S1I17_2Col2": "50",
+                }),
+                ("frm1702EX:txtPg3Pt6S1I17_2Col1", "OTHER B"),
+            ),
+            (
+                "1707",
+                1,
+                "frm1707:txtPg2Pt4S2_1Col1",
+                12,
+                json!({
+                    "frm1707:txtPg2Pt4S2_1Col1": "Corp D",
+                    "frm1707:txtPg2Pt4S2_2Col1": "Corp E",
+                }),
+                ("frm1707:txtPg2Pt4S2_2Col1", "CORP E"),
+            ),
+            (
+                "2200M",
+                7,
+                "frm2200M:txtSched1ATC11",
+                12,
+                json!({
+                    "frm2200M:txtSched1_description11": "Added mineral",
+                    "frm2200M:txtSched1_LocallyExtractedTaxDueF11": "250",
+                }),
+                ("frm2200M:txtSched1_description11", "ADDED MINERAL"),
+            ),
+        ] {
+            let form = schema_entry(code).unwrap();
+            let table = form["parts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|p| p["items"].as_array().unwrap())
+                .find(|it| it["keys"][0][0] == first)
+                .unwrap_or_else(|| panic!("{code} table at {first}"))
+                .clone();
+            assert_eq!(table["rows"], rows, "{code}");
+            let opened = open(code, period);
+            let filled = fill(code, &opened["draft"], edits);
+            assert_eq!(filled["rejected"], json!({}), "{code}");
+            save(code, &filled["draft"]);
+            let reopened = open(code, period);
+            assert_eq!(
+                reopened["values"][check.0].as_str().map(str::to_uppercase),
+                Some(check.1.to_string()),
+                "{code} {}",
+                check.0
+            );
+        }
     }
 
     /// N04: 1707A rows 4 and after save. Schedules 1 and 2 print rows 1-4;
