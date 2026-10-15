@@ -11,6 +11,7 @@
 
 import { View, div } from "gpui-kit";
 import { InputState, CalendarState, Popup } from "gpui-base";
+import { Spinner } from "gpui-component";
 import {
   tokens,
   SPACE,
@@ -161,6 +162,7 @@ export class FormPageActions {
   open(opts, cx) {
     const app = this.app;
     for (const row of this.state?.rowViews?.values() || []) row.entity.release();
+    this.state?.checkButton?.entity.release();
     const token = ++this.token;
     let schema = null;
     let error = null;
@@ -186,7 +188,6 @@ export class FormPageActions {
       messages: {},
       formErrors: [],
       checking: false,
-      showChecking: false,
       openParts: new Set([0]),
       inputs: new Map(),
       rowViews: new Map(),
@@ -198,6 +199,10 @@ export class FormPageActions {
       guided: false,
     };
     if (!schema) return;
+    this.state.checkButton = {
+      entity: cx.new(FormCheckButton, { ui: this, state: this.state }),
+      checking: false,
+    };
     cx.spawn(async (acx) => {
       try {
         const r = await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
@@ -311,6 +316,11 @@ export class FormPageActions {
   /** Header and navigation may change too; row callbacks have their own cx. */
   notify(cx) {
     this.refreshRows();
+    const check = this.state.checkButton;
+    if (check && check.checking !== this.state.checking) {
+      check.checking = this.state.checking;
+      check.entity.set_props({ ui: this, state: this.state });
+    }
     const snapshot = this.chromeSnapshot();
     if (snapshot === this.state.chromeSnapshot) return;
     this.state.chromeSnapshot = snapshot;
@@ -321,7 +331,7 @@ export class FormPageActions {
   chromeSnapshot() {
     const s = this.state;
     return JSON.stringify([
-      s.status, s.editable, s.loading, s.error, s.showChecking,
+      s.status, s.editable, s.loading, s.error,
       Object.keys(s.messages).sort(), s.formErrors,
     ]);
   }
@@ -486,12 +496,6 @@ export class FormPageActions {
     s.validateSeq = (s.validateSeq || 0) + 1;
     const seq = s.validateSeq;
     const draft = s.draft;
-    // Fast validations should not flash a status chip and rebuild the header.
-    cx.timer.after(150, (acx) => {
-      if (token !== this.token || seq !== this.state.validateSeq || !s.checking) return;
-      s.showChecking = true;
-      this.notify(acx);
-    });
     cx.spawn(async (acx) => {
       try {
         const r = await this.app.store.call("screen_form_validate", s.code, draft);
@@ -508,7 +512,6 @@ export class FormPageActions {
       }
       if (token === this.token && seq === this.state.validateSeq) {
         this.state.checking = false;
-        this.state.showChecking = false;
       }
       this.notify(acx);
     });
@@ -956,6 +959,21 @@ function datePicker(cx, ui, id, date) {
   return popup.content(card);
 }
 
+class FormCheckButton extends View {
+  init(props) { this.props = props; }
+  update(props) { this.props = props; }
+  render(cx) {
+    const { ui, state: s } = this.props;
+    if (s !== ui.state) return div();
+    const leading = div().size(16).flex_none().flex().items_center().justify_center()
+      .child(s.checking ? Spinner.new().size("xsmall").color(tokens(cx).fg) : Icon(cx, "circle-check"));
+    return AppButton(cx, "fp-check", "Check", {
+      size: "sm", leading, ariaLabel: s.checking ? "Check — validation in progress" : "Check",
+      onClick: (_e, cx) => ui.check(cx),
+    });
+  }
+}
+
 class FormItemView extends View {
   init(props) { this.props = props; }
   update(props) { this.props = props; }
@@ -1108,7 +1126,7 @@ function formContent(cx, app, width) {
   if (s.status === "Queued") {
     actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
   } else if (s.editable) {
-    actions.push(AppButton(cx, "fp-check", "Check", { size: "sm", icon: "circle-check", onClick: (_e, cx) => ui.check(cx) }));
+    actions.push(s.checkButton.entity);
     actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
     actions.push(AppButton(cx, "fp-save", "Save draft", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
   }
@@ -1168,7 +1186,7 @@ function formContent(cx, app, width) {
   }
   bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
   bar.child(Text(cx, "meta", `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
-  if (s.showChecking || s.loading) bar.child(Chip(cx, s.loading ? "Opening…" : "Checking…", "accent"));
+  if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
   bar.child(div().flex_1());
   // Guided mode walks the fields a template marks, so it shows only when this
   // branch's template for the form marks some.

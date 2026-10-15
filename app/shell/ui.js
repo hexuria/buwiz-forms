@@ -284,7 +284,8 @@ export function AppButton(cx, id, label, opts = {}) {
   if (variant === "primary") btn.bg(t.primary);
   else if (variant === "secondary") btn.bg(t.surface);
   else if (variant === "danger") btn.bg(t.dangerSoft);
-  if (opts.icon) btn.child(Icon(cx, opts.icon, { color: fg }));
+  if (opts.leading) btn.child(opts.leading);
+  else if (opts.icon) btn.child(Icon(cx, opts.icon, { color: fg }));
   btn.child(Text(cx, "control", label, fg));
   if (opts.trailing) btn.child(opts.trailing);
   if (disabled) {

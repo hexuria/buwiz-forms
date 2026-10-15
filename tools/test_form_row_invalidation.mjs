@@ -7,7 +7,8 @@ const cat=schema.parts.flatMap((p,pi)=>p.items.map((it,ii)=>({it,pi,ii}))).find(
 assert.ok(cat,"real 1601C category item");
 const keys=cat.it.f.filter(f=>f.t==="radio").map(f=>f.k);
 const traces=[], entities=[], tasks=[];
-let rootDirty=true, owner=null, previewCalls=0, column=1056, errors=[];
+let rootDirty=true, owner=null, previewCalls=0, column=1056, errors=[], holdValidation=false, finishValidation;
+const checkButtons=[], chips=[];
 class View {}
 function context(entity=null){
  return {notify(){if(entity)entity.dirty=true;else rootDirty=true;},
@@ -41,20 +42,30 @@ const contextVM=vm.createContext({console,Map,Set,JSON,window:{viewport_size:()=
 function mock(name,exports){const m=new vm.SyntheticModule(Object.keys(exports),function(){for(const [k,v]of Object.entries(exports))this.setExport(k,v);},{context:contextVM,identifier:name});return m;}
 const kit=mock("gpui-kit",{div:element,svg:element,View});
 const base=mock("gpui-base",{InputState,CalendarState:{},Popup:{new:element}});
+const components=mock("gpui-component",{Spinner:{new:element}});
 const uiExports={tokens:()=>new Proxy({},{get:()=>"#000"}),SPACE:[0,4,8,12,16,20,24],RADIUS:{},SIZE:{validationLine:18},BREAK:{formNav:760}};
 for(const n of ["Text","Line","Code","Icon","AppButton","IconButton","Avatar","Chip","Switch","Checkbox","TextField","Dropdown","PageHeader","MetaLine"])uiExports[n]=element;
+uiExports.AppButton=(_cx,id,label,opts={})=>{
+ if(id==="fp-check")checkButtons.push({label,ariaLabel:opts.ariaLabel,leading:opts.leading});
+ return element();
+};
+uiExports.Chip=(_cx,label)=>{chips.push(label);return element();};
 const uiModule=mock("./ui.js",uiExports);
 const store=mock("./store.js",{formatTin:x=>x});
 const periods=mock("./periods.js",{periodLabel:()=>"March 2026"});
 const mod=new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js",root),"utf8"),{context:contextVM});
-await mod.link(s=>({"gpui-kit":kit,"gpui-base":base,"./ui.js":uiModule,"./store.js":store,"./periods.js":periods}[s]));
+await mod.link(s=>({"gpui-kit":kit,"gpui-base":base,"gpui-component":components,"./ui.js":uiModule,"./store.js":store,"./periods.js":periods}[s]));
 await mod.evaluate();
 let values=Object.fromEntries(keys.map((k,i)=>[k,i===0?"true":"false"]));
 const app={prefs:{},branchFor:()=>null,taxpayers:()=>[],layout:()=>({column}),invalidate:()=>{rootDirty=true;},toast(){rootDirty=true;},store:{templates:()=>[],call(name,...args){
  if(name==="screen_form_schema")return schema;
  if(name==="screen_form_open")return Promise.resolve({draft:{id:1},status:"Draft",editable:true,values:{...values},locks:{},errors:[]});
  if(name==="screen_form_fill"){values={...values,...args[2]};return{draft:{id:1},values:{...values},options:{},rejected:{}};}
- if(name==="screen_form_validate")return Promise.resolve({draft:args[1],values:{...values},options:{},errors});
+ if(name==="screen_form_validate"){
+  const result={draft:args[1],values:{...values},options:{},errors};
+  if(holdValidation)return new Promise(resolve=>{finishValidation=()=>resolve(result);});
+  return Promise.resolve(result);
+ }
  if(name==="screen_form_preview_sync"){previewCalls++;return true;}
  throw Error(name);
  }}};
@@ -112,4 +123,14 @@ assert.ok(traces.includes("fp-item-"+cat.pi+":0"),"reopened row refreshes");
 const previous=[...app.formUi.state.rowViews.values()];
 app.formUi.reload(cx);await settle();frame();
 assert.ok(previous.every(r=>r.entity.released),"old return releases retained rows");
+// Validation activity belongs to the retained Check button, never a banner.
+holdValidation=true;traces.length=0;checkButtons.length=0;
+app.formUi.validate(cx);frame();
+assert.equal(checkButtons.at(-1).label,"Check","button label remains stable");
+assert.match(checkButtons.at(-1).ariaLabel,/validation in progress/);
+assert.ok(checkButtons.at(-1).leading,"spinner occupies the existing icon slot");
+assert.equal(traces.length,0,"validation spinner does not rebuild field rows");
+finishValidation();holdValidation=false;await settle();frame();
+assert.equal(checkButtons.at(-1).ariaLabel,"Check","button returns to its idle icon");
+assert.ok(!chips.some(s=>String(s).includes("Checking")),"no Checking chip anywhere");
 console.log("PASS: unchanged rows, dependent values/errors, resize, folded sections and return reload.");
