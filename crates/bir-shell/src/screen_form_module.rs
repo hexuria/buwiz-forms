@@ -3025,6 +3025,36 @@ mod tests {
     /// employer boxes and the spouse's TIN are written by the host
     /// (rows_1700), including the "(add more...)" rows once Item 4 folds.
     #[test]
+    fn dummy_tin_requires_the_explicit_development_override() {
+        const PROBE: &str = "BIR_TIN_OVERRIDE_PROBE";
+        if let Ok(mode) = std::env::var(PROBE) {
+            setup();
+            let opened = open("1700", 0);
+            let mut draft = opened["draft"].clone();
+            draft["tin"] = json!("00000000000000");
+            let checked =
+                call_async("screen_form_validate", vec!["1700".into(), json(draft)]).unwrap();
+            let invalid_tin = checked["errors"].as_array().unwrap().iter().any(|e| {
+                e["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains("incorrect TIN"))
+            });
+            assert_eq!(invalid_tin, mode == "strict" || !cfg!(debug_assertions));
+            return;
+        }
+        // Environment changes are isolated in child processes, so parallel
+        // form tests keep their normal validation behavior.
+        for mode in ["strict", "demo"] {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "screen_form_module::tests::dummy_tin_requires_the_explicit_development_override", "--nocapture"])
+                .env(PROBE, mode)
+                .env("EBIR_RELAXED_VALIDATION", if mode == "demo" { "1" } else { "0" })
+                .status().unwrap();
+            assert!(status.success(), "{mode} TIN validation probe failed");
+        }
+    }
+
+    #[test]
     fn form_1700_shows_the_2018_page_and_writes_its_employers() {
         setup();
         let keys = schema_keys("1700");
