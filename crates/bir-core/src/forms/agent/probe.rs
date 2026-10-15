@@ -1744,24 +1744,33 @@ pub fn supplement_row_families(
     if families.is_empty() {
         return Vec::new();
     }
-    let mut written: BTreeMap<String, String> = BTreeMap::new();
+    let mut written: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut note = |map: BTreeMap<String, String>| {
+        for (key, value) in map {
+            written.entry(key).or_default().insert(value);
+        }
+    };
     for seed in seeds {
         let Some((computed, map)) = probe_eval(kind, seed) else {
             continue;
         };
-        written.extend(map);
+        note(map);
         let grown = grow_rows_past(kind, &computed, FAMILY_ROWS);
         if grown != computed
             && let Some((_, map)) = probe_eval(kind, &grown)
         {
-            written.extend(map);
+            note(map);
         }
     }
     let listed: BTreeSet<&str> = boxes.iter().map(|entry| entry.key.as_str()).collect();
     written
         .into_iter()
         .filter(|(key, _)| !listed.contains(key.as_str()))
-        .filter_map(|(key, value)| {
+        // A row tick box the app always writes unticked (a Delete
+        // selector) is a constant, not a box: a probe flipping another
+        // field could only tie it to that field by coincidence.
+        .filter(|(_, values)| values.iter().any(|value| value != "false"))
+        .filter_map(|(key, values)| {
             let mut found = families
                 .iter()
                 .filter_map(|(family, parts)| Some((*family, family_match(parts, &key, None)?)));
@@ -1770,7 +1779,9 @@ pub fn supplement_row_families(
                 return None;
             }
             let control = key.rsplit(':').next().unwrap_or(&key).to_string();
-            let flag = value == "true" || value == "false";
+            let flag = values
+                .iter()
+                .all(|value| value == "true" || value == "false");
             Some(BoxDef {
                 label: format!("{}, row {row}", family.label),
                 item: family.item.clone(),
