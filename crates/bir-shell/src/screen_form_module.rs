@@ -2221,6 +2221,90 @@ mod tests {
         assert_eq!(codes(&refused["draft"]), ["VB010", "VS010"]);
     }
 
+    /// N04: 1601C Schedule I is one table of its three printed rows, and
+    /// Previous Month/s (which the probe left unbound) saves.
+    #[test]
+    fn rows_1601c_schedule_i_table_saves() {
+        setup();
+        let form = schema_entry("1601C").unwrap();
+        let items: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .collect();
+        let table = items
+            .iter()
+            .find(|it| it["keys"][0][0] == "frm1601c:sched1:txtMonthYear0")
+            .expect("Schedule I table");
+        assert_eq!(table["rows"], 3);
+        assert_eq!(table["cols"][0]["l"], "1 Previous Month/s (MM/YYYY)");
+        assert_eq!(table["cols"][4]["t"], "money");
+        assert!(table["cols"][6].get("c").is_some());
+        // Each row box sits in the table only; templates and selectors hide.
+        for it in &items {
+            for f in it["f"].as_array().into_iter().flatten() {
+                let k = f["k"].as_str().unwrap();
+                if k.contains("{N>=") || k.starts_with("chkScheduleDelete") {
+                    assert_eq!(f["t"], "hidden", "{k}");
+                }
+                assert!(
+                    k.contains("{N>=") || !k.starts_with("frm1601c:sched1:txtMonthYear"),
+                    "{k}"
+                );
+            }
+        }
+
+        let opened = open("1601C", 7);
+        assert!(
+            opened["locks"]
+                .get("frm1601c:sched1:txtMonthYear1")
+                .is_none()
+        );
+        let filled = fill(
+            "1601C",
+            &opened["draft"],
+            json!({
+                "frm1601c:sched1:txtMonthYear0": "05/2026",
+                "frm1601c:sched1:txtDatePaid0": "06/10/2026",
+                "frm1601c:sched1:txtTaxPaid0": "1000",
+                "frm1601c:sched1:txtShouldTaxDue0": "1500",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(
+            filled["draft"]["schedule_1"][0]["previous_month"],
+            "05/2026"
+        );
+        assert_eq!(
+            amount(&filled["values"], "frm1601c:sched1:txtAdjustments0"),
+            500.0
+        );
+        let long = fill(
+            "1601C",
+            &filled["draft"],
+            json!({"frm1601c:sched1:txtMonthYear0": "May 2026"}),
+        );
+        assert!(
+            long["rejected"]
+                .get("frm1601c:sched1:txtMonthYear0")
+                .is_some()
+        );
+        let blank = fill(
+            "1601C",
+            &filled["draft"],
+            json!({"frm1601c:sched1:txtMonthYear2": ""}),
+        );
+        assert_eq!(blank["draft"]["schedule_1"].as_array().unwrap().len(), 1);
+
+        save("1601C", &filled["draft"]);
+        let reopened = open("1601C", 7);
+        assert_eq!(
+            reopened["values"]["frm1601c:sched1:txtMonthYear0"],
+            "05/2026"
+        );
+    }
+
     /// N04: 1707A rows 4 and after save. Schedules 1 and 2 print rows 1-4;
     /// the official "More" pop-up holds row 4 onward, and its row k is draft
     /// row 3+k. Once a schedule has more than four rows, printed row 4 reads

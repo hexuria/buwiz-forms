@@ -4,7 +4,7 @@
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{
-    excise_places, form_1601fq, form_1702mx_official, form_1702q, form_2000, form_2550m,
+    excise_places, form_1601c, form_1601fq, form_1702mx_official, form_1702q, form_2000, form_2550m,
 };
 use bir_core::reference;
 use serde_json::{Map, Value, json};
@@ -71,6 +71,9 @@ pub(super) fn fill(
     }
     if let Some(cell) = rows_2550m::cell(kind, key) {
         return rows_2550m::fill(draft, cell, value);
+    }
+    if let Some(row) = month_year_1601c_row(kind, key) {
+        return fill_1601c_month_year(draft, row, value);
     }
     if let Some(row) = atc_2000_row(kind, key)
         && let Some(choice) = value
@@ -170,6 +173,43 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     atc_2550m_row(kind, key).is_some()
         || sales_2550m_row(kind, key).is_some()
         || rows_2550m::cell(kind, key).is_some()
+        || month_year_1601c_row(kind, key).is_some()
+}
+
+/// 1601C Schedule I row of `frm1601c:sched1:txtMonthYear<i>` (row `i`).
+/// The probe saw the page reformat what it typed (`dateMaskingMonthYear`)
+/// and left the box unbound; the draft keeps it as `previous_month`, which
+/// `to_bir_field_map` writes back to the same box.
+fn month_year_1601c_row(kind: AgentFormKind, key: &str) -> Option<usize> {
+    if kind.form_code() != "1601C" {
+        return None;
+    }
+    let row: usize = key
+        .strip_prefix("frm1601c:sched1:txtMonthYear")?
+        .parse()
+        .ok()?;
+    (row < form_1601c::MAX_SCHEDULE_1_ROWS).then_some(row)
+}
+
+/// Previous Month/s (`MM/YYYY`, `maxlength="7"`). Like the row's other
+/// boxes it starts the row (and any before it); validation checks the
+/// month the way `validateMonthYear` does.
+fn fill_1601c_month_year(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+    let text = value.as_str().unwrap_or_default().trim().to_string();
+    if text.chars().count() > 7 {
+        return Err("Enter the month as MM/YYYY.".to_string());
+    }
+    let mut typed: form_1601c::Form1601CDraft =
+        serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    if row >= typed.schedule_1.len() {
+        if text.is_empty() {
+            return Ok(());
+        }
+        typed.schedule_1.resize(row + 1, Default::default());
+    }
+    typed.schedule_1[row].previous_month = text;
+    *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// 2550M Schedule 1 row of `frm2550m:txtAmountSales<n>`. Rows re-sort by

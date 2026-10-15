@@ -929,102 +929,6 @@
       "label": "No",
       "evidence": "Official .hta: AmendedRtn_1 is Yes, AmendedRtn_2 is No (checked across the eBIRForms forms, 2026-10-15)."
     },
-    "chkScheduleDelete0": {
-      "label": "Schedule I row 1 delete selector",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta id chkScheduleDelete0 sits in the row printed '1'"
-    },
-    "frm1601c:sched1:txtMonthYear0": {
-      "label": "Schedule I row 1, 1 Previous Month/s (MM/YYYY)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '1 Previous Month/s (MM/YYYY)'; id index 0 is the row printed '1'"
-    },
-    "frm1601c:sched1:txtDatePaid0": {
-      "label": "Schedule I row 1, 2 Date Paid (MM/DD/YYYY)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '2 Date Paid (MM/DD/YYYY)'; id index 0 is the row printed '1'"
-    },
-    "frm1601c:sched1:txtBankCode0": {
-      "label": "Schedule I row 1, 3 Drawee Bank/Bank Code/Agency",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '3 Drawee Bank/Bank Code/Agency'; id index 0 is the row printed '1'"
-    },
-    "frm1601c:sched1:txtNumber0": {
-      "label": "Schedule I row 1, 4 Number",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '4 Number'; id index 0 is the row printed '1'"
-    },
-    "frm1601c:sched1:txtTaxPaid0": {
-      "label": "Schedule I row 1, 5 Tax Paid (Excluding Penalties for the Month)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '5 Tax Paid (Excluding Penalties for the Month)'; id index 0 is the row printed '1'"
-    },
-    "frm1601c:sched1:txtMonthYear1": {
-      "label": "Schedule I row 2, 1 Previous Month/s (MM/YYYY)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '1 Previous Month/s (MM/YYYY)'; id index 1 is the row printed '2'"
-    },
-    "frm1601c:sched1:txtDatePaid1": {
-      "label": "Schedule I row 2, 2 Date Paid (MM/DD/YYYY)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '2 Date Paid (MM/DD/YYYY)'; id index 1 is the row printed '2'"
-    },
-    "frm1601c:sched1:txtBankCode1": {
-      "label": "Schedule I row 2, 3 Drawee Bank/Bank Code/Agency",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '3 Drawee Bank/Bank Code/Agency'; id index 1 is the row printed '2'"
-    },
-    "frm1601c:sched1:txtNumber1": {
-      "label": "Schedule I row 2, 4 Number",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '4 Number'; id index 1 is the row printed '2'"
-    },
-    "frm1601c:sched1:txtTaxPaid1": {
-      "label": "Schedule I row 2, 5 Tax Paid (Excluding Penalties for the Month)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '5 Tax Paid (Excluding Penalties for the Month)'; id index 1 is the row printed '2'"
-    },
-    "frm1601c:sched1:txtMonthYear2": {
-      "label": "Schedule I row 3, 1 Previous Month/s (MM/YYYY)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '1 Previous Month/s (MM/YYYY)'; id index 2 is the row printed '3'"
-    },
-    "frm1601c:sched1:txtDatePaid2": {
-      "label": "Schedule I row 3, 2 Date Paid (MM/DD/YYYY)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '2 Date Paid (MM/DD/YYYY)'; id index 2 is the row printed '3'"
-    },
-    "frm1601c:sched1:txtBankCode2": {
-      "label": "Schedule I row 3, 3 Drawee Bank/Bank Code/Agency",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '3 Drawee Bank/Bank Code/Agency'; id index 2 is the row printed '3'"
-    },
-    "frm1601c:sched1:txtNumber2": {
-      "label": "Schedule I row 3, 4 Number",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '4 Number'; id index 2 is the row printed '3'"
-    },
-    "frm1601c:sched1:txtTaxPaid2": {
-      "label": "Schedule I row 3, 5 Tax Paid (Excluding Penalties for the Month)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '5 Tax Paid (Excluding Penalties for the Month)'; id index 2 is the row printed '3'"
-    },
-    "frm1601c:sched1:txtShouldTaxDue0": {
-      "label": "Schedule I row 1, 6 Should be Tax Due for the Month",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '6 Should be Tax Due for the Month'; id index 0 is the row printed '1'"
-    },
-    "frm1601c:sched1:txtAdjustments0": {
-      "label": "Schedule I row 1, 7 Adjustments (6 less 5)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '7 Adjustments (6 less 5)'; id index 0 is the row printed '1'"
-    },
-    "frm1601c:sched1:txtShouldTaxDue1": {
-      "label": "Schedule I row 2, 6 Should be Tax Due for the Month",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '6 Should be Tax Due for the Month'; id index 1 is the row printed '2'"
-    },
-    "frm1601c:sched1:txtAdjustments1": {
-      "label": "Schedule I row 2, 7 Adjustments (6 less 5)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '7 Adjustments (6 less 5)'; id index 1 is the row printed '2'"
-    },
-    "frm1601c:sched1:txtShouldTaxDue2": {
-      "label": "Schedule I row 3, 6 Should be Tax Due for the Month",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '6 Should be Tax Due for the Month'; id index 2 is the row printed '3'"
-    },
-    "frm1601c:sched1:txtAdjustments2": {
-      "label": "Schedule I row 3, 7 Adjustments (6 less 5)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I column '7 Adjustments (6 less 5)'; id index 2 is the row printed '3'"
-    },
-    "chkScheduleDelete1": {
-      "label": "Schedule I row 2 delete selector",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta id chkScheduleDelete1 sits in the row printed '2'"
-    },
-    "chkScheduleDelete2": {
-      "label": "Schedule I row 3 delete selector",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601Cv2018.hta id chkScheduleDelete2 sits in the row printed '3'"
-    },
     "frm1601c:txtTax32": {
       "label": "32 Surcharge",
       "evidence": "P4: printed caption '32 Surcharge' (html-frozen/1601c-2018/writer-cells.json money_joins frm1601c:txtTax32)"
@@ -1036,6 +940,70 @@
     "frm1601c:txtTax34": {
       "label": "34 Compromise",
       "evidence": "P4: printed caption '34 Compromise' (html-frozen/1601c-2018/writer-cells.json money_joins frm1601c:txtTax34)"
+    },
+    "table:3:sched1": {
+      "no": "",
+      "label": "Schedule I – Adjustment of Taxes Withheld on Compensation for Previous Months (attach additional sheet/s, if necessary)",
+      "templates": [
+        "frm1601c:sched1:txtMonthYear{N>=0}",
+        "frm1601c:sched1:txtDatePaid{N>=0}",
+        "frm1601c:sched1:txtBankCode{N>=0}",
+        "frm1601c:sched1:txtNumber{N>=0}",
+        "frm1601c:sched1:txtTaxPaid{N>=0}",
+        "frm1601c:sched1:txtShouldTaxDue{N>=0}",
+        "frm1601c:sched1:txtAdjustments{N>=0}"
+      ],
+      "row_keys": {
+        "frm1601c:sched1:txtMonthYear{N>=0}": "frm1601c:sched1:txtMonthYear{index}",
+        "frm1601c:sched1:txtDatePaid{N>=0}": "frm1601c:sched1:txtDatePaid{index}",
+        "frm1601c:sched1:txtBankCode{N>=0}": "frm1601c:sched1:txtBankCode{index}",
+        "frm1601c:sched1:txtNumber{N>=0}": "frm1601c:sched1:txtNumber{index}",
+        "frm1601c:sched1:txtTaxPaid{N>=0}": "frm1601c:sched1:txtTaxPaid{index}",
+        "frm1601c:sched1:txtShouldTaxDue{N>=0}": "frm1601c:sched1:txtShouldTaxDue{index}",
+        "frm1601c:sched1:txtAdjustments{N>=0}": "frm1601c:sched1:txtAdjustments{index}"
+      },
+      "rows": [
+        0,
+        2
+      ],
+      "cols": [
+        "1 Previous Month/s (MM/YYYY)",
+        "2 Date Paid (MM/DD/YYYY)",
+        "3 Drawee Bank/Bank Code/Agency",
+        "4 Number",
+        "5 Tax Paid (Excluding Penalties for the Month)",
+        "6 Should be Tax Due for the Month",
+        "7 Adjustments (6 less 5)"
+      ],
+      "evidence": "N04: official ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I 'Previous Months (attach additional sheet/s, if necessary)' with columns 1 Previous Month/s (MM/YYYY) ... 7 Adjustments (6 less 5); ids frm1601c:sched1:<stem>0..2 are the rows printed 1-3 (form_1601c.rs MAX_SCHEDULE_1_ROWS = 3, form_1601c_xml.rs writes three rows). The previous per-box labels ('Schedule I row 1, ...') became these column captions; txtMonthYear<i> is written by the host (catalogs.rs month_year_1601c_row)."
+    },
+    "chkScheduleDelete{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete (chkScheduleDelete<i>, saved as the constant 'false' by form_1601c_xml.rs); clearing a row's boxes is the way to empty it here."
+    },
+    "chkScheduleDelete0": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete (chkScheduleDelete<i>, saved as the constant 'false' by form_1601c_xml.rs); clearing a row's boxes is the way to empty it here."
+    },
+    "chkScheduleDelete1": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete (chkScheduleDelete<i>, saved as the constant 'false' by form_1601c_xml.rs); clearing a row's boxes is the way to empty it here."
+    },
+    "chkScheduleDelete2": {
+      "kind": "hidden",
+      "evidence": "N04: the official row tick box only selects a row for Delete (chkScheduleDelete<i>, saved as the constant 'false' by form_1601c_xml.rs); clearing a row's boxes is the way to empty it here."
+    },
+    "move:frm1601c:sched1:txtTotal1": {
+      "to": "3:new:",
+      "item": {
+        "l": "Total Adjustment (Sum of Items 1 to 3) (To Part II, Item 26)",
+        "order": 1
+      },
+      "evidence": "N04: official ebirforms-mirror/forms/BIR-Form1601Cv2018.hta prints 'Total Adjustment (Sum of Items 1 to 3) (To Part II, Item 26)' under the Schedule I rows (frm1601c:sched1:txtTotal1, disabled, summed from txtAdjustments<j>); the extractor grouped it with row 0's month box, ahead of the table."
+    },
+    "frm1601c:sched1:txtTotal1": {
+      "label": "Total Adjustment",
+      "evidence": "N04: official ebirforms-mirror/forms/BIR-Form1601Cv2018.hta caption 'Total Adjustment (Sum of Items 1 to 3) (To Part II, Item 26)'."
     }
   },
   "1601EQ": {
