@@ -102,7 +102,9 @@ export default class BirApp extends View {
     this.initAuth();
     this.focusRoot = cx.focus_handle();
     // Development aid: BIR_SHELL_START="tp=123456788;theme=dark;view=library"
-    // (also "palette=<query>" and "edit=<profile section>"; none bypasses a PIN)
+    // (also "palette=<query>", "edit=<profile section>", and on a form
+    // "choose=<key>~<value>|...", "select=<key>", "more=<part>:<item>",
+    // "save"; none bypasses a PIN)
     // or "...;form=2551Q/2026/3" opens a screen at launch, so a screen can be
     // checked headlessly (one launch, one screenshot). Unset in normal use.
     const start = process.env.BIR_SHELL_START;
@@ -184,12 +186,52 @@ export default class BirApp extends View {
         this.openPalette(cx);
         this.palette.input.set_value(value);
       }
+      // Form proofs (dev only): once the open return's draft has loaded, set
+      // boxes through the page's own choose (what picking an option does),
+      // show one dropdown open, or save.
+      else if (key === "choose") {
+        const edits = {};
+        for (const pair of value.split("|")) {
+          const at = pair.indexOf("~");
+          if (at > 0) edits[pair.slice(0, at)] = pair.slice(at + 1);
+        }
+        this.afterFormLoads(cx, (cx) => this.formUi.choose(edits, cx));
+      } else if (key === "select") {
+        this.afterFormLoads(cx, (cx) => {
+          this.formUi.state.openSelect = value;
+          cx.notify();
+        });
+      } else if (key === "more") {
+        this.afterFormLoads(cx, (cx) => {
+          this.formUi.state.moreOpen.add(value);
+          cx.notify();
+        });
+      } else if (key === "save") this.afterFormLoads(cx, (cx) => this.formUi.save(cx));
       else if (key === "items") {
         const [from, to] = value.split("-").map(Number);
         this.formUi.devItems = { from, to: to ?? from };
       }
     }
     cx.notify();
+  }
+
+  /**
+   * Run `fn` once the form page's draft has loaded (dev start routes). Steps
+   * run one at a time in the order the route names them, so `choose` always
+   * lands before `save`.
+   */
+  afterFormLoads(cx, fn) {
+    const queue = (this.formSteps = this.formSteps || []);
+    queue.push(fn);
+    if (queue.length > 1) return;
+    const tick = (cx) => {
+      const s = this.formUi.state;
+      if (!(s && s.draft && !s.loading)) return cx.timer.after(150, tick);
+      const step = queue.shift();
+      step(cx);
+      if (queue.length) cx.timer.after(150, tick);
+    };
+    cx.timer.after(150, tick);
   }
 
   // ---------------------------------------------------------------- local storage

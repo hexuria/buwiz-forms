@@ -191,7 +191,9 @@ export class FormPageActions {
         s.locks = r.locks;
         s.saved = Boolean(r.draft && r.draft.id);
         this.setErrors(r.errors);
-        this.ensureInputs(0);
+        // Every part already open (one picked while the return was still
+        // opening, too) gets its inputs now that the draft is here.
+        for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i);
         acx.notify();
       } catch (e) {
         if (token !== this.token) return;
