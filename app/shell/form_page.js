@@ -37,6 +37,8 @@ import { formatTin } from "./store.js";
 import { periodLabel } from "./periods.js";
 
 const VALIDATE_DELAY = 300;
+/** Debounce for live print-preview sync (ms after the last keystroke). */
+const LIVE_PREVIEW_DELAY = 120;
 
 function message(e) {
   // Host errors arrive as "`bir.fn`: text"; the person needs only the text.
@@ -262,6 +264,22 @@ export class FormPageActions {
       if (token !== this.token || seq !== this.state.editSeq) return;
       this.flush(acx);
     });
+    // Live sync to an open print preview, sooner than the draft flush.
+    cx.timer.after(LIVE_PREVIEW_DELAY, () => {
+      if (token !== this.token || seq !== this.state.editSeq) return;
+      this.livePreview();
+    });
+  }
+
+  /** Push draft + staged edits to the open print preview (no-op if none is open). */
+  livePreview() {
+    const s = this.state;
+    if (!s || !s.previewOpen) return;
+    try {
+      this.app.store.call("screen_form_preview_sync", s.code, s.draft, s.pending || {});
+    } catch (_e) {
+      /* preview sync is best effort */
+    }
   }
 
   /** Fill an item's month, day and year boxes from a picked "YYYY-MM-DD". */
@@ -294,6 +312,7 @@ export class FormPageActions {
     Object.assign(s.pending, edits);
     s.dirty = true;
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
+    this.livePreview();
     this.flush(cx);
   }
 
@@ -518,7 +537,8 @@ export class FormPageActions {
     if (s.editable && !this.ensureSaved(cx)) return;
     try {
       this.app.store.call("screen_form_print", s.code, s.draft);
-      this.app.toast("Print preview opened.", cx, "printer");
+      s.previewOpen = true;
+      this.app.toast("Print preview opened. It follows your edits live.", cx, "printer");
     } catch (e) {
       this.app.toast(message(e), cx, "triangle-alert");
     }
