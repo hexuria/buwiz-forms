@@ -510,15 +510,23 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const value = s.values[f.k] ?? "";
   let el;
   if (f.t === "sel") {
-    const options = [{ value: "", label: "Choose…" }, ...(f.o || []).filter((o) => !/^"/.test(o)).map((o) => ({ value: o, label: o }))];
-    if (value && !options.some((o) => o.value === value)) options.push({ value, label: value });
+    // Options are strings, or { value, label } where the value is the
+    // official code the draft stores (e.g. 2551Q 12A: 1 Special Rate).
+    const listed = (f.o || [])
+      .filter((o) => typeof o !== "string" || !/^"/.test(o))
+      .map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+    const options = [{ value: "", label: "Choose…" }, ...listed];
+    const known = options.some((o) => o.value === value);
+    // "0" is the official runtime's empty choice, not a value to offer.
+    const shown = known ? value : value === "0" ? "" : value;
+    if (shown && !known) options.push({ value: shown, label: shown });
     el = locked
-      ? lockedBox(cx, value, width)
+      ? lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width)
       : Dropdown(cx, `fp-${f.k}`, {
           label: f.l,
           width,
           options,
-          value,
+          value: shown,
           open: s.openSelect === f.k,
           onOpenChange: (open, cx) => {
             s.openSelect = open ? f.k : null;

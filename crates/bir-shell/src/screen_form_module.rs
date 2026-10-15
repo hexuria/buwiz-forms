@@ -126,9 +126,40 @@ fn schema() -> &'static [Value] {
             if let Some(fixes) = overrides.get(&code).and_then(Value::as_object) {
                 apply_overrides(form, fixes);
             }
+            hide_repeated_occurrences(form);
         }
         forms
     })
+}
+
+/// A box the official form repeats (`X#occurrence-2`, `-3`, …: 2551Q's
+/// email, 2200A's TIN, branch and name) is shown once: every later
+/// occurrence is hidden. The serializer writes the same value to all of
+/// them, so nothing is lost on save or print.
+fn hide_repeated_occurrences(form: &mut Value) {
+    let Some(parts) = form["parts"].as_array_mut() else {
+        return;
+    };
+    for part in parts.iter_mut() {
+        let Some(items) = part["items"].as_array_mut() else {
+            continue;
+        };
+        for item in items.iter_mut() {
+            let Some(fields) = item["f"].as_array_mut() else {
+                continue;
+            };
+            for field in fields.iter_mut() {
+                let later = field["k"]
+                    .as_str()
+                    .and_then(|k| k.rsplit_once("#occurrence-"))
+                    .and_then(|(_, n)| n.parse::<u32>().ok())
+                    .is_some_and(|n| n >= 2);
+                if later {
+                    field["t"] = Value::from("hidden");
+                }
+            }
+        }
+    }
 }
 
 /// Apply one form's corrections. Keys are a field key `k` (label, kind,
@@ -1321,6 +1352,44 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("{code} prints: {}", error.message()));
         }
+    }
+
+    #[test]
+    fn repeated_occurrences_show_once_and_12a_is_a_dropdown() {
+        let fields: Vec<Value> = schema_entry("2551Q").unwrap()["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .flat_map(|it| it["f"].as_array().cloned().unwrap_or_default())
+            .collect();
+        let kind = |k: &str| fields.iter().find(|f| f["k"] == k).unwrap()["t"].clone();
+        assert_eq!(kind("txtEmail#occurrence-1"), "text");
+        assert_eq!(kind("txtEmail#occurrence-2"), "hidden");
+        let relief = fields
+            .iter()
+            .find(|f| f["k"] == "frm2551Qv2018:txtTaxReliefSpecify")
+            .unwrap();
+        assert_eq!(relief["t"], "sel");
+        assert_eq!(relief["o"][1]["label"], "International Tax Treaty");
+        // The codes are what the draft takes.
+        setup();
+        let opened = open("2551Q", 3);
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({
+                "frm2551Qv2018:taxTreaty_1": "true",
+                "frm2551Qv2018:taxTreaty_2": "false",
+                "frm2551Qv2018:txtTaxReliefSpecify": "2"
+            }),
+        );
+        assert!(
+            filled["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            filled["rejected"]
+        );
+        assert_eq!(filled["values"]["frm2551Qv2018:txtTaxReliefSpecify"], "2");
     }
 
     #[test]
