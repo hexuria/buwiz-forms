@@ -163,6 +163,7 @@ export class FormPageActions {
       values: {},
       options: {},
       locks: {},
+      profile: new Set(),
       errors: [],
       messages: {},
       formErrors: [],
@@ -189,6 +190,7 @@ export class FormPageActions {
         s.values = r.values;
         s.options = r.options || {};
         s.locks = r.locks;
+        s.profile = new Set(r.profile || []);
         s.saved = Boolean(r.draft && r.draft.id);
         this.setErrors(r.errors);
         // Every part already open (one picked while the return was still
@@ -811,7 +813,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
   const allCalc = !it.rows && fs.length > 0 && fs.every((x) => x.c);
   const req = fs.some((x) => x.r);
   const tin = isTinItem(it);
-  const fromProfile = tin || fs.some((x) => x.a && !x.c);
+  // The host says which boxes the profile fills (the schema's auto flag is
+  // only the extractor's guess).
+  const fromProfile = tin || fs.some((x) => s.profile.has(x.k));
   // Markers are 16 px icons that explain themselves on hover, so a long
   // printed label is never covered; the label gets a pixel width.
   const markers = [];
@@ -1111,8 +1115,9 @@ export function renderFormPage(cx, app, width) {
           .accessibility_label(partName(p, pi))
           .on_click((_e, cx) => ui.togglePart(pi, cx))
           .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
-          .child(Text(cx, "control", partName(p, pi)).font_weight(600).flex_1().whitespace_normal())
-          .child(Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg3")),
+          // min_w(0) lets a long part name wrap instead of running under the count.
+          .child(Text(cx, "control", partName(p, pi)).font_weight(600).flex_1().min_w(0).whitespace_normal())
+          .child(Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg3").flex_none()),
       );
     if (open) {
       const body = div().flex().flex_col().border_t(1).border_color(t.border);

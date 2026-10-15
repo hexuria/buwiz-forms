@@ -62,6 +62,8 @@ export interface ScreenFormOpened {
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     locks: Record<string, string>;
+    /** Boxes the taxpayer profile fills (the page marks their items). */
+    profile: string[];
     errors: ScreenFormError[];
 }
 export interface ScreenFormFilled {
@@ -987,6 +989,39 @@ fn locks(kind: AgentFormKind) -> Map<String, Value> {
     locks
 }
 
+/// Boxes the taxpayer profile fills: bound (themselves or through their
+/// item's group box) with a profile lock, plus repeated occurrences of one.
+/// The extracted schema's auto flag is a guess; this is what the app does.
+fn profile_keys(kind: AgentFormKind) -> Vec<String> {
+    let def = kind.definition();
+    let profile = |key: &str| {
+        matches!(
+            def.bindings.get(key),
+            Some(BoundBox {
+                lock: Some(bir_core::forms::agent::Lock::Profile),
+                ..
+            })
+        )
+    };
+    let mut keys: Vec<String> = def
+        .boxes
+        .iter()
+        .filter(|entry| {
+            !entry.computed
+                && entry.is_user_box()
+                && def.bindings.contains_key(&entry.key)
+                && (profile(&entry.key) || entry.group.as_deref().is_some_and(profile))
+        })
+        .map(|entry| entry.key.clone())
+        .collect();
+    for (key, official) in occurrence_aliases(kind) {
+        if profile(official) {
+            keys.push(key.clone());
+        }
+    }
+    keys
+}
+
 /// On-screen keys that repeat an official control id (`txtEmail#occurrence-2`,
 /// the rules corpus's name for the same `serialized_key` placed again on the
 /// official form) and have no binding of their own, each with that official
@@ -1159,6 +1194,7 @@ fn screen_form_open(
             "values": values,
             "options": catalogs::options(kind, &draft),
             "locks": locks(kind),
+            "profile": profile_keys(kind),
             "errors": errors,
         })))
     })
@@ -1982,6 +2018,31 @@ mod tests {
             );
         }
         assert!(rows.iter().any(|row| row["c"] == "0619E"));
+    }
+
+    #[test]
+    fn screen_form_open_names_the_boxes_the_profile_fills() {
+        setup();
+        let open = |code: &str, period: i64| {
+            let future = module()
+                .begin(
+                    "screen_form_open",
+                    &args(vec![TIN.into(), code.into(), YEAR.into(), period.into()]),
+                )
+                .expect("sync half");
+            to_json(&block_on(future).expect("future"))
+        };
+        let has = |opened: &Value, key: &str| {
+            opened["profile"]
+                .as_array()
+                .is_some_and(|keys| keys.iter().any(|k| k == key))
+        };
+        let q = open("1603Q", 1);
+        assert!(has(&q, "frm1603Q:rdoCode"), "{}", q["profile"]);
+        // The treaty choice is the filer's (D01), whatever the schema guessed.
+        assert!(!has(&q, "frm1603Q:selTreaty"));
+        let pt = open("1600PT", 3);
+        assert!(!has(&pt, "frm1600PT:Pg2Sc1TIN1"), "a payee TIN is typed");
     }
 
     #[test]
