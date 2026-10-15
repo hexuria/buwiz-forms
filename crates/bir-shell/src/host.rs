@@ -93,6 +93,7 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
             runtime.set_editor_files(true);
 
             open_main_window(cx, runtime, root);
+            crate::print_preview_window::start(cx);
             cx.activate(true);
         });
     Ok(())

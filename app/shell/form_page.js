@@ -554,7 +554,7 @@ export class FormPageActions {
     if (s.editable && !this.ensureSaved(cx)) return;
     try {
       this.app.store.call("screen_form_print", s.code, s.draft);
-      this.app.toast("Print preview opened in your browser.", cx, "printer");
+      this.app.toast("Print preview opened.", cx, "printer");
     } catch (e) {
       this.app.toast(message(e), cx, "triangle-alert");
     }

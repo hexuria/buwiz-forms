@@ -99,7 +99,7 @@ export function screen_form_open(tin: string, form_code: string, year: number, p
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
-/** Print preview of a saved draft (opens the filled official sheet in the browser). */
+/** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
 export function screen_form_print(form_code: string, draft: object): { path: string };
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
@@ -1556,17 +1556,18 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let draft = draft_argument(arguments, 1)?;
     let slug = crate::bir_module::print_slug_for(kind.form_code())
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
-    let year = agent::identity(kind, &draft)
-        .map_err(host_error)?
-        .taxable_year;
+    let identity = agent::identity(kind, &draft).map_err(host_error)?;
+    let year = identity.taxable_year;
     with_database(|db| {
         let (fields, receipt) = print_map(db, kind, &draft)?;
+        let profile = db.get_profile_by_tin(&identity.tin).ok().flatten().map(|p| p.full_name.clone());
         crate::bir_module::open_print_preview(
             slug,
             kind.form_code(),
             year,
             &fields,
             receipt.as_ref(),
+            profile,
         )
     })
 }

@@ -47,6 +47,21 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = 
     "wayland",
     "runtime_shaders",
 ] }
+# In-app print preview (same monorepo rev as gpui-shell).
+wry = { version = "0.53.3", package = "lb-wry" }
+gpui-base = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
+raw-window-handle = "0.6"
+# Blitz renders the static print sheet for the preview view.
+blitz-dom = "=0.3.0-beta.3"
+blitz-html = "=0.3.0-beta.3"
+blitz-paint = "=0.3.0-beta.3"
+blitz-traits = "=0.3.0-beta.3"
+anyrender = "0.14"
+anyrender_vello_cpu = { version = "0.18", features = ["multithreading"] }
+peniko = "0.6"
+base64 = "0.22"
+image = { version = "0.25", default-features = false }
+smallvec = "1"
 
 bir-core = { path = "../bir-core" }
 bir-print = { path = "../bir-print" }
@@ -70,6 +85,13 @@ totp-rs = "5.7.1"
 # versions collide (`ModuleDef` trait conflict).
 [patch.crates-io]
 rquickjs = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3.2", features = ["NSArray", "NSURL", "NSString", "NSGeometry", "NSKeyValueCoding", "NSDictionary"] }
+objc2-app-kit = { version = "0.3.2", features = ["NSSharingService", "NSView", "NSResponder", "NSPrintInfo", "NSPrintOperation", "NSWindow", "NSGraphics"] }
+objc2-web-kit = { version = "0.3.2", features = ["WKWebView", "objc2-app-kit"] }
+objc2-pdf-kit = { version = "0.3.2", features = ["PDFDocument", "PDFPage", "objc2-app-kit"] }
 
 # Debug builds optimize the packages every frame runs through, so `just run`
 # feels like the release app. This crate is its own workspace root, so the
@@ -111,3 +133,17 @@ quickjs-jit-sys = { opt-level = 3 }
 quickjs-jit-core = { opt-level = 3 }
 cap-std = { opt-level = 3 }
 gpui-shell = { opt-level = 3 }
+
+# Blitz layout + raster is far too slow unoptimised; these are its hot crates.
+blitz-dom = { opt-level = 3 }
+blitz-html = { opt-level = 3 }
+blitz-paint = { opt-level = 3 }
+anyrender_vello_cpu = { opt-level = 3 }
+vello_cpu = { opt-level = 3 }
+vello_common = { opt-level = 3 }
+stylo = { opt-level = 3 }
+selectors = { opt-level = 3 }
+parley = { opt-level = 3 }
+fontique = { opt-level = 3 }
+skrifa = { opt-level = 3 }
+html5ever = { opt-level = 3 }
