@@ -1519,3 +1519,482 @@ fn fix_classes(forms: &[Value]) -> String {
     }
     md
 }
+
+// ------------------------------------------------- effective-schema census
+//
+// The controls the host actually serves (`schema()`: forms-schema.json with
+// schema-overrides.json applied and repeated occurrences hidden), each
+// classified from the agent definition the page binds through, with the
+// runtime catalogs (`catalogs::options`) for dropdowns. The raw static audit
+// (`tools/audit_screen_forms.py`) stays as provenance; this is what the page
+// shows. Case ids are `<form>:<key>`, stable across runs.
+
+/// One effective control's class. `unbound` is a visible user box with no
+/// draft field (nothing writes it) and is open work, not a pass.
+const CENSUS_CLASSES: &[&str] = &[
+    "editable",
+    "profile_locked",
+    "computed",
+    "static_artwork",
+    "hidden_workflow",
+    "concrete_row",
+    "row_template",
+    "unbound",
+];
+
+fn census_class(kind: AgentFormKind, field: &SchemaField) -> (&'static str, String) {
+    let def = kind.definition();
+    let key = field.key.as_str();
+    let entry = def.box_def(key);
+    let unmapped = def.unmapped.get(key).map(String::as_str).unwrap_or("");
+    if field.kind == "hidden" {
+        let why = if key.contains("#occurrence-") {
+            "a repeated occurrence: shown once, written under the official key"
+        } else {
+            "hidden by schema-overrides.json; kept for error placement"
+        };
+        return ("hidden_workflow", why.to_string());
+    }
+    if key.contains('{') || unmapped.starts_with("a row family pattern") {
+        return (
+            "row_template",
+            "a row family pattern, not one box".to_string(),
+        );
+    }
+    if field.kind == "cell" {
+        return ("concrete_row", "a schedule table cell".to_string());
+    }
+    if field.computed
+        || entry.is_some_and(|e| e.computed || e.required == "computed")
+        || unmapped.starts_with("derived by the app")
+    {
+        return ("computed", "computed by the form's formulas".to_string());
+    }
+    let binding = def.bindings.get(key).or_else(|| {
+        entry
+            .and_then(|e| e.group.as_deref())
+            .and_then(|group| def.bindings.get(group))
+    });
+    if let Some(bound) = binding {
+        return match bound.lock {
+            Some(lock @ (agent::Lock::Identity | agent::Lock::Profile)) => {
+                ("profile_locked", lock.reason().to_string())
+            }
+            Some(agent::Lock::Election) => ("editable", "an election the user answers".to_string()),
+            None => ("editable", String::new()),
+        };
+    }
+    if unmapped.starts_with("written by the app without a draft field") {
+        return ("static_artwork", unmapped.to_string());
+    }
+    if let Some((official, _)) = key.split_once("#occurrence-") {
+        return (
+            "unbound",
+            format!("repeats `{official}`; read-only here, written under the official key"),
+        );
+    }
+    let reason = if unmapped.is_empty() {
+        if entry.is_some() {
+            "in the agent definition but has no draft field".to_string()
+        } else {
+            "not in the agent definition".to_string()
+        }
+    } else {
+        unmapped.to_string()
+    };
+    ("unbound", reason)
+}
+
+/// Where a dropdown's choices come from: the reviewed schema, a runtime
+/// catalog, a dependent list awaiting its parent, or nowhere.
+fn dropdown_source(form: &Value, key: &str, catalog: &Value) -> Option<&'static str> {
+    let field = form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        .flat_map(|item| item["f"].as_array().into_iter().flatten())
+        .find(|f| f["k"].as_str() == Some(key))?;
+    if field["t"] != "sel" {
+        return None;
+    }
+    Some(if field["o"].as_array().is_some_and(|o| !o.is_empty()) {
+        "schema"
+    } else {
+        match catalog.get(key).and_then(Value::as_array) {
+            Some(rows) if !rows.is_empty() => "catalog",
+            Some(_) => "awaiting_parent",
+            None => "missing",
+        }
+    })
+}
+
+/// Every effective control of every form, classified.
+fn effective_census() -> Value {
+    let mut forms = Vec::new();
+    for form in schema() {
+        let code = form["c"].as_str().unwrap_or_default();
+        let kind = kind_of(code).expect("every schema form is an agent form");
+        let catalog = catalogs::options(kind, &Value::Null);
+        let mut controls = Vec::new();
+        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut dropdowns: BTreeMap<&str, usize> = BTreeMap::new();
+        for field in schema_fields(code) {
+            let (class, reason) = census_class(kind, &field);
+            *counts.entry(class).or_default() += 1;
+            let dropdown = dropdown_source(form, &field.key, &catalog);
+            if let Some(source) = dropdown {
+                *dropdowns.entry(source).or_default() += 1;
+            }
+            controls.push(json!({
+                "id": format!("{code}:{}", field.key),
+                "k": field.key,
+                "item": field.item,
+                "label": field.label,
+                "kind": field.kind,
+                "class": class,
+                "reason": reason,
+                "dropdown": dropdown,
+            }));
+        }
+        forms.push(json!({
+            "code": code,
+            "controls": controls.len(),
+            "counts": counts,
+            "dropdowns": dropdowns,
+            "list": controls,
+        }));
+    }
+    let mut totals: BTreeMap<String, usize> = BTreeMap::new();
+    let mut dropdown_totals: BTreeMap<String, usize> = BTreeMap::new();
+    for form in &forms {
+        for (class, n) in form["counts"].as_object().into_iter().flatten() {
+            *totals.entry(class.clone()).or_default() += n.as_u64().unwrap_or(0) as usize;
+        }
+        for (source, n) in form["dropdowns"].as_object().into_iter().flatten() {
+            *dropdown_totals.entry(source.clone()).or_default() += n.as_u64().unwrap_or(0) as usize;
+        }
+    }
+    json!({
+        "generated_by": "screen_form_audit::write_effective_census",
+        "source": "host schema(): forms-schema.json + schema-overrides.json + hidden repeated occurrences; catalogs::options",
+        "forms_audited": forms.len(),
+        "totals": totals,
+        "dropdowns": dropdown_totals,
+        "forms": forms,
+    })
+}
+
+fn census_markdown(census: &Value) -> String {
+    let mut md = String::new();
+    let _ = writeln!(md, "# Effective screen-form census\n");
+    let _ = writeln!(
+        md,
+        "Generated by `{}` from {}. Raw static-audit counts (`tools/audit_screen_forms.py`) are \
+         provenance and are not this census. `unbound` is open work, not a pass.\n",
+        census["generated_by"].as_str().unwrap_or_default(),
+        census["source"].as_str().unwrap_or_default(),
+    );
+    let _ = writeln!(md, "Forms: {}\n", census["forms_audited"]);
+    let _ = writeln!(md, "| class | controls |\n| --- | ---: |");
+    for class in CENSUS_CLASSES {
+        let _ = writeln!(
+            md,
+            "| {class} | {} |",
+            census["totals"][*class].as_u64().unwrap_or(0)
+        );
+    }
+    let _ = writeln!(
+        md,
+        "\n| dropdown choices from | dropdowns |\n| --- | ---: |"
+    );
+    for source in ["schema", "catalog", "awaiting_parent", "missing"] {
+        let _ = writeln!(
+            md,
+            "| {source} | {} |",
+            census["dropdowns"][source].as_u64().unwrap_or(0)
+        );
+    }
+    let _ = writeln!(md, "\n## Per form\n");
+    let _ = write!(md, "| form | controls |");
+    for class in CENSUS_CLASSES {
+        let _ = write!(md, " {class} |");
+    }
+    let _ = writeln!(
+        md,
+        "\n| --- | ---: |{}",
+        " ---: |".repeat(CENSUS_CLASSES.len())
+    );
+    for form in census["forms"].as_array().into_iter().flatten() {
+        let _ = write!(
+            md,
+            "| {} | {} |",
+            form["code"].as_str().unwrap_or_default(),
+            form["controls"]
+        );
+        for class in CENSUS_CLASSES {
+            let _ = write!(md, " {} |", form["counts"][*class].as_u64().unwrap_or(0));
+        }
+        let _ = writeln!(md);
+    }
+    let _ = writeln!(md, "\n## Open cases\n");
+    let _ = writeln!(
+        md,
+        "| case | class | reason / dropdown |\n| --- | --- | --- |"
+    );
+    for form in census["forms"].as_array().into_iter().flatten() {
+        for control in form["list"].as_array().into_iter().flatten() {
+            let open = control["class"] == "unbound"
+                || control["class"] == "row_template"
+                || control["dropdown"] == "missing";
+            if open {
+                let _ = writeln!(
+                    md,
+                    "| `{}` | {} | {}{} |",
+                    control["id"].as_str().unwrap_or_default(),
+                    control["class"].as_str().unwrap_or_default(),
+                    control["reason"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .replace('|', "\\|"),
+                    if control["dropdown"] == "missing" {
+                        " · dropdown missing"
+                    } else {
+                        ""
+                    },
+                );
+            }
+        }
+    }
+    md
+}
+
+#[test]
+fn effective_census_classifies_every_control_of_all_43_forms() {
+    let census = effective_census();
+    assert_eq!(census["forms_audited"], 43);
+    let mut total = 0;
+    for form in census["forms"].as_array().unwrap() {
+        let code = form["code"].as_str().unwrap();
+        let list = form["list"].as_array().unwrap();
+        assert_eq!(
+            list.len(),
+            schema_fields(code).len(),
+            "{code}: every control classified"
+        );
+        let ids: BTreeSet<&str> = list.iter().map(|c| c["id"].as_str().unwrap()).collect();
+        assert_eq!(ids.len(), list.len(), "{code}: case ids are unique");
+        for control in list {
+            assert!(
+                CENSUS_CLASSES.contains(&control["class"].as_str().unwrap()),
+                "{code}: {control}"
+            );
+        }
+        total += list.len();
+    }
+    let by_class: usize = census["totals"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|n| n.as_u64().unwrap() as usize)
+        .sum();
+    assert_eq!(by_class, total, "class totals cover every control once");
+    // The ten dropdowns without choices are the baseline's D01-D10, in the
+    // same order the catalog coverage test pins.
+    let missing: Vec<String> = census["forms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|form| form["list"].as_array().unwrap().iter())
+        .filter(|c| c["dropdown"] == "missing")
+        .map(|c| c["id"].as_str().unwrap().replacen(':', " ", 1))
+        .collect();
+    assert_eq!(
+        missing,
+        [
+            "1603Q frm1603Q:selTreaty",
+            "1604C frm1604c:txtRefMonth",
+            "1606 frm1606:txtTaxRate",
+            "1606 frm1606:selTreaty",
+            "1706 frm1706:selTreaty",
+            "1800 frm1800v2018:txtDate",
+            "1801 frm1801v2018:sched4Rdo_{index}",
+            "2000 drpATCCode{index}",
+            "2200S frm2200S:lstTaxTreaty",
+            "2550M frm2550m:lstSpecialTax",
+        ]
+    );
+    let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
+        + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
+    assert_eq!(supplied, 80, "catalog lists, dependent ones included");
+}
+
+#[test]
+#[ignore = "census; writes tmp/screen-form-audit/effective.{json,md}"]
+fn write_effective_census() {
+    let census = effective_census();
+    let dir = format!("{}/../../tmp/screen-form-audit", env!("CARGO_MANIFEST_DIR"));
+    std::fs::create_dir_all(&dir).expect("audit dir");
+    std::fs::write(
+        format!("{dir}/effective.json"),
+        serde_json::to_string_pretty(&census).expect("census json"),
+    )
+    .expect("effective.json");
+    std::fs::write(format!("{dir}/effective.md"), census_markdown(&census)).expect("effective.md");
+    println!(
+        "totals {} dropdowns {}",
+        census["totals"], census["dropdowns"]
+    );
+}
+
+// ------------------------------------------------ confirmed symptoms (P0.4)
+//
+// Each test states one confirmed defect from the continuation baseline and
+// fails on exactly that symptom today. They are ignored so the suite stays
+// green; the increment that fixes a case removes its `ignore` (never the
+// assertion). Run them with `-- --ignored symptom_` to see each one fail.
+
+fn seed_fictional_profile() {
+    use_ephemeral_database();
+    let profile: TaxpayerProfile =
+        serde_json::from_value(profile_json()).expect("fictional profile parses");
+    with_database(|db| {
+        db.save_profile(profile)
+            .map(|_| ())
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+    .expect("profile saves");
+}
+
+/// The page's value and the printed value of each key, after a fresh open.
+fn screen_and_print(code: &str, keys: &[&str]) -> Vec<(String, String, String)> {
+    seed_fictional_profile();
+    let kind = kind_of(code).expect("form kind");
+    let opened = open(code, page_period_for(code)).expect("form opens");
+    let values = string_map(&opened["values"]);
+    let printed = with_database(|db| print_map(db, kind, &opened["draft"]))
+        .expect("screen Print")
+        .0;
+    keys.iter()
+        .map(|key| {
+            (
+                key.to_string(),
+                values.get(*key).cloned().unwrap_or_default(),
+                printed.get(*key).cloned().unwrap_or_default(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+#[ignore = "R01: 1701 page headers show the surname, the print shows the full name"]
+fn symptom_r01_1701_page_headers_agree_with_print() {
+    for (key, screen, print) in screen_and_print(
+        "1701",
+        &[
+            "frm1701:txtPg2TaxpayerName",
+            "frm1701:txtPg3TaxpayerName",
+            "frm1701:txtPg4TaxpayerName",
+        ],
+    ) {
+        assert_eq!(
+            screen, print,
+            "{key}: page shows {screen:?}, print shows {print:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "R02: 1702MX instruction checkbox is true on the page, false in print"]
+fn symptom_r02_1702mx_instruction_checkbox_agrees_with_print() {
+    for (key, screen, print) in screen_and_print("1702MX", &["frm1702MX:InstAPg2Part4"]) {
+        assert_eq!(screen, print, "{key}");
+    }
+}
+
+#[test]
+#[ignore = "R03: 1702RT other-ATC selector shows IC010 on the page, blank in print"]
+fn symptom_r03_1702rt_other_atc_agrees_with_print() {
+    for (key, screen, print) in screen_and_print("1702RT", &["frm1702RT:drpPg1I5AtcOther"]) {
+        assert_eq!(screen, print, "{key}");
+    }
+}
+
+#[test]
+#[ignore = "R04: 2550Q Item 12 email is empty although the profile has one"]
+fn symptom_r04_2550q_email_shows_the_profile_email() {
+    let (_, screen, _) = screen_and_print("2550Q", &["txtEmail"]).remove(0);
+    assert!(!screen.trim().is_empty(), "txtEmail is empty on the page");
+}
+
+#[test]
+#[ignore = "D03: 1606 Item 31 tax rate has no binding, so a chosen rate is refused"]
+fn symptom_d03_1606_tax_rate_choice_round_trips() {
+    seed_fictional_profile();
+    let period = page_period_for("1606");
+    let opened = open("1606", period).expect("1606 opens");
+    let filled = call(
+        "screen_form_fill",
+        vec![
+            "1606".into(),
+            json(opened["draft"].clone()),
+            json(json!({"frm1606:txtTaxRate": "5"})),
+        ],
+    )
+    .expect("fill runs");
+    assert!(
+        filled["rejected"].get("frm1606:txtTaxRate").is_none(),
+        "rate refused: {}",
+        filled["rejected"]
+    );
+    call(
+        "screen_form_save",
+        vec!["1606".into(), json(filled["draft"].clone())],
+    )
+    .expect("saves");
+    let reopened = open("1606", period).expect("reopens");
+    assert_eq!(
+        string_map(&reopened["values"])
+            .get("frm1606:txtTaxRate")
+            .map(String::as_str),
+        Some("5")
+    );
+}
+
+#[test]
+#[ignore = "R05: 31 validation errors on open name no on-screen key (80 with the round trip)"]
+fn symptom_r05_every_validation_error_names_a_screen_key() {
+    seed_fictional_profile();
+    let mut unplaced = Vec::new();
+    for form in schema() {
+        let code = form["c"].as_str().unwrap_or_default();
+        let Ok(opened) = open(code, page_period_for(code)) else {
+            continue;
+        };
+        for error in opened["errors"].as_array().into_iter().flatten() {
+            if error["keys"].as_array().is_none_or(Vec::is_empty) {
+                unplaced.push(format!("{code} {} — {}", error["field"], error["message"]));
+            }
+        }
+    }
+    assert!(
+        unplaced.is_empty(),
+        "{} errors name no screen key:\n{}",
+        unplaced.len(),
+        unplaced.join("\n")
+    );
+}
+
+#[test]
+#[ignore = "P4: 1800's branch code sits under Additional details, not with the donor TIN"]
+fn symptom_p4_1800_branch_code_sits_with_the_donor_tin() {
+    let field = schema_fields("1800")
+        .into_iter()
+        .find(|f| f.key == "frm1800v2018:txtBranchCode")
+        .expect("1800 branch code is on screen");
+    assert!(
+        field.item.contains("Taxpayer Identification Number"),
+        "frm1800v2018:txtBranchCode is under {:?}",
+        field.item
+    );
+}
