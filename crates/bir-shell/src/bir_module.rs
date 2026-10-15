@@ -1127,6 +1127,9 @@ pub(crate) fn open_print_preview(
 ) -> HostResult {
     let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
         .map_err(HostError::new)?;
+    // A4 layout + static markup (no scripts, values as text): prints one A4
+    // page per form page from any engine.
+    let html = crate::static_html::staticize(&crate::print_sheet::prepare_html(&html));
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
