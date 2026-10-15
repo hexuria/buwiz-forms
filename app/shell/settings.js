@@ -61,6 +61,13 @@ export function renderSettings(cx, app, _width) {
       "The last four returns you opened",
       Switch(cx, "settings-recent-switch", app.prefs.showRecent, (v, cx) => app.setPref("showRecent", v, cx), "Show recent returns"),
     ),
+    SettingRow(
+      cx,
+      "settings-compact-form-nav",
+      "Compact form sections",
+      "One line per part in On this form; point at a part for its full name",
+      Switch(cx, "settings-compact-form-nav-switch", app.prefs.compactFormNav, (v, cx) => app.setPref("compactFormNav", v, cx), "Compact form sections"),
+    ),
   ]);
 
   const data = Card(cx, "settings-data", [

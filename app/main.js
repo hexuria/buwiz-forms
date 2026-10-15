@@ -82,7 +82,7 @@ export default class BirApp extends View {
     this.readIds = new Set(storedRead || this.notifications().map((n) => n.id));
     if (!storedRead) this.writeLocal(READ_KEY, [...this.readIds]);
     this.knownEvents = new Set(this.notifications().map((n) => n.id));
-    this.prefs = { showRecent: true, ...this.readLocal(PREFS_KEY, {}) };
+    this.prefs = { showRecent: true, compactFormNav: false, ...this.readLocal(PREFS_KEY, {}) };
 
     // Screen state.
     this.palette = { input: InputState.new({ placeholder: "Search taxpayers, forms and pages" }), index: 0 };
@@ -175,6 +175,8 @@ export default class BirApp extends View {
       else if (key === "view") this.go(value, cx);
       else if (key === "panel") this.togglePanel(value, cx);
       else if (key === "scope") this.library.scope = value;
+      // Compact form sections for this run only; Settings is what saves it.
+      else if (key === "compact") this.prefs = { ...this.prefs, compactFormNav: value !== "0" };
       else if (key === "form") {
         const [code, year, period] = value.split("/");
         const b = this.branch();

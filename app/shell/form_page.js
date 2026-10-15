@@ -119,6 +119,19 @@ function partName(p, i) {
   return i === 0 && /^Page \d+$/.test(p.n) ? "Return details" : p.n;
 }
 
+/**
+ * A part name for the compact navigator's one line: the filing instructions
+ * in parentheses go ("(attach additional sheet/s, if necessary)") and
+ * "Schedule" becomes "Sch.". The row's tooltip keeps the full name.
+ */
+function compactPartName(name) {
+  const short = name
+    .replace(/\s*\((?:attach|if graduated|except)[^)]*\)/gi, "")
+    .replace(/^Schedule\b/, "Sch.")
+    .trim();
+  return short || name;
+}
+
 /** Every key an item binds: its fields, or every cell of its table. */
 function itemKeys(it) {
   if (it.rows) return it.keys.flat();
@@ -1081,15 +1094,18 @@ function formContent(cx, app, width) {
     const current = s.openParts.has(i) && s.openParts.size === 1;
     const errors = errorsIn(i);
     if (sideNav) {
+      // Compact (Settings > Compact form sections): one line per part, the
+      // label shortened and cut with an ellipsis, the full name on hover.
+      const compact = app.prefs.compactFormNav;
+      const labelW = errors > 0 ? 208 - 16 - 8 - 26 - 26 - 4 : 208 - 16 - 8 - 26;
       const row = div()
         .id(`fp-nav-${i}`)
         .flex()
         .flex_row()
-        .items_start()
+        .when(!compact, (el) => el.items_start().min_h(32).py(6))
+        .when(compact, (el) => el.items_center().h(28).tooltip(partName(p, i)))
         .gap(SPACE[2])
         .w(208)
-        .min_h(32)
-        .py(6)
         .px(SPACE[2])
         .rounded(RADIUS.row)
         .cursor_pointer()
@@ -1099,7 +1115,11 @@ function formContent(cx, app, width) {
         .on_click((_e, cx) => ui.jumpTo(i, cx))
         // Pixel widths, not flex-grow: a grown text cell has no definite width
         // and GPUI lays the wrapped label out one word per line.
-        .child(Text(cx, "control", partName(p, i), current ? "fg" : "fg2").w(errors > 0 ? 208 - 16 - 8 - 26 - 26 - 4 : 208 - 16 - 8 - 26).line_height("18px").whitespace_normal())
+        .child(
+          compact
+            ? Line(cx, "control", compactPartName(partName(p, i)), current ? "fg" : "fg2").w(labelW)
+            : Text(cx, "control", partName(p, i), current ? "fg" : "fg2").w(labelW).line_height("18px").whitespace_normal(),
+        )
         .child(div().flex().flex_row().flex_none().gap(SPACE[1]).when(errors > 0, (el) => el.child(badge(String(errors), true))).child(badge(String(p.items.length), false)));
       navRows.push(row);
     } else {
