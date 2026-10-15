@@ -2,9 +2,9 @@
 //! (stylo + taffy + parley, vello_cpu) into one RGBA bitmap per `.sheet`.
 use std::sync::Arc;
 
-use anyrender::{render_to_buffer, PaintScene as _};
+use anyrender::{PaintScene as _, render_to_buffer};
 use anyrender_vello_cpu::VelloCpuImageRenderer;
-use blitz_dom::{util::Color, DocumentConfig};
+use blitz_dom::{DocumentConfig, util::Color};
 use blitz_html::HtmlDocument;
 use blitz_paint::paint_scene;
 use blitz_traits::net::{Bytes, NetHandler, NetProvider, Request};
@@ -38,7 +38,9 @@ fn decode_data_url(s: &str) -> Option<Vec<u8>> {
     let body = s.strip_prefix("data:")?;
     let (meta, data) = body.split_once(',')?;
     if meta.ends_with(";base64") {
-        base64::engine::general_purpose::STANDARD.decode(data.trim()).ok()
+        base64::engine::general_purpose::STANDARD
+            .decode(data.trim())
+            .ok()
     } else {
         Some(percent_decode(data))
     }
@@ -89,7 +91,12 @@ fn build(static_html: &str, scale: f32) -> HtmlDocument {
         &html,
         DocumentConfig {
             net_provider: Some(Arc::new(LocalProvider) as _),
-            viewport: Some(Viewport::new((sheet_w * scale) as u32, (sheet_h * scale) as u32, scale, ColorScheme::Light)),
+            viewport: Some(Viewport::new(
+                (sheet_w * scale) as u32,
+                (sheet_h * scale) as u32,
+                scale,
+                ColorScheme::Light,
+            )),
             ..Default::default()
         },
     );
@@ -100,7 +107,10 @@ fn build(static_html: &str, scale: f32) -> HtmlDocument {
 }
 
 fn sheet_ids(doc: &HtmlDocument) -> Vec<blitz_dom::NodeId> {
-    doc.as_ref().query_selector_all(".sheet").map(|v| v.to_vec()).unwrap_or_default()
+    doc.as_ref()
+        .query_selector_all(".sheet")
+        .map(|v| v.to_vec())
+        .unwrap_or_default()
 }
 
 fn paint_sheets(doc: &mut HtmlDocument, scale: f32, only: Option<&[bool]>) -> Vec<Option<Page>> {
@@ -108,7 +118,10 @@ fn paint_sheets(doc: &mut HtmlDocument, scale: f32, only: Option<&[bool]>) -> Ve
     let base = doc.as_mut();
     // Bounding rects depend on the current scroll; measure from the top.
     base.set_viewport_scroll(blitz_dom::Point { x: 0.0, y: 0.0 });
-    let rects: Vec<_> = sheets.iter().filter_map(|id| base.get_client_bounding_rect(*id)).collect();
+    let rects: Vec<_> = sheets
+        .iter()
+        .filter_map(|id| base.get_client_bounding_rect(*id))
+        .collect();
     let mut pages = Vec::with_capacity(rects.len());
     for (i, r) in rects.into_iter().enumerate() {
         if only.is_some_and(|m| !m.get(i).copied().unwrap_or(true)) {
@@ -116,10 +129,16 @@ fn paint_sheets(doc: &mut HtmlDocument, scale: f32, only: Option<&[bool]>) -> Ve
             continue;
         }
         let (cw, ch) = (r.width.max(1.0), r.height.max(1.0));
-        let (w, h) = ((cw * scale as f64).round() as u32, (ch * scale as f64).round() as u32);
+        let (w, h) = (
+            (cw * scale as f64).round() as u32,
+            (ch * scale as f64).round() as u32,
+        );
         base.set_viewport(Viewport::new(w, h, scale, ColorScheme::Light));
         base.resolve(0.0);
-        base.set_viewport_scroll(blitz_dom::Point { x: r.x.max(0.0), y: r.y });
+        base.set_viewport_scroll(blitz_dom::Point {
+            x: r.x.max(0.0),
+            y: r.y,
+        });
         let rgba = render_to_buffer::<VelloCpuImageRenderer, _>(
             |scene| {
                 scene.fill(
@@ -138,7 +157,13 @@ fn paint_sheets(doc: &mut HtmlDocument, scale: f32, only: Option<&[bool]>) -> Ve
         // vello_cpu: premultiplied RGBA; GPUI wants premultiplied BGRA. Done
         // here, on the worker thread.
         rgba_to_bgra(&mut rgba);
-        pages.push(Some(Page { width: w, height: h, rgba, css_w: cw as f32, css_h: ch as f32 }));
+        pages.push(Some(Page {
+            width: w,
+            height: h,
+            rgba,
+            css_w: cw as f32,
+            css_h: ch as f32,
+        }));
         base.set_viewport_scroll(blitz_dom::Point { x: 0.0, y: 0.0 });
     }
     pages
@@ -162,7 +187,12 @@ fn patch(doc: &mut HtmlDocument, changes: &[(String, String)]) -> Option<Vec<boo
             }
             cur = base.get_node(n).and_then(|n| n.parent);
         }
-        let child = base.get_node(node)?.children.iter().copied().find(|c| base.get_node(*c).is_some_and(|n| n.is_text_node()));
+        let child = base
+            .get_node(node)?
+            .children
+            .iter()
+            .copied()
+            .find(|c| base.get_node(*c).is_some_and(|n| n.is_text_node()));
         targets.push((node, child, decode_entities(text)));
     }
     {
@@ -186,7 +216,11 @@ fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
         return s.to_string();
     }
-    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
 }
 
 pub enum Job {
@@ -213,13 +247,20 @@ impl Worker {
                 let mut doc: Option<HtmlDocument> = None;
                 for (job, reply) in rx {
                     let patched = match (&job, doc.as_mut()) {
-                        (Job::Patch(changes, _), Some(d)) => patch(d, changes).map(|mask| (d, mask)),
+                        (Job::Patch(changes, _), Some(d)) => {
+                            patch(d, changes).map(|mask| (d, mask))
+                        }
                         _ => None,
                     };
                     let r = match patched {
-                        Some((d, mask)) => Rendered { pages: paint_sheets(d, scale, Some(&mask)) },
+                        Some((d, mask)) => Rendered {
+                            pages: paint_sheets(d, scale, Some(&mask)),
+                        },
                         None => {
-                            let (html, only) = match job { Job::Full(h, only) => (h, only), Job::Patch(_, h) => (h, None) };
+                            let (html, only) = match job {
+                                Job::Full(h, only) => (h, only),
+                                Job::Patch(_, h) => (h, None),
+                            };
                             let mut d = build(&html, scale);
                             let pages = paint_sheets(&mut d, scale, only.as_deref());
                             doc = Some(d);
@@ -242,10 +283,15 @@ impl Worker {
 
 /// Head + one chunk per `.sheet`, for change detection between live updates.
 pub fn segments(static_html: &str) -> Vec<String> {
-    let mut cuts: Vec<usize> = static_html.match_indices("<div class=\"sheet").map(|(i, _)| i).collect();
+    let mut cuts: Vec<usize> = static_html
+        .match_indices("<div class=\"sheet")
+        .map(|(i, _)| i)
+        .collect();
     cuts.insert(0, 0);
     cuts.push(static_html.len());
-    cuts.windows(2).map(|w| static_html[w[0]..w[1]].to_string()).collect()
+    cuts.windows(2)
+        .map(|w| static_html[w[0]..w[1]].to_string())
+        .collect()
 }
 
 /// Which sheets differ (all of them if the head or the sheet count changed).
@@ -261,7 +307,12 @@ pub fn dirty_mask(old: &[String], new: &[String]) -> Vec<bool> {
 fn rgba_to_bgra(buf: &mut [u8]) {
     // SAFETY: u8 -> u32 reinterpretation; align_to_mut handles the edges.
     let (head, mid, tail) = unsafe { buf.align_to_mut::<u32>() };
-    for px in head.as_chunks_mut::<4>().0.iter_mut().chain(tail.as_chunks_mut::<4>().0.iter_mut()) {
+    for px in head
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .chain(tail.as_chunks_mut::<4>().0.iter_mut())
+    {
         px.swap(0, 2);
     }
     for x in mid.iter_mut() {

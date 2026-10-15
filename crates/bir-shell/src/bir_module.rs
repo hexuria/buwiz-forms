@@ -1112,7 +1112,11 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
         .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
     with_database(|db| {
         let (fields, receipt) = print_fields(db, &tin, &form_code, year, quarter)?;
-        let profile = db.get_profile_by_tin(&tin).ok().flatten().map(|p| p.full_name.clone());
+        let profile = db
+            .get_profile_by_tin(&tin)
+            .ok()
+            .flatten()
+            .map(|p| p.full_name.clone());
         open_print_preview(slug, &form_code, year, &fields, receipt.as_ref(), profile)
     })
 }
@@ -1131,7 +1135,8 @@ pub(crate) fn open_print_preview(
         .map_err(HostError::new)?;
     // A4 layout + static markup (no scripts, values as text): prints one A4
     // page per form page from any engine; `print-overrides/<slug>.css` on top.
-    let html = crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
+    let html =
+        crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())

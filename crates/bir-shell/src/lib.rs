@@ -10,12 +10,12 @@
 
 mod bir_module;
 mod blitz_render;
-pub mod print_preview_window;
-pub mod print_sheet;
-pub mod static_html;
 mod dashboard_module;
 mod host;
+pub mod print_preview_window;
+pub mod print_sheet;
 mod screen_form_module;
+pub mod static_html;
 mod tax_profile_module;
 
 pub use host::{app_root, run};

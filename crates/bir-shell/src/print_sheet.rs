@@ -59,7 +59,11 @@ font:600 9px -apple-system,sans-serif;color:#888;pointer-events:none}}";
 /// wrappers and the script-free markup.
 pub fn prepare_html(html: &str) -> String {
     let native = document_sheet_size(html).unwrap_or((612.0, 936.0));
-    let style = format!("<style id=\"preview-paper\">{}{}</style>", fit_css(native), SCREEN_CSS);
+    let style = format!(
+        "<style id=\"preview-paper\">{}{}</style>",
+        fit_css(native),
+        SCREEN_CSS
+    );
     match html.rfind("</head>") {
         Some(at) => format!("{}{}{}", &html[..at], style, &html[at..]),
         None => format!("{style}{html}"),
@@ -72,7 +76,9 @@ pub fn prepare_html(html: &str) -> String {
 pub fn overrides_dir() -> std::path::PathBuf {
     std::env::var_os("BIR_PRINT_OVERRIDES")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../print-overrides"))
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../print-overrides")
+        })
 }
 
 /// [`prepare_html`] plus `slug`'s override stylesheet (when `apply_override`
@@ -108,7 +114,8 @@ mod tests {
 
     #[test]
     fn reads_the_native_page_size_and_injects_paper_css() {
-        let html = "<html><head><style>@page { size: 612pt 936pt; }</style></head><body></body></html>";
+        let html =
+            "<html><head><style>@page { size: 612pt 936pt; }</style></head><body></body></html>";
         assert_eq!(super::document_sheet_size(html), Some((612.0, 936.0)));
         let out = super::prepare_html(html);
         assert!(out.contains("id=\"preview-paper\""));
@@ -117,9 +124,13 @@ mod tests {
 
     #[test]
     fn override_lands_after_the_paper_css_inside_head() {
-        let html = super::prepare_html("<html><head><style>@page{size:612pt 936pt}</style></head><body></body></html>");
+        let html = super::prepare_html(
+            "<html><head><style>@page{size:612pt 936pt}</style></head><body></body></html>",
+        );
         let out = super::inject_override("bir-1701", &html, ".x{top:1pt}");
-        let tag = out.find("<style id=\"form-override\" data-slug=\"bir-1701\">.x{top:1pt}</style>").unwrap();
+        let tag = out
+            .find("<style id=\"form-override\" data-slug=\"bir-1701\">.x{top:1pt}</style>")
+            .unwrap();
         assert!(out.find("id=\"preview-paper\"").unwrap() < tag);
         assert!(tag < out.find("</head>").unwrap());
     }
@@ -127,6 +138,9 @@ mod tests {
     #[test]
     fn missing_override_file_is_a_no_op() {
         let html = "<html><head></head><body></body></html>";
-        assert_eq!(super::prepare_html_for("no-such-slug-xyz", html, true), super::prepare_html(html));
+        assert_eq!(
+            super::prepare_html_for("no-such-slug-xyz", html, true),
+            super::prepare_html(html)
+        );
     }
 }

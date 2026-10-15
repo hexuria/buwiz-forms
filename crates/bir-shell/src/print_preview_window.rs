@@ -12,6 +12,8 @@ use std::time::Duration;
 use std::sync::Arc;
 use std::time::Instant;
 
+use gpui_kit as gpui;
+
 use gpui::{
     App, AppContext, Bounds, Context, FocusHandle, ImageSource, InteractiveElement, IntoElement,
     KeyDownEvent, MouseButton, ParentElement, Render, RenderImage, SharedString,
@@ -39,12 +41,24 @@ thread_local! {
 }
 
 pub fn request(path: PathBuf, title: String) {
-    QUEUE.with(|q| q.borrow_mut().push(Request { path, title, key: None }));
+    QUEUE.with(|q| {
+        q.borrow_mut().push(Request {
+            path,
+            title,
+            key: None,
+        })
+    });
 }
 
 pub fn request_keyed(path: PathBuf, title: String, key: String) {
     LIVE_KEYS.with(|k| k.borrow_mut().insert(key.clone()));
-    QUEUE.with(|q| q.borrow_mut().push(Request { path, title, key: Some(key) }));
+    QUEUE.with(|q| {
+        q.borrow_mut().push(Request {
+            path,
+            title,
+            key: Some(key),
+        })
+    });
 }
 
 /// Whether a preview window for `key` (a form code) is open.
@@ -66,49 +80,69 @@ pub fn live_update(key: &str, static_html: Producer, started: Instant) {
 
 pub fn start(cx: &mut App) {
     if let Some(p) = std::env::var_os("BIR_PREVIEW_HTML") {
-        let title = std::env::var("BIR_PREVIEW_HTML_TITLE").unwrap_or_else(|_| "Print Preview".into());
+        let title =
+            std::env::var("BIR_PREVIEW_HTML_TITLE").unwrap_or_else(|_| "Print Preview".into());
         request(PathBuf::from(p), title);
     }
-    cx.spawn(async move |cx| loop {
-        // 16 ms: live edits are picked up within one frame.
-        cx.background_executor().timer(Duration::from_millis(16)).await;
-        let pending: Vec<Request> = QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()));
-        let live: Vec<_> = LIVE.with(|l| std::mem::take(&mut *l.borrow_mut()));
-        cx.update(|cx| {
-            for r in pending {
-                // One window per form: reuse it when already open.
-                let existing = r.key.as_ref().and_then(|k| {
-                    VIEWS.with(|v| v.borrow().iter().find(|w| w.upgrade().is_some_and(|e| e.read(cx).key.as_deref() == Some(k.as_str()))).cloned())
-                });
-                match existing {
-                    Some(w) => {
-                        if let Ok(html) = std::fs::read_to_string(&r.path) {
-                            let _ = w.update(cx, |v, cx| v.apply_live(crate::static_html::staticize_if_needed(html), Instant::now(), cx));
+    cx.spawn(async move |cx| {
+        loop {
+            // 16 ms: live edits are picked up within one frame.
+            cx.background_executor()
+                .timer(Duration::from_millis(16))
+                .await;
+            let pending: Vec<Request> = QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()));
+            let live: Vec<_> = LIVE.with(|l| std::mem::take(&mut *l.borrow_mut()));
+            cx.update(|cx| {
+                for r in pending {
+                    // One window per form: reuse it when already open.
+                    let existing = r.key.as_ref().and_then(|k| {
+                        VIEWS.with(|v| {
+                            v.borrow()
+                                .iter()
+                                .find(|w| {
+                                    w.upgrade().is_some_and(|e| {
+                                        e.read(cx).key.as_deref() == Some(k.as_str())
+                                    })
+                                })
+                                .cloned()
+                        })
+                    });
+                    match existing {
+                        Some(w) => {
+                            if let Ok(html) = std::fs::read_to_string(&r.path) {
+                                let _ = w.update(cx, |v, cx| {
+                                    v.apply_live(
+                                        crate::static_html::staticize_if_needed(html),
+                                        Instant::now(),
+                                        cx,
+                                    )
+                                });
+                            }
                         }
+                        None => open(r, cx),
                     }
-                    None => open(r, cx),
                 }
-            }
-            let views: Vec<_> = VIEWS.with(|v| {
-                v.borrow_mut().retain(|w| w.upgrade().is_some());
-                v.borrow().clone()
-            });
-            let mut live = live;
-            let mut keys = std::collections::HashSet::new();
-            for w in &views {
-                let _ = w.update(cx, |view, cx| {
-                    view.tick(cx);
-                    if let Some(k) = view.key.clone() {
-                        if let Some(i) = live.iter().position(|(lk, _, _)| *lk == k) {
-                            let (_, produce, t) = live.swap_remove(i);
-                            view.produce_live(produce, t, cx);
-                        }
-                        keys.insert(k);
-                    }
+                let views: Vec<_> = VIEWS.with(|v| {
+                    v.borrow_mut().retain(|w| w.upgrade().is_some());
+                    v.borrow().clone()
                 });
-            }
-            LIVE_KEYS.with(|k| *k.borrow_mut() = keys);
-        });
+                let mut live = live;
+                let mut keys = std::collections::HashSet::new();
+                for w in &views {
+                    let _ = w.update(cx, |view, cx| {
+                        view.tick(cx);
+                        if let Some(k) = view.key.clone() {
+                            if let Some(i) = live.iter().position(|(lk, _, _)| *lk == k) {
+                                let (_, produce, t) = live.swap_remove(i);
+                                view.produce_live(produce, t, cx);
+                            }
+                            keys.insert(k);
+                        }
+                    });
+                }
+                LIVE_KEYS.with(|k| *k.borrow_mut() = keys);
+            });
+        }
     })
     .detach();
 }
@@ -164,7 +198,10 @@ impl PreviewView {
         self.live_seq += 1;
         let seq = self.live_seq;
         cx.spawn(async move |this, cx| {
-            let html = cx.background_executor().spawn(async move { produce() }).await;
+            let html = cx
+                .background_executor()
+                .spawn(async move { produce() })
+                .await;
             let _ = this.update(cx, |v: &mut PreviewView, cx| {
                 // Fills can finish out of order; never apply an older one.
                 if seq > v.applied_seq {
@@ -214,11 +251,19 @@ impl PreviewView {
         self.last_live = Instant::now();
         let rx = self.worker.submit(job);
         cx.spawn(async move |this, cx| {
-            let rendered = match cx.background_executor().spawn(async move { rx.recv() }).await {
+            let rendered = match cx
+                .background_executor()
+                .spawn(async move { rx.recv() })
+                .await
+            {
                 Ok(r) => r,
                 Err(_) => return,
             };
-            let fresh: Vec<_> = rendered.pages.into_iter().map(|p| p.map(to_render_image)).collect();
+            let fresh: Vec<_> = rendered
+                .pages
+                .into_iter()
+                .map(|p| p.map(to_render_image))
+                .collect();
             let _ = this.update(cx, |v, cx| {
                 if fresh.len() != v.pages.len() {
                     v.pages = fresh.into_iter().flatten().collect();
@@ -265,22 +310,38 @@ impl PreviewView {
             PdfState::Loading if self.loaded.get() => {
                 let _ = std::fs::remove_file(&self.pdf_path);
                 #[cfg(target_os = "macos")]
-                match self.webview.as_ref().map(|w| mac::generate_pdf(w, &self.pdf_path)) {
+                match self
+                    .webview
+                    .as_ref()
+                    .map(|w| mac::generate_pdf(w, &self.pdf_path))
+                {
                     Some(Ok(())) => self.pdf = PdfState::Generating(Instant::now()),
-                    Some(Err(e)) => { self.pdf = PdfState::Failed; self.status = Some(format!("PDF failed: {e}")); }
-                    None => { self.pdf = PdfState::Failed; }
+                    Some(Err(e)) => {
+                        self.pdf = PdfState::Failed;
+                        self.status = Some(format!("PDF failed: {e}"));
+                    }
+                    None => {
+                        self.pdf = PdfState::Failed;
+                    }
                 }
                 cx.notify();
             }
             PdfState::Generating(t) => {
-                let size = std::fs::metadata(&self.pdf_path).map(|m| m.len()).unwrap_or(0);
+                let size = std::fs::metadata(&self.pdf_path)
+                    .map(|m| m.len())
+                    .unwrap_or(0);
                 // The save runs asynchronously; done once the file stops growing.
                 if size != self.pdf_last_size {
                     self.pdf_stable_since = Instant::now();
                 }
-                let settled = size > 0 && self.pdf_stable_since.elapsed() > Duration::from_millis(300);
+                let settled =
+                    size > 0 && self.pdf_stable_since.elapsed() > Duration::from_millis(300);
                 #[cfg(target_os = "macos")]
-                let info = if settled { mac::pdf_info(&self.pdf_path) } else { None };
+                let info = if settled {
+                    mac::pdf_info(&self.pdf_path)
+                } else {
+                    None
+                };
                 #[cfg(not(target_os = "macos"))]
                 let info: Option<(usize, f64, f64)> = settled.then_some((0, 0.0, 0.0));
                 // Ready only once PDFKit parses it (a half-written file doesn't).
@@ -320,7 +381,11 @@ impl PreviewView {
     }
 
     fn share(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let target = if self.pdf == PdfState::Ready && !self.pdf_stale { self.pdf_path.clone() } else { self.html_path.clone() };
+        let target = if self.pdf == PdfState::Ready && !self.pdf_stale {
+            self.pdf_path.clone()
+        } else {
+            self.html_path.clone()
+        };
         #[cfg(target_os = "macos")]
         {
             self.status = macos_share(self.ns_view, &target, _window).err();
@@ -333,8 +398,14 @@ impl PreviewView {
     }
 
     fn zoom_by(&mut self, dir: i32, cx: &mut Context<Self>) {
-        let i = ZOOM_STEPS.iter().position(|z| (*z - self.zoom).abs() < 0.01).unwrap_or(4) as i32;
-        self.set_zoom(ZOOM_STEPS[(i + dir).clamp(0, ZOOM_STEPS.len() as i32 - 1) as usize], cx);
+        let i = ZOOM_STEPS
+            .iter()
+            .position(|z| (*z - self.zoom).abs() < 0.01)
+            .unwrap_or(4) as i32;
+        self.set_zoom(
+            ZOOM_STEPS[(i + dir).clamp(0, ZOOM_STEPS.len() as i32 - 1) as usize],
+            cx,
+        );
     }
 
     fn set_zoom(&mut self, zoom: f32, cx: &mut Context<Self>) {
@@ -367,12 +438,14 @@ mod mac {
     //! WebKit vector PDF + PDFKit printing for the split preview.
     use std::path::Path;
 
-    use objc2::rc::Retained;
+    use objc2::AllocAnyThread;
     use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSPaperOrientation, NSPrintInfo, NSPrintJobSavingURL, NSPrintSaveJob, NSView};
+    use objc2::rc::Retained;
+    use objc2_app_kit::{
+        NSPaperOrientation, NSPrintInfo, NSPrintJobSavingURL, NSPrintSaveJob, NSView,
+    };
     use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSURL};
     use objc2_pdf_kit::{PDFDisplayBox, PDFDocument, PDFPrintScalingMode};
-    use objc2::AllocAnyThread;
     use wry::WebViewExtMacOS;
 
     use super::{PAPER_HEIGHT_PT, PAPER_WIDTH_PT};
@@ -402,18 +475,25 @@ mod mac {
         let info = a4_info();
         unsafe {
             info.setJobDisposition(NSPrintSaveJob);
-            info.dictionary().setValue_forKey(Some(&file_url(out)), NSPrintJobSavingURL);
+            info.dictionary()
+                .setValue_forKey(Some(&file_url(out)), NSPrintJobSavingURL);
         }
         let op = unsafe { wk.printOperationWithPrintInfo(&info) };
         op.setShowsPrintPanel(false);
         op.setShowsProgressPanel(false);
         if let Some(v) = op.view() {
-            v.setFrame(NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(PAPER_WIDTH_PT as f64, PAPER_HEIGHT_PT as f64)));
+            v.setFrame(NSRect::new(
+                NSPoint::new(0.0, 0.0),
+                NSSize::new(PAPER_WIDTH_PT as f64, PAPER_HEIGHT_PT as f64),
+            ));
         }
         // WKWebView only paginates correctly through the window-modal path.
         unsafe {
             op.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
-                &window, None, None, std::ptr::null_mut(),
+                &window,
+                None,
+                None,
+                std::ptr::null_mut(),
             )
         };
         Ok(())
@@ -436,12 +516,22 @@ mod mac {
         let doc = unsafe { PDFDocument::initWithURL(PDFDocument::alloc(), &file_url(path)) }
             .ok_or("cannot open PDF")?;
         let info = a4_info();
-        let op = unsafe { doc.printOperationForPrintInfo_scalingMode_autoRotate(Some(&info), PDFPrintScalingMode::PageScaleNone, false, MainThreadMarker::new().ok_or("not on main thread")?) }
-            .ok_or("PDFKit gave no print operation")?;
+        let op = unsafe {
+            doc.printOperationForPrintInfo_scalingMode_autoRotate(
+                Some(&info),
+                PDFPrintScalingMode::PageScaleNone,
+                false,
+                MainThreadMarker::new().ok_or("not on main thread")?,
+            )
+        }
+        .ok_or("PDFKit gave no print operation")?;
         op.setShowsPrintPanel(true);
         unsafe {
             op.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
-                &window, None, None, std::ptr::null_mut(),
+                &window,
+                None,
+                None,
+                std::ptr::null_mut(),
             )
         };
         Ok(())
@@ -454,9 +544,9 @@ fn macos_share(
     path: &std::path::Path,
     window: &Window,
 ) -> Result<(), String> {
+    use objc2::MainThreadMarker;
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
-    use objc2::MainThreadMarker;
     use objc2_app_kit::{NSSharingServicePicker, NSView};
     use objc2_foundation::{NSArray, NSPoint, NSRect, NSRectEdge, NSSize, NSString, NSURL};
 
@@ -469,7 +559,10 @@ fn macos_share(
     let view: &NSView = unsafe { ns_view.cast::<NSView>().as_ref() };
     let w = f32::from(window.viewport_size().width) as f64;
     let h = f32::from(window.viewport_size().height) as f64;
-    let rect = NSRect::new(NSPoint::new(w - 150.0, h - TITLE_BAR_H as f64), NSSize::new(60.0, TITLE_BAR_H as f64));
+    let rect = NSRect::new(
+        NSPoint::new(w - 150.0, h - TITLE_BAR_H as f64),
+        NSSize::new(60.0, TITLE_BAR_H as f64),
+    );
     picker.showRelativeToRect_ofView_preferredEdge(rect, view, NSRectEdge::MinY);
     std::mem::forget(picker);
     Ok(())
@@ -496,7 +589,14 @@ impl Render for PreviewView {
             .gap(px(24.0))
             .py(px(24.0));
         if let Some(e) = self.error.as_ref().or(self.status.as_ref()) {
-            pages = pages.child(div().p(px(8.0)).rounded(px(6.0)).bg(colors.background).text_color(colors.foreground).child(e.clone()));
+            pages = pages.child(
+                div()
+                    .p(px(8.0))
+                    .rounded(px(6.0))
+                    .bg(colors.background)
+                    .text_color(colors.foreground)
+                    .child(e.clone()),
+            );
         }
         if self.pages.is_empty() && self.error.is_none() {
             pages = pages.child(div().text_color(gpui::white()).child("Rendering\u{2026}"));
@@ -541,7 +641,14 @@ impl Render for PreviewView {
             .flex()
             .flex_col()
             .bg(colors.background)
-            .child(gpui::AnyView::from(self.bar.clone()).cached(gpui::StyleRefinement::default().w_full().h(px(TITLE_BAR_H)).flex_none()))
+            .child(
+                gpui::AnyView::from(self.bar.clone()).cached(
+                    gpui::StyleRefinement::default()
+                        .w_full()
+                        .h(px(TITLE_BAR_H))
+                        .flex_none(),
+                ),
+            )
             .child(pages)
     }
 }
@@ -554,7 +661,10 @@ fn static_file(path: &std::path::Path) -> std::io::Result<(PathBuf, String)> {
         return Ok((path.to_path_buf(), html));
     }
     let html = crate::static_html::staticize(&html);
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("preview");
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("preview");
     let out = std::env::temp_dir().join(format!("{stem}.static.html"));
     std::fs::write(&out, &html)?;
     Ok((out, html))
@@ -571,7 +681,11 @@ fn open(r: Request, cx: &mut App) {
     };
     let pdf_path = html_path.with_extension("pdf");
     let options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(980.0), px(1100.0)), cx))),
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(980.0), px(1100.0)),
+            cx,
+        ))),
         app_id: Some("com.buwiz.bir".to_owned()),
         titlebar: Some(TitlebarOptions {
             title: Some(r.title.clone().into()),
@@ -591,7 +705,8 @@ fn open(r: Request, cx: &mut App) {
             .with_visible(false)
             .with_bounds(wry::Rect {
                 position: wry::dpi::LogicalPosition::new(0.0, 0.0).into(),
-                size: wry::dpi::LogicalSize::new(PAPER_WIDTH_PT as f64, PAPER_HEIGHT_PT as f64).into(),
+                size: wry::dpi::LogicalSize::new(PAPER_WIDTH_PT as f64, PAPER_HEIGHT_PT as f64)
+                    .into(),
             })
             .with_on_page_load_handler(move |ev, _| {
                 if matches!(ev, wry::PageLoadEvent::Finished) {
@@ -612,12 +727,20 @@ fn open(r: Request, cx: &mut App) {
                 Ok(wv) => (Some(wv), None),
                 Err(e) => (None, Some(format!("PDF engine failed: {e}"))),
             };
-            cx.observe_global::<gpui_base::Theme>(|_: &mut PreviewView, cx| cx.notify()).detach();
+            cx.observe_global::<gpui_base::Theme>(|_: &mut PreviewView, cx| cx.notify())
+                .detach();
             let owner = cx.entity().downgrade();
             let bar_title: SharedString = r.title.clone().into();
             let bar = cx.new(|cx| {
-                cx.observe_global::<gpui_base::Theme>(|_: &mut TitleBar, cx| cx.notify()).detach();
-                TitleBar { title: bar_title, pdf: BarPdf::Busy, zoom: 1.0, print_pending: false, owner }
+                cx.observe_global::<gpui_base::Theme>(|_: &mut TitleBar, cx| cx.notify())
+                    .detach();
+                TitleBar {
+                    title: bar_title,
+                    pdf: BarPdf::Busy,
+                    zoom: 1.0,
+                    print_pending: false,
+                    owner,
+                }
             });
             let segments = crate::blitz_render::segments(&html);
             let fields = crate::static_html::field_map(&html);
@@ -625,8 +748,19 @@ fn open(r: Request, cx: &mut App) {
             let rx = worker.submit(crate::blitz_render::Job::Full(html, None));
             // Blitz layout + raster on the preview's worker thread.
             cx.spawn(async move |this, cx| {
-                let Ok(rendered) = cx.background_executor().spawn(async move { rx.recv() }).await else { return };
-                let pages: Vec<_> = rendered.pages.into_iter().flatten().map(to_render_image).collect();
+                let Ok(rendered) = cx
+                    .background_executor()
+                    .spawn(async move { rx.recv() })
+                    .await
+                else {
+                    return;
+                };
+                let pages: Vec<_> = rendered
+                    .pages
+                    .into_iter()
+                    .flatten()
+                    .map(to_render_image)
+                    .collect();
                 let _ = this.update(cx, |v: &mut PreviewView, cx| {
                     if pages.is_empty() {
                         v.error = Some("Blitz produced no pages".into());
@@ -683,9 +817,18 @@ fn strip_field_text(segments: &[String]) -> Vec<String> {
             let mut out = String::with_capacity(seg.len());
             let mut rest = seg.as_str();
             while let Some(i) = rest.find(" fs\"") {
-                let Some(gt) = rest[i..].find('>') else { break };
+                let Some(gt) = rest[i..].find('>') else {
+                    break;
+                };
+                // Only identified spans participate in field_map/Patch.
+                // An overflow line has no id: retain its text in the shape
+                // so changing it forces a full rebuild instead of an empty patch.
+                let patchable = rest[i..i + gt].contains(" id=\"");
                 out.push_str(&rest[..i + gt + 1]);
                 rest = &rest[i + gt + 1..];
+                if !patchable {
+                    continue;
+                }
                 match rest.find("</span>") {
                     Some(c) => rest = &rest[c..],
                     None => break,
@@ -695,6 +838,61 @@ fn strip_field_text(segments: &[String]) -> Vec<String> {
             out
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_field_text;
+
+    #[test]
+    fn real_2000ot_email_overflow_changes_the_render_shape() {
+        let filled = |email: &str| {
+            let fields =
+                std::collections::BTreeMap::from([("txtEmail".to_string(), email.to_string())]);
+            let html = bir_print::frozen_html::filled_document("2000-ot-2018", &fields).unwrap();
+            crate::static_html::staticize(&crate::print_sheet::prepare_html(&html))
+        };
+        let old = filled("Andrea.Mae.Galang.Accounting@Example.ph");
+        let new = filled("Andrea.Mae.Galang.Accounting@Example.co");
+        assert!(new.contains("Andrea.Mae.Galang.Accounting@Example.co"));
+        assert_eq!(
+            crate::static_html::field_map(&old),
+            crate::static_html::field_map(&new)
+        );
+        assert_ne!(strip_field_text(&[old]), strip_field_text(&[new]));
+    }
+
+    #[test]
+    fn changed_overflow_text_requires_a_full_render() {
+        let filled = |text: &str| {
+            crate::static_html::staticize(&format!(
+                "<html><head></head><body><div class=\"page\"><input class=\"fi\" readonly value=\"{text}\" style=\"font-size:9.00pt\"><input class=\"fi fc\" id=\"p1c1-s0\" value=\"\"></div></body></html>"
+            ))
+        };
+        let old = filled("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com");
+        let new = filled("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb@example.com");
+        assert_eq!(
+            crate::static_html::field_map(&old),
+            crate::static_html::field_map(&new)
+        );
+        assert_ne!(strip_field_text(&[old]), strip_field_text(&[new]));
+    }
+
+    #[test]
+    fn identified_text_changes_can_still_use_incremental_patches() {
+        let filled = |text: &str| {
+            crate::static_html::staticize(&format!(
+                "<html><head></head><body><div class=\"page\"><input class=\"fi\" id=\"p1c1-i\" value=\"{text}\"></div></body></html>"
+            ))
+        };
+        let old = filled("OLD NAME");
+        let new = filled("NEW NAME");
+        assert_ne!(
+            crate::static_html::field_map(&old),
+            crate::static_html::field_map(&new)
+        );
+        assert_eq!(strip_field_text(&[old]), strip_field_text(&[new]));
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -752,7 +950,13 @@ impl Render for TitleBar {
                 .cursor_pointer()
                 .hover(move |s| s.bg(colors.accent).text_color(colors.accent_foreground))
         };
-        let icon = |path: &'static str| svg().path(path).size(px(14.0)).flex_none().text_color(colors.secondary_foreground);
+        let icon = |path: &'static str| {
+            svg()
+                .path(path)
+                .size(px(14.0))
+                .flex_none()
+                .text_color(colors.secondary_foreground)
+        };
         let busy = self.pdf == BarPdf::Busy;
         // Printer icon always drawn; while the PDF refreshes it dims and a
         // small spinner sits on its corner (absolute: no layout change).
@@ -774,7 +978,11 @@ impl Render for TitleBar {
             );
         let print = button("print", PRINT_W)
             .child(print_icon)
-            .child(div().opacity(if self.print_pending { 0.6 } else { 1.0 }).child("Print \u{2318}P"))
+            .child(
+                div()
+                    .opacity(if self.print_pending { 0.6 } else { 1.0 })
+                    .child("Print \u{2318}P"),
+            )
             .on_mouse_down(MouseButton::Left, act(|v, _, cx| v.print(cx)));
         let share = button("share", SHARE_W)
             .child(icon("icons/upload.svg"))
@@ -821,13 +1029,19 @@ impl Render for TitleBar {
                     .flex()
                     .items_center()
                     .gap(px(6.0))
-                    .child(zoom_btn("zoom-out", "\u{2212}".into()).on_mouse_down(MouseButton::Left, act(|v, _, cx| v.zoom_by(-1, cx))))
+                    .child(
+                        zoom_btn("zoom-out", "\u{2212}".into())
+                            .on_mouse_down(MouseButton::Left, act(|v, _, cx| v.zoom_by(-1, cx))),
+                    )
                     .child(
                         button("zoom-reset", ZOOM_W)
                             .child(format!("{:.0}%", self.zoom * 100.0))
                             .on_mouse_down(MouseButton::Left, act(|v, _, cx| v.set_zoom(1.0, cx))),
                     )
-                    .child(zoom_btn("zoom-in", "+".into()).on_mouse_down(MouseButton::Left, act(|v, _, cx| v.zoom_by(1, cx))))
+                    .child(
+                        zoom_btn("zoom-in", "+".into())
+                            .on_mouse_down(MouseButton::Left, act(|v, _, cx| v.zoom_by(1, cx))),
+                    )
                     .child(div().w(px(8.0)).flex_none())
                     .child(share)
                     .child(print),
@@ -848,7 +1062,11 @@ impl BusySpinner for gpui::Div {
             .size(px(10.0))
             .text_color(color)
             .opacity(if busy { 1.0 } else { 0.0 });
-        let el = div().absolute().right(px(-5.0)).top(px(-5.0)).size(px(10.0));
+        let el = div()
+            .absolute()
+            .right(px(-5.0))
+            .top(px(-5.0))
+            .size(px(10.0));
         if busy {
             self.child(el.child(spinner.with_animation(
                 "pdf-spin",

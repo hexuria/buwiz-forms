@@ -1563,7 +1563,11 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let year = identity.taxable_year;
     with_database(|db| {
         let (fields, receipt) = print_map(db, kind, &draft)?;
-        let profile = db.get_profile_by_tin(&identity.tin).ok().flatten().map(|p| p.full_name.clone());
+        let profile = db
+            .get_profile_by_tin(&identity.tin)
+            .ok()
+            .flatten()
+            .map(|p| p.full_name.clone());
         crate::bir_module::open_print_preview(
             slug,
             kind.form_code(),
@@ -1604,8 +1608,12 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
         let slug = slug.to_string();
         // Template fill + prepare + staticize run off the UI thread.
         let produce = Box::new(move || {
-            let html = bir_print::frozen_html::filled_document_with_receipt(&slug, &fields, receipt.as_ref())
-                .unwrap_or_default();
+            let html = bir_print::frozen_html::filled_document_with_receipt(
+                &slug,
+                &fields,
+                receipt.as_ref(),
+            )
+            .unwrap_or_default();
             crate::static_html::staticize(&crate::print_sheet::prepare_html_for(&slug, &html, true))
         });
         crate::print_preview_window::live_update(kind.form_code(), produce, started);

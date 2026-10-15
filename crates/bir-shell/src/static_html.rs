@@ -32,7 +32,9 @@ fn strip_scripts(html: &str) -> String {
         out.push_str(&rest[..start]);
         match rest[start..].find("</script>") {
             Some(end) => rest = &rest[start + end + "</script>".len()..],
-            None => { rest = ""; }
+            None => {
+                rest = "";
+            }
         }
     }
     out.push_str(rest);
@@ -51,7 +53,9 @@ fn inputs_to_spans(html: &str) -> String {
     let mut rest = html;
     while let Some(start) = rest.find("<input") {
         out.push_str(&rest[..start]);
-        let Some(end) = rest[start..].find('>') else { break };
+        let Some(end) = rest[start..].find('>') else {
+            break;
+        };
         let tag = &rest[start..start + end + 1];
         rest = &rest[start + end + 1..];
         let class = attr(tag, "class").unwrap_or("");
@@ -111,7 +115,9 @@ fn wrap_sheets(html: &str) -> String {
         }
         out.push_str(&format!(
             "<div class=\"sheet{}\" data-preview-label=\"Page {} of {}\">",
-            if *receipt { " sheet-flow" } else { "" }, i + 1, n
+            if *receipt { " sheet-flow" } else { "" },
+            i + 1,
+            n
         ));
         cur = *at;
     }
@@ -124,7 +130,11 @@ fn wrap_sheets(html: &str) -> String {
 /// Files written by the old path (or `BIR_PREVIEW_HTML`) still carry
 /// scripts/inputs; convert those, pass static ones through.
 pub fn staticize_if_needed(html: String) -> String {
-    if html.contains("<script") || html.contains("<input") { staticize(&html) } else { html }
+    if html.contains("<script") || html.contains("<input") {
+        staticize(&html)
+    } else {
+        html
+    }
 }
 
 /// `(span id, text)` for every field span, in document order.
@@ -134,12 +144,18 @@ pub fn field_map(html: &str) -> Vec<(String, String)> {
     while let Some(i) = html[from..].find(" fs\"") {
         let at = from + i;
         from = at + 4;
-        let Some(gt) = html[at..].find('>') else { break };
+        let Some(gt) = html[at..].find('>') else {
+            break;
+        };
         let tag = &html[at..at + gt];
         let padded = format!(" {tag}");
-        let Some(id) = attr(&padded, "id") else { continue };
+        let Some(id) = attr(&padded, "id") else {
+            continue;
+        };
         let open = at + gt + 1;
-        let Some(close) = html[open..].find("</span>") else { break };
+        let Some(close) = html[open..].find("</span>") else {
+            break;
+        };
         out.push((id.to_string(), html[open..open + close].to_string()));
     }
     out
@@ -154,8 +170,12 @@ mod tests {
         let out = super::staticize(DOC);
         assert!(!out.contains("<script"));
         assert!(!out.contains("<input"));
-        assert!(out.contains(r#"<span class="fi fh4 fc fs" id="p1c1-i" style="inset:1pt">X</span>"#));
-        assert!(out.contains(r#"<span class="fi fh22 fs" id="p2c3-s0" data-slot-index="0">A&amp;B</span>"#));
+        assert!(
+            out.contains(r#"<span class="fi fh4 fc fs" id="p1c1-i" style="inset:1pt">X</span>"#)
+        );
+        assert!(out.contains(
+            r#"<span class="fi fh22 fs" id="p2c3-s0" data-slot-index="0">A&amp;B</span>"#
+        ));
         assert!(out.contains(r#"id="static-fields""#));
     }
 
@@ -163,7 +183,9 @@ mod tests {
     fn each_page_gets_one_labelled_sheet() {
         let out = super::staticize(DOC);
         assert_eq!(out.matches(r#"<div class="sheet"#).count(), 2);
-        assert!(out.contains(r#"<div class="sheet" data-preview-label="Page 1 of 2"><div class="page page-1">"#));
+        assert!(out.contains(
+            r#"<div class="sheet" data-preview-label="Page 1 of 2"><div class="page page-1">"#
+        ));
         assert!(out.contains(r#"<div class="sheet sheet-flow" data-preview-label="Page 2 of 2">"#));
         // Balanced: every sheet closes before </body>.
         let body = &out[out.find("<body>").unwrap()..out.find("</body>").unwrap()];

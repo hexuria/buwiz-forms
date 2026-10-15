@@ -141,7 +141,11 @@ fn fill_text_input(
         if let Some(writes) = money_comb_values(tags, &ordered, print) {
             for (offset, (index, ch)) in writes.into_iter().enumerate() {
                 let writer = (via_cell && offset == 0).then_some(print);
-                replacements.push((tags[index].start, tags[index].end, set_value(tags[index].tag, &ch, writer)));
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &ch, writer),
+                ));
             }
             return;
         }
@@ -185,16 +189,29 @@ fn fill_text_input(
 
 /// `(slot tag index, char)` for an amount printed into a point-column comb,
 /// or `None` when the comb has no point column or the value is not an amount.
-fn money_comb_values(tags: &[InputTag<'_>], ordered: &[usize], value: &str) -> Option<Vec<(usize, String)>> {
-    let slots: Vec<usize> = ordered.iter().map(|&i| tags[i].slot).collect::<Option<_>>()?;
-    let gaps: Vec<usize> = (1..slots.len()).filter(|&k| slots[k] != slots[k - 1] + 1).collect();
-    let [gap] = gaps.as_slice() else { return None };
+fn money_comb_values(
+    tags: &[InputTag<'_>],
+    ordered: &[usize],
+    value: &str,
+) -> Option<Vec<(usize, String)>> {
+    let slots: Vec<usize> = ordered
+        .iter()
+        .map(|&i| tags[i].slot)
+        .collect::<Option<_>>()?;
+    let gaps: Vec<usize> = (1..slots.len())
+        .filter(|&k| slots[k] != slots[k - 1] + 1)
+        .collect();
+    let [gap] = gaps.as_slice() else {
+        return None;
+    };
     if slots.len() - gap != 2 || *gap < 1 {
         return None;
     }
     let trimmed = value.trim();
     if trimmed.is_empty()
-        || !trimmed.chars().all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '-' | ' '))
+        || !trimmed
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '-' | ' '))
         || !trimmed.chars().any(|c| c.is_ascii_digit())
     {
         return None;
@@ -203,7 +220,12 @@ fn money_comb_values(tags: &[InputTag<'_>], ordered: &[usize], value: &str) -> O
     let peso = signed_digits(negative, &peso, &cents);
     let peso_values = right_aligned_slot_values(*gap, &peso)?;
     let mut out: Vec<(usize, String)> = ordered[..*gap].iter().copied().zip(peso_values).collect();
-    out.extend(ordered[*gap..].iter().copied().zip(cents.chars().map(|c| c.to_string())));
+    out.extend(
+        ordered[*gap..]
+            .iter()
+            .copied()
+            .zip(cents.chars().map(|c| c.to_string())),
+    );
     Some(out)
 }
 
@@ -726,7 +748,7 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
             _ => {
                 return Err(
                     "writer-cells.json not_joined row needs writer_key or writer_keys".to_string(),
-                )
+                );
             }
         };
         let reason = required_str(row, "reason")
@@ -1674,9 +1696,18 @@ mod tests {
     #[test]
     fn amounts_right_align_pesos_and_put_cents_after_the_point_gap() {
         // Before the fix `0.00` spread from the first box as `0 . 0 0`.
-        assert_eq!(money_writes("0.00").unwrap(), ["", "", "", "", "0", "0", "0"]);
-        assert_eq!(money_writes("1,234.56").unwrap(), ["", "1", "2", "3", "4", "5", "6"]);
-        assert_eq!(money_writes("12").unwrap(), ["", "", "", "1", "2", "0", "0"]);
+        assert_eq!(
+            money_writes("0.00").unwrap(),
+            ["", "", "", "", "0", "0", "0"]
+        );
+        assert_eq!(
+            money_writes("1,234.56").unwrap(),
+            ["", "1", "2", "3", "4", "5", "6"]
+        );
+        assert_eq!(
+            money_writes("12").unwrap(),
+            ["", "", "", "1", "2", "0", "0"]
+        );
     }
 
     #[test]
