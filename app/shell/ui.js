@@ -10,7 +10,7 @@
 // it must not depend on list position or render order.
 
 import { div, svg } from "gpui-kit";
-import { Input, Popup } from "gpui-base";
+import { Input, Popup, OtpInput } from "gpui-base";
 
 // ---------------------------------------------------------------- tokens
 
@@ -1152,4 +1152,26 @@ export function Overlay(cx, id, card, onDismiss) {
 /** Hairline used between list rows and disclosure sections only. */
 export function Hairline(cx) {
   return div().w_full().h(1).flex_none().bg(tokens(cx).border);
+}
+
+/** PIN / one-time-code cells: 32 px boxes, radius 8, accent when active. */
+export function PinCells(cx, state, id) {
+  const t = tokens(cx);
+  return OtpInput.new(state)
+    .id(id)
+    .flex()
+    .gap(6)
+    .cell_style((cell) =>
+      cell
+        .size(SIZE.control)
+        .flex()
+        .items_center()
+        .justify_center()
+        .border(1)
+        .border_color(t.borderStrong)
+        .bg(t.surface)
+        .rounded(RADIUS.row),
+    )
+    .cell_active_style((cell) => cell.border_color(t.accent))
+    .caret_style((caret) => caret.w(2).h(16).bg(t.fg));
 }

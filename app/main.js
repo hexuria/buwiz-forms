@@ -9,6 +9,7 @@
 // Migration plan + tracking: docs/plans/gpui-shell-migration.md, issue #135.
 
 import { View, div } from "gpui-kit";
+import process from "process";
 import { InputState, OtpState } from "gpui-base";
 import { Store } from "./shell/store.js";
 import {
@@ -96,6 +97,12 @@ export default class BirApp extends View {
 
     this.initAuth();
     this.focusRoot = cx.focus_handle();
+    // Development aid: BIR_SHELL_START="tp=123456788;theme=dark;view=library"
+    // or "...;form=2551Q/2026/3" opens a screen at launch, so a screen can be
+    // checked headlessly (one launch, one screenshot). Unset in normal use.
+    const start = process.env.BIR_SHELL_START;
+    if (start) cx.timer.after(400, (cx) => this.runStartRoute(start, cx));
+
     // In-app notifications work while the app runs: the submission worker
     // (painted app or bir-headless) shares this database, so new
     // submissions and BIR confirmations are picked up by polling and shown
@@ -149,6 +156,29 @@ export default class BirApp extends View {
       ]),
       { keystroke: "escape", action: "dismiss" },
     ]);
+  }
+
+  runStartRoute(route, cx) {
+    for (const step of route.split(";")) {
+      const [key, value = ""] = step.split("=");
+      if (key === "tp") this.selectTaxpayer(value, cx, { quiet: true });
+      else if (key === "branch") this.selectBranch(value, cx);
+      else if (key === "theme") this.setThemePreference(value, cx);
+      else if (key === "view") this.go(value, cx);
+      else if (key === "panel") this.togglePanel(value, cx);
+      else if (key === "scope") this.library.scope = value;
+      else if (key === "form") {
+        const [code, year, period] = value.split("/");
+        const b = this.branch();
+        if (b) this.openForm({ tin: b.tin, code, year: Number(year), period: Number(period) }, cx);
+      } else if (key === "part") this.formUi.jumpTo(Number(value), cx);
+      else if (key === "open") this.taxpayerUi.open[value] = true;
+      else if (key === "items") {
+        const [from, to] = value.split("-").map(Number);
+        this.formUi.devItems = { from, to: to ?? from };
+      }
+    }
+    cx.notify();
   }
 
   // ---------------------------------------------------------------- local storage

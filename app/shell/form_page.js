@@ -10,7 +10,7 @@
 // print output and are not touched here.
 
 import { div } from "gpui-kit";
-import { InputState } from "gpui-base";
+import { InputState, CalendarState, Popup } from "gpui-base";
 import {
   tokens,
   SPACE,
@@ -22,6 +22,7 @@ import {
   Code,
   Icon,
   AppButton,
+  IconButton,
   Avatar,
   Chip,
   Switch,
@@ -49,6 +50,23 @@ function isTinItem(it) {
   const fs = it.f || [];
   const named = /\bTIN\b|Identification/i.test(it.l) || fs.some((x) => /\bTIN\d?\b|txtTIN/i.test(`${x.l} ${x.k}`));
   return named && fs.length >= 3 && fs.length <= 5 && fs.every((x) => x.t === "text" || x.t === "int");
+}
+
+/**
+ * Drop fields the schema marks `hidden` (internal or login controls of the
+ * official runtime), and items left with no field. Validation messages for
+ * them fall back to their item number or the first item.
+ */
+function withoutHidden(schema) {
+  const parts = schema.parts
+    .map((p) => ({
+      ...p,
+      items: p.items
+        .map((it) => (it.f ? { ...it, f: it.f.filter((f) => f.t !== "hidden") } : it))
+        .filter((it) => it.rows || (it.f && it.f.length)),
+    }))
+    .filter((p) => p.items.length);
+  return { ...schema, parts };
 }
 
 function partName(p, i) {
@@ -88,6 +106,7 @@ export class FormPageActions {
     } catch (e) {
       error = message(e);
     }
+    if (schema) schema = withoutHidden(schema);
     this.state = {
       ...opts,
       schema,
@@ -194,6 +213,26 @@ export class FormPageActions {
       if (token !== this.token || seq !== this.state.editSeq) return;
       this.flush(acx);
     });
+  }
+
+  /** Fill an item's month, day and year boxes from a picked "YYYY-MM-DD". */
+  pickDate(date, iso, cx) {
+    const s = this.state;
+    const [y, m, d] = iso.split("-");
+    const edits = {};
+    const put = (f, v) => {
+      if (!f || f.c || s.locks[f.k] !== undefined) return;
+      let value = v;
+      if (f.t === "sel" && f.o) value = f.o.find((o) => String(o).startsWith(v) || String(o) === String(Number(v))) || v;
+      edits[f.k] = value;
+      const input = s.inputs.get(f.k);
+      if (input) input.set_value(String(value));
+    };
+    put(date.month, m);
+    put(date.day, d);
+    put(date.year, y);
+    s.picker = null;
+    this.choose(edits, cx);
   }
 
   /** Choice controls commit at once. */
@@ -375,14 +414,33 @@ export class FormPageActions {
     }
   }
 
+  /** 1601C and 2551Q keep their own queue path, keyed by month or quarter. */
+  usesPeriodPath() {
+    return this.state.code === "1601C" || this.state.code === "2551Q";
+  }
+
+  /** Save if anything changed; false when the save failed (its toast says why). */
+  ensureSaved(cx) {
+    const s = this.state;
+    if (!s.dirty && s.saved) return true;
+    this.save(cx);
+    return s.saved && !s.dirty;
+  }
+
+  /** Reopen the return as stored (after queueing or cancelling). */
+  reload(cx) {
+    const s = this.state;
+    this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period }, cx);
+  }
+
   queue(cx) {
     const s = this.state;
-    if (s.dirty || !s.saved) this.save(cx);
+    if (!this.ensureSaved(cx)) return;
     try {
-      this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
-      s.status = "Queued";
-      s.editable = false;
+      if (this.usesPeriodPath()) this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
+      else this.app.store.write("screen_form_queue", s.code, s.draft);
       this.app.toast("Queued for background submission.", cx, "send");
+      this.reload(cx);
     } catch (e) {
       this.app.toast(message(e), cx, "triangle-alert");
     }
@@ -391,19 +449,21 @@ export class FormPageActions {
   cancelQueue(cx) {
     const s = this.state;
     try {
-      this.app.store.write("cancel_queued", s.tin, s.code, s.year, s.period || null);
+      if (this.usesPeriodPath()) this.app.store.write("cancel_queued", s.tin, s.code, s.year, s.period || null);
+      else this.app.store.write("screen_form_cancel_queue", s.code, s.draft);
       this.app.toast("Queue cancelled. The return is an editable draft again.", cx);
-      this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period }, cx);
+      this.reload(cx);
     } catch (e) {
       this.app.toast(message(e), cx, "triangle-alert");
     }
   }
 
+  /** Print preview of the return as saved: the official sheet, filled. */
   print(cx) {
     const s = this.state;
-    if (s.dirty || !s.saved) this.save(cx);
+    if (s.editable && !this.ensureSaved(cx)) return;
     try {
-      this.app.store.call("form_print_html", s.tin, s.code, s.year, s.period || null);
+      this.app.store.call("screen_form_print", s.code, s.draft);
       this.app.toast("Print preview opened in your browser.", cx, "printer");
     } catch (e) {
       this.app.toast(message(e), cx, "triangle-alert");
@@ -596,6 +656,111 @@ function scheduleTable(cx, ui, it, width) {
     .child(div().flex().flex_col().w(tableW).child(head).child(body));
 }
 
+/**
+ * The month, day and year boxes of an item, when it has them: a printed date
+ * split into separate boxes. Needs at least a month and a year.
+ */
+function dateParts(fs) {
+  const find = (re, not) =>
+    fs.find((f) => f.t !== "radio" && f.t !== "chk" && re.test(`${f.l} ${String(f.k).split(":").pop()}`) && !(not && not.test(`${f.l} ${f.k}`)));
+  const month = find(/month|\bmm\b/i, /months|no\.? of/i);
+  const year = find(/year|yyyy|\byr\b/i, /month|years ended|no\.? of/i);
+  const day = find(/\bday\b|\bdd\b|[a-z]day\b|day\d*$/i, /days|month|year/i);
+  if (!month || !year || month === year) return null;
+  return { month, day: day && day !== month && day !== year ? day : null, year };
+}
+
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** A calendar button beside an item's date boxes; picking a day fills them. Typing still works. */
+function datePicker(cx, ui, id, date) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const open = s.picker && s.picker.id === id;
+  const button = IconButton(cx, `fp-date-${id}`, "calendar", {
+    tooltip: "Pick a date",
+    pressed: open,
+    onClick: (_e, cx) => {
+      if (open) {
+        s.picker = null;
+        return cx.notify();
+      }
+      const cal = CalendarState.new();
+      const m = Number(String(s.values[date.month.k] || "").slice(0, 2));
+      const y = Number(s.values[date.year.k] || "");
+      const d = date.day ? Number(s.values[date.day.k] || "") : 1;
+      if (m >= 1 && m <= 12 && y > 1900) {
+        cal.set_value(`${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`);
+      }
+      cal.on("change", (value, cx) => {
+        if (typeof value === "string") ui.pickDate(date, value, cx);
+      });
+      s.picker = { id, cal };
+      cx.notify();
+    },
+  });
+  const popup = Popup.new(`fp-date-popup-${id}`, button).anchor("top_left");
+  if (!open) return popup;
+  const cal = s.picker.cal;
+  const grid = cal.month_days()[0] || [];
+  const selected = cal.value();
+  const card = div()
+    .id(`fp-date-card-${id}`)
+    .flex()
+    .flex_col()
+    .gap(SPACE[1])
+    .mt(SPACE[1])
+    .p(SPACE[3])
+    .rounded(RADIUS.card)
+    .border(1)
+    .border_color(t.border)
+    .bg(t.raised)
+    .shadow_lg()
+    .on_mouse_down_out((_e, cx) => {
+      s.picker = null;
+      cx.notify();
+    })
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(SPACE[1])
+        .mb(SPACE[1])
+        .child(IconButton(cx, `fp-date-prev-${id}`, "chevron-left", { tooltip: "Previous month", onClick: (_e, cx) => { cal.prev_month(); cx.notify(); } }))
+        .child(Text(cx, "control", `${MONTH_NAMES[cal.month() - 1]} ${cal.year()}`).font_weight(600).flex_1().text_center())
+        .child(IconButton(cx, `fp-date-next-${id}`, "chevron-right", { tooltip: "Next month", onClick: (_e, cx) => { cal.next_month(); cx.notify(); } })),
+    )
+    .child(div().flex().flex_row().children(WEEKDAYS.map((w) => div().w(32).flex().justify_center().child(Text(cx, "cap", w, "fg3")))));
+  for (const week of grid) {
+    const row = div().flex().flex_row();
+    for (const day of week) {
+      const inMonth = Number(day.slice(5, 7)) === cal.month();
+      const on = day === selected;
+      row.child(
+        div()
+          .id(`fp-date-${id}-${day}`)
+          .flex()
+          .items_center()
+          .justify_center()
+          .size(32)
+          .rounded(RADIUS.ctl)
+          .cursor_pointer()
+          .when(on, (el) => el.bg(t.primary))
+          .when(!on, (el) => el.hover((st) => st.bg(t.hover)))
+          .on_click((_e, cx) => {
+            cal.set_value(day);
+            ui.pickDate(date, day, cx);
+          })
+          .child(Text(cx, "body", String(Number(day.slice(8))), on ? "primaryFg" : inMonth ? "fg" : "fg3")),
+      );
+    }
+    card.child(row);
+  }
+  return popup.content(card);
+}
+
 function itemRow(cx, ui, it, pi, ii, width) {
   const s = ui.state;
   const t = tokens(cx);
@@ -606,27 +771,28 @@ function itemRow(cx, ui, it, pi, ii, width) {
   const req = fs.some((x) => x.r);
   const tin = isTinItem(it);
   const fromProfile = tin || fs.some((x) => x.a && !x.c);
+  // Markers are 16 px icons that explain themselves on hover, so a long
+  // printed label is never covered; the label gets a pixel width.
+  const markers = [];
+  if (fromProfile) markers.push(["user", "From tax profile. Change it in the tax profile."]);
+  if (allCalc) markers.push(["lock", "Computed from other items"]);
+  const markerW = markers.length * 20 + (it.rows ? 64 : 0);
   const label = div()
     .flex()
     .flex_row()
-    .flex_wrap()
     .items_start()
     .gap(SPACE[2])
     .mb(10)
     .min_h(22)
     .child(
       div()
-        .flex()
-        .flex_row()
-        .flex_1()
-        .min_w(0)
-        .gap(2)
-        .child(Text(cx, "control", it.l).whitespace_normal())
-        .when(req, (el) => el.child(Text(cx, "control", "*", "danger"))),
+        .w(Math.max(120, inner - markerW - 8))
+        .child(Text(cx, "control", req ? `${it.l} *` : it.l).whitespace_normal()),
     );
-  if (it.rows) label.child(Chip(cx, `${it.rows} rows`));
-  if (fromProfile) label.child(Chip(cx, "From tax profile", "neutral", "user"));
-  if (allCalc) label.child(Chip(cx, "Computed", "neutral", "lock"));
+  if (it.rows) label.child(Text(cx, "meta", `${it.rows} rows`, "fg3").flex_none().pt(2));
+  for (const [icon, tip] of markers) {
+    label.child(div().id(`fp-mark-${icon}-${id}`).flex_none().pt(3).tooltip(tip).accessibility_label(tip).child(Icon(cx, icon, { size: 14, color: "fg3" })));
+  }
 
   let controls;
   if (it.rows) {
@@ -665,6 +831,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
     const radios = fs.filter((f) => f.t === "radio");
     if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
     for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
+    const date = dateParts(fs);
+    if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || s.locks[f.k] !== undefined)) {
+      controls.child(datePicker(cx, ui, id, date));
+    }
   }
 
   const msg = s.messages[id] || "";
@@ -744,7 +914,7 @@ export function renderFormPage(cx, app, width) {
         .flex()
         .flex_col()
         .flex_1()
-        .min_w(0)
+        .min_w(Math.min(width, 420))
         .child(MetaLine(cx, [Code(cx, `BIR Form ${f.c}`), `Revision ${f.rev}`]))
         .child(Text(cx, "page", f.t).mt(SPACE[1]).whitespace_normal())
         .child(chips),
@@ -785,20 +955,25 @@ export function renderFormPage(cx, app, width) {
   bar.child(Text(cx, "meta", `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
   if (s.checking || s.loading) bar.child(Chip(cx, s.loading ? "Opening…" : "Checking…", "accent"));
   bar.child(div().flex_1());
-  bar.child(
-    div()
-      .flex()
-      .flex_row()
-      .items_center()
-      .gap(SPACE[2])
-      .child(Text(cx, "meta", "Guided mode", "fg2"))
-      .child(
-        Switch(cx, "fp-guided", s.guided, (v, cx) => {
-          s.guided = v;
-          app.toast(v ? "Guided mode stops at the fields a template marks. Templates do not mark fields yet." : "Guided mode off.", cx);
-        }, "Guided mode"),
-      ),
-  );
+  // Guided mode walks the fields a template marks, so it shows only when this
+  // branch's template for the form marks some.
+  const template = app.store.templates(s.tin).find((x) => x.form_code === s.code);
+  if (template && template.marked > 0) {
+    bar.child(
+      div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(SPACE[2])
+        .child(Text(cx, "meta", "Guided mode", "fg2"))
+        .child(
+          Switch(cx, "fp-guided", s.guided, (v, cx) => {
+            s.guided = v;
+            cx.notify();
+          }, "Guided mode"),
+        ),
+    );
+  }
 
   const page = div().flex().flex_col().child(head).child(bar);
   if (s.error) {
@@ -901,6 +1076,8 @@ export function renderFormPage(cx, app, width) {
     if (open) {
       const body = div().flex().flex_col().border_t(1).border_color(t.border);
       p.items.forEach((it, ii) => {
+        // Dev start route only (BIR_SHELL_START items=a-b): show a slice.
+        if (ui.devItems && (ii < ui.devItems.from || ii > ui.devItems.to)) return;
         const row = itemRow(cx, ui, it, pi, ii, partsW);
         if (ii > 0) row.border_t(1).border_color(t.border);
         body.child(row);

@@ -5,7 +5,6 @@
 // rather than drawn as dead switches (see docs/plans/gpui-shell-migration.md).
 
 import { div } from "gpui-kit";
-import { OtpInput } from "gpui-base";
 import {
   tokens,
   SPACE,
@@ -20,28 +19,9 @@ import {
   SettingRow,
   PageHeader,
   SectionTitle,
+  PinCells,
 } from "./ui.js";
 
-function pinCells(cx, state, id) {
-  const t = tokens(cx);
-  return OtpInput.new(state)
-    .id(id)
-    .flex()
-    .gap(6)
-    .cell_style((cell) =>
-      cell
-        .size(SIZE.control)
-        .flex()
-        .items_center()
-        .justify_center()
-        .border(1)
-        .border_color(t.borderStrong)
-        .bg(t.surface)
-        .rounded(RADIUS.row),
-    )
-    .cell_active_style((cell) => cell.border_color(t.accent))
-    .caret_style((caret) => caret.w(2).h(16).bg(t.fg));
-}
 
 function jobChip(cx, status) {
   const s = String(status || "").toLowerCase();
@@ -114,7 +94,7 @@ export function renderSettings(cx, app, _width) {
     .flex_wrap()
     .items_center()
     .gap(SPACE[2])
-    .child(pinCells(cx, app.adminPinOtp, "settings-admin-pin"))
+    .child(PinCells(cx, app.adminPinOtp, "settings-admin-pin"))
     .child(
       AppButton(cx, "settings-admin-pin-save", auth.has_admin_pin ? "Change PIN" : "Set PIN", {
         size: "sm",

@@ -2,7 +2,7 @@
 // month, from today through the next twelve months.
 
 import { div } from "gpui-kit";
-import { ListGroup, EmptyRow, PageHeader, SectionTitle } from "./ui.js";
+import { ListGroup, EmptyRow, PageHeader, SectionTitle, Segmented } from "./ui.js";
 import { isoDate, addDays, MONTHS_LONG } from "./store.js";
 import { dueRow } from "./home.js";
 
@@ -13,8 +13,37 @@ export function renderCalendar(cx, app, width) {
     lede: `Every deadline for the forms your taxpayers file, from the ${year} BIR tax calendar.`,
   });
   const today = new Date();
-  const rows = app.isFresh() ? [] : app.store.deadlines(isoDate(today), isoDate(addDays(today, 366)));
+  const all = app.isFresh() ? [] : app.store.deadlines(isoDate(today), isoDate(addDays(today, 366)));
+  // Scoped to the selected taxpayer's branch unless "All taxpayers" is chosen.
+  const tp = app.taxpayer();
+  const b = app.branch();
+  const scope = tp ? app.calendarScope || "mine" : "all";
+  const rows = scope === "all" ? all : all.filter((d) => d.tin === b.tin);
   const page = div().flex().flex_col().child(header);
+  if (tp) {
+    page.child(
+      div()
+        .mt(24)
+        .flex()
+        .flex_row()
+        .child(
+          Segmented(
+            cx,
+            "calendar-scope",
+            [
+              { value: "mine", label: tp.branches.length > 1 ? `${tp.name} · ${b.name}` : tp.name },
+              { value: "all", label: "All taxpayers" },
+            ],
+            scope,
+            (v, cx) => {
+              app.calendarScope = v;
+              cx.notify();
+            },
+            { label: "Whose deadlines" },
+          ),
+        ),
+    );
+  }
   if (!rows.length) {
     return page.child(
       div()

@@ -58,8 +58,19 @@ export function renderLibrary(cx, app, width) {
   const t = tokens(cx);
   const index = app.store.screenIndex();
   const q = app.library.query.value().trim().toLowerCase();
-  const list = index.filter((f) => (app.library.freq === "All" || f.freq === app.library.freq) && (!q || searchText(f).includes(q)));
   const tp = app.taxpayer();
+  const b = app.branch();
+  const year = app.year();
+  // Scoped to the selected taxpayer and branch: the forms it files in the
+  // selected tax year, unless "All forms" is chosen.
+  const owned = new Set(app.yearForms());
+  const scope = tp ? app.library.scope || "owned" : "all";
+  const list = index.filter(
+    (f) =>
+      (scope === "all" || owned.has(f.c)) &&
+      (app.library.freq === "All" || f.freq === app.library.freq) &&
+      (!q || searchText(f).includes(q)),
+  );
 
   const tools = div()
     .flex()
@@ -86,6 +97,24 @@ export function renderLibrary(cx, app, width) {
         .child(Icon(cx, "search", { color: "fg3" }))
         .child(TextField(cx, app.library.query, { id: "library-search", label: "Find a form" }).border(0).px(0).h(30).flex_1()),
     )
+    .when(Boolean(tp), (el) =>
+      el.child(
+        Segmented(
+          cx,
+          "library-scope",
+          [
+            { value: "owned", label: `Filed in ${year || "this year"} (${owned.size})` },
+            { value: "all", label: `All forms (${index.length})` },
+          ],
+          scope,
+          (v, cx) => {
+            app.library.scope = v;
+            cx.notify();
+          },
+          { label: "Which forms" },
+        ),
+      ),
+    )
     .child(
       Segmented(
         cx,
@@ -107,12 +136,18 @@ export function renderLibrary(cx, app, width) {
     .child(
       PageHeader(cx, {
         title: "Form library",
-        lede: `Every return eBIRForms can prepare. ${tp ? `Open one to fill it in for ${tp.name}.` : "Add a taxpayer to fill one in."}`,
+        lede: tp
+          ? `Forms ${tp.name}${tp.branches.length > 1 ? ` (${b.name})` : ""} files in ${year || "this year"}. Choose All forms to see every return eBIRForms can prepare.`
+          : "Every return eBIRForms can prepare. Add a taxpayer to fill one in.",
       }),
     )
     .child(tools);
   if (!list.length) {
-    return page.child(EmptyRow(cx, "library-empty", "No form matches. Try a code like 1601C or a word like VAT."));
+    const text =
+      scope === "owned" && !owned.size
+        ? `${tp.name} has no forms for ${year || "this year"} yet. Choose them under Forms, or see All forms.`
+        : "No form matches. Try a code like 1601C or a word like VAT.";
+    return page.child(EmptyRow(cx, "library-empty", text));
   }
   const gap = 12;
   const cols = Math.max(1, Math.floor((width + gap) / (250 + gap)));

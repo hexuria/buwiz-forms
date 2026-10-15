@@ -8,7 +8,7 @@
 // file only shapes input and reports what the data layer answers.
 
 import { div } from "gpui-kit";
-import { InputState } from "gpui-base";
+import { InputState, OtpState } from "gpui-base";
 import {
   tokens,
   SPACE,
@@ -35,6 +35,7 @@ import {
   NameCell,
   EmptyRow,
   SettingRow,
+  PinCells,
   PageHeader,
   MetaLine,
   Tabs,
@@ -87,6 +88,70 @@ export class TaxpayerActions {
     this.addYearOpen = false;
     this.newTp = null;
     this.newBranch = null;
+    // Taxpayer security (Profile › Email, security and export).
+    this.pinOtp = OtpState.new(4, { masked: true });
+    this.totpOtp = OtpState.new(6);
+    this.totpSecret = null;
+  }
+
+  /** PIN and authenticator state of the selected branch's taxpayer profile. */
+  auth() {
+    const b = this.app.branch();
+    return b ? this.app.store.read(`auth:${b.tin}`, "profile_auth", [b.tin], { has_pin: false, has_totp: false }) : {};
+  }
+
+  setPin(cx) {
+    const app = this.app;
+    const pin = this.pinOtp.value();
+    if (pin.length !== 4) return app.toast("Type all 4 digits of the new PIN first.", cx, "lock");
+    try {
+      app.store.write("set_profile_pin", app.branch().tin, pin);
+      this.pinOtp.set_value("");
+      app.toast(app.store.authState().enable_profile_pins ? "PIN saved." : "PIN saved. Turn on Taxpayer PINs in Settings to ask for it.", cx, "lock");
+    } catch (e) {
+      app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  clearPin(cx) {
+    try {
+      this.app.store.write("set_profile_pin", this.app.branch().tin, null);
+      this.app.toast("PIN removed.", cx, "lock");
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  startTotp(cx) {
+    try {
+      const t = this.app.taxpayer();
+      this.totpSecret = this.app.store.call("generate_totp_secret", `eBIRForms ${t.tin_display || t.tin_root}`).secret;
+      this.totpOtp.set_value("");
+      cx.notify();
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  confirmTotp(cx) {
+    try {
+      this.app.store.write("set_profile_totp", this.app.branch().tin, this.totpSecret, this.totpOtp.value());
+      this.totpSecret = null;
+      this.totpOtp.set_value("");
+      this.app.toast("Authenticator added.", cx, "lock");
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  clearTotp(cx) {
+    try {
+      this.app.store.write("set_profile_totp", this.app.branch().tin, null);
+      this.totpSecret = null;
+      this.app.toast("Authenticator removed.", cx, "lock");
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
   }
 
   /** Taxpayer or branch switched: drop every edit in progress. */
@@ -641,27 +706,79 @@ function profileTab(cx, app, width) {
     )
     .child(editAction("address"));
 
-  const securityBody = div()
+  const auth = ui.auth();
+  const pinControls = div()
     .flex()
-    .flex_col()
-    .child(
-      SettingRow(
-        cx,
-        "tp-security-pin",
-        "Taxpayer PIN",
-        "Ask for a PIN before opening this taxpayer",
-        AppButton(cx, "tp-security-pin-btn", "Set PIN", { size: "sm", onClick: (_e, cx) => app.openLegacyEditor(cx) }),
-      ),
-    )
-    .child(
-      SettingRow(
-        cx,
-        "tp-security-archive",
-        "Archive or delete",
-        "Hide this taxpayer from new work, or remove it",
-        AppButton(cx, "tp-security-archive-btn", "Open", { size: "sm", onClick: (_e, cx) => app.openLegacyEditor(cx) }),
-      ).border_t(1).border_color(tokens(cx).border),
-    );
+    .flex_row()
+    .flex_wrap()
+    .items_center()
+    .gap(SPACE[2])
+    .child(PinCells(cx, ui.pinOtp, "tp-security-pin-cells"))
+    .child(AppButton(cx, "tp-security-pin-save", auth.has_pin ? "Change PIN" : "Set PIN", { size: "sm", onClick: (_e, cx) => ui.setPin(cx) }));
+  if (auth.has_pin) {
+    pinControls.child(AppButton(cx, "tp-security-pin-clear", "Remove", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.clearPin(cx) }));
+  }
+  let totpControl;
+  if (ui.totpSecret) {
+    totpControl = div()
+      .flex()
+      .flex_row()
+      .flex_wrap()
+      .items_center()
+      .gap(SPACE[2])
+      .child(PinCells(cx, ui.totpOtp, "tp-security-totp-cells"))
+      .child(AppButton(cx, "tp-security-totp-confirm", "Confirm", { variant: "primary", size: "sm", onClick: (_e, cx) => ui.confirmTotp(cx) }))
+      .child(
+        AppButton(cx, "tp-security-totp-cancel", "Cancel", {
+          variant: "ghost",
+          size: "sm",
+          onClick: (_e, cx) => {
+            ui.totpSecret = null;
+            cx.notify();
+          },
+        }),
+      );
+  } else {
+    totpControl = AppButton(cx, "tp-security-totp-btn", auth.has_totp ? "Remove" : "Add", {
+      variant: auth.has_totp ? "ghost" : "secondary",
+      size: "sm",
+      onClick: (_e, cx) => (auth.has_totp ? ui.clearTotp(cx) : ui.startTotp(cx)),
+    });
+  }
+  const pinsOn = app.store.authState().enable_profile_pins;
+  const rows = [
+    SettingRow(
+      cx,
+      "tp-security-pin",
+      "Taxpayer PIN",
+      auth.has_pin
+        ? pinsOn
+          ? "Asked before this taxpayer opens"
+          : "Set. Turn on Taxpayer PINs in Settings to ask for it"
+        : "Ask for a 4-digit PIN before this taxpayer opens",
+      pinControls,
+    ),
+    SettingRow(
+      cx,
+      "tp-security-totp",
+      "Authenticator",
+      ui.totpSecret
+        ? `Add this key to your authenticator app, then type the code it shows: ${ui.totpSecret}`
+        : auth.has_totp
+          ? "A code from your authenticator app also unlocks this taxpayer"
+          : "Use a 6-digit code from an authenticator app instead of the PIN",
+      totpControl,
+    ),
+    SettingRow(
+      cx,
+      "tp-security-archive",
+      "Archive or delete",
+      "Hide this taxpayer from new work, or remove it",
+      AppButton(cx, "tp-security-archive-btn", "Open", { size: "sm", onClick: (_e, cx) => app.openLegacyEditor(cx) }),
+    ),
+  ];
+  const securityBody = div().flex().flex_col();
+  rows.forEach((row, i) => securityBody.child(i ? row.border_t(1).border_color(tokens(cx).border) : row));
 
   const section = (id, title, meta, body, editable) =>
     Disclosure(cx, `tp-sec-${id}`, {
