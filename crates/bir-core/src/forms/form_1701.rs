@@ -519,6 +519,19 @@ impl Form1701Draft {
         ] {
             fields.insert(format!("derived:{key}"), value);
         }
+        // Item 6 (and the spouse's Part IV Item 3) and Item 7 print what the
+        // page shows: the official map ticks Compensation Earner beside a
+        // business type for mixed income, which the upload map cannot.
+        for (key, value) in super::queueable::QueueableForm::field_map(self) {
+            let tail = key.rsplit(':').next().unwrap_or(&key);
+            if tail.starts_with("rdoPg1I6TaxpayerType")
+                || tail.starts_with("rdoPg2I3SpouseType")
+                || tail.starts_with("rdoPg1I7ATC_")
+            {
+                let key = if key.contains(':') { key.clone() } else { format!("frm1701:{key}") };
+                fields.insert(key, value);
+            }
+        }
         // The page 2-4 headers print "Taxpayer/Filer's Last Name", as the
         // official page fills them; the XML map keeps its full name.
         for page in [2, 3, 4] {

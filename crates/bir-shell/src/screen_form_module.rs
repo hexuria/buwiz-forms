@@ -1462,34 +1462,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         .as_object()
         .ok_or_else(|| host_error("edits must be an object of key -> value"))?;
     let editable = agent::identity(kind, &draft).map_err(host_error)?.status == FilingStatus::Draft;
-    let mut rejected = Map::new();
-    // Location parents precede their children, including a pasted batch
-    // whose JSON keys happen to sort city/province/region.
-    let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
-    edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
-    let shown = values_json(kind, &draft).map_err(host_error)?;
-    for (key, step) in plan_choice_edits(kind, &draft, &shown, edits) {
-        if !editable {
-            rejected.insert(key.clone(), json!("this return is no longer a draft"));
-            continue;
-        }
-        let mut next = draft.clone();
-        let result = match step {
-            ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value),
-            ChoiceStep::Set(sets) => {
-                for (path, value) in sets {
-                    set_draft_path(&mut next, &path, value);
-                }
-                Ok(())
-            }
-        };
-        match result {
-            Ok(()) => draft = next,
-            Err(message) => {
-                rejected.insert(key.clone(), Value::String(message));
-            }
-        }
-    }
+    let edits: Map<String, Value> = edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
+    let rejected = apply_screen_edits(kind, &mut draft, &edits, editable)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
         // same step opening a draft runs.
@@ -1510,6 +1484,44 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "options": catalogs::options(kind, &draft),
         "rejected": rejected,
     })))
+}
+
+/// Apply the page's edits to `draft` the one way both the draft fill and the
+/// live print preview use, so the preview never prints a different answer
+/// than the page shows. Returns the rejected keys with their reasons.
+fn apply_screen_edits(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    edits: &Map<String, Value>,
+    editable: bool,
+) -> Result<Map<String, Value>, HostError> {
+    let mut rejected = Map::new();
+    let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
+    let shown = values_json(kind, draft).map_err(host_error)?;
+    for (key, step) in plan_choice_edits(kind, draft, &shown, edits) {
+        if !editable {
+            rejected.insert(key.clone(), json!("this return is no longer a draft"));
+            continue;
+        }
+        let mut next = draft.clone();
+        let result = match step {
+            ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value),
+            ChoiceStep::Set(sets) => {
+                for (path, value) in sets {
+                    set_draft_path(&mut next, &path, value);
+                }
+                Ok(())
+            }
+        };
+        match result {
+            Ok(()) => *draft = next,
+            Err(message) => {
+                rejected.insert(key.clone(), Value::String(message));
+            }
+        }
+    }
+    Ok(rejected)
 }
 
 /// One planned write of `screen_form_fill`.
@@ -1588,6 +1600,36 @@ fn plan_choice_edits(
     edits: Vec<(String, Value)>,
 ) -> Vec<(String, ChoiceStep)> {
     let def = kind.definition();
+    // Radio boxes without a group box (1701 Item 7's ATCs) form one group
+    // per draft field their tick writes.
+    let implicit_path = |key: &str| -> Option<String> {
+        let entry = def.box_def(key)?;
+        if entry.group.is_some() || !entry.kind.contains("radio") {
+            return None;
+        }
+        let paths = true_option_paths(def, key);
+        (paths.len() == 1).then(|| paths[0].clone())
+    };
+    let mut implicit: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for entry in &def.boxes {
+        if let Some(path) = implicit_path(&entry.key) {
+            implicit.entry(path).or_default().push(entry.key.clone());
+        }
+    }
+    // (group id, member count) of a one-answer box.
+    let group_info = |key: &str| -> Option<(String, usize)> {
+        if let Some(group) = def
+            .box_def(key)
+            .and_then(|e| e.group.as_deref())
+            .and_then(|g| def.box_def(g))
+            .filter(|g| g.radio_group)
+        {
+            return Some((group.key.clone(), group.members.len()));
+        }
+        let path = implicit_path(key)?;
+        let members = implicit.get(&path).map_or(0, Vec::len);
+        (members >= 2).then(|| (format!("path:{path}"), members))
+    };
     let group_of = |key: &str| -> Option<&BoxDef> {
         let group = def.box_def(key)?.group.as_deref()?;
         def.box_def(group).filter(|entry| entry.radio_group)
@@ -1595,7 +1637,7 @@ fn plan_choice_edits(
     let ticked_groups: BTreeSet<String> = edits
         .iter()
         .filter(|(_, value)| !is_unticked(value))
-        .filter_map(|(key, _)| group_of(key).map(|g| g.key.clone()))
+        .filter_map(|(key, _)| group_info(key).map(|g| g.0))
         .collect();
     let mut plain = Vec::new();
     for (key, value) in edits {
@@ -1672,14 +1714,14 @@ fn plan_choice_edits(
                 continue;
             }
         }
-        match group_of(&key) {
-            Some(group) if unticked => {
-                if ticked_groups.contains(&group.key)
+        match group_info(&key) {
+            Some((group, members)) if unticked => {
+                if ticked_groups.contains(&group)
                     || shown.get(&key).and_then(Value::as_str) != Some("true")
                 {
                     continue;
                 }
-                if group.members.len() >= 3 {
+                if members >= 3 {
                     let sets = true_option_paths(def, &key)
                         .into_iter()
                         .map(|path| (path, Value::Null))
@@ -1809,15 +1851,12 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     }
     let mut draft = draft_argument(arguments, 1)?;
     if let Some(edits) = arguments.value(2).ok().and_then(|v| v.as_object()) {
-        let mut edits: Vec<_> = edits.iter().collect();
-        edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
-        for (key, value) in edits {
-            let mut next = draft.clone();
-            if catalogs::fill(kind, &mut next, key, &to_json(value)).is_ok() {
-                draft = next;
-            }
+        let edits: Map<String, Value> =
+            edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
+        if !edits.is_empty() {
+            let _ = apply_screen_edits(kind, &mut draft, &edits, true);
+            let _ = agent::compute(kind, &mut draft);
         }
-        let _ = agent::compute(kind, &mut draft);
     }
     let slug = crate::bir_module::print_slug_for(kind.form_code())
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
@@ -3923,6 +3962,107 @@ mod tests {
             .filter(|c| f["values"][cs(c)] == "true")
             .collect();
         assert_eq!(on, ["W"]);
+    }
+
+    /// The page's row, the draft and the live preview's printed boxes agree
+    /// after every Item 6 click, whether the preview gets the edit staged
+    /// (before the flush) or the flushed draft.
+    #[test]
+    fn form_1701_item6_page_draft_and_preview_agree() {
+        setup();
+        let kind = kind_of("1701").unwrap();
+        let opened = open("1701", 0);
+        let k = |c: &str| format!("frm1701:rdoPg1I6TaxpayerType{c}");
+        let codes = ["S", "P", "E", "T", "C"];
+        let printed = |draft: &Value| -> Vec<&str> {
+            let map = with_database(|db| print_map(db, kind, draft)).unwrap().0;
+            codes
+                .into_iter()
+                .filter(|c| {
+                    let tail = format!("rdoPg1I6TaxpayerType{c}");
+                    map.iter().any(|(key, v)| {
+                        key.rsplit(':').next() == Some(tail.as_str()) && v == "true"
+                    })
+                })
+                .collect()
+        };
+        let steps: Vec<(&str, &str, Vec<&str>)> = vec![
+            ("S", "true", vec!["S"]),
+            ("P", "true", vec!["P"]),
+            ("E", "true", vec!["E"]),
+            ("T", "true", vec!["T"]),
+            ("C", "true", vec!["C"]),
+            ("C", "false", vec![]),
+            ("P", "true", vec!["P"]),
+            ("P", "false", vec![]),
+            ("S", "true", vec!["S"]),
+            ("P", "true", vec!["P"]),
+            ("C", "true", vec!["P", "C"]),
+            ("P", "false", vec!["C"]),
+            ("C", "false", vec![]),
+        ];
+        let mut draft = opened["draft"].clone();
+        for (code, value, want) in steps {
+            let edit = json!({ k(code): value });
+            // Preview with the edit staged, as the live sync sends it.
+            let mut staged = draft.clone();
+            apply_screen_edits(kind, &mut staged, edit.as_object().unwrap(), true).unwrap();
+            agent::compute(kind, &mut staged).unwrap();
+            let filled = fill("1701", &draft, edit);
+            let page: Vec<&str> = codes
+                .into_iter()
+                .filter(|c| filled["values"][k(c)] == "true")
+                .collect();
+            assert_eq!(page, want, "page after {code}={value}");
+            assert_eq!(
+                printed(&staged),
+                want,
+                "staged preview after {code}={value}"
+            );
+            assert_eq!(
+                printed(&filled["draft"]),
+                want,
+                "preview of the flushed draft after {code}={value}"
+            );
+            draft = filled["draft"].clone();
+        }
+        // Item 7: each ATC ticks its own box on the page and the print, one
+        // at a time; unticking the ticked one clears it.
+        let atcs = [
+            "II012", "II014", "II013", "II011", "II015", "II017", "II016",
+        ];
+        let a = |c: &str| format!("frm1701:rdoPg1I7ATC_{c}");
+        let atc_printed = |draft: &Value| -> Vec<&str> {
+            let map = with_database(|db| print_map(db, kind, draft)).unwrap().0;
+            atcs.into_iter()
+                .filter(|c| map.get(&a(c)).is_some_and(|v| v == "true"))
+                .collect()
+        };
+        let mut draft = opened["draft"].clone();
+        for code in atcs {
+            let mut batch = Map::new();
+            for other in atcs {
+                batch.insert(
+                    a(other),
+                    json!(if other == code { "true" } else { "false" }),
+                );
+            }
+            let filled = fill("1701", &draft, Value::Object(batch));
+            let page: Vec<&str> = atcs
+                .into_iter()
+                .filter(|c| filled["values"][a(c)] == "true")
+                .collect();
+            assert_eq!(page, [code], "page ATC {code}");
+            assert_eq!(atc_printed(&filled["draft"]), [code], "print ATC {code}");
+            draft = filled["draft"].clone();
+        }
+        let cleared = fill("1701", &draft, json!({ a("II016"): "false" }));
+        let page: Vec<&str> = atcs
+            .into_iter()
+            .filter(|c| cleared["values"][a(c)] == "true")
+            .collect();
+        assert!(page.is_empty(), "untick clears Item 7: {page:?}");
+        assert!(atc_printed(&cleared["draft"]).is_empty());
     }
 
     #[test]

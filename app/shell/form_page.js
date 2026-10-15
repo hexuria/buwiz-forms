@@ -496,7 +496,7 @@ export class FormPageActions {
     Object.assign(s.pending, edits);
     s.dirty = true;
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
-    this.livePreview();
+    // flush() syncs the preview from the host-applied draft.
     this.flush(cx);
   }
 
@@ -515,6 +515,9 @@ export class FormPageActions {
         s.options = r.options || {};
         this.syncComputed();
         this.syncChanged(before, edits);
+        // The preview prints the draft the host just applied, never the
+        // page's optimistic values.
+        this.livePreview();
         const rejected = Object.entries(r.rejected || {});
         if (rejected.length) {
           for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
@@ -836,33 +839,70 @@ function control(cx, ui, f, itemLabel, multi, available) {
   return wrap.child(el);
 }
 
+/** BIR's own words for the income-tax ATCs the forms list as bare codes. */
+const ATC_TITLES = {
+  II011: "Compensation Income",
+  II012: "Business Income – Graduated IT Rates",
+  II013: "Mixed Income – Graduated IT Rates",
+  II014: "Income from Profession – Graduated IT Rates",
+  II015: "Business Income – 8% IT Rate",
+  II016: "Mixed Income – 8% IT Rate",
+  II017: "Income from Profession – 8% IT Rate",
+};
+
+function choiceLabel(f) {
+  const text = f.l.replace(/^.*?:\s*/, "");
+  const code = /^A?TC\s+([A-Z]{2}\d{3})$/.exec(text)?.[1];
+  return code ? (ATC_TITLES[code] ? `${code}  ${ATC_TITLES[code]}` : code) : text;
+}
+
+/**
+ * A one-answer group, drawn as the paper form's tick boxes. Ticking one
+ * clears the others; the ticked box of a group of three or more unticks
+ * (clears the answer), a yes/no pair keeps one answer.
+ */
 function radioGroup(cx, ui, it, radios) {
   const s = ui.state;
   const t = tokens(cx);
-  const row = div().flex().flex_row().flex_wrap().gap(6);
+  const wide = radios.some((f) => choiceLabel(f).length > 24);
+  const row = div().flex().gap_x(SPACE[4]).gap_y(SPACE[2]).when(wide, (el) => el.flex_col()).when(!wide, (el) => el.flex_row().flex_wrap());
   for (const f of radios) {
     const on = s.values[f.k] === "true";
     const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
-    const pill = div()
-      .id(`fp-${f.k}`)
+    const pick = (cx) => {
+      if (locked) return;
+      if (on) {
+        if (radios.length >= 3) ui.choose({ [f.k]: "false" }, cx);
+        return;
+      }
+      const edits = {};
+      for (const r of radios) edits[r.k] = r.k === f.k ? "true" : "false";
+      ui.choose(edits, cx);
+    };
+    const label = choiceLabel(f);
+    const box = div()
       .flex()
+      .flex_none()
       .items_center()
-      .h(SIZE.controlSm)
-      .px(SPACE[3])
-      .rounded(RADIUS.full)
+      .justify_center()
+      .size(16)
+      .rounded(4)
       .border(1)
       .border_color(on ? t.primary : t.borderStrong)
-      .bg(on ? t.primary : t.surface)
-      .accessibility_label(f.l)
-      .child(Text(cx, "metaStrong", f.l.replace(/^.*?:\s*/, ""), on ? "primaryFg" : "fg2").whitespace_nowrap());
-    if (!locked) {
-      pill.cursor_pointer().hover((st) => (on ? st : st.border_color(t.fg3))).on_click((_e, cx) => {
-        const edits = {};
-        for (const r of radios) edits[r.k] = r.k === f.k ? "true" : "false";
-        ui.choose(edits, cx);
-      });
-    } else pill.opacity(0.7);
-    row.child(pill);
+      .bg(on ? t.primary : t.surface);
+    if (on) box.child(Icon(cx, "check", { size: 12, color: "primaryFg" }));
+    const item = div()
+      .id(`fp-${f.k}`)
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(SPACE[2])
+      .accessibility_label(label)
+      .child(box)
+      .child(Text(cx, "body", label, locked ? "fg2" : "fg").whitespace_normal());
+    if (!locked) item.cursor_pointer().on_click((_e, cx) => pick(cx));
+    else item.opacity(0.7);
+    row.child(item);
   }
   void it;
   return row;
