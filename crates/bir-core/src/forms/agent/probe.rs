@@ -534,10 +534,16 @@ fn row_templates(kind: AgentFormKind, seed: &Value, out: &mut BTreeMap<String, V
             let mut row_leaves = Vec::new();
             leaves(last, "", 1, &mut row_leaves);
             for (leaf_path, leaf) in row_leaves {
-                let mut trial = row.clone();
-                pointer_set(&mut trial, &leaf_path, blank(&leaf));
-                if with_row(&trial) {
-                    row = trial;
+                // A blank, else null (an optional identity such as 2550Q's
+                // row instance_id, which an empty string does not parse as):
+                // a copied value would give every added row the same one.
+                for candidate in [blank(&leaf), Value::Null] {
+                    let mut trial = row.clone();
+                    pointer_set(&mut trial, &leaf_path, candidate);
+                    if with_row(&trial) {
+                        row = trial;
+                        break;
+                    }
                 }
             }
             row
