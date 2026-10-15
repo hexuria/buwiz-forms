@@ -137,6 +137,41 @@ function compactPartName(name) {
 }
 
 /** Every key an item binds: its fields, or every cell of its table. */
+/**
+ * A date the filer typed, read the way the old tax-profile date input read
+ * it: `12012020`, `12/01/2020`, `12-01-2020`, `2020-12-01` or `Dec 01 2020`
+ * all mean December 1, 2020. Returns null when it is not a real day.
+ */
+export function parseTypedDate(text) {
+  const v = String(text || "").trim();
+  if (!v) return null;
+  const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  let y, m, d, hit;
+  if ((hit = /^(\d{2})(\d{2})(\d{4})$/.exec(v))) [, m, d, y] = hit;
+  else if ((hit = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v))) [, y, m, d] = hit;
+  else if ((hit = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v))) [, m, d, y] = hit;
+  else if ((hit = /^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/i.exec(v))) {
+    m = MON.indexOf(hit[1].toLowerCase()) + 1;
+    [, , d, y] = hit;
+  } else return null;
+  [y, m, d] = [Number(y), Number(m), Number(d)];
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return null;
+  if (d > new Date(Date.UTC(y, m, 0)).getUTCDate()) return null;
+  return { y, m, d };
+}
+
+/** The form's MM/DD/YYYY text for a parsed date. */
+export function formatMDY({ y, m, d }) {
+  return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
+}
+
+const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
+
+/** One box holding a whole MM/DD/YYYY date. */
+function isDateField(f, it) {
+  return f.t === "date" || (f.t === "text" && /MM\/DD\/YYYY/i.test(`${it?.l || ""} ${f.l || ""}`));
+}
+
 function itemKeys(it) {
   if (it.rows) return it.keys.flat();
   return (it.f || []).map((f) => f.k);
@@ -243,6 +278,29 @@ export class FormPageActions {
       let value = s.values[k] ?? "";
       if (t === "money" && value !== "") value = formatMoney(value);
       const input = InputState.new({ value: String(value) });
+      if (t === "date") {
+        // Typing stays as typed; the draft gets MM/DD/YYYY as soon as it
+        // reads as a date, and the box is normalized on blur.
+        input.on("change", (_e, cx) => {
+          const raw = input.value();
+          const date = parseTypedDate(raw);
+          if (date || !raw.trim()) this.setDateError(k, "");
+          this.edit(k, date ? formatMDY(date) : raw, cx);
+        });
+        input.on("blur", (_e, cx) => {
+          const raw = input.value();
+          const date = parseTypedDate(raw);
+          if (date) {
+            const text = formatMDY(date);
+            if (text !== raw) input.set_value(text);
+            this.setDateError(k, "");
+          } else this.setDateError(k, raw.trim() ? DATE_ERROR : "");
+          this.flush(cx);
+        });
+        s.inputs.set(k, input);
+        (s.inputKinds ||= new Map()).set(k, t);
+        return;
+      }
       input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
       input.on("blur", (_e, cx) => {
         if (t === "money") input.set_value(formatMoney(input.value()));
@@ -255,7 +313,7 @@ export class FormPageActions {
       if (it.rows) {
         it.keys.forEach((row) => row.forEach((k, c) => make(k, it.cols[c].t)));
       } else {
-        for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, f.t);
+        for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, isDateField(f, it) ? "date" : f.t);
       }
     }
     if (cx) {
@@ -285,7 +343,7 @@ export class FormPageActions {
     const keys = itemKeys(it);
     const picker = s.picker?.id === id ? s.picker.cal : null;
     return JSON.stringify([
-      width, s.editable, s.messages[id] || "", s.moreOpen.has(id),
+      width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value()] : null,
       keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.options[k]]),
@@ -387,10 +445,31 @@ export class FormPageActions {
     }
   }
 
-  /** Fill an item's month, day and year boxes from a picked "YYYY-MM-DD". */
+  /** A typed date's own message; only its row's snapshot changes. */
+  setDateError(k, msg) {
+    const s = this.state;
+    const id = this.itemIdForKey(k);
+    if (!s || !id) return;
+    s.dateErrors ||= {};
+    if ((s.dateErrors[id] || "") === msg) return;
+    if (msg) s.dateErrors[id] = msg;
+    else delete s.dateErrors[id];
+  }
+
+  /** Fill an item's month, day and year boxes (or its one date box) from a picked "YYYY-MM-DD". */
   pickDate(date, iso, cx) {
     const s = this.state;
     const [y, m, d] = iso.split("-");
+    if (date.single) {
+      const f = date.single;
+      if (f.c || s.locks[f.k] !== undefined) return;
+      const text = formatMDY({ y: Number(y), m: Number(m), d: Number(d) });
+      s.inputs.get(f.k)?.set_value(text);
+      this.setDateError(f.k, "");
+      s.picker = null;
+      this.choose({ [f.k]: text }, cx);
+      return;
+    }
     const edits = {};
     const put = (f, v) => {
       if (!f || f.c || s.locks[f.k] !== undefined) return;
@@ -884,9 +963,10 @@ function datePicker(cx, ui, id, date) {
         return cx.notify();
       }
       const cal = CalendarState.new();
-      const m = Number(String(s.values[date.month.k] || "").slice(0, 2));
-      const y = Number(s.values[date.year.k] || "");
-      const d = date.day ? Number(s.values[date.day.k] || "") : 1;
+      const typed = date.single ? parseTypedDate(s.values[date.single.k]) : null;
+      const m = typed ? typed.m : date.single ? 0 : Number(String(s.values[date.month.k] || "").slice(0, 2));
+      const y = typed ? typed.y : date.single ? 0 : Number(s.values[date.year.k] || "");
+      const d = typed ? typed.d : date.day ? Number(s.values[date.day.k] || "") : 1;
       if (m >= 1 && m <= 12 && y > 1900) {
         cal.set_value(`${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`);
       }
@@ -1058,13 +1138,17 @@ function itemRow(cx, ui, it, pi, ii, width) {
     const radios = fs.filter((f) => f.t === "radio");
     if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
     for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
-    const date = dateParts(fs);
+    const single = fs.filter((f) => isDateField(f, it));
+    if (single.length === 1 && s.editable && !single[0].c && s.locks[single[0].k] === undefined) {
+      controls.child(datePicker(cx, ui, id, { single: single[0] }));
+    }
+    const date = single.length ? null : dateParts(fs);
     if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || s.locks[f.k] !== undefined)) {
       controls.child(datePicker(cx, ui, id, date));
     }
   }
 
-  const msg = s.messages[id] || "";
+  const msg = s.dateErrors?.[id] || s.messages[id] || "";
   return div()
     .id(`fp-item-${id}`)
     .flex()
