@@ -9,7 +9,7 @@
 // with a "Checking…" chip while it runs. The html-frozen/ sheets stay the
 // print output and are not touched here.
 
-import { div } from "gpui-kit";
+import { View, div } from "gpui-kit";
 import { InputState, CalendarState, Popup } from "gpui-base";
 import {
   tokens,
@@ -87,6 +87,7 @@ function selectBox(cx, ui, k, label, listedRaw, value, locked, width) {
     open: s.openSelect === k,
     onOpenChange: (open, cx) => {
       s.openSelect = open ? k : null;
+      ui.refreshRows();
       cx.notify();
     },
     onChange: (v, cx) => ui.choose({ [k]: v }, cx),
@@ -159,6 +160,7 @@ export class FormPageActions {
   /** Load the schema now and the return in the background. */
   open(opts, cx) {
     const app = this.app;
+    for (const row of this.state?.rowViews?.values() || []) row.entity.release();
     const token = ++this.token;
     let schema = null;
     let error = null;
@@ -184,8 +186,10 @@ export class FormPageActions {
       messages: {},
       formErrors: [],
       checking: false,
+      showChecking: false,
       openParts: new Set([0]),
       inputs: new Map(),
+      rowViews: new Map(),
       pending: {},
       dirty: false,
       saved: false,
@@ -211,7 +215,8 @@ export class FormPageActions {
         this.setErrors(r.errors);
         // Every part already open (one picked while the return was still
         // opening, too) gets its inputs now that the draft is here.
-        for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i);
+        for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i, acx);
+        s.chromeSnapshot = this.chromeSnapshot();
         acx.notify();
       } catch (e) {
         if (token !== this.token) return;
@@ -223,7 +228,7 @@ export class FormPageActions {
   }
 
   /** Create InputStates for one part's text-like controls (only once). */
-  ensureInputs(partIndex) {
+  ensureInputs(partIndex, cx) {
     const s = this.state;
     if (!s || !s.schema || !s.draft) return;
     const part = s.schema.parts[partIndex];
@@ -248,23 +253,96 @@ export class FormPageActions {
         for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, f.t);
       }
     }
+    if (cx) {
+      part.items.forEach((it, ii) => {
+        const id = `${partIndex}:${ii}`;
+        if (!s.rowViews.has(id)) {
+          const props = { ui: this, state: s, it, pi: partIndex, ii, width: this.rowWidth() };
+          s.rowViews.set(id, {
+            props,
+            snapshot: this.rowSnapshot(props),
+            entity: cx.new(FormItemView, props),
+          });
+        }
+      });
+      this.refreshRows();
+    }
+  }
+
+  rowWidth() {
+    const width = this.app.layout().column;
+    return width >= BREAK.formNav ? width - 208 - 28 : width;
+  }
+
+  /** Values used by one row; fresh host objects alone do not invalidate it. */
+  rowSnapshot({ state: s, it, pi, ii, width }) {
+    const id = `${pi}:${ii}`;
+    const keys = itemKeys(it);
+    const picker = s.picker?.id === id ? s.picker.cal : null;
+    return JSON.stringify([
+      width, s.editable, s.messages[id] || "", s.moreOpen.has(id),
+      keys.includes(s.openSelect) ? s.openSelect : null,
+      picker ? [picker.year(), picker.month(), picker.value()] : null,
+      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.options[k]]),
+    ]);
+  }
+
+  /** Retained rows keep their snapshots until something they display changes. */
+  refreshRows() {
+    const s = this.state;
+    if (!s?.rowViews) return;
+    const width = this.rowWidth();
+    s.rowLayoutWidth = width;
+    for (const row of s.rowViews.values()) {
+      if (!s.openParts.has(row.props.pi)) continue;
+      const props = { ...row.props, width };
+      const snapshot = this.rowSnapshot(props);
+      if (snapshot === row.snapshot) continue;
+      row.props = props;
+      row.snapshot = snapshot;
+      row.entity.set_props(props);
+    }
+  }
+
+  refreshLayout() {
+    if (this.state && this.state.rowLayoutWidth !== this.rowWidth()) this.refreshRows();
+  }
+
+  /** Header and navigation may change too; row callbacks have their own cx. */
+  notify(cx) {
+    this.refreshRows();
+    const snapshot = this.chromeSnapshot();
+    if (snapshot === this.state.chromeSnapshot) return;
+    this.state.chromeSnapshot = snapshot;
+    if (this.app.invalidate) this.app.invalidate();
+    else cx.notify();
+  }
+
+  chromeSnapshot() {
+    const s = this.state;
+    return JSON.stringify([
+      s.status, s.editable, s.loading, s.error, s.showChecking,
+      Object.keys(s.messages).sort(), s.formErrors,
+    ]);
   }
 
   togglePart(i, cx) {
     const s = this.state;
     if (s.openParts.has(i)) s.openParts.delete(i);
     else {
-      this.ensureInputs(i);
+      this.ensureInputs(i, cx);
       s.openParts.add(i);
     }
+    this.refreshRows();
     cx.notify();
   }
 
   /** Navigator: open the chosen part and fold the others, so it sits near the top. */
   jumpTo(i, cx) {
     const s = this.state;
-    this.ensureInputs(i);
+    this.ensureInputs(i, cx);
     s.openParts = new Set([i]);
+    this.refreshRows();
     cx.notify();
   }
 
@@ -408,6 +486,12 @@ export class FormPageActions {
     s.validateSeq = (s.validateSeq || 0) + 1;
     const seq = s.validateSeq;
     const draft = s.draft;
+    // Fast validations should not flash a status chip and rebuild the header.
+    cx.timer.after(150, (acx) => {
+      if (token !== this.token || seq !== this.state.validateSeq || !s.checking) return;
+      s.showChecking = true;
+      this.notify(acx);
+    });
     cx.spawn(async (acx) => {
       try {
         const r = await this.app.store.call("screen_form_validate", s.code, draft);
@@ -422,10 +506,13 @@ export class FormPageActions {
         if (token !== this.token) return;
         this.state.formErrors = [message(e)];
       }
-      if (token === this.token && seq === this.state.validateSeq) this.state.checking = false;
-      acx.notify();
+      if (token === this.token && seq === this.state.validateSeq) {
+        this.state.checking = false;
+        this.state.showChecking = false;
+      }
+      this.notify(acx);
     });
-    cx.notify();
+    this.notify(cx);
   }
 
   /** Item id for a key ("p:i") from the schema. */
@@ -790,6 +877,7 @@ function datePicker(cx, ui, id, date) {
     onClick: (_e, cx) => {
       if (open) {
         s.picker = null;
+        ui.refreshRows();
         return cx.notify();
       }
       const cal = CalendarState.new();
@@ -803,6 +891,7 @@ function datePicker(cx, ui, id, date) {
         if (typeof value === "string") ui.pickDate(date, value, cx);
       });
       s.picker = { id, cal };
+      ui.refreshRows();
       cx.notify();
     },
   });
@@ -865,6 +954,18 @@ function datePicker(cx, ui, id, date) {
     card.child(row);
   }
   return popup.content(card);
+}
+
+class FormItemView extends View {
+  init(props) { this.props = props; }
+  update(props) { this.props = props; }
+  render(cx) {
+    const { ui, state, it, pi, ii, width } = this.props;
+    if (state !== ui.state) return div();
+    const row = itemRow(cx, ui, it, pi, ii, width);
+    if (ii > 0) row.border_t(1).border_color(tokens(cx).border);
+    return row;
+  }
 }
 
 function itemRow(cx, ui, it, pi, ii, width) {
@@ -1067,7 +1168,7 @@ function formContent(cx, app, width) {
   }
   bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
   bar.child(Text(cx, "meta", `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
-  if (s.checking || s.loading) bar.child(Chip(cx, s.loading ? "Opening…" : "Checking…", "accent"));
+  if (s.showChecking || s.loading) bar.child(Chip(cx, s.loading ? "Opening…" : "Checking…", "accent"));
   bar.child(div().flex_1());
   // Guided mode walks the fields a template marks, so it shows only when this
   // branch's template for the form marks some.
@@ -1222,8 +1323,9 @@ function formContent(cx, app, width) {
       p.items.forEach((it, ii) => {
         // Dev start route only (BIR_SHELL_START items=a-b): show a slice.
         if (ui.devItems && (ii < ui.devItems.from || ii > ui.devItems.to)) return;
-        const row = itemRow(cx, ui, it, pi, ii, partsW);
-        if (ii > 0) row.border_t(1).border_color(t.border);
+        const retained = s.rowViews.get(`${pi}:${ii}`);
+        const row = retained ? retained.entity : itemRow(cx, ui, it, pi, ii, partsW);
+        if (!retained && ii > 0) row.border_t(1).border_color(t.border);
         body.child(row);
       });
       card.child(body);

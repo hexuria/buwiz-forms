@@ -48,8 +48,18 @@ const PREFS_KEY = "redesign.prefs";
 /** `selRoot` after Back on a taxpayer's lock with nothing open before it. */
 const NO_TAXPAYER = "";
 
-export default class BirApp extends View {
+// The retained app handle lets a form row request changes to shared chrome
+// without treating the row's own event context as the application's context.
+export default class BirRoot extends View {
+  init(props, cx) {
+    this.app = cx.new(BirApp, { ...props, invalidate: () => this.app.set_props({}) });
+  }
+  render() { return this.app; }
+}
+
+class BirApp extends View {
   init(_props, cx) {
+    this.invalidate = _props.invalidate;
     this.store = new Store();
     this.info = this.store.systemInfo();
     this.isMac = this.info.os === "macos";
@@ -127,6 +137,7 @@ export default class BirApp extends View {
     this.lastViewport = "";
     this.wasNarrow = null;
     cx.timer.every(200, (cx) => {
+      if (this.view === "form") this.formUi.refreshLayout();
       const vp = window.viewport_size();
       const key = `${Math.round(vp.width)}x${Math.round(vp.height)}`;
       if (key !== this.lastViewport) {
@@ -201,11 +212,13 @@ export default class BirApp extends View {
       } else if (key === "select") {
         this.afterFormLoads(cx, (cx) => {
           this.formUi.state.openSelect = value;
+          this.formUi.refreshRows();
           cx.notify();
         });
       } else if (key === "more") {
         this.afterFormLoads(cx, (cx) => {
           this.formUi.state.moreOpen.add(value);
+          this.formUi.refreshRows();
           cx.notify();
         });
       } else if (key === "save") this.afterFormLoads(cx, (cx) => this.formUi.save(cx));
@@ -576,10 +589,10 @@ export default class BirApp extends View {
     cx.timer.after(2600, (cx) => {
       if (this.toastState && this.toastState.id === id) {
         this.toastState = null;
-        cx.notify();
+        this.invalidate();
       }
     });
-    cx.notify();
+    this.invalidate();
   }
 
   // ---------------------------------------------------------------- palette

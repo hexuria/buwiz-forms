@@ -73,7 +73,10 @@ shell-run *args="":
 run-upstream *args="":
     cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell {{args}}
 
-shell-check:
+shell-ui-test:
+    node --experimental-vm-modules tools/test_form_row_invalidation.mjs
+
+shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features gpui-fast
