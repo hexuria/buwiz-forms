@@ -18,7 +18,7 @@
 "frm1702MX:rdoPg1Pt1I13MethodOfDeduc": {"options":[{"set":{"/deduction_method":"Itemized"},"value":"Itemized"},{"set":{"/deduction_method":"OptionalStandard"},"value":"Optional"}],"type":"choice"},
 "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized": {"options":[{"set":{"/deduction_method":"OptionalStandard"},"value":"false"},{"set":{"/deduction_method":"Itemized"},"value":"true"}],"type":"choice"},
 "frm1702MX:rdoPg1Pt1I13MethodOfDeducOptional": {"options":[{"set":{"/deduction_method":"Itemized"},"value":"false"},{"set":{"/deduction_method":"OptionalStandard"},"value":"true"}],"type":"choice"},
-"frm1702MX:rdoPg1Pt2I21CarriedOver": {"options":[{"set":{"/is_amended":false,"/part_ii/overpayment_disposition":null},"value":"false"},{"set":{"/is_amended":true,"/part_ii/overpayment_disposition":"CarryOver"},"value":"true"}],"type":"choice"},
+"frm1702MX:rdoPg1Pt2I21CarriedOver": {"options":[{"set":{"/part_ii/overpayment_disposition":null},"value":"false"},{"set":{"/part_ii/overpayment_disposition":"CarryOver"},"value":"true"}],"type":"choice"},
 "frm1702MX:rdoPg1Pt2I21IssueTCC": {"options":[{"set":{"/part_ii/overpayment_disposition":null},"value":"false"},{"set":{"/part_ii/overpayment_disposition":"TaxCreditCertificate"},"value":"true"}],"type":"choice"},
 "frm1702MX:rdoPg1Pt2I21Refund": {"options":[{"set":{"/part_ii/overpayment_disposition":null},"value":"false"},{"set":{"/part_ii/overpayment_disposition":"Refund"},"value":"true"}],"type":"choice"},
 "frm1702MX:txtPg1I2YearEnd": {"lock":"identity","path":"/taxable_year","type":"whole"},

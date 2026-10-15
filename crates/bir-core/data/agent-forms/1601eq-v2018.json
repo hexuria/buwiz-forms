@@ -1,5 +1,9 @@
 {
 "bindings": {
+"frm1601EQ:if": {"options":[{"set":{"/over_remittance":"refund"},"value":"Refund"},{"set":{"/over_remittance":"tax_credit_certificate"},"value":"IssueCert"},{"set":{"/over_remittance":"carried_over"},"value":"CarriedOver"}],"type":"choice"},
+"frm1601EQ:ifCarriedOver": {"options":[{"set":{"/over_remittance":"none"},"value":"false"},{"set":{"/over_remittance":"carried_over"},"value":"true"}],"type":"choice"},
+"frm1601EQ:ifIssueCert": {"options":[{"set":{"/over_remittance":"none"},"value":"false"},{"set":{"/over_remittance":"tax_credit_certificate"},"value":"true"}],"type":"choice"},
+"frm1601EQ:ifRefund": {"options":[{"set":{"/over_remittance":"none"},"value":"false"},{"set":{"/over_remittance":"refund"},"value":"true"}],"type":"choice"},
 "frm1601EQ:optAmend": {"options":[{"set":{"/is_amended":true},"value":"Y"},{"set":{"/is_amended":false},"value":"N"}],"type":"choice"},
 "frm1601EQ:optAmend:N": {"options":[{"set":{"/is_amended":true},"value":"false"},{"set":{"/is_amended":false},"value":"true"}],"type":"choice"},
 "frm1601EQ:optAmend:Y": {"options":[{"set":{"/is_amended":false},"value":"false"},{"set":{"/is_amended":true},"value":"true"}],"type":"choice"},
@@ -194,9 +198,10 @@
 {"item":"28","key":"frm1601EQ:txtTax28","kind":"text","label":"Compromise","required":"optional"},
 {"computed":true,"item":"29","key":"frm1601EQ:txtTax29","kind":"text","label":"Total Penalties","required":"computed"},
 {"computed":true,"item":"30","key":"frm1601EQ:txtTax30","kind":"text","label":"Total Amount Still Due/(Over-remittance)","required":"computed"},
-{"computed":true,"item":"30","key":"frm1601EQ:ifRefund","kind":"checkbox","label":"Total Amount Still Due/(Over-remittance)","required":"computed"},
-{"computed":true,"item":"30","key":"frm1601EQ:ifIssueCert","kind":"checkbox","label":"Total Amount Still Due/(Over-remittance)","required":"computed"},
-{"computed":true,"item":"30","key":"frm1601EQ:ifCarriedOver","kind":"checkbox","label":"Total Amount Still Due/(Over-remittance)","required":"computed"},
+{"item":"30","key":"frm1601EQ:if","kind":"radio","label":"Total Amount Still Due/(Over-remittance)","members":["frm1601EQ:ifRefund","frm1601EQ:ifIssueCert","frm1601EQ:ifCarriedOver"],"options":[{"label":"Refund","value":"Refund"},{"label":"IssueCert","value":"IssueCert"},{"label":"CarriedOver","value":"CarriedOver"}],"radio_group":true,"required":"conditional"},
+{"group":"frm1601EQ:if","item":"30","key":"frm1601EQ:ifRefund","kind":"checkbox","label":"Total Amount Still Due/(Over-remittance)","required":"conditional"},
+{"group":"frm1601EQ:if","item":"30","key":"frm1601EQ:ifIssueCert","kind":"checkbox","label":"Total Amount Still Due/(Over-remittance)","required":"conditional"},
+{"group":"frm1601EQ:if","item":"30","key":"frm1601EQ:ifCarriedOver","kind":"checkbox","label":"Total Amount Still Due/(Over-remittance)","required":"conditional"},
 {"key":"txtTaxAgentNo","kind":"text","label":"Tax Agent Accreditation/Attorney Roll Number","required":"optional"},
 {"key":"txtDateIssue","kind":"text","label":"Tax Agent Accreditation Date of Issue","required":"optional"},
 {"key":"txtDateExpiry","kind":"text","label":"Tax Agent Accreditation Date of Expiry","required":"optional"},

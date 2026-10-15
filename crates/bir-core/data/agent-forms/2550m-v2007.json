@@ -52,7 +52,7 @@
 "frm2550m:txtAtcCde17": {"path":"/sales_schedule/15/atc_code","type":"text"},
 "frm2550m:txtAtcCde18": {"path":"/sales_schedule/16/atc_code","type":"text"},
 "frm2550m:txtAtcCde19": {"path":"/sales_schedule/17/atc_code","type":"text"},
-"frm2550m:txtAtcCde2": {"options":[{"set":{"/sales_schedule/0/atc_code":"VB010","/sales_schedule/1/atc_code":"VB010"},"value":"VB010"},{"set":{"/sales_schedule/0/atc_code":"See fixtures/atc-catalog-v796.json","/sales_schedule/1/atc_code":"VT010"},"value":"VS062"},{"set":{"/sales_schedule/0/atc_code":"VB010","/sales_schedule/1/atc_code":"VT010"},"value":"VT010"}],"type":"choice"},
+"frm2550m:txtAtcCde2": {"options":[{"set":{"/sales_schedule/1/atc_code":"VB010"},"value":"VB010"},{"set":{"/sales_schedule/1/atc_code":"See fixtures/atc-catalog-v796.json"},"value":"VS062"},{"set":{"/sales_schedule/1/atc_code":"VT010"},"value":"VT010"}],"type":"choice"},
 "frm2550m:txtAtcCde20": {"path":"/sales_schedule/18/atc_code","type":"text"},
 "frm2550m:txtAtcCde21": {"path":"/sales_schedule/19/atc_code","type":"text"},
 "frm2550m:txtAtcCde22": {"path":"/sales_schedule/20/atc_code","type":"text"},

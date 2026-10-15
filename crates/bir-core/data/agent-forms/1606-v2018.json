@@ -71,7 +71,7 @@
 "frm1606:txtOthers28E": {"path":"/others_base","type":"amount"},
 "frm1606:txtOtherss28E": {"path":"/others_base_description","type":"text"},
 "frm1606:txtRDOCode": {"lock":"profile","path":"/rdo_code","type":"text"},
-"frm1606:txtRDOCode16A": {"lock":"profile","path":"/property_rdo_code","type":"text"},
+"frm1606:txtRDOCode16A": {"path":"/property_rdo_code","type":"text"},
 "frm1606:txtRDOCodeS": {"path":"/seller_rdo_code","type":"text"},
 "frm1606:txtSellerAddress": {"path":"/seller_address","type":"text"},
 "frm1606:txtSellerName": {"path":"/seller_name","type":"text"},

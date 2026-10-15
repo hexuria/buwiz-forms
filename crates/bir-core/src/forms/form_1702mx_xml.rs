@@ -475,10 +475,15 @@ impl Form1702MXDraft {
                 self.taxpayer_name.clone(),
             );
         }
+        // Part IV Schedule 1's A/B instructions are one radio pair: A is
+        // checked unless B is (fields.json default A "C", B "F"), as the
+        // official page writes them (`form_1702mx_official`). The page sets
+        // only `instruction_multiple_activities`, so the single-activity
+        // flag alone would leave both unchecked.
         insert_bool(
             &mut fields,
             "frm1702MX:InstAPg2Part4",
-            self.relief_basis.instruction_single_activity,
+            !self.relief_basis.instruction_multiple_activities,
         );
         insert_bool(
             &mut fields,

@@ -487,6 +487,9 @@ impl Form1701Draft {
     ///   combs (the sheet preprints the branch 00000 after them).
     /// - `derived:attachments_tens` / `derived:attachments_units`: Item 33
     ///   over its two digit boxes.
+    ///
+    /// The page 2-4 header names are the last name the sheet prints
+    /// ([`Self::page_header_name`]), not the upload map's full name.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         let tin_digits = super::print_map::digits_of(
@@ -515,6 +518,14 @@ impl Form1701Draft {
             ("attachments_units", units),
         ] {
             fields.insert(format!("derived:{key}"), value);
+        }
+        // The page 2-4 headers print "Taxpayer/Filer's Last Name", as the
+        // official page fills them; the XML map keeps its full name.
+        for page in [2, 3, 4] {
+            fields.insert(
+                format!("frm1701:txtPg{page}TaxpayerName"),
+                self.page_header_name(),
+            );
         }
         fields
     }

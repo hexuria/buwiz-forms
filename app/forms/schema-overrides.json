@@ -1022,6 +1022,16 @@
         }
       ],
       "evidence": "D03: Item 31 is chosen by the filer, not computed. Official BIR-Form1606.hta: select titled \"Please select Tax Rate\" with \"\" Select Tax Rate, 0 0%, 1.5 1.5%, 3 3%, 5 5%, 6 6%, enabled for the filer. form_1606.rs stores it as tax_rate (Form1606TaxRate) and requires it (\"Please select the tax rate on Item 31.\"). The rules corpus marks it computed; probe::USER_CHOSEN corrects the projection and the binding is derived. The blank official choice is the page's empty choice (clears tax_rate)."
+    },
+    "add:2:5": {
+      "fields": [
+        {
+          "k": "frm1606:txtRDOCode16A",
+          "l": "RDO code (Item 16A)",
+          "t": "sel"
+        }
+      ],
+      "evidence": "R05: the agent binds frm1606:txtRDOCode16A to /property_rdo_code and the form asks \"Please enter the RDO Code on Item 16A.\", but the extracted schema had no control for it; added beside the property location (Item 16). The RDO list comes from the catalog."
     }
   },
   "1700": {
@@ -1276,6 +1286,10 @@
     "frm1700:AmendedRtn_2": {
       "label": "No",
       "evidence": "Official .hta: AmendedRtn_1 is Yes, AmendedRtn_2 is No (checked across the eBIRForms forms, 2026-10-15)."
+    },
+    "frm1700:zipContainer": {
+      "kind": "hidden",
+      "evidence": "R04 identity review: a hidden workflow control in the official BIR-Form1700.hta (inside a display:none container, line 546); the filer never sees or types it. The ZIP code is shown and printed in its own item."
     }
   },
   "1701": {
@@ -1929,6 +1943,10 @@
     "frm1701:txtPg4IShed6_11E": {
       "label": "Net Operating Loss (Unapplied)",
       "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)'"
+    },
+    "frm1701:txtZIP": {
+      "kind": "hidden",
+      "evidence": "R04 identity review: a hidden workflow control in the official BIR-Form1701v2018.hta (inside a display:none container, line 5471); the filer never sees or types it. The ZIP code is shown and printed in its own item."
     }
   },
   "1701A": {
@@ -2093,6 +2111,10 @@
     "frm1701A:txtSpouseFTN": {
       "label": "Foreign Tax Number",
       "evidence": "agent box label: 'Foreign Tax Number'; writer-cells printed caption: 'Foreign Tax Number'"
+    },
+    "frm1701A:txtZIP": {
+      "kind": "hidden",
+      "evidence": "R04 identity review: a hidden workflow control in the official BIR-Form1701A.hta (inside a display:none container, line 1727); the filer never sees or types it. The ZIP code is shown and printed in its own item."
     }
   },
   "1701MS": {
@@ -3073,6 +3095,16 @@
         }
       ],
       "evidence": "D05: options as in the official BIR-Form1706.hta select (0 blank, 1 International Tax Treaty, 2 Special Law); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 international_tax_treaty, 2 special_law."
+    },
+    "add:2:2": {
+      "fields": [
+        {
+          "k": "frm1706:txtRDOCode14A",
+          "l": "RDO code (Item 14A)",
+          "t": "sel"
+        }
+      ],
+      "evidence": "R05: the agent binds frm1706:txtRDOCode14A to /property_rdo_code and the form asks \"Please enter the RDO Code on Item 14A.\", but the extracted schema had no control for it; added beside the property location (Item 14). The RDO list comes from the catalog."
     }
   },
   "1707": {

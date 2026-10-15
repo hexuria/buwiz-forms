@@ -62,5 +62,19 @@ fn form_1601eq_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_1601eq()).expect("sample serializes")]
+    // Overpaid (Item 30 below zero): the only state in which the Item 30
+    // option is kept, so the probe can bind its checkboxes.
+    let mut overpaid = sample_1601eq();
+    overpaid.remittance_first_month = 5_000_000.0;
+    overpaid.recompute();
+    assert!(
+        overpaid.total_amount_due < 0.0,
+        "the overpaid seed is overpaid"
+    );
+    overpaid.over_remittance = bir_core::forms::form_1601eq::Form1601EqOverRemittance::Refund;
+    overpaid.recompute();
+    vec![
+        serde_json::to_value(sample_1601eq()).expect("sample serializes"),
+        serde_json::to_value(overpaid).expect("overpaid sample serializes"),
+    ]
 }

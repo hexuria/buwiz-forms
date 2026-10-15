@@ -2,6 +2,7 @@
 //! list would offer codes a particular return cannot serialize or validate.
 
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
+use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{excise_places, form_1601fq, form_1702mx_official, form_1702q, form_2000};
 use bir_core::reference;
 use serde_json::{Map, Value, json};
@@ -90,6 +91,19 @@ pub(super) fn fill(
     let loc = location(kind, key);
     let before = loc.and_then(|(base, _)| draft.pointer(base).cloned());
     agent::fill_as_user(kind, draft, key, value)?;
+    // 1702RT Item 5: the official select is enabled only once "Other" is
+    // chosen, so picking a code chooses "Other".
+    if key == "frm1702RT:drpPg1I5AtcOther"
+        && kind == AgentFormKind::Queueable(QueueableKind::Form1702RT)
+        && value.as_str().is_some_and(|code| !code.trim().is_empty())
+    {
+        agent::fill_as_user(
+            kind,
+            draft,
+            "frm1702RT:rdoPg1I5AtcOther",
+            &Value::from("true"),
+        )?;
+    }
     if let Some((base, level)) = loc {
         let member = ["region", "province", "city"][level];
         if before.as_ref().and_then(|v| v.get(member)) != draft.pointer(&format!("{base}/{member}"))
@@ -130,7 +144,7 @@ fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Va
         };
         return Some(rows.into_iter().map(|(c, n)| code_option(c, n)).collect());
     }
-    if matches!(kind.definition().bindings.get(key).map(|b| &b.binding), Some(Binding::Text { path, .. }) if path == "/rdo_code" || path.ends_with("/rdo_code"))
+    if matches!(kind.definition().bindings.get(key).map(|b| &b.binding), Some(Binding::Text { path, .. }) if path.rsplit('/').next().is_some_and(|leaf| leaf == "rdo_code" || leaf.ends_with("_rdo_code")))
     {
         return Some(
             reference::get_all_rdos()

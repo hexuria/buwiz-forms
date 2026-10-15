@@ -1,7 +1,7 @@
 {
 "bindings": {
-"frm0605:itemApprovedYN": {"lock":"election","options":[{"set":{"/approval_selection":"XmlOption2"},"value":"2"},{"set":{"/approval_selection":"XmlOption1","/manner_of_payment":"PreliminaryOrFinalAssessmentOrDeficiencyTax"},"value":"1"}],"type":"choice"},
-"frm0605:itemApprovedYN:_1": {"lock":"election","options":[{"set":{"/approval_selection":"XmlOption2","/manner_of_payment":"PreliminaryOrFinalAssessmentOrDeficiencyTax"},"value":"false"},{"set":{"/approval_selection":"XmlOption1","/manner_of_payment":"PreliminaryOrFinalAssessmentOrDeficiencyTax"},"value":"true"}],"type":"choice"},
+"frm0605:itemApprovedYN": {"lock":"election","options":[{"set":{"/approval_selection":"XmlOption1"},"value":"1"},{"set":{"/approval_selection":"XmlOption2"},"value":"2"}],"type":"choice"},
+"frm0605:itemApprovedYN:_1": {"lock":"election","options":[{"set":{"/approval_selection":"XmlOption2"},"value":"false"},{"set":{"/approval_selection":"XmlOption1"},"value":"true"}],"type":"choice"},
 "frm0605:itemApprovedYN:_2": {"lock":"election","options":[{"set":{"/approval_selection":"XmlOption1"},"value":"false"},{"set":{"/approval_selection":"XmlOption2"},"value":"true"}],"type":"choice"},
 "frm0605:itemFiscalStartMonth": {"options":[{"set":{"/filing_basis":"Calendar"},"value":"1"},{"set":{"/filing_basis":"Fiscal"},"value":"2"}],"type":"choice"},
 "frm0605:itemFiscalStartMonth:_1": {"options":[{"set":{"/filing_basis":"Fiscal"},"value":"false"},{"set":{"/filing_basis":"Calendar"},"value":"true"}],"type":"choice"},
@@ -97,8 +97,8 @@
 {"item":"20","key":"frm0605:txtTax20C","kind":"text","label":"20C Compromise","required":"optional"},
 {"computed":true,"item":"20","key":"frm0605:txtTax20D","kind":"text","label":"20D Total Penalties","required":"computed"},
 {"computed":true,"item":"21","key":"frm0605:txtTax21","kind":"text","label":"21 Total Amount Payable (Sum of Items 19 & 20D)","required":"computed"},
+{"item":"17","key":"frm0605:itemApprovedYN","kind":"radio","label":"Item 17","members":["frm0605:itemApprovedYN:_1","frm0605:itemApprovedYN:_2"],"options":[{"label":"1","value":"1"},{"label":"2","value":"2"}],"radio_group":true,"required":"conditional"},
 {"group":"frm0605:itemApprovedYN","item":"17","key":"frm0605:itemApprovedYN:_1","kind":"radio","label":"Item 17","options":[{"value":"true"},{"value":"false"}],"required":"conditional"},
-{"item":"17","key":"frm0605:itemApprovedYN","kind":"radio","label":"Item 17","members":["frm0605:itemApprovedYN:_2","frm0605:itemApprovedYN:_1"],"options":[{"label":"2","value":"2"},{"label":"1","value":"1"}],"radio_group":true,"required":"conditional"},
 {"group":"frm0605:itemApprovedYN","item":"17","key":"frm0605:itemApprovedYN:_2","kind":"radio","label":"Item 17","options":[{"value":"true"},{"value":"false"}],"required":"conditional"},
 {"item":"ATC lookup catalog","key":"AtcCode1","kind":"hidden","label":"ATC lookup entry 1","required":"optional"},
 {"item":"ATC lookup catalog","key":"AtcCode2","kind":"hidden","label":"ATC lookup entry 2","required":"optional"},

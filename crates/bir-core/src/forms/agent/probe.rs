@@ -25,13 +25,54 @@ use super::{
 /// filer choose them. The corpus is not edited here (its digest and counts
 /// are guarded by its own objective); the projection corrects it, and each
 /// entry carries its evidence. Bindings are still derived by probing.
-const USER_CHOSEN: &[(&str, &str)] = &[(
-    "frm1606:txtTaxRate",
-    "official BIR-Form1606.hta: a select titled \"Please select Tax Rate\" \
+const USER_CHOSEN: &[(&str, &str)] = &[
+    (
+        "frm1606:txtTaxRate",
+        "official BIR-Form1606.hta: a select titled \"Please select Tax Rate\" \
      (0%, 1.5%, 3%, 5%, 6%) that the page enables for the filer; form_1606.rs \
      keeps the choice in `tax_rate` (Form1606TaxRate) and checks it \
      (\"Please select the tax rate on Item 31.\")",
-)];
+    ),
+    (
+        "frm1601EQ:ifRefund",
+        "official BIR-Form1601EQ.hta: Item 30 checkbox \"To be Refunded\" \
+         (onclick checkRefund), enabled for the filer when Item 30 is an \
+         over-remittance; form_1601eq.rs keeps `over_remittance` and asks \
+         \"Please select an Overpayment option in Part II Item 30.\"",
+    ),
+    (
+        "frm1601EQ:ifIssueCert",
+        "official BIR-Form1601EQ.hta: Item 30 checkbox \"To be issued Tax \
+         Credit Certificate\" (onclick checkIssueCert), enabled on an \
+         over-remittance; form_1601eq.rs `over_remittance`",
+    ),
+    (
+        "frm1601EQ:ifCarriedOver",
+        "official BIR-Form1601EQ.hta: Item 30 checkbox (onclick \
+         checkCarriedOver), enabled on an over-remittance; form_1601eq.rs \
+         `over_remittance`",
+    ),
+];
+
+/// Boxes whose value only coincides with the sample profile's: the recorded
+/// samples put the property and the spouse in the filer's own RDO (039), so
+/// the probe would lock them as the profile's. They are the filer's answers.
+const NOT_PROFILE: &[(&str, &str)] = &[
+    (
+        "frm1606:txtRDOCode16A",
+        "Item 16A: the RDO where the property is",
+    ),
+    (
+        "frm1706:txtRDOCode14A",
+        "Item 14A: the RDO where the property is",
+    ),
+    (
+        "frm1701:txtPg2I2SpouseRDOCode",
+        "Part IV Item 2: the spouse's RDO",
+    ),
+    ("frm1701A:txtSpouseRDOCode", "the spouse's RDO"),
+    ("frm1701MS:txtRDOCodeb", "the spouse's RDO"),
+];
 
 /// Project `fields.json` onto the boxes the assistant needs.
 pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
@@ -1432,7 +1473,8 @@ fn decide(
                 "derived by the app: shows {path} combined with {other}"
             ));
         }
-        let lock = lock_for(&[path.as_str()]);
+        let lock = lock_for(&[path.as_str()])
+            .filter(|lock| *lock != Lock::Profile || !NOT_PROFILE.iter().any(|(k, _)| *k == key));
         let binding = match value_kind {
             ValueKind::Text(date) => Binding::Text {
                 path,
@@ -1621,6 +1663,56 @@ fn choice_binding(
     }
     if best.len() < 2 {
         return Ok(None);
+    }
+    // One path that alone decides the box answers it: its own changes (with
+    // the seeds) produce every value the box takes, each from a different
+    // value of that path. The flags that merely open the box (1701MS Item
+    // 31's checkboxes open only for some Item 12 tax options) stay out of its
+    // options, so ticking it never rewrites them. When several paths decide
+    // it, the one that moves the fewest other boxes is the answer (a gate
+    // opens many); a tie keeps every path.
+    let deciding = |path: &String| -> Option<Vec<ChoiceOption>> {
+        let mut options = Vec::new();
+        let mut taken: Vec<&Value> = Vec::new();
+        for official in best.keys() {
+            let obs = observations
+                .iter()
+                .filter(|obs| obs.official == *official)
+                .filter(|obs| {
+                    obs.change
+                        .as_ref()
+                        .is_none_or(|(changed, _)| changed == path)
+                })
+                .min_by_key(|obs| (!obs.answered, usize::from(obs.change.is_some()), obs.seed))?;
+            let value = match &obs.change {
+                Some((_, value)) => value,
+                None => evidence.seed_leaves.get(&obs.seed)?.get(path)?,
+            };
+            if taken.contains(&value) {
+                return None;
+            }
+            taken.push(value);
+            options.push(ChoiceOption {
+                value: official.to_string(),
+                set: BTreeMap::from([(path.clone(), value.clone())]),
+            });
+        }
+        Some(options)
+    };
+    if paths.len() > 1 {
+        let mut deciders: Vec<(usize, Vec<ChoiceOption>)> = paths
+            .iter()
+            .filter_map(|path| {
+                let moved = evidence.gates.get(*path).map_or(0, BTreeSet::len);
+                deciding(path).map(|options| (moved, options))
+            })
+            .collect();
+        deciders.sort_by_key(|(moved, _)| *moved);
+        if let Some((fewest, _)) = deciders.first()
+            && deciders.iter().filter(|(moved, _)| moved == fewest).count() == 1
+        {
+            return Ok(Some(deciders.remove(0).1));
+        }
     }
     let options = best
         .into_iter()

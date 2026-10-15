@@ -1096,7 +1096,129 @@ pub fn error_keys(kind: AgentFormKind, field: &str) -> Vec<String> {
     if def.box_def(field).is_some() {
         return vec![field.to_string()];
     }
-    let pointer = format!("/{}", field.replace('.', "/"));
+    let pointer = error_pointer(field);
+    let direct = bound_error_keys(def, field, &pointer);
+    if !direct.is_empty() {
+        return direct;
+    }
+    let related = related_error_keys(def, &pointer);
+    if !related.is_empty() {
+        return related;
+    }
+    aliased_error_keys(kind, def, field)
+}
+
+/// Error names that are neither a draft field nor its parent, with the
+/// fields the form's own check reads (reviewed against its `validate`).
+const ERROR_ALIASES: &[(&str, &str, &[&str])] = &[(
+    // form_1701ms.rs Item 31: "Item 31 is mandatory because Item 30 is has
+    // negative value." / "The total amount in Item 31 must equal ...".
+    "1701MS",
+    "overpayment",
+    &[
+        "/to_be_refunded",
+        "/to_be_issued_tcc",
+        "/to_be_carried_over",
+        "/refund_amount",
+        "/tcc_amount",
+        "/carry_over_amount",
+    ],
+)];
+
+fn aliased_error_keys(kind: AgentFormKind, def: &AgentFormDef, field: &str) -> Vec<String> {
+    let Some((_, _, paths)) = ERROR_ALIASES
+        .iter()
+        .find(|(form, name, _)| *form == kind.form_code() && *name == field)
+    else {
+        return Vec::new();
+    };
+    def.bindings
+        .iter()
+        .filter(|(_, bound)| match &bound.binding {
+            Binding::Text { path, .. }
+            | Binding::Amount { path, .. }
+            | Binding::Whole { path, .. } => paths.contains(&path.as_str()),
+            Binding::Choice { options } => options
+                .iter()
+                .flat_map(|option| option.set.keys())
+                .any(|path| paths.contains(&path.as_str())),
+        })
+        .map(|(key, _)| key.clone())
+        .collect()
+}
+
+/// `atc_rows[0].atc_code` / `schedules[0][0].reference` -> a JSON pointer.
+fn error_pointer(field: &str) -> String {
+    let mut pointer = String::from("/");
+    for c in field.chars() {
+        match c {
+            '.' | '[' => {
+                if !pointer.ends_with('/') {
+                    pointer.push('/');
+                }
+            }
+            ']' => {}
+            c => pointer.push(c),
+        }
+    }
+    pointer
+}
+
+/// When no box is bound to the named field itself: the boxes bound under it
+/// (an object or a row: `place_of_production`, `sellers[0]`), the month,
+/// day and year boxes of a split date (`donation_date` or `year_end` ->
+/// `donation_month`/`year_end_month`, `_day`, `_year` in the same object),
+/// else the boxes the
+/// probe saw the field change without binding them (a TIN written over
+/// four boxes: "derived by the app: changes with /seller_tin").
+fn related_error_keys(def: &AgentFormDef, pointer: &str) -> Vec<String> {
+    let under = format!("{pointer}/");
+    // `donation_date` -> `donation_month`/...; `year_end` -> `year_end_month`/...
+    let date_parts: Vec<String> = [Some(pointer), pointer.strip_suffix("_date")]
+        .into_iter()
+        .flatten()
+        .flat_map(|stem| ["month", "day", "year"].map(|part| format!("{stem}_{part}")))
+        .collect();
+    let names = |path: &str| path.starts_with(&under) || date_parts.iter().any(|p| p == path);
+    let mut keys: Vec<String> = def
+        .bindings
+        .iter()
+        .filter(|(_, bound)| match &bound.binding {
+            Binding::Text { path, .. }
+            | Binding::Amount { path, .. }
+            | Binding::Whole { path, .. } => names(path),
+            Binding::Choice { options } => options
+                .iter()
+                .flat_map(|option| option.set.keys())
+                .any(|path| names(path)),
+        })
+        .map(|(key, _)| key.clone())
+        .collect();
+    if keys.is_empty() {
+        let mentions = |reason: &str| {
+            reason
+                .strip_prefix("derived by the app: changes with ")
+                .map(|rest| rest.split(" but ").next().unwrap_or(""))
+                .is_some_and(|paths| {
+                    paths
+                        .split(", ")
+                        .any(|path| path == pointer || path.starts_with(&under))
+                })
+        };
+        keys = def
+            .unmapped
+            .iter()
+            .filter(|(_, reason)| mentions(reason))
+            .map(|(key, _)| key.clone())
+            .collect();
+    }
+    keys
+}
+
+/// The keys bound to the draft field a validation error names (see
+/// [`error_keys`]).
+fn bound_error_keys(def: &AgentFormDef, field: &str, pointer: &str) -> Vec<String> {
+    let pointer = pointer.to_string();
     let leaf = |path: &str| path == pointer || path.rsplit('/').next() == Some(field);
     let decided = |bound: &BoundBox| -> Option<usize> {
         match &bound.binding {

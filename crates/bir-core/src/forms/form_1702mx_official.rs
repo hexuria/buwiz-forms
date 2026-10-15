@@ -2126,4 +2126,29 @@ mod tests {
         assert!(back.get("lifecycle").is_none());
         assert_eq!(back["status"], "Draft");
     }
+
+    #[test]
+    fn instruction_radios_agree_between_the_official_page_and_the_upload_map() {
+        for multiple in [false, true] {
+            let mut d = sample();
+            d.relief_basis.instruction_multiple_activities = multiple;
+            let page = d.to_official_field_map();
+            let upload = d.to_bir_field_map();
+            for (key, want) in [
+                ("frm1702MX:InstAPg2Part4", !multiple),
+                ("frm1702MX:InstBPg2Part4", multiple),
+            ] {
+                assert_eq!(
+                    page[key],
+                    want.to_string(),
+                    "{key} on the page, multiple={multiple}"
+                );
+                assert_eq!(
+                    upload[key],
+                    want.to_string(),
+                    "{key} uploaded, multiple={multiple}"
+                );
+            }
+        }
+    }
 }

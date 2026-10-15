@@ -216,6 +216,21 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
         if key.starts_with("table:") {
             continue;
         }
+        // `add:<part>:<item>`: a bound control the extracted schema left out,
+        // appended to that item (`fields`: `{k, l, t}`).
+        if let Some(rest) = key.strip_prefix("add:") {
+            let mut at = rest.split(':').filter_map(|n| n.parse::<usize>().ok());
+            if let (Some(p), Some(i)) = (at.next(), at.next())
+                && let Some(item) = parts.get_mut(p).and_then(|part| part["items"].get_mut(i))
+                && let Some(fields) = fix["fields"].as_array()
+            {
+                match item["f"].as_array_mut() {
+                    Some(existing) => existing.extend(fields.iter().cloned()),
+                    None => item["f"] = Value::Array(fields.clone()),
+                }
+            }
+            continue;
+        }
         if let Some(rest) = key.strip_prefix("item:") {
             let mut indexes = rest.split(':').filter_map(|n| n.parse::<usize>().ok());
             if let (Some(p), Some(i)) = (indexes.next(), indexes.next())
@@ -939,6 +954,19 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
+    // 1702RT Item 5: the official select keeps IC010 even while "Other" is
+    // not selected (the upload keeps that raw default); the page shows the
+    // election, as the print does.
+    if kind == AgentFormKind::Queueable(QueueableKind::Form1702RT)
+        && let Ok(atc) = serde_json::from_value::<
+            bir_core::forms::form_1702rt::Form1702RTAtcSelection,
+        >(draft["atc"].clone())
+    {
+        map.insert(
+            "frm1702RT:drpPg1I5AtcOther".into(),
+            atc.elected_other_code(),
+        );
+    }
     for (key, official) in occurrence_aliases(kind) {
         if !map.contains_key(key)
             && let Some(value) = map.get(official).cloned()
@@ -1397,7 +1425,10 @@ mod tests {
             let keys = schema_keys(code);
             for key in fixes.as_object().unwrap().keys() {
                 assert!(
-                    key.starts_with("item:") || key.starts_with("table:") || keys.contains(key),
+                    key.starts_with("item:")
+                        || key.starts_with("table:")
+                        || key.starts_with("add:")
+                        || keys.contains(key),
                     "{code}: override {key} names no control"
                 );
             }
@@ -1827,7 +1858,8 @@ mod tests {
         // They must not silently turn into an incomplete catalog rollout.
         // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
-        assert_eq!(supplied, 80);
+        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05).
+        assert_eq!(supplied, 82);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
