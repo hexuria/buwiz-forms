@@ -152,6 +152,7 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                     .map(|c| text(c, "choice_meaning"))
                     .unwrap_or_default(),
                 choice_value: chosen.map(|c| text(c, "control_value")).unwrap_or_default(),
+                family: None,
             }
         })
         .collect())
@@ -1125,6 +1126,7 @@ pub fn group_radios(def: &mut AgentFormDef) {
             members: keys.iter().map(|key| key.to_string()).collect(),
             choice: String::new(),
             choice_value: String::new(),
+            family: None,
         };
         let binding = Binding::Choice {
             options: options
@@ -1368,10 +1370,33 @@ type RowPattern = (String, String, isize, String, String);
 /// with the same offset, every unbound `<prefix><m><suffix>` box of the form
 /// is row `m - offset` of that list.
 fn extend_rows(def: &mut AgentFormDef) {
+    // A row family's row number is where the family says, not the key's
+    // last number (`txtPg2Pt4I54.5C1` is row 5, column 1).
+    // Every key a family matches (rows `fields.json` lists too), so listed
+    // and supplemented rows of one family share their pattern.
+    let families: Vec<String> = def
+        .boxes
+        .iter()
+        .filter(|entry| family_parts(&entry.key).is_some())
+        .map(|entry| entry.key.clone())
+        .collect();
+    let split = |key: &str| -> Option<(String, usize, String)> {
+        let mut found = families.iter().filter_map(|family| {
+            let row = family_match(&family_parts(family)?, key, None)?;
+            Some((family.clone(), row, String::new()))
+        });
+        if let Some(first) = found.next()
+            && found.next().is_none()
+        {
+            return Some(first);
+        }
+        split_index(key)
+            .map(|(prefix, number, suffix)| (prefix.to_string(), number, suffix.to_string()))
+    };
     let mut patterns: BTreeMap<RowPattern, (usize, BoundBox)> = BTreeMap::new();
     for (key, bound) in &def.bindings {
         let (Some((prefix, number, suffix)), Some((row, parts))) =
-            (split_index(key), row_of(&bound.binding))
+            (split(key), row_of(&bound.binding))
         else {
             continue;
         };
@@ -1380,13 +1405,7 @@ fn extend_rows(def: &mut AgentFormDef) {
         };
         let offset = number as isize - row as isize;
         patterns
-            .entry((
-                prefix.to_string(),
-                suffix.to_string(),
-                offset,
-                list.clone(),
-                field.clone(),
-            ))
+            .entry((prefix, suffix, offset, list.clone(), field.clone()))
             .and_modify(|entry| entry.0 += 1)
             .or_insert((1, bound.clone()));
     }
@@ -1398,11 +1417,11 @@ fn extend_rows(def: &mut AgentFormDef) {
         .map(|(key, _)| key.clone())
         .collect();
     for key in unbound {
-        let Some((prefix, number, suffix)) = split_index(&key) else {
+        let Some((prefix, number, suffix)) = split(&key) else {
             continue;
         };
         let found = patterns.iter().find(|((p, s, offset, _, _), (seen, _))| {
-            p == prefix && s == suffix && *seen >= 2 && number as isize >= *offset
+            *p == prefix && *s == suffix && *seen >= 2 && number as isize >= *offset
         });
         let Some(((_, _, offset, list, field), (_, template))) = found else {
             continue;
@@ -1600,8 +1619,180 @@ pub fn supplement_from_field_map(
                 members: Vec::new(),
                 choice: String::new(),
                 choice_value: String::new(),
+                family: None,
                 key,
             }
+        })
+        .collect()
+}
+
+/// One piece of a row family key: `txtAmt{N>=0}`, `txtPg2Sc3_{N>=1}Col2`,
+/// `txtSched1ATC{n>=28}`, `txtTaxBase{index}`, `..._1A{EX|SP}{N>=1}`.
+enum FamilyPart<'a> {
+    Text(&'a str),
+    /// The row number, at least this.
+    Number(usize),
+    OneOf(Vec<&'a str>),
+}
+
+/// The pieces of a row family key, or `None` when it has no row number.
+fn family_parts(template: &str) -> Option<Vec<FamilyPart<'_>>> {
+    let mut parts = Vec::new();
+    let mut rest = template;
+    while let Some(open) = rest.find('{') {
+        if open > 0 {
+            parts.push(FamilyPart::Text(&rest[..open]));
+        }
+        let close = open + rest[open..].find('}')?;
+        let inner = &rest[open + 1..close];
+        let lower = inner.to_ascii_lowercase();
+        if let Some(min) = lower.strip_prefix("n>=") {
+            parts.push(FamilyPart::Number(min.parse().ok()?));
+        } else if lower == "index" {
+            parts.push(FamilyPart::Number(0));
+        } else if inner.contains('|') {
+            parts.push(FamilyPart::OneOf(inner.split('|').collect()));
+        } else {
+            return None;
+        }
+        rest = &rest[close + 1..];
+    }
+    if !rest.is_empty() {
+        parts.push(FamilyPart::Text(rest));
+    }
+    parts
+        .iter()
+        .any(|part| matches!(part, FamilyPart::Number(_)))
+        .then_some(parts)
+}
+
+/// `Some(row)` when `key` is a row of the family (the first number in it).
+fn family_match(parts: &[FamilyPart], key: &str, row: Option<usize>) -> Option<usize> {
+    let Some((first, rest)) = parts.split_first() else {
+        return if key.is_empty() { row } else { None };
+    };
+    match first {
+        FamilyPart::Text(text) => family_match(rest, key.strip_prefix(text)?, row),
+        FamilyPart::OneOf(options) => options
+            .iter()
+            .find_map(|option| family_match(rest, key.strip_prefix(option)?, row)),
+        FamilyPart::Number(min) => {
+            let digits = key.bytes().take_while(u8::is_ascii_digit).count();
+            (1..=digits).rev().find_map(|len| {
+                if len > 1 && key.starts_with('0') {
+                    return None;
+                }
+                let number: usize = key[..len].parse().ok()?;
+                if number < *min {
+                    return None;
+                }
+                family_match(rest, &key[len..], row.or(Some(number)))
+            })
+        }
+    }
+}
+
+/// Rows past a list's own (and past [`PROBE_ROWS`]) that
+/// [`supplement_row_families`] grows it by, so a form whose list starts
+/// long (2200P's 27 rows) still gets rows the filer can add.
+const FAMILY_ROWS: usize = 10;
+
+/// `seed` with each non-empty list grown by `extra` rows past its own
+/// length and past [`PROBE_ROWS`], repeating its last row. A list is grown
+/// only where the draft still parses with it: a fixed-length field
+/// (1702RT's three address lines) is a JSON array too.
+fn grow_rows_past(kind: AgentFormKind, seed: &Value, extra: usize) -> Value {
+    let mut grown = seed.clone();
+    let mut lists = Vec::new();
+    collect_lists(seed, "", 0, &mut lists);
+    for (path, _) in lists {
+        let Some(Value::Array(items)) = grown.pointer(&path) else {
+            continue;
+        };
+        let Some(last) = items.last().cloned() else {
+            continue;
+        };
+        let target = (items.len() + extra).max(PROBE_ROWS);
+        let mut trial = grown.clone();
+        if let Some(Value::Array(items)) = trial.pointer_mut(&path) {
+            while items.len() < target {
+                items.push(last.clone());
+            }
+        }
+        if parse_error(kind, &trial).is_none() {
+            grown = trial;
+        }
+    }
+    grown
+}
+
+/// The rows of each row family the app's field map writes, as boxes of
+/// their own. The official page builds these rows in script, so
+/// `fields.json` lists only the family (`txtAmt{N>=0}`); the probe needs
+/// each row's key to bind it. Rows come from every sample and from the
+/// sample with its lists grown ([`grow_rows_past`]). A key two
+/// families both match is left out.
+pub fn supplement_row_families(
+    kind: AgentFormKind,
+    seeds: &[Value],
+    boxes: &[BoxDef],
+) -> Vec<BoxDef> {
+    let families: Vec<(&BoxDef, Vec<FamilyPart>)> = boxes
+        .iter()
+        .filter_map(|entry| family_parts(&entry.key).map(|parts| (entry, parts)))
+        .collect();
+    if families.is_empty() {
+        return Vec::new();
+    }
+    let mut written: BTreeMap<String, String> = BTreeMap::new();
+    for seed in seeds {
+        let Some((computed, map)) = probe_eval(kind, seed) else {
+            continue;
+        };
+        written.extend(map);
+        let grown = grow_rows_past(kind, &computed, FAMILY_ROWS);
+        if grown != computed
+            && let Some((_, map)) = probe_eval(kind, &grown)
+        {
+            written.extend(map);
+        }
+    }
+    let listed: BTreeSet<&str> = boxes.iter().map(|entry| entry.key.as_str()).collect();
+    written
+        .into_iter()
+        .filter(|(key, _)| !listed.contains(key.as_str()))
+        .filter_map(|(key, value)| {
+            let mut found = families
+                .iter()
+                .filter_map(|(family, parts)| Some((*family, family_match(parts, &key, None)?)));
+            let (family, row) = found.next()?;
+            if found.next().is_some() {
+                return None;
+            }
+            let control = key.rsplit(':').next().unwrap_or(&key).to_string();
+            let flag = value == "true" || value == "false";
+            Some(BoxDef {
+                label: format!("{}, row {row}", family.label),
+                item: family.item.clone(),
+                kind: if !flag {
+                    "text".to_string()
+                } else if control.starts_with("rdo") {
+                    "radio".to_string()
+                } else {
+                    "checkbox".to_string()
+                },
+                computed: family.computed,
+                required: family.required.clone(),
+                options: family.options.clone(),
+                layout_only: false,
+                group: None,
+                radio_group: false,
+                members: Vec::new(),
+                choice: String::new(),
+                choice_value: String::new(),
+                family: Some(family.key.clone()),
+                key,
+            })
         })
         .collect()
 }

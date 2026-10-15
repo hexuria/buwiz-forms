@@ -435,6 +435,11 @@ pub struct BoxDef {
     pub choice: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub choice_value: String,
+    /// One row of a row family (`txtAmt{N>=0}`): the family's key. The
+    /// official page builds these rows in script, so `fields.json` lists
+    /// only the family (see `probe::supplement_row_families`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
 }
 
 impl BoxDef {
