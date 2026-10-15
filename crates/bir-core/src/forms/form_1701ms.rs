@@ -1084,6 +1084,13 @@ pub struct Form1701MsDraft {
     #[serde(default)]
     pub perjury_agreed: bool,
 
+    /// The signature block's printed name and authorized representative
+    /// (`printedName`, `authorizeRepresentative`), uploaded as typed.
+    #[serde(default)]
+    pub signatory_name: String,
+    #[serde(default)]
+    pub authorized_representative: String,
+
     #[serde(flatten)]
     pub lifecycle: SubmissionLifecycle,
 }
@@ -1126,6 +1133,8 @@ impl Form1701MsDraft {
             to_be_carried_over: false,
             carry_over_amount: 0.0,
             perjury_agreed: false,
+            signatory_name: String::new(),
+            authorized_representative: String::new(),
             lifecycle: SubmissionLifecycle::default(),
         };
         draft.recompute();
@@ -1428,6 +1437,14 @@ impl Form1701MsDraft {
         put("txtToBeIssued", self.to_be_issued_tcc);
         put("txtToBeCarried", self.to_be_carried_over);
         put("perjuryClause", self.perjury_agreed);
+        fields.insert(
+            "frm1701MS:printedName".to_string(),
+            self.signatory_name.trim().to_string(),
+        );
+        fields.insert(
+            "frm1701MS:authorizeRepresentative".to_string(),
+            self.authorized_representative.trim().to_string(),
+        );
         fields
     }
 
@@ -2174,6 +2191,8 @@ mod tests {
             to_be_carried_over: false,
             carry_over_amount: 0.0,
             perjury_agreed: true,
+            signatory_name: String::new(),
+            authorized_representative: String::new(),
             lifecycle: SubmissionLifecycle::default(),
         };
         // This sample enters its penalties by hand.
@@ -2271,7 +2290,8 @@ mod tests {
         assert_eq!(fields["frm1701MS:txtTaxpayerNo17b"], "true");
         assert_eq!(fields["frm1701MS:txtSpouseNo17b"], "false");
         assert_eq!(fields["frm1701MS:perjuryClause"], "true");
-        assert_eq!(fields.len(), 183);
+        // 183 return cells plus the printed name and authorized representative.
+        assert_eq!(fields.len(), 185);
         assert_eq!(
             d.submission_filename(),
             "12345678800000-1701MS-122025#sample.taxpayer@example.com#.xml"

@@ -320,6 +320,9 @@ pub struct Form1801Draft {
     #[serde(default)]
     pub total_penalties: f64,
 
+    /// Details of Payment, as typed (`cashBank` ... `othersAmt`).
+    #[serde(default)]
+    pub payment: super::payment_cells::PaymentCells,
     #[serde(flatten)]
     pub lifecycle: SubmissionLifecycle,
 }
@@ -428,6 +431,7 @@ impl Form1801Draft {
             interest: 0.0,
             compromise: 0.0,
             total_penalties: 0.0,
+            payment: Default::default(),
             lifecycle: SubmissionLifecycle::default(),
         };
         draft.recompute();
@@ -812,6 +816,7 @@ impl Form1801Draft {
             put(&format!("sched5{name}Conj"), typed(split.conjugal));
         }
         put("sched5Others_Specify", up(&ded.others_description));
+        fields.extend(self.payment.controls("frm1801v2018", "frm1801v2018taxkNum"));
         fields
     }
 
