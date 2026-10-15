@@ -66,6 +66,36 @@ pub fn prepare_html(html: &str) -> String {
     }
 }
 
+/// Per-form override layer: `print-overrides/<slug>.css` (directory
+/// overridable with `BIR_PRINT_OVERRIDES`), read at render time and injected
+/// after the frozen CSS for that slug only. The frozen HTML is never edited.
+pub fn overrides_dir() -> std::path::PathBuf {
+    std::env::var_os("BIR_PRINT_OVERRIDES")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../print-overrides"))
+}
+
+/// [`prepare_html`] plus `slug`'s override stylesheet (when `apply_override`
+/// and the file exists).
+pub fn prepare_html_for(slug: &str, html: &str, apply_override: bool) -> String {
+    let html = prepare_html(html);
+    if !apply_override {
+        return html;
+    }
+    let Ok(css) = std::fs::read_to_string(overrides_dir().join(format!("{slug}.css"))) else {
+        return html;
+    };
+    inject_override(slug, &html, &css)
+}
+
+fn inject_override(slug: &str, html: &str, css: &str) -> String {
+    let tag = format!("<style id=\"form-override\" data-slug=\"{slug}\">{css}</style>");
+    match html.rfind("</head>") {
+        Some(at) => format!("{}{}{}", &html[..at], tag, &html[at..]),
+        None => format!("{tag}{html}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -83,5 +113,20 @@ mod tests {
         let out = super::prepare_html(html);
         assert!(out.contains("id=\"preview-paper\""));
         assert!(out.find("preview-paper").unwrap() < out.find("</head>").unwrap());
+    }
+
+    #[test]
+    fn override_lands_after_the_paper_css_inside_head() {
+        let html = super::prepare_html("<html><head><style>@page{size:612pt 936pt}</style></head><body></body></html>");
+        let out = super::inject_override("bir-1701", &html, ".x{top:1pt}");
+        let tag = out.find("<style id=\"form-override\" data-slug=\"bir-1701\">.x{top:1pt}</style>").unwrap();
+        assert!(out.find("id=\"preview-paper\"").unwrap() < tag);
+        assert!(tag < out.find("</head>").unwrap());
+    }
+
+    #[test]
+    fn missing_override_file_is_a_no_op() {
+        let html = "<html><head></head><body></body></html>";
+        assert_eq!(super::prepare_html_for("no-such-slug-xyz", html, true), super::prepare_html(html));
     }
 }
