@@ -835,9 +835,7 @@ function profileTab(cx, app, width) {
 /** Next open period and its due date for a form in the selected year. */
 function schedule(app, code, year) {
   const b = app.branch();
-  const rows = app.store
-    .deadlines(`${year}-01-01`, `${year + 1}-12-31`)
-    .filter((d) => d.tin === b.tin && d.form_code === code && d.taxable_year === year);
+  const rows = app.store.formDeadlines(b.tin, code, year, `${year}-01-01`, `${year + 1}-12-31`);
   const open = rows.filter((d) => d.status === "Not started" || d.status === "Draft");
   const upcoming = open.find((d) => daysUntil(d.due_date) >= 0) || open[open.length - 1];
   if (!rows.length) return { next: null, due: "", none: true };

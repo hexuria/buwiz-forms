@@ -102,6 +102,27 @@ export class Store {
   deadlines(from, to) {
     return this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], []).filter((d) => this.canSee(d.tin_root));
   }
+  /**
+   * One branch's deadlines for one form and tax year, in date order. The
+   * deadlines between `from` and `to` are grouped once per data version, so
+   * a list that asks this per row pays a map lookup per row rather than a
+   * scan of every taxpayer's deadlines (the Forms tab asks for each form).
+   */
+  formDeadlines(tin, code, year, from, to) {
+    const key = `deadlines_by_form:${from}:${to}`;
+    let index = this.cache.get(key);
+    if (!index) {
+      index = new Map();
+      for (const d of this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], [])) {
+        const k = `${d.tin}|${d.form_code}|${d.taxable_year}`;
+        const rows = index.get(k);
+        if (rows) rows.push(d);
+        else index.set(k, [d]);
+      }
+      this.cache.set(key, index);
+    }
+    return (index.get(`${tin}|${code}|${year}`) || []).filter((d) => this.canSee(d.tin_root));
+  }
   returns(which) {
     return this.read(`returns:${which}`, "list_returns", [which], []).filter((r) => this.canSee(r.tin_root));
   }
