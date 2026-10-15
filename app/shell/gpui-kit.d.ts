@@ -1436,7 +1436,7 @@ declare module "gpui-kit" {
     /** Sets the width. */
     w<Self extends Element>(this: Self, value: Length): Self;
 
-    // The 3146 no-argument style methods, generated from GPUI's reflection
+    // The 3148 no-argument style methods, generated from GPUI's reflection
     // table. A name here is a name the runtime dispatches, and the
     // documentation is GPUI's own.
     /**
@@ -2917,6 +2917,10 @@ declare module "gpui-kit" {
      * [Docs](https://tailwindcss.com/docs/cursor)
      */
     cursor_w_resize<Self extends Element>(this: Self): Self;
+    /** Draws a debug border around this element. */
+    debug<Self extends Element>(this: Self): Self;
+    /** Draws a debug border on all conforming elements below this element. */
+    debug_below<Self extends Element>(this: Self): Self;
     debug_blue<Self extends Element>(this: Self): Self;
     debug_green<Self extends Element>(this: Self): Self;
     debug_pink<Self extends Element>(this: Self): Self;
@@ -27763,6 +27767,14 @@ declare module "bir" {
   export function verify_profile_totp(tin: string, token: string): boolean;
   /** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
   export function set_profile_totp(tin: string, secret: string | null, token?: string): null;
+  /** PIN and authenticator of a taxpayer (TIN root), shared by every branch. */
+  export function taxpayer_auth(tin_root: string): ProfileAuth;
+  export function set_taxpayer_pin(tin_root: string, pin: string | null): null;
+  export function set_taxpayer_totp(tin_root: string, secret: string | null, token?: string): null;
+  export function verify_taxpayer_pin(tin_root: string, pin: string): boolean;
+  export function verify_taxpayer_totp(tin_root: string, token: string): boolean;
+  /** Give every branch its taxpayer's PIN and authenticator; returns rows changed. */
+  export function unify_taxpayer_credentials(): number;
   export function verify_admin_pin(pin: string): boolean;
   export function verify_admin_totp(token: string): boolean;
   export function generate_totp_secret(account: string): TotpSecret;
@@ -27932,18 +27944,27 @@ declare module "bir" {
       stored_period: number | null;
       draft: object;
       values: Record<string, string>;
+      options: Record<string, ScreenFormOption[]>;
       locks: Record<string, string>;
       errors: ScreenFormError[];
   }
   export interface ScreenFormFilled {
       draft: object;
       values: Record<string, string>;
+      options: Record<string, ScreenFormOption[]>;
       rejected: Record<string, string>;
   }
   export interface ScreenFormValidated {
       draft: object;
       values: Record<string, string>;
+      options: Record<string, ScreenFormOption[]>;
       errors: ScreenFormError[];
+  }
+  export interface ScreenFormOption {
+      value: string;
+      label: string;
+      /** Selected by the typed draft when multiple choices share a code. */
+      selected?: boolean;
   }
   export interface ScreenFormSaved {
       id: number;

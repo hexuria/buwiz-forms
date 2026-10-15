@@ -697,6 +697,7 @@ export function Dropdown(cx, id, opts) {
           .flex()
           .items_center()
           .h(SIZE.controlSm)
+          .flex_shrink(0)
           .px(SPACE[2])
           .rounded(RADIUS.ctl)
           .cursor_pointer()

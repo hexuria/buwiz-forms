@@ -31,6 +31,8 @@ use serde_json::{Map, Value, json};
 
 use crate::bir_module::{json, to_json, with_database};
 
+mod catalogs;
+
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
 export interface ScreenFormIndexEntry {
@@ -58,18 +60,27 @@ export interface ScreenFormOpened {
     stored_period: number | null;
     draft: object;
     values: Record<string, string>;
+    options: Record<string, ScreenFormOption[]>;
     locks: Record<string, string>;
     errors: ScreenFormError[];
 }
 export interface ScreenFormFilled {
     draft: object;
     values: Record<string, string>;
+    options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;
 }
 export interface ScreenFormValidated {
     draft: object;
     values: Record<string, string>;
+    options: Record<string, ScreenFormOption[]>;
     errors: ScreenFormError[];
+}
+export interface ScreenFormOption {
+    value: string;
+    label: string;
+    /** Selected by the typed draft when multiple choices share a code. */
+    selected?: boolean;
 }
 export interface ScreenFormSaved {
     id: number;
@@ -921,6 +932,7 @@ fn screen_form_open(
             "stored_period": stored_period(kind, &draft),
             "draft": draft,
             "values": values,
+            "options": catalogs::options(kind, &draft),
             "locks": locks(kind),
             "errors": errors,
         })))
@@ -936,13 +948,17 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         .ok_or_else(|| host_error("edits must be an object of key -> value"))?;
     let editable = agent::identity(kind, &draft).map_err(host_error)?.status == FilingStatus::Draft;
     let mut rejected = Map::new();
+    // Location parents precede their children, including a pasted batch
+    // whose JSON keys happen to sort city/province/region.
+    let mut edits: Vec<_> = edits.iter().collect();
+    edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
     for (key, value) in edits {
         if !editable {
             rejected.insert(key.clone(), json!("this return is no longer a draft"));
             continue;
         }
         let mut next = draft.clone();
-        match agent::fill_as_user(kind, &mut next, key, &to_json(value)) {
+        match catalogs::fill(kind, &mut next, key, &to_json(value)) {
             Ok(()) => draft = next,
             Err(message) => {
                 rejected.insert(key.clone(), Value::String(message));
@@ -956,6 +972,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     Ok(json(json!({
         "draft": draft,
         "values": values,
+        "options": catalogs::options(kind, &draft),
         "rejected": rejected,
     })))
 }
@@ -971,6 +988,7 @@ fn screen_form_validate(
         Ok(json(json!({
             "draft": draft,
             "values": values,
+            "options": catalogs::options(kind, &draft),
             "errors": errors,
         })))
     })
@@ -1390,6 +1408,326 @@ mod tests {
             filled["rejected"]
         );
         assert_eq!(filled["values"]["frm2551Qv2018:txtTaxReliefSpecify"], "2");
+    }
+
+    #[test]
+    fn catalog_rdo_labels_preserve_profile_codes_and_locks() {
+        setup();
+        let opened = open("0619E", 7);
+        let key = "frm0619E:txtRDOCode";
+        let rows = opened["options"][key].as_array().expect("RDO options");
+        let qc = rows.iter().find(|o| o["value"] == "039").unwrap();
+        assert!(qc["label"].as_str().unwrap().contains("Quezon City"));
+        assert_eq!(opened["values"][key], "039");
+        let refused = fill("0619E", &opened["draft"], json!({key: "040"}));
+        assert!(refused["rejected"].get(key).is_some());
+        assert_eq!(refused["values"][key], "039");
+    }
+
+    #[test]
+    fn catalog_locations_filter_cascade_and_roundtrip_all_excise_forms() {
+        setup();
+        for code in ["2200A", "2200AN", "2200C", "2200M", "2200P", "2200S"] {
+            let kind = kind_of(code).unwrap();
+            let base = if code == "2200C" {
+                "/place"
+            } else {
+                "/place_of_production"
+            };
+            let key = |member: &str| {
+                kind.definition().bindings.iter().find_map(|(k, b)| {
+                    matches!(&b.binding, agent::Binding::Text { path, .. } if path == &format!("{base}/{member}"))
+                        .then_some(k.clone())
+                }).unwrap()
+            };
+            let (r, p, c) = (key("region"), key("province"), key("city"));
+            let opened = open(code, 1);
+            assert_eq!(
+                opened["options"][&r].as_array().unwrap().len(),
+                17,
+                "{code}"
+            );
+            assert_eq!(
+                opened["options"][&p],
+                json!([]),
+                "{code} needs a region first"
+            );
+            assert_eq!(
+                opened["options"][&c],
+                json!([]),
+                "{code} needs a province first"
+            );
+            // A batch arrives in lexical key order, which is city first on
+            // several forms. The host must apply parents first.
+            let region = excise_places_for_test(code);
+            let filled = fill(
+                code,
+                &opened["draft"],
+                json!({&r: region.0, &p: region.1, &c: region.2}),
+            );
+            assert_eq!(filled["rejected"], json!({}), "{code}");
+            assert!(
+                filled["options"][&c]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|o| o["value"] == region.2),
+                "{code}"
+            );
+            let saved = save(code, &filled["draft"]);
+            let reopened = open(code, 1);
+            assert_eq!(
+                reopened["draft"].pointer(base),
+                saved["draft"].pointer(base),
+                "{code}"
+            );
+            assert_eq!(reopened["values"][&r], region.0, "{code}");
+            assert_eq!(reopened["values"][&p], region.1, "{code}");
+            assert_eq!(reopened["values"][&c], region.2, "{code}");
+            // Re-selecting the same parent keeps its descendants.
+            let same = fill(code, &reopened["draft"], json!({&r: region.0}));
+            assert_eq!(
+                same["draft"].pointer(base),
+                reopened["draft"].pointer(base),
+                "{code}"
+            );
+            let changed = fill(code, &same["draft"], json!({&p: ""}));
+            assert_eq!(
+                changed["draft"].pointer(&format!("{base}/city")),
+                Some(&json!("")),
+                "{code}"
+            );
+            let changed = fill(code, &same["draft"], json!({&r: ""}));
+            assert_eq!(
+                changed["draft"].pointer(base),
+                Some(&json!({"region": "", "province": "", "city": ""})),
+                "{code}"
+            );
+            assert_eq!(changed["options"][&p], json!([]), "{code}");
+            let validated = call_async(
+                "screen_form_validate",
+                vec![code.into(), json(changed["draft"].clone())],
+            )
+            .unwrap();
+            assert_eq!(validated["options"], changed["options"], "{code}");
+        }
+    }
+
+    fn excise_places_for_test(code: &str) -> (&'static str, &'static str, &'static str) {
+        use bir_core::forms::excise_places;
+        let region = excise_places::regions(code)[0].0;
+        let province = excise_places::provinces(code, region)[0].0;
+        let city = excise_places::cities(code, region, province)[0].0;
+        (region, province, city)
+    }
+
+    #[test]
+    fn catalog_location_parent_changes_leave_the_other_place_intact() {
+        setup();
+        let opened = open("2200S", 1);
+        let (r, p, c) = excise_places_for_test("2200S");
+        let filled = fill(
+            "2200S",
+            &opened["draft"],
+            json!({
+                "frm2200SoptRegion": r, "frm2200SoptProvince": p, "frm2200SoptCity": c,
+                "frm2200SoptRegion1": r, "frm2200SoptProvince1": p, "frm2200SoptCity1": c,
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let changed = fill(
+            "2200S",
+            &filled["draft"],
+            json!({"frm2200SoptRegion": "020000000"}),
+        );
+        assert_eq!(
+            changed["draft"]["place_of_production"],
+            json!({"region": "020000000", "province": "", "city": ""})
+        );
+        assert_eq!(
+            changed["draft"]["place_of_removal"],
+            filled["draft"]["place_of_removal"]
+        );
+        let cleared = fill("2200S", &changed["draft"], json!({"frm2200SoptRegion": ""}));
+        save("2200S", &cleared["draft"]);
+        assert_eq!(
+            open("2200S", 1)["draft"]["place_of_production"],
+            cleared["draft"]["place_of_production"]
+        );
+    }
+
+    #[test]
+    fn catalog_atc_and_treaty_choices_store_codes_instead_of_labels() {
+        setup();
+        for (code, key, chosen) in [
+            ("1601FQ", "drpTreatyCode0", "AU"),
+            ("1601FQ", "drpATCCode0", "WI330"),
+            ("1702Q", "frm1702q:cbATC_2", "IC010_25%"),
+            ("1702MX", "frm1702MX:drpPg1I5ATCR2", "IC011"),
+            ("1702RT", "frm1702RT:drpPg1I5AtcOther", "IC010"),
+        ] {
+            let opened = open(code, 1);
+            assert!(
+                opened["options"][key]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|o| o["value"] == chosen && o["label"] != chosen),
+                "{code} {chosen}"
+            );
+            let mut draft = opened["draft"].clone();
+            if code == "1601FQ" {
+                // The existing agent definition has no relief-control
+                // binding. Exercise catalogs on an already enabled typed
+                // schedule, without claiming the fresh-page flow is ported.
+                use bir_core::forms::form_1601fq::{Form1601FqDraft, Form1601FqTaxRelief};
+                let mut typed: Form1601FqDraft = serde_json::from_value(draft).unwrap();
+                typed.set_tax_relief(Some(Form1601FqTaxRelief::InternationalTaxTreaty));
+                draft = serde_json::to_value(typed).unwrap();
+            }
+            let filled = fill(code, &draft, json!({key: chosen}));
+            assert_eq!(filled["rejected"], json!({}), "{code}");
+            save(code, &filled["draft"]);
+            assert_eq!(open(code, 1)["values"][key], chosen, "{code}");
+        }
+    }
+
+    #[test]
+    fn catalog_2551q_uses_official_option_numbers_without_unlocking_rows() {
+        setup();
+        let opened = open("2551Q", 3);
+        let rows = opened["options"]["drpATC1"].as_array().unwrap();
+        assert_eq!(rows.len(), 23);
+        for value in ["1", "23"] {
+            let row = rows.iter().find(|o| o["value"] == value).unwrap();
+            assert!(row["label"].as_str().unwrap().contains("PT010"));
+        }
+        let filled = fill("2551Q", &opened["draft"], json!({"drpATC1": "1"}));
+        assert!(filled["rejected"].get("drpATC1").is_some());
+        assert_eq!(filled["draft"]["schedule_1"], opened["draft"]["schedule_1"]);
+        assert_eq!(filled["values"]["drpATC1"], opened["values"]["drpATC1"]);
+    }
+
+    #[test]
+    fn catalog_2000_distinguishes_same_code_with_different_tax_calculations() {
+        use bir_core::forms::form_2000::Form2000Draft;
+
+        setup();
+        let opened = open("2000", 1);
+        let choices: Vec<_> = opened["options"]["drpATCCode0"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|o| o["label"].as_str().unwrap().starts_with("DS112 —"))
+            .collect();
+        assert_eq!(choices.len(), 2);
+        assert_ne!(choices[0]["value"], choices[1]["value"]);
+        for (choice, due) in choices.iter().zip([5.0, 2.0]) {
+            let filled = fill(
+                "2000",
+                &opened["draft"],
+                json!({
+                    "drpATCCode0": choice["value"], "frm2000:sched1:txtTaxBase0": "1000",
+                }),
+            );
+            assert_eq!(filled["rejected"], json!({}));
+            assert_eq!(filled["draft"]["schedule1"][0]["atc_code"], "DS112");
+            assert_eq!(filled["draft"]["schedule1"][0]["tax_due"], due);
+            save("2000", &filled["draft"]);
+            let reopened = open("2000", 1);
+            let selected: Vec<_> = reopened["options"]["drpATCCode0"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|o| o["selected"] == true)
+                .collect();
+            assert_eq!(selected.len(), 1);
+            assert_eq!(selected[0]["value"], choice["value"]);
+            let map =
+                with_database(|db| print_map(db, kind_of("2000")?, &reopened["draft"])).unwrap();
+            assert_eq!(map.0.get("drpATCCode0").map(String::as_str), Some("DS112"));
+            assert!(!reopened["draft"].to_string().contains("catalog:"));
+            let cleared = fill("2000", &reopened["draft"], json!({"drpATCCode0": ""}));
+            assert_eq!(cleared["rejected"], json!({}));
+            assert_eq!(cleared["draft"]["schedule1"], json!([]));
+            let mut queued_form: Form2000Draft =
+                serde_json::from_value(reopened["draft"].clone()).unwrap();
+            queued_form.lifecycle.status = FilingStatus::Queued;
+            let queued = serde_json::to_value(&queued_form).unwrap();
+            let refused = fill("2000", &queued, json!({"drpATCCode0": choice["value"]}));
+            assert!(refused["rejected"].get("drpATCCode0").is_some());
+            assert_eq!(
+                serde_json::from_value::<Form2000Draft>(refused["draft"].clone()).unwrap(),
+                queued_form
+            );
+        }
+        let invalid = fill(
+            "2000",
+            &opened["draft"],
+            json!({"drpATCCode0": "catalog:999"}),
+        );
+        assert!(invalid["rejected"].get("drpATCCode0").is_some());
+        assert_eq!(invalid["draft"]["schedule1"], opened["draft"]["schedule1"]);
+    }
+
+    #[test]
+    fn catalog_lists_have_unique_values_across_the_schema() {
+        let mut supplied = 0;
+        let mut missing = Vec::new();
+        for form in schema() {
+            let code = form["c"].as_str().unwrap();
+            let options = catalogs::options(kind_of(code).unwrap(), &Value::Null);
+            for (key, rows) in options.as_object().unwrap() {
+                let rows = rows.as_array().unwrap();
+                let unique: BTreeSet<_> =
+                    rows.iter().map(|o| o["value"].as_str().unwrap()).collect();
+                assert_eq!(
+                    unique.len(),
+                    rows.len(),
+                    "{code} {key} repeats a dropdown value"
+                );
+                assert!(
+                    rows.iter()
+                        .all(|o| o["label"].as_str().is_some_and(|s| !s.is_empty())),
+                    "{code} {key}"
+                );
+            }
+            for part in form["parts"].as_array().unwrap() {
+                for item in part["items"].as_array().unwrap() {
+                    for f in item["f"].as_array().into_iter().flatten() {
+                        if f["t"] == "sel" && f["o"].as_array().is_none_or(Vec::is_empty) {
+                            let key = f["k"].as_str().unwrap();
+                            if options.get(key).is_some() {
+                                supplied += 1;
+                            } else {
+                                missing.push(format!("{code} {key}"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        println!(
+            "Catalogs supply {supplied} schema dropdowns (including dependent lists awaiting a parent); remaining: {missing:#?}"
+        );
+        // Explicitly retain the non-catalog / unbound cases as open work.
+        // They must not silently turn into an incomplete catalog rollout.
+        assert_eq!(supplied, 80);
+        assert_eq!(
+            missing,
+            [
+                "1603Q frm1603Q:selTreaty",
+                "1604C frm1604c:txtRefMonth",
+                "1606 frm1606:txtTaxRate",
+                "1606 frm1606:selTreaty",
+                "1706 frm1706:selTreaty",
+                "1800 frm1800v2018:txtDate",
+                "1801 frm1801v2018:sched4Rdo_{index}",
+                "2000 drpATCCode{index}",
+                "2200S frm2200S:lstTaxTreaty",
+                "2550M frm2550m:lstSpecialTax",
+            ]
+        );
     }
 
     #[test]

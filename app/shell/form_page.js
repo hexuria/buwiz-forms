@@ -116,6 +116,7 @@ export class FormPageActions {
       status: "Draft",
       editable: true,
       values: {},
+      options: {},
       locks: {},
       errors: [],
       messages: {},
@@ -141,6 +142,7 @@ export class FormPageActions {
         s.status = r.status;
         s.editable = r.editable;
         s.values = r.values;
+        s.options = r.options || {};
         s.locks = r.locks;
         s.saved = Boolean(r.draft && r.draft.id);
         this.setErrors(r.errors);
@@ -256,6 +258,7 @@ export class FormPageActions {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
         s.draft = r.draft;
         s.values = r.values;
+        s.options = r.options || {};
         this.syncComputed();
         const rejected = Object.entries(r.rejected || {});
         if (rejected.length) {
@@ -307,6 +310,7 @@ export class FormPageActions {
         // Keep a newer local draft if the user typed meanwhile; take values/errors.
         if (this.state.draft === draft) this.state.draft = r.draft;
         this.state.values = { ...this.state.values, ...r.values };
+        this.state.options = r.options || {};
         this.syncComputed();
         this.setErrors(r.errors);
       } catch (e) {
@@ -510,16 +514,18 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const value = s.values[f.k] ?? "";
   let el;
   if (f.t === "sel") {
-    // Options are strings, or { value, label } where the value is the
-    // official code the draft stores (e.g. 2551Q 12A: 1 Special Rate).
-    const listed = (f.o || [])
+    // The host resolves catalog choices into the typed draft. It marks
+    // the selected choice when two options share an official code (2000).
+    const listed = (s.options[f.k] || f.o || [])
       .filter((o) => typeof o !== "string" || !/^"/.test(o))
       .map((o) => (typeof o === "string" ? { value: o, label: o } : o));
     const options = [{ value: "", label: "Choose…" }, ...listed];
+    const selected = listed.find((o) => o.selected);
     const known = options.some((o) => o.value === value);
-    // "0" is the official runtime's empty choice, not a value to offer.
-    const shown = known ? value : value === "0" ? "" : value;
-    if (shown && !known) options.push({ value: shown, label: shown });
+    // Unknown 0/00 are the official runtime's empty choices (including
+    // excise locations). A listed 0 remains a real, selectable option.
+    const shown = selected ? selected.value : known ? value : value === "0" || value === "00" ? "" : value;
+    if (shown && !selected && !known) options.push({ value: shown, label: shown });
     el = locked
       ? lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width)
       : Dropdown(cx, `fp-${f.k}`, {
