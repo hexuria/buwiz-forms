@@ -684,7 +684,12 @@ function tinBoxes(cx, ui, it) {
   const row = div().flex().flex_row().flex_wrap().items_center().gap(6);
   (it.f || []).forEach((f, j) => {
     if (j) row.child(Text(cx, "body", "-", "fg3"));
-    row.child(lockedBox(cx, s.values[f.k] ?? "", j === 3 ? 76 : 58, { center: true }));
+    const width = j === 3 ? 76 : 58;
+    // A TIN the filer types (1700's spouse) is editable; the profile's is locked.
+    const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+    const input = s.inputs.get(f.k);
+    if (locked || !input) row.child(lockedBox(cx, s.values[f.k] ?? "", width, { center: true }));
+    else row.child(TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }));
   });
   return row;
 }

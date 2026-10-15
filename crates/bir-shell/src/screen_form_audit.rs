@@ -1360,21 +1360,12 @@ fn fix_classes(forms: &[Value]) -> String {
             );
         }
         for entry in list("i_profile_fact_printed_but_not_on_form_page") {
-            let (id, title, layer) = if code == "1700" {
-                (
-                    'C',
-                    "Form page built from a different revision than the draft (1700: schema from the \
-                     1700-v2013 rule package, draft/print use 2018 keys)",
-                    "rules corpus (no 1700 v2018 package) + forms-schema generator",
-                )
-            } else {
-                (
-                    'D',
-                    "Profile fact printed, but the schema has no control for the key the draft writes \
-                     (RDO: runtime-injected or non-corpus control dropped from forms-schema.json)",
-                    "forms-schema generator (runtime-injected-control rows) / rules corpus",
-                )
-            };
+            let (id, title, layer) = (
+                'D',
+                "Profile fact printed, but the schema has no control for the key the draft writes \
+                 (RDO: runtime-injected or non-corpus control dropped from forms-schema.json)",
+                "forms-schema generator (runtime-injected-control rows) / rules corpus",
+            );
             add(
                 id,
                 title,
@@ -1388,21 +1379,11 @@ fn fix_classes(forms: &[Value]) -> String {
             );
         }
         for entry in list("i_identity_empty_in_both") {
-            let id = if code == "1700" { 'C' } else { 'E' };
             add(
-                id,
-                if id == 'C' {
-                    "Form page built from a different revision than the draft (1700: schema from the \
-                     1700-v2013 rule package, draft/print use 2018 keys)"
-                } else {
-                    "Identity box empty in form and print although the profile has the value"
-                },
-                if id == 'C' {
-                    "rules corpus (no 1700 v2018 package) + forms-schema generator"
-                } else {
-                    "bir-core draft constructor (new_from_profile) / print map; some are hidden \
-                     duplicates the schema should drop"
-                },
+                'E',
+                "Identity box empty in form and print although the profile has the value",
+                "bir-core draft constructor (new_from_profile) / print map; some are hidden \
+                 duplicates the schema should drop",
                 "open",
                 format!(
                     "{code} {} [{}] binding={} unmapped={}",
@@ -1964,9 +1945,6 @@ fn symptom_r05_every_validation_error_names_a_screen_key() {
             }
         }
     }
-    // Open cases, each recorded in the plan: 1700's schema is v2013 while
-    // its draft and print are v2018 (revision contract, blocked).
-    unplaced.retain(|line| !line.starts_with("1700 "));
     assert!(
         unplaced.is_empty(),
         "{} errors name no screen key:\n{}",

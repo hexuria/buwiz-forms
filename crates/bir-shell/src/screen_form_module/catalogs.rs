@@ -10,7 +10,7 @@ use bir_core::forms::{
 use bir_core::reference;
 use serde_json::{Map, Value, json};
 
-use super::{rows_2550m, rows_2550q, schema_entry};
+use super::{rows_1700, rows_2550m, rows_2550q, schema_entry};
 
 fn option(value: &str, label: &str) -> Value {
     json!({"value": value, "label": label})
@@ -63,6 +63,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
     if let Some(order) = rows_2550q::edit_order(kind, key) {
         return order;
     }
+    if let Some(order) = rows_1700::edit_order(kind, key) {
+        return order;
+    }
     location(kind, key).map_or(0, |(_, level)| level + 1)
 }
 
@@ -109,6 +112,9 @@ pub(super) fn fill(
     }
     if let Some(cell) = rows_2550q::cell(kind, key) {
         return rows_2550q::fill(kind, draft, cell, value);
+    }
+    if let Some(cell) = rows_1700::cell(kind, key) {
+        return rows_1700::fill(draft, cell, value);
     }
     if let Some(row) = atc_2000_row(kind, key)
         && let Some(choice) = value
@@ -238,6 +244,7 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || base_1601eq_row(kind, key).is_some()
         || spouse_1701a_more_row(kind, key).is_some()
         || rows_2550q::cell(kind, key).is_some()
+        || rows_1700::cell(kind, key).is_some()
 }
 
 /// 1701A "(add more...)" spouse cell `frm1701A:txtmodalPartIV<A|B>_<n>C3`:

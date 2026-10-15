@@ -32,6 +32,7 @@ use serde_json::{Map, Value, json};
 use crate::bir_module::{json, to_json, with_database};
 
 mod catalogs;
+mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
 
@@ -127,12 +128,21 @@ fn host_error(message: impl Into<String>) -> HostError {
 
 /// The on-screen form schema: one entry per form, parsed once, with the
 /// reviewed corrections in `app/forms/schema-overrides.json` applied.
+/// 1700's entry is replaced by `app/forms/screen-1700-v2018.json`: the
+/// extracted entry follows the 2013 rule package, while the model, its
+/// upload and the printed sheet are the January 2018 revision.
 fn schema() -> &'static [Value] {
     static SCHEMA: OnceLock<Vec<Value>> = OnceLock::new();
     SCHEMA.get_or_init(|| {
         let mut forms: Vec<Value> =
             serde_json::from_str(include_str!("../../../app/forms/forms-schema.json"))
                 .expect("app/forms/forms-schema.json is a JSON array of forms");
+        let form_1700: Value =
+            serde_json::from_str(include_str!("../../../app/forms/screen-1700-v2018.json"))
+                .expect("app/forms/screen-1700-v2018.json is one form");
+        for form in forms.iter_mut().filter(|form| form["c"] == "1700") {
+            *form = form_1700.clone();
+        }
         let overrides: Value =
             serde_json::from_str(include_str!("../../../app/forms/schema-overrides.json"))
                 .expect("app/forms/schema-overrides.json is a JSON object");
@@ -2961,6 +2971,118 @@ mod tests {
     /// Item 3: 1601EQ ATCs are chosen from the popup list on every row (the
     /// probe could not bind them: rows re-sort into popup order); rows 7-30
     /// are one table instead of loose boxes, and rows past 30 hide.
+    /// 1700 shows the January 2018 page the model uploads; Schedule 1's
+    /// employer boxes and the spouse's TIN are written by the host
+    /// (rows_1700), including the "(add more...)" rows once Item 4 folds.
+    #[test]
+    fn form_1700_shows_the_2018_page_and_writes_its_employers() {
+        setup();
+        let keys = schema_keys("1700");
+        assert!(keys.contains("frm1700:txtPg1I1Year"));
+        assert!(keys.contains("frm1700:txtPg2I4_12PartVIEmployerName1"));
+        assert!(!keys.contains("frm1700:txtYear"), "2013 controls are gone");
+
+        let opened = open("1700", 0);
+        let tin = |row: &str| {
+            json!({
+                format!("frm1700:txtPg2I{row}PartVIEmployerTIN1"): "123",
+                format!("frm1700:txtPg2I{row}PartVIEmployerTIN2"): "456",
+                format!("frm1700:txtPg2I{row}PartVIEmployerTIN3"): "789",
+                format!("frm1700:txtPg2I{row}PartVIEmployerBranchCode"): "00000",
+            })
+        };
+        let mut edits = json!({
+            "frm1700:rdoPg1I6TaxpayerTypeE": "true",
+            "frm1700:txtPg2I1PartVIEmployerName1": "First Employer",
+            "frm1700:txtPg2ISched1c_1REG": "500000",
+            "frm1700:txtPg2ISched1e_1TW": "20000",
+        });
+        edits
+            .as_object_mut()
+            .unwrap()
+            .extend(tin("1").as_object().unwrap().clone());
+        let filled = fill("1700", &opened["draft"], edits);
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(filled["draft"]["employers"][0]["tin"], "12345678900000");
+        let values = &filled["values"];
+        assert_eq!(
+            values["frm1700:txtPg2I1PartVIEmployerName1"],
+            "FIRST EMPLOYER"
+        );
+        assert_eq!(values["frm1700:txtPg2I1PartVIEmployerTIN2"], "456");
+        assert_eq!(amount(values, "frm1700:txtPg2I42A"), 500_000.0);
+
+        // The spouse's TIN waits for a joint return.
+        let refused = fill(
+            "1700",
+            &filled["draft"],
+            json!({"frm1700:txtPg1I18STIN1": "111"}),
+        );
+        assert!(refused["rejected"].get("frm1700:txtPg1I18STIN1").is_some());
+
+        // A popup row past the next one is refused; filling 4_2 folds Item 4.
+        let early = fill(
+            "1700",
+            &filled["draft"],
+            json!({"frm1700:txtPg2I4_2PartVIEmployerName1": "Too Early"}),
+        );
+        assert!(
+            early["rejected"]
+                .get("frm1700:txtPg2I4_2PartVIEmployerName1")
+                .is_some()
+        );
+        let four = fill(
+            "1700",
+            &filled["draft"],
+            json!({
+                "frm1700:txtPg2I2PartVIEmployerName1": "Second",
+                "frm1700:txtPg2I3PartVIEmployerName1": "Third",
+                "frm1700:txtPg2I4PartVIEmployerName1": "Fourth",
+                "frm1700:txtPg2ISched1c_4REG": "1000",
+            }),
+        );
+        assert_eq!(four["rejected"], json!({}));
+        let folded = fill(
+            "1700",
+            &four["draft"],
+            json!({
+                "frm1700:txtPg2I4_2PartVIEmployerName1": "Fifth",
+                "frm1700:txtPg2ISched1c_4_2REG": "2000",
+            }),
+        );
+        assert_eq!(folded["rejected"], json!({}));
+        let values = &folded["values"];
+        assert_eq!(values["frm1700:txtPg2I4PartVIEmployerName1"], "OTHERS");
+        assert_eq!(values["frm1700:txtPg2I4_1PartVIEmployerName1"], "FOURTH");
+        assert_eq!(values["frm1700:txtPg2I4_2PartVIEmployerName1"], "FIFTH");
+        assert_eq!(amount(values, "frm1700:txtPg2Pt6I4SubtotalC"), 3_000.0);
+        // Item 4 now reads OTHERS: its employer is changed in row 4_1.
+        let item4 = fill(
+            "1700",
+            &folded["draft"],
+            json!({"frm1700:txtPg2I4PartVIEmployerName1": "Renamed"}),
+        );
+        assert!(
+            item4["rejected"]
+                .get("frm1700:txtPg2I4PartVIEmployerName1")
+                .is_some()
+        );
+        // Clearing row 4_2 deletes it and unfolds the schedule.
+        let cleared = fill(
+            "1700",
+            &folded["draft"],
+            json!({
+                "frm1700:txtPg2I4_2PartVIEmployerName1": "",
+                "frm1700:txtPg2ISched1c_4_2REG": "",
+            }),
+        );
+        assert_eq!(cleared["draft"]["employers"].as_array().unwrap().len(), 4);
+        assert_eq!(
+            cleared["values"]["frm1700:txtPg2I4PartVIEmployerName1"],
+            "FOURTH"
+        );
+    }
+
     #[test]
     fn atc_1601eq_rows_follow_the_popup() {
         setup();
