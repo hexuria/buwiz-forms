@@ -1064,16 +1064,195 @@
       "evidence": "internal workflow/credential key ebirOnlineSecret (not a printed box)"
     },
     "frm1601EQ:txtTax26": {
-      "label": "27 Surcharge",
-      "evidence": "P4: printed caption '27 Surcharge' (html-frozen/1601eq-2019/writer-cells.json money_joins frm1601EQ:txtTax26)"
+      "label": "Surcharge",
+      "evidence": "Decision (a) layout: printed item heading carries the number (html-frozen/1601eq-2019/writer-cells.json money_joins frm1601EQ:txtTax26, caption 'Surcharge')"
     },
     "frm1601EQ:txtTax27": {
-      "label": "28 Interest",
-      "evidence": "P4: printed caption '28 Interest' (html-frozen/1601eq-2019/writer-cells.json money_joins frm1601EQ:txtTax27)"
+      "label": "Interest",
+      "evidence": "Decision (a) layout: printed item heading carries the number (html-frozen/1601eq-2019/writer-cells.json money_joins frm1601EQ:txtTax27, caption 'Interest')"
     },
     "frm1601EQ:txtTax28": {
-      "label": "29 Compromise",
-      "evidence": "P4: printed caption '29 Compromise' (html-frozen/1601eq-2019/writer-cells.json money_joins frm1601EQ:txtTax28)"
+      "label": "Compromise",
+      "evidence": "Decision (a) layout: printed item heading carries the number (html-frozen/1601eq-2019/writer-cells.json money_joins frm1601EQ:txtTax28, caption 'Compromise')"
+    },
+    "layout": {
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1601eq-2019/index.html (BIR Form 1601-EQ January 2019: items 1-5, Part I 6-12, Part II ATC rows 13-18 and 19-31, Part III 32-35) and html-frozen/1601eq-2019/writer-cells.json, whose rule records that the 2019 sheet adds 'Other Payments Made' at item 24 so the layout's txtTax24-30 print at items 25-31 and the payment rows 33-36 at items 32-35. Item 24 has no control in the official program and is not drawn. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "keep": 1
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "table": "frm1601EQ:txtAtcCd1"
+            },
+            {
+              "no": "19",
+              "l": "Total Taxes Withheld for the Quarter (Sum of Items 13 to 18)",
+              "k": [
+                "frm1601EQ:txtTax19",
+                "frm1601EQ:txtTotalOtherTax"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Less: Remittances Made: 1st Month of the Quarter",
+              "k": [
+                "frm1601EQ:txtTax20"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "2nd Month of the Quarter",
+              "k": [
+                "frm1601EQ:txtTax21"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Tax Remitted in Return Previously Filed, if this is an amended return",
+              "k": [
+                "frm1601EQ:txtTax22"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Over-remittance from Previous Quarter of the same taxable year",
+              "k": [
+                "frm1601EQ:txtTax23"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Total Remittances Made (Sum of Items 20 to 24)",
+              "k": [
+                "frm1601EQ:txtTax24"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Tax Still Due/(Over-remittance) (Item 19 Less Item 25)",
+              "k": [
+                "frm1601EQ:txtTax25"
+              ]
+            },
+            {
+              "no": "27",
+              "l": "Surcharge",
+              "k": [
+                "frm1601EQ:txtTax26"
+              ]
+            },
+            {
+              "no": "28",
+              "l": "Interest",
+              "k": [
+                "frm1601EQ:txtTax27"
+              ]
+            },
+            {
+              "no": "29",
+              "l": "Compromise",
+              "k": [
+                "frm1601EQ:txtTax28"
+              ]
+            },
+            {
+              "no": "30",
+              "l": "Total Penalties (Sum of Items 27 to 29)",
+              "k": [
+                "frm1601EQ:txtTax29"
+              ]
+            },
+            {
+              "no": "31",
+              "l": "TOTAL AMOUNT STILL DUE/(Over-remittance) (Sum of Items 26 and 30)",
+              "k": [
+                "frm1601EQ:txtTax30",
+                "frm1601EQ:ifCarriedOver",
+                "frm1601EQ:ifRefund",
+                "frm1601EQ:ifIssueCert"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable)",
+              "k": [
+                "txtTaxAgentNo",
+                "txtDateIssue",
+                "txtDateExpiry"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "32",
+              "l": "Cash/Bank Debit Memo",
+              "k": [
+                "frm1601EQ:txtAgency33",
+                "frm1601EQ:txtNumber33",
+                "frm1601EQ:txtDate33",
+                "frm1601EQ:txtAmount33"
+              ]
+            },
+            {
+              "no": "33",
+              "l": "Check",
+              "k": [
+                "frm1601EQ:txtAgency34",
+                "frm1601EQ:txtNumber34",
+                "frm1601EQ:txtDate34",
+                "frm1601EQ:txtAmount34"
+              ]
+            },
+            {
+              "no": "34",
+              "l": "Tax Debit Memo",
+              "k": [
+                "frm1601EQ:txtAgency35",
+                "frm1601EQ:txtNumber35",
+                "frm1601EQ:txtDate35",
+                "frm1601EQ:txtAmount35"
+              ]
+            },
+            {
+              "no": "35",
+              "l": "Others (specify below)",
+              "k": [
+                "frm1601EQ:txtParticular36",
+                "frm1601EQ:txtAgency36",
+                "frm1601EQ:txtNumber36",
+                "frm1601EQ:txtDate36",
+                "frm1601EQ:txtAmount36"
+              ]
+            }
+          ]
+        }
+      ],
+      "rest": "Additional ATC rows (attachment; the sheet prints six)"
+    },
+    "item:0:5": {
+      "label": "ATC (Items 13 to 18)",
+      "evidence": "Decision (a) layout: html-frozen/1601eq-2019/index.html Part II prints the ATC/Tax Base/Tax Rate/Tax Withheld rows as items 13 to 18"
+    },
+    "frm1601EQ:ifCarriedOver": {
+      "label": "To be carried over to the next quarter within the same calendar year",
+      "evidence": "Decision (a) layout: printed beside item 31 on html-frozen/1601eq-2019/index.html (writer-cells xbox_joins frm1601EQ:ifCarriedOver)"
+    },
+    "frm1601EQ:ifRefund": {
+      "label": "To be refunded",
+      "evidence": "Decision (a) layout: printed beside item 31 on html-frozen/1601eq-2019/index.html (writer-cells xbox_joins frm1601EQ:ifRefund)"
+    },
+    "frm1601EQ:ifIssueCert": {
+      "label": "To be issued Tax Credit Certificate",
+      "evidence": "Decision (a) layout: printed beside item 31 on html-frozen/1601eq-2019/index.html (writer-cells xbox_joins frm1601EQ:ifIssueCert)"
     }
   },
   "1601FQ": {
@@ -1312,132 +1491,599 @@
       "evidence": "painted form_1602q_view.rs (local:sur via binding /penalty_overrides/surcharge): 'Surcharge'; writer-cells printed caption: 'Surcharge'"
     },
     "frm1602Q:txtSched1Amount1": {
-      "label": "Schedule 1 item 1, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 1, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount1)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax1": {
-      "label": "Schedule 1 item 1, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 1, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax1)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount2": {
-      "label": "Schedule 1 item 2, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 2, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount2)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax2": {
-      "label": "Schedule 1 item 2, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 2, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax2)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount3": {
-      "label": "Schedule 1 item 3, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 3, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount3)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax3": {
-      "label": "Schedule 1 item 3, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 3, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax3)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount4": {
-      "label": "Schedule 1 item 4, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 4, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount4)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax4": {
-      "label": "Schedule 1 item 4, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 4, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax4)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount5": {
-      "label": "Schedule 1 item 5, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 5, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount5)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax5": {
-      "label": "Schedule 1 item 5, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 5, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax5)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount6": {
-      "label": "Schedule 1 item 6, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 6, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount6)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax6": {
-      "label": "Schedule 1 item 6, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 6, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax6)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount7": {
-      "label": "Schedule 1 item 7, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 7, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount7)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax7": {
-      "label": "Schedule 1 item 7, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 7, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax7)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount8": {
-      "label": "Schedule 1 item 8, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 8, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount8)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax8": {
-      "label": "Schedule 1 item 8, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 8, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax8)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount9": {
-      "label": "Schedule 1 item 9, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 9, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount9)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax9": {
-      "label": "Schedule 1 item 9, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 9, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax9)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount10": {
-      "label": "Schedule 1 item 10, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 10, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount10)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax10": {
-      "label": "Schedule 1 item 10, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 10, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax10)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount11": {
-      "label": "Schedule 1 item 11, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 11, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount11)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax11": {
-      "label": "Schedule 1 item 11, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 11, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax11)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount12": {
-      "label": "Schedule 1 item 12, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 12, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount12)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax12": {
-      "label": "Schedule 1 item 12, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 12, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax12)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount13": {
-      "label": "Schedule 1 item 13, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 13, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount13)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Rate13": {
-      "label": "Schedule 1 item 13, BSP Exchange Rate on the Date of Remittance",
-      "evidence": "P4: printed caption 'Schedule 1 item 13, BSP Exchange Rate on the Date of Remittance' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Rate13)"
+      "label": "BSP Exchange Rate on the Date of Remittance",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax13": {
-      "label": "Schedule 1 item 13, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 13, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax13)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Amount14": {
-      "label": "Schedule 1 item 14, Total Interest/Yield",
-      "evidence": "P4: printed caption 'Schedule 1 item 14, Total Interest/Yield' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Amount14)"
+      "label": "Total Interest/Yield Paid/Accrued/Amount",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Rate14": {
-      "label": "Schedule 1 item 14, BSP Exchange Rate on the Date of Remittance",
-      "evidence": "P4: printed caption 'Schedule 1 item 14, BSP Exchange Rate on the Date of Remittance' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Rate14)"
+      "label": "BSP Exchange Rate on the Date of Remittance",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched1Tax14": {
-      "label": "Schedule 1 item 14, Taxes Withheld",
-      "evidence": "P4: printed caption 'Schedule 1 item 14, Taxes Withheld' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched1Tax14)"
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched2Interest1": {
-      "label": "Schedule 2 row 1 Total Interest",
-      "evidence": "P4: printed caption 'Schedule 2 row 1 Total Interest' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched2Interest1)"
+      "label": "Total Interest",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtSched2Interest2": {
-      "label": "Schedule 2 row 2 Total Interest",
-      "evidence": "P4: printed caption 'Schedule 2 row 2 Total Interest' (html-frozen/1602q-2019/writer-cells.json money_joins frm1602Q:txtSched2Interest2)"
+      "label": "Total Interest",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "layout": {
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1602q-2019/index.html (BIR Form 1602Q January 2019: items 1-5, Part I 6-13A, Part II 14-28, Part IV Schedules 1-3 on page 2) and html-frozen/1602q-2019/writer-cells.json joins (which box prints at which item). The sheet prints three Schedule 2 and 3 rows; the official program has two. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1602Q:txtTIN1",
+                "frm1602Q:txtTIN2",
+                "frm1602Q:txtTIN3",
+                "frm1602Q:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm1602Q:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Withholding Agent's Name (Registered Name of Non-Individual)",
+              "k": [
+                "frm1602Q:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address",
+              "k": [
+                "frm1602Q:txtAddress"
+              ]
+            },
+            {
+              "no": "9A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1602Q:txtZipCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Contact Number",
+              "k": [
+                "frm1602Q:txtTelNum"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1602Q:OptCategoryAgent1",
+                "frm1602Q:OptCategoryAgent2"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Are there payees availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1602Q:OptSpecialTax1",
+                "frm1602Q:OptSpecialTax2"
+              ]
+            },
+            {
+              "no": "13A",
+              "l": "If yes, specify",
+              "k": [
+                "frm1602Q:lstSpecialTax"
+              ]
+            }
+          ]
+        },
+        {
+          "keep": 2
+        },
+        {
+          "n": "Part IV · Schedule 1 – Interest Payments and Tax Withheld Based on Regular Rates",
+          "items": [
+            {
+              "no": "",
+              "l": "Page 2 header (TIN, Withholding Agent's Name)",
+              "k": [
+                "frm1602Q:txtPage2TIN",
+                "frm1602Q:txtPage2Agent"
+              ]
+            },
+            {
+              "no": "1",
+              "l": "Savings Deposit · WI161 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount1",
+                "frm1602Q:txtSched1Tax1"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Savings Deposit · WC161 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount2",
+                "frm1602Q:txtSched1Tax2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Time Deposit · WI161 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount3",
+                "frm1602Q:txtSched1Tax3"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Time Deposit · WC161 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount4",
+                "frm1602Q:txtSched1Tax4"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Government Securities · WI162 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount5",
+                "frm1602Q:txtSched1Tax5"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Government Securities · WC162 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount6",
+                "frm1602Q:txtSched1Tax6"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Deposit Substitutes/Others · WI163 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount7",
+                "frm1602Q:txtSched1Tax7"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Deposit Substitutes/Others · WC163 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount8",
+                "frm1602Q:txtSched1Tax8"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Pre-terminated Long-Term Deposits/Investments · WI440 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount9",
+                "frm1602Q:txtSched1Tax9"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Pre-terminated Long-Term Deposits/Investments · WI441 · 12%",
+              "k": [
+                "frm1602Q:txtSched1Amount10",
+                "frm1602Q:txtSched1Tax10"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Pre-terminated Long-Term Deposits/Investments · WI442 · 5%",
+              "k": [
+                "frm1602Q:txtSched1Amount11",
+                "frm1602Q:txtSched1Tax11"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Pre-terminated Long-Term Deposits/Investments · WC440 · 20%",
+              "k": [
+                "frm1602Q:txtSched1Amount12",
+                "frm1602Q:txtSched1Tax12"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Foreign Currency Deposit · WI170 · 15%",
+              "k": [
+                "frm1602Q:txtSched1Rate13",
+                "frm1602Q:txtSched1Amount13",
+                "frm1602Q:txtSched1Tax13"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Foreign Currency Deposit · WC170 · 15%",
+              "k": [
+                "frm1602Q:txtSched1Rate14",
+                "frm1602Q:txtSched1Amount14",
+                "frm1602Q:txtSched1Tax14"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Total Taxes Withheld Based on Regular Rates (Sum of Items 1 to 14) (To Part II, Item 14)",
+              "k": [
+                "frm1602Q:txtSched1Total"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 2 – Interest Payments and Tax Withheld Based on Tax Treaty Rates",
+          "items": [
+            {
+              "no": "1",
+              "l": "Row 1",
+              "k": [
+                "frm1602Q:txtSched2TreatyCode1",
+                "frm1602Q:txtSched2ATC1",
+                "frm1602Q:txtSched2TaxRate1",
+                "frm1602Q:txtSched2Interest1",
+                "frm1602Q:txtSched2TaxesWithheld1"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Row 2",
+              "k": [
+                "frm1602Q:txtSched2TreatyCode2",
+                "frm1602Q:txtSched2ATC2",
+                "frm1602Q:txtSched2TaxRate2",
+                "frm1602Q:txtSched2Interest2",
+                "frm1602Q:txtSched2TaxesWithheld2"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Total Taxes Withheld Based on Tax Treaty Rates (Sum of Items 1 to 3) (To Part II, Item 15)",
+              "k": [
+                "frm1602Q:txtSched2Total"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 3 – Interest Payments and Tax Withheld on Taxpayers Enjoying Preferential Rates",
+          "items": [
+            {
+              "no": "1",
+              "l": "Row 1",
+              "k": [
+                "frm1602Q:txtSched3IPA1",
+                "frm1602Q:txtSched3TaxRate1",
+                "frm1602Q:txtSched3TotInterest1",
+                "frm1602Q:txtSched3TaxWithheld1"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Row 2",
+              "k": [
+                "frm1602Q:txtSched3IPA2",
+                "frm1602Q:txtSched3TaxRate2",
+                "frm1602Q:txtSched3TotInterest2",
+                "frm1602Q:txtSched3TaxWithheld2"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Total Taxes Withheld on TPs Enjoying Preferential Rates (Sum of Items 1 to 3) (To Part II, Item 16)",
+              "k": [
+                "frm1602Q:txtSched3Total"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Page 3 header (TIN, Withholding Agent's Name)",
+              "k": [
+                "frm1602Q:txtPage3TIN",
+                "frm1602Q:txtPage3Agent"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "frm1602Q:txtSched2TreatyCode1": {
+      "label": "Treaty Code",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2ATC1": {
+      "label": "ATC",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2TaxesWithheld1": {
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3IPA1": {
+      "label": "Investment Promotion Agency (IPA) Code",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3TotInterest1": {
+      "label": "Total Interest",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3TaxWithheld1": {
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2TreatyCode2": {
+      "label": "Treaty Code",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2ATC2": {
+      "label": "ATC",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2TaxesWithheld2": {
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3IPA2": {
+      "label": "Investment Promotion Agency (IPA) Code",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3TotInterest2": {
+      "label": "Total Interest",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3TaxWithheld2": {
+      "label": "Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched1Total": {
+      "label": "Total Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2Total": {
+      "label": "Total Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3Total": {
+      "label": "Total Taxes Withheld",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtPage2TIN": {
+      "label": "TIN",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtPage2Agent": {
+      "label": "Withholding Agent's Name",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtPage3TIN": {
+      "label": "TIN",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtPage3Agent": {
+      "label": "Withholding Agent's Name",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2TaxRate1": {
+      "label": "Tax Rate",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3TaxRate1": {
+      "label": "Tax Rate",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched2TaxRate2": {
+      "label": "Tax Rate",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched3TaxRate2": {
+      "label": "Tax Rate",
+      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+    },
+    "frm1602Q:txtSched1TaxRate13": {
+      "label": "Tax rate, row 13 (preprinted 15% on the sheet)",
+      "evidence": "html-frozen/1602q-2019/writer-cells.json not_joined: the Tax Rate column of items 13-14 is preprinted"
+    },
+    "frm1602Q:txtSched1TaxRate14": {
+      "label": "Tax rate, row 14 (preprinted 15% on the sheet)",
+      "evidence": "html-frozen/1602q-2019/writer-cells.json not_joined: the Tax Rate column of items 13-14 is preprinted"
+    },
+    "frm1602Q:txtSched1Amount15": {
+      "label": "Schedule 1 layout row 15 amount (the sheet prints 14 rows)",
+      "evidence": "html-frozen/1602q-2019/writer-cells.json not_joined: item 15 is the Total line"
+    },
+    "frm1602Q:txtSched1Tax15": {
+      "label": "Schedule 1 layout row 15 tax (the sheet prints 14 rows)",
+      "evidence": "html-frozen/1602q-2019/writer-cells.json not_joined: item 15 is the Total line"
+    },
+    "frm1602Q:OptCategoryAgent1": {
+      "label": "Private",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html item 11"
+    },
+    "frm1602Q:OptCategoryAgent2": {
+      "label": "Government",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html item 11"
+    },
+    "frm1602Q:txt14": {
+      "label": "Taxes Withheld Based on Regular Rates",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 14"
+    },
+    "frm1602Q:txt15": {
+      "label": "Taxes Withheld Based on Tax Treaty Rates",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 15"
+    },
+    "frm1602Q:txt16": {
+      "label": "Taxes Withheld Based on Preferential Rates",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 16"
+    },
+    "frm1602Q:txt17": {
+      "label": "Total Taxes Withheld for the Quarter",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 17"
+    },
+    "frm1602Q:txt22": {
+      "label": "Total Remittances Made",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 22"
+    },
+    "frm1602Q:txt23": {
+      "label": "Tax Still Due/(Over-remittance)",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 23"
+    },
+    "frm1602Q:txt25": {
+      "label": "Interest",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 25"
+    },
+    "frm1602Q:txt26": {
+      "label": "Compromise",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 26"
+    },
+    "frm1602Q:txt27": {
+      "label": "Total Penalties",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 27"
+    },
+    "frm1602Q:txt28": {
+      "label": "TOTAL AMOUNT STILL DUE/(Over-remittance)",
+      "evidence": "Decision (a) layout: printed on html-frozen/1602q-2019/index.html Part II item 28"
+    },
+    "frm1602Q:OverRemittance1": {
+      "label": "To be refunded",
+      "evidence": "Decision (a) layout: printed beside item 28 on html-frozen/1602q-2019/index.html (writer-cells xbox_joins frm1602Q:OverRemittance1)"
+    },
+    "frm1602Q:OverRemittance2": {
+      "label": "To be issued Tax Credit Certificate",
+      "evidence": "Decision (a) layout: printed beside item 28 on html-frozen/1602q-2019/index.html (writer-cells xbox_joins frm1602Q:OverRemittance2)"
+    },
+    "frm1602Q:OverRemittance3": {
+      "label": "To be carried over to the next quarter within the same calendar year",
+      "evidence": "Decision (a) layout: printed beside item 28 on html-frozen/1602q-2019/index.html (writer-cells xbox_joins frm1602Q:OverRemittance3)"
     }
   },
   "1603Q": {
@@ -2069,12 +2715,12 @@
       "evidence": "R05: the agent binds frm1606:txtRDOCode16A to /property_rdo_code and the form asks \"Please enter the RDO Code on Item 16A.\", but the extracted schema had no control for it; added beside the property location (Item 16). The RDO list comes from the catalog."
     },
     "frm1606:j_id217:_1": {
-      "label": "Return? Yes",
-      "evidence": "P4: printed caption '2 Amended Return? Yes' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Yes",
+      "evidence": "Decision (a) layout: 2018 item 2 Amended Return? Yes"
     },
     "frm1606:j_id217:_2": {
-      "label": "Return? No",
-      "evidence": "P4: printed caption '2 Amended Return? No' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "No",
+      "evidence": "Decision (a) layout: 2018 item 2 Amended Return? No"
     },
     "frm1606:j_id252:_1": {
       "label": "Any Taxes Withheld? Yes",
@@ -2147,6 +2793,450 @@
     "frm1606:opt37:_2": {
       "label": "If overremittance: To be issued a Tax Credit Certificate",
       "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate'"
+    },
+    "layout": {
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1606-2018/index.html (BIR Form 1606 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1606-2018/writer-cells.json (joins and not_joined notes). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction (MM/DD/YYYY)",
+              "k": [
+                "frm1606:txtDateMonth",
+                "frm1606:txtDateDay",
+                "frm1606:txtDateYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1606:j_id217:_1",
+                "frm1606:j_id217:_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Any Taxes Withheld?",
+              "k": [
+                "frm1606:j_id252:_1",
+                "frm1606:j_id252:_2"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "No. of Sheet/s Attached",
+              "k": [
+                "frm1606:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "RDO Code of Location of Property",
+              "k": [
+                "frm1606:txtRDOCode16A"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1606:j_id392:_1",
+                "frm1606:j_id392:_2"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Buyer (7A Name, 7B Registered Address, 7C TIN)",
+              "k": [
+                "frm1606:txtBuyerName",
+                "frm1606:txtBuyerAddress",
+                "frm1606:txtTIN1",
+                "frm1606:txtTIN2",
+                "frm1606:txtTIN3",
+                "frm1606:txtBranchCode",
+                "frm1606:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Seller (8A Name, 8B Registered Address, 8C TIN)",
+              "k": [
+                "frm1606:txtSellerName",
+                "frm1606:txtSellerAddress",
+                "frm1606:txtTINS1",
+                "frm1606:txtTINS2",
+                "frm1606:txtTINS3",
+                "frm1606:txtBranchCodeS",
+                "frm1606:txtRDOCodeS"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "ATC/Tax Rates",
+              "k": [
+                "frm1606:optATC13_2",
+                "frm1606:txt13",
+                "frm1606:optATC13_3",
+                "frm1606:txt13C"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Does the selling price cover more than one property?",
+              "k": [
+                "frm1606:j_id394:_1",
+                "frm1606:j_id394:_2"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Are you availing of tax relief under an International Tax Treaty or Special Law?",
+              "k": [
+                "frm1606:rdTreaty:_1",
+                "frm1606:rdTreaty:_2",
+                "frm1606:selTreaty"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "12",
+              "l": "Taxable Base (From Part IV Schedule 3 Item 2)",
+              "k": [
+                "frm1606:txtTax"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Applicable Tax Rate % (From Part IV Schedule 4)",
+              "k": [
+                "frm1606:txtTaxRate"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Tax Due (Item 12 Multiply by Item 13)",
+              "k": [
+                "frm1606:txtTaxR"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Less: Tax paid in previously filed return, if this is an amended return",
+              "k": [
+                "frm1606:txtLess"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Required Tax to be Withheld (Item 14 Less Item 15)",
+              "k": [
+                "frm1606:txtTaxDue"
+              ]
+            },
+            {
+              "no": "17A",
+              "l": "Surcharge",
+              "k": [
+                "frm1606:txtSurcharge"
+              ]
+            },
+            {
+              "no": "17B",
+              "l": "Interest",
+              "k": [
+                "frm1606:txtInterest"
+              ]
+            },
+            {
+              "no": "17C",
+              "l": "Compromise",
+              "k": [
+                "frm1606:txtCompromise"
+              ]
+            },
+            {
+              "no": "17D",
+              "l": "Total Penalties (Sum of Items 17A to 17C)",
+              "k": [
+                "frm1606:txtTotalPenalties"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "TOTAL AMOUNT PAYABLE/(Over remittance) (Sum of Item 16 and Item 17D)",
+              "k": [
+                "frm1606:txtTotal",
+                "frm1606:opt37:_1",
+                "frm1606:opt37:_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 1 – Brief Description of Property",
+          "items": [
+            {
+              "no": "",
+              "l": "OCT/TCT/CCT No., Tax Declaration (TD) No., Location, Area (sq.m.)",
+              "k": [
+                "frm1606:txtTCT",
+                "frm1606:txtTaxDC",
+                "frm1606:txtLocation",
+                "frm1606:txtArea"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Classification",
+              "k": [
+                "frm1606:j_id393:_1",
+                "frm1606:j_id393:_2",
+                "frm1606:j_id393:_3",
+                "frm1606:j_id393:_4",
+                "frm1606:j_id393:_5",
+                "frm1606:j_id393:_6",
+                "frm1606:j_id393_8",
+                "frm1606:j_id393_7"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Fair Market Value per TD (Column 1)",
+              "k": [
+                "frm1606:txtFMVLand",
+                "frm1606:txtFMVImprovements"
+              ]
+            },
+            {
+              "no": "",
+              "l": "FMV per BIR (Zonal Value) (Column 2)",
+              "k": [
+                "frm1606:txtFMVZonal",
+                "frm1606:txtFMVBIR"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 2 – Transaction Description",
+          "items": [
+            {
+              "no": "1",
+              "l": "Description of Transaction (Mark one box only)",
+              "k": [
+                "frm1606:j_id395:_1",
+                "frm1606:j_id395:_2",
+                "frm1606:j_id395:_3",
+                "frm1606:j_id395:_4",
+                "frm1606:j_id395:_5",
+                "frm1606:txtOthers20"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Selling Price",
+              "k": [
+                "frm1606:txtSelling"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Cost and Other Expenses",
+              "k": [
+                "frm1606:txtCost"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Mortgage Assumed",
+              "k": [
+                "frm1606:txtMortgage"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Total Payments during the Initial Year",
+              "k": [
+                "frm1606:txtTotalP"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Amount of Installment this Month (To Schedule 3 Item 1C)",
+              "k": [
+                "frm1606:txtAmount"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Total No. of Installments in The Contract",
+              "k": [
+                "frm1606:txtTotalN"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 3 – Determination of Taxable Base",
+          "items": [
+            {
+              "no": "1A",
+              "l": "Gross Selling Price / Bid Price for foreclosure sale",
+              "k": [
+                "frm1606:txtGross",
+                "frm1606:txtBid"
+              ]
+            },
+            {
+              "no": "1B",
+              "l": "Total Fair Market Value of Land and Improvement per Schedule 1",
+              "k": [
+                "frm1606:txtFMVLI"
+              ]
+            },
+            {
+              "no": "1C",
+              "l": "Installment Collected (From Schedule 2 Item 6)",
+              "k": [
+                "frm1606:txtInstallment"
+              ]
+            },
+            {
+              "no": "1D",
+              "l": "Others (Specify)",
+              "k": [
+                "frm1606:txtOtherss28E",
+                "frm1606:txtOthers28E"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Taxable Base: which line applies",
+              "k": [
+                "frm1606:opt28A",
+                "frm1606:opt28B",
+                "frm1606:opt28C",
+                "frm1606:opt28D",
+                "frm1606:opt28E"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 4 – Tax Rates",
+          "items": [
+            {
+              "no": "",
+              "l": "Is the seller habitually engaged in real estate business? (rate b. or c.)",
+              "k": [
+                "frm1606:Habitual_1",
+                "frm1606:Habitual_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "FMV basis boxes (older layout Item 27; the 2018 sheet prints the FMVs in Schedule 1)",
+              "k": [
+                "frm1606:opt27A",
+                "frm1606:opt27B",
+                "frm1606:opt27C",
+                "frm1606:opt27D"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Others description (older layout Item 17; the 2018 Schedule 1 has no Others column)",
+              "k": [
+                "frm1606:txtOthers"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Email address (the 2018 sheet has no email box)",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "frm1606:optATC13_2": {
+      "label": "Individual (WI 555–558)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /seller_type individual; the 2018 Item 9 prints 'Individual WI 555 – 1.5 % ... WI 558 – 6.0 %'"
+    },
+    "frm1606:txt13": {
+      "label": "Individual ATC",
+      "evidence": "Decision (a) layout: older-layout ATC text box of the individual row (writer-cells not_joined: prints Item 9 from derived:atc_individual_*)"
+    },
+    "frm1606:optATC13_3": {
+      "label": "Corporate (WC 555–558)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /seller_type corporation; the 2018 Item 9 prints 'Corporate WC 555 – 1.5 % ... WC 558 – 6.0 %'"
+    },
+    "frm1606:txt13C": {
+      "label": "Corporate ATC",
+      "evidence": "Decision (a) layout: older-layout ATC text box of the corporate row (writer-cells not_joined: prints Item 9 from derived:atc_corporate_*)"
+    },
+    "frm1606:opt28A": {
+      "label": "Line A – Gross Selling Price",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28A matches 2018 Schedule 3 line A"
+    },
+    "frm1606:opt28B": {
+      "label": "Line B – Total FMV of Land and Improvement",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28B matches 2018 Schedule 3 line B"
+    },
+    "frm1606:opt28C": {
+      "label": "Line A – Bid Price (foreclosure sale)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28C matches 2018 Schedule 3 line A"
+    },
+    "frm1606:opt28D": {
+      "label": "Line C – Installment Collected",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28D matches 2018 Schedule 3 line C"
+    },
+    "frm1606:opt28E": {
+      "label": "Line D – Others",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28E matches 2018 Schedule 3 line D"
+    },
+    "frm1606:Habitual_1": {
+      "label": "Yes",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json sets /seller_habitual true"
+    },
+    "frm1606:Habitual_2": {
+      "label": "No",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json sets /seller_habitual false"
+    },
+    "frm1606:opt27A": {
+      "label": "FMV of Land per latest Tax Declaration",
+      "evidence": "Decision (a) layout: older-layout item 27A caption (forms-schema item 27A 'FMV of Land per latest Tax Declaration'); writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1606:opt27B": {
+      "label": "FMV of Improvements per latest Tax Declaration",
+      "evidence": "Decision (a) layout: older-layout item 27B caption (forms-schema item 27B 'FMV of Improvements per latest Tax Declaration'); writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1606:opt27C": {
+      "label": "FMV of Land per BIR (zonal value)",
+      "evidence": "Decision (a) layout: older-layout item 27C caption (forms-schema item 27C 'FMV of Land per BIR (zonal value)'); writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1606:opt27D": {
+      "label": "FMV of Improvements per BIR",
+      "evidence": "Decision (a) layout: older-layout item 27D caption (forms-schema item 27D 'FMV of Improvements per BIR'); writer-cells not_joined: no such boxes on the 2018 sheet"
     }
   },
   "1700": {
@@ -8780,8 +9870,552 @@
       "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate'"
     },
     "frm1706:opt4C": {
-      "label": "3 ATC: WC 450-Corporation",
-      "evidence": "P4: printed caption '3 ATC: WC 450-Corporation' (html-frozen/1706-2018/writer-cells.json xbox_joins frm1706:opt4C)"
+      "label": "WC 450 – Corporation",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type corporation; 2018 item 3 prints 'WC 450-Corporation'"
+    },
+    "layout": {
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1706-2018/index.html (BIR Form 1706 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1706-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction (MM/DD/YYYY)",
+              "k": [
+                "frm1706:txtDateMonth",
+                "frm1706:txtDateDay",
+                "frm1706:txtDateYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1706:j_id217:_1",
+                "frm1706:j_id217:_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "ATC",
+              "k": [
+                "frm1706:opt4",
+                "frm1706:txt4",
+                "frm1706:opt4C",
+                "frm1706:txt4C"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1706:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "RDO Code of Location of Property",
+              "k": [
+                "frm1706:txtRDOCode14A"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Seller (6A Name, 6B Registered Address, 6C TIN)",
+              "k": [
+                "frm1706:txtSellerName",
+                "frm1706:txtSellerAddress",
+                "frm1706:txtTIN1",
+                "frm1706:txtTIN2",
+                "frm1706:txtTIN3",
+                "frm1706:txtBranchCode",
+                "frm1706:txtRDOCode",
+                "frm1706:txtSellerRAddress"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Buyer (7A Name, 7B Registered Address, 7C TIN)",
+              "k": [
+                "frm1706:txtBuyerName",
+                "frm1706:txtBuyerAddress",
+                "frm1706:txtTINB1",
+                "frm1706:txtTINB2",
+                "frm1706:txtTINB3",
+                "frm1706:txtBranchCodeB",
+                "frm1706:txtRDOCodeB"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Is the property being sold your principal residence? (For Individual sellers only)",
+              "k": [
+                "frm1706:j_id392:_1",
+                "frm1706:j_id392:_2"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Do you intend to construct or acquire a new principal residence within 18 months from the date of disposition/sale? (For Individuals)",
+              "k": [
+                "frm1706:j_id393:_1",
+                "frm1706:j_id393:_2"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Does the selling price cover more than one property?",
+              "k": [
+                "frm1706:j_id394:_1",
+                "frm1706:j_id394:_2"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Are you availing of tax relief under an International Tax Treaty or Special Law?",
+              "k": [
+                "frm1706:rdTreaty:_1",
+                "frm1706:rdTreaty:_2",
+                "frm1706:selTreaty"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "12",
+              "l": "Taxable Base (From Part IV, Schedule 4 Item 2)",
+              "k": [
+                "frm1706:txtTax"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Tax Due (Item 12 Multiply by Item 13; Item 13 prints 6%)",
+              "k": [
+                "frm1706:txtRate"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Less: Tax paid in previously filed return, if this is an amended return",
+              "k": [
+                "frm1706:txtLess"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Tax Payable/(Overpayment) (Item 14 Less Item 15)",
+              "k": [
+                "frm1706:txtTaxDue"
+              ]
+            },
+            {
+              "no": "17A",
+              "l": "Surcharge",
+              "k": [
+                "frm1706:txtSurcharge"
+              ]
+            },
+            {
+              "no": "17B",
+              "l": "Interest",
+              "k": [
+                "frm1706:txtInterest"
+              ]
+            },
+            {
+              "no": "17C",
+              "l": "Compromise",
+              "k": [
+                "frm1706:txtCompromise"
+              ]
+            },
+            {
+              "no": "17D",
+              "l": "Total Penalties (Sum of Items 17A to 17C)",
+              "k": [
+                "frm1706:txtTotalPenalties"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "TOTAL AMOUNT PAYABLE/(Over remittance) (Sum of Item 16 and 17D)",
+              "k": [
+                "frm1706:txtTotal",
+                "frm1706:opt37:_1",
+                "frm1706:opt37:_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 1 – Description of Transaction",
+          "items": [
+            {
+              "no": "",
+              "l": "OCT/TCT/CCT No., Tax Declaration No. (TD), Location, Area (sq.m.)",
+              "k": [
+                "frm1706:txtTCT",
+                "frm1706:txtTaxDC",
+                "frm1706:txtLocation",
+                "frm1706:txtArea"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Classification",
+              "k": [
+                "frm1706:j_id391:_1",
+                "frm1706:j_id391:_2",
+                "frm1706:j_id391:_3",
+                "frm1706:j_id391:_4",
+                "frm1706:j_id391:_5",
+                "frm1706:j_id391:_6",
+                "frm1706:j_id391:_8",
+                "frm1706:j_id391:_7"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Fair Market Value per TD (Column 1)",
+              "k": [
+                "frm1706:txtFMVLand",
+                "frm1706:txtFMVImprovements"
+              ]
+            },
+            {
+              "no": "",
+              "l": "FMV per BIR (Zonal Value) (Column 2)",
+              "k": [
+                "frm1706:txtFMVZonal",
+                "frm1706:txtFMVBIR"
+              ]
+            },
+            {
+              "no": "",
+              "l": "More property rows (the official program's Schedule 1 popup cells)",
+              "k": [
+                "frm1706:txtSchedModal1",
+                "frm1706:txtSchedModal2",
+                "frm1706:txtSchedModal3",
+                "frm1706:txtSchedModal4",
+                "frm1706:txtSchedModal5",
+                "frm1706:txtSchedModal6",
+                "frm1706:txtSchedModal7",
+                "frm1706:txtSchedModal8",
+                "frm1706:txtSchedModal9",
+                "frm1706:txtSchedModal10",
+                "frm1706:txtSchedModal11",
+                "frm1706:txtSchedModal12",
+                "frm1706:txtSchedModal13",
+                "frm1706:txtSchedModal14",
+                "frm1706:txtSchedModal15",
+                "frm1706:txtSchedModal16",
+                "frm1706:txtSchedModal17",
+                "frm1706:txtSchedModal18",
+                "frm1706:txtSchedModal19",
+                "frm1706:txtSchedModal20"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 2 – Description of Transaction",
+          "items": [
+            {
+              "no": "",
+              "l": "Description of Transaction (Mark one box only)",
+              "k": [
+                "frm1706:j_id395:_1",
+                "frm1706:j_id395:_2",
+                "frm1706:j_id395:_3",
+                "frm1706:j_id395:_4",
+                "frm1706:j_id395:_5",
+                "frm1706:txtOthers21"
+              ]
+            },
+            {
+              "no": "1",
+              "l": "Selling Price",
+              "k": [
+                "frm1706:txtSelling"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Cost and Expenses",
+              "k": [
+                "frm1706:txtCost"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Mortgage Assumed",
+              "k": [
+                "frm1706:txtMortgage"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Total Payments (Collection) During the Initial Year",
+              "k": [
+                "frm1706:txtTotalP"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Amount of Periodic Payment (Collection) (To Schedule 4 Item 1D)",
+              "k": [
+                "frm1706:txtAmount"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "No. of Installments in the contract",
+              "k": [
+                "frm1706:txtTotalN"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Date of Installment (MM/DD/YYYY)",
+              "k": [
+                "frm1706:txtDateMonthI",
+                "frm1706:txtDateDayI",
+                "frm1706:txtDateYearI"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 4 – Determination of Taxable Base",
+          "items": [
+            {
+              "no": "1A",
+              "l": "Gross Selling Price / Bid Price For Foreclosure Sale",
+              "k": [
+                "frm1706:txtGross",
+                "frm1706:txtBid"
+              ]
+            },
+            {
+              "no": "1B",
+              "l": "Total FMV of Land and Improvement (From Schedule 1)",
+              "k": [
+                "frm1706:txtFMVLI"
+              ]
+            },
+            {
+              "no": "1C",
+              "l": "On the Unutilized Portion of Sales Proceeds (From Schedule 3)",
+              "k": [
+                "frm1706:txtOthers30E"
+              ]
+            },
+            {
+              "no": "1D",
+              "l": "Installment Collected (From Schedule 2 Item 5)",
+              "k": [
+                "frm1706:txtInstallment"
+              ]
+            },
+            {
+              "no": "1E",
+              "l": "Others (specify)",
+              "k": [
+                "frm1706:txtOtherss30F",
+                "frm1706:txtOthers30F"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Taxable Base: which line applies",
+              "k": [
+                "frm1706:opt30A",
+                "frm1706:opt30B",
+                "frm1706:opt30C",
+                "frm1706:opt30D",
+                "frm1706:opt30E",
+                "frm1706:opt30F"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "FMV basis boxes (older layout Item 29; the 2018 sheet prints the FMVs in Schedule 1)",
+              "k": [
+                "frm1706:opt29A",
+                "frm1706:opt29B",
+                "frm1706:opt29C",
+                "frm1706:opt29D"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Others description (older layout; the 2018 Schedule 1 has no Others column)",
+              "k": [
+                "frm1706:txtOthers"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Email address (the 2018 sheet has no email box)",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "frm1706:opt4": {
+      "label": "WI 450 – Individual",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type individual; 2018 item 3 prints 'WI 450-Individual'"
+    },
+    "frm1706:txt4": {
+      "label": "ATC code (WI 450)",
+      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box"
+    },
+    "frm1706:txt4C": {
+      "label": "ATC code (WC 450)",
+      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box"
+    },
+    "frm1706:opt30A": {
+      "label": "Line A – Gross Selling Price",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option gross_selling_price; 2018 Schedule 4 line A"
+    },
+    "frm1706:opt30B": {
+      "label": "Line A – Bid Price (foreclosure sale)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option bid_price; 2018 Schedule 4 line A"
+    },
+    "frm1706:opt30C": {
+      "label": "Line B – Total FMV of Land and Improvement",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option fair_market_value; 2018 Schedule 4 line B"
+    },
+    "frm1706:opt30D": {
+      "label": "Line D – Installment Collected",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option taxable_installment; 2018 Schedule 4 line D"
+    },
+    "frm1706:opt30E": {
+      "label": "Line C – Unutilized Portion of Sales Proceeds",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option unutilized_proceeds; 2018 Schedule 4 line C"
+    },
+    "frm1706:opt30F": {
+      "label": "Line E – Others",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option others; 2018 Schedule 4 line E"
+    },
+    "frm1706:opt29A": {
+      "label": "FMV of Land per latest Tax Declaration",
+      "evidence": "Decision (a) layout: older-layout item 29A caption; writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1706:opt29B": {
+      "label": "FMV of Improvements per latest Tax Declaration",
+      "evidence": "Decision (a) layout: older-layout item 29B caption; writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1706:opt29C": {
+      "label": "FMV of Land per BIR (zonal value)",
+      "evidence": "Decision (a) layout: older-layout item 29C caption; writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1706:opt29D": {
+      "label": "FMV of Improvements per BIR",
+      "evidence": "Decision (a) layout: older-layout item 29D caption; writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1706:txtSchedModal1": {
+      "label": "Schedule 1 popup cell 1",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal2": {
+      "label": "Schedule 1 popup cell 2",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal3": {
+      "label": "Schedule 1 popup cell 3",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal4": {
+      "label": "Schedule 1 popup cell 4",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal5": {
+      "label": "Schedule 1 popup cell 5",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal6": {
+      "label": "Schedule 1 popup cell 6",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal7": {
+      "label": "Schedule 1 popup cell 7",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal8": {
+      "label": "Schedule 1 popup cell 8",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal9": {
+      "label": "Schedule 1 popup cell 9",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal10": {
+      "label": "Schedule 1 popup cell 10",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal11": {
+      "label": "Schedule 1 popup cell 11",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal12": {
+      "label": "Schedule 1 popup cell 12",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal13": {
+      "label": "Schedule 1 popup cell 13",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal14": {
+      "label": "Schedule 1 popup cell 14",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal15": {
+      "label": "Schedule 1 popup cell 15",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal16": {
+      "label": "Schedule 1 popup cell 16",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal17": {
+      "label": "Schedule 1 popup cell 17",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal18": {
+      "label": "Schedule 1 popup cell 18",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal19": {
+      "label": "Schedule 1 popup cell 19",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtSchedModal20": {
+      "label": "Schedule 1 popup cell 20",
+      "evidence": "Decision (a) layout: writer-cells not_joined: free-text cells of the older layout's Schedule 1 popup in page order"
+    },
+    "frm1706:txtRate": {
+      "label": "Tax Due",
+      "evidence": "Decision (a) layout: html-frozen/1706-2018/writer-cells.json joins frm1706:txtRate to '14 Tax Due (Item 12 Multiply by Item 13)'"
     }
   },
   "1707": {
@@ -11747,75 +13381,1171 @@
     },
     "frm2200ANv2018:txtPage2Taxpayer": {
       "label": "Taxpayer's Name",
-      "evidence": "painted form_2200an_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's Name\"; agent box label: \"Taxpayer's Name (page 2 header)\"; writer-cells printed caption: \"Taxpayer's Name (page 2 header)\""
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html page 2 header"
     },
     "frm2200ANv2018:txtXGOthers1": {
-      "label": "Schedule 1B Others (specify) row 1, ATC",
-      "evidence": "agent box label: 'Schedule 1B Others (specify) row 1, ATC'; writer-cells printed caption: 'Schedule 1B Others (specify) row 1, ATC'"
+      "label": "ATC (XG…)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1B Others row"
     },
     "frm2200ANv2018:txtXGOthers1Tax": {
-      "label": "Others, Tax Rate",
-      "evidence": "agent box label: 'Others, Tax Rate'; writer-cells printed caption: 'Others, Tax Rate'"
+      "label": "Tax Rate",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1B Others row"
     },
     "frm2200ANv2018:txtXGOthers1Exempt1": {
-      "label": "Others row 1, Exempt/Underbond",
-      "evidence": "agent box label: 'Others row 1, Exempt/Underbond'; writer-cells printed caption: 'Others row 1, Exempt/Underbond'"
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /other_goods/0/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
     },
     "frm2200ANv2018:txtXGOthers1Taxable1": {
-      "label": "Others row 1, Taxable",
-      "evidence": "agent box label: 'Others row 1, Taxable'; writer-cells printed caption: 'Others row 1, Taxable'"
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /other_goods/0/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
     },
     "frm2200ANv2018:txtXGOthers1Exempt2": {
-      "label": "Others row 1, Exempt/Underbond",
-      "evidence": "agent box label: 'Others row 1, Exempt/Underbond'; writer-cells printed caption: 'Others row 1, Exempt/Underbond'"
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
     },
     "frm2200ANv2018:txtXGOthers1Taxable2": {
-      "label": "Others row 1, Taxable",
-      "evidence": "agent box label: 'Others row 1, Taxable'; writer-cells printed caption: 'Others row 1, Taxable'"
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
     },
     "frm2200ANv2018:txtXGOthers1TaxDue": {
-      "label": "Others row 1, Due",
-      "evidence": "agent box label: 'Others row 1, Due'; writer-cells printed caption: 'Others row 1, Due'"
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
     },
     "frm2200ANv2018:txtXGOthers2": {
-      "label": "Schedule 1B Others (specify) row 2, ATC",
-      "evidence": "agent box label: 'Schedule 1B Others (specify) row 2, ATC'; writer-cells printed caption: 'Schedule 1B Others (specify) row 2, ATC'"
+      "label": "ATC (XG…)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1B Others row"
     },
     "frm2200ANv2018:txtXGOthers2Tax": {
-      "label": "Others, Tax Rate",
-      "evidence": "agent box label: 'Others, Tax Rate'; writer-cells printed caption: 'Others, Tax Rate'"
+      "label": "Tax Rate",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1B Others row"
     },
     "frm2200ANv2018:txtXGOthers2Exempt1": {
-      "label": "Others row 2, Exempt/Underbond",
-      "evidence": "agent box label: 'Others row 2, Exempt/Underbond'; writer-cells printed caption: 'Others row 2, Exempt/Underbond'"
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /other_goods/1/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
     },
     "frm2200ANv2018:txtXGOthers2Taxable1": {
-      "label": "Others row 2, Taxable",
-      "evidence": "agent box label: 'Others row 2, Taxable'; writer-cells printed caption: 'Others row 2, Taxable'"
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /other_goods/1/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
     },
     "frm2200ANv2018:txtXGOthers2Exempt2": {
-      "label": "Others row 2, Exempt/Underbond",
-      "evidence": "agent box label: 'Others row 2, Exempt/Underbond'; writer-cells printed caption: 'Others row 2, Exempt/Underbond'"
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
     },
     "frm2200ANv2018:txtXGOthers2Taxable2": {
-      "label": "Others row 2, Taxable",
-      "evidence": "agent box label: 'Others row 2, Taxable'; writer-cells printed caption: 'Others row 2, Taxable'"
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
     },
     "frm2200ANv2018:txtXGOthers2TaxDue": {
-      "label": "Others row 2, Due",
-      "evidence": "agent box label: 'Others row 2, Due'; writer-cells printed caption: 'Others row 2, Due'"
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
     },
     "frm2200ANv2018:txtSchedule1C": {
       "label": "Schedule 1C total (Sum of Schedule 1A and 1B) (To Part III, Item 16)",
       "evidence": "agent box label: 'Schedule 1C total (Sum of Schedule 1A and 1B) (To Part III, Item 16)'; writer-cells printed caption: 'Schedule 1C total (Sum of Schedule 1A and 1B) (To Part III, Item 16)'"
     },
     "frm2200ANv2018:txtXGOthers1Name": {
-      "label": "Name of item/product",
-      "evidence": "agent box label: 'Others (specify), name of item/product'; writer-cells printed caption: 'Others (specify), name of item/product'"
+      "label": "Name of Item/Product",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1B Others row"
     },
     "frm2200ANv2018:txtXGOthers2Name": {
-      "label": "Name of item/product",
-      "evidence": "agent box label: 'Others (specify), name of item/product'; writer-cells printed caption: 'Others (specify), name of item/product'"
+      "label": "Name of Item/Product",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1B Others row"
+    },
+    "layout": {
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/2200an-2018/index.html (BIR Form 2200-AN January 2018: items 1-3, Part I 4-12A, Part II 13-15, Part III 16-24, Part IV 25-28, Part V Schedules 1A-1C on page 2) and html-frozen/2200an-2018/writer-cells.json joins. Schedule columns from crates/bir-core/data/agent-forms/2200an-v2018.json bindings (Exempt1/Taxable1 are unit counts, Exempt2/Taxable2 peso values; MannerOfPayment1-3 set actual removal, prepayment, other). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2200ANv2018:txtTIN1",
+                "frm2200ANv2018:txtTIN2",
+                "frm2200ANv2018:txtTIN3",
+                "frm2200ANv2018:txtBranchCode"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm2200ANv2018:txtRDOCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Taxpayer's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm2200ANv2018:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address",
+              "k": [
+                "frm2200ANv2018:txtAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2200ANv2018:txtZipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Contact Number (Landline/Cellphone No.)",
+              "k": [
+                "frm2200ANv2018:txtTelNum"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Place of Production",
+              "k": [
+                "frm2200ANv2018optRegion",
+                "frm2200ANv2018optProvince",
+                "frm2200ANv2018optCity"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Place of Removal",
+              "k": [
+                "frm2200ANv2018optRegion1",
+                "frm2200ANv2018optProvince1",
+                "frm2200ANv2018optCity1"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm2200ANv2018:OptSpecialTax1",
+                "frm2200ANv2018:OptSpecialTax2"
+              ]
+            },
+            {
+              "no": "12A",
+              "l": "If yes, specify",
+              "k": [
+                "frm2200ANv2018:lstSpecialTax"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Manner of Payment",
+          "items": [
+            {
+              "no": "13",
+              "l": "Payment on Actual Removal",
+              "k": [
+                "frm2200ANv2018:MannerOfPayment1"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Prepayment/Advance Deposit",
+              "k": [
+                "frm2200ANv2018:MannerOfPayment2"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Other Similar Schemes (specify)",
+              "k": [
+                "frm2200ANv2018:MannerOfPayment3",
+                "frm2200ANv2018:MannerOfPaymentOthers"
+              ]
+            }
+          ]
+        },
+        {
+          "keep": 3
+        },
+        {
+          "keep": 4
+        },
+        {
+          "n": "Part V · Schedule 1A – Summary of Removals and Excise Tax Due on Automobiles",
+          "items": [
+            {
+              "no": "",
+              "l": "Page 2 header (TIN, Taxpayer's Name)",
+              "k": [
+                "frm2200ANv2018:txtPage2TIN",
+                "frm2200ANv2018:txtPage2Taxpayer"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG021 · Passenger Car · Up to P600,000 · 4%",
+              "k": [
+                "frm2200ANv2018:txtXG021Exempt2",
+                "frm2200ANv2018:txtXG021Taxable2",
+                "frm2200ANv2018:txtXG021Exempt1",
+                "frm2200ANv2018:txtXG021Taxable1",
+                "frm2200ANv2018:txtXG021TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG022 · Passenger Car · Over P600,000 to P1,000,000 · 10%",
+              "k": [
+                "frm2200ANv2018:txtXG022Exempt2",
+                "frm2200ANv2018:txtXG022Taxable2",
+                "frm2200ANv2018:txtXG022Exempt1",
+                "frm2200ANv2018:txtXG022Taxable1",
+                "frm2200ANv2018:txtXG022TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG023 · Passenger Car · Over P1,000,000 to P4,000,000 · 20%",
+              "k": [
+                "frm2200ANv2018:txtXG023Exempt2",
+                "frm2200ANv2018:txtXG023Taxable2",
+                "frm2200ANv2018:txtXG023Exempt1",
+                "frm2200ANv2018:txtXG023Taxable1",
+                "frm2200ANv2018:txtXG023TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG024 · Passenger Car · Over P4,000,000 · 50%",
+              "k": [
+                "frm2200ANv2018:txtXG024Exempt2",
+                "frm2200ANv2018:txtXG024Taxable2",
+                "frm2200ANv2018:txtXG024Exempt1",
+                "frm2200ANv2018:txtXG024Taxable1",
+                "frm2200ANv2018:txtXG024TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG031 · Utility Vehicles · Up to P600,000 · 4%",
+              "k": [
+                "frm2200ANv2018:txtXG031Exempt2",
+                "frm2200ANv2018:txtXG031Taxable2",
+                "frm2200ANv2018:txtXG031Exempt1",
+                "frm2200ANv2018:txtXG031Taxable1",
+                "frm2200ANv2018:txtXG031TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG032 · Utility Vehicles · Over P600,000 to P1,000,000 · 10%",
+              "k": [
+                "frm2200ANv2018:txtXG032Exempt2",
+                "frm2200ANv2018:txtXG032Taxable2",
+                "frm2200ANv2018:txtXG032Exempt1",
+                "frm2200ANv2018:txtXG032Taxable1",
+                "frm2200ANv2018:txtXG032TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG033 · Utility Vehicles · Over P1,000,000 to P4,000,000 · 20%",
+              "k": [
+                "frm2200ANv2018:txtXG033Exempt2",
+                "frm2200ANv2018:txtXG033Taxable2",
+                "frm2200ANv2018:txtXG033Exempt1",
+                "frm2200ANv2018:txtXG033Taxable1",
+                "frm2200ANv2018:txtXG033TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG034 · Utility Vehicles · Over P4,000,000 · 50%",
+              "k": [
+                "frm2200ANv2018:txtXG034Exempt2",
+                "frm2200ANv2018:txtXG034Taxable2",
+                "frm2200ANv2018:txtXG034Exempt1",
+                "frm2200ANv2018:txtXG034Taxable1",
+                "frm2200ANv2018:txtXG034TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG055 · Pick-Ups · Exempt",
+              "k": [
+                "frm2200ANv2018:txtXG055Exempt2",
+                "frm2200ANv2018:txtXG055Taxable2",
+                "frm2200ANv2018:txtXG055Exempt1",
+                "frm2200ANv2018:txtXG055Taxable1",
+                "frm2200ANv2018:txtXG055TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG041 · Passenger Vans · Up to P600,000 · 4%",
+              "k": [
+                "frm2200ANv2018:txtXG041Exempt2",
+                "frm2200ANv2018:txtXG041Taxable2",
+                "frm2200ANv2018:txtXG041Exempt1",
+                "frm2200ANv2018:txtXG041Taxable1",
+                "frm2200ANv2018:txtXG041TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG042 · Passenger Vans · Over P600,000 to P1,000,000 · 10%",
+              "k": [
+                "frm2200ANv2018:txtXG042Exempt2",
+                "frm2200ANv2018:txtXG042Taxable2",
+                "frm2200ANv2018:txtXG042Exempt1",
+                "frm2200ANv2018:txtXG042Taxable1",
+                "frm2200ANv2018:txtXG042TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG043 · Passenger Vans · Over P1,000,000 to P4,000,000 · 20%",
+              "k": [
+                "frm2200ANv2018:txtXG043Exempt2",
+                "frm2200ANv2018:txtXG043Taxable2",
+                "frm2200ANv2018:txtXG043Exempt1",
+                "frm2200ANv2018:txtXG043Taxable1",
+                "frm2200ANv2018:txtXG043TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG044 · Passenger Vans · Over P4,000,000 · 50%",
+              "k": [
+                "frm2200ANv2018:txtXG044Exempt2",
+                "frm2200ANv2018:txtXG044Taxable2",
+                "frm2200ANv2018:txtXG044Exempt1",
+                "frm2200ANv2018:txtXG044Taxable1",
+                "frm2200ANv2018:txtXG044TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG065 · Hybrid Vehicles · Up to P600,000 · 50% of the applicable excise tax rate",
+              "k": [
+                "frm2200ANv2018:txtXG065Exempt2",
+                "frm2200ANv2018:txtXG065Taxable2",
+                "frm2200ANv2018:txtXG065Exempt1",
+                "frm2200ANv2018:txtXG065Taxable1",
+                "frm2200ANv2018:txtXG065TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG071 · Hybrid Vehicles · Over P600,000 to P1,000,000 · 50% of the applicable excise tax rate",
+              "k": [
+                "frm2200ANv2018:txtXG071Exempt2",
+                "frm2200ANv2018:txtXG071Taxable2",
+                "frm2200ANv2018:txtXG071Exempt1",
+                "frm2200ANv2018:txtXG071Taxable1",
+                "frm2200ANv2018:txtXG071TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG072 · Hybrid Vehicles · Over P1,000,000 to P4,000,000 · 50% of the applicable excise tax rate",
+              "k": [
+                "frm2200ANv2018:txtXG072Exempt2",
+                "frm2200ANv2018:txtXG072Taxable2",
+                "frm2200ANv2018:txtXG072Exempt1",
+                "frm2200ANv2018:txtXG072Taxable1",
+                "frm2200ANv2018:txtXG072TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG073 · Hybrid Vehicles · Over P4,000,000 · 50% of the applicable excise tax rate",
+              "k": [
+                "frm2200ANv2018:txtXG073Exempt2",
+                "frm2200ANv2018:txtXG073Taxable2",
+                "frm2200ANv2018:txtXG073Exempt1",
+                "frm2200ANv2018:txtXG073Taxable1",
+                "frm2200ANv2018:txtXG073TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG068 · Purely Electric Vehicles · Exempt",
+              "k": [
+                "frm2200ANv2018:txtXG068Exempt2",
+                "frm2200ANv2018:txtXG068Taxable2",
+                "frm2200ANv2018:txtXG068Exempt1",
+                "frm2200ANv2018:txtXG068Taxable1",
+                "frm2200ANv2018:txtXG068TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG061 · Others · Up to P600,000 · 4%",
+              "k": [
+                "frm2200ANv2018:txtXG061Exempt2",
+                "frm2200ANv2018:txtXG061Taxable2",
+                "frm2200ANv2018:txtXG061Exempt1",
+                "frm2200ANv2018:txtXG061Taxable1",
+                "frm2200ANv2018:txtXG061TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG062 · Others · Over P600,000 to P1,000,000 · 10%",
+              "k": [
+                "frm2200ANv2018:txtXG062Exempt2",
+                "frm2200ANv2018:txtXG062Taxable2",
+                "frm2200ANv2018:txtXG062Exempt1",
+                "frm2200ANv2018:txtXG062Taxable1",
+                "frm2200ANv2018:txtXG062TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG063 · Others · Over P1,000,000 to P4,000,000 · 20%",
+              "k": [
+                "frm2200ANv2018:txtXG063Exempt2",
+                "frm2200ANv2018:txtXG063Taxable2",
+                "frm2200ANv2018:txtXG063Exempt1",
+                "frm2200ANv2018:txtXG063Taxable1",
+                "frm2200ANv2018:txtXG063TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG064 · Others · Over P4,000,000 · 50%",
+              "k": [
+                "frm2200ANv2018:txtXG064Exempt2",
+                "frm2200ANv2018:txtXG064Taxable2",
+                "frm2200ANv2018:txtXG064Exempt1",
+                "frm2200ANv2018:txtXG064Taxable1",
+                "frm2200ANv2018:txtXG064TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "BASIC EXCISE TAX DUE – AUTOMOBILES (To Schedule 1C)",
+              "k": [
+                "frm2200ANv2018:txtBasicExciseTaxDue"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedule 1B – Summary of Removals and Excise Tax Due on Non-Essential Goods",
+          "items": [
+            {
+              "no": "",
+              "l": "XG100 · Jewelries, Pearls, Precious and Semi-precious Stones, whether Real or Imitation · 20%",
+              "k": [
+                "frm2200ANv2018:txtXG100Exempt2",
+                "frm2200ANv2018:txtXG100Taxable2",
+                "frm2200ANv2018:txtXG100Exempt1",
+                "frm2200ANv2018:txtXG100Taxable1",
+                "frm2200ANv2018:txtXG100TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG110 · Perfumes and Toilet Waters · 20%",
+              "k": [
+                "frm2200ANv2018:txtXG110Exempt2",
+                "frm2200ANv2018:txtXG110Taxable2",
+                "frm2200ANv2018:txtXG110Exempt1",
+                "frm2200ANv2018:txtXG110Taxable1",
+                "frm2200ANv2018:txtXG110TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "XG120 · Yachts and Other Vessels for Pleasure or Sports · 20%",
+              "k": [
+                "frm2200ANv2018:txtXG120Exempt2",
+                "frm2200ANv2018:txtXG120Taxable2",
+                "frm2200ANv2018:txtXG120Exempt1",
+                "frm2200ANv2018:txtXG120Taxable1",
+                "frm2200ANv2018:txtXG120TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Others (specify) row 1",
+              "k": [
+                "frm2200ANv2018:txtXGOthers1Name",
+                "frm2200ANv2018:txtXGOthers1",
+                "frm2200ANv2018:txtXGOthers1Tax",
+                "frm2200ANv2018:txtXGOthers1Exempt2",
+                "frm2200ANv2018:txtXGOthers1Taxable2",
+                "frm2200ANv2018:txtXGOthers1Exempt1",
+                "frm2200ANv2018:txtXGOthers1Taxable1",
+                "frm2200ANv2018:txtXGOthers1TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Others (specify) row 2",
+              "k": [
+                "frm2200ANv2018:txtXGOthers2Name",
+                "frm2200ANv2018:txtXGOthers2",
+                "frm2200ANv2018:txtXGOthers2Tax",
+                "frm2200ANv2018:txtXGOthers2Exempt2",
+                "frm2200ANv2018:txtXGOthers2Taxable2",
+                "frm2200ANv2018:txtXGOthers2Exempt1",
+                "frm2200ANv2018:txtXGOthers2Taxable1",
+                "frm2200ANv2018:txtXGOthers2TaxDue"
+              ]
+            },
+            {
+              "no": "",
+              "l": "BASIC EXCISE TAX DUE – NON-ESSENTIAL GOODS (To Schedule 1C)",
+              "k": [
+                "frm2200ANv2018:txtBasicExciseTaxDueNonEssentialGoods"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedule 1C – Total Excise Tax Due",
+          "items": [
+            {
+              "no": "",
+              "l": "TOTAL EXCISE TAX DUE – Automobiles and Non-Essential Goods (Sum of Schedule 1A and 1B) (To Part III, Item 16)",
+              "k": [
+                "frm2200ANv2018:txtSchedule1C"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "frm2200ANv2018:txtXG021Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG021Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG021Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/0/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG021Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/0/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG021TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG022Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG022Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG022Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/1/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG022Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/1/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG022TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG023Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG023Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG023Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/2/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG023Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/2/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG023TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG024Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG024Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG024Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/3/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG024Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/3/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG024TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG031Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG031Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG031Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/4/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG031Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/4/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG031TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG032Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG032Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG032Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/5/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG032Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/5/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG032TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG033Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG033Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG033Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/6/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG033Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/6/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG033TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG034Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG034Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG034Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/7/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG034Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/7/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG034TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG055Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG055Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG055Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/8/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG055Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/8/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG055TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG041Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG041Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG041Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/9/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG041Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/9/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG041TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG042Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG042Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG042Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/10/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG042Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/10/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG042TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG043Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG043Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG043Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/11/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG043Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/11/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG043TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG044Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG044Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG044Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/12/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG044Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/12/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG044TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG065Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG065Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG065Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/13/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG065Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/13/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG065TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG071Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG071Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG071Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/14/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG071Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/14/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG071TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG072Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG072Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG072Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/15/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG072Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/15/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG072TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG073Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG073Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG073Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/16/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG073Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/16/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG073TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG068Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG068Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG068Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/17/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG068Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/17/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG068TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG061Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG061Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG061Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/18/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG061Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/18/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG061TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG062Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG062Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG062Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/19/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG062Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/19/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG062TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG063Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG063Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG063Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/20/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG063Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/20/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG063TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG064Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG064Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG064Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/21/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG064Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /automobiles/21/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG064TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG100Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG100Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG100Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /goods/0/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG100Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /goods/0/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG100TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG110Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG110Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG110Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /goods/1/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG110Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /goods/1/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG110TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018:txtXG120Exempt2": {
+      "label": "Total Selling Price/Market Value: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_value)"
+    },
+    "frm2200ANv2018:txtXG120Taxable2": {
+      "label": "Total Selling Price/Market Value: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_value)"
+    },
+    "frm2200ANv2018:txtXG120Exempt1": {
+      "label": "Number of Units: Exempt/Underbond",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/exempt_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /goods/2/exempt_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG120Taxable1": {
+      "label": "Number of Units: Taxable",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/taxable_units) Kind: crates/bir-core/data/agent-forms/2200an-v2018.json binds it to /goods/2/taxable_units (a unit count, type text), so no peso sign.",
+      "kind": "int"
+    },
+    "frm2200ANv2018:txtXG120TaxDue": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part V schedule column (binding /…/tax_due)"
+    },
+    "frm2200ANv2018optRegion": {
+      "label": "Region",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 10 Place of Production"
+    },
+    "frm2200ANv2018optProvince": {
+      "label": "Province",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 10 Place of Production"
+    },
+    "frm2200ANv2018optCity": {
+      "label": "City",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 10 Place of Production"
+    },
+    "frm2200ANv2018optRegion1": {
+      "label": "Region",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 11 Place of Removal"
+    },
+    "frm2200ANv2018optProvince1": {
+      "label": "Province",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 11 Place of Removal"
+    },
+    "frm2200ANv2018optCity1": {
+      "label": "City",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 11 Place of Removal"
+    },
+    "frm2200ANv2018:txtPage2TIN": {
+      "label": "TIN",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html page 2 header"
+    },
+    "frm2200ANv2018:MannerOfPayment1": {
+      "label": "Payment on Actual Removal",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 13"
+    },
+    "frm2200ANv2018:MannerOfPayment2": {
+      "label": "Prepayment/Advance Deposit",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 14"
+    },
+    "frm2200ANv2018:MannerOfPayment3": {
+      "label": "Other Similar Schemes",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html item 15"
+    },
+    "frm2200ANv2018:txtBasicExciseTaxDue": {
+      "label": "Basic Excise Tax Due – Automobiles",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1A total line"
+    },
+    "frm2200ANv2018:txtBasicExciseTaxDueNonEssentialGoods": {
+      "label": "Basic Excise Tax Due – Non-Essential Goods",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Schedule 1B total line"
+    },
+    "frm2200ANv2018:txt18": {
+      "label": "Net Tax Due/(Overpayment)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part III item 18"
+    },
+    "frm2200ANv2018:txt20": {
+      "label": "Tax Still Due/(Overpayment)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part III item 20"
+    },
+    "frm2200ANv2018:txt24": {
+      "label": "Balance to be Carried Over to Next Return",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html Part III item 24"
+    },
+    "item:3:16": {
+      "label": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200an-2018/index.html signature block (no item number)"
     }
   },
   "2200C": {
@@ -14555,16 +17285,16 @@
       "kind": "int"
     },
     "frm2200S:txtTIN1": {
-      "label": "Part 1",
-      "evidence": "agent box label: 'Taxpayer Identification Number (TIN), part 1'; writer-cells printed caption: 'Taxpayer Identification Number (TIN), part 1'"
+      "label": "TIN (first 3 digits)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 4"
     },
     "frm2200S:txtTIN2": {
-      "label": "Part 2",
-      "evidence": "agent box label: 'Taxpayer Identification Number (TIN), part 2'; writer-cells printed caption: 'Taxpayer Identification Number (TIN), part 2'"
+      "label": "TIN (second 3 digits)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 4"
     },
     "frm2200S:txtTIN3": {
-      "label": "Part 3",
-      "evidence": "agent box label: 'Taxpayer Identification Number (TIN), part 3'; writer-cells printed caption: 'Taxpayer Identification Number (TIN), part 3'"
+      "label": "TIN (third 3 digits)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 4"
     },
     "frm2200S:txtRDOCode": {
       "label": "RDO Code",
@@ -14765,6 +17495,634 @@
         }
       ],
       "evidence": "D09: options as in the official BIR-Form2200S.hta select (0 blank, 1 Special Law, 2 International Tax Treaty); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 special_law, 2 international_tax_treaty."
+    },
+    "layout": {
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/2200s-2018/index.html (BIR Form 2200-S January 2018: items 1-3, Part I 4-14A, Part II 15-17, Part III 18-26, Part IV 27-30, Part V Schedule 1 on page 2) and html-frozen/2200s-2018/writer-cells.json joins (which box prints at which item; the layout's txtTax16-24 print at items 18-26). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2200S:txtTIN1",
+                "frm2200S:txtTIN2",
+                "frm2200S:txtTIN3",
+                "frm2200S:txtBranchCode"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm2200S:txtRDOCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Taxpayer's Name (Last Name, First Name, Middle Name for Individual)/(Registered Name for Non-Individual)",
+              "k": [
+                "frm2200S:taxpayerName"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address",
+              "k": [
+                "frm2200S:txtAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2200S:txtZipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Contact Number",
+              "k": [
+                "frm2200S:txtTelNum"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Main Line of Business",
+              "k": [
+                "frm2200S:txtLineBus"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "PSIC",
+              "k": [
+                "frm2200S:txtPSIC"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Place of Production",
+              "k": [
+                "frm2200SoptRegion",
+                "frm2200SoptProvince",
+                "frm2200SoptCity"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Place of Removal",
+              "k": [
+                "frm2200SoptRegion1",
+                "frm2200SoptProvince1",
+                "frm2200SoptCity1"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm2200S:optTreaty_1",
+                "frm2200S:optTreaty_2"
+              ]
+            },
+            {
+              "no": "14A",
+              "l": "If yes, specify",
+              "k": [
+                "frm2200S:lstTaxTreaty"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Manner Of Payment",
+          "items": [
+            {
+              "no": "15",
+              "l": "Payment on Actual Removal",
+              "k": [
+                "frm2200S:chkPymntManner_1"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Prepayment/Advance Deposit",
+              "k": [
+                "frm2200S:chkPymntManner_2"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Other Similar Schemes (specify)",
+              "k": [
+                "frm2200S:chkPymntManner_3",
+                "frm2200S:txtOthMannerofPymnt"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Payments and Application",
+          "items": [
+            {
+              "no": "18",
+              "l": "Excise Tax Due (from Part V - Schedule 1)",
+              "k": [
+                "frm2200S:txtTax16"
+              ]
+            },
+            {
+              "no": "19A",
+              "l": "Less: Balance Carried Over from Previous Return",
+              "k": [
+                "frm2200S:txtTax17A"
+              ]
+            },
+            {
+              "no": "19B",
+              "l": "Creditable Excise Tax, if applicable",
+              "k": [
+                "frm2200S:txtTax17B"
+              ]
+            },
+            {
+              "no": "19C",
+              "l": "Total (Sum of Items 19A & 19B)",
+              "k": [
+                "frm2200S:txtTax17C"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Net Tax Due/(Overpayment) (Item 18 less Item 19C)",
+              "k": [
+                "frm2200S:txtTax18"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Less: Payment on Returns Previously Filed for the Same Period, if amended return",
+              "k": [
+                "frm2200S:txtTax19"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Tax Still Due/(Overpayment) (Item 20 less Item 21)",
+              "k": [
+                "frm2200S:txtTax20"
+              ]
+            },
+            {
+              "no": "23A",
+              "l": "Add: Penalties: Surcharge",
+              "k": [
+                "frm2200S:txtTax21A"
+              ]
+            },
+            {
+              "no": "23B",
+              "l": "Interest",
+              "k": [
+                "frm2200S:txtTax21B"
+              ]
+            },
+            {
+              "no": "23C",
+              "l": "Compromise",
+              "k": [
+                "frm2200S:txtTax21C"
+              ]
+            },
+            {
+              "no": "23D",
+              "l": "Total Penalties (Sum of Items 23A to 23C)",
+              "k": [
+                "frm2200S:txtTax21D"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Amount Payable/(Overpayment) (Sum of Items 22 & 23D)",
+              "k": [
+                "frm2200S:txtTax22"
+              ]
+            },
+            {
+              "no": "25A",
+              "l": "Less: Payment Made Today: Tax Payment/Deposit",
+              "k": [
+                "frm2200S:txtTax23A"
+              ]
+            },
+            {
+              "no": "25B",
+              "l": "Penalties (from Item 23D)",
+              "k": [
+                "frm2200S:txtTax23B",
+                "frm2200S:PayPenalties"
+              ]
+            },
+            {
+              "no": "25C",
+              "l": "Total Payment Made Today (Sum of Items 25A & 25B)",
+              "k": [
+                "frm2200S:txtTax23C"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Balance to be Carried Over to Next Return (Item 24 less Item 25C)",
+              "k": [
+                "frm2200S:txtTax24"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable)",
+              "k": [
+                "txtTaxAgentNo",
+                "txtDateIssue",
+                "txtDateExpiry"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Details of Payment",
+          "items": [
+            {
+              "no": "27",
+              "l": "Cash/Bank Debit Memo",
+              "k": [
+                "frm2200S:txtAgency33",
+                "frm2200S:txtNumber33",
+                "frm2200S:txtDate33",
+                "frm2200S:txtAmount33"
+              ]
+            },
+            {
+              "no": "28",
+              "l": "Check",
+              "k": [
+                "frm2200S:txtAgency34",
+                "frm2200S:txtNumber34",
+                "frm2200S:txtDate34",
+                "frm2200S:txtAmount34"
+              ]
+            },
+            {
+              "no": "29",
+              "l": "Tax Debit Memo",
+              "k": [
+                "frm2200S:txtAgency35",
+                "frm2200S:txtNumber35",
+                "frm2200S:txtDate35",
+                "frm2200S:txtAmount35"
+              ]
+            },
+            {
+              "no": "30",
+              "l": "Others (specify)",
+              "k": [
+                "frm2200S:txtParticular36",
+                "frm2200S:txtAgency36",
+                "frm2200S:txtNumber36",
+                "frm2200S:txtDate36",
+                "frm2200S:txtAmount36"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedule 1 – Summary of Removals and Excise Tax Due on Sweetened Beverages",
+          "items": [
+            {
+              "no": "",
+              "l": "Page 2 header (TIN, Taxpayer's Name)",
+              "k": [
+                "frm2200S:txtSched1TIN1",
+                "frm2200S:txtSched1TIN2",
+                "frm2200S:txtSched1TIN3",
+                "frm2200S:txtSched1BranchCode",
+                "frm2200S:txtSched1TaxpayerName"
+              ]
+            },
+            {
+              "no": "1a",
+              "l": "XB010 Sweetened Juice Drinks · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue0",
+                "frm2200S:txtVolumeRemovals0",
+                "frm2200S:txtBasicTaxDue0"
+              ]
+            },
+            {
+              "no": "1b",
+              "l": "XB020 Sweetened Tea · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue1",
+                "frm2200S:txtVolumeRemovals1",
+                "frm2200S:txtBasicTaxDue1"
+              ]
+            },
+            {
+              "no": "1c",
+              "l": "XB030 Carbonated Beverages · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue2",
+                "frm2200S:txtVolumeRemovals2",
+                "frm2200S:txtBasicTaxDue2"
+              ]
+            },
+            {
+              "no": "1d",
+              "l": "XB040 Flavored Water · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue3",
+                "frm2200S:txtVolumeRemovals3",
+                "frm2200S:txtBasicTaxDue3"
+              ]
+            },
+            {
+              "no": "1e",
+              "l": "XB050 Energy and Sports Drinks · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue4",
+                "frm2200S:txtVolumeRemovals4",
+                "frm2200S:txtBasicTaxDue4"
+              ]
+            },
+            {
+              "no": "1f",
+              "l": "XB060 Powdered Drinks not classified as Milk, Juice, Tea and Coffee · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue5",
+                "frm2200S:txtVolumeRemovals5",
+                "frm2200S:txtBasicTaxDue5"
+              ]
+            },
+            {
+              "no": "1g",
+              "l": "XB070 Cereal and Grain Beverages · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue6",
+                "frm2200S:txtVolumeRemovals6",
+                "frm2200S:txtBasicTaxDue6"
+              ]
+            },
+            {
+              "no": "1h",
+              "l": "XB080 Other Non-Alcoholic Beverages that contain added sugar · P 6.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue7",
+                "frm2200S:txtVolumeRemovals7",
+                "frm2200S:txtBasicTaxDue7"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "XB090 Using purely high fructose corn syrup or in combination with any caloric or non-caloric sweeteners · P 12.00 per liter",
+              "k": [
+                "frm2200S:txtSalesValue8",
+                "frm2200S:txtVolumeRemovals8",
+                "frm2200S:txtBasicTaxDue8"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "XB100 Using purely coconut sap sugar and purely Steviol Glycosides · Exempt",
+              "k": [
+                "frm2200S:txtSalesValue9",
+                "frm2200S:txtVolumeRemovals9",
+                "frm2200S:txtBasicTaxDue9"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Others (specify) 1.",
+              "k": [
+                "frm2200S:sched1Chk0",
+                "frm2200S:txtsched1Atc0",
+                "frm2200S:txtsched1Desc0",
+                "frm2200S:txtsched1TaxBracket0",
+                "frm2200S:txtsched1AppTaxRate0",
+                "frm2200S:txtsched1SalesValue0",
+                "frm2200S:txtsched1VolumeRemovals0",
+                "frm2200S:txtsched1BasicTaxDue0"
+              ]
+            },
+            {
+              "no": "",
+              "l": "GRAND TOTAL EXCISE TAX DUE (To Item 18 of Part III)",
+              "k": [
+                "frm2200S:totalTaxDue"
+              ]
+            }
+          ],
+          "keep": 4
+        }
+      ]
+    },
+    "frm2200S:txtSalesValue0": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals0": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue0": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue1": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals1": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue1": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue2": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals2": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue2": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue3": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals3": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue3": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue4": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals4": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue4": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue5": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals5": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue5": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue6": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals6": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue6": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue7": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals7": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue7": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue8": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals8": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue8": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtSalesValue9": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtVolumeRemovals9": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:txtBasicTaxDue9": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
+    },
+    "frm2200S:sched1Chk0": {
+      "label": "Select row",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200S:txtsched1Atc0": {
+      "label": "ATC",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200S:txtsched1Desc0": {
+      "label": "Description",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200S:txtsched1TaxBracket0": {
+      "label": "Tax Bracket/Unit of Measure",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200S:txtsched1AppTaxRate0": {
+      "label": "Applicable Tax Rate",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200S:txtsched1SalesValue0": {
+      "label": "Sales Value (in Peso)",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200S:txtsched1VolumeRemovals0": {
+      "label": "Volume of Removals",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200S:txtsched1BasicTaxDue0": {
+      "label": "Basic Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+    },
+    "frm2200SoptRegion": {
+      "label": "Region",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 12 Place of Production"
+    },
+    "frm2200SoptProvince": {
+      "label": "Province",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 12 Place of Production"
+    },
+    "frm2200SoptCity": {
+      "label": "City",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 12 Place of Production"
+    },
+    "frm2200SoptRegion1": {
+      "label": "Region",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 13 Place of Removal"
+    },
+    "frm2200SoptProvince1": {
+      "label": "Province",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 13 Place of Removal"
+    },
+    "frm2200SoptCity1": {
+      "label": "City",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html item 13 Place of Removal"
+    },
+    "frm2200S:txtAgency35": {
+      "label": "Drawee Bank/Agency",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part IV item 29 column"
+    },
+    "frm2200S:totalTaxDue": {
+      "label": "Grand Total Excise Tax Due",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 last line"
+    },
+    "item:4:7": {
+      "label": "Others (specify), further rows",
+      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 'Others (specify) 1. 2.' rows"
     }
   },
   "2200T": {

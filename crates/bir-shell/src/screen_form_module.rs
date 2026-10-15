@@ -138,6 +138,9 @@ fn schema() -> &'static [Value] {
             let code = form["c"].as_str().unwrap_or_default().to_string();
             if let Some(fixes) = overrides.get(&code).and_then(Value::as_object) {
                 apply_overrides(form, fixes);
+                if let Some(layout) = fixes.get("layout") {
+                    apply_layout(form, layout);
+                }
             }
             hide_repeated_occurrences(form);
         }
@@ -290,6 +293,153 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
             }
         }
     }
+}
+
+/// A `layout` correction: the printed sheet's own structure for a form whose
+/// extracted items follow another numbering (the official program's
+/// fields.json). `parts: [{n, items: [{no, l, k: [field keys]} |
+/// {table: <cell key>}], keep}]` rebuilds the form in that order, after
+/// every other correction; a `table` entry takes the whole schedule table
+/// holding that cell, and `keep: <part index>` appends that extracted part's
+/// items (less what the layout names elsewhere) unchanged, its name too when
+/// `n` is absent. Whatever the layout does not name keeps its own label and
+/// goes to a last part (`rest`, "Not on the printed sheet") without an item
+/// number, so no control is lost.
+fn apply_layout(form: &mut Value, layout: &Value) {
+    let Some(old_parts) = form["parts"].as_array().cloned() else {
+        return;
+    };
+    let specs: Vec<&Value> = layout["parts"].as_array().into_iter().flatten().collect();
+    let named_items = || {
+        specs
+            .iter()
+            .flat_map(|p| p["items"].as_array().into_iter().flatten())
+    };
+    // What the layout places itself: field keys, and every cell of a named table.
+    let mut claimed: BTreeSet<String> = named_items()
+        .flat_map(|it| it["k"].as_array().into_iter().flatten())
+        .filter_map(|k| k.as_str().map(str::to_string))
+        .collect();
+    let table_keys = |item: &Value| -> Vec<String> {
+        item["keys"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|row| row.as_array().into_iter().flatten())
+            .filter_map(|k| k.as_str().map(str::to_string))
+            .collect()
+    };
+    let mut fields: BTreeMap<String, (Value, Value)> = BTreeMap::new();
+    let mut tables: Vec<Value> = Vec::new();
+    for part in &old_parts {
+        for item in part["items"].as_array().into_iter().flatten() {
+            if item.get("rows").is_some() {
+                tables.push(item.clone());
+            }
+            for field in item["f"].as_array().into_iter().flatten() {
+                if let Some(key) = field["k"].as_str() {
+                    fields.insert(key.to_string(), (field.clone(), item["p"].clone()));
+                }
+            }
+        }
+    }
+    let wanted_tables: Vec<&str> = named_items()
+        .filter_map(|it| it["table"].as_str())
+        .collect();
+    for table in &tables {
+        let keys = table_keys(table);
+        if keys.iter().any(|k| wanted_tables.contains(&k.as_str())) {
+            claimed.extend(keys);
+        }
+    }
+    let mut kept = BTreeSet::new();
+    // An extracted item less what the layout claims; None when nothing is left.
+    let remainder = |item: &Value, claimed: &BTreeSet<String>, number: bool| -> Option<Value> {
+        if item.get("rows").is_some() {
+            let keys = table_keys(item);
+            return (!keys.iter().any(|k| claimed.contains(k))).then(|| item.clone());
+        }
+        let left: Vec<Value> = item["f"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|f| f["k"].as_str().is_some_and(|k| !claimed.contains(k)))
+            .cloned()
+            .collect();
+        if left.is_empty() {
+            return None;
+        }
+        let mut item = item.clone();
+        item["f"] = Value::Array(left);
+        if !number {
+            item["no"] = Value::from("");
+        }
+        Some(item)
+    };
+    let mut parts = Vec::new();
+    for spec in &specs {
+        let mut items = Vec::new();
+        for entry in spec["items"].as_array().into_iter().flatten() {
+            if let Some(cell) = entry["table"].as_str() {
+                if let Some(table) = tables
+                    .iter()
+                    .find(|t| table_keys(t).iter().any(|k| k == cell))
+                {
+                    items.push(table.clone());
+                }
+                continue;
+            }
+            let mut page = Value::Null;
+            let chosen: Vec<Value> = entry["k"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .filter_map(|key| fields.get(key).cloned())
+                .map(|(field, p)| {
+                    if page.is_null() {
+                        page = p;
+                    }
+                    field
+                })
+                .collect();
+            if !chosen.is_empty() {
+                items.push(json!({ "no": entry["no"].clone(), "l": entry["l"].clone(), "p": page, "f": chosen }));
+            }
+        }
+        let mut name = spec["n"].clone();
+        if let Some(i) = spec["keep"].as_u64().map(|i| i as usize)
+            && let Some(old) = old_parts.get(i)
+        {
+            kept.insert(i);
+            if name.is_null() {
+                name = old["n"].clone();
+            }
+            items.extend(
+                old["items"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|it| remainder(it, &claimed, true)),
+            );
+        }
+        parts.push(json!({ "n": name, "items": items }));
+    }
+    // The rest, in its extracted order and grouping.
+    let rest: Vec<Value> = old_parts
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !kept.contains(i))
+        .flat_map(|(_, part)| part["items"].as_array().cloned().unwrap_or_default())
+        .filter_map(|it| remainder(&it, &claimed, false))
+        .collect();
+    if !rest.is_empty() {
+        let name = layout["rest"]
+            .as_str()
+            .unwrap_or("Not on the printed sheet");
+        parts.push(json!({ "n": name, "items": rest }));
+    }
+    form["parts"] = Value::Array(parts);
 }
 
 /// Take the field `key` out of its item and append it to the item `fix.to`
@@ -1549,9 +1699,41 @@ mod tests {
                         || key.starts_with("table:")
                         || key.starts_with("add:")
                         || key.strip_prefix("move:").is_some_and(|k| keys.contains(k))
+                        || key == "layout"
                         || keys.contains(key),
                     "{code}: override {key} names no control"
                 );
+            }
+            // A printed-sheet layout names each control once, and only
+            // controls the form has; what it leaves out is kept in the last
+            // part, so the form loses nothing.
+            if let Some(layout) = fixes.get("layout") {
+                let mut seen = BTreeSet::new();
+                let named = layout["parts"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|p| p["items"].as_array().into_iter().flatten())
+                    .flat_map(|it| it["k"].as_array().into_iter().flatten())
+                    .filter_map(Value::as_str);
+                for key in named {
+                    assert!(keys.contains(key), "{code}: layout names {key}, no control");
+                    assert!(seen.insert(key), "{code}: layout names {key} twice");
+                }
+                let form = schema().iter().find(|f| f["c"] == code.as_str()).unwrap();
+                let built = form["parts"].as_array().unwrap();
+                for (i, part) in layout["parts"].as_array().unwrap().iter().enumerate() {
+                    // A `keep` part without its own name keeps the extracted one.
+                    if !part["n"].is_null() {
+                        assert_eq!(built[i]["n"], part["n"], "{code}: layout part {i} moved");
+                    }
+                    assert!(
+                        built[i]["items"]
+                            .as_array()
+                            .is_some_and(|items| !items.is_empty()),
+                        "{code}: layout part {i} came out empty"
+                    );
+                }
             }
         }
     }
