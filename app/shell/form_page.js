@@ -71,9 +71,10 @@ function selectBox(cx, ui, k, label, listedRaw, value, locked, width) {
   const options = [{ value: "", label: "Choose…" }, ...listed];
   const selected = listed.find((o) => o.selected);
   const known = options.some((o) => o.value === value);
-  // Unknown all-zero codes (0, 00, 000) are the official runtime's empty
-  // choices (excise locations, an empty RDO). A listed 0 stays selectable.
-  const shown = selected ? selected.value : known ? value : /^0+$/.test(value) ? "" : value;
+  // Unknown all-zero codes (0, 00, 000) and a lone "-" (2000's ATC writer)
+  // are the official runtime's empty choices (excise locations, an empty
+  // RDO). A listed 0 or "-" stays selectable.
+  const shown = selected ? selected.value : known ? value : /^(0+|-)$/.test(value) ? "" : value;
   if (shown && !selected && !known) options.push({ value: shown, label: shown });
   if (locked) return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
   return Dropdown(cx, `fp-${k}`, {
