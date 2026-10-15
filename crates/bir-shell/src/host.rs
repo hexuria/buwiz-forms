@@ -5,9 +5,11 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gpui::{
-    App, Bounds, TitlebarOptions, Window, WindowBounds, WindowDecorations, WindowOptions, point,
-    px, size,
+// GPUI comes through the Kit so the `gpui-fast` feature switches this host
+// along with gpui-shell and the components (one engine in the build).
+use gpui_kit::{
+    App, Bounds, Pixels, Size, TitlebarOptions, Window, WindowBounds, WindowDecorations,
+    WindowOptions, point, px, size,
 };
 use gpui_shell::{
     AppAssets, Capabilities, ShellRuntime, export_module, init_with_components, on_exit_request,
@@ -58,7 +60,7 @@ fn capabilities() -> Capabilities {
 pub fn run(root: PathBuf) -> anyhow::Result<()> {
     let root = resolve_app_root(&root, "main.js").unwrap_or(root);
 
-    gpui_platform::application()
+    gpui_kit::platform::application()
         .with_assets(AppAssets::new(root.clone()))
         .run(move |cx| {
             let components =
@@ -121,22 +123,65 @@ fn open_main_window(cx: &mut App, runtime: Rc<ShellRuntime>, root: PathBuf) {
         if let Some(size) = requested_window_size() {
             hold_window_size(window, cx, size);
         }
+        if std::env::var_os("BIR_SHELL_METRICS").is_some() {
+            log_runtime_metrics(window, cx, runtime.clone());
+        }
         runtime.load(&root, window, cx)
     })
     .expect("main window must open");
+}
+
+/// Development aid: `BIR_SHELL_METRICS=1` logs what the script runtime spent
+/// over each second that had activity — how many times JavaScript `render`
+/// ran and what one run cost, and how many times a description was turned
+/// back into GPUI elements (scrolling and hover do this without running any
+/// script). Compare debug and release, or two versions of a screen, with it.
+fn log_runtime_metrics(window: &mut Window, cx: &mut App, runtime: Rc<ShellRuntime>) {
+    window
+        .spawn(cx, async move |cx| {
+            tracing::info!(target: "bir_shell::metrics", "runtime metrics: logging each active second");
+            let mut last = runtime.read_metrics();
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_secs(1))
+                    .await;
+                let now = runtime.read_metrics();
+                let delta = now.since(&last);
+                last = now;
+                if delta.script_renders() == 0 && delta.materializations() == 0 {
+                    continue;
+                }
+                tracing::info!(
+                    target: "bir_shell::metrics",
+                    "script renders {} (mean {:.2} ms, slowest {:.2} ms, host calls {:.2} ms) | materializations {} (mean {:.2} ms, total {:.1} ms)",
+                    delta.script_renders(),
+                    ms(delta.mean_script_render()),
+                    ms(delta.slowest_script_render()),
+                    ms(delta.mean_native()),
+                    delta.materializations(),
+                    ms(delta.mean_materialize()),
+                    ms(delta.materialize_time()),
+                );
+            }
+        })
+        .detach();
+}
+
+fn ms(duration: std::time::Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
 }
 
 /// Development aid for side-by-side checks against the design prototype:
 /// `BIR_SHELL_WINDOW_SIZE=800x900` sizes the window. A tiling window manager
 /// may re-tile it when it opens, so the size is re-applied for a few seconds
 /// (long enough to float the window there).
-fn requested_window_size() -> Option<gpui::Size<gpui::Pixels>> {
+fn requested_window_size() -> Option<Size<Pixels>> {
     let raw = std::env::var("BIR_SHELL_WINDOW_SIZE").ok()?;
     let (w, h) = raw.split_once('x')?;
     Some(size(px(w.trim().parse().ok()?), px(h.trim().parse().ok()?)))
 }
 
-fn hold_window_size(window: &mut Window, cx: &mut App, target: gpui::Size<gpui::Pixels>) {
+fn hold_window_size(window: &mut Window, cx: &mut App, target: Size<Pixels>) {
     window
         .spawn(cx, async move |cx| {
             for _ in 0..12 {

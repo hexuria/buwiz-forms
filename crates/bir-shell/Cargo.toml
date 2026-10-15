@@ -21,6 +21,14 @@ path = "src/lib.rs"
 name = "bir-shell"
 path = "src/main.rs"
 
+[features]
+# GPUI Fast (https://gpui-kit.com/docs/installation/#optional-gpui-fast-backend):
+# its retained rendering and layout engine in place of upstream GPUI, across
+# gpui-shell, the Kit and the components together. The host imports GPUI only
+# through `gpui_kit`, so one feature switches every layer; never mix a direct
+# upstream `gpui` import with it.
+gpui-fast = ["gpui-kit/gpui-fast", "gpui-shell/gpui-fast", "gpui-component/gpui-fast"]
+
 [dependencies]
 # gpui-shell is published only via the monorepo git (the crates.io `gpui-shell`
 # 0.1.0 is an empty placeholder). All monorepo crates share ONE rev so the
@@ -62,3 +70,44 @@ totp-rs = "5.7.1"
 # versions collide (`ModuleDef` trait conflict).
 [patch.crates-io]
 rquickjs = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
+
+# Debug builds optimize the packages every frame runs through, so `just run`
+# feels like the release app. This crate is its own workspace root, so the
+# repository root's `[profile.dev.package."*"]` does not reach it, and a
+# library cannot impose a profile on its host: every host repeats it. The list
+# is the union of GPUI Kit's "Improve development runtime performance"
+# (https://gpui-kit.com/docs/installation/#improve-development-runtime-performance)
+# and gpui-shell's "Building for development" (website/shell/hosting.md).
+# Without it the Form library measured 51 ms per script render and 12 frames a
+# second while rebuilding in a debug build.
+#
+# quickjs-jit is a facade: the interpreter (`-sys`, C built through cc, which
+# reads this opt-level) and the value bindings (`-core`) must be named
+# themselves. gpui-shell is added to the upstream list because here it is a
+# dependency: it records every builder call a script render makes and
+# materializes the result into elements on scroll and hover.
+[profile.dev.package]
+resvg = { opt-level = 3 }
+rustybuzz = { opt-level = 3 }
+taffy = { opt-level = 3 }
+ttf-parser = { opt-level = 3 }
+smol = { opt-level = 3 }
+gpui-pre = { opt-level = 3 }
+gpui-pre-platform = { opt-level = 3 }
+gpui-pre-macros = { opt-level = 3 }
+gpui-pre-sum-tree = { opt-level = 3 }
+gpui-fast = { opt-level = 3 }
+gpui-fast-platform = { opt-level = 3 }
+gpui-component = { opt-level = 3 }
+gpui-kit = { opt-level = 3 }
+gpui-kit-assets = { opt-level = 3 }
+ropey = { opt-level = 3 }
+lsp-types = { opt-level = 3 }
+markdown = { opt-level = 3 }
+xml5ever = { opt-level = 3 }
+quickjs-jit = { opt-level = 3 }
+quickjs-jit-runtime = { opt-level = 3 }
+quickjs-jit-sys = { opt-level = 3 }
+quickjs-jit-core = { opt-level = 3 }
+cap-std = { opt-level = 3 }
+gpui-shell = { opt-level = 3 }
