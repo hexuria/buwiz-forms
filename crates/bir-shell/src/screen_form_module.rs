@@ -212,8 +212,30 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
             append_table(parts, part, fix);
         }
     }
+    // `move:<field key>` with `to: "<part>:<item>"`: a field the extractor
+    // grouped under the wrong item moves to the printed item it belongs to.
+    // `to: "<part>:new:<no>"` with `item: {l, order}` moves it to printed
+    // item `<no>` (one per `<no>` and heading), which the extractor left
+    // out, appended at the part's end.
+    // The emptied item stays (indexes hold) and the page skips it.
     for (key, fix) in fixes {
-        if key.starts_with("table:") {
+        if let Some(field_key) = key.strip_prefix("move:") {
+            move_field(parts, field_key, fix);
+        }
+    }
+    // Added items sit after every extracted item, ordered by their `order`
+    // (the overrides map's own order is not relied on).
+    for part in parts.iter_mut() {
+        if let Some(items) = part["items"].as_array_mut() {
+            let first = items
+                .iter()
+                .position(|it| it["added"] == true)
+                .unwrap_or(items.len());
+            items[first..].sort_by_key(|it| it["order"].as_i64().unwrap_or(i64::MAX));
+        }
+    }
+    for (key, fix) in fixes {
+        if key.starts_with("table:") || key.starts_with("move:") {
             continue;
         }
         // `add:<part>:<item>`: a bound control the extracted schema left out,
@@ -265,6 +287,68 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
                 }
             }
         }
+    }
+}
+
+/// Take the field `key` out of its item and append it to the item `fix.to`
+/// names (`<part>:<item>`, or `<part>:new:<no>` for a printed item the
+/// extractor left out). Nothing changes when the field or target is missing.
+fn move_field(parts: &mut [Value], key: &str, fix: &Value) {
+    let to: Vec<&str> = fix["to"].as_str().unwrap_or_default().split(':').collect();
+    let Some(p) = to.first().and_then(|n| n.parse::<usize>().ok()) else {
+        return;
+    };
+    let new_no = match to.as_slice() {
+        [_, "new", no] => Some(*no),
+        _ => None,
+    };
+    let index = to.get(1).and_then(|n| n.parse::<usize>().ok());
+    let Some(items) = parts.get(p).and_then(|part| part["items"].as_array()) else {
+        return;
+    };
+    if new_no.is_none() && index.is_none_or(|i| i >= items.len()) {
+        return;
+    }
+    let mut taken = None;
+    for part in parts.iter_mut() {
+        for item in part["items"].as_array_mut().into_iter().flatten() {
+            let page = item["p"].clone();
+            if let Some(fields) = item["f"].as_array_mut()
+                && let Some(n) = fields.iter().position(|f| f["k"] == key)
+            {
+                taken = Some((fields.remove(n), page));
+            }
+        }
+    }
+    let Some((field, page)) = taken else {
+        return;
+    };
+    let Some(items) = parts[p]["items"].as_array_mut() else {
+        return;
+    };
+    let i = match new_no {
+        Some(no) => match items
+            .iter()
+            .position(|it| it["added"] == true && it["no"] == no && it["l"] == fix["item"]["l"])
+        {
+            Some(i) => i,
+            None => {
+                items.push(json!({
+                    "no": no,
+                    "l": fix["item"]["l"].clone(),
+                    "p": page,
+                    "f": [],
+                    "added": true,
+                    "order": fix["item"]["order"].clone(),
+                }));
+                items.len() - 1
+            }
+        },
+        None => index.unwrap_or_default(),
+    };
+    match items[i]["f"].as_array_mut() {
+        Some(fields) => fields.push(field),
+        None => items[i]["f"] = Value::Array(vec![field]),
     }
 }
 
@@ -1428,6 +1512,7 @@ mod tests {
                     key.starts_with("item:")
                         || key.starts_with("table:")
                         || key.starts_with("add:")
+                        || key.strip_prefix("move:").is_some_and(|k| keys.contains(k))
                         || keys.contains(key),
                     "{code}: override {key} names no control"
                 );

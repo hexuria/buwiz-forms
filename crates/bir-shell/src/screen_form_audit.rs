@@ -1970,18 +1970,77 @@ fn symptom_r05_every_validation_error_names_a_screen_key() {
     );
 }
 
+/// 1800's branch code is the last segment of item 5, the donor's TIN; the
+/// donee rows are a separate item the filer types, never the donor's identity.
 #[test]
-#[ignore = "P4: 1800's branch code sits under Additional details, not with the donor TIN"]
 fn symptom_p4_1800_branch_code_sits_with_the_donor_tin() {
-    let field = schema_fields("1800")
-        .into_iter()
-        .find(|f| f.key == "frm1800v2018:txtBranchCode")
-        .expect("1800 branch code is on screen");
+    let fields = schema_fields("1800");
+    let item_of = |key: &str| {
+        fields
+            .iter()
+            .find(|f| f.key == key)
+            .unwrap_or_else(|| panic!("{key} is on screen"))
+            .item
+            .clone()
+    };
+    let donor = item_of("frm1800v2018:txtTIN1");
     assert!(
-        field.item.contains("Taxpayer Identification Number"),
-        "frm1800v2018:txtBranchCode is under {:?}",
-        field.item
+        donor.contains("Donor’s Taxpayer Identification Number"),
+        "{donor:?}"
     );
+    assert_eq!(item_of("frm1800v2018:txtBranchCode"), donor);
+    let census = effective_census();
+    let class = |key: &str| {
+        census["forms"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|f| f["code"] == "1800")
+            .flat_map(|f| f["list"].as_array().into_iter().flatten())
+            .find(|e| e["k"] == key)
+            .map(|e| e["class"].as_str().unwrap_or_default().to_string())
+            .unwrap_or_default()
+    };
+    for row in ["A", "B", "C", "D", "E"] {
+        for key in [
+            format!("frm1800v2018:txtDoneeName{row}"),
+            format!("frm1800v2018:txtDoneeTIN{row}"),
+        ] {
+            assert_ne!(item_of(&key), donor, "{key} sits with the donor TIN");
+            assert_eq!(class(&key), "editable", "{key} is not typed by the filer");
+        }
+    }
+}
+
+/// P2a found 1603Q's tax-relief controls under "12 Email Address" and
+/// 1604C's refund date in an unlabelled group; they sit with their printed
+/// items (1603Q 13/13A, 1604C 11).
+#[test]
+fn symptom_p4_relief_and_refund_controls_sit_with_their_printed_items() {
+    let item_of = |code: &str, key: &str| {
+        schema_fields(code)
+            .into_iter()
+            .find(|f| f.key == key)
+            .unwrap_or_else(|| panic!("{code} {key} is on screen"))
+            .item
+    };
+    assert_eq!(item_of("1603Q", "txtEmail"), "12 Email Address");
+    for key in ["frm1603Q:SpecialTax_1", "frm1603Q:SpecialTax_2"] {
+        assert!(item_of("1603Q", key).starts_with("13 Are there payees availing of tax relief"));
+    }
+    assert_eq!(
+        item_of("1603Q", "frm1603Q:selTreaty"),
+        "13A If yes, specify"
+    );
+    let refund = item_of("1604C", "frm1604c:releasedOfFunds_1");
+    assert!(refund.starts_with("11 "), "{refund:?}");
+    for key in [
+        "frm1604c:txtRefMonth",
+        "frm1604c:txtRefDate",
+        "frm1604c:txtRefYear",
+    ] {
+        assert_eq!(item_of("1604C", key), refund, "{key}");
+    }
 }
 
 // ------------------------------------------------------------- P1 controls
