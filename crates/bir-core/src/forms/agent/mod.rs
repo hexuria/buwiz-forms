@@ -633,8 +633,40 @@ pub fn fill(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
+    fill_box(kind, draft, key, value, false)
+}
+
+/// [`fill`] for the user's own form page. The one difference: an income-tax
+/// election ([`Lock::Election`]) is the user's to answer, so it is written;
+/// the assistant is still refused it through [`fill`]. Identity, profile,
+/// computed, hidden and unbound boxes are refused exactly as in [`fill`].
+pub fn fill_as_user(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    fill_box(kind, draft, key, value, true)
+}
+
+fn fill_box(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+    user: bool,
+) -> Result<(), String> {
     let def = kind.definition();
-    if let Some(reason) = def.refusal(key) {
+    let election = matches!(
+        def.bindings.get(key),
+        Some(BoundBox {
+            lock: Some(Lock::Election),
+            ..
+        })
+    );
+    if let Some(reason) = def.refusal(key)
+        && !(user && election)
+    {
         return Err(reason);
     }
     let bound = def
@@ -1070,6 +1102,40 @@ pub fn card_boxes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_user_answers_an_election_the_assistant_may_not() {
+        let kind = AgentFormKind::Form2551Q;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "store@example.test",
+            "default_form_type": "2551Qv2018"
+        }))
+        .unwrap();
+        let mut draft =
+            serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+        let refused = fill(kind, &mut draft, "frm2551Qv2018:taxRate", &Value::from("2"));
+        assert!(refused.unwrap_err().contains("election"));
+        fill_as_user(kind, &mut draft, "frm2551Qv2018:taxRate", &Value::from("2")).unwrap();
+        assert_eq!(draft["item_13_election"], "eight_percent");
+        // Profile and identity boxes stay refused for the user too.
+        let def = kind.definition();
+        for (key, bound) in &def.bindings {
+            if matches!(bound.lock, Some(Lock::Profile | Lock::Identity)) {
+                assert!(
+                    fill_as_user(kind, &mut draft, key, &Value::from("x")).is_err(),
+                    "{key}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn every_form_has_pinned_data_for_its_package() {
