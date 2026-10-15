@@ -130,7 +130,7 @@ fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Va
         };
         return Some(rows.into_iter().map(|(c, n)| code_option(c, n)).collect());
     }
-    if matches!(kind.definition().bindings.get(key).map(|b| &b.binding), Some(Binding::Text { path, .. }) if path == "/rdo_code")
+    if matches!(kind.definition().bindings.get(key).map(|b| &b.binding), Some(Binding::Text { path, .. }) if path == "/rdo_code" || path.ends_with("/rdo_code"))
     {
         return Some(
             reference::get_all_rdos()

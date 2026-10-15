@@ -1799,9 +1799,8 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
         .map(|n| n.as_u64().unwrap() as usize)
         .sum();
     assert_eq!(by_class, total, "class totals cover every control once");
-    // The dropdowns still without choices: the baseline's D01-D10 less the
-    // ones P1 has given their official choices (D01-D06, D09, D10),
-    // in the order the catalog coverage test pins.
+    // No dropdown is left without choices: P1 resolved the baseline's
+    // D01-D10 (the catalog coverage test pins the same).
     let missing: Vec<String> = census["forms"]
         .as_array()
         .unwrap()
@@ -1810,13 +1809,7 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
         .filter(|c| c["dropdown"] == "missing")
         .map(|c| c["id"].as_str().unwrap().replacen(':', " ", 1))
         .collect();
-    assert_eq!(
-        missing,
-        [
-            "1801 frm1801v2018:sched4Rdo_{index}",
-            "2000 drpATCCode{index}",
-        ]
-    );
+    assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
     assert_eq!(supplied, 80, "catalog lists, dependent ones included");
@@ -2453,4 +2446,210 @@ fn p1_1800_day_of_donation_is_a_day_select() {
         .find(|f| f.key == "frm1800v2018:txtDate")
         .unwrap();
     assert_eq!(field.kind, "sel");
+}
+
+/// D07: 1801 Part V schedules are tables of their concrete, bound rows
+/// (no `{index}` row template is shown), and two Schedule 4 rows keep
+/// distinct names, RDOs and amounts through save, reopen and print.
+#[test]
+fn p1_1801_schedules_are_tables_of_bound_rows() {
+    let code = "1801";
+    let kind = kind_of(code).unwrap();
+    let def = kind.definition();
+    let form = schema_entry(code).unwrap();
+    let items: Vec<&Value> = form["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|p| p["items"].as_array().unwrap())
+        .collect();
+    let tables: Vec<&str> = items
+        .iter()
+        .filter(|it| it["rows"].as_u64().is_some())
+        .map(|it| it["l"].as_str().unwrap())
+        .collect();
+    for want in [
+        "Schedule 1 — Real properties",
+        "Schedule 1A — Family home",
+        "Schedule 2 — Shares of stock",
+        "Schedule 2A — Other personal properties",
+        "Schedule 3 — Taxable transfers",
+        "Schedule 4 — Business interest",
+    ] {
+        assert!(tables.contains(&want), "{want} table: {tables:?}");
+    }
+    for item in items.iter().filter(|it| it["rows"].as_u64().is_some()) {
+        for key in item["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|r| r.as_array().unwrap())
+        {
+            let key = key.as_str().unwrap();
+            assert!(def.bindings.contains_key(key), "{key} is not a bound box");
+        }
+    }
+    for field in schema_fields(code)
+        .iter()
+        .filter(|f| f.key.contains("{index}"))
+    {
+        assert_eq!(field.kind, "hidden", "{} is still shown", field.key);
+    }
+    // Two business interests, entered in the table, kept apart.
+    seed_fictional_profile();
+    let period = page_period_for(code);
+    let opened = open(code, period).unwrap();
+    let rows = json!({
+        "frm1801v2018:sched4Name_1": "ALPHA TRADING",
+        "frm1801v2018:sched4Address_1": "1 ALPHA ST, MAKATI",
+        "frm1801v2018:sched4Rdo_1": "047",
+        "frm1801v2018:sched4Exc_1": "1000.00",
+        "frm1801v2018:sched4Conj_1": "250.00",
+        "frm1801v2018:sched4Name_2": "BETA SERVICES",
+        "frm1801v2018:sched4Address_2": "2 BETA AVE, PASIG",
+        "frm1801v2018:sched4Rdo_2": "043",
+        "frm1801v2018:sched4Exc_2": "2000.00",
+        "frm1801v2018:sched4Conj_2": "500.00",
+    });
+    let filled = call(
+        "screen_form_fill",
+        vec![
+            code.into(),
+            json(opened["draft"].clone()),
+            json(rows.clone()),
+        ],
+    )
+    .unwrap();
+    assert!(
+        filled["rejected"].as_object().is_none_or(|r| r.is_empty()),
+        "{}",
+        filled["rejected"]
+    );
+    call(
+        "screen_form_save",
+        vec![code.into(), json(filled["draft"].clone())],
+    )
+    .unwrap();
+    let reopened = open(code, period).unwrap();
+    let values = string_map(&reopened["values"]);
+    let printed = with_database(|db| print_map(db, kind, &reopened["draft"]))
+        .unwrap()
+        .0;
+    for (key, want) in rows.as_object().unwrap() {
+        let want = want.as_str().unwrap();
+        for (side, got) in [("page", values.get(key)), ("print", printed.get(key))] {
+            let got = got.cloned().unwrap_or_default();
+            assert_ne!(
+                compare(want, &got),
+                "value",
+                "{key} on the {side}: {got:?}, entered {want:?}"
+            );
+        }
+    }
+    let interests = reopened["draft"]["business_interests"].as_array().unwrap();
+    assert_eq!(interests[0]["rdo_code"], "047");
+    assert_eq!(interests[1]["rdo_code"], "043");
+    // The RDO cells offer the RDO list.
+    assert!(
+        reopened["options"]["frm1801v2018:sched4Rdo_1"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().any(|o| o["value"] == "047")),
+        "sched4Rdo_1 has the RDO list"
+    );
+}
+
+/// D08: 2000's Schedule 1 ATC rows are its concrete rows 0-2 (the `{index}`
+/// template is not shown). Both DS112 variants in two rows stay independent
+/// and ordered, keep their own tax due, reopen and print as chosen, and no
+/// UI token or template key reaches the saved draft.
+#[test]
+fn p1_2000_atc_rows_stay_independent_and_ordered() {
+    let code = "2000";
+    let kind = kind_of(code).unwrap();
+    for field in schema_fields(code)
+        .iter()
+        .filter(|f| f.key.contains("{index}"))
+    {
+        assert_eq!(field.kind, "hidden", "{} is still shown", field.key);
+    }
+    seed_fictional_profile();
+    let period = page_period_for(code);
+    let opened = open(code, period).unwrap();
+    let ds112: Vec<Value> = opened["options"]["drpATCCode0"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|o| {
+            o["label"]
+                .as_str()
+                .unwrap_or_default()
+                .starts_with("DS112 —")
+        })
+        .cloned()
+        .collect();
+    assert_eq!(ds112.len(), 2, "two DS112 choices");
+    let filled = call(
+        "screen_form_fill",
+        vec![
+            code.into(),
+            json(opened["draft"].clone()),
+            json(json!({
+                "drpATCCode0": ds112[0]["value"],
+                "frm2000:sched1:txtTaxBase0": "1000",
+                "drpATCCode1": ds112[1]["value"],
+                "frm2000:sched1:txtTaxBase1": "1000",
+            })),
+        ],
+    )
+    .unwrap();
+    assert!(
+        filled["rejected"].as_object().is_none_or(|r| r.is_empty()),
+        "{}",
+        filled["rejected"]
+    );
+    call(
+        "screen_form_save",
+        vec![code.into(), json(filled["draft"].clone())],
+    )
+    .unwrap();
+    let reopened = open(code, period).unwrap();
+    let rows = reopened["draft"]["schedule1"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["atc_code"], "DS112");
+    assert_eq!(rows[1]["atc_code"], "DS112");
+    assert_ne!(
+        rows[0]["description"], rows[1]["description"],
+        "distinct DS112 variants"
+    );
+    assert_ne!(
+        rows[0]["tax_due"], rows[1]["tax_due"],
+        "each keeps its own calculation"
+    );
+    for (row, choice) in [("drpATCCode0", &ds112[0]), ("drpATCCode1", &ds112[1])] {
+        let selected: Vec<&Value> = reopened["options"][row]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|o| o["selected"] == true)
+            .collect();
+        assert_eq!(selected.len(), 1, "{row}");
+        assert_eq!(
+            selected[0]["value"], choice["value"],
+            "{row} keeps its choice"
+        );
+    }
+    let printed = with_database(|db| print_map(db, kind, &reopened["draft"]))
+        .unwrap()
+        .0;
+    assert_eq!(
+        printed.get("drpATCCode0").map(String::as_str),
+        Some("DS112")
+    );
+    assert_eq!(
+        printed.get("drpATCCode1").map(String::as_str),
+        Some("DS112")
+    );
+    let saved = reopened["draft"].to_string();
+    assert!(!saved.contains("catalog:"), "no UI token saved");
+    assert!(!saved.contains("{index}"), "no template key saved");
 }

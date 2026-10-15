@@ -205,7 +205,17 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
     let Some(parts) = form["parts"].as_array_mut() else {
         return;
     };
+    // Tables first, so a cell key's correction (a column's options) finds
+    // the table it belongs to.
     for (key, fix) in fixes {
+        if let Some(part) = key.strip_prefix("table:") {
+            append_table(parts, part, fix);
+        }
+    }
+    for (key, fix) in fixes {
+        if key.starts_with("table:") {
+            continue;
+        }
         if let Some(rest) = key.strip_prefix("item:") {
             let mut indexes = rest.split(':').filter_map(|n| n.parse::<usize>().ok());
             if let (Some(p), Some(i)) = (indexes.next(), indexes.next())
@@ -240,6 +250,97 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
                 }
             }
         }
+    }
+}
+
+/// A `table:<part>:<name>` correction: the row-template fields `templates`
+/// of part `<part>` (keys with `{index}`, in column order) become a schedule
+/// table appended to that part, with rows `rows[0]..=rows[1]` (`{index}`
+/// replaced by the row number, in the template key or in its `row_keys`
+/// pattern when the official row key differs) and `cols` captions; the
+/// template fields are hidden. Appending keeps every existing
+/// `item:<part>:<index>` correction pointing at the same item. Each row key
+/// must be a box the agent definition binds (a test checks).
+fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
+    let Some(part) = spec
+        .split(':')
+        .next()
+        .and_then(|p| p.parse::<usize>().ok())
+        .and_then(|p| parts.get_mut(p))
+    else {
+        return;
+    };
+    let wanted: Vec<&str> = fix["templates"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    let (first, last) = (
+        fix["rows"][0].as_u64().unwrap_or(1),
+        fix["rows"][1].as_u64().unwrap_or(0),
+    );
+    let captions = fix["cols"].as_array().cloned().unwrap_or_default();
+    // Find every template first; hide them only when the table can be built.
+    let mut found: BTreeMap<&str, Value> = BTreeMap::new();
+    let mut page = Value::Null;
+    for item in part["items"].as_array().into_iter().flatten() {
+        for field in item["f"].as_array().into_iter().flatten() {
+            let key = field["k"].as_str().unwrap_or_default();
+            if let Some(name) = wanted.iter().find(|w| **w == key) {
+                found.insert(name, field.clone());
+                page = item["p"].clone();
+            }
+        }
+    }
+    let templates: Vec<Value> = wanted.iter().filter_map(|k| found.remove(k)).collect();
+    if templates.is_empty() || templates.len() != wanted.len() {
+        return;
+    }
+    for item in part["items"].as_array_mut().into_iter().flatten() {
+        for field in item["f"].as_array_mut().into_iter().flatten() {
+            if wanted.contains(&field["k"].as_str().unwrap_or_default()) {
+                field["t"] = Value::from("hidden");
+            }
+        }
+    }
+    let cols: Vec<Value> = templates
+        .iter()
+        .enumerate()
+        .map(|(i, field)| {
+            let mut col = json!({
+                "l": captions.get(i).cloned().unwrap_or_else(|| field["l"].clone()),
+                "t": field["t"].clone(),
+            });
+            if field.get("c").is_some() {
+                col["c"] = field["c"].clone();
+            }
+            col
+        })
+        .collect();
+    let keys: Vec<Value> = (first..=last)
+        .map(|row| {
+            Value::Array(
+                templates
+                    .iter()
+                    .map(|field| {
+                        let template = field["k"].as_str().unwrap_or_default();
+                        let pattern = fix["row_keys"][template].as_str().unwrap_or(template);
+                        Value::from(pattern.replace("{index}", &row.to_string()))
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    if let Some(items) = part["items"].as_array_mut() {
+        items.push(json!({
+            "no": fix["no"].clone(),
+            "l": fix["label"].clone(),
+            "p": page,
+            "cols": cols,
+            "rows": keys.len(),
+            "keys": keys,
+        }));
     }
 }
 
@@ -1296,7 +1397,7 @@ mod tests {
             let keys = schema_keys(code);
             for key in fixes.as_object().unwrap().keys() {
                 assert!(
-                    key.starts_with("item:") || keys.contains(key),
+                    key.starts_with("item:") || key.starts_with("table:") || keys.contains(key),
                     "{code}: override {key} names no control"
                 );
             }
@@ -1724,16 +1825,10 @@ mod tests {
         );
         // Explicitly retain the non-catalog / unbound cases as open work.
         // They must not silently turn into an incomplete catalog rollout.
-        // D01-D06, D09 and D10 left this list with reviewed schema
+        // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
         assert_eq!(supplied, 80);
-        assert_eq!(
-            missing,
-            [
-                "1801 frm1801v2018:sched4Rdo_{index}",
-                "2000 drpATCCode{index}",
-            ]
-        );
+        assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
     #[test]

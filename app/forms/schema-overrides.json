@@ -3557,6 +3557,208 @@
     "item:0:2": {
       "label": "No. of Sheet/s Attached",
       "evidence": "ATC code from the neighbouring printed cell removed"
+    },
+    "table:4:sched1": {
+      "no": "",
+      "label": "Schedule 1 — Real properties",
+      "templates": [
+        "frm1801v2018:sched1Oct_{index}",
+        "frm1801v2018:sched1Td_{index}",
+        "frm1801v2018:sched1Loc_{index}",
+        "frm1801v2018:sched1Lot_{index}",
+        "frm1801v2018:sched1Area_{index}",
+        "frm1801v2018:sched1Class_{index}",
+        "frm1801v2018:sched1Fmv_{index}",
+        "frm1801v2018:sched1Zonal_{index}",
+        "frm1801v2018:sched1Exc_{index}",
+        "frm1801v2018:sched1Conj_{index}"
+      ],
+      "cols": [
+        "OCT/TCT/CCT No.",
+        "Tax declaration no.",
+        "Location",
+        "Lot / improvement",
+        "Area",
+        "Classification",
+        "FMV per TD",
+        "FMV per BIR (zonal value)",
+        "Exclusive",
+        "Conjugal"
+      ],
+      "rows": [
+        1,
+        21
+      ],
+      "row_keys": {
+        "frm1801v2018:sched1Class_{index}": "frm1801v2018:sched1Class_{index}'"
+      },
+      "evidence": "D07: Part V Schedule 1 — Real properties as concrete rows instead of the {index} row template; captions from the painted crates/bir-desktop/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+    },
+    "table:4:sched1A": {
+      "no": "",
+      "label": "Schedule 1A — Family home",
+      "templates": [
+        "frm1801v2018:sched1AOct_{index}",
+        "frm1801v2018:sched1ATd_{index}",
+        "frm1801v2018:sched1ALoc_{index}",
+        "frm1801v2018:sched1AArea_{index}",
+        "frm1801v2018:sched1AClass_{index}",
+        "frm1801v2018:sched1AFmv_{index}",
+        "frm1801v2018:sched1AZonal_{index}",
+        "frm1801v2018:sched1AExc_{index}",
+        "frm1801v2018:sched1AConj_{index}"
+      ],
+      "cols": [
+        "OCT/TCT/CCT No.",
+        "Tax declaration no.",
+        "Location",
+        "Area",
+        "Classification",
+        "FMV per TD",
+        "FMV per BIR (zonal value)",
+        "Exclusive",
+        "Conjugal"
+      ],
+      "rows": [
+        1,
+        7
+      ],
+      "row_keys": {
+        "frm1801v2018:sched1AClass_{index}": "frm1801v2018:sched1AClass_{index}'"
+      },
+      "evidence": "D07: Part V Schedule 1A — Family home as concrete rows instead of the {index} row template; captions from the painted crates/bir-desktop/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+    },
+    "table:4:sched2": {
+      "no": "",
+      "label": "Schedule 2 — Shares of stock",
+      "templates": [
+        "frm1801v2018:sched2Corp_{index}",
+        "frm1801v2018:sched2Class_{index}",
+        "frm1801v2018:sched2Stock_{index}",
+        "frm1801v2018:sched2Shares_{index}",
+        "frm1801v2018:sched2FmvPerShare_{index}",
+        "frm1801v2018:sched2Exc_{index}",
+        "frm1801v2018:sched2Conj_{index}"
+      ],
+      "cols": [
+        "Name of corporation",
+        "Listed / Not Listed",
+        "Stock certificate no.",
+        "No. of shares",
+        "FMV / book value per share",
+        "Exclusive",
+        "Conjugal"
+      ],
+      "rows": [
+        1,
+        7
+      ],
+      "evidence": "D07: Part V Schedule 2 — Shares of stock as concrete rows instead of the {index} row template; captions from the painted crates/bir-desktop/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+    },
+    "table:4:sched2A": {
+      "no": "",
+      "label": "Schedule 2A — Other personal properties",
+      "templates": [
+        "frm1801v2018:sched2AParticulars_{index}",
+        "frm1801v2018:sched2AExc_{index}",
+        "frm1801v2018:sched2AConj_{index}"
+      ],
+      "cols": [
+        "Particulars",
+        "Exclusive",
+        "Conjugal"
+      ],
+      "rows": [
+        1,
+        7
+      ],
+      "evidence": "D07: Part V Schedule 2A — Other personal properties as concrete rows instead of the {index} row template; captions from the painted crates/bir-desktop/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+    },
+    "table:4:sched3": {
+      "no": "",
+      "label": "Schedule 3 — Taxable transfers",
+      "templates": [
+        "frm1801v2018:sched3Particulars_{index}",
+        "frm1801v2018:sched3Exc_{index}",
+        "frm1801v2018:sched3Conj_{index}"
+      ],
+      "cols": [
+        "Particulars",
+        "Exclusive",
+        "Conjugal"
+      ],
+      "rows": [
+        1,
+        7
+      ],
+      "evidence": "D07: Part V Schedule 3 — Taxable transfers as concrete rows instead of the {index} row template; captions from the painted crates/bir-desktop/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+    },
+    "table:4:sched4": {
+      "no": "",
+      "label": "Schedule 4 — Business interest",
+      "templates": [
+        "frm1801v2018:sched4Name_{index}",
+        "frm1801v2018:sched4Address_{index}",
+        "frm1801v2018:sched4Rdo_{index}",
+        "frm1801v2018:sched4Exc_{index}",
+        "frm1801v2018:sched4Conj_{index}"
+      ],
+      "cols": [
+        "Trade / business name",
+        "Registered address",
+        "RDO code",
+        "Exclusive",
+        "Conjugal"
+      ],
+      "rows": [
+        1,
+        7
+      ],
+      "evidence": "D07: Part V Schedule 4 — Business interest as concrete rows instead of the {index} row template; captions from the painted crates/bir-desktop/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+    },
+    "frm1801v2018:sched1Class_1'": {
+      "kind": "sel",
+      "options": [
+        "RR",
+        "CR",
+        "CL",
+        "GL",
+        "A",
+        "X",
+        "RC",
+        "CC",
+        "PS",
+        "GP",
+        "I",
+        "APD"
+      ],
+      "evidence": "Classification column: the official list form_1801.rs validates (\"Pick a classification from the official list.\") and the painted caption names (RR, CR, CL, GL, A, X, RC, CC, PS, GP, I, APD)."
+    },
+    "frm1801v2018:sched1AClass_1'": {
+      "kind": "sel",
+      "options": [
+        "RR",
+        "CR",
+        "CL",
+        "GL",
+        "A",
+        "X",
+        "RC",
+        "CC",
+        "PS",
+        "GP",
+        "I",
+        "APD"
+      ],
+      "evidence": "Classification column: the official list form_1801.rs validates (\"Pick a classification from the official list.\") and the painted caption names (RR, CR, CL, GL, A, X, RC, CC, PS, GP, I, APD)."
+    },
+    "frm1801v2018:sched2Class_1": {
+      "kind": "sel",
+      "options": [
+        "Listed",
+        "Not Listed"
+      ],
+      "evidence": "Schedule 2 classification: form_1801.rs accepts Listed, Not Listed or blank (\"Schedule 2 classification is Listed or Not Listed.\")."
     }
   },
   "2000": {
@@ -3647,6 +3849,86 @@
     "frm2000:txtPg2TaxpayerName": {
       "label": "Taxpayer's Name",
       "evidence": "painted form_2000_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's Name\""
+    },
+    "chkSchedule1Delete{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "drpATCCode{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched1:txtTaxBase{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched1:txtTaxRate{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched1:txtTaxDue{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "chkSchedule2Delete{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched2:txtPaymentDate{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched2:txtReceipt{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched2:txtAmountPaid{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "chkSchedule3Delete{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched3:txtPaymentDate{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched3:txtReceipt{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched3:txtAmountPaid{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "chkSchedule4Delete{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched4:txtRCOCode{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched4:txtRemittanceDate{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched4:txtBank{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched4:txtAmountRemitted{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched4:txtNumberFrom{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
+    },
+    "frm2000:sched4:txtNumberTo{index}": {
+      "kind": "hidden",
+      "evidence": "D08: the {index} row template duplicates the concrete rows 0-2 the page already shows (same keys with 0, 1, 2; ATC rows bound to schedule1 and resolved through Form2000Draft::set_atc). The writer binds three rows, so no row is added."
     }
   },
   "2000OT": {
