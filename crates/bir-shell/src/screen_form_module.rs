@@ -1465,15 +1465,25 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let mut rejected = Map::new();
     // Location parents precede their children, including a pasted batch
     // whose JSON keys happen to sort city/province/region.
-    let mut edits: Vec<_> = edits.iter().collect();
+    let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
-    for (key, value) in edits {
+    let shown = values_json(kind, &draft).map_err(host_error)?;
+    for (key, step) in plan_choice_edits(kind, &draft, &shown, edits) {
         if !editable {
             rejected.insert(key.clone(), json!("this return is no longer a draft"));
             continue;
         }
         let mut next = draft.clone();
-        match catalogs::fill(kind, &mut next, key, &to_json(value)) {
+        let result = match step {
+            ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value),
+            ChoiceStep::Set(sets) => {
+                for (path, value) in sets {
+                    set_draft_path(&mut next, &path, value);
+                }
+                Ok(())
+            }
+        };
+        match result {
             Ok(()) => draft = next,
             Err(message) => {
                 rejected.insert(key.clone(), Value::String(message));
@@ -1500,6 +1510,190 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "options": catalogs::options(kind, &draft),
         "rejected": rejected,
     })))
+}
+
+/// One planned write of `screen_form_fill`.
+enum ChoiceStep {
+    /// The ordinary box fill.
+    Fill(Value),
+    /// Direct draft writes (JSON pointer -> value).
+    Set(Vec<(String, Value)>),
+}
+
+fn set_draft_path(draft: &mut Value, path: &str, value: Value) {
+    if let Some(slot) = draft.pointer_mut(path) {
+        *slot = value;
+    } else if let Some((parent, leaf)) = path.rsplit_once('/')
+        && let Some(Value::Object(object)) =
+            draft.pointer_mut(if parent.is_empty() { "" } else { parent })
+    {
+        object.insert(leaf.to_string(), value);
+    }
+}
+
+fn is_unticked(value: &Value) -> bool {
+    match value {
+        Value::Bool(b) => !b,
+        Value::Null => true,
+        Value::String(s) => matches!(s.trim(), "" | "false" | "0" | "N"),
+        _ => false,
+    }
+}
+
+/// Paths a choice box's `"true"` option writes.
+fn true_option_paths(def: &AgentFormDef, key: &str) -> Vec<String> {
+    match def.bindings.get(key).map(|bound| &bound.binding) {
+        Some(Binding::Choice { options }) => options
+            .iter()
+            .filter(|option| option.value == "true")
+            .flat_map(|option| option.set.keys().cloned())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// 1701 Item 6 and Part IV Item 3: the filer type and its "also a
+/// compensation earner" flag. Compensation Earner alone is its own filer
+/// type (ATC II011); beside Single Proprietor or Professional it marks mixed
+/// income, as the official form's TPFilerType does.
+fn form_1701_type_paths(kind: AgentFormKind, key: &str) -> Option<(&'static str, &'static str)> {
+    if kind.form_code() != "1701" {
+        return None;
+    }
+    let tail = key.rsplit(':').next().unwrap_or(key);
+    if tail.starts_with("rdoPg1I6TaxpayerType") {
+        Some(("/taxpayer_type", "/taxpayer_also_compensation_earner"))
+    } else if tail.starts_with("rdoPg2I3SpouseType") {
+        Some(("/spouse/filer_type", "/spouse_also_compensation_earner"))
+    } else {
+        None
+    }
+}
+
+/// Turn the page's checkbox edits into writes that keep a radio group to one
+/// answer. The probe binds each member's `"false"` to some other answer
+/// (unticking Single Proprietor wrote Professional), and a batch that ticks
+/// one member and unticks the rest could end on an unticked member's
+/// "other" answer. So:
+/// - a group with a ticked member in the batch ignores its unticked members;
+/// - unticking a member that is not ticked does nothing;
+/// - unticking the ticked member of a group of three or more clears the
+///   group (a yes/no pair keeps its official flip).
+///
+/// Edits keep their dependency order otherwise.
+fn plan_choice_edits(
+    kind: AgentFormKind,
+    draft: &Value,
+    shown: &Value,
+    edits: Vec<(String, Value)>,
+) -> Vec<(String, ChoiceStep)> {
+    let def = kind.definition();
+    let group_of = |key: &str| -> Option<&BoxDef> {
+        let group = def.box_def(key)?.group.as_deref()?;
+        def.box_def(group).filter(|entry| entry.radio_group)
+    };
+    let ticked_groups: BTreeSet<String> = edits
+        .iter()
+        .filter(|(_, value)| !is_unticked(value))
+        .filter_map(|(key, _)| group_of(key).map(|g| g.key.clone()))
+        .collect();
+    let mut plain = Vec::new();
+    for (key, value) in edits {
+        let unticked = is_unticked(&value);
+        if let Some((type_path, flag_path)) = form_1701_type_paths(kind, &key) {
+            let current = draft
+                .pointer(type_path)
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let mixed = draft
+                .pointer(flag_path)
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let business = matches!(current, "SingleProprietor" | "Professional");
+            if key.ends_with('C') && group_of(&key).is_none() {
+                let sets = match (unticked, business) {
+                    (false, true) => vec![(flag_path.to_string(), json!(true))],
+                    (false, false) => vec![
+                        (type_path.to_string(), json!("CompensationEarner")),
+                        (flag_path.to_string(), json!(false)),
+                    ],
+                    (true, _) if current == "CompensationEarner" => vec![
+                        (type_path.to_string(), Value::Null),
+                        (flag_path.to_string(), json!(false)),
+                    ],
+                    (true, _) => vec![(flag_path.to_string(), json!(false))],
+                };
+                plain.push((key, ChoiceStep::Set(sets)));
+                continue;
+            }
+            if group_of(&key).is_some() {
+                let shown_on = shown.get(&key).and_then(Value::as_str) == Some("true");
+                if unticked {
+                    if ticked_groups.contains(&group_of(&key).unwrap().key) || !shown_on {
+                        continue;
+                    }
+                    // Unticking the business type of a mixed-income filer
+                    // leaves Compensation Earner ticked.
+                    let rest = if mixed && business {
+                        json!("CompensationEarner")
+                    } else {
+                        Value::Null
+                    };
+                    plain.push((
+                        key,
+                        ChoiceStep::Set(vec![
+                            (type_path.to_string(), rest),
+                            (flag_path.to_string(), json!(false)),
+                        ]),
+                    ));
+                } else {
+                    let pure_comp = current == "CompensationEarner";
+                    let mut sets: Vec<(String, Value)> = Vec::new();
+                    let option = match def.bindings.get(&key).map(|b| &b.binding) {
+                        Some(Binding::Choice { options }) => {
+                            options.iter().find(|o| o.value == "true")
+                        }
+                        _ => None,
+                    };
+                    let picked = option
+                        .and_then(|o| o.set.get(type_path))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let picked_business =
+                        matches!(picked.as_str(), "SingleProprietor" | "Professional");
+                    sets.push((type_path.to_string(), json!(picked)));
+                    sets.push((
+                        flag_path.to_string(),
+                        json!(picked_business && (mixed || pure_comp)),
+                    ));
+                    plain.push((key, ChoiceStep::Set(sets)));
+                }
+                continue;
+            }
+        }
+        match group_of(&key) {
+            Some(group) if unticked => {
+                if ticked_groups.contains(&group.key)
+                    || shown.get(&key).and_then(Value::as_str) != Some("true")
+                {
+                    continue;
+                }
+                if group.members.len() >= 3 {
+                    let sets = true_option_paths(def, &key)
+                        .into_iter()
+                        .map(|path| (path, Value::Null))
+                        .collect();
+                    plain.push((key, ChoiceStep::Set(sets)));
+                } else {
+                    plain.push((key, ChoiceStep::Fill(value)));
+                }
+            }
+            Some(_) => plain.push((key, ChoiceStep::Fill(value))),
+            None => plain.push((key, ChoiceStep::Fill(value))),
+        }
+    }
+    plain
 }
 
 fn screen_form_validate(
@@ -3655,6 +3849,80 @@ mod tests {
         // The spouse's name is typed by the filer.
         let opened = open("1700", 0);
         assert!(opened["locks"].get("frm1700:txtPg1I21SpouseName").is_none());
+    }
+
+    #[test]
+    fn form_1701_item6_keeps_one_filer_type_and_maps_each_box() {
+        setup();
+        let opened = open("1701", 0);
+        let k = |c: &str| format!("frm1701:rdoPg1I6TaxpayerType{c}");
+        let ticked = |f: &Value| -> Vec<&str> {
+            ["S", "P", "E", "T", "C"]
+                .into_iter()
+                .filter(|c| f["values"][k(c)] == "true")
+                .collect()
+        };
+        let item6_error = |f: &Value| {
+            let v = call_async(
+                "screen_form_validate",
+                vec!["1701".into(), json(f["draft"].clone())],
+            )
+            .unwrap();
+            v["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["message"].as_str().is_some_and(|m| m.contains("Item 6.")))
+        };
+        // Compensation Earner alone is selectable and is a filer type.
+        let c = fill("1701", &opened["draft"], json!({ k("C"): "true" }));
+        assert_eq!(ticked(&c), ["C"]);
+        assert!(!item6_error(&c), "C alone answers Item 6");
+        // Each business type ticks its own box only; a pill-style batch too.
+        for pick in ["S", "P", "E", "T"] {
+            let mut batch = Map::new();
+            for other in ["S", "P", "E", "T"] {
+                batch.insert(
+                    k(other),
+                    json!(if other == pick { "true" } else { "false" }),
+                );
+            }
+            let f = fill("1701", &opened["draft"], Value::Object(batch));
+            assert_eq!(ticked(&f), [pick], "batch picking {pick}");
+            assert!(!item6_error(&f));
+            let single = fill("1701", &opened["draft"], json!({ k(pick): "true" }));
+            assert_eq!(ticked(&single), [pick], "single tick {pick}");
+        }
+        // Switching keeps one; unticking clears instead of jumping.
+        let s = fill("1701", &opened["draft"], json!({ k("S"): "true" }));
+        let p = fill("1701", &s["draft"], json!({ k("P"): "true" }));
+        assert_eq!(ticked(&p), ["P"]);
+        let none = fill("1701", &p["draft"], json!({ k("P"): "false" }));
+        assert_eq!(ticked(&none), Vec::<&str>::new(), "untick clears Item 6");
+        let noop = fill("1701", &p["draft"], json!({ k("S"): "false" }));
+        assert_eq!(ticked(&noop), ["P"], "unticking an unticked box is a no-op");
+        // Mixed income: C beside S or P, in either order.
+        let mixed = fill("1701", &p["draft"], json!({ k("C"): "true" }));
+        assert_eq!(ticked(&mixed), ["P", "C"]);
+        let mixed2 = fill("1701", &c["draft"], json!({ k("S"): "true" }));
+        assert_eq!(ticked(&mixed2), ["S", "C"]);
+        let back = fill("1701", &mixed2["draft"], json!({ k("S"): "false" }));
+        assert_eq!(ticked(&back), ["C"]);
+        let estate = fill("1701", &mixed["draft"], json!({ k("E"): "true" }));
+        assert_eq!(ticked(&estate), ["E"], "Estate is not mixed income");
+        // A three-way radio elsewhere (1700 civil status) also stays single.
+        let o = open("1700", 0);
+        let cs = |c: &str| format!("frm1700:rdoPg1I15CivilStatus{c}");
+        let mut batch = Map::new();
+        for c in ["S", "M", "LS", "W"] {
+            batch.insert(cs(c), json!(if c == "W" { "true" } else { "false" }));
+        }
+        let f = fill("1700", &o["draft"], Value::Object(batch));
+        let on: Vec<_> = ["S", "M", "LS", "W"]
+            .into_iter()
+            .filter(|c| f["values"][cs(c)] == "true")
+            .collect();
+        assert_eq!(on, ["W"]);
     }
 
     #[test]
