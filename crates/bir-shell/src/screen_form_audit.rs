@@ -475,6 +475,50 @@ struct Totals {
     per_class: BTreeMap<&'static str, usize>,
 }
 
+/// The five forms whose drafts the legacy period-keyed lookup cannot find
+/// (stored under a transaction date or another period): the screen's Print
+/// path (`print_map` on the reopened draft) must print them, while the legacy
+/// `print_fields` diagnostic keeps failing, so the audit reports the two
+/// paths apart instead of calling the legacy miss a Print failure.
+#[test]
+fn screen_print_works_where_the_legacy_period_lookup_misses() {
+    use_ephemeral_database();
+    let profile: TaxpayerProfile =
+        serde_json::from_value(profile_json()).expect("fictional profile parses");
+    with_database(|db| {
+        db.save_profile(profile)
+            .map(|_| ())
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+    .expect("profile saves");
+    for code in ["2000OT", "2200AN", "2200C", "2200S", "2552"] {
+        let kind = kind_of(code).expect("form kind");
+        let period = page_period_for(code);
+        let opened = open(code, period).unwrap_or_else(|error| panic!("{code} opens: {error}"));
+        call(
+            "screen_form_save",
+            vec![code.into(), json(opened["draft"].clone())],
+        )
+        .unwrap_or_else(|error| panic!("{code} saves: {}", error.message()));
+        let reopened = open(code, period).unwrap_or_else(|error| panic!("{code} reopens: {error}"));
+        let quarter = (reopened["period"].as_i64().unwrap_or(0) != 0)
+            .then(|| reopened["period"].as_i64().unwrap_or(0) as u8);
+        let legacy = with_database(|db| {
+            print_fields(db, TIN, kind.form_code(), YEAR as u16, quarter).map(|_| ())
+        });
+        assert!(
+            legacy.is_err(),
+            "{code}: the legacy lookup now finds the draft; drop it from this list"
+        );
+        let printed = with_database(|db| print_map(db, kind, &reopened["draft"]))
+            .unwrap_or_else(|error| panic!("{code}: screen Print failed: {}", error.message()));
+        assert!(
+            !printed.0.is_empty(),
+            "{code}: screen Print produced no fields"
+        );
+    }
+}
+
 #[test]
 #[ignore = "runtime audit; writes tmp/screen-form-audit/runtime.{json,md}"]
 fn audit_all_screen_forms() {
@@ -914,10 +958,31 @@ fn audit_all_screen_forms() {
                                         .or_default()
                                         .extend(unplaceable);
                                 }
+                                // Legacy diagnostic: the period-keyed store
+                                // lookup with the page's period as a `u8`
+                                // quarter. It fails when a form stores its
+                                // draft under another key (a transaction
+                                // date, a month); it does not decide whether
+                                // the screen's Print works.
                                 let quarter = (reopened["period"].as_i64().unwrap_or(0) != 0)
                                     .then(|| reopened["period"].as_i64().unwrap_or(0) as u8);
-                                let printed = with_database(|db| {
+                                if let Err(error) = with_database(|db| {
                                     print_fields(db, TIN, kind.form_code(), YEAR as u16, quarter)
+                                }) {
+                                    findings
+                                        .entry("legacy_print_fields_failed")
+                                        .or_default()
+                                        .push(json!({
+                                            "quarter_argument": quarter,
+                                            "stored_period": reopened["stored_period"],
+                                            "error": error.message(),
+                                        }));
+                                }
+                                // The screen's Print action: `print_map` on
+                                // the draft the page holds, exactly as
+                                // `screen_form_print` calls it.
+                                let printed = with_database(|db| {
+                                    print_map(db, kind, &reopened["draft"])
                                         .map(|(fields, _)| fields)
                                 });
                                 match printed {
@@ -925,8 +990,7 @@ fn audit_all_screen_forms() {
                                         .entry("ii_roundtrip_failed")
                                         .or_default()
                                         .push(json!({
-                                            "stage": "print preview loads the saved draft",
-                                            "quarter_argument": quarter,
+                                            "stage": "screen Print (print_map) on the reopened draft",
                                             "error": error.message(),
                                         })),
                                     Ok(print_saved) => {
@@ -1074,6 +1138,11 @@ const CLASSES: &[(&str, &str, &str)] = &[
         "ii-fail",
     ),
     (
+        "legacy_print_fields_failed",
+        "legacy period-keyed print load failed (diagnostic, not the Print action)",
+        "legacy-print",
+    ),
+    (
         "print_sheet_fill_failed",
         "print sheet fill failed",
         "sheet-fail",
@@ -1122,8 +1191,10 @@ fn markdown(report: &Value) -> String {
         "Generated by `{}` on an ephemeral database: one fictional Individual taxpayer \
          (TIN 123-456-788-00000) with every profile field filled, tax year {}. Each form opens \
          the way `screen_form_open` does; print values come from the same print field map \
-         `form_print_html` fills (after open: from the open draft; after the round trip: loaded \
-         from the store through `bir_module::print_fields`, the exact print path).\n",
+         `form_print_html` fills (after open: from the open draft; after the round trip: from \
+         `print_map` on the reopened draft, the path the screen's Print action takes). The \
+         legacy period-keyed `bir_module::print_fields` load is reported separately as a \
+         diagnostic.\n",
         report["generated_by"].as_str().unwrap(),
         report["year"]
     );
