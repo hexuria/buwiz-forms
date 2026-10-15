@@ -18,8 +18,20 @@ use serde_json::Value;
 
 use super::{
     AgentFormDef, AgentFormKind, Binding, BoundBox, BoxDef, BoxOption, ChoiceOption, DateFormat,
-    Lock, parse_amount, parse_error, probe_eval, probe_identity,
+    DatePart, Lock, parse_amount, parse_error, probe_eval, probe_identity,
 };
+
+/// Boxes the rules corpus marks computed although the official page lets the
+/// filer choose them. The corpus is not edited here (its digest and counts
+/// are guarded by its own objective); the projection corrects it, and each
+/// entry carries its evidence. Bindings are still derived by probing.
+const USER_CHOSEN: &[(&str, &str)] = &[(
+    "frm1606:txtTaxRate",
+    "official BIR-Form1606.hta: a select titled \"Please select Tax Rate\" \
+     (0%, 1.5%, 3%, 5%, 6%) that the page enables for the filer; form_1606.rs \
+     keeps the choice in `tax_rate` (Form1606TaxRate) and checks it \
+     (\"Please select the tax rate on Item 31.\")",
+)];
 
 /// Project `fields.json` onto the boxes the assistant needs.
 pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
@@ -38,13 +50,19 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                 .filter_map(Value::as_array)
                 .flatten()
                 .find(|meaning| meaning["stored_value"] == "true");
+            let key = text(field, "field_key");
+            let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
             BoxDef {
-                key: text(field, "field_key"),
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
-                computed: field["computed"].as_bool().unwrap_or(false),
-                required: text(field, "required"),
+                computed: !chosen_by_user && field["computed"].as_bool().unwrap_or(false),
+                required: if chosen_by_user {
+                    "conditional".to_string()
+                } else {
+                    text(field, "required")
+                },
+                key,
                 options: values
                     .iter()
                     .filter_map(|value| match value {
@@ -119,6 +137,8 @@ const PROBE_ROWS: usize = 12;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum ValueKind {
     Text(Option<DateFormatKey>),
+    /// One part of a probed date, shown on its own (see [`DatePart`]).
+    DatePart(DateFormatKey, DatePart),
     Amount,
     Whole,
 }
@@ -159,6 +179,21 @@ impl DateFormatKey {
         }
     }
 
+    /// The part of the probe date a box shows on its own, if it shows
+    /// exactly one: `07` (month), `19` (day) or `2031` (year).
+    fn part_shown_by(self, official: &str) -> Option<DatePart> {
+        let digits: String = official.chars().filter(char::is_ascii_digit).collect();
+        if digits.len() != official.trim().len() {
+            return None;
+        }
+        match digits.as_str() {
+            "07" | "7" => Some(DatePart::Month),
+            "19" if self != Self::MonthYear => Some(DatePart::Day),
+            "2031" => Some(DatePart::Year),
+            _ => None,
+        }
+    }
+
     fn format(self) -> DateFormat {
         match self {
             Self::Iso => DateFormat::Iso,
@@ -187,6 +222,7 @@ fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
                 || (value - (AMOUNT_PROBE * 10.0).round() / 10.0).abs() < 0.005
         }),
         ValueKind::Whole => official.trim().parse::<i64>().ok() == probe.as_i64(),
+        ValueKind::DatePart(date, part) => date.part_shown_by(official) == Some(part),
     }
 }
 
@@ -613,6 +649,17 @@ fn probe_seed(
             let official = map.get(key).cloned().unwrap_or_default();
             match candidate {
                 Candidate::Value(value_kind, nullable, probe) => {
+                    // A box that shows one part of the probed date (a month
+                    // select, a day box) echoes that part.
+                    let value_kind = match value_kind {
+                        ValueKind::Text(Some(date)) if !echoes(*value_kind, probe, &official) => {
+                            date.part_shown_by(&official)
+                                .map(|part| ValueKind::DatePart(*date, part))
+                                .unwrap_or(*value_kind)
+                        }
+                        _ => *value_kind,
+                    };
+                    let value_kind = &value_kind;
                     if echoes(*value_kind, probe, &official) {
                         evidence.echoes.entry(key.clone()).or_default().insert((
                             path.clone(),
@@ -1172,6 +1219,9 @@ fn verify(kind: AgentFormKind, def: &mut AgentFormDef, seeds: &[&Value]) {
                 };
                 let shown = map.get(key).cloned().unwrap_or_default();
                 let ok = match &bound.binding {
+                    Binding::Text {
+                        part: Some(part), ..
+                    } => DateFormatKey::Mdy.part_shown_by(&shown) == Some(*part),
                     Binding::Text { date: Some(_), .. } => DateFormatKey::Mdy.echoed_by(&shown),
                     Binding::Text { .. } => shown.to_ascii_uppercase().contains(expected.as_str()),
                     Binding::Amount { .. } => echoes(ValueKind::Amount, &Value::Null, &shown),
@@ -1293,10 +1343,16 @@ fn extend_rows(def: &mut AgentFormDef) {
         let row = (number as isize - offset) as usize;
         let path = format!("{list}/{row}/{field}");
         let binding = match &template.binding {
-            Binding::Text { nullable, date, .. } => Binding::Text {
+            Binding::Text {
+                nullable,
+                date,
+                part,
+                ..
+            } => Binding::Text {
                 path,
                 nullable: *nullable,
                 date: *date,
+                part: *part,
             },
             Binding::Amount { nullable, .. } => Binding::Amount {
                 path,
@@ -1382,6 +1438,13 @@ fn decide(
                 path,
                 nullable,
                 date: date.map(DateFormatKey::format),
+                part: None,
+            },
+            ValueKind::DatePart(date, part) => Binding::Text {
+                path,
+                nullable,
+                date: Some(date.format()),
+                part: Some(part),
             },
             ValueKind::Amount => Binding::Amount { path, nullable },
             ValueKind::Whole => Binding::Whole { path, nullable },

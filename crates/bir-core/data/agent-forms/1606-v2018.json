@@ -80,6 +80,7 @@
 "frm1606:txtSurcharge": {"path":"/penalty_overrides/surcharge","type":"amount"},
 "frm1606:txtTCT": {"path":"/tct_number","type":"text"},
 "frm1606:txtTaxDC": {"path":"/tax_declaration_number","type":"text"},
+"frm1606:txtTaxRate": {"options":[{"set":{"/tax_rate":"0"},"value":"0"},{"set":{"/tax_rate":"1.5"},"value":"1.5"},{"set":{"/tax_rate":"3"},"value":"3"},{"set":{"/tax_rate":"5"},"value":"5"},{"set":{"/tax_rate":"6"},"value":"6"}],"type":"choice"},
 "frm1606:txtTotalN": {"path":"/number_of_installments","type":"amount"},
 "frm1606:txtTotalP": {"path":"/initial_year_payments","type":"amount"},
 "txtEmail": {"lock":"profile","path":"/email","type":"text"}
@@ -176,7 +177,7 @@
 {"group":"frm1606:Habitual","item":"29","key":"frm1606:Habitual_1","kind":"radio","label":"Habitual_1","options":[{"value":"true"},{"value":"false"}],"required":"optional"},
 {"group":"frm1606:Habitual","item":"29","key":"frm1606:Habitual_2","kind":"radio","label":"Habitual_2","options":[{"value":"true"},{"value":"false"}],"required":"optional"},
 {"computed":true,"item":"30","key":"frm1606:txtTax","kind":"text","label":"txtTax","required":"computed"},
-{"computed":true,"item":"31","key":"frm1606:txtTaxRate","kind":"select","label":"txtTaxRate","required":"computed"},
+{"item":"31","key":"frm1606:txtTaxRate","kind":"select","label":"txtTaxRate","required":"conditional"},
 {"computed":true,"item":"32","key":"frm1606:txtTaxR","kind":"text","label":"txtTaxR","required":"computed"},
 {"item":"33","key":"frm1606:txtLess","kind":"text","label":"txtLess","required":"optional"},
 {"computed":true,"item":"34","key":"frm1606:txtTaxDue","kind":"text","label":"txtTaxDue","required":"computed"},

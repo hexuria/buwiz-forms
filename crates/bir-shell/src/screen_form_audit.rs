@@ -1799,8 +1799,9 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
         .map(|n| n.as_u64().unwrap() as usize)
         .sum();
     assert_eq!(by_class, total, "class totals cover every control once");
-    // The ten dropdowns without choices are the baseline's D01-D10, in the
-    // same order the catalog coverage test pins.
+    // The dropdowns still without choices: the baseline's D01-D10 less the
+    // ones P1 has given their official choices (D01-D06, D09, D10),
+    // in the order the catalog coverage test pins.
     let missing: Vec<String> = census["forms"]
         .as_array()
         .unwrap()
@@ -1812,16 +1813,8 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     assert_eq!(
         missing,
         [
-            "1603Q frm1603Q:selTreaty",
-            "1604C frm1604c:txtRefMonth",
-            "1606 frm1606:txtTaxRate",
-            "1606 frm1606:selTreaty",
-            "1706 frm1706:selTreaty",
-            "1800 frm1800v2018:txtDate",
             "1801 frm1801v2018:sched4Rdo_{index}",
             "2000 drpATCCode{index}",
-            "2200S frm2200S:lstTaxTreaty",
-            "2550M frm2550m:lstSpecialTax",
         ]
     );
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
@@ -1928,7 +1921,6 @@ fn symptom_r04_2550q_email_shows_the_profile_email() {
 }
 
 #[test]
-#[ignore = "D03: 1606 Item 31 tax rate has no binding, so a chosen rate is refused"]
 fn symptom_d03_1606_tax_rate_choice_round_trips() {
     seed_fictional_profile();
     let period = page_period_for("1606");
@@ -1997,4 +1989,468 @@ fn symptom_p4_1800_branch_code_sits_with_the_donor_tin() {
         "frm1800v2018:txtBranchCode is under {:?}",
         field.item
     );
+}
+
+// ------------------------------------------------------------- P1 controls
+
+/// One box filled, saved and reopened.
+struct Reopened {
+    /// The fill's refusals (empty when accepted).
+    rejected: Value,
+    /// The box's value on the reopened page.
+    shown: String,
+    /// The box's value in the screen's Print map.
+    printed: String,
+    /// The reopened typed draft.
+    draft: Value,
+}
+
+impl Reopened {
+    fn accepted(&self) -> bool {
+        self.rejected.as_object().is_none_or(|r| r.is_empty())
+    }
+}
+
+/// Fill one box, save, reopen.
+fn choose_save_reopen(code: &str, key: &str, value: &str) -> Reopened {
+    let kind = kind_of(code).expect("form kind");
+    let period = page_period_for(code);
+    let opened = open(code, period).expect("form opens");
+    let filled = call(
+        "screen_form_fill",
+        vec![
+            code.into(),
+            json(opened["draft"].clone()),
+            json(json!({ key: value })),
+        ],
+    )
+    .expect("fill runs");
+    call(
+        "screen_form_save",
+        vec![code.into(), json(filled["draft"].clone())],
+    )
+    .expect("saves");
+    let reopened = open(code, period).expect("reopens");
+    let shown = string_map(&reopened["values"])
+        .get(key)
+        .cloned()
+        .unwrap_or_default();
+    let printed = with_database(|db| print_map(db, kind, &reopened["draft"]))
+        .expect("screen Print")
+        .0
+        .get(key)
+        .cloned()
+        .unwrap_or_default();
+    Reopened {
+        rejected: filled["rejected"].clone(),
+        shown,
+        printed,
+        draft: reopened["draft"].clone(),
+    }
+}
+
+/// A dropdown choice: (value, label).
+type Choice<'a> = (&'a str, &'a str);
+
+/// D01, D04, D05, D09, D10: each form's tax-relief dropdown lists the
+/// official HTA choices with this form's own numbering, and every choice
+/// survives save, reopen and print.
+#[test]
+fn p1_relief_dropdowns_offer_each_forms_official_choices() {
+    let cases: &[(&str, &str, &[Choice])] = &[
+        (
+            "1603Q",
+            "frm1603Q:selTreaty",
+            &[
+                ("0", "None"),
+                ("1", "Special Rate"),
+                ("2", "International Tax Treaty"),
+                ("3", "Both"),
+            ],
+        ),
+        (
+            "1606",
+            "frm1606:selTreaty",
+            &[("0", "International Tax Treaty"), ("1", "Special Law")],
+        ),
+        (
+            "1706",
+            "frm1706:selTreaty",
+            &[
+                ("0", "None"),
+                ("1", "International Tax Treaty"),
+                ("2", "Special Law"),
+            ],
+        ),
+        (
+            "2200S",
+            "frm2200S:lstTaxTreaty",
+            &[
+                ("0", "None"),
+                ("1", "Special Law"),
+                ("2", "International Tax Treaty"),
+            ],
+        ),
+        (
+            "2550M",
+            "frm2550m:lstSpecialTax",
+            &[
+                ("0", "None"),
+                ("1", "Special Rate"),
+                ("2", "International Tax Treaty"),
+            ],
+        ),
+    ];
+    for (code, key, choices) in cases {
+        let form = schema_entry(code).expect("schema");
+        let field = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .flat_map(|it| it["f"].as_array().cloned().unwrap_or_default())
+            .find(|f| f["k"] == *key)
+            .expect("on screen");
+        let listed: Vec<(String, String)> = field["o"]
+            .as_array()
+            .expect("options")
+            .iter()
+            .map(|o| {
+                (
+                    o["value"].as_str().unwrap().to_string(),
+                    o["label"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        let want: Vec<(String, String)> = choices
+            .iter()
+            .map(|(v, l)| (v.to_string(), l.to_string()))
+            .collect();
+        assert_eq!(listed, want, "{code} {key} options");
+        for (value, label) in *choices {
+            seed_fictional_profile();
+            let Reopened {
+                rejected,
+                shown,
+                printed,
+                draft,
+            } = choose_save_reopen(code, key, value);
+            assert!(
+                rejected.as_object().is_none_or(|r| r.is_empty()),
+                "{code} {key}={value} ({label}) refused: {rejected}"
+            );
+            // The typed draft holds the enum this form's binding names.
+            let def = kind_of(code).unwrap().definition();
+            let Some(BoundBox {
+                binding: agent::Binding::Choice { options },
+                ..
+            }) = def.bindings.get(*key)
+            else {
+                panic!("{code} {key} is a choice binding");
+            };
+            let option = options
+                .iter()
+                .find(|o| o.value == *value)
+                .unwrap_or_else(|| panic!("{code} {key} binds {value}"));
+            for (pointer, want) in &option.set {
+                assert_eq!(
+                    draft.pointer(pointer),
+                    Some(want),
+                    "{code} {key}={value} ({label}): draft {pointer}"
+                );
+            }
+            assert_eq!(shown, *value, "{code} {key}: {label} after reopen");
+            assert_eq!(printed, *value, "{code} {key}: {label} in print");
+        }
+    }
+    // 1606's blank official choice is the page's empty choice: it means no
+    // relief, and 0 (International Tax Treaty) is not turned into it.
+    seed_fictional_profile();
+    let Reopened {
+        rejected, shown, ..
+    } = choose_save_reopen("1606", "frm1606:selTreaty", "");
+    assert!(
+        rejected.as_object().is_none_or(|r| r.is_empty()),
+        "{rejected}"
+    );
+    assert_eq!(shown, "");
+}
+
+/// D02: 1604C Item 11's refund date is one MM/DD/YYYY field shown as a
+/// month select and day and year boxes. With refunds released it is entered
+/// a box at a time, survives save and reopen, and prints as entered; turning
+/// Item 11 to No clears it and the month falls back to the official 00.
+#[test]
+fn p1_1604c_refund_date_is_entered_by_its_month_day_and_year_boxes() {
+    seed_fictional_profile();
+    let code = "1604C";
+    let kind = kind_of(code).unwrap();
+    let period = page_period_for(code);
+    let opened = open(code, period).expect("1604C opens");
+    let fill = |draft: &Value, edits: Value| {
+        let filled = call(
+            "screen_form_fill",
+            vec![code.into(), json(draft.clone()), json(edits)],
+        )
+        .expect("fill runs");
+        assert!(
+            filled["rejected"].as_object().is_none_or(|r| r.is_empty()),
+            "{}",
+            filled["rejected"]
+        );
+        filled
+    };
+    let mut draft = fill(
+        &opened["draft"],
+        json!({"frm1604c:releasedOfFunds_1": "true"}),
+    )["draft"]
+        .clone();
+    for (key, value) in [
+        ("frm1604c:txtRefMonth", "03"),
+        ("frm1604c:txtRefDate", "15"),
+        ("frm1604c:txtRefYear", "2026"),
+    ] {
+        draft = fill(&draft, json!({ key: value }))["draft"].clone();
+    }
+    call("screen_form_save", vec![code.into(), json(draft)]).expect("saves");
+    let reopened = open(code, period).expect("reopens");
+    assert_eq!(reopened["draft"]["refund_date"], "03/15/2026");
+    let values = string_map(&reopened["values"]);
+    let printed = with_database(|db| print_map(db, kind, &reopened["draft"]))
+        .expect("screen Print")
+        .0;
+    for (key, want) in [
+        ("frm1604c:txtRefMonth", "03"),
+        ("frm1604c:txtRefDate", "15"),
+        ("frm1604c:txtRefYear", "2026"),
+    ] {
+        assert_eq!(
+            values.get(key).map(String::as_str),
+            Some(want),
+            "{key} on the page"
+        );
+        assert_eq!(
+            printed.get(key).map(String::as_str),
+            Some(want),
+            "{key} in print"
+        );
+    }
+    // Every month the official select lists is accepted.
+    for month in 1..=12 {
+        let value = format!("{month:02}");
+        let filled = fill(&reopened["draft"], json!({"frm1604c:txtRefMonth": value}));
+        assert_eq!(filled["values"]["frm1604c:txtRefMonth"], value);
+    }
+    // Item 11 back to No: the date goes, the month shows the official 00.
+    let off = fill(
+        &reopened["draft"],
+        json!({"frm1604c:releasedOfFunds_2": "true"}),
+    );
+    assert_eq!(off["draft"]["refund_date"], "");
+    assert_eq!(off["values"]["frm1604c:txtRefMonth"], "00");
+}
+
+/// D03: 1606 Item 31 is the filer's choice of rate. Every official rate
+/// (0 included) is kept by the typed draft, shown after reopen, printed,
+/// and the computed tax (Item 32) agrees between page and print; the blank
+/// official choice clears it.
+#[test]
+fn p1_1606_tax_rate_is_chosen_from_the_official_rates() {
+    for rate in ["0", "1.5", "3", "5", "6"] {
+        seed_fictional_profile();
+        let r = choose_save_reopen("1606", "frm1606:txtTaxRate", rate);
+        assert!(r.accepted(), "{rate}: {}", r.rejected);
+        assert_eq!(r.draft["tax_rate"], rate, "typed Form1606TaxRate");
+        assert_eq!(r.shown, rate, "page after reopen");
+        assert_eq!(r.printed, rate, "print");
+        let kind = kind_of("1606").unwrap();
+        let reopened = open("1606", page_period_for("1606")).unwrap();
+        let page_tax = string_map(&reopened["values"])
+            .get("frm1606:txtTaxR")
+            .cloned()
+            .unwrap_or_default();
+        let print_tax = with_database(|db| print_map(db, kind, &reopened["draft"]))
+            .unwrap()
+            .0
+            .get("frm1606:txtTaxR")
+            .cloned()
+            .unwrap_or_default();
+        assert_ne!(
+            compare(&page_tax, &print_tax),
+            "value",
+            "{rate}: Item 32 page {page_tax:?} print {print_tax:?}"
+        );
+    }
+    seed_fictional_profile();
+    let six = choose_save_reopen("1606", "frm1606:txtTaxRate", "6");
+    assert!(six.accepted(), "{}", six.rejected);
+    assert_eq!(six.shown, "6");
+    let opened = open("1606", page_period_for("1606")).unwrap();
+    let cleared = call(
+        "screen_form_fill",
+        vec![
+            "1606".into(),
+            json(opened["draft"].clone()),
+            json(json!({"frm1606:txtTaxRate": ""})),
+        ],
+    )
+    .unwrap();
+    assert!(
+        cleared["rejected"].as_object().is_none_or(|r| r.is_empty()),
+        "{}",
+        cleared["rejected"]
+    );
+    assert_eq!(cleared["draft"]["tax_rate"], Value::Null);
+}
+
+/// The value the page sends for a listed dropdown option (form_page.js
+/// `optionOf`): an object's `value`; a `"CODE - Label"` string's code; any
+/// other string itself. `None` for strings the page drops (template text).
+fn page_option_value(option: &Value) -> Option<String> {
+    match option {
+        Value::Object(_) => option["value"].as_str().map(str::to_string),
+        Value::String(text) if text.starts_with('"') => None,
+        Value::String(text) => Some(
+            text.split_once(" - ")
+                .filter(|(code, label)| {
+                    !code.is_empty() && !code.contains(char::is_whitespace) && !label.is_empty()
+                })
+                .map_or(text.as_str(), |(code, _)| code)
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
+/// Every choice a schema dropdown lists, sent the way the page sends it,
+/// is one the host accepts (unless the page shows the field locked).
+#[test]
+fn every_listed_dropdown_choice_is_accepted_by_the_host() {
+    seed_fictional_profile();
+    let mut refused = Vec::new();
+    for form in schema() {
+        let code = form["c"].as_str().unwrap_or_default();
+        let Ok(opened) = open(code, page_period_for(code)) else {
+            continue;
+        };
+        let locks = opened["locks"].as_object().cloned().unwrap_or_default();
+        let fields = form["parts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|p| p["items"].as_array().into_iter().flatten())
+            .flat_map(|it| it["f"].as_array().into_iter().flatten());
+        for field in fields {
+            let key = field["k"].as_str().unwrap_or_default();
+            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) {
+                continue;
+            }
+            for option in field["o"].as_array().into_iter().flatten() {
+                let Some(value) = page_option_value(option) else {
+                    continue;
+                };
+                let filled = call(
+                    "screen_form_fill",
+                    vec![
+                        code.into(),
+                        json(opened["draft"].clone()),
+                        json(json!({ key: value })),
+                    ],
+                )
+                .expect("fill runs");
+                if let Some(reason) = filled["rejected"].get(key) {
+                    refused.push(format!("{code} {key} {value:?}: {reason}"));
+                }
+            }
+        }
+    }
+    // N03 (open): 2550M's Schedule 1 ATC selects list extractor placeholder
+    // text, and their bindings know only the ATCs the samples used (VB010,
+    // VT010, VS062), not FORM_2550M_ATCS. Fixing needs the binding probe to
+    // try the form's ATC list; pinned here so it cannot grow silently.
+    let open_cases: Vec<&str> = refused
+        .iter()
+        .map(|r| r.split(' ').take(2).collect::<Vec<_>>().join(" "))
+        .map(|id| match id.as_str() {
+            "2550M frm2550m:txtAtcCde1" => "N03 2550M txtAtcCde1",
+            "2550M frm2550m:txtAtcCde2" => "N03 2550M txtAtcCde2",
+            _ => "unexpected",
+        })
+        .collect();
+    assert_eq!(
+        open_cases,
+        ["N03 2550M txtAtcCde1", "N03 2550M txtAtcCde2"],
+        "listed choices refused:\n{}",
+        refused.join("\n")
+    );
+}
+
+/// D06: 1800 Item 1's day is chosen from 01-31, stored as a number and shown
+/// padded; a leap day is a valid date, an impossible one is refused by the
+/// form's own check, and blank goes back to "not chosen" (the official 00).
+#[test]
+fn p1_1800_day_of_donation_is_a_day_select() {
+    let code = "1800";
+    let period = page_period_for(code);
+    let date = |month: &str, day: &str, year: &str| {
+        seed_fictional_profile();
+        let opened = open(code, period).unwrap();
+        let filled = call(
+            "screen_form_fill",
+            vec![
+                code.into(),
+                json(opened["draft"].clone()),
+                json(json!({
+                    "frm1800v2018:txtMonth": month,
+                    "frm1800v2018:txtDate": day,
+                    "frm1800v2018:txtYear": year,
+                })),
+            ],
+        )
+        .unwrap();
+        assert!(
+            filled["rejected"].as_object().is_none_or(|r| r.is_empty()),
+            "{}",
+            filled["rejected"]
+        );
+        call(
+            "screen_form_save",
+            vec![code.into(), json(filled["draft"].clone())],
+        )
+        .unwrap();
+        open(code, period).unwrap()
+    };
+    let date_errors = |opened: &Value| -> Vec<String> {
+        opened["errors"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|e| e["field"] == "donation_date")
+            .map(|e| e["message"].as_str().unwrap_or_default().to_string())
+            .collect()
+    };
+    // Stored as a number, shown padded, after save and reopen.
+    let fifth = date("03", "05", "2024");
+    assert_eq!(fifth["draft"]["donation_day"], 5);
+    assert_eq!(fifth["values"]["frm1800v2018:txtDate"], "05");
+    assert!(date_errors(&fifth).is_empty(), "{:?}", date_errors(&fifth));
+    // A leap day is a date; the same day in a common year is not.
+    assert!(date_errors(&date("02", "29", "2024")).is_empty());
+    assert_eq!(
+        date_errors(&date("02", "29", "2023")),
+        ["Please enter a valid date on Item 1."]
+    );
+    // Blank is "not chosen" again.
+    let cleared = date("03", "", "2024");
+    assert_eq!(cleared["draft"]["donation_day"], 0);
+    assert_eq!(
+        date_errors(&cleared),
+        ["Please enter a valid date on Item 1."]
+    );
+    // Every listed day is accepted.
+    let field = schema_fields(code)
+        .into_iter()
+        .find(|f| f.key == "frm1800v2018:txtDate")
+        .unwrap();
+    assert_eq!(field.kind, "sel");
 }

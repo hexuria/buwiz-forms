@@ -497,6 +497,27 @@ pub enum DateFormat {
     MonthYear,
 }
 
+/// One part of a date that a box shows on its own: 1604C's Item 11
+/// refund date is one `MM/DD/YYYY` field written to a month select and
+/// day and year boxes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DatePart {
+    Month,
+    Day,
+    Year,
+}
+
+impl DatePart {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Month => "month (01-12)",
+            Self::Day => "day (01-31)",
+            Self::Year => "four-digit year",
+        }
+    }
+}
+
 /// How an official box is written into the draft.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -508,6 +529,10 @@ pub enum Binding {
         nullable: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         date: Option<DateFormat>,
+        /// The box shows only this part of the date in `path` (`date` is
+        /// then that field's format); filling it rewrites that part.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<DatePart>,
     },
     /// The box shows an amount field.
     Amount {
@@ -677,8 +702,24 @@ fn fill_box(
     match &bound.binding {
         Binding::Text {
             path,
+            date: Some(format),
+            part: Some(part),
+            ..
+        } => {
+            let current = draft.pointer(path).and_then(Value::as_str).unwrap_or("");
+            let leaf = set_date_part(current, *format, *part, &text).ok_or_else(|| {
+                format!(
+                    "`{key}` must be the {} of a date (got `{text}`)",
+                    part.name()
+                )
+            })?;
+            set_path(draft, path, Value::String(leaf), &def.rows)
+        }
+        Binding::Text {
+            path,
             nullable,
             date,
+            ..
         } => {
             let leaf = if text.trim().is_empty() && *nullable {
                 Value::Null
@@ -704,6 +745,14 @@ fn fill_box(
         Binding::Whole { path, nullable } => {
             let leaf = if text.trim().is_empty() && *nullable {
                 Value::Null
+            } else if text.trim().is_empty()
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.kind.contains("select"))
+            {
+                // A month or day select's blank official choice (`00`): the
+                // draft keeps 0 for "not chosen" and its validation says so.
+                Value::from(0)
             } else {
                 let number = text
                     .trim()
@@ -712,6 +761,20 @@ fn fill_box(
                 Value::from(number)
             };
             set_path(draft, path, leaf, &def.rows)
+        }
+        // A select's blank official choice ("Select Tax Rate") when the
+        // binding lists none: every option sets the same one field, so blank
+        // clears it. The typed draft decides whether that field may be empty.
+        Binding::Choice { options }
+            if text.trim().is_empty()
+                && !options.iter().any(|option| option.value.is_empty())
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.kind.contains("select"))
+                && single_choice_path(options).is_some() =>
+        {
+            let path = single_choice_path(options).expect("checked in the guard");
+            set_path(draft, path, Value::Null, &def.rows)
         }
         Binding::Choice { options } => {
             let option = choose(def, key, options, &text).ok_or_else(|| {
@@ -749,6 +812,20 @@ fn fill_box(
     // Typed values must still make a draft (an integer field refuses 1.5).
     with_agent_kind!(kind, F => parse::<F>(kind, draft).map(|_| ()))
         .map_err(|error| format!("`{key}` = `{text}` does not fit this box: {error}"))
+}
+
+/// The one draft field every option of a choice sets, if they all set
+/// exactly that field.
+fn single_choice_path(options: &[ChoiceOption]) -> Option<&str> {
+    let mut paths = options.iter().map(|option| {
+        let mut keys = option.set.keys();
+        match (keys.next(), keys.next()) {
+            (Some(path), None) => Some(path.as_str()),
+            _ => None,
+        }
+    });
+    let first = paths.next()??;
+    paths.all(|path| path == Some(first)).then_some(first)
 }
 
 fn choose<'a>(
@@ -817,6 +894,52 @@ pub fn parse_amount(text: &str) -> Option<f64> {
 }
 
 /// Accept MM/DD/YYYY (the official box format) or the field's own format.
+/// `current` (a date in `format`, possibly partial or empty) with one part
+/// replaced by `text`: `01` or `1 - January` for a month, `5` for a day, a
+/// four-digit year. Blank text clears the part; all parts blank is `""`.
+/// The other parts are kept as they are, so a date can be entered one box
+/// at a time; the form's own validation judges the finished date.
+fn set_date_part(current: &str, format: DateFormat, part: DatePart, text: &str) -> Option<String> {
+    let digits: String = text
+        .trim()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if digits.is_empty() && !text.trim().is_empty() {
+        return None;
+    }
+    let value = if digits.is_empty() {
+        String::new()
+    } else {
+        let number: u32 = digits.parse().ok()?;
+        match part {
+            DatePart::Month if (1..=12).contains(&number) => format!("{number:02}"),
+            DatePart::Day if (1..=31).contains(&number) => format!("{number:02}"),
+            DatePart::Year if digits.len() == 4 => digits,
+            _ => return None,
+        }
+    };
+    let (separator, order): (char, &[DatePart]) = match format {
+        DateFormat::Mdy => ('/', &[DatePart::Month, DatePart::Day, DatePart::Year]),
+        DateFormat::Iso => ('-', &[DatePart::Year, DatePart::Month, DatePart::Day]),
+        DateFormat::MonthYear => ('/', &[DatePart::Month, DatePart::Year]),
+    };
+    let at = order.iter().position(|p| *p == part)?;
+    let mut parts: Vec<String> = current
+        .trim()
+        .split(separator)
+        .map(|piece| piece.trim().to_string())
+        .collect();
+    parts.resize(order.len(), String::new());
+    parts.truncate(order.len());
+    parts[at] = value;
+    Some(if parts.iter().all(String::is_empty) {
+        String::new()
+    } else {
+        parts.join(&separator.to_string())
+    })
+}
+
 fn reformat_date(text: &str, format: DateFormat) -> Option<String> {
     let digits: Vec<&str> = text
         .trim()
@@ -1177,6 +1300,48 @@ mod tests {
             Some("07/2031")
         );
         assert_eq!(reformat_date("13/40/2031", DateFormat::Mdy), None);
+    }
+
+    #[test]
+    fn a_date_part_box_rewrites_only_its_part() {
+        use DatePart::{Day, Month, Year};
+        let mdy = DateFormat::Mdy;
+        // Entered one box at a time, from empty.
+        assert_eq!(set_date_part("", mdy, Month, "3").as_deref(), Some("03//"));
+        assert_eq!(
+            set_date_part("03//", mdy, Day, "15").as_deref(),
+            Some("03/15/")
+        );
+        assert_eq!(
+            set_date_part("03/15/", mdy, Year, "2026").as_deref(),
+            Some("03/15/2026")
+        );
+        // A select's label carries its code first.
+        assert_eq!(
+            set_date_part("03/15/2026", mdy, Month, "12 - December").as_deref(),
+            Some("12/15/2026")
+        );
+        // Clearing a part keeps the others; clearing all leaves nothing.
+        assert_eq!(
+            set_date_part("03/15/2026", mdy, Day, "").as_deref(),
+            Some("03//2026")
+        );
+        assert_eq!(set_date_part("03//", mdy, Month, "").as_deref(), Some(""));
+        // Out of range or not a number is refused.
+        assert_eq!(set_date_part("", mdy, Month, "13"), None);
+        assert_eq!(set_date_part("", mdy, Month, "00"), None);
+        assert_eq!(set_date_part("", mdy, Day, "32"), None);
+        assert_eq!(set_date_part("", mdy, Year, "26"), None);
+        assert_eq!(set_date_part("", mdy, Month, "March"), None);
+        // Other formats keep their own order.
+        assert_eq!(
+            set_date_part("2031-07-19", DateFormat::Iso, Month, "2").as_deref(),
+            Some("2031-02-19")
+        );
+        assert_eq!(
+            set_date_part("07/2031", DateFormat::MonthYear, Year, "2032").as_deref(),
+            Some("07/2032")
+        );
     }
 
     #[test]

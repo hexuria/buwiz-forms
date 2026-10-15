@@ -568,6 +568,28 @@
     "frm1603Q:Sched1:txtValue2": {
       "label": "Schedule 1 line 1 (WF360) — monetary value",
       "evidence": "painted form_1603q_view.rs (local:value0 via binding /monetary_value/1): 'Schedule 1 line 1 (WF360) — monetary value'; painted form_1603q_view.rs (local:value1 via binding /monetary_value/1): 'Schedule 1 line 2 (WF330) — monetary value'; writer-cells printed caption: 'Schedule 1 row 2, Monetary Value of Fringe Benefit'"
+    },
+    "frm1603Q:selTreaty": {
+      "kind": "sel",
+      "options": [
+        {
+          "value": "0",
+          "label": "None"
+        },
+        {
+          "value": "1",
+          "label": "Special Rate"
+        },
+        {
+          "value": "2",
+          "label": "International Tax Treaty"
+        },
+        {
+          "value": "3",
+          "label": "Both"
+        }
+      ],
+      "evidence": "D01: options as in the official BIR-Form1603Qv2018.hta select (0 blank, 1 Special Rate, 2 International Tax Treaty, 3 Both); the blank official 0 is labelled None. Values are the agent binding's /tax_relief choices (0 unspecified, 1 special_rate, 2 international_tax_treaty, 3 both)."
     }
   },
   "1604C": {
@@ -636,6 +658,61 @@
     "frm1604c:txtSched1Total": {
       "label": "Part II continuation TOTAL Total Amount Remitted",
       "evidence": "agent box label: 'Part II continuation TOTAL Total Amount Remitted'; writer-cells printed caption: 'Part II continuation TOTAL Total Amount Remitted'"
+    },
+    "frm1604c:txtRefMonth": {
+      "label": "Month",
+      "kind": "sel",
+      "options": [
+        {
+          "value": "01",
+          "label": "01 - January"
+        },
+        {
+          "value": "02",
+          "label": "02 - February"
+        },
+        {
+          "value": "03",
+          "label": "03 - March"
+        },
+        {
+          "value": "04",
+          "label": "04 - April"
+        },
+        {
+          "value": "05",
+          "label": "05 - May"
+        },
+        {
+          "value": "06",
+          "label": "06 - June"
+        },
+        {
+          "value": "07",
+          "label": "07 - July"
+        },
+        {
+          "value": "08",
+          "label": "08 - August"
+        },
+        {
+          "value": "09",
+          "label": "09 - September"
+        },
+        {
+          "value": "10",
+          "label": "10 - October"
+        },
+        {
+          "value": "11",
+          "label": "11 - November"
+        },
+        {
+          "value": "12",
+          "label": "12 - December"
+        }
+      ],
+      "evidence": "D02: Item 11 refund date, month part. The official 1604CF/1604C select offers 00 (blank) and 01-12 (BIR-Form1604CF.hta, changeRefund enables it only when Item 11 is Yes and resets it to 00 otherwise). form_1604c.rs keeps one MM/DD/YYYY refund_date split into txtRefMonth/txtRefDate/txtRefYear; the agent binding writes the month part of /refund_date. The blank 00 is the page's empty choice."
     }
   },
   "1604E": {
@@ -903,6 +980,48 @@
     "frm1606:txtOthers20": {
       "label": "If Exempt or Others, specify",
       "evidence": "painted form_1606_view.rs (local:txn_other via binding /transaction_other): 'If Exempt or Others, specify'; writer-cells printed caption: 'Schedule 2 If Exempt, or Others, specify'"
+    },
+    "frm1606:selTreaty": {
+      "kind": "sel",
+      "options": [
+        {
+          "value": "0",
+          "label": "International Tax Treaty"
+        },
+        {
+          "value": "1",
+          "label": "Special Law"
+        }
+      ],
+      "evidence": "D04: options as in the official BIR-Form1606.hta select (\"\" blank, 0 International Tax Treaty, 1 Special Law). The blank official choice is the page's empty choice (binding \"\" = /tax_relief no); 0 is a real choice, not blank."
+    },
+    "frm1606:txtTaxRate": {
+      "label": "Tax rate",
+      "kind": "sel",
+      "computed": false,
+      "options": [
+        {
+          "value": "0",
+          "label": "0%"
+        },
+        {
+          "value": "1.5",
+          "label": "1.5%"
+        },
+        {
+          "value": "3",
+          "label": "3%"
+        },
+        {
+          "value": "5",
+          "label": "5%"
+        },
+        {
+          "value": "6",
+          "label": "6%"
+        }
+      ],
+      "evidence": "D03: Item 31 is chosen by the filer, not computed. Official BIR-Form1606.hta: select titled \"Please select Tax Rate\" with \"\" Select Tax Rate, 0 0%, 1.5 1.5%, 3 3%, 5 5%, 6 6%, enabled for the filer. form_1606.rs stores it as tax_rate (Form1606TaxRate) and requires it (\"Please select the tax rate on Item 31.\"). The rules corpus marks it computed; probe::USER_CHOSEN corrects the projection and the binding is derived. The blank official choice is the page's empty choice (clears tax_rate)."
     }
   },
   "1700": {
@@ -2116,6 +2235,62 @@
     "frm1701MS:Pg2TaxPayer": {
       "label": "Taxpayer's name",
       "evidence": "painted form_1701ms_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's name\""
+    },
+    "frm1701MS:civilStatus": {
+      "kind": "sel",
+      "options": [
+        {
+          "value": "Single",
+          "label": "Single"
+        },
+        {
+          "value": "Married",
+          "label": "Married"
+        },
+        {
+          "value": "Widowed",
+          "label": "Widow/er"
+        },
+        {
+          "value": "Separated",
+          "label": "Legally Separated"
+        },
+        {
+          "value": "Not Applicable",
+          "label": "Not Applicable"
+        }
+      ],
+      "evidence": "Item 4 civil status. form_1701ms.rs Form1701MsCivilStatus::ALL: value() is the select's option value (Widowed, Separated, Not Applicable), label() its text (Widow/er, Legally Separated). The extracted list used the text as the value, which the binding refused."
+    },
+    "taxCodeDropdown": {
+      "kind": "sel",
+      "options": [
+        {
+          "value": "II012",
+          "label": "II012 - Business Income- Graduated IT Rates"
+        },
+        {
+          "value": "II013",
+          "label": "II013 - Mixed Income- Graduated IT Rates"
+        },
+        {
+          "value": "II014",
+          "label": "II014 - Income from Profession- Graduated IT Rates"
+        },
+        {
+          "value": "II015",
+          "label": "II015 - Business Income- 8% IT Rate"
+        },
+        {
+          "value": "II016",
+          "label": "II016 - Mixed Income-8% IT Rate"
+        },
+        {
+          "value": "II017",
+          "label": "II017 - Income from Profession - 8% IT Rate"
+        }
+      ],
+      "evidence": "Item 18 taxpayer ATC (checkButtons). form_1701ms.rs: compensation (II011) is a spouse-column source only (Form1701MsSource::Compensation, \"Spouse column only\"), so the taxpayer's select offers II012-II017; text from form_1701ms_atc_description."
     }
   },
   "1701Q": {
@@ -2880,6 +3055,24 @@
     "frm1706:txtDateYearI": {
       "kind": "int",
       "evidence": "fields.json logical_type date-component-string, max_length 4 — one component of a split date"
+    },
+    "frm1706:selTreaty": {
+      "kind": "sel",
+      "options": [
+        {
+          "value": "0",
+          "label": "None"
+        },
+        {
+          "value": "1",
+          "label": "International Tax Treaty"
+        },
+        {
+          "value": "2",
+          "label": "Special Law"
+        }
+      ],
+      "evidence": "D05: options as in the official BIR-Form1706.hta select (0 blank, 1 International Tax Treaty, 2 Special Law); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 international_tax_treaty, 2 special_law."
     }
   },
   "1707": {
@@ -3190,7 +3383,41 @@
     },
     "frm1800v2018:txtDate": {
       "label": "Day",
-      "evidence": "Day of the date of donation (Item 1 MM/DD/YYYY)"
+      "evidence": "D06: Item 1 day of donation. fields.json: control_kind select, max_length 2 (official-hta-runtime control L313); the page's binding is whole /donation_day (u8); form_1800.rs writes it padded ({:02}) and donation_date() rejects impossible dates (\"Please enter a valid date on Item 1.\"). Blank is the official 00 (not chosen).",
+      "kind": "sel",
+      "options": [
+        "01",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31"
+      ]
     },
     "item:0:1": {
       "label": "Amended Return?",
@@ -7573,6 +7800,24 @@
     "frm2200S:chkPymntManner_2": {
       "label": "16 Prepayment/Advance Deposit",
       "evidence": "agent group option: '16 Prepayment/Advance Deposit'; agent box label: 'Prepayment/Advance Deposit'; binding /manner='prepayment' when selected: 'Prepayment'"
+    },
+    "frm2200S:lstTaxTreaty": {
+      "kind": "sel",
+      "options": [
+        {
+          "value": "0",
+          "label": "None"
+        },
+        {
+          "value": "1",
+          "label": "Special Law"
+        },
+        {
+          "value": "2",
+          "label": "International Tax Treaty"
+        }
+      ],
+      "evidence": "D09: options as in the official BIR-Form2200S.hta select (0 blank, 1 Special Law, 2 International Tax Treaty); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 special_law, 2 international_tax_treaty."
     }
   },
   "2200T": {
@@ -8416,6 +8661,24 @@
     "txtmodalTotal23C": {
       "label": "Schedule 8 Total Tax Withheld",
       "evidence": "agent box label: 'Schedule 8 Total Tax Withheld'; writer-cells printed caption: 'Schedule 8 Total Tax Withheld'"
+    },
+    "frm2550m:lstSpecialTax": {
+      "kind": "sel",
+      "options": [
+        {
+          "value": "0",
+          "label": "None"
+        },
+        {
+          "value": "1",
+          "label": "Special Rate"
+        },
+        {
+          "value": "2",
+          "label": "International Tax Treaty"
+        }
+      ],
+      "evidence": "D10: options as in the official BIR-Form2550M.hta select (0 blank, 1 Special Rate, 2 International Tax Treaty); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 special_rate, 2 international_tax_treaty."
     }
   },
   "2550Q": {

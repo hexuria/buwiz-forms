@@ -174,7 +174,8 @@ fn hide_repeated_occurrences(form: &mut Value) {
 }
 
 /// Apply one form's corrections. Keys are a field key `k` (label, kind,
-/// options of that field, or of a schedule column when `k` is a table cell)
+/// options or computed flag of that field, or of a schedule column when `k`
+/// is a table cell)
 /// or `item:<part>:<index>` (that item's printed label). `kind: "hidden"`
 /// keeps the field for validation placement but the page does not draw it.
 /// The `evidence` text is provenance only.
@@ -188,6 +189,17 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
         }
         if let Some(options) = fix.get("options") {
             target["o"] = options.clone();
+        }
+        // `computed: false` corrects a field the extractor marked computed
+        // although the filer chooses it (1606 Item 31).
+        if let Some(computed) = fix.get("computed").and_then(Value::as_bool)
+            && let Some(object) = target.as_object_mut()
+        {
+            if computed {
+                object.insert("c".into(), Value::from(1));
+            } else {
+                object.remove("c");
+            }
         }
     };
     let Some(parts) = form["parts"].as_array_mut() else {
@@ -1712,20 +1724,14 @@ mod tests {
         );
         // Explicitly retain the non-catalog / unbound cases as open work.
         // They must not silently turn into an incomplete catalog rollout.
+        // D01-D06, D09 and D10 left this list with reviewed schema
+        // options (schema-overrides.json, from each form's official HTA).
         assert_eq!(supplied, 80);
         assert_eq!(
             missing,
             [
-                "1603Q frm1603Q:selTreaty",
-                "1604C frm1604c:txtRefMonth",
-                "1606 frm1606:txtTaxRate",
-                "1606 frm1606:selTreaty",
-                "1706 frm1706:selTreaty",
-                "1800 frm1800v2018:txtDate",
                 "1801 frm1801v2018:sched4Rdo_{index}",
                 "2000 drpATCCode{index}",
-                "2200S frm2200S:lstTaxTreaty",
-                "2550M frm2550m:lstSpecialTax",
             ]
         );
     }

@@ -45,6 +45,51 @@ function message(e) {
     .replace(/^`[^`]+`:\s*/, "");
 }
 
+/**
+ * A listed dropdown option as `{ value, label }`. The schema writes many
+ * as `"CODE - Label"` strings (`"03 - March"`): the host takes the code, so
+ * that is the value and the whole string the label. Template text the
+ * extractor left (`"\" + rdo.description + \""`) is dropped. Mirrored by
+ * `page_option_value` in crates/bir-shell/src/screen_form_audit.rs.
+ */
+function optionOf(o) {
+  if (typeof o !== "string") return o;
+  if (/^"/.test(o)) return null;
+  const m = /^(\S+) - (.+)$/.exec(o);
+  return m ? { value: m[1], label: o } : { value: o, label: o };
+}
+
+/**
+ * A dropdown for key `k` (a field or a schedule cell): the host's catalog
+ * choices or the schema's listed ones. The host resolves catalog choices
+ * into the typed draft and marks the selected one when two options share an
+ * official code (2000).
+ */
+function selectBox(cx, ui, k, label, listedRaw, value, locked, width) {
+  const s = ui.state;
+  const listed = (s.options[k] || listedRaw || []).map(optionOf).filter(Boolean);
+  const options = [{ value: "", label: "Choose…" }, ...listed];
+  const selected = listed.find((o) => o.selected);
+  const known = options.some((o) => o.value === value);
+  // Unknown all-zero codes (0, 00, 000) are the official runtime's empty
+  // choices (excise locations, an empty RDO). A listed 0 stays selectable.
+  const shown = selected ? selected.value : known ? value : /^0+$/.test(value) ? "" : value;
+  if (shown && !selected && !known) options.push({ value: shown, label: shown });
+  if (locked) return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
+  return Dropdown(cx, `fp-${k}`, {
+    label,
+    width,
+    options,
+    value: shown,
+    open: s.openSelect === k,
+    onOpenChange: (open, cx) => {
+      s.openSelect = open ? k : null;
+      cx.notify();
+    },
+    onChange: (v, cx) => ui.choose({ [k]: v }, cx),
+  });
+}
+
 /** Items whose four text boxes are the TIN (3-3-3-5), shown as locked boxes. */
 function isTinItem(it) {
   const fs = it.f || [];
@@ -225,7 +270,10 @@ export class FormPageActions {
     const put = (f, v) => {
       if (!f || f.c || s.locks[f.k] !== undefined) return;
       let value = v;
-      if (f.t === "sel" && f.o) value = f.o.find((o) => String(o).startsWith(v) || String(o) === String(Number(v))) || v;
+      if (f.t === "sel" && f.o) {
+        const hit = f.o.map(optionOf).find((o) => o && (o.value === v || o.value === String(Number(v))));
+        value = hit ? hit.value : v;
+      }
       edits[f.k] = value;
       const input = s.inputs.get(f.k);
       if (input) input.set_value(String(value));
@@ -514,32 +562,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const value = s.values[f.k] ?? "";
   let el;
   if (f.t === "sel") {
-    // The host resolves catalog choices into the typed draft. It marks
-    // the selected choice when two options share an official code (2000).
-    const listed = (s.options[f.k] || f.o || [])
-      .filter((o) => typeof o !== "string" || !/^"/.test(o))
-      .map((o) => (typeof o === "string" ? { value: o, label: o } : o));
-    const options = [{ value: "", label: "Choose…" }, ...listed];
-    const selected = listed.find((o) => o.selected);
-    const known = options.some((o) => o.value === value);
-    // Unknown 0/00 are the official runtime's empty choices (including
-    // excise locations). A listed 0 remains a real, selectable option.
-    const shown = selected ? selected.value : known ? value : value === "0" || value === "00" ? "" : value;
-    if (shown && !selected && !known) options.push({ value: shown, label: shown });
-    el = locked
-      ? lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width)
-      : Dropdown(cx, `fp-${f.k}`, {
-          label: f.l,
-          width,
-          options,
-          value: shown,
-          open: s.openSelect === f.k,
-          onOpenChange: (open, cx) => {
-            s.openSelect = open ? f.k : null;
-            cx.notify();
-          },
-          onChange: (v, cx) => ui.choose({ [f.k]: v }, cx),
-        });
+    el = selectBox(cx, ui, f.k, f.l, f.o, value, locked, width);
   } else if (f.t === "chk") {
     const on = value === "true" || value === "1" || value === "Y";
     return div()
@@ -649,6 +672,8 @@ function scheduleTable(cx, ui, it, width) {
       if (col.t === "radio" || col.t === "chk") {
         const on = value === "true";
         cell = Checkbox(cx, `fp-${k}`, on, (v, cx) => (locked ? null : ui.choose({ [k]: v ? "true" : "false" }, cx)), `${col.l}, row ${r + 1}`);
+      } else if (col.t === "sel") {
+        cell = selectBox(cx, ui, k, `${col.l}, row ${r + 1}`, col.o, value, locked, colW - 16);
       } else if (locked || !s.inputs.get(k)) {
         cell = lockedBox(cx, col.t === "money" ? formatMoney(value) : value, colW - 16, { right: col.t === "money" });
       } else {
