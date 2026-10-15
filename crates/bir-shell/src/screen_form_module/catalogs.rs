@@ -4,13 +4,13 @@
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{
-    excise_places, form_1601c, form_1601fq, form_1702mx_official, form_1702q, form_2000,
-    form_2200s, form_2550m,
+    excise_places, form_1600wp, form_1601c, form_1601fq, form_1701a, form_1702mx_official,
+    form_1702q, form_2000, form_2200s, form_2550m,
 };
 use bir_core::reference;
 use serde_json::{Map, Value, json};
 
-use super::{rows_2550m, schema_entry};
+use super::{rows_2550m, rows_2550q, schema_entry};
 
 fn option(value: &str, label: &str) -> Value {
     json!({"value": value, "label": label})
@@ -50,7 +50,14 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
     if sales_2550m_row(kind, key).is_some() {
         return 1;
     }
+    // A 1600WP Part II tax base needs its row, which choosing the ATC makes.
+    if kind.form_code() == "1600WP" && key.starts_with("frm1600WP:txtTaxBase") {
+        return 1;
+    }
     if let Some(order) = rows_2550m::edit_order(kind, key) {
+        return order;
+    }
+    if let Some(order) = rows_2550q::edit_order(kind, key) {
         return order;
     }
     location(kind, key).map_or(0, |(_, level)| level + 1)
@@ -84,6 +91,15 @@ pub(super) fn fill(
     }
     if let Some(row) = rate_2200s_row(kind, key) {
         return fill_2200s_rate(draft, row, value);
+    }
+    if let Some(row) = atc_1600wp_row(kind, key) {
+        return fill_1600wp_atc(draft, row, value);
+    }
+    if let Some((part_b, row)) = spouse_1701a_more_row(kind, key) {
+        return fill_1701a_more_spouse(draft, part_b, row, value);
+    }
+    if let Some(cell) = rows_2550q::cell(kind, key) {
+        return rows_2550q::fill(kind, draft, cell, value);
     }
     if let Some(row) = atc_2000_row(kind, key)
         && let Some(choice) = value
@@ -208,6 +224,98 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || rows_2550m::cell(kind, key).is_some()
         || month_year_1601c_row(kind, key).is_some()
         || rate_2200s_row(kind, key).is_some()
+        || atc_1600wp_row(kind, key).is_some()
+        || spouse_1701a_more_row(kind, key).is_some()
+        || rows_2550q::cell(kind, key).is_some()
+}
+
+/// 1701A "(add more...)" spouse cell `frm1701A:txtmodalPartIV<A|B>_<n>C3`:
+/// `(Part IV.B, row n - 1)`. The probe bound only some of these: the spouse
+/// ATC's disable handlers moved the rest, and row 1 shows the Item 42/51
+/// text the link transfers. The cell is the filer's (`Form1701AMoreRow`).
+fn spouse_1701a_more_row(kind: AgentFormKind, key: &str) -> Option<(bool, usize)> {
+    if kind.form_code() != "1701A" {
+        return None;
+    }
+    let rest = key.strip_prefix("frm1701A:txtmodalPartIV")?;
+    let (part_b, rest) = match rest.split_at_checked(1)? {
+        ("A", rest) => (false, rest),
+        ("B", rest) => (true, rest),
+        _ => return None,
+    };
+    let n: usize = rest.strip_prefix('_')?.strip_suffix("C3")?.parse().ok()?;
+    n.checked_sub(1).map(|row| (part_b, row))
+}
+
+/// A "(add more...)" row's spouse amount. Like the row's other cells it
+/// starts the row (and any before it).
+fn fill_1701a_more_spouse(
+    draft: &mut Value,
+    part_b: bool,
+    row: usize,
+    value: &Value,
+) -> Result<(), String> {
+    let text = match value {
+        Value::Number(n) => n.to_string(),
+        other => other.as_str().unwrap_or_default().trim().to_string(),
+    };
+    let amount = if text.is_empty() {
+        0.0
+    } else {
+        agent::parse_amount(&text).ok_or_else(|| format!("`{text}` is not an amount."))?
+    };
+    let mut typed: form_1701a::Form1701ADraft =
+        serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    let rows = if part_b {
+        &mut typed.eight_other_income_more
+    } else {
+        &mut typed.other_income_more
+    };
+    if row >= rows.len() {
+        if text.is_empty() {
+            return Ok(());
+        }
+        rows.resize(row + 1, Default::default());
+    }
+    rows[row].spouse = amount;
+    *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 1600WP Part II row of `frm1600WP:txtAtcCode<n>` (row `n - 1`). The page
+/// writes one row per ATC ticked in its popup (`getATCCode`), two ATCs per
+/// category of withholding agent, so there are at most two rows; the host
+/// ticks and unticks them through the typed draft (`toggle_atc`).
+fn atc_1600wp_row(kind: AgentFormKind, key: &str) -> Option<usize> {
+    if kind.form_code() != "1600WP" {
+        return None;
+    }
+    let n: usize = key.strip_prefix("frm1600WP:txtAtcCode")?.parse().ok()?;
+    (1..=2).contains(&n).then(|| n - 1)
+}
+
+/// Choose a Part II row's ATC: a new row ticks it, a changed row unticks
+/// the old ATC and ticks the new one (its tax base starts again, as on the
+/// page), blank unticks it. Rows keep the popup's order.
+fn fill_1600wp_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+    let code = value.as_str().unwrap_or_default().trim();
+    let mut typed: form_1600wp::Form1600WpDraft =
+        serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    let current = typed.atc_rows.get(row).map(|r| r.atc_code.clone());
+    if current.as_deref() == Some(code) {
+        return Ok(());
+    }
+    if !code.is_empty() && typed.atc_rows.iter().any(|r| r.atc_code == code) {
+        return Err(format!("{code} is already in Part II."));
+    }
+    if let Some(current) = current {
+        typed.toggle_atc(&current)?;
+    }
+    if !code.is_empty() {
+        typed.toggle_atc(code)?;
+    }
+    *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// 2200S Schedule 1 "Others" row of `frm2200S:txtsched1AppTaxRate<i>`. The
@@ -374,6 +482,24 @@ fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Va
         );
     }
     match code {
+        "1600WP" if atc_1600wp_row(kind, key).is_some() => {
+            let category = serde_json::from_value::<form_1600wp::Form1600WpAgentCategory>(
+                draft["agent_category"].clone(),
+            )
+            .ok();
+            Some(
+                form_1600wp::FORM_1600WP_ATC_OPTIONS
+                    .iter()
+                    .filter(|option| category.is_none_or(|c| option.category == c))
+                    .map(|option| {
+                        code_option(
+                            option.code,
+                            &format!("{} ({}%)", option.description, option.rate_text),
+                        )
+                    })
+                    .collect(),
+            )
+        }
         "2550M" if atc_2550m_row(kind, key).is_some() => Some(
             form_2550m::FORM_2550M_ATCS
                 .iter()

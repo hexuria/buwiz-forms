@@ -910,6 +910,46 @@
     "frm1600WP:txtTax16": {
       "label": "16 Total Amount Still Due/(Overremittance)",
       "evidence": "P4: printed caption '16 Total Amount Still Due/(Overremittance)' (html-frozen/1600wp-2010/writer-cells.json joins frm1600WP:txtTax16)"
+    },
+    "table:1:part2": {
+      "no": "",
+      "label": "Part II – Computation of Tax",
+      "templates": [
+        "frm1600WP:txtAtcCode{index}",
+        "frm1600WP:txtTaxBase{index}",
+        "frm1600WP:txtTaxRate{index}",
+        "frm1600WP:txtTaxbeWithHeld{index}"
+      ],
+      "row_keys": {
+        "frm1600WP:txtAtcCode{index}": "frm1600WP:txtAtcCode{index}",
+        "frm1600WP:txtTaxBase{index}": "frm1600WP:txtTaxBase{index}",
+        "frm1600WP:txtTaxRate{index}": "frm1600WP:txtTaxRate{index}",
+        "frm1600WP:txtTaxbeWithHeld{index}": "frm1600WP:txtTaxbeWithHeld{index}"
+      },
+      "rows": [
+        1,
+        2
+      ],
+      "cols": [
+        "ATC",
+        "Tax Base",
+        "Rate",
+        "Tax Required to be Withheld"
+      ],
+      "evidence": "N04: form_1600wp.rs: the page writes one Part II row per ATC ticked in its popup (getATCCode), two ATCs per category of withholding agent (FORM_1600WP_ATC_OPTIONS), so there are at most two rows (txtAtcCode<n>, txtTaxBase<n>, txtTaxRate<n>, txtTaxbeWithHeld<n>, n from 1). The host ticks the ATC (catalogs.rs atc_1600wp_row, toggle_atc); the tax base is bound; rate and tax withheld are computed (getRequiredWithheld: base x rate). Captions from html-frozen/1600wp-2010/index.html Part II (ATC, Tax Base, Rate, Tax Required to be Withheld)."
+    },
+    "frm1600WP:txtAtcCode1": {
+      "computed": false,
+      "kind": "sel",
+      "evidence": "N04: the row's ATC is chosen from the category's popup (getATCCode); the host writes it (catalogs.rs atc_1600wp_row), so it is a choice, not a computed box."
+    },
+    "frm1600WP:txtTaxRate1": {
+      "computed": true,
+      "evidence": "N04: the rate follows the ATC (form_1600wp.rs FORM_1600WP_ATC_OPTIONS rate_text)."
+    },
+    "frm1600WP:txtTaxbeWithHeld1": {
+      "computed": true,
+      "evidence": "N04: tax withheld is tax base x rate (form_1600wp.rs recompute, getRequiredWithheld)."
     }
   },
   "1601C": {
@@ -5652,6 +5692,466 @@
         "order": 910
       },
       "evidence": "P4: html-frozen/1701-2018/index.html prints 'PART IX – Reconciliation of Net Income per Books Against Taxable Income' with its own numbered items; the key names Part 9 item 10; heading from the item's sourced field captions"
+    },
+    "frm1701:txtPg3mSchedA_1A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_1B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_1A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_1B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedC_1A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedC_1B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_2A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_2B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_2A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_2B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedC_2A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedC_2B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_3A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_3A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedC_3A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_3B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_3B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedC_3B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_4A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_4B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_4A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_4B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_5A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_5B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_5A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_5B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_6A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedA_6B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_6A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_6B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_7A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_7B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_8A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_8B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_9B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_9A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_10{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_10A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_10B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_11{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_11A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_11B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_12B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_12A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_13A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_13B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_14A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_14B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_15A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg3mSchedB_15B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_3{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_1{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_1ALB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_1A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_2{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_2ALB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_2A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_3ALB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_3A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_4A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_4B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_4{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_4ALB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_4A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_5A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_5B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD1_5A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_6A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_6B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_6{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_6BLB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_6B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_7A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_7B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_7{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_7BLB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_7B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_8A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_8B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_8{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_8LBB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_8B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_9A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_11A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_11B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_12A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_12B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_13A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_13B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_14A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_14B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_15A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_15B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_16A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_16B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17aA{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17aB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17bA{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17bB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17cA{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17cB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17d{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17dA{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_17dB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_18A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_18B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:rdoPg3mExempt{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:rdoPg3mSpecialRate{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_9B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_9{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_9BLB{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_9B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_10A{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedC_10B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1701:txtPg4mSchedD2_10B{EX|SP}{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
     }
   },
   "1701A": {
@@ -5836,6 +6336,54 @@
     "frm1701A:optATC_4": {
       "label": "7 II017 Income from Profession - 8% IT Rate",
       "evidence": "P4: printed caption '7 II017 Income from Profession - 8% IT Rate' (html-frozen/1701a-2018/writer-cells.json xbox_joins frm1701A:optATC_4)"
+    },
+    "table:4:morea": {
+      "no": "",
+      "label": "Part IV.A Item 42 – Other Non-Operating Income – (add more...) rows",
+      "templates": [
+        "frm1701A:txtmodalPartIVADesc_{N>=1}C1",
+        "frm1701A:txtmodalPartIVA_{N>=1}C2",
+        "frm1701A:txtmodalPartIVA_{N>=1}C3"
+      ],
+      "row_keys": {
+        "frm1701A:txtmodalPartIVADesc_{N>=1}C1": "frm1701A:txtmodalPartIVADesc_{index}C1",
+        "frm1701A:txtmodalPartIVA_{N>=1}C2": "frm1701A:txtmodalPartIVA_{index}C2",
+        "frm1701A:txtmodalPartIVA_{N>=1}C3": "frm1701A:txtmodalPartIVA_{index}C3"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "A) Taxpayer/Filer",
+        "B) Spouse"
+      ],
+      "evidence": "N04: form_1701a.rs: Items 42 and 51 take more rows through the official '(add more...)' modals (modalPartIVA / modalPartIVB, inside frmMain); saving two or more rows copies them into tblmodalPartIV<A|B>Repository, the upload writes every row's description and two amounts ahead of txtmodalPartIV<A|B>_C1, and Item 42/51 reads OTHERS with the whole-peso subtotals. Row 1 is the Item 42/51 entry the link transfers (Form1701AMoreRow). The probe binds rows 1-12 (agent supplement_row_families, with add-more samples); the spouse cells the probe could not tie are written by the host (catalogs.rs spouse_1701a_more_row). Captions from html-frozen/1701a-2018/index.html ('Add: Other Non-Operating Income (specify below)'; columns A Taxpayer/Filer, B Spouse)."
+    },
+    "table:4:moreb": {
+      "no": "",
+      "label": "Part IV.B Item 51 – Other Non-Operating Income (8% rate) – (add more...) rows",
+      "templates": [
+        "frm1701A:txtmodalPartIVBDesc_{N>=1}C1",
+        "frm1701A:txtmodalPartIVB_{N>=1}C2",
+        "frm1701A:txtmodalPartIVB_{N>=1}C3"
+      ],
+      "row_keys": {
+        "frm1701A:txtmodalPartIVBDesc_{N>=1}C1": "frm1701A:txtmodalPartIVBDesc_{index}C1",
+        "frm1701A:txtmodalPartIVB_{N>=1}C2": "frm1701A:txtmodalPartIVB_{index}C2",
+        "frm1701A:txtmodalPartIVB_{N>=1}C3": "frm1701A:txtmodalPartIVB_{index}C3"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "A) Taxpayer/Filer",
+        "B) Spouse"
+      ],
+      "evidence": "N04: form_1701a.rs: Items 42 and 51 take more rows through the official '(add more...)' modals (modalPartIVA / modalPartIVB, inside frmMain); saving two or more rows copies them into tblmodalPartIV<A|B>Repository, the upload writes every row's description and two amounts ahead of txtmodalPartIV<A|B>_C1, and Item 42/51 reads OTHERS with the whole-peso subtotals. Row 1 is the Item 42/51 entry the link transfers (Form1701AMoreRow). The probe binds rows 1-12 (agent supplement_row_families, with add-more samples); the spouse cells the probe could not tie are written by the host (catalogs.rs spouse_1701a_more_row). Captions from html-frozen/1701a-2018/index.html ('Add: Other Non-Operating Income (specify below)'; columns A Taxpayer/Filer, B Spouse)."
     }
   },
   "1701MS": {
@@ -9082,6 +9630,356 @@
     "item:20:8": {
       "label": "Schedule 10 Special Deductions",
       "evidence": "P4: item heading from its fields' sourced captions"
+    },
+    "table:19:sc6i4": {
+      "no": "",
+      "label": "Schedule 6 Item 4 – Special Allowable Itemized Deductions – (Add more...) rows",
+      "templates": [
+        "frm1702MX:txtPg6Sc6_{N>=1}Col1",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col2",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col3",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col4",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col5"
+      ],
+      "row_keys": {
+        "frm1702MX:txtPg6Sc6_{N>=1}Col1": "frm1702MX:txtPg6Sc6_{index}Col1",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col2": "frm1702MX:txtPg6Sc6_{index}Col2",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col3": "frm1702MX:txtPg6Sc6_{index}Col3",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col4": "frm1702MX:txtPg6Sc6_{index}Col4",
+        "frm1702MX:txtPg6Sc6_{N>=1}Col5": "frm1702MX:txtPg6Sc6_{index}Col5"
+      },
+      "rows": [
+        1,
+        12
+      ],
+      "cols": [
+        "Description",
+        "Legal Basis",
+        "A. Total Exempt",
+        "B. Total Special",
+        "C. Total Regular"
+      ],
+      "evidence": "N04: form_1702mx_official.rs: Schedule 6 Item 4's '(Add more...)' rows (Form1702MXSchedule6.more_rows) are uploaded as txtPg6Sc6_<n>Col1-Col6 while Item 4 is folded (two or more rows); the probe binds rows 1-17 (agent supplement_row_families). Captions from html-frozen/1702mx-2018c/index.html 'Schedule 6 – Special Allowable Itemized Deductions: Description, Legal Basis, A. Total Exempt, B. Total Special, C. Total Regular'."
+    },
+    "frm1702MX:txtPg6Sc6_1Col1": {
+      "kind": "text",
+      "evidence": "N04: a Schedule 6 row's description and legal basis are text (Form1702MXSpecialDeductionRow); the extractor typed the family money."
+    },
+    "frm1702MX:txtPg6Sc6_1Col2": {
+      "kind": "text",
+      "evidence": "N04: a Schedule 6 row's description and legal basis are text (Form1702MXSpecialDeductionRow); the extractor typed the family money."
+    },
+    "frm1702MX:txtPg6Sc5I39_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg6Sc5I39_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg6Sc5I39_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg6Sc5I39_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I4other-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg3Sc5It17i_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg3Sc5It17i_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg3Sc5It17i_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg3Sc5It17i_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc4I3_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc4I3_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc4I3_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc4I3_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc5I4_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc5I4_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc5I4_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg5Sc5I4_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I2CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I2CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I3CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I3CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I4CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I4CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I4CC-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I4CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I4CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I5CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I5CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I5CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I5CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I6CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I6CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I6CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I6CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I7CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I7CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I7CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc14I7CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg2Sc3_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg2Sc3_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg2Sc3_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg2Sc3_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I8CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I8CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I9CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I9CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:drpPg9Sc13I10CA-1-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I10CA-2-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:drpPg9Sc13I10CB-1-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I10CB-2-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I11CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I11CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I12CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I12CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I13CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I13CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I14CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I14CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I15CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I15CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I16CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I16CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I17CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I17CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I18CA-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg9Sc13I18CB-{N>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm3_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm3_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm3_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm3_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm6_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm6_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm6_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm6_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm8_{N>=1}Col1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm8_{N>=1}Col2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm8_{N>=1}Col3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702MX:txtPg4Sc10Itm8_{N>=1}Col4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702MX model. form_1702mx_official.rs: 'The four base pages and Schedule 6 Item 4's (Add more...) rows are supported; the mandatory attachments (Instruction B, one copy per exempt or special-rate activity) and the other add more modals are cloned into the official form at run time, so a return that needs them does not validate here.' The draft has no place for these rows and the official BIR-Form1702MXv2018C.hta is not in the workspace to port them from, so the runtime row template is hidden rather than shown as a box that never saves."
     }
   },
   "1702Q": {
@@ -9988,6 +10886,30 @@
         "Amount"
       ],
       "evidence": "N04: the official '(Add more...)' modal (rules/forms/1702rt-v2018c/fields.json frm1702RT:txtPg4Sc5I8.{N>=1}C* runtime-indexed-family, source loadModalTable / addRowModalTable / saveModalTable) holds the item's rows; form_1702rt.rs Form1702RTMoreRows keeps them, and form_1702rt_official.rs modal_controls uploads the saved rows (those with a description) once two or more fold the item into OTHERS with their subtotal. The probe binds rows 1-12 and more (agent supplement_row_families); row 1 is the item's own entry, as the page transfers it. Modal title from Form1702RTModal::title."
+    },
+    "frm1702RT:txtPg4Sc3AI7.{N>=1}C1": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702RT model. rules/forms/1702rt-v2018c/fields.json lists a Schedule IIIA Item 7 '(Add more...)' modal (frm1702RT:txtPg4Sc3AI7.{N>=1}C1-C6), but form_1702rt.rs FORM_1702RT_MODALS ('Every modal, in page DOM order') holds six modals without it, so the draft has no place for its rows, and the official v2018C HTA is not in the workspace to port it from. The runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702RT:txtPg4Sc3AI7.{N>=1}C2": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702RT model. rules/forms/1702rt-v2018c/fields.json lists a Schedule IIIA Item 7 '(Add more...)' modal (frm1702RT:txtPg4Sc3AI7.{N>=1}C1-C6), but form_1702rt.rs FORM_1702RT_MODALS ('Every modal, in page DOM order') holds six modals without it, so the draft has no place for its rows, and the official v2018C HTA is not in the workspace to port it from. The runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702RT:txtPg4Sc3AI7.{N>=1}C3": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702RT model. rules/forms/1702rt-v2018c/fields.json lists a Schedule IIIA Item 7 '(Add more...)' modal (frm1702RT:txtPg4Sc3AI7.{N>=1}C1-C6), but form_1702rt.rs FORM_1702RT_MODALS ('Every modal, in page DOM order') holds six modals without it, so the draft has no place for its rows, and the official v2018C HTA is not in the workspace to port it from. The runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702RT:txtPg4Sc3AI7.{N>=1}C4": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702RT model. rules/forms/1702rt-v2018c/fields.json lists a Schedule IIIA Item 7 '(Add more...)' modal (frm1702RT:txtPg4Sc3AI7.{N>=1}C1-C6), but form_1702rt.rs FORM_1702RT_MODALS ('Every modal, in page DOM order') holds six modals without it, so the draft has no place for its rows, and the official v2018C HTA is not in the workspace to port it from. The runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702RT:txtPg4Sc3AI7.{N>=1}C5": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702RT model. rules/forms/1702rt-v2018c/fields.json lists a Schedule IIIA Item 7 '(Add more...)' modal (frm1702RT:txtPg4Sc3AI7.{N>=1}C1-C6), but form_1702rt.rs FORM_1702RT_MODALS ('Every modal, in page DOM order') holds six modals without it, so the draft has no place for its rows, and the official v2018C HTA is not in the workspace to port it from. The runtime row template is hidden rather than shown as a box that never saves."
+    },
+    "frm1702RT:txtPg4Sc3AI7.{N>=1}C6": {
+      "kind": "hidden",
+      "evidence": "N04: not supported by this app's 1702RT model. rules/forms/1702rt-v2018c/fields.json lists a Schedule IIIA Item 7 '(Add more...)' modal (frm1702RT:txtPg4Sc3AI7.{N>=1}C1-C6), but form_1702rt.rs FORM_1702RT_MODALS ('Every modal, in page DOM order') holds six modals without it, so the draft has no place for its rows, and the official v2018C HTA is not in the workspace to port it from. The runtime row template is hidden rather than shown as a box that never saves."
     }
   },
   "1706": {
@@ -19891,90 +20813,14 @@
       "kind": "hidden",
       "evidence": "internal workflow/credential key txtEnroll (not a printed box)"
     },
-    "txtEstimatedLife10": {
-      "label": "Schedule 1 row 1 (F) Estimated Life (in months)",
-      "evidence": "agent box label: 'Schedule 1 row 1 (F) Estimated Life (in months)'; writer-cells printed caption: 'Schedule 1 row 1 (F) Estimated Life (in months)'"
-    },
-    "txtEstimatedLife11": {
-      "label": "Schedule 1 row 2 (F) Estimated Life (in months)",
-      "evidence": "agent box label: 'Schedule 1 row 2 (F) Estimated Life (in months)'; writer-cells printed caption: 'Schedule 1 row 2 (F) Estimated Life (in months)'"
-    },
     "txtFinalFlag": {
       "kind": "hidden",
       "evidence": "internal workflow/credential key txtFinalFlag (not a printed box)"
-    },
-    "txtIncomePayment30": {
-      "label": "Schedule 3 row 1 (C) Income Payment",
-      "evidence": "agent box label: 'Schedule 3 row 1 (C) Income Payment'; writer-cells printed caption: 'Schedule 3 row 1 (C) Income Payment'"
-    },
-    "txtIncomePayment31": {
-      "label": "Schedule 3 row 2 (C) Income Payment",
-      "evidence": "agent box label: 'Schedule 3 row 2 (C) Income Payment'; writer-cells printed caption: 'Schedule 3 row 2 (C) Income Payment'"
-    },
-    "txtInputTax10": {
-      "label": "Schedule 1 row 1 (E) Balance of Input Tax from Previous Period",
-      "evidence": "agent box label: 'Schedule 1 row 1 (E) Balance of Input Tax from Previous Period'; writer-cells printed caption: 'Schedule 1 row 1 (E) Balance of Input Tax from Previous Period'"
-    },
-    "txtInputTax11": {
-      "label": "Schedule 1 row 2 (E) Balance of Input Tax from Previous Period",
-      "evidence": "agent box label: 'Schedule 1 row 2 (E) Balance of Input Tax from Previous Period'; writer-cells printed caption: 'Schedule 1 row 2 (E) Balance of Input Tax from Previous Period'"
-    },
-    "txtNameOfMiller40": {
-      "label": "Schedule 4 row 1 (B) Name of Miller",
-      "evidence": "agent box label: 'Schedule 4 row 1 (B) Name of Miller'; writer-cells printed caption: 'Schedule 4 row 1 (B) Name of Miller'"
-    },
-    "txtNameOfMiller41": {
-      "label": "Schedule 4 row 2 (B) Name of Miller",
-      "evidence": "agent box label: 'Schedule 4 row 2 (B) Name of Miller'; writer-cells printed caption: 'Schedule 4 row 2 (B) Name of Miller'"
-    },
-    "txtNameOfTaxpayer40": {
-      "label": "Schedule 4 row 1 (C) Name of Taxpayer",
-      "evidence": "agent box label: 'Schedule 4 row 1 (C) Name of Taxpayer'; writer-cells printed caption: 'Schedule 4 row 1 (C) Name of Taxpayer'"
     },
     "txtNameOfTaxpayer41": {
       "label": "Schedule 4 row 2 (C) Name of Taxpayer",
       "evidence": "agent box label: 'Schedule 4 row 2 (C) Name of Taxpayer'; writer-cells printed caption: 'Schedule 4 row 2 (C) Name of Taxpayer' | binding type text; fields.json text/decimal-money",
       "kind": "text"
-    },
-    "txtNameWithHoldingAgent30": {
-      "label": "Schedule 3 row 1 (B) Name of Withholding Agent",
-      "evidence": "agent box label: 'Schedule 3 row 1 (B) Name of Withholding Agent'; writer-cells printed caption: 'Schedule 3 row 1 (B) Name of Withholding Agent'"
-    },
-    "txtNameWithHoldingAgent31": {
-      "label": "Schedule 3 row 2 (B) Name of Withholding Agent",
-      "evidence": "agent box label: 'Schedule 3 row 2 (B) Name of Withholding Agent'; writer-cells printed caption: 'Schedule 3 row 2 (B) Name of Withholding Agent'"
-    },
-    "txtOfficialReceiptNumber40": {
-      "label": "Schedule 4 row 1 (D) Official Receipt Number",
-      "evidence": "agent box label: 'Schedule 4 row 1 (D) Official Receipt Number'; writer-cells printed caption: 'Schedule 4 row 1 (D) Official Receipt Number'"
-    },
-    "txtOfficialReceiptNumber41": {
-      "label": "Schedule 4 row 2 (D) Official Receipt Number",
-      "evidence": "agent box label: 'Schedule 4 row 2 (D) Official Receipt Number'; writer-cells printed caption: 'Schedule 4 row 2 (D) Official Receipt Number'"
-    },
-    "txtRecognizedLife10": {
-      "label": "Schedule 1 row 1 (G) Recognized Life (Remaining Life)",
-      "evidence": "agent box label: 'Schedule 1 row 1 (G) Recognized Life (Remaining Life)'; writer-cells printed caption: 'Schedule 1 row 1 (G) Recognized Life (Remaining Life)'"
-    },
-    "txtRecognizedLife11": {
-      "label": "Schedule 1 row 2 (G) Recognized Life (Remaining Life)",
-      "evidence": "agent box label: 'Schedule 1 row 2 (G) Recognized Life (Remaining Life)'; writer-cells printed caption: 'Schedule 1 row 2 (G) Recognized Life (Remaining Life)'"
-    },
-    "txtSourceCode10": {
-      "label": "Schedule 1 row 1 (B) Source Code",
-      "evidence": "agent box label: 'Schedule 1 row 1 (B) Source Code'; writer-cells printed caption: 'Schedule 1 row 1 (B) Source Code'"
-    },
-    "txtSourceCode11": {
-      "label": "Schedule 1 row 2 (B) Source Code",
-      "evidence": "agent box label: 'Schedule 1 row 2 (B) Source Code'; writer-cells printed caption: 'Schedule 1 row 2 (B) Source Code'"
-    },
-    "txtTotalTaxWithHeld30": {
-      "label": "Schedule 3 row 1 (D) Total Tax Withheld",
-      "evidence": "agent box label: 'Schedule 3 row 1 (D) Total Tax Withheld'; writer-cells printed caption: 'Schedule 3 row 1 (D) Total Tax Withheld'"
-    },
-    "txtTotalTaxWithHeld31": {
-      "label": "Schedule 3 row 2 (D) Total Tax Withheld",
-      "evidence": "agent box label: 'Schedule 3 row 2 (D) Total Tax Withheld'; writer-cells printed caption: 'Schedule 3 row 2 (D) Total Tax Withheld'"
     },
     "frm2550qv2024:addSpecifyNo19": {
       "label": "Other Credits/Payment (Specify)",
@@ -20021,52 +20867,12 @@
       "evidence": "agent box label: 'Schedule 4 Total (To Part II, Item 17)'; writer-cells printed caption: 'Schedule 4 Total (To Part II, Item 17)'"
     },
     "txtAllowedInputTax10": {
-      "label": "Schedule 1 row 1 (H) Allowable Input Tax for the Period",
-      "evidence": "agent box label: 'Schedule 1 row 1 (H) Allowable Input Tax for the Period'; writer-cells printed caption: 'Schedule 1 row 1 (H) Allowable Input Tax for the Period'"
-    },
-    "txtAllowedInputTax11": {
-      "label": "Schedule 1 row 2 (H) Allowable Input Tax for the Period",
-      "evidence": "agent box label: 'Schedule 1 row 2 (H) Allowable Input Tax for the Period'; writer-cells printed caption: 'Schedule 1 row 2 (H) Allowable Input Tax for the Period'"
-    },
-    "txtAmountPaid40": {
-      "label": "Schedule 4 row 1 (E) Amount Paid",
-      "evidence": "agent box label: 'Schedule 4 row 1 (E) Amount Paid'; writer-cells printed caption: 'Schedule 4 row 1 (E) Amount Paid'"
-    },
-    "txtAmountPaid41": {
-      "label": "Schedule 4 row 2 (E) Amount Paid",
-      "evidence": "agent box label: 'Schedule 4 row 2 (E) Amount Paid'; writer-cells printed caption: 'Schedule 4 row 2 (E) Amount Paid'"
-    },
-    "txtAmountPurchase10": {
-      "label": "Schedule 1 row 1 (D) Amount of Purchases/Importation",
-      "evidence": "agent box label: 'Schedule 1 row 1 (D) Amount of Purchases/Importation'; writer-cells printed caption: 'Schedule 1 row 1 (D) Amount of Purchases/Importation'"
-    },
-    "txtAmountPurchase11": {
-      "label": "Schedule 1 row 2 (D) Amount of Purchases/Importation",
-      "evidence": "agent box label: 'Schedule 1 row 2 (D) Amount of Purchases/Importation'; writer-cells printed caption: 'Schedule 1 row 2 (D) Amount of Purchases/Importation'"
+      "computed": true,
+      "evidence": "N04: preserved from the reviewed save, not typed (form_2550q.rs Form2550QCapitalGoodRow allowable_input_tax_for_period / balance_to_next_period: the evidence does not expose the months-in-use input)."
     },
     "txtBalanceInputTax10": {
-      "label": "Schedule 1 row 1 (I) Balance of Input Tax to be carried to Next Period",
-      "evidence": "agent box label: 'Schedule 1 row 1 (I) Balance of Input Tax to be carried to Next Period'; writer-cells printed caption: 'Schedule 1 row 1 (I) Balance of Input Tax to be carried to Next Period'"
-    },
-    "txtBalanceInputTax11": {
-      "label": "Schedule 1 row 2 (I) Balance of Input Tax to be carried to Next Period",
-      "evidence": "agent box label: 'Schedule 1 row 2 (I) Balance of Input Tax to be carried to Next Period'; writer-cells printed caption: 'Schedule 1 row 2 (I) Balance of Input Tax to be carried to Next Period'"
-    },
-    "txtDatePurchase10": {
-      "label": "Schedule 1 row 1 (A) Date Purchased/Imported (MM/DD/YYYY)",
-      "evidence": "agent box label: 'Schedule 1 row 1 (A) Date Purchased/Imported (MM/DD/YYYY)'; writer-cells printed caption: 'Schedule 1 row 1 (A) Date Purchased/Imported (MM/DD/YYYY)'"
-    },
-    "txtDatePurchase11": {
-      "label": "Schedule 1 row 2 (A) Date Purchased/Imported (MM/DD/YYYY)",
-      "evidence": "agent box label: 'Schedule 1 row 2 (A) Date Purchased/Imported (MM/DD/YYYY)'; writer-cells printed caption: 'Schedule 1 row 2 (A) Date Purchased/Imported (MM/DD/YYYY)'"
-    },
-    "txtDescription10": {
-      "label": "Schedule 1 row 1 (C) Description",
-      "evidence": "agent box label: 'Schedule 1 row 1 (C) Description'; writer-cells printed caption: 'Schedule 1 row 1 (C) Description'"
-    },
-    "txtDescription11": {
-      "label": "Schedule 1 row 2 (C) Description",
-      "evidence": "agent box label: 'Schedule 1 row 2 (C) Description'; writer-cells printed caption: 'Schedule 1 row 2 (C) Description'"
+      "computed": true,
+      "evidence": "N04: preserved from the reviewed save, not typed (form_2550q.rs Form2550QCapitalGoodRow allowable_input_tax_for_period / balance_to_next_period: the evidence does not expose the months-in-use input)."
     },
     "frm2550qv2024:adjDeductions": {
       "label": "Adjusted Deductions from Input Tax",
@@ -20083,6 +20889,211 @@
     "frm2550qv2024:txtPg2BranchCode": {
       "label": "Page 2 header TIN branch code",
       "evidence": "P4: html-frozen/2550q-2024/writer-cells.json 'the page 2 TIN comb preprints the branch slots'"
+    },
+    "table:2:sched1more": {
+      "no": "",
+      "label": "Schedule 1 – Amortized Input Tax from Capital Goods",
+      "templates": [
+        "txtDatePurchase1{N>=0}",
+        "txtSourceCode1{N>=0}",
+        "txtDescription1{N>=0}",
+        "txtAmountPurchase1{N>=0}",
+        "txtInputTax1{N>=0}",
+        "txtEstimatedLife1{N>=0}",
+        "txtRecognizedLife1{N>=0}",
+        "txtAllowedInputTax1{N>=0}",
+        "txtBalanceInputTax1{N>=0}"
+      ],
+      "row_keys": {
+        "txtDatePurchase1{N>=0}": "txtDatePurchase1{index}",
+        "txtSourceCode1{N>=0}": "txtSourceCode1{index}",
+        "txtDescription1{N>=0}": "txtDescription1{index}",
+        "txtAmountPurchase1{N>=0}": "txtAmountPurchase1{index}",
+        "txtInputTax1{N>=0}": "txtInputTax1{index}",
+        "txtEstimatedLife1{N>=0}": "txtEstimatedLife1{index}",
+        "txtRecognizedLife1{N>=0}": "txtRecognizedLife1{index}",
+        "txtAllowedInputTax1{N>=0}": "txtAllowedInputTax1{index}",
+        "txtBalanceInputTax1{N>=0}": "txtBalanceInputTax1{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "(A) Date Purchased/Imported (MM/DD/YYYY)",
+        "(B) Source Code (D/I)",
+        "(C) Description",
+        "(D) Amount of Purchases/Importation of Capital Goods Exceeding P1M",
+        "(E) Balance of Input Tax from Previous Period",
+        "(F) Estimated Life (in months)",
+        "(G) Recognized Life (Remaining Life)",
+        "(H) Allowable Input Tax for the Period",
+        "(I) Balance of Input Tax to be carried to Next Period"
+      ],
+      "evidence": "N04: 'Schedule 1 – Amortized Input Tax from Capital Goods'. Allowable input tax and the balance carried over are preserved from the reviewed save, not typed (Form2550QCapitalGoodRow: the evidence does not expose the months-in-use input), so they show read-only. form_2550q.rs official_control_map: a schedule with rows is written as its official modal rows (addlistSched1/3/4, txt<column><schedule><row>), see official_layout. The upload leaves empty rows out, so the host writes every box of these schedules and keeps the rows gap-free (screen_form_module/rows_2550q.rs: rows fill in order, clearing a row removes it, a schedule keeps its two opening rows). The table holds rows 1-12, including the two the extractor listed as loose boxes in two parts. Captions from html-frozen/2550q-2024/index.html Part V. The extractor's per-row labels ('Schedule 1 row 1 (B) Source Code' ...) give these column captions and letters."
+    },
+    "table:2:sched3more": {
+      "no": "",
+      "label": "Schedule 3 – Creditable VAT Withheld",
+      "templates": [
+        "txtDateCovered3{N>=0}",
+        "txtDateCovered3To{N>=0}",
+        "txtNameWithHoldingAgent3{N>=0}",
+        "txtIncomePayment3{N>=0}",
+        "txtTotalTaxWithHeld3{N>=0}"
+      ],
+      "row_keys": {
+        "txtDateCovered3{N>=0}": "txtDateCovered3{index}",
+        "txtDateCovered3To{N>=0}": "txtDateCovered3To{index}",
+        "txtNameWithHoldingAgent3{N>=0}": "txtNameWithHoldingAgent3{index}",
+        "txtIncomePayment3{N>=0}": "txtIncomePayment3{index}",
+        "txtTotalTaxWithHeld3{N>=0}": "txtTotalTaxWithHeld3{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "(A) Period Covered, from (MM/DD/YYYY)",
+        "(A) Period Covered, to (MM/DD/YYYY)",
+        "(B) Name of Withholding Agent",
+        "(C) Income Payment",
+        "(D) Total Tax Withheld"
+      ],
+      "evidence": "N04: 'Schedule 3 – Creditable VAT Withheld: (A) Period Covered, (B) Name of Withholding Agent, (C) Income Payment, (D) Total Tax Withheld ... Total (Column D - To Part II, Item 16)'. form_2550q.rs official_control_map: a schedule with rows is written as its official modal rows (addlistSched1/3/4, txt<column><schedule><row>), see official_layout. The upload leaves empty rows out, so the host writes every box of these schedules and keeps the rows gap-free (screen_form_module/rows_2550q.rs: rows fill in order, clearing a row removes it, a schedule keeps its two opening rows). The table holds rows 1-12, including the two the extractor listed as loose boxes in two parts. Captions from html-frozen/2550q-2024/index.html Part V. The extractor's per-row labels ('Schedule 1 row 1 (B) Source Code' ...) give these column captions and letters."
+    },
+    "table:2:sched4more": {
+      "no": "",
+      "label": "Schedule 4 – Advance VAT Payment",
+      "templates": [
+        "txtDate4{N>=0}",
+        "txtDate4To{N>=0}",
+        "txtNameOfMiller4{N>=0}",
+        "txtNameOfTaxpayer4{N>=0}",
+        "txtOfficialReceiptNumber4{N>=0}",
+        "txtAmountPaid4{N>=0}"
+      ],
+      "row_keys": {
+        "txtDate4{N>=0}": "txtDate4{index}",
+        "txtDate4To{N>=0}": "txtDate4To{index}",
+        "txtNameOfMiller4{N>=0}": "txtNameOfMiller4{index}",
+        "txtNameOfTaxpayer4{N>=0}": "txtNameOfTaxpayer4{index}",
+        "txtOfficialReceiptNumber4{N>=0}": "txtOfficialReceiptNumber4{index}",
+        "txtAmountPaid4{N>=0}": "txtAmountPaid4{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "(A) Period Covered, from (MM/DD/YYYY)",
+        "(A) Period Covered, to (MM/DD/YYYY)",
+        "(B) Name of Miller",
+        "(C) Name of Taxpayer",
+        "(D) Official Receipt Number",
+        "(E) Amount Paid"
+      ],
+      "evidence": "N04: 'Schedule 4 – Advance VAT Payment: (A) Period Covered, (B) Name of Miller, (C) Name of Taxpayer, (D) Official Receipt Number, (E) Amount Paid ... Total (To Part II, Item 17)'. form_2550q.rs official_control_map: a schedule with rows is written as its official modal rows (addlistSched1/3/4, txt<column><schedule><row>), see official_layout. The upload leaves empty rows out, so the host writes every box of these schedules and keeps the rows gap-free (screen_form_module/rows_2550q.rs: rows fill in order, clearing a row removes it, a schedule keeps its two opening rows). The table holds rows 1-12, including the two the extractor listed as loose boxes in two parts. Captions from html-frozen/2550q-2024/index.html Part V. The extractor's per-row labels ('Schedule 1 row 1 (B) Source Code' ...) give these column captions and letters."
+    },
+    "table:2:item19more": {
+      "no": "",
+      "label": "Item 19 – Other Credits/Payment (Specify) – popup rows",
+      "templates": [
+        "frm2550qv2024:totalTaxPayableNo19Description{N>=0}",
+        "frm2550qv2024:totalTaxPayableNo19Amount{N>=0}"
+      ],
+      "row_keys": {
+        "frm2550qv2024:totalTaxPayableNo19Description{N>=0}": "frm2550qv2024:totalTaxPayableNo19Description{index}",
+        "frm2550qv2024:totalTaxPayableNo19Amount{N>=0}": "frm2550qv2024:totalTaxPayableNo19Amount{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_2550q.rs: the item's 'Others (Specify)' popup rows (item_<n>_additional_rows) set the item to VARIOUS with their total (apply_specify_popup_rows) and are written only by the official upload (official_payload). The probe binds rows 1-13 (agent supplement_row_families); the table offers rows 1-12."
+    },
+    "table:3:item42more": {
+      "no": "",
+      "label": "Item 42 – Others (Specify) – popup rows",
+      "templates": [
+        "frm2550qv2024:totalTaxPayableNo42Description{N>=0}",
+        "frm2550qv2024:totalTaxPayableNo42Amount{N>=0}"
+      ],
+      "row_keys": {
+        "frm2550qv2024:totalTaxPayableNo42Description{N>=0}": "frm2550qv2024:totalTaxPayableNo42Description{index}",
+        "frm2550qv2024:totalTaxPayableNo42Amount{N>=0}": "frm2550qv2024:totalTaxPayableNo42Amount{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_2550q.rs: the item's 'Others (Specify)' popup rows (item_<n>_additional_rows) set the item to VARIOUS with their total (apply_specify_popup_rows) and are written only by the official upload (official_payload). The probe binds rows 1-13 (agent supplement_row_families); the table offers rows 1-12."
+    },
+    "table:3:item47more": {
+      "no": "",
+      "label": "Item 47 – Others (Specify) – popup rows",
+      "templates": [
+        "frm2550qv2024:totalTaxPayableNo47Description{N>=0}",
+        "frm2550qv2024:totalTaxPayableNo47Amount{N>=0}"
+      ],
+      "row_keys": {
+        "frm2550qv2024:totalTaxPayableNo47Description{N>=0}": "frm2550qv2024:totalTaxPayableNo47Description{index}",
+        "frm2550qv2024:totalTaxPayableNo47Amount{N>=0}": "frm2550qv2024:totalTaxPayableNo47Amount{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_2550q.rs: the item's 'Others (Specify)' popup rows (item_<n>_additional_rows) set the item to VARIOUS with their total (apply_specify_popup_rows) and are written only by the official upload (official_payload). The probe binds rows 1-13 (agent supplement_row_families); the table offers rows 1-12."
+    },
+    "table:3:item56more": {
+      "no": "",
+      "label": "Item 56 – Others (Specify) – popup rows",
+      "templates": [
+        "frm2550qv2024:totalTaxPayableNo56Description{N>=0}",
+        "frm2550qv2024:totalTaxPayableNo56Amount{N>=0}"
+      ],
+      "row_keys": {
+        "frm2550qv2024:totalTaxPayableNo56Description{N>=0}": "frm2550qv2024:totalTaxPayableNo56Description{index}",
+        "frm2550qv2024:totalTaxPayableNo56Amount{N>=0}": "frm2550qv2024:totalTaxPayableNo56Amount{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "Description",
+        "Amount"
+      ],
+      "evidence": "N04: form_2550q.rs: the item's 'Others (Specify)' popup rows (item_<n>_additional_rows) set the item to VARIOUS with their total (apply_specify_popup_rows) and are written only by the official upload (official_payload). The probe binds rows 1-13 (agent supplement_row_families); the table offers rows 1-12."
+    },
+    "frm2550qv2024:totalTaxPayableNo42Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: these columns held the Items 42, 47 and 56 popup row templates; their rows are now each item's own table (table:3:item42more etc.), so the extracted Item 42 table hides them."
+    },
+    "frm2550qv2024:totalTaxPayableNo42Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: these columns held the Items 42, 47 and 56 popup row templates; their rows are now each item's own table (table:3:item42more etc.), so the extracted Item 42 table hides them."
+    },
+    "frm2550qv2024:addSpecifyNo42": {
+      "label": "Description (specify)",
+      "evidence": "N04: the printed Items 42/47/56 'Others (Specify)' line: description box (addSpecifyNo<n>)."
+    },
+    "resultOtherCreditsNo42": {
+      "label": "Amount",
+      "evidence": "N04: the printed Items 42/47/56 'Others (Specify)' line: amount box (resultOtherCreditsNo<n>)."
     }
   },
   "2551Q": {

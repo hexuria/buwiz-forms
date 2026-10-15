@@ -694,10 +694,12 @@ function scheduleTable(cx, ui, it, width) {
   const t = tokens(cx);
   const colW = 140;
   const numW = 36;
-  const tableW = numW + it.cols.length * colW;
+  // A column an override hides (a row template another table now holds).
+  const shown = it.cols.map((c, i) => (c.t === "hidden" ? -1 : i)).filter((i) => i >= 0);
+  const tableW = numW + shown.length * colW;
   const head = div().flex().flex_row().items_end().bg(t.bg).border_b(1).border_color(t.border);
   head.child(div().w(numW).flex_none().py(SPACE[2]).flex().justify_center().child(Text(cx, "meta", "#", "fg3")));
-  for (const c of it.cols) head.child(div().w(colW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", c.l, "fg3").whitespace_normal()));
+  for (const i of shown) head.child(div().w(colW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", it.cols[i].l, "fg3").whitespace_normal()));
   const body = div().flex().flex_col();
   it.keys.forEach((row, r) => {
     const no = (it.start ?? 1) + r;
@@ -705,6 +707,7 @@ function scheduleTable(cx, ui, it, width) {
     tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(no), "fg3")));
     row.forEach((k, c) => {
       const col = it.cols[c];
+      if (col.t === "hidden") return;
       const locked = !s.editable || col.c || s.locks[k] !== undefined;
       const value = s.values[k] ?? "";
       let cell;

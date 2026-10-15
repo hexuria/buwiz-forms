@@ -194,17 +194,21 @@ fn schema_fields(code: &str) -> Vec<SchemaField> {
                     let Some(key) = key.as_str() else {
                         continue;
                     };
-                    let column = item["cols"]
-                        .as_array()
-                        .and_then(|cols| cols.get(c))
-                        .and_then(Value::as_str)
-                        .unwrap_or_default();
+                    let col = &item["cols"][c];
+                    let column = col["l"].as_str().unwrap_or_default();
+                    // A column an override hides is not drawn (2550Q's Item
+                    // 42 table once held the Items 42/47/56 popup templates).
+                    let kind = if col["t"] == "hidden" {
+                        "hidden"
+                    } else {
+                        "cell"
+                    };
                     out.push(SchemaField {
                         key: key.to_string(),
                         item: item_label.clone(),
                         label: format!("row {} {column}", r + 1).trim().to_string(),
                         page,
-                        kind: "cell".to_string(),
+                        kind: kind.to_string(),
                         auto: false,
                         computed: false,
                     });

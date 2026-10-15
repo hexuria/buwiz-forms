@@ -33,6 +33,7 @@ use crate::bir_module::{json, to_json, with_database};
 
 mod catalogs;
 mod rows_2550m;
+mod rows_2550q;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -514,11 +515,11 @@ fn move_field(parts: &mut [Value], key: &str, fix: &Value) {
 /// `item:<part>:<index>` correction pointing at the same item. Each row key
 /// must be a box the agent definition binds (a test checks).
 fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
-    let Some(part) = spec
+    let Some(at) = spec
         .split(':')
         .next()
         .and_then(|p| p.parse::<usize>().ok())
-        .and_then(|p| parts.get_mut(p))
+        .filter(|p| *p < parts.len())
     else {
         return;
     };
@@ -536,12 +537,29 @@ fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
     // Find every template first; hide them only when the table can be built.
     let mut found: BTreeMap<&str, Value> = BTreeMap::new();
     let mut page = Value::Null;
-    for item in part["items"].as_array().into_iter().flatten() {
+    for item in parts[at]["items"].as_array().into_iter().flatten() {
         for field in item["f"].as_array().into_iter().flatten() {
             let key = field["k"].as_str().unwrap_or_default();
             if let Some(name) = wanted.iter().find(|w| **w == key) {
                 found.insert(name, field.clone());
                 page = item["p"].clone();
+            }
+        }
+        // A row template can also be a cell of an extracted table (2550Q's
+        // Items 42, 47 and 56 popups sit in the Item 42 table's columns);
+        // it takes that column's type, and an override hides the column.
+        for row in item["keys"].as_array().into_iter().flatten() {
+            for (c, cell) in row.as_array().into_iter().flatten().enumerate() {
+                let key = cell.as_str().unwrap_or_default();
+                if let Some(name) = wanted.iter().find(|w| **w == key) {
+                    let col = &item["cols"][c];
+                    let mut field = json!({"k": key, "l": col["l"].clone(), "t": col["t"].clone()});
+                    if col.get("c").is_some() {
+                        field["c"] = col["c"].clone();
+                    }
+                    found.insert(name, field);
+                    page = item["p"].clone();
+                }
             }
         }
     }
@@ -578,13 +596,18 @@ fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
         })
         .collect();
     // A concrete row field the extractor listed is a table cell now: drop
-    // the loose copy (one control, one place). Row templates stay, hidden.
+    // the loose copy, in whichever part it sits (one control, one place;
+    // 2550Q splits its first two schedule rows across two parts). Row
+    // templates stay, hidden.
     let cells: BTreeSet<&str> = keys
         .iter()
         .flat_map(|row| row.as_array().into_iter().flatten())
         .filter_map(Value::as_str)
         .collect();
-    for item in part["items"].as_array_mut().into_iter().flatten() {
+    for item in parts
+        .iter_mut()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten())
+    {
         if let Some(fields) = item["f"].as_array_mut() {
             fields.retain(|field| !cells.contains(field["k"].as_str().unwrap_or_default()));
             for field in fields.iter_mut() {
@@ -594,7 +617,7 @@ fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
             }
         }
     }
-    if let Some(items) = part["items"].as_array_mut() {
+    if let Some(items) = parts[at]["items"].as_array_mut() {
         let mut table = json!({
             "no": fix["no"].clone(),
             "l": fix["label"].clone(),
@@ -1421,6 +1444,16 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         }
     }
     if editable {
+        // An added 2550Q row needs a stable row ID before it is saved; the
+        // same step opening a draft runs.
+        if kind == AgentFormKind::Queueable(QueueableKind::Form2550Q) {
+            let mut typed: bir_core::forms::form_2550q::Form2550QDraft =
+                serde_json::from_value(draft.clone()).map_err(|e| host_error(e.to_string()))?;
+            bir_core::form_rules::prepare_form_2550q_live_row_identities(&mut typed).map_err(
+                |e| host_error(format!("the 2550Q draft's row identities are unsafe: {e}")),
+            )?;
+            draft = serde_json::to_value(typed).map_err(|e| host_error(e.to_string()))?;
+        }
         agent::compute(kind, &mut draft).map_err(host_error)?;
     }
     let values = values_json(kind, &draft).map_err(host_error)?;
@@ -2675,6 +2708,254 @@ mod tests {
                 .map(str::to_uppercase),
             Some("SELLER FIVE".to_string())
         );
+    }
+
+    /// N04: 1600WP Part II rows follow the ATC popup: choosing an ATC ticks
+    /// it (at most two, the category's), its tax base saves, and rate and
+    /// tax withheld follow.
+    #[test]
+    fn rows_1600wp_part_ii_follows_the_popup() {
+        setup();
+        let form = schema_entry("1600WP").unwrap();
+        let table = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .find(|it| it["keys"][0][0] == "frm1600WP:txtAtcCode1")
+            .expect("Part II table")
+            .clone();
+        assert_eq!(table["rows"], 2);
+        assert_eq!(table["cols"][0]["t"], "sel");
+        assert!(table["cols"][0].get("c").is_none() && table["cols"][3].get("c").is_some());
+
+        let opened = open("1600WP", 7);
+        assert!(opened["locks"].get("frm1600WP:txtAtcCode1").is_none());
+        let filled = fill(
+            "1600WP",
+            &opened["draft"],
+            json!({
+                "frm1600WP:AnyTaxHeld_1": "true",
+                "frm1600WP:CategoryAgent": "G",
+                "frm1600WP:txtAtcCode1": "WB191",
+                "frm1600WP:txtTaxBase1": "10000",
+            }),
+        );
+        let listed = filled["options"]["frm1600WP:txtAtcCode1"]
+            .as_array()
+            .unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(filled["draft"]["atc_rows"][0]["atc_code"], "WB191");
+        assert_eq!(
+            amount(&filled["values"], "frm1600WP:txtTaxbeWithHeld1"),
+            400.0
+        );
+        save("1600WP", &filled["draft"]);
+        let reopened = open("1600WP", 7);
+        assert_eq!(reopened["values"]["frm1600WP:txtAtcCode1"], "WB191");
+        let cleared = fill(
+            "1600WP",
+            &reopened["draft"],
+            json!({"frm1600WP:txtAtcCode1": ""}),
+        );
+        assert_eq!(cleared["draft"]["atc_rows"], json!([]));
+    }
+
+    /// N04: 1701A Items 42 and 51 "(add more...)" rows save; two rows fold
+    /// Item 42 into OTHERS, and the spouse cells save through the host.
+    #[test]
+    fn rows_1701a_add_more_rows_save() {
+        setup();
+        let form = schema_entry("1701A").unwrap();
+        let tables: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .filter(|it| {
+                it["keys"][0][0]
+                    .as_str()
+                    .is_some_and(|k| k.starts_with("frm1701A:txtmodalPartIV"))
+            })
+            .collect();
+        assert_eq!(tables.len(), 2);
+
+        let opened = open("1701A", 0);
+        assert!(
+            opened["locks"]
+                .get("frm1701A:txtmodalPartIVA_5C3")
+                .is_none()
+        );
+        let filled = fill(
+            "1701A",
+            &opened["draft"],
+            json!({
+                // Part IV.A opens with a graduated-rate ATC.
+                "frm1701A:optTaxType_1": "true",
+                "frm1701A:optATC_1": "true",
+                "frm1701A:txtmodalPartIVADesc_1C1": "Rental income",
+                "frm1701A:txtmodalPartIVA_1C2": "500",
+                "frm1701A:txtmodalPartIVADesc_2C1": "Royalty income",
+                "frm1701A:txtmodalPartIVA_2C2": "1000",
+                "frm1701A:txtmodalPartIVA_5C3": "250",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let rows = filled["draft"]["other_income_more"].as_array().unwrap();
+        // The spouse cell starts row 5; a return without a joint spouse
+        // keeps the spouse column at zero, as the page does.
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[4]["spouse"], 0.0);
+        assert_eq!(filled["draft"]["other_income_42_description"], "OTHERS");
+        assert_eq!(rows[1]["description"], "Royalty income");
+        save("1701A", &filled["draft"]);
+        let reopened = open("1701A", 0);
+        assert_eq!(
+            reopened["draft"]["other_income_more"][1]["taxpayer"],
+            filled["draft"]["other_income_more"][1]["taxpayer"]
+        );
+    }
+
+    /// N04: 2550Q Schedules 1, 3 and 4 are tables of every row, kept
+    /// gap-free (the upload leaves empty rows out), with dates through the
+    /// host; the Items 19, 42, 47 and 56 popup rows are tables of their own.
+    #[test]
+    fn rows_2550q_schedules_and_popups_save() {
+        setup();
+        let form = schema_entry("2550Q").unwrap();
+        let items: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .collect();
+        let table = |first: &str| {
+            items
+                .iter()
+                .find(|it| it["keys"][0][0] == first)
+                .unwrap_or_else(|| panic!("2550Q table at {first}"))
+        };
+        assert_eq!(table("txtDatePurchase10")["rows"], 12);
+        assert_eq!(table("txtDateCovered30")["rows"], 12);
+        assert_eq!(table("txtDate40")["rows"], 12);
+        for item in ["19", "42", "47", "56"] {
+            let first = format!("frm2550qv2024:totalTaxPayableNo{item}Description0");
+            assert_eq!(table(&first)["rows"], 12);
+        }
+        assert_eq!(
+            table("frm2550qv2024:addSpecifyNo42")["cols"][2]["t"],
+            "hidden"
+        );
+        // A row box sits in its table only, though the extractor split the
+        // first two rows across two parts.
+        let loose: Vec<&str> = items
+            .iter()
+            .flat_map(|it| it["f"].as_array().into_iter().flatten())
+            .filter_map(|f| f["k"].as_str())
+            .collect();
+        for key in [
+            "txtNameWithHoldingAgent30",
+            "txtDateCovered31",
+            "txtAmountPurchase10",
+        ] {
+            assert!(!loose.contains(&key), "{key} is still a loose box");
+        }
+
+        let opened = open("2550Q", 2);
+        assert!(opened["locks"].get("txtNameWithHoldingAgent30").is_none());
+        let gap = fill(
+            "2550Q",
+            &opened["draft"],
+            json!({"txtNameWithHoldingAgent32": "Too far"}),
+        );
+        assert!(gap["rejected"].get("txtNameWithHoldingAgent32").is_some());
+        let filled = fill(
+            "2550Q",
+            &opened["draft"],
+            json!({
+                "txtDateCovered30": "04/01/2026",
+                "txtDateCovered3To0": "06/30/2026",
+                "txtNameWithHoldingAgent30": "Agent One",
+                "txtIncomePayment30": "10000",
+                "txtTotalTaxWithHeld30": "500",
+                "txtNameWithHoldingAgent31": "Agent Two",
+                "txtIncomePayment31": "2000",
+                "txtNameWithHoldingAgent32": "Agent Three",
+                "frm2550qv2024:totalTaxPayableNo42Description0": "Other A",
+                "frm2550qv2024:totalTaxPayableNo42Amount0": "100",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let rows = filled["draft"]["schedule_3"].as_array().unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(
+            rows[0]["period_from"],
+            json!({"year": 2026, "month": 4, "day": 1})
+        );
+        assert_eq!(filled["values"]["txtNameWithHoldingAgent32"], "Agent Three");
+        assert_eq!(
+            filled["draft"]["item_42_additional_rows"][0]["description"],
+            "Other A"
+        );
+        let bad = fill(
+            "2550Q",
+            &filled["draft"],
+            json!({"txtDate40": "13/40/2026"}),
+        );
+        assert!(bad["rejected"].get("txtDate40").is_some());
+
+        // Clearing row 2 removes it; row 3 moves up, as the upload sends it.
+        let cleared = fill(
+            "2550Q",
+            &filled["draft"],
+            json!({"txtNameWithHoldingAgent31": "", "txtIncomePayment31": ""}),
+        );
+        assert_eq!(cleared["rejected"], json!({}));
+        assert_eq!(
+            cleared["values"]["txtNameWithHoldingAgent31"],
+            "Agent Three"
+        );
+
+        save("2550Q", &filled["draft"]);
+        let reopened = open("2550Q", 2);
+        assert_eq!(reopened["values"]["txtDateCovered30"], "4/01/2026");
+        assert_eq!(
+            reopened["values"]["txtNameWithHoldingAgent32"],
+            "Agent Three"
+        );
+    }
+
+    /// Item 4: 2200AN's per-row Basic Excise Tax Due is the filer's entry on
+    /// the official page (rules/forms/2200an-v2018: computed false, no
+    /// calculation); what the page computes are the Schedule 1A and 1B
+    /// totals and Item 16, which follow the rows here.
+    #[test]
+    fn excise_2200an_totals_follow_the_typed_row_tax_due() {
+        setup();
+        let opened = open("2200AN", 7);
+        assert!(
+            opened["locks"]
+                .get("frm2200ANv2018:txtXG021TaxDue")
+                .is_none()
+        );
+        let filled = fill(
+            "2200AN",
+            &opened["draft"],
+            json!({
+                "frm2200ANv2018:txtXG021TaxDue": "1000",
+                "frm2200ANv2018:txtXG022TaxDue": "250.50",
+                "frm2200ANv2018:txtXG100TaxDue": "500",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let v = &filled["values"];
+        assert_eq!(amount(v, "frm2200ANv2018:txtBasicExciseTaxDue"), 1_250.5);
+        assert_eq!(
+            amount(v, "frm2200ANv2018:txtBasicExciseTaxDueNonEssentialGoods"),
+            500.0
+        );
+        assert_eq!(amount(v, "frm2200ANv2018:txt16"), 1_750.5);
     }
 
     /// N04: 1707A rows 4 and after save. Schedules 1 and 2 print rows 1-4;
