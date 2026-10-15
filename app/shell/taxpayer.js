@@ -40,6 +40,8 @@ import {
   MetaLine,
   Tabs,
   Banner,
+  DigitEntry,
+  DigitCells,
 } from "./ui.js";
 import { formatTin, shortDate, daysUntil } from "./store.js";
 import { searchText } from "./library.js";
@@ -60,10 +62,6 @@ function message(e) {
   return String(e && e.message ? e.message : e)
     .replace(/^Error:\s*/, "")
     .replace(/^`[^`]+`:\s*/, "");
-}
-
-function tinDigits(text) {
-  return String(text || "").replace(/\D/g, "");
 }
 
 /** Owns the taxpayer screens' state and talks to the store. */
@@ -88,16 +86,16 @@ export class TaxpayerActions {
     this.addYearOpen = false;
     this.newTp = null;
     this.newBranch = null;
-    // Taxpayer security (Profile › Email, security and export).
+    // Taxpayer security (Profile › Security): one PIN per taxpayer.
     this.pinOtp = OtpState.new(4, { masked: true });
     this.totpOtp = OtpState.new(6);
     this.totpSecret = null;
   }
 
-  /** PIN and authenticator state of the selected branch's taxpayer profile. */
+  /** PIN and authenticator of the selected taxpayer, shared by every branch. */
   auth() {
-    const b = this.app.branch();
-    return b ? this.app.store.read(`auth:${b.tin}`, "profile_auth", [b.tin], { has_pin: false, has_totp: false }) : {};
+    const t = this.app.taxpayer();
+    return t ? this.app.taxpayerCreds(t.tin_root) : {};
   }
 
   setPin(cx) {
@@ -105,7 +103,10 @@ export class TaxpayerActions {
     const pin = this.pinOtp.value();
     if (pin.length !== 4) return app.toast("Type all 4 digits of the new PIN first.", cx, "lock");
     try {
-      app.store.write("set_profile_pin", app.branch().tin, pin);
+      const root = app.taxpayer().tin_root;
+      app.store.write("set_taxpayer_pin", root, pin);
+      // Whoever sets the PIN is already in: it is asked from the next visit.
+      app.unlockedRoots.add(root);
       this.pinOtp.set_value("");
       app.toast(app.store.authState().enable_profile_pins ? "PIN saved." : "PIN saved. Turn on Taxpayer PINs in Settings to ask for it.", cx, "lock");
     } catch (e) {
@@ -115,7 +116,7 @@ export class TaxpayerActions {
 
   clearPin(cx) {
     try {
-      this.app.store.write("set_profile_pin", this.app.branch().tin, null);
+      this.app.store.write("set_taxpayer_pin", this.app.taxpayer().tin_root, null);
       this.app.toast("PIN removed.", cx, "lock");
     } catch (e) {
       this.app.toast(message(e), cx, "triangle-alert");
@@ -135,7 +136,9 @@ export class TaxpayerActions {
 
   confirmTotp(cx) {
     try {
-      this.app.store.write("set_profile_totp", this.app.branch().tin, this.totpSecret, this.totpOtp.value());
+      const root = this.app.taxpayer().tin_root;
+      this.app.store.write("set_taxpayer_totp", root, this.totpSecret, this.totpOtp.value());
+      this.app.unlockedRoots.add(root);
       this.totpSecret = null;
       this.totpOtp.set_value("");
       this.app.toast("Authenticator added.", cx, "lock");
@@ -146,7 +149,7 @@ export class TaxpayerActions {
 
   clearTotp(cx) {
     try {
-      this.app.store.write("set_profile_totp", this.app.branch().tin, null);
+      this.app.store.write("set_taxpayer_totp", this.app.taxpayer().tin_root, null);
       this.totpSecret = null;
       this.app.toast("Authenticator removed.", cx, "lock");
     } catch (e) {
@@ -193,10 +196,12 @@ export class TaxpayerActions {
     this.inherit = {};
     if (sec === "taxpayer") {
       this.inputs.name = InputState.new({ value: t.name });
-      this.inputs.tin = InputState.new({ value: formatTin(t.tin_root), placeholder: "000-000-000" });
+      this.inputs.tin = new DigitEntry([3, 3, 3], t.tin_root);
       this.typeValue = t.taxpayer_type;
       this.typeOpen = false;
     } else if (sec === "branch") {
+      // The branch code is edited here (the taxpayer's TIN shows 3 · 3 · 3).
+      if (!b.is_head_office) this.inputs.code = new DigitEntry([5], b.code);
       this.inputs.name = InputState.new({ value: b.name });
       this.inputs.rdo_code = InputState.new({ value: b.facts.rdo_code || "" });
       this.inherit.rdo_code = (b.inherited || []).includes("rdo_code");
@@ -221,9 +226,8 @@ export class TaxpayerActions {
     const b = app.branch();
     try {
       if (sec === "taxpayer") {
-        const raw = this.inputs.tin.value().trim();
-        const digits = tinDigits(raw);
-        if (!/^[\d-]+$/.test(raw) || digits.length !== 9) {
+        const digits = this.inputs.tin.value();
+        if (digits.length !== 9) {
           this.tinError = "TIN is 9 digits, like 123-456-789.";
           return cx.notify();
         }
@@ -244,10 +248,18 @@ export class TaxpayerActions {
         return app.toast(toastText, cx);
       }
       if (sec === "branch") {
+        if (this.inputs.code) {
+          const error = this.moveBranchCode(this.inputs.code.value());
+          if (error) {
+            this.tinError = error;
+            return cx.notify();
+          }
+        }
+        const current = app.branch();
         const fields = {};
-        if (!b.is_head_office && this.inherit.rdo_code) fields.rdo_code = null;
+        if (!current.is_head_office && this.inherit.rdo_code) fields.rdo_code = null;
         else fields.rdo_code = this.inputs.rdo_code.value().trim();
-        app.store.write("update_branch", b.tin, { name: this.inputs.name.value().trim() || b.name, fields });
+        app.store.write("update_branch", current.tin, { name: this.inputs.name.value().trim() || current.name, fields });
       } else if (sec === "address") {
         const fields = {};
         for (const [f] of ADDRESS_FIELDS) {
@@ -279,12 +291,32 @@ export class TaxpayerActions {
     const b = this.app.branch();
     this.panelEdit = {
       name: InputState.new({ value: t.name }),
-      code: InputState.new({ value: b.code }),
+      code: new DigitEntry([5], b.code),
       branchName: InputState.new({ value: b.name }),
       address: InputState.new({ value: b.facts.registered_address || "" }),
       error: null,
     };
     cx.notify();
+  }
+
+  /**
+   * Move the selected branch to a new 5-digit code (returns, years and
+   * templates move with it in one bir-core transaction). Returns an error
+   * message, or null when moved or unchanged.
+   */
+  moveBranchCode(code) {
+    const app = this.app;
+    const t = app.taxpayer();
+    const b = app.branch();
+    if (b.is_head_office || code === b.code) return null;
+    if (!/^\d{5}$/.test(code)) return "Branch code is 5 digits, like 00001.";
+    if (code === "00000" || t.branches.some((x) => x.code === code)) return `Branch ${code} already exists.`;
+    const oldTin = b.tin;
+    app.store.write("move_branch_code", b.tin, code);
+    app.remapRecent((tin) => (tin === oldTin ? t.tin_root + code : tin));
+    app.selCode = code;
+    app.writeLocal(SELECTION_KEY, { root: app.selRoot, code });
+    return null;
   }
 
   cancelPanelEdit(cx) {
@@ -295,24 +327,15 @@ export class TaxpayerActions {
   savePanelEdit(cx) {
     const app = this.app;
     const t = app.taxpayer();
-    let b = app.branch();
+    const b = app.branch();
     const e = this.panelEdit;
-    const code = e.code.value().trim();
     try {
-      if (!b.is_head_office && code !== b.code) {
-        if (!/^\d{5}$/.test(code)) {
-          e.error = "Branch code is 5 digits, like 00001.";
+      if (!b.is_head_office) {
+        const error = this.moveBranchCode(e.code.value());
+        if (error) {
+          e.error = error;
           return cx.notify();
         }
-        if (code === "00000" || t.branches.some((x) => x.code === code)) {
-          e.error = `Branch ${code} already exists.`;
-          return cx.notify();
-        }
-        const oldTin = b.tin;
-        b = app.store.write("move_branch_code", b.tin, code);
-        app.remapRecent((tin) => (tin === oldTin ? t.tin_root + code : tin));
-        app.selCode = code;
-        app.writeLocal(SELECTION_KEY, { root: app.selRoot, code });
       }
       const name = e.name.value().trim();
       if (name && name !== t.name) app.store.write("update_taxpayer", t.tin_root, { name });
@@ -454,7 +477,7 @@ export class TaxpayerActions {
 
   openNewTaxpayer(cx) {
     this.newTp = {
-      tin: InputState.new({ placeholder: "000-000-000" }),
+      tin: new DigitEntry([3, 3, 3]),
       name: InputState.new({ placeholder: "As registered with BIR" }),
       type: "Individual",
       typeOpen: false,
@@ -472,7 +495,7 @@ export class TaxpayerActions {
   createTaxpayer(cx) {
     const app = this.app;
     const n = this.newTp;
-    const digits = tinDigits(n.tin.value());
+    const digits = n.tin.value();
     const name = n.name.value().trim();
     if (digits.length !== 9) {
       n.error = "TIN is 9 digits, like 123-456-789.";
@@ -518,7 +541,7 @@ export class TaxpayerActions {
     } catch (_e) {}
     const head = t.branches.find((b) => b.is_head_office) || t.branches[0];
     this.newBranch = {
-      code: InputState.new({ value: suggestion }),
+      code: new DigitEntry([5], suggestion),
       name: InputState.new({ placeholder: "Cebu branch" }),
       inputs: {},
       inherit: {},
@@ -535,7 +558,7 @@ export class TaxpayerActions {
   createBranch(cx) {
     const app = this.app;
     const nb = this.newBranch;
-    const code = nb.code.value().trim();
+    const code = nb.code.value();
     if (!/^\d{5}$/.test(code)) {
       nb.error = "Branch code is 5 digits, like 00001.";
       return cx.notify();
@@ -618,7 +641,9 @@ function profileTab(cx, app, width) {
     const editing = ui.editSec === sec && !opts.readonly;
     const inheritable = opts.inheritable && !b.is_head_office && head;
     let input = null;
-    if (editing) {
+    if (editing && ui.inputs[f] instanceof DigitEntry) {
+      input = DigitCells(cx, ui.inputs[f], `tp-${sec}-${f}`, { error: Boolean(ui.tinError) });
+    } else if (editing) {
       input = TextField(cx, ui.inputs[f], {
         id: `tp-${sec}-${f}`,
         label,
@@ -631,7 +656,7 @@ function profileTab(cx, app, width) {
       el: Field(cx, label, {
         value,
         input,
-        error: f === "tin" ? ui.tinError : null,
+        error: f === "tin" || f === "code" ? ui.tinError : null,
         inherited: !editing && inheritable && inherited(f),
         inheritSwitch:
           editing && inheritable
@@ -686,7 +711,7 @@ function profileTab(cx, app, width) {
     .flex_col()
     .child(
       FieldGrid(cx, inner, [
-        field("branch", "code", "Branch code", b.code, { readonly: true }),
+        field("branch", "code", "Branch code", b.code, { readonly: b.is_head_office }),
         field("branch", "name", "Branch name", b.name),
         field("branch", "rdo_code", "RDO", b.facts.rdo_code, { inheritable: true }),
       ]),
@@ -753,9 +778,9 @@ function profileTab(cx, app, width) {
       "Taxpayer PIN",
       auth.has_pin
         ? pinsOn
-          ? "Asked before this taxpayer opens"
+          ? "Asked before this taxpayer or any of its branches opens"
           : "Set. Turn on Taxpayer PINs in Settings to ask for it"
-        : "Ask for a 4-digit PIN before this taxpayer opens",
+        : "One 4-digit PIN for this taxpayer and all its branches",
       pinControls,
     ),
     SettingRow(
@@ -801,7 +826,7 @@ function profileTab(cx, app, width) {
       addressBody,
       true,
     ),
-    section("security", "Email, security and export", "Set once for the taxpayer", securityBody, false),
+    section("security", "Security", "This taxpayer, every branch", securityBody, false),
   ]);
 }
 
@@ -1114,7 +1139,7 @@ export function renderNewTaxpayer(cx, app, width) {
   if (!n) return div();
   const input = (key, label) => ({ el: Field(cx, label, { input: TextField(cx, n[key], { id: `new-tp-${key}`, label }) }) });
   const cells = [
-    input("tin", "TIN"),
+    { el: Field(cx, "TIN", { input: DigitCells(cx, n.tin, "new-tp-tin") }) },
     {
       el: Field(cx, "Taxpayer type", {
         input: Dropdown(cx, "new-tp-type", {
@@ -1182,7 +1207,7 @@ function renderNewBranch(cx, app, width) {
   const t = app.taxpayer();
   const labels = { rdo_code: "RDO code", registered_address: "Registered address", zip_code: "ZIP code", phone: "Phone", email: "Email" };
   const cells = [
-    { el: Field(cx, "Branch code", { input: TextField(cx, nb.code, { id: "new-branch-code", label: "Branch code" }) }) },
+    { el: Field(cx, "Branch code", { input: DigitCells(cx, nb.code, "new-branch-code") }) },
     { el: Field(cx, "Branch name", { input: TextField(cx, nb.name, { id: "new-branch-name", label: "Branch name" }) }) },
   ];
   for (const f of Object.keys(nb.inputs)) {

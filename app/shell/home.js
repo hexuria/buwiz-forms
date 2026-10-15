@@ -19,6 +19,7 @@ import {
   PageHeader,
   SectionTitle,
   StepCircle,
+  Avatar,
 } from "./ui.js";
 import { isoDate, addDays, daysUntil, MONTHS, shortDate } from "./store.js";
 
@@ -165,8 +166,23 @@ function welcome(cx, app) {
     .child(div().mt(28).child(ListGroup(cx, "welcome-steps", rows)));
 }
 
+/** Taxpayers exist but none is open (each asks for its PIN). */
+function chooser(cx, app) {
+  const rows = app.taxpayers().map((t) =>
+    ListRow(cx, `choose-${t.tin_root}`, { onClick: (_e, cx) => app.selectTaxpayer(t.tin_root, cx) })
+      .child(Avatar(cx, t.name, 28, t.tin_root))
+      .child(NameCell(cx, t.name, t.tin_display))
+      .child(Icon(cx, app.isRootLocked(t.tin_root) ? "lock" : "chevron-right", { color: "fg3" })),
+  );
+  return div()
+    .flex()
+    .flex_col()
+    .child(PageHeader(cx, { title: "Choose a taxpayer", lede: "Taxpayers with a PIN ask for it before they open." }))
+    .child(div().mt(28).child(ListGroup(cx, "choose-taxpayer", rows)));
+}
+
 export function renderHome(cx, app, width) {
-  if (app.isFresh()) return welcome(cx, app);
+  if (app.isFresh()) return app.taxpayers().length ? chooser(cx, app) : welcome(cx, app);
   const today = new Date();
   const soon = app.store
     .deadlines(isoDate(addDays(today, -30)), isoDate(addDays(today, 30)))

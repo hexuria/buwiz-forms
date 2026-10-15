@@ -28,6 +28,7 @@ import {
   Overlay,
   Dropdown,
   TextField,
+  DigitCells,
 } from "./ui.js";
 import { themeIcon } from "./theme.js";
 import { formatTin, shortDate } from "./store.js";
@@ -141,6 +142,15 @@ export function renderTitleBar(cx, app, L) {
         tooltip: `Theme: ${app.themePref} (click to change)`,
         onClick: (_e, cx) => app.cycleTheme(cx),
       }),
+    )
+    .child(
+      IconButton(cx, "tb-panel", "panel-right", {
+        tooltip: app.panel
+          ? `Hide ${app.panel === "notifs" ? "notifications" : "tax profile"}`
+          : `Show ${app.lastPanel === "notifs" ? "notifications" : "tax profile"}`,
+        pressed: Boolean(app.panel),
+        onClick: (_e, cx) => app.toggleRightPanel(cx),
+      }),
     );
   if (!app.isMac) right.child(captionButtons(cx));
 
@@ -157,6 +167,38 @@ export function renderTitleBar(cx, app, L) {
     .window_control_area("drag")
     .child(left)
     .child(div().flex().flex_none().min_w(0).max_w(compact ? 160 : 460).child(pill))
+    .child(right);
+}
+
+/**
+ * The title bar of the sign-in and lock screens: a drag area, the theme
+ * button and (off macOS) the caption buttons. Nothing names a taxpayer.
+ */
+export function renderBareTitleBar(cx, app) {
+  const right = div()
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(SPACE[1])
+    .h_full()
+    .when(app.isMac, (el) => el.pr(10))
+    .child(
+      IconButton(cx, "tb-theme", themeIcon(app.themePref), {
+        tooltip: `Theme: ${app.themePref} (click to change)`,
+        onClick: (_e, cx) => app.cycleTheme(cx),
+      }),
+    );
+  if (!app.isMac) right.child(captionButtons(cx));
+  return div()
+    .id("title-bar")
+    .flex()
+    .flex_row()
+    .flex_none()
+    .items_center()
+    .justify_end()
+    .w_full()
+    .h(SIZE.titleBar)
+    .window_control_area("drag")
     .child(right);
 }
 
@@ -205,10 +247,12 @@ export function renderSidebar(cx, app) {
   ]) {
     nav.child(NavRow(cx, `nav-${view}`, icon, label, { current: app.view === view, onClick: (_e, cx) => app.go(view, cx) }));
   }
-  if (app.prefs.showRecent && !app.isFresh() && app.recent.some((r) => app.branchFor(r.tin))) {
+  // Only returns whose TIN and branch exist in this database and whose
+  // taxpayer is open: a locked taxpayer's name never shows.
+  const recent = app.recent.filter((r) => app.branchFor(r.tin) && !app.isRootLocked(String(r.tin).slice(0, 9)));
+  if (app.prefs.showRecent && !app.isFresh() && recent.length) {
     nav.child(GroupLabel(cx, "Recent"));
-    // Only returns whose TIN and branch exist in this database.
-    app.recent.filter((r) => app.branchFor(r.tin)).forEach((r) => {
+    recent.forEach((r) => {
       const name = (app.taxpayers().find((x) => x.tin_root === String(r.tin).slice(0, 9)) || {}).name || "";
       const label = `${r.code} ${periodLabel(frequencyOf(app.store.screenIndex(), r.code), r.year, r.period, true)} · ${name}`;
       nav.child(
@@ -220,13 +264,8 @@ export function renderSidebar(cx, app) {
     });
   }
 
+  // Settings lives in the account menu (Account settings), not as its own row.
   const foot = div().id("sb-foot").relative().flex().flex_col().gap(2).pt(SPACE[2]);
-  foot.child(
-    NavRow(cx, "nav-settings", "settings", "Settings", {
-      current: app.view === "settings",
-      onClick: (_e, cx) => app.go("settings", cx),
-    }),
-  );
   foot.child(accountRow(cx, app));
 
   return div()
@@ -379,9 +418,16 @@ function profilePanel(cx, app) {
       .pt(SPACE[8])
       .px(SPACE[2])
       .child(StepCircle(cx, Icon(cx, "user", { color: "fg2" }), 56))
-      .child(Text(cx, "title", "No taxpayer yet").mt(SPACE[1]))
+      .child(Text(cx, "title", app.taxpayers().length ? "No taxpayer open" : "No taxpayer yet").mt(SPACE[1]))
       .child(
-        Text(cx, "meta", "The taxpayer you file for shows here, with its branches, tax years, forms and templates.", "fg2")
+        Text(
+          cx,
+          "meta",
+          app.taxpayers().length
+            ? "Choose one on Home or with search. The one you open shows here, with its branches, tax years, forms and templates."
+            : "The taxpayer you file for shows here, with its branches, tax years, forms and templates.",
+          "fg2",
+        )
           .text_center()
           .max_w(240)
           .whitespace_normal(),
@@ -420,7 +466,7 @@ function profilePanel(cx, app) {
         .child(
           label(
             "Branch code",
-            TextField(cx, e.code, { id: "pe-code", label: "Branch code", disabled: b.is_head_office, error: Boolean(e.error) }),
+            b.is_head_office ? Code(cx, b.code, "fg2").font_weight(400) : DigitCells(cx, e.code, "pe-code", { error: Boolean(e.error) }),
             e.error,
           ),
         )
@@ -509,8 +555,10 @@ function profilePanel(cx, app) {
     );
   }
   body.child(NavRow(cx, "panel-add-branch", "plus", "Add branch", { onClick: (_e, cx) => ui.openNewBranch(cx) }));
+  // Signed in as a taxpayer: that taxpayer and its branches only.
+  if (app.session.kind === "taxpayer") return SidePanel(cx, "panel-profile", { body });
   const others = app.store.authState().hide_tax_profiles ? [] : app.taxpayers().filter((x) => x.tin_root !== tp.tin_root);
-  body.child(GroupLabel(cx, "Switch taxpayer"));
+  if (others.length) body.child(GroupLabel(cx, "Switch taxpayer"));
   for (const x of others) {
     body.child(
       NavRow(cx, `panel-tp-${x.tin_root}`, Avatar(cx, x.name, 20, x.tin_root), x.name, {

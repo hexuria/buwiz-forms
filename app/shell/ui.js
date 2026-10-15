@@ -10,7 +10,7 @@
 // it must not depend on list position or render order.
 
 import { div, svg } from "gpui-kit";
-import { Input, Popup, OtpInput } from "gpui-base";
+import { Input, Popup, OtpInput, OtpState } from "gpui-base";
 
 // ---------------------------------------------------------------- tokens
 
@@ -1068,6 +1068,9 @@ export function SidePanel(cx, id, opts) {
     if (opts.action) head.child(opts.action);
     panel.child(head);
   }
+  // Padding sits on the content, not on the scroll box, exactly as in the
+  // sidebar: a scroll box's own padding counts toward its scroll range, and
+  // the panels scrolled when their content fit (Notifications with two rows).
   panel.child(
     div()
       .id(`${id}-scroll`)
@@ -1075,10 +1078,17 @@ export function SidePanel(cx, id, opts) {
       .min_h(0)
       .overflow_y_scroll()
       .overflow_x_hidden()
-      .px(SPACE[3])
-      .pb(SPACE[3])
-      .pt(opts.title ? 0 : SPACE[1])
-      .child(div().flex().flex_col().gap(2).w(SIZE.panel - 24).child(opts.body)),
+      .child(
+        div()
+          .flex()
+          .flex_col()
+          .gap(2)
+          .w(SIZE.panel)
+          .px(SPACE[3])
+          .pb(SPACE[3])
+          .pt(opts.title ? 0 : SPACE[1])
+          .child(opts.body),
+      ),
   );
   return panel;
 }
@@ -1174,4 +1184,94 @@ export function PinCells(cx, state, id) {
     )
     .cell_active_style((cell) => cell.border_color(t.accent))
     .caret_style((caret) => caret.w(2).h(16).bg(t.fg));
+}
+
+/**
+ * Digits typed in printed-form groups: 3 · 3 · 3 for a TIN, 5 for a branch
+ * code. Each group is an `OtpState`; a full group hands the keyboard to the
+ * next one, so typing runs straight through (scripts cannot focus a text
+ * Input, but they can focus a code). Digits past a group's length, as from a
+ * paste, flow on into the groups after it.
+ */
+export class DigitEntry {
+  constructor(sizes, value = "") {
+    this.sizes = sizes;
+    /** Called after any edit, for screens that react to the digits. @type {((cx: any) => void) | null} */
+    this.onChange = null;
+    this.groups = sizes.map((n) => OtpState.new(n));
+    this.set(value);
+    this.groups.forEach((g, i) => {
+      g.on("complete", () => {
+        const next = this.groups[i + 1];
+        if (next && next.value().length < next.len()) next.focus();
+      });
+      g.on("change", (_e, cx) => {
+        const v = g.value().replace(/\D/g, "");
+        if (v.length > g.len()) this.set(this.value().slice(0, this.offset(i)) + v + this.rest(i + 1));
+        if (this.onChange) this.onChange(cx);
+      });
+    });
+  }
+
+  /** Index of the first digit of group `i`. */
+  offset(i) {
+    return this.sizes.slice(0, i).reduce((a, b) => a + b, 0);
+  }
+
+  /** The digits of groups `i` onward. */
+  rest(i) {
+    return this.groups.slice(i).map((g) => g.value()).join("");
+  }
+
+  value() {
+    return this.groups.map((g) => g.value().replace(/\D/g, "").slice(0, g.len())).join("");
+  }
+
+  isComplete() {
+    return this.value().length === this.sizes.reduce((a, b) => a + b, 0);
+  }
+
+  set(digits) {
+    const d = String(digits || "").replace(/\D/g, "");
+    let at = 0;
+    this.groups.forEach((g, i) => {
+      g.set_value(d.slice(at, at + this.sizes[i]));
+      at += this.sizes[i];
+    });
+  }
+
+  /** Keyboard onto the first group that is not full. */
+  focus() {
+    (this.groups.find((g) => g.value().length < g.len()) || this.groups[0]).focus();
+  }
+}
+
+/** The cells of a `DigitEntry`, groups separated by a dash like the printed TIN. */
+export function DigitCells(cx, entry, id, opts = {}) {
+  const t = tokens(cx);
+  const row = div().id(id).flex().flex_row().flex_wrap().items_center().gap(6);
+  entry.groups.forEach((g, i) => {
+    if (i) row.child(Text(cx, "body", "-", "fg3"));
+    row.child(
+      OtpInput.new(g)
+        .id(`${id}-${i}`)
+        .flex()
+        .gap(3)
+        .cell_style((cell) =>
+          cell
+            .w(opts.cell || 24)
+            .h(SIZE.control)
+            .flex()
+            .items_center()
+            .justify_center()
+            .border(1)
+            .border_color(opts.error ? t.danger : t.borderStrong)
+            .bg(t.surface)
+            .rounded(RADIUS.ctl),
+        )
+        .cell_active_style((cell) => cell.border_color(t.accent))
+        .caret_style((caret) => caret.w(2).h(14).bg(t.fg)),
+    );
+  });
+  return row;
 }

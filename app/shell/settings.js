@@ -94,7 +94,7 @@ export function renderSettings(cx, app, _width) {
     .flex_wrap()
     .items_center()
     .gap(SPACE[2])
-    .child(PinCells(cx, app.adminPinOtp, "settings-admin-pin"))
+    .child(PinCells(cx, app.newAdminPinOtp, "settings-admin-pin"))
     .child(
       AppButton(cx, "settings-admin-pin-save", auth.has_admin_pin ? "Change PIN" : "Set PIN", {
         size: "sm",
@@ -140,12 +140,18 @@ export function renderSettings(cx, app, _width) {
     ),
   ]);
 
-  return div()
+  const page = div()
     .flex()
     .flex_col()
     .child(PageHeader(cx, { title: "Settings", lede: "App-wide preferences for this computer. Taxpayer details live in each tax profile." }))
     .child(div().mt(28).child(SectionTitle(cx, "Appearance", true)))
-    .child(appearance)
+    .child(appearance);
+  // Signed in as a taxpayer: appearance only. Import, background tasks and
+  // the admin's security settings belong to the admin.
+  if (app.session.kind === "taxpayer") {
+    return page.child(Text(cx, "meta", "Signed in as one taxpayer. Data, background tasks and security are managed by the admin.", "fg3").mt(SPACE[6]).whitespace_normal());
+  }
+  return page
     .child(SectionTitle(cx, "Data"))
     .child(data)
     .child(SectionTitle(cx, "Background tasks"))

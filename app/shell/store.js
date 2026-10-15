@@ -16,6 +16,15 @@ export class Store {
     this.cache = new Map();
     /** Last error per cache key, for screens that show one. */
     this.errors = new Map();
+    /**
+     * Which taxpayers this session may see. `scopeRoot` (a TIN root) narrows
+     * the taxpayer list to one taxpayer for a taxpayer sign-in; `canSee(root)`
+     * also drops locked taxpayers' deadlines and returns, which name them.
+     */
+    /** @type {string | null} */
+    this.scopeRoot = null;
+    /** @type {(root: string) => boolean} */
+    this.canSee = (_root) => true;
   }
 
   /** Drop every cached read. Call after any write. */
@@ -71,7 +80,8 @@ export class Store {
     return this.read("screen_forms_index", "screen_forms_index", [], []);
   }
   taxpayers() {
-    return this.read("taxpayers", "list_taxpayers", [], []);
+    const all = this.read("taxpayers", "list_taxpayers", [], []);
+    return this.scopeRoot ? all.filter((t) => t.tin_root === this.scopeRoot) : all;
   }
   yearBounds() {
     const now = new Date().getFullYear();
@@ -90,10 +100,10 @@ export class Store {
     return tin ? this.read(`packs:${tin}`, "starter_packs", [tin], []) : [];
   }
   deadlines(from, to) {
-    return this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], []);
+    return this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], []).filter((d) => this.canSee(d.tin_root));
   }
   returns(which) {
-    return this.read(`returns:${which}`, "list_returns", [which], []);
+    return this.read(`returns:${which}`, "list_returns", [which], []).filter((r) => this.canSee(r.tin_root));
   }
   authState() {
     return this.read("auth_state", "auth_state", [], {

@@ -361,6 +361,158 @@ fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+// ---------- taxpayer credentials (one PIN per TIN root) ----------
+//
+// A PIN and an authenticator belong to the taxpayer, not the branch: every
+// branch of a TIN root shares them. They are still stored on each branch's
+// profile row (that is where `profile_pin_hash` lives), so writes go to every
+// branch and reads resolve the head office first, then the other branches.
+
+/// Branch profiles of a taxpayer, head office first. Branches without a
+/// profile row are skipped.
+fn taxpayer_profiles(
+    db: &Database,
+    tin_root: &str,
+) -> Result<Vec<bir_core::profile::TaxpayerProfile>, HostError> {
+    let taxpayer = db
+        .get_taxpayer(tin_root)
+        .map_err(|error| HostError::new(error.to_string()))?
+        .ok_or_else(|| HostError::new(format!("No taxpayer with TIN {tin_root}")))?;
+    let mut profiles = Vec::new();
+    for branch in &taxpayer.branches {
+        if let Some(profile) = db
+            .get_profile_by_tin(&branch.tin)
+            .map_err(|error| HostError::new(error.to_string()))?
+        {
+            profiles.push(profile);
+        }
+    }
+    if profiles.is_empty() {
+        return Err(HostError::new(format!(
+            "no taxpayer profile with TIN {tin_root}"
+        )));
+    }
+    Ok(profiles)
+}
+
+/// The taxpayer's PIN hash and authenticator secret: the head office's when
+/// set, otherwise the first branch's that has one.
+fn taxpayer_credentials(
+    profiles: &[bir_core::profile::TaxpayerProfile],
+) -> (Option<String>, Option<String>) {
+    let pin = profiles.iter().find_map(|p| p.profile_pin_hash.clone());
+    let totp = profiles.iter().find_map(|p| p.totp_secret.clone());
+    (pin, totp)
+}
+
+/// Write one PIN hash and authenticator secret to every branch of a taxpayer.
+/// Returns how many branch rows changed.
+fn write_taxpayer_credentials(
+    db: &Database,
+    profiles: Vec<bir_core::profile::TaxpayerProfile>,
+    pin: Option<String>,
+    totp: Option<String>,
+) -> Result<usize, HostError> {
+    let mut changed = 0;
+    for mut profile in profiles {
+        if profile.profile_pin_hash == pin && profile.totp_secret == totp {
+            continue;
+        }
+        profile.profile_pin_hash = pin.clone();
+        profile.totp_secret = totp.clone();
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        changed += 1;
+    }
+    Ok(changed)
+}
+
+fn taxpayer_auth(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin_root = arguments.string(0)?;
+    with_database(|db| {
+        let (pin, totp) = taxpayer_credentials(&taxpayer_profiles(db, tin_root)?);
+        Ok(HostObject::new()
+            .field("has_pin", pin.is_some())
+            .field("has_totp", totp.is_some())
+            .into())
+    })
+}
+
+/// Set (`pin`) or clear (`null`) the PIN of every branch of a taxpayer.
+fn set_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin_root = arguments.string(0)?.to_owned();
+    let pin = arguments.value(1)?.as_str().map(bir_core::crypto::hash_pin);
+    with_database(|db| {
+        let profiles = taxpayer_profiles(db, &tin_root)?;
+        let (_, totp) = taxpayer_credentials(&profiles);
+        write_taxpayer_credentials(db, profiles, pin, totp).map(|_| HostValue::Null)
+    })
+}
+
+/// Set or clear a taxpayer's authenticator; setting needs a current code, as
+/// in `set_profile_totp`.
+fn set_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin_root = arguments.string(0)?.to_owned();
+    let secret = arguments.value(1)?.as_str().map(str::to_owned);
+    let token = arguments
+        .get(2)
+        .and_then(HostValue::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    if let Some(secret) = &secret
+        && !bir_core::crypto::validate_totp(secret, &token)
+    {
+        return Err(HostError::new(
+            "That code does not match. Type the 6-digit code your authenticator app shows now.",
+        ));
+    }
+    with_database(|db| {
+        let profiles = taxpayer_profiles(db, &tin_root)?;
+        let (pin, _) = taxpayer_credentials(&profiles);
+        write_taxpayer_credentials(db, profiles, pin, secret).map(|_| HostValue::Null)
+    })
+}
+
+fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin_root = arguments.string(0)?;
+    let hashed = bir_core::crypto::hash_pin(arguments.string(1)?);
+    with_database(|db| {
+        let (pin, _) = taxpayer_credentials(&taxpayer_profiles(db, tin_root)?);
+        Ok(HostValue::Bool(pin.as_deref() == Some(hashed.as_str())))
+    })
+}
+
+fn verify_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin_root = arguments.string(0)?;
+    let token = arguments.string(1)?;
+    with_database(|db| {
+        let (_, totp) = taxpayer_credentials(&taxpayer_profiles(db, tin_root)?);
+        Ok(HostValue::Bool(totp.as_deref().is_some_and(|secret| {
+            bir_core::crypto::validate_totp(secret, token)
+        })))
+    })
+}
+
+/// One-time move to one PIN per taxpayer: every branch takes the head
+/// office's PIN and authenticator (or, without one, the first branch's that
+/// has one). Safe to run at every launch; returns how many rows changed.
+fn unify_taxpayer_credentials() -> HostResult {
+    with_database(|db| {
+        let mut changed = 0;
+        for entry in db
+            .list_taxpayers()
+            .map_err(|error| HostError::new(error.to_string()))?
+        {
+            let Ok(profiles) = taxpayer_profiles(db, &entry.taxpayer.tin_root) else {
+                continue;
+            };
+            let (pin, totp) = taxpayer_credentials(&profiles);
+            changed += write_taxpayer_credentials(db, profiles, pin, totp)?;
+        }
+        Ok(HostValue::Number(changed as f64))
+    })
+}
+
 // ---------- S3: form drafts ----------
 
 fn list_drafts(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -1137,6 +1289,14 @@ pub fn module() -> HostModule {
         .function("verify_profile_pin", verify_profile_pin)
         .function("verify_profile_totp", verify_profile_totp)
         .function("set_profile_totp", set_profile_totp)
+        .function("taxpayer_auth", taxpayer_auth)
+        .function("set_taxpayer_pin", set_taxpayer_pin)
+        .function("set_taxpayer_totp", set_taxpayer_totp)
+        .function("verify_taxpayer_pin", verify_taxpayer_pin)
+        .function("verify_taxpayer_totp", verify_taxpayer_totp)
+        .function("unify_taxpayer_credentials", |_| {
+            unify_taxpayer_credentials()
+        })
         .function("verify_admin_pin", verify_admin_pin)
         .function("verify_admin_totp", verify_admin_totp)
         .function("generate_totp_secret", generate_totp_secret)
@@ -1229,6 +1389,14 @@ export function verify_profile_pin(tin: string, pin: string): boolean;
 export function verify_profile_totp(tin: string, token: string): boolean;
 /** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
 export function set_profile_totp(tin: string, secret: string | null, token?: string): null;
+/** PIN and authenticator of a taxpayer (TIN root), shared by every branch. */
+export function taxpayer_auth(tin_root: string): ProfileAuth;
+export function set_taxpayer_pin(tin_root: string, pin: string | null): null;
+export function set_taxpayer_totp(tin_root: string, secret: string | null, token?: string): null;
+export function verify_taxpayer_pin(tin_root: string, pin: string): boolean;
+export function verify_taxpayer_totp(tin_root: string, token: string): boolean;
+/** Give every branch its taxpayer's PIN and authenticator; returns rows changed. */
+export function unify_taxpayer_credentials(): number;
 export function verify_admin_pin(pin: string): boolean;
 export function verify_admin_totp(token: string): boolean;
 export function generate_totp_secret(account: string): TotpSecret;
@@ -1366,5 +1534,96 @@ mod tests {
         assert!(has_totp());
         set_profile_totp(&args(vec![HostValue::Str(TIN.into()), HostValue::Null])).unwrap();
         assert!(!has_totp());
+    }
+
+    const ROOT: &str = "123456788";
+    const BRANCH: &str = "12345678800001";
+
+    fn add_branch() {
+        with_database(|db| {
+            db.create_branch(
+                ROOT,
+                bir_core::tax_profile::NewBranch {
+                    branch_code: "00001".into(),
+                    name: "Makati branch".into(),
+                    fields: Default::default(),
+                },
+            )
+            .map_err(|error| HostError::new(error.to_string()))?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn pin_hash(tin: &str) -> Option<String> {
+        with_database(|db| Ok(get_profile_by_tin(db, tin)?.profile_pin_hash.clone())).unwrap()
+    }
+
+    fn set_branch_pin(tin: &str, pin: &str) {
+        set_profile_pin(&args(vec![
+            HostValue::Str(tin.into()),
+            HostValue::Str(pin.into()),
+        ]))
+        .unwrap();
+    }
+
+    fn verify(pin: &str) -> bool {
+        verify_taxpayer_pin(&args(vec![
+            HostValue::Str(ROOT.into()),
+            HostValue::Str(pin.into()),
+        ]))
+        .unwrap()
+            == HostValue::Bool(true)
+    }
+
+    #[test]
+    fn a_taxpayer_pin_is_written_to_every_branch_and_cleared_from_every_branch() {
+        setup();
+        add_branch();
+        set_taxpayer_pin(&args(vec![
+            HostValue::Str(ROOT.into()),
+            HostValue::Str("0817".into()),
+        ]))
+        .unwrap();
+        let hash = Some(bir_core::crypto::hash_pin("0817"));
+        assert_eq!(pin_hash(TIN), hash);
+        assert_eq!(pin_hash(BRANCH), hash);
+        assert!(verify("0817"));
+        assert!(!verify("1234"));
+
+        set_taxpayer_pin(&args(vec![HostValue::Str(ROOT.into()), HostValue::Null])).unwrap();
+        assert_eq!(pin_hash(TIN), None);
+        assert_eq!(pin_hash(BRANCH), None);
+        assert!(!verify("0817"));
+    }
+
+    #[test]
+    fn unifying_gives_every_branch_the_head_office_pin() {
+        setup();
+        add_branch();
+        set_branch_pin(TIN, "1111");
+        set_branch_pin(BRANCH, "2222");
+        assert!(verify("1111"), "the head office's PIN wins");
+        assert!(!verify("2222"));
+        assert_eq!(
+            unify_taxpayer_credentials().unwrap(),
+            HostValue::Number(1.0)
+        );
+        assert_eq!(pin_hash(BRANCH), Some(bir_core::crypto::hash_pin("1111")));
+        assert_eq!(
+            unify_taxpayer_credentials().unwrap(),
+            HostValue::Number(0.0),
+            "a second run changes nothing"
+        );
+    }
+
+    #[test]
+    fn a_pin_only_a_branch_had_becomes_the_taxpayer_pin() {
+        setup();
+        add_branch();
+        set_branch_pin(BRANCH, "2222");
+        assert!(verify("2222"));
+        unify_taxpayer_credentials().unwrap();
+        assert_eq!(pin_hash(TIN), Some(bir_core::crypto::hash_pin("2222")));
     }
 }
