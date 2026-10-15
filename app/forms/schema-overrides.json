@@ -6086,6 +6086,45 @@
     "frm1701MS:txtSpouseNo17b": {
       "label": "Optional Standard Deduction B. Spouse",
       "evidence": "P4: printed caption '17 Optional Standard Deduction B. Spouse' (html-frozen/1701ms-2024/writer-cells.json xbox_joins frm1701MS:txtSpouseNo17b); binding /spouse/deduction='osd'"
+    },
+    "move:frm1701MS:txtToBeRefunded1": {
+      "to": "2:12",
+      "evidence": "N07: html-frozen/1701ms-2024/index.html prints item 31 'If overpayment, mark up to two (2) boxes and indicate in the space provided the amount, which shall be equivalent to Item No. 27'; bound to the draft's Item 31 amount (crates/bir-core/data/agent-forms/1701ms-v2024.json)"
+    },
+    "frm1701MS:txtToBeRefunded1": {
+      "label": "Amount to be refunded",
+      "kind": "money",
+      "evidence": "N07: html-frozen/1701ms-2024/index.html prints item 31 'If overpayment, mark up to two (2) boxes and indicate in the space provided the amount, which shall be equivalent to Item No. 27'"
+    },
+    "frm1701MS:txtToBeRefunded": {
+      "label": "To be refunded",
+      "evidence": "html-frozen/1701ms-2024/writer-cells.json xbox_joins frm1701MS:txtToBeRefunded '31 To be refunded'"
+    },
+    "move:frm1701MS:txtToBeIssued1": {
+      "to": "2:12",
+      "evidence": "N07: html-frozen/1701ms-2024/index.html prints item 31 'If overpayment, mark up to two (2) boxes and indicate in the space provided the amount, which shall be equivalent to Item No. 27'; bound to the draft's Item 31 amount (crates/bir-core/data/agent-forms/1701ms-v2024.json)"
+    },
+    "frm1701MS:txtToBeIssued1": {
+      "label": "Amount to be issued a Tax Credit Certificate",
+      "kind": "money",
+      "evidence": "N07: html-frozen/1701ms-2024/index.html prints item 31 'If overpayment, mark up to two (2) boxes and indicate in the space provided the amount, which shall be equivalent to Item No. 27'"
+    },
+    "frm1701MS:txtToBeIssued": {
+      "label": "To be issued a Tax Credit Certificate",
+      "evidence": "html-frozen/1701ms-2024/writer-cells.json xbox_joins frm1701MS:txtToBeIssued '31 To be issued a Tax Credit Certificate'"
+    },
+    "move:frm1701MS:txtToBeCarried1": {
+      "to": "2:12",
+      "evidence": "N07: html-frozen/1701ms-2024/index.html prints item 31 'If overpayment, mark up to two (2) boxes and indicate in the space provided the amount, which shall be equivalent to Item No. 27'; bound to the draft's Item 31 amount (crates/bir-core/data/agent-forms/1701ms-v2024.json)"
+    },
+    "frm1701MS:txtToBeCarried1": {
+      "label": "Amount to be carried over as tax credit",
+      "kind": "money",
+      "evidence": "N07: html-frozen/1701ms-2024/index.html prints item 31 'If overpayment, mark up to two (2) boxes and indicate in the space provided the amount, which shall be equivalent to Item No. 27'"
+    },
+    "frm1701MS:txtToBeCarried": {
+      "label": "To be carried over as tax credit for next year/quarter",
+      "evidence": "html-frozen/1701ms-2024/writer-cells.json xbox_joins frm1701MS:txtToBeCarried '31 To be carried over as tax credit for next year/quarter'"
     }
   },
   "1701Q": {

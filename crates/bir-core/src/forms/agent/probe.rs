@@ -74,6 +74,32 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ("frm1701MS:txtRDOCodeb", "the spouse's RDO"),
 ];
 
+/// Amounts the filer types that another field only clears. The probe sees
+/// the box move with that other field and would call it a combination; here
+/// the other field closes a gate (no overpayment left) and `compute` empties
+/// the entry. They are bound to the one path they echo.
+const GATED_ENTRY: &[(&str, &str)] = &[
+    (
+        "frm1701MS:txtToBeRefunded1",
+        "Item 31 \"To be refunded\" amount: the filer types it once the box \
+         is ticked (official validate: \"The total amount in Item 31 must \
+         equal the sum of Item 27A and Item 27B\"); form_1701ms.rs \
+         `compute` clears it when a penalty such as the compromise ends the \
+         overpayment",
+    ),
+    (
+        "frm1701MS:txtToBeIssued1",
+        "Item 31 \"To be issued a Tax Credit Certificate\" amount: typed by \
+         the filer; cleared by `compute` with its box when the overpayment \
+         ends",
+    ),
+    (
+        "frm1701MS:txtToBeCarried1",
+        "Item 31 \"To be carried over\" amount: typed by the filer; cleared \
+         by `compute` with its box when the overpayment ends",
+    ),
+];
+
 /// Project `fields.json` onto the boxes the assistant needs.
 pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
     let doc: Value = serde_json::from_str(fields_json).map_err(|error| error.to_string())?;
@@ -1463,11 +1489,13 @@ fn decide(
             .cloned()
             .expect("non-empty echo set");
         // Another field's amount or text also moves this box: it is a sum
-        // or a combination (Total Remitted = Tax + Penalty), not an entry.
-        if let Some((_, other)) = evidence
-            .misses
-            .iter()
-            .find(|(missed, other)| missed == key && *other != path)
+        // or a combination (Total Remitted = Tax + Penalty), not an entry,
+        // unless the other field only clears it (`GATED_ENTRY`).
+        if !GATED_ENTRY.iter().any(|(k, _)| *k == key)
+            && let Some((_, other)) = evidence
+                .misses
+                .iter()
+                .find(|(missed, other)| missed == key && *other != path)
         {
             return Err(format!(
                 "derived by the app: shows {path} combined with {other}"

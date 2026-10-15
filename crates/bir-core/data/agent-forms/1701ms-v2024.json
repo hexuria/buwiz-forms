@@ -93,8 +93,11 @@
 "frm1701MS:txtTelNum10a": {"lock":"profile","path":"/contact_number","type":"text"},
 "frm1701MS:txtTelNum10b": {"path":"/spouse_info/contact_number","type":"text"},
 "frm1701MS:txtToBeCarried": {"options":[{"set":{"/to_be_carried_over":false},"value":"false"},{"set":{"/to_be_carried_over":true},"value":"true"}],"type":"choice"},
+"frm1701MS:txtToBeCarried1": {"path":"/carry_over_amount","type":"amount"},
 "frm1701MS:txtToBeIssued": {"options":[{"set":{"/to_be_issued_tcc":false},"value":"false"},{"set":{"/to_be_issued_tcc":true},"value":"true"}],"type":"choice"},
+"frm1701MS:txtToBeIssued1": {"path":"/tcc_amount","type":"amount"},
 "frm1701MS:txtToBeRefunded": {"options":[{"set":{"/to_be_refunded":false},"value":"false"},{"set":{"/to_be_refunded":true},"value":"true"}],"type":"choice"},
+"frm1701MS:txtToBeRefunded1": {"path":"/refund_amount","type":"amount"},
 "frm1701MS:txtYearNo1": {"lock":"identity","path":"/taxable_year","type":"whole"},
 "taxCodeDropdown": {"options":[{"set":{"/taxpayer/source":"mixed","/taxpayer/tax_option":"unanswered"},"value":""},{"set":{"/taxpayer/source":"business","/taxpayer/tax_option":"special"},"value":"II012"},{"set":{"/taxpayer/source":"mixed","/taxpayer/tax_option":"graduated"},"value":"II013"},{"set":{"/taxpayer/source":"profession","/taxpayer/tax_option":"graduated"},"value":"II014"},{"set":{"/taxpayer/source":"business","/taxpayer/tax_option":"eight_percent"},"value":"II015"},{"set":{"/taxpayer/source":"mixed","/taxpayer/tax_option":"eight_percent"},"value":"II016"},{"set":{"/taxpayer/source":"profession","/taxpayer/tax_option":"eight_percent"},"value":"II017"}],"type":"choice"},
 "taxCodeDropdownSpouse": {"options":[{"set":{"/civil_status":"single","/filing":"unanswered","/spouse/source":"unanswered","/spouse/tax_option":"unanswered"},"value":""},{"set":{"/civil_status":"married","/filing":"jointly","/spouse/source":"compensation","/spouse/tax_option":"graduated"},"value":"II011"},{"set":{"/civil_status":"married","/filing":"jointly","/spouse/source":"business","/spouse/tax_option":"graduated"},"value":"II012"},{"set":{"/civil_status":"married","/filing":"jointly","/spouse/source":"mixed","/spouse/tax_option":"graduated"},"value":"II013"},{"set":{"/civil_status":"married","/filing":"jointly","/spouse/source":"profession","/spouse/tax_option":"graduated"},"value":"II014"},{"set":{"/civil_status":"married","/filing":"jointly","/spouse/source":"business","/spouse/tax_option":"eight_percent"},"value":"II015"},{"set":{"/civil_status":"married","/filing":"jointly","/spouse/source":"mixed","/spouse/tax_option":"eight_percent"},"value":"II016"},{"set":{"/civil_status":"married","/filing":"jointly","/spouse/source":"profession","/spouse/tax_option":"eight_percent"},"value":"II017"}],"type":"choice"}
@@ -408,9 +411,6 @@
 "frm1701MS:txtTaxpayerNo16b": "written by the app without a draft field (a constant or the period)",
 "frm1701MS:txtTaxpayerNo16b1": "written by the app without a draft field (a constant or the period)",
 "frm1701MS:txtTaxpayerNo4a": "derived by the app: changes with /taxpayer/gross_compensation, /taxpayer/non_taxable_compensation, /taxpayer/source but never shows one field's value",
-"frm1701MS:txtTaxpayerNo4b": "derived by the app: changes with /civil_status, /filing, /spouse/gross_compensation, ... but never shows one field's value",
-"frm1701MS:txtToBeCarried1": "derived by the app: shows /carry_over_amount combined with /taxpayer/penalty_overrides/compromise",
-"frm1701MS:txtToBeIssued1": "derived by the app: shows /tcc_amount combined with /taxpayer/penalty_overrides/compromise",
-"frm1701MS:txtToBeRefunded1": "derived by the app: shows /refund_amount combined with /taxpayer/penalty_overrides/compromise"
+"frm1701MS:txtTaxpayerNo4b": "derived by the app: changes with /civil_status, /filing, /spouse/gross_compensation, ... but never shows one field's value"
 }
 }

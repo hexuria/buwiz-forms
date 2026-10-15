@@ -2638,4 +2638,42 @@ mod tests {
         d.recompute();
         assert!(d.taxpayer.itemized_rows.is_empty());
     }
+
+    /// N07: the Item 31 amounts are the filer's entries. The page writes them
+    /// through the agent bindings, they reach the draft and the official box,
+    /// and `compute` still clears them once the overpayment is gone.
+    #[test]
+    fn item_31_amounts_are_typed_by_the_filer_and_cleared_without_overpayment() {
+        use crate::forms::agent::{self, AgentFormKind};
+        let kind = AgentFormKind::from_code("1701MS").unwrap();
+        let mut d = sample();
+        d.taxpayer.cwt_2316 = 500_000.0;
+        d.recompute();
+        d.to_be_refunded = true;
+        let mut value = serde_json::to_value(&d).unwrap();
+        agent::fill_as_user(
+            kind,
+            &mut value,
+            "frm1701MS:txtToBeRefunded1",
+            &serde_json::json!("221,500.00"),
+        )
+        .unwrap();
+        let mut d: Form1701MsDraft = serde_json::from_value(value).unwrap();
+        d.recompute();
+        assert_eq!(d.refund_amount, 221_500.0);
+        assert_eq!(
+            d.to_bir_field_map()["frm1701MS:txtToBeRefunded1"],
+            "221,500.00"
+        );
+        assert!(
+            !d.validate_on(today())
+                .iter()
+                .any(|(_, m)| m.contains("Item 31")),
+            "{:?}",
+            d.validate_on(today())
+        );
+        d.taxpayer.cwt_2316 = 0.0;
+        d.recompute();
+        assert_eq!(d.refund_amount, 0.0);
+    }
 }
