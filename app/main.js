@@ -33,7 +33,7 @@ import { renderCalendar } from "./shell/calendar_page.js";
 import { renderFilings } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
-import { renderFormPage, FormPageActions } from "./shell/form_page.js";
+import { renderFormPage, renderFormSplit, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderTaxpayerLock } from "./shell/auth.js";
 import { renderProfileManager, blankProfile, parseTin } from "./shell/profile_manager.js";
@@ -1336,6 +1336,9 @@ export default class BirApp extends View {
     if (current && this.isRootLocked(current.tin_root)) return renderTaxpayerLock(cx, this, current.tin_root);
     const L = this.layout();
 
+    // A form on a wide window brings its own two scroll areas (the part
+    // navigator pinned beside the form); everything else scrolls as one.
+    const formSplit = this.view === "form" && !this.isFresh() ? renderFormSplit(cx, this, L) : null;
     const main = div()
       .id("main-surface")
       .flex()
@@ -1351,7 +1354,8 @@ export default class BirApp extends View {
       .border_color(t.border)
       .bg(t.surface)
       .overflow_hidden()
-      .child(
+      .when(Boolean(formSplit), (el) => el.child(formSplit))
+      .when(!formSplit, (el) => el.child(
         div()
           .id("main-scroll")
           .flex_1()
@@ -1369,7 +1373,7 @@ export default class BirApp extends View {
               .pb(56)
               .child(div().flex().flex_col().w(L.column).child(this.renderView(cx, L.column))),
           ),
-      );
+      ));
 
     const body = div().flex().flex_row().flex_1().min_h(0).w_full();
     if (L.sidebarDocked) body.child(renderSidebar(cx, this));

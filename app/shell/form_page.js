@@ -919,14 +919,20 @@ function itemRow(cx, ui, it, pi, ii, width) {
 
 // ---------------------------------------------------------------- page
 
-export function renderFormPage(cx, app, width) {
+/**
+ * The form page's pieces: the header (title, actions, taxpayer bar), the part
+ * navigator and the parts. `renderFormPage` stacks them in the main scroll
+ * area; `renderFormSplit` pins the navigator beside a form that scrolls on
+ * its own.
+ */
+function formContent(cx, app, width) {
   const ui = app.formUi;
   const s = ui.state;
   const t = tokens(cx);
-  if (!s) return div();
+  if (!s) return { early: div() };
   const f = s.schema;
   if (!f) {
-    return PageHeader(cx, { title: `Form ${s.code}`, lede: s.error || "This form has no on-screen layout." });
+    return { early: PageHeader(cx, { title: `Form ${s.code}`, lede: s.error || "This form has no on-screen layout." }) };
   }
   // The return's own TIN and branch decide whose it is; never a name match
   // or whichever taxpayer happens to be selected.
@@ -1023,10 +1029,10 @@ export function renderFormPage(cx, app, width) {
 
   const page = div().flex().flex_col().child(head).child(bar);
   if (s.error) {
-    return page.child(div().p(SPACE[4]).rounded(RADIUS.card).bg(t.dangerSoft).child(Text(cx, "body", s.error, "danger").whitespace_normal()));
+    return { page: page.child(div().p(SPACE[4]).rounded(RADIUS.card).bg(t.dangerSoft).child(Text(cx, "body", s.error, "danger").whitespace_normal())) };
   }
   if (s.loading) {
-    return page.child(div().py(40).flex().justify_center().child(Text(cx, "body", `Opening ${f.c}…`, "fg3")));
+    return { page: page.child(div().py(40).flex().justify_center().child(Text(cx, "body", `Opening ${f.c}…`, "fg3"))) };
   }
 
   // Part navigator: 208 px beside the parts, a chip row below 760 px. Labels
@@ -1048,7 +1054,29 @@ export function renderFormPage(cx, app, width) {
       .bg(danger ? t.danger : t.hover)
       .child(Text(cx, "cap", text, danger ? "primaryFg" : "fg2").when(danger, (el) => el.text_color(t.surface)));
   const nav = sideNav ? div().flex().flex_col().gap(2).w(208).flex_none() : div().flex().flex_row().flex_wrap().gap(SPACE[1]).mb(SPACE[4]);
-  if (sideNav) nav.child(div().px(SPACE[2]).pb(6).child(Text(cx, "metaStrong", "On this form", "fg3")));
+  // Heading: where you are, and a link to the next part with something to fix.
+  const openOne = s.openParts.size === 1 ? [...s.openParts][0] : -1;
+  const navHead = div()
+    .flex()
+    .flex_row()
+    .items_center()
+    .px(SPACE[2])
+    .pb(6)
+    .child(Text(cx, "metaStrong", "On this form", "fg3"))
+    .child(div().flex_1())
+    .child(Text(cx, "meta", openOne >= 0 ? `${openOne + 1} of ${f.parts.length}` : `${f.parts.length} parts`, "fg3"));
+  const needing = f.parts.map((_p, i) => i).filter((i) => errorsIn(i) > 0);
+  const attn = needing.length
+    ? div()
+        .id("fp-nav-attention")
+        .px(SPACE[2])
+        .pb(6)
+        .cursor_pointer()
+        .accessibility_label("Go to the next part that needs attention")
+        .on_click((_e, cx) => ui.jumpTo(needing.find((i) => i > openOne) ?? needing[0], cx))
+        .child(Text(cx, "meta", `${needing.length} part${needing.length > 1 ? "s" : ""} need${needing.length > 1 ? "" : "s"} attention · next ↓`, "danger"))
+    : null;
+  const navRows = [];
   f.parts.forEach((p, i) => {
     const current = s.openParts.has(i) && s.openParts.size === 1;
     const errors = errorsIn(i);
@@ -1073,7 +1101,7 @@ export function renderFormPage(cx, app, width) {
         // and GPUI lays the wrapped label out one word per line.
         .child(Text(cx, "control", partName(p, i), current ? "fg" : "fg2").w(errors > 0 ? 208 - 16 - 8 - 26 - 26 - 4 : 208 - 16 - 8 - 26).line_height("18px").whitespace_normal())
         .child(div().flex().flex_row().flex_none().gap(SPACE[1]).when(errors > 0, (el) => el.child(badge(String(errors), true))).child(badge(String(p.items.length), false)));
-      nav.child(row);
+      navRows.push(row);
     } else {
       nav.child(
         div()
@@ -1134,6 +1162,53 @@ export function renderFormPage(cx, app, width) {
     parts.child(card);
   });
 
-  if (sideNav) return page.child(div().flex().flex_row().items_start().gap(28).child(nav).child(parts));
-  return page.child(nav).child(parts);
+  return { page, nav, navHead, attn, navRows, parts, sideNav };
+}
+
+export function renderFormPage(cx, app, width) {
+  const c = formContent(cx, app, width);
+  if (c.early) return c.early;
+  if (!c.parts) return c.page;
+  if (c.sideNav) {
+    c.nav.child(c.navHead).when(Boolean(c.attn), (el) => el.child(c.attn));
+    for (const row of c.navRows) c.nav.child(row);
+    return c.page.child(div().flex().flex_row().items_start().gap(28).child(c.nav).child(c.parts));
+  }
+  return c.page.child(c.nav).child(c.parts);
+}
+
+/**
+ * Wide windows: the part navigator is pinned beside the form instead of
+ * scrolling away with it. The form scrolls in its own area; the navigator's
+ * heading stays put and its list scrolls on its own (with a scrollbar) when
+ * the parts need more height than the window has, so the wheel over it never
+ * moves the form. `null` below the side-navigator width, where the page
+ * keeps one scroll area and a chip row. `L` is the shell's layout().
+ */
+export function renderFormSplit(cx, app, L) {
+  if (L.column < BREAK.formNav) return null;
+  const c = formContent(cx, app, L.column);
+  if (c.early) return null;
+  // The column's left edge, matching the centred column of the main scroll area.
+  const left = Math.max(L.padX, Math.floor((L.mainWidth - L.column) / 2));
+  const navW = 208 + 6; // the rows plus room for the list's scrollbar
+  const formW = L.column - 208 - 28;
+  const navCol = div().flex().flex_col().flex_none().w(left + navW).pl(left).h_full().min_h(0).pt(28).pb(16);
+  if (c.parts) {
+    navCol
+      .child(c.navHead)
+      .when(Boolean(c.attn), (el) => el.child(c.attn))
+      .child(div().id("fp-nav-list").flex().flex_col().gap(2).flex_1().min_h(0).w(navW).overflow_y_scrollbar().children(c.navRows));
+  }
+  const body = div().flex().flex_col().w(formW + 22).pl(22).pt(28).pb(56).child(c.page);
+  if (c.parts) body.child(c.parts);
+  return div()
+    .id("fp-split")
+    .flex()
+    .flex_row()
+    .flex_1()
+    .min_h(0)
+    .w_full()
+    .child(navCol)
+    .child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
 }
