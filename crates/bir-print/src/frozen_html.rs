@@ -133,6 +133,24 @@ fn fill_text_input(
     let comb = indices.iter().any(|&index| tags[index].slot.is_some());
     if comb {
         let ordered = ordered_comb_indices(tags, indices);
+        // Attachment counts occupy the sheet's existing digit boxes.
+        // Pad the displayed count only; the upload value stays as written.
+        if is_attachment_count_key(name)
+            && !print.is_empty()
+            && print.bytes().all(|b| b.is_ascii_digit())
+            && print.len() < ordered.len()
+        {
+            let padded = format!("{print:0>width$}", width = ordered.len());
+            for (offset, (index, ch)) in ordered.into_iter().zip(padded.chars()).enumerate() {
+                let writer = (via_cell && offset == 0).then_some(print);
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &ch.to_string(), writer),
+                ));
+            }
+            return;
+        }
         // An amount into a comb drawn with a decimal-point column (one gap in
         // the slot indices, exactly two slots after it): right-align the peso
         // digits into the slots before the point and put the two centavo
@@ -185,6 +203,29 @@ fn fill_text_input(
             ));
         }
     }
+}
+
+/// Attachment-count writer keys used by the reviewed frozen-sheet joins.
+/// In particular, 1702RT calls its count PagesFilled. Split tens/units joins
+/// already supply one digit each and do not need a different layout.
+fn is_attachment_count_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    matches!(
+        key.rsplit(':').next().unwrap_or(&key),
+        "txtsheets"
+            | "txtnosheets"
+            | "txtnoofsheets"
+            | "txtpg1i3nosheets"
+            | "txtpg1i3noofsheets"
+            | "txtpg1i4nosheets"
+            | "txtpg1i4noofsheets"
+            | "txti3sheets"
+            | "txtpg1p2i23numofattachments"
+            | "txtpg1pt2pagesfilled"
+            | "attachments"
+            | "attachments_tens"
+            | "attachments_units"
+    )
 }
 
 /// `(slot tag index, char)` for an amount printed into a point-column comb,
@@ -1676,6 +1717,79 @@ fn is_email_key(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn attachment_counts_fill_both_digits_for_one_through_ninety_nine() {
+        let html = r#"<input name="frm1601c:txtSheets" data-slot-index="0" value=""><input name="frm1601c:txtSheets" data-slot-index="1" value="">"#;
+        for n in 0..=99 {
+            let fields = BTreeMap::from([("frm1601c:txtSheets".to_string(), n.to_string())]);
+            let filled = super::fill_by_name(html, &fields);
+            assert_eq!(comb_text(&filled, "frm1601c:txtSheets"), format!("{n:02}"));
+        }
+        let fields = BTreeMap::from([("frm1601c:txtSheets".to_string(), String::new())]);
+        assert_eq!(
+            comb_text(&super::fill_by_name(html, &fields), "frm1601c:txtSheets"),
+            ""
+        );
+    }
+
+    #[test]
+    fn every_frozen_attachment_count_join_pads_to_its_existing_capacity() {
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(root).unwrap() {
+            let dir = entry.unwrap().path();
+            let path = dir.join("writer-cells.json");
+            if !path.exists() {
+                continue;
+            }
+            let doc: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+            let slug = dir.file_name().unwrap().to_str().unwrap();
+            for join in doc["joins"].as_array().unwrap() {
+                let caption = join["printed"].as_str().unwrap_or("").to_ascii_lowercase();
+                if !(caption.contains("number of sheet")
+                    || caption.contains("no. of sheet")
+                    || caption.contains("number of attachment"))
+                {
+                    continue;
+                }
+                let key = join["writer_key"].as_str().unwrap();
+                let cell = join["html_id"].as_str().unwrap();
+                assert!(
+                    super::is_attachment_count_key(key),
+                    "{slug}: missing count key {key}"
+                );
+                let empty = super::filled_document(slug, &BTreeMap::new()).unwrap();
+                let capacity = super::input_tags(&empty)
+                    .iter()
+                    .filter(|t| t.name == cell && t.slot.is_some())
+                    .count();
+                if capacity < 2 {
+                    continue;
+                } // Separate tens/units or plain fields.
+                for value in ["", "0", "1", "9", "10", "99"] {
+                    let fields = BTreeMap::from([(key.to_string(), value.to_string())]);
+                    let filled = super::filled_document(slug, &fields).unwrap();
+                    let expected = if value.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{value:0>capacity$}")
+                    };
+                    assert_eq!(
+                        comb_text(&filled, cell),
+                        expected,
+                        "{slug}: {key} = {value}"
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 30,
+            "attachment coverage unexpectedly fell to {checked}"
+        );
+    }
+
     /// A comb drawn with a decimal-point column: slots 0..=4 for pesos, an
     /// index gap where the point is printed, then two centavo slots.
     fn point_column_comb() -> String {
