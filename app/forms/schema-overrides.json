@@ -13309,6 +13309,38 @@
     "frm2200Av2020:optPayment_3": {
       "label": "15 Other Similar Schemes",
       "evidence": "P4: printed caption '15 Other Similar Schemes' (html-frozen/2200a-2020/writer-cells.json xbox_joins frm2200Av2020:optPayment_3)"
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Check": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Atc": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Desc": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Bracket": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Rate": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Export": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Taxable": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
+    },
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Due": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the three printed 'Others (specify)' rows are a page feature only: form_2200a.rs (ported from BIR-Form2200Av2020.hta, sha256 1df302ee…) notes 'The page can append more \"Others\" rows, but those are not part of the official submit layout, so the model stops at three'; crates/bir-core/data/official-xml/2200a-v2020.json lists only xa_others1-3. Rows 1-3 stay editable; this runtime row template is hidden."
     }
   },
   "2200AN": {
@@ -17364,6 +17396,66 @@
     "item:4:0": {
       "label": "Others (specify)",
       "evidence": "P4: item heading from its fields' sourced captions"
+    },
+    "frm2200P:chkBoxSched1ATC{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1ATC{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1Description{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1UnitOfMeasure{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1ApplicableRate{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1PlaceOfRemoval{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1LocalManuProd{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1Imported{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1TotTaxRemovals{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1TaxPaidImported{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1UnderBond{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1Exports{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1Others{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1TotTaxPaid{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
+    },
+    "frm2200P:txtSched1BasicExciseTaxDue{n>=28}": {
+      "kind": "hidden",
+      "evidence": "N04: rows past the 27 official Schedule 1 rows are a page feature only: form_2200p.rs notes 'The page can append rows past 27 (addRowSched1), but those controls are not part of the official submit layout, so the model stops at 27'. Rows 1-27 stay editable; this runtime row template is hidden."
     }
   },
   "2200S": {
