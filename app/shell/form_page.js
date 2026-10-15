@@ -237,6 +237,7 @@ export class FormPageActions {
         this.flush(cx);
       });
       s.inputs.set(k, input);
+      (s.inputKinds ||= new Map()).set(k, t);
     };
     for (const it of part.items) {
       if (it.rows) {
@@ -322,10 +323,12 @@ export class FormPageActions {
     if (Object.keys(edits).length) {
       try {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
+        const before = s.values;
         s.draft = r.draft;
         s.values = r.values;
         s.options = r.options || {};
         this.syncComputed();
+        this.syncChanged(before, edits);
         const rejected = Object.entries(r.rejected || {});
         if (rejected.length) {
           for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
@@ -344,6 +347,23 @@ export class FormPageActions {
       if (!(s.locks[k] !== undefined || this.isComputed(k))) continue;
       const v = s.values[k] ?? "";
       if (input.value() !== v) input.set_value(String(v));
+    }
+  }
+
+  /**
+   * A box the filer can type in but the host also fills (a 2550M schedule's
+   * input tax refilled at 12% from its amount, rows moving up when one is
+   * cleared) shows the host's new value. Boxes in this batch keep the typing.
+   */
+  syncChanged(before, edits) {
+    const s = this.state;
+    for (const [k, input] of s.inputs) {
+      if (k in edits) continue;
+      const was = before[k] ?? "";
+      const now = s.values[k] ?? "";
+      if (was === now) continue;
+      const shown = s.inputKinds?.get(k) === "money" && now !== "" ? formatMoney(now) : String(now);
+      if (input.value() !== shown) input.set_value(shown);
     }
   }
 

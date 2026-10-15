@@ -19075,6 +19075,252 @@
         "Output Tax for the Period"
       ],
       "evidence": "N03: html-frozen/2550m-2007/index.html page 2 'Schedule 1 Schedule of Sales/Receipts and Output Tax' with columns ATC, Amount of Sales/Receipts For the Period, Output Tax For the Period (To Item 12A/B); one row per ATC ticked in the popup, row n is sales_schedule[n-1] (form_2550m.rs schedule_row_controls); 36 rows, the length of the official ATC popup (FORM_2550M_ATCS)."
+    },
+    "table:2:sched2": {
+      "no": "",
+      "label": "Schedule 2 – Purchases/Importation of Capital Goods (Aggregate Amount Not Exceeding P1 Million) (To Item 18A/B)",
+      "templates": [
+        "txtDatePurchased{N>=0}",
+        "txtDescription{N>=0}",
+        "txtAmt{N>=0}",
+        "txtInputTax{N>=0}"
+      ],
+      "row_keys": {
+        "txtDatePurchased{N>=0}": "txtDatePurchased{index}",
+        "txtDescription{N>=0}": "txtDescription{index}",
+        "txtAmt{N>=0}": "txtAmt{index}",
+        "txtInputTax{N>=0}": "txtInputTax{index}"
+      },
+      "rows": [
+        0,
+        9
+      ],
+      "cols": [
+        "Date Purchased",
+        "Description",
+        "Amount (Net of VAT)",
+        "Input Tax"
+      ],
+      "evidence": "Item 1: official ebirforms-mirror/forms/BIR-Form2550M.hta addlistSched2() builds txtDatePurchased<i>, txtDescription<i>, txtAmt<i> (getInputTaxCompute, 12%), txtInputTax<i> (editable, computeSumTax); modal headers 'Date Purchased', 'Description', 'Amount (Net of VAT)', 'Input Tax', total 'To Item 18A/B'; html-frozen/2550m-2007/index.html page 2 'Purchases/Importation of Capital Goods (Aggregate Amount Not Exceeding P1 Million) Schedule 2'. Rows are written by the host (screen_form_module/rows_2550m.rs) into the typed draft in the order schedule_row_controls reads them back (form_2550m.rs); ten rows, the page's own rows start at 0."
+    },
+    "table:2:sched3a": {
+      "no": "",
+      "label": "Schedule 3 – Purchases/Importation of Capital Goods (Aggregate Amount Exceeds P1 Million): A) Purchases/Importations This Period (To Item 18C/D)",
+      "templates": [
+        "txtDatePurchased3A{N>=0}",
+        "txtDescription3A{N>=0}",
+        "txtAmt3A{N>=0}",
+        "txtInputTax3A{N>=0}",
+        "txtEstLife3A{N>=0}",
+        "txtRecogLife3A{N>=0}",
+        "txtAllowInputTax3A{N>=0}",
+        "txtBalInputTax3A{N>=0}"
+      ],
+      "row_keys": {
+        "txtDatePurchased3A{N>=0}": "txtDatePurchased3A{index}",
+        "txtDescription3A{N>=0}": "txtDescription3A{index}",
+        "txtAmt3A{N>=0}": "txtAmt3A{index}",
+        "txtInputTax3A{N>=0}": "txtInputTax3A{index}",
+        "txtEstLife3A{N>=0}": "txtEstLife3A{index}",
+        "txtRecogLife3A{N>=0}": "txtRecogLife3A{index}",
+        "txtAllowInputTax3A{N>=0}": "txtAllowInputTax3A{index}",
+        "txtBalInputTax3A{N>=0}": "txtBalInputTax3A{index}"
+      },
+      "rows": [
+        0,
+        9
+      ],
+      "cols": [
+        "Date Purchased",
+        "Description",
+        "Amount (Net of VAT)",
+        "Input Tax",
+        "Est. Life (in months)",
+        "Recognized Life (in months, at most 60)",
+        "Allowable Input Tax for the Period",
+        "Balance carried to Next Period"
+      ],
+      "evidence": "Item 1: official ebirforms-mirror/forms/BIR-Form2550M.hta addlistSched3A() builds the eight row boxes; txtAmt3A blur runs getInputTaxCompute3A (12%), txtInputTax3A stays editable, txtAllowInputTax3A and txtBalInputTax3A are greyed (computed: (D) divided by (F), (D) less (G)); modal headers 'A) Purchases/Importations This Period', 'Total (To Item 18C/D)'. Rows are written by the host (screen_form_module/rows_2550m.rs) into the typed draft in the order schedule_row_controls reads them back (form_2550m.rs); ten rows, the page's own rows start at 0."
+    },
+    "table:2:sched3b": {
+      "no": "",
+      "label": "Schedule 3 – B) Purchases/Importations Previous Period",
+      "templates": [
+        "txtDatePurchased3B{N>=0}",
+        "txtDescription3B{N>=0}",
+        "txtAmt3B{N>=0}",
+        "txtBalInputTaxPrevious3B{N>=0}",
+        "txtEstLife3B{N>=0}",
+        "txtRecogLife3B{N>=0}",
+        "txtAllowInputTax3B{N>=0}",
+        "txtBalInputTax3B{N>=0}"
+      ],
+      "row_keys": {
+        "txtDatePurchased3B{N>=0}": "txtDatePurchased3B{index}",
+        "txtDescription3B{N>=0}": "txtDescription3B{index}",
+        "txtAmt3B{N>=0}": "txtAmt3B{index}",
+        "txtBalInputTaxPrevious3B{N>=0}": "txtBalInputTaxPrevious3B{index}",
+        "txtEstLife3B{N>=0}": "txtEstLife3B{index}",
+        "txtRecogLife3B{N>=0}": "txtRecogLife3B{index}",
+        "txtAllowInputTax3B{N>=0}": "txtAllowInputTax3B{index}",
+        "txtBalInputTax3B{N>=0}": "txtBalInputTax3B{index}"
+      },
+      "rows": [
+        0,
+        9
+      ],
+      "cols": [
+        "Date Purchased",
+        "Description",
+        "Amount (Net of VAT)",
+        "Balance of Input Tax from previous period",
+        "Est. Life (in months)",
+        "Recognized Life (in months, at most 60)",
+        "Allowable Input Tax for the Period",
+        "Balance carried to Next Period"
+      ],
+      "evidence": "Item 1: official ebirforms-mirror/forms/BIR-Form2550M.hta line 1370 'B) Purchases/Importations Previous Period', header 'Balance of Input Tax from previous period'; addlistSched3B() row boxes, txtBalInputTaxPrevious3B editable (computeSumTax3B). Rows are written by the host (screen_form_module/rows_2550m.rs) into the typed draft in the order schedule_row_controls reads them back (form_2550m.rs); ten rows, the page's own rows start at 0."
+    },
+    "table:2:sched6": {
+      "no": "",
+      "label": "Schedule 6 – Tax Withheld Claimed as Tax Credit (To Item 23A)",
+      "templates": [
+        "txtPeriodCovered{N>=0}",
+        "txtNameAgent{N>=0}",
+        "txtIncomePayment{N>=0}",
+        "txtTotalWithheld{N>=0}",
+        "txtAppliedCurr{N>=0}"
+      ],
+      "row_keys": {
+        "txtPeriodCovered{N>=0}": "txtPeriodCovered{index}",
+        "txtNameAgent{N>=0}": "txtNameAgent{index}",
+        "txtIncomePayment{N>=0}": "txtIncomePayment{index}",
+        "txtTotalWithheld{N>=0}": "txtTotalWithheld{index}",
+        "txtAppliedCurr{N>=0}": "txtAppliedCurr{index}"
+      },
+      "rows": [
+        0,
+        9
+      ],
+      "cols": [
+        "Period Covered",
+        "Name of Withholding Agent",
+        "Income Payment",
+        "Total Tax Withheld",
+        "Applied Current Month"
+      ],
+      "evidence": "Item 1: official ebirforms-mirror/forms/BIR-Form2550M.hta addlistSched6() builds the five row boxes, all typed by the filer (txtTotalWithheld has onkeypress numbersonly, not readonly); html-frozen/2550m-2007/index.html 'Tax Withheld Claimed as Tax Credit ... Schedule 6 Period Covered, Name of Withholding Agent, Income Payment, Total Tax Withheld, Applied Current mo., Total (To Item 23A)'. Rows are written by the host (screen_form_module/rows_2550m.rs) into the typed draft in the order schedule_row_controls reads them back (form_2550m.rs); ten rows, the page's own rows start at 0."
+    },
+    "table:2:sched7": {
+      "no": "",
+      "label": "Schedule 7 – Schedule of Advance Payment (To Item 23B)",
+      "templates": [
+        "txtPeriodCoveredSch7{N>=0}",
+        "txtNameMillerSch7{N>=0}",
+        "txtNameTaxPayerSch7{N>=0}",
+        "txtORNumSch7{N>=0}",
+        "txtAmountPaidSch7{N>=0}",
+        "txtAppliedCurrSch7{N>=0}"
+      ],
+      "row_keys": {
+        "txtPeriodCoveredSch7{N>=0}": "txtPeriodCoveredSch7{index}",
+        "txtNameMillerSch7{N>=0}": "txtNameMillerSch7{index}",
+        "txtNameTaxPayerSch7{N>=0}": "txtNameTaxPayerSch7{index}",
+        "txtORNumSch7{N>=0}": "txtORNumSch7{index}",
+        "txtAmountPaidSch7{N>=0}": "txtAmountPaidSch7{index}",
+        "txtAppliedCurrSch7{N>=0}": "txtAppliedCurrSch7{index}"
+      },
+      "rows": [
+        0,
+        9
+      ],
+      "cols": [
+        "Period Covered",
+        "Name of Miller",
+        "Name of Taxpayer",
+        "Official Receipt Number",
+        "Amount Paid",
+        "Applied Current Month"
+      ],
+      "evidence": "Item 1: official ebirforms-mirror/forms/BIR-Form2550M.hta addlistSched7() row order period, miller, taxpayer (maxlength 17), OR number (maxlength 20), amount paid, applied current month; html-frozen/2550m-2007/index.html 'Schedule of Advance Payment ... Schedule 7 ... Total (To Item 23B)'. Rows are written by the host (screen_form_module/rows_2550m.rs) into the typed draft in the order schedule_row_controls reads them back (form_2550m.rs); ten rows, the page's own rows start at 0."
+    },
+    "table:2:sched8": {
+      "no": "",
+      "label": "Schedule 8 – VAT Withheld on Sales to Government (To Item 23C)",
+      "templates": [
+        "txtPeriodCoveredSch8{N>=0}",
+        "txtNameAgentSch8{N>=0}",
+        "txtIncomePaymentSch8{N>=0}",
+        "txtTotalWithheldSch8{N>=0}",
+        "txtAppliedCurrSch8{N>=0}"
+      ],
+      "row_keys": {
+        "txtPeriodCoveredSch8{N>=0}": "txtPeriodCoveredSch8{index}",
+        "txtNameAgentSch8{N>=0}": "txtNameAgentSch8{index}",
+        "txtIncomePaymentSch8{N>=0}": "txtIncomePaymentSch8{index}",
+        "txtTotalWithheldSch8{N>=0}": "txtTotalWithheldSch8{index}",
+        "txtAppliedCurrSch8{N>=0}": "txtAppliedCurrSch8{index}"
+      },
+      "rows": [
+        0,
+        9
+      ],
+      "cols": [
+        "Period Covered",
+        "Name of Withholding Agent",
+        "Income Payment",
+        "Total Tax Withheld",
+        "Applied Current Month"
+      ],
+      "evidence": "Item 1: official ebirforms-mirror/forms/BIR-Form2550M.hta addlistSched8() builds the five row boxes, all typed by the filer; the page loads Schedule 8 only once Item 13A has a value; html-frozen/2550m-2007/index.html 'VAT Withheld on Sales to Government ... Schedule 8 ... Total (To Item 23C)'. Rows are written by the host (screen_form_module/rows_2550m.rs) into the typed draft in the order schedule_row_controls reads them back (form_2550m.rs); ten rows, the page's own rows start at 0."
+    },
+    "txtInputTax0": {
+      "computed": false,
+      "evidence": "Item 1: the official ebirforms-mirror/forms/BIR-Form2550M.hta row box is typed by the filer (onkeypress numbersonly, onblur round and the schedule sum), not readonly or greyed; the extractor marked it computed. Its amount fills it at 12% first (getInputTaxCompute); 2550M-082022.steps.json overrides txtInputTax1 to 14000."
+    },
+    "txtInputTax3A0": {
+      "computed": false,
+      "evidence": "Item 1: the official ebirforms-mirror/forms/BIR-Form2550M.hta row box is typed by the filer (onkeypress numbersonly, onblur round and the schedule sum), not readonly or greyed; the extractor marked it computed. Its amount fills it at 12% first (getInputTaxCompute3A)."
+    },
+    "txtBalInputTaxPrevious3B0": {
+      "computed": false,
+      "evidence": "Item 1: the official ebirforms-mirror/forms/BIR-Form2550M.hta row box is typed by the filer (onkeypress numbersonly, onblur round and the schedule sum), not readonly or greyed; the extractor marked it computed. 2550M-082022.steps.json types txtBalInputTaxPrevious3B0."
+    },
+    "txtTotalWithheld0": {
+      "computed": false,
+      "evidence": "Item 1: the official ebirforms-mirror/forms/BIR-Form2550M.hta row box is typed by the filer (onkeypress numbersonly, onblur round and the schedule sum), not readonly or greyed; the extractor marked it computed. 2550M-092022.steps.json types txtTotalWithheld0 and 1."
+    },
+    "txtTotalWithheldSch80": {
+      "computed": false,
+      "evidence": "Item 1: the official ebirforms-mirror/forms/BIR-Form2550M.hta row box is typed by the filer (onkeypress numbersonly, onblur round and the schedule sum), not readonly or greyed; the extractor marked it computed. 2550M-092022.steps.json types txtTotalWithheldSch80."
+    },
+    "txtNameTaxPayerSch70": {
+      "kind": "text",
+      "evidence": "Item 1: official ebirforms-mirror/forms/BIR-Form2550M.hta txtNameTaxPayerSch7<i> is a plain text box (maxlength 17, no numbersonly); the extractor typed it money."
+    },
+    "chxSched2{N>=0}": {
+      "kind": "hidden",
+      "evidence": "Item 1: the official row tick box only selects a row for the modal's Delete button; it is never saved (schedule_row_controls writes 'false'). Clearing every box of a row removes it here."
+    },
+    "chxSched3A{N>=0}": {
+      "kind": "hidden",
+      "evidence": "Item 1: the official row tick box only selects a row for the modal's Delete button; it is never saved (schedule_row_controls writes 'false'). Clearing every box of a row removes it here."
+    },
+    "chxSched3B{N>=0}": {
+      "kind": "hidden",
+      "evidence": "Item 1: the official row tick box only selects a row for the modal's Delete button; it is never saved (schedule_row_controls writes 'false'). Clearing every box of a row removes it here."
+    },
+    "chxSched6{N>=0}": {
+      "kind": "hidden",
+      "evidence": "Item 1: the official row tick box only selects a row for the modal's Delete button; it is never saved (schedule_row_controls writes 'false'). Clearing every box of a row removes it here."
+    },
+    "chxSched7{N>=0}": {
+      "kind": "hidden",
+      "evidence": "Item 1: the official row tick box only selects a row for the modal's Delete button; it is never saved (schedule_row_controls writes 'false'). Clearing every box of a row removes it here."
+    },
+    "chxSched8{N>=0}": {
+      "kind": "hidden",
+      "evidence": "Item 1: the official row tick box only selects a row for the modal's Delete button; it is never saved (schedule_row_controls writes 'false'). Clearing every box of a row removes it here."
     }
   },
   "2550Q": {

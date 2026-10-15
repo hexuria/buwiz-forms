@@ -32,6 +32,7 @@ use serde_json::{Map, Value, json};
 use crate::bir_module::{json, to_json, with_database};
 
 mod catalogs;
+mod rows_2550m;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -1221,6 +1222,8 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                         _ => keys.push(key),
                     }
                 }
+                // A 2550M schedule row has no draft binding of its own.
+                keys.extend(rows_2550m::error_keys(kind, field));
                 // Keys the page cannot bind (not in the schema) are dropped;
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
@@ -2210,6 +2213,146 @@ mod tests {
         let refused = fill("2550M", &queued, json!({"frm2550m:txtAtcCde3": "VC010"}));
         assert!(refused["rejected"].get("frm2550m:txtAtcCde3").is_some());
         assert_eq!(codes(&refused["draft"]), ["VB010", "VS010"]);
+    }
+    /// Item 1: 2550M Schedules 2, 3A, 3B, 6, 7 and 8 save. The page builds
+    /// their rows in script; the host writes them into the typed draft, an
+    /// amount fills its input tax at 12% before a typed input tax replaces
+    /// it, a row cannot skip ahead, clearing a row removes it, Schedule 8
+    /// waits for Item 13A, and the rows survive save and reopen.
+    #[test]
+    fn rows_2550m_schedules_2_to_8_save() {
+        setup();
+        let form = schema_entry("2550M").unwrap();
+        let table = |first: &str| -> Value {
+            form["parts"][2]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|it| it["keys"][0][0] == first)
+                .unwrap_or_else(|| panic!("table starting {first}"))
+                .clone()
+        };
+        let editable = |t: &Value, col: usize| t["cols"][col].get("c").is_none();
+        let s2 = table("txtDatePurchased0");
+        assert_eq!(s2["rows"], 10);
+        assert!((0..4).all(|c| editable(&s2, c)));
+        let s3a = table("txtDatePurchased3A0");
+        assert!((0..6).all(|c| editable(&s3a, c)));
+        assert!(!editable(&s3a, 6) && !editable(&s3a, 7));
+        let s3b = table("txtDatePurchased3B0");
+        assert_eq!(s3b["keys"][9][3], "txtBalInputTaxPrevious3B9");
+        assert!(editable(&s3b, 3) && !editable(&s3b, 7));
+        assert!((0..5).all(|c| editable(&table("txtPeriodCovered0"), c)));
+        let s7 = table("txtPeriodCoveredSch70");
+        assert_eq!(s7["cols"][2]["t"], "text");
+        assert!((0..5).all(|c| editable(&table("txtPeriodCoveredSch80"), c)));
+
+        let opened = open("2550M", 8);
+        let refused = fill(
+            "2550M",
+            &opened["draft"],
+            json!({"txtNameAgentSch80": "Gov Agency"}),
+        );
+        assert!(refused["rejected"].get("txtNameAgentSch80").is_some());
+        assert_eq!(refused["draft"]["schedule_8"], json!([]));
+
+        let filled = fill(
+            "2550M",
+            &opened["draft"],
+            json!({
+                "txtDatePurchased0": "08/05/2026", "txtDescription0": "Office printer",
+                "txtAmt0": "85000.55",
+                "txtDatePurchased1": "08/20/2026", "txtDescription1": "Delivery bike",
+                "txtInputTax1": "14000", "txtAmt1": "120000",
+                "txtDatePurchased3A0": "08/10/2026", "txtDescription3A0": "Factory machine",
+                "txtAmt3A0": "1500000.25", "txtEstLife3A0": "120", "txtRecogLife3A0": "60",
+                "txtDatePurchased3B0": "03/01/2026", "txtDescription3B0": "Warehouse",
+                "txtAmt3B0": "2000000", "txtBalInputTaxPrevious3B0": "200000.50",
+                "txtEstLife3B0": "120", "txtRecogLife3B0": "50",
+                "txtPeriodCovered0": "08/31/2026", "txtNameAgent0": "Sample Agent Corp",
+                "txtIncomePayment0": "100000", "txtTotalWithheld0": "5000",
+                "txtAppliedCurr0": "4000.50",
+                "txtPeriodCovered1": "08/15/2026", "txtNameAgent1": "Agent Two",
+                "txtIncomePayment1": "50000", "txtTotalWithheld1": "2500",
+                "txtAppliedCurr1": "2500",
+                "txtPeriodCoveredSch70": "08/10/2026", "txtNameMillerSch70": "Rice Mill",
+                "txtNameTaxPayerSch70": "Sample Dummy", "txtORNumSch70": "OR-12345",
+                "txtAmountPaidSch70": "3000", "txtAppliedCurrSch70": "1500.25",
+                "frm2550m:txtTax13A": "200000",
+                "txtPeriodCoveredSch80": "08/31/2026", "txtNameAgentSch80": "Gov Agency",
+                "txtIncomePaymentSch80": "200000", "txtTotalWithheldSch80": "10000",
+                "txtAppliedCurrSch80": "10000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let d = &filled["draft"];
+        assert_eq!(d["schedule_2"][0]["input_tax"], 10_200.07);
+        // The typed input tax replaces the 12% (14,400) its amount filled.
+        assert_eq!(d["schedule_2"][1]["input_tax"], 14_000.0);
+        assert_eq!(d["schedule_totals"]["schedule_2_amount"], 205_000.55);
+        assert_eq!(d["schedule_3a"][0]["input_tax"], 180_000.03);
+        assert_eq!(d["schedule_3a"][0]["allowable_input_tax"], 3_000.0);
+        assert_eq!(d["schedule_3b"][0]["input_tax"], 200_000.5);
+        assert_eq!(d["schedule_3b"][0]["allowable_input_tax"], 4_000.01);
+        assert_eq!(d["schedule_totals"]["schedule_6_applied"], 6_500.5);
+        assert_eq!(d["schedule_7"][0]["or_number"], "OR-12345");
+        assert_eq!(d["schedule_totals"]["schedule_8_withheld"], 10_000.0);
+        assert_eq!(amount(&filled["values"], "txtAllowInputTax3A0"), 3_000.0);
+        assert_eq!(amount(&filled["values"], "txtmodalTotal23A"), 7_500.0);
+
+        // A row cannot skip ahead; a life outside the page's range is refused.
+        let gap = fill("2550M", d, json!({"txtNameAgent3": "Too far"}));
+        assert!(gap["rejected"].get("txtNameAgent3").is_some());
+        let life = fill("2550M", d, json!({"txtRecogLife3A0": "0"}));
+        assert!(life["rejected"].get("txtRecogLife3A0").is_some());
+        assert_eq!(life["draft"]["schedule_3a"], d["schedule_3a"]);
+
+        // Clearing every box of Schedule 6 row 1 removes it; row 2 moves up.
+        let cleared = fill(
+            "2550M",
+            d,
+            json!({
+                "txtPeriodCovered0": "", "txtNameAgent0": "", "txtIncomePayment0": "",
+                "txtTotalWithheld0": "", "txtAppliedCurr0": "",
+            }),
+        );
+        assert_eq!(cleared["rejected"], json!({}));
+        assert_eq!(cleared["draft"]["schedule_6"].as_array().unwrap().len(), 1);
+        assert_eq!(cleared["values"]["txtNameAgent0"], "AGENT TWO");
+        assert_eq!(cleared["values"].get("txtNameAgent1"), None);
+
+        save("2550M", d);
+        let reopened = open("2550M", 8);
+        assert_eq!(reopened["draft"]["schedule_2"], d["schedule_2"]);
+        assert_eq!(reopened["draft"]["schedule_8"], d["schedule_8"]);
+        assert_eq!(reopened["values"]["txtDescription3A0"], "FACTORY MACHINE");
+        assert_eq!(amount(&reopened["values"], "txtAmountPaidSch70"), 3_000.0);
+        let map = with_database(|db| print_map(db, kind_of("2550M")?, &reopened["draft"])).unwrap();
+        assert_eq!(
+            map.0.get("txtNameMillerSch70").map(String::as_str),
+            Some("RICE MILL")
+        );
+
+        // A row problem lands on that row's boxes.
+        let blank = fill("2550M", d, json!({"txtDescription1": ""}));
+        let validated = call_async(
+            "screen_form_validate",
+            vec!["2550M".into(), json(blank["draft"].clone())],
+        )
+        .unwrap();
+        let row = validated["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["field"] == "schedule_2[1]")
+            .expect("Schedule 2 row 2 error");
+        assert!(
+            row["keys"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("txtDescription1"))
+        );
+        assert_error_keys_on_screen("2550M", &validated["errors"]);
     }
 
     #[test]

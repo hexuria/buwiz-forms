@@ -9,7 +9,7 @@ use bir_core::forms::{
 use bir_core::reference;
 use serde_json::{Map, Value, json};
 
-use super::schema_entry;
+use super::{rows_2550m, schema_entry};
 
 fn option(value: &str, label: &str) -> Value {
     json!({"value": value, "label": label})
@@ -49,6 +49,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
     if sales_2550m_row(kind, key).is_some() {
         return 1;
     }
+    if let Some(order) = rows_2550m::edit_order(kind, key) {
+        return order;
+    }
     location(kind, key).map_or(0, |(_, level)| level + 1)
 }
 
@@ -65,6 +68,9 @@ pub(super) fn fill(
     }
     if let Some(row) = sales_2550m_row(kind, key) {
         return fill_2550m_amount(draft, row, value);
+    }
+    if let Some(cell) = rows_2550m::cell(kind, key) {
+        return rows_2550m::fill(draft, cell, value);
     }
     if let Some(row) = atc_2000_row(kind, key)
         && let Some(choice) = value
@@ -161,7 +167,9 @@ fn atc_2550m_row(kind: AgentFormKind, key: &str) -> Option<usize> {
 /// Whether the host writes `key` itself, so the agent's "cannot be filled
 /// here" verdict for it does not apply on the page.
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
-    atc_2550m_row(kind, key).is_some() || sales_2550m_row(kind, key).is_some()
+    atc_2550m_row(kind, key).is_some()
+        || sales_2550m_row(kind, key).is_some()
+        || rows_2550m::cell(kind, key).is_some()
 }
 
 /// 2550M Schedule 1 row of `frm2550m:txtAmountSales<n>`. Rows re-sort by
