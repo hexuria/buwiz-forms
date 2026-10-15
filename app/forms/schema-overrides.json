@@ -6093,6 +6093,90 @@
     "frm1701MS:txtToBeCarried": {
       "label": "To be carried over as tax credit for next year/quarter",
       "evidence": "html-frozen/1701ms-2024/writer-cells.json xbox_joins frm1701MS:txtToBeCarried '31 To be carried over as tax credit for next year/quarter'"
+    },
+    "frm1701MS:sched410A:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410A:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410aSpouse:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410aSpouse:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410A1:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410A1:LegalBasis{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410A1:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410A2:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410A2:LegalBasis{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched410A2:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched413A:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched413A:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:Sched413B:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:Sched413B:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched420A:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched420A:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched42OB:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched420B:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched5No9:Description{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched5No9:Amount{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
+    },
+    "frm1701MS:sched5No9:Spouse{N>=0}": {
+      "kind": "hidden",
+      "evidence": "N04: form_1701ms.rs: the 'View Details' / '(Add more...)' popups (Schedule IV 10A/10B, 13A/13B, 20A/20B, Part V Item 9) sit after </form>, outside frmMain, so their rows reach neither saveXMLsubmit nor saveEncryptedProfile; only the totals they write back into the page do (and Item 9's description, VARIOUS for two or more rows). The item's total box is the filed value and stays editable; Schedule 10A's rows are kept only for the validationSpecify10A check when present. This runtime popup row is hidden."
     }
   },
   "1701Q": {
@@ -17837,7 +17921,7 @@
       "evidence": "D09: options as in the official BIR-Form2200S.hta select (0 blank, 1 Special Law, 2 International Tax Treaty); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 special_law, 2 international_tax_treaty."
     },
     "layout": {
-      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/2200s-2018/index.html (BIR Form 2200-S January 2018: items 1-3, Part I 4-14A, Part II 15-17, Part III 18-26, Part IV 27-30, Part V Schedule 1 on page 2) and html-frozen/2200s-2018/writer-cells.json joins (which box prints at which item; the layout's txtTax16-24 print at items 18-26). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/2200s-2018/index.html (BIR Form 2200-S January 2018: items 1-3, Part I 4-14A, Part II 15-17, Part III 18-26, Part IV 27-30, Part V Schedule 1 on page 2) and html-frozen/2200s-2018/writer-cells.json joins (which box prints at which item; the layout's txtTax16-24 print at items 18-26). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers. N04: the printed 'Others (specify)' row 1 and the rows the page appends are one table (table:4:others); the layout places that table where row 1 printed.",
       "parts": [
         {
           "keep": 0
@@ -18251,18 +18335,7 @@
               ]
             },
             {
-              "no": "",
-              "l": "Others (specify) 1.",
-              "k": [
-                "frm2200S:sched1Chk0",
-                "frm2200S:txtsched1Atc0",
-                "frm2200S:txtsched1Desc0",
-                "frm2200S:txtsched1TaxBracket0",
-                "frm2200S:txtsched1AppTaxRate0",
-                "frm2200S:txtsched1SalesValue0",
-                "frm2200S:txtsched1VolumeRemovals0",
-                "frm2200S:txtsched1BasicTaxDue0"
-              ]
+              "table": "frm2200S:txtsched1Atc0"
             },
             {
               "no": "",
@@ -18397,36 +18470,8 @@
       "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column"
     },
     "frm2200S:sched1Chk0": {
-      "label": "Select row",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
-    },
-    "frm2200S:txtsched1Atc0": {
-      "label": "ATC",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
-    },
-    "frm2200S:txtsched1Desc0": {
-      "label": "Description",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
-    },
-    "frm2200S:txtsched1TaxBracket0": {
-      "label": "Tax Bracket/Unit of Measure",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
-    },
-    "frm2200S:txtsched1AppTaxRate0": {
-      "label": "Applicable Tax Rate",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
-    },
-    "frm2200S:txtsched1SalesValue0": {
-      "label": "Sales Value (in Peso)",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
-    },
-    "frm2200S:txtsched1VolumeRemovals0": {
-      "label": "Volume of Removals",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
-    },
-    "frm2200S:txtsched1BasicTaxDue0": {
-      "label": "Basic Excise Tax Due",
-      "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 column (Others row)"
+      "kind": "hidden",
+      "evidence": "N04: the row tick box only selects a row for the page's Delete button; the upload writes it unticked (form_2200s.rs sched1Fields). Clearing a row's boxes empties it."
     },
     "frm2200SoptRegion": {
       "label": "Region",
@@ -18463,6 +18508,50 @@
     "item:4:7": {
       "label": "Others (specify), further rows",
       "evidence": "Decision (a) layout: printed on html-frozen/2200s-2018/index.html Part V Schedule 1 'Others (specify) 1. 2.' rows"
+    },
+    "table:4:others": {
+      "no": "",
+      "label": "Schedule 1 – Others (specify)",
+      "templates": [
+        "frm2200S:txtsched1Atc{n>=1}",
+        "frm2200S:txtsched1Desc{n>=1}",
+        "frm2200S:txtsched1TaxBracket{n>=1}",
+        "frm2200S:txtsched1AppTaxRate{n>=1}",
+        "frm2200S:txtsched1SalesValue{n>=1}",
+        "frm2200S:txtsched1VolumeRemovals{n>=1}",
+        "frm2200S:txtsched1BasicTaxDue{n>=1}"
+      ],
+      "row_keys": {
+        "frm2200S:txtsched1Atc{n>=1}": "frm2200S:txtsched1Atc{index}",
+        "frm2200S:txtsched1Desc{n>=1}": "frm2200S:txtsched1Desc{index}",
+        "frm2200S:txtsched1TaxBracket{n>=1}": "frm2200S:txtsched1TaxBracket{index}",
+        "frm2200S:txtsched1AppTaxRate{n>=1}": "frm2200S:txtsched1AppTaxRate{index}",
+        "frm2200S:txtsched1SalesValue{n>=1}": "frm2200S:txtsched1SalesValue{index}",
+        "frm2200S:txtsched1VolumeRemovals{n>=1}": "frm2200S:txtsched1VolumeRemovals{index}",
+        "frm2200S:txtsched1BasicTaxDue{n>=1}": "frm2200S:txtsched1BasicTaxDue{index}"
+      },
+      "rows": [
+        0,
+        11
+      ],
+      "cols": [
+        "ATC (XB + three digits)",
+        "Description",
+        "Tax Bracket/Unit of Measure",
+        "Applicable Tax Rate",
+        "Sales Value (in Peso)",
+        "Volume of Removals",
+        "Basic Excise Tax Due"
+      ],
+      "evidence": "N04: form_2200s.rs Form2200SOtherRow: the page opens with one 'Others (specify)' row and addFieldsForSched1 appends more; the field map uploads every row (txtsched1<col><i>, row 0 first). The probe binds rows 0-14 (agent supplement_row_families) except the rate, which the host writes (catalogs.rs rate_2200s_row), and Basic Excise Tax Due, computed (rate x volume, computeSched1BasicTaxDue). Row 0's printed captions (html-frozen/2200s-2018 Part V Schedule 1 Others row) become the column captions; the table offers rows 1-12."
+    },
+    "frm2200S:txtsched1BasicTaxDue0": {
+      "computed": true,
+      "evidence": "N04: Basic Excise Tax Due is rate x volume (form_2200s.rs recompute, computeSched1BasicTaxDue)."
+    },
+    "frm2200S:sched1Chk{n>=1}": {
+      "kind": "hidden",
+      "evidence": "N04: the row tick box only selects a row for the page's Delete button; the upload writes it unticked (form_2200s.rs sched1Fields). Clearing a row's boxes empties it."
     }
   },
   "2200T": {
@@ -20691,6 +20780,142 @@
     "frm2552:txtPg2P4I5TransClass": {
       "label": "Transaction Classification",
       "evidence": "P4: printed caption 'Part IV row 5 Transaction Classification' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I5TransClass)"
+    },
+    "table:4:sch1more": {
+      "no": "",
+      "label": "Schedule 1 – Sale, Barter or Exchange of Shares Listed and Traded Through the LSE, rows 5 and after (Add More...)",
+      "templates": [
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col1",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col2",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col3",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col4",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col5",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col6",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col7",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col8"
+      ],
+      "row_keys": {
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col1": "frm2552:txtPg2Pt5Sch1_{index}Col1",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col2": "frm2552:txtPg2Pt5Sch1_{index}Col2",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col3": "frm2552:txtPg2Pt5Sch1_{index}Col3",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col4": "frm2552:txtPg2Pt5Sch1_{index}Col4",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col5": "frm2552:txtPg2Pt5Sch1_{index}Col5",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col6": "frm2552:txtPg2Pt5Sch1_{index}Col6",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col7": "frm2552:txtPg2Pt5Sch1_{index}Col7",
+        "frm2552:txtPg2Pt5Sch1_{N>=1}Col8": "frm2552:txtPg2Pt5Sch1_{index}Col8"
+      },
+      "rows": [
+        1,
+        9
+      ],
+      "cols": [
+        "(a) Date (MM/DD/YYYY)",
+        "(b) Seller",
+        "(c) Buyer",
+        "(d) Issuing Corporation",
+        "(e) Number of Shares",
+        "(f) Tax Base",
+        "(g) Tax Rate",
+        "(h) Tax Due"
+      ],
+      "evidence": "N04: form_2552.rs: Part V takes more than five transactions the way the official '(Add More...)' popup does: the fifth and later rows go to the popup (Pg2Pt5Sch<n>PopTable1st/2nd), row 5 shows OTHERS with the popup subtotal, and official_payload splices the popup controls ahead of Pg2Pt5Sch<n>SubTotal. Popup row k is draft row 4+k (the agent binds _1 to /schedule/4), so rows are numbered from 5. All three schedules keep their rows in the one draft list; only the schedule Item 11 selects takes edits (catalogs.rs inactive_schedule). The probe binds popup rows 1-9 and more (agent supplement_row_families; a secondary-offering sample reaches Schedule 3). Captions from html-frozen/2552-2018/index.html Part V columns (a)-(h).",
+      "start": 5
+    },
+    "frm2552:txtPg2Pt5Sch1_1Col8": {
+      "computed": true,
+      "evidence": "N04: (h) Tax Due is tax base x rate (form_2552.rs recompute)."
+    },
+    "table:4:sch2more": {
+      "no": "",
+      "label": "Schedule 2 – Sale/Exchange of Shares through Primary Public Offering, rows 5 and after (Add More...)",
+      "templates": [
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col1",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col2",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col3",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col4",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col5",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col6",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col7",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col8"
+      ],
+      "row_keys": {
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col1": "frm2552:txtPg2Pt5Sch2_{index}Col1",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col2": "frm2552:txtPg2Pt5Sch2_{index}Col2",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col3": "frm2552:txtPg2Pt5Sch2_{index}Col3",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col4": "frm2552:txtPg2Pt5Sch2_{index}Col4",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col5": "frm2552:txtPg2Pt5Sch2_{index}Col5",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col6": "frm2552:txtPg2Pt5Sch2_{index}Col6",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col7": "frm2552:txtPg2Pt5Sch2_{index}Col7",
+        "frm2552:txtPg2Pt5Sch2_{N>=1}Col8": "frm2552:txtPg2Pt5Sch2_{index}Col8"
+      },
+      "rows": [
+        1,
+        9
+      ],
+      "cols": [
+        "(a) Date (MM/DD/YYYY)",
+        "(b) Seller",
+        "(c) Buyer",
+        "(d) Issuing Corporation",
+        "(e) Number of Shares",
+        "(f) Tax Base",
+        "(g) Tax Rate",
+        "(h) Tax Due"
+      ],
+      "evidence": "N04: form_2552.rs: Part V takes more than five transactions the way the official '(Add More...)' popup does: the fifth and later rows go to the popup (Pg2Pt5Sch<n>PopTable1st/2nd), row 5 shows OTHERS with the popup subtotal, and official_payload splices the popup controls ahead of Pg2Pt5Sch<n>SubTotal. Popup row k is draft row 4+k (the agent binds _1 to /schedule/4), so rows are numbered from 5. All three schedules keep their rows in the one draft list; only the schedule Item 11 selects takes edits (catalogs.rs inactive_schedule). The probe binds popup rows 1-9 and more (agent supplement_row_families; a secondary-offering sample reaches Schedule 3). Captions from html-frozen/2552-2018/index.html Part V columns (a)-(h).",
+      "start": 5
+    },
+    "frm2552:txtPg2Pt5Sch2_1Col8": {
+      "computed": true,
+      "evidence": "N04: (h) Tax Due is tax base x rate (form_2552.rs recompute)."
+    },
+    "table:4:sch3more": {
+      "no": "",
+      "label": "Schedule 3 – Sale/Exchange of Shares through Secondary Public Offering, rows 5 and after (Add More...)",
+      "templates": [
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col1",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col2",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col3",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col4",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col5",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col6",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col7",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col8"
+      ],
+      "row_keys": {
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col1": "frm2552:txtPg2Pt5Sch3_{index}Col1",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col2": "frm2552:txtPg2Pt5Sch3_{index}Col2",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col3": "frm2552:txtPg2Pt5Sch3_{index}Col3",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col4": "frm2552:txtPg2Pt5Sch3_{index}Col4",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col5": "frm2552:txtPg2Pt5Sch3_{index}Col5",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col6": "frm2552:txtPg2Pt5Sch3_{index}Col6",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col7": "frm2552:txtPg2Pt5Sch3_{index}Col7",
+        "frm2552:txtPg2Pt5Sch3_{N>=1}Col8": "frm2552:txtPg2Pt5Sch3_{index}Col8"
+      },
+      "rows": [
+        1,
+        9
+      ],
+      "cols": [
+        "(a) Date (MM/DD/YYYY)",
+        "(b) Seller",
+        "(c) Buyer",
+        "(d) Issuing Corporation",
+        "(e) Number of Shares",
+        "(f) Tax Base",
+        "(g) Tax Rate",
+        "(h) Tax Due"
+      ],
+      "evidence": "N04: form_2552.rs: Part V takes more than five transactions the way the official '(Add More...)' popup does: the fifth and later rows go to the popup (Pg2Pt5Sch<n>PopTable1st/2nd), row 5 shows OTHERS with the popup subtotal, and official_payload splices the popup controls ahead of Pg2Pt5Sch<n>SubTotal. Popup row k is draft row 4+k (the agent binds _1 to /schedule/4), so rows are numbered from 5. All three schedules keep their rows in the one draft list; only the schedule Item 11 selects takes edits (catalogs.rs inactive_schedule). The probe binds popup rows 1-9 and more (agent supplement_row_families; a secondary-offering sample reaches Schedule 3). Captions from html-frozen/2552-2018/index.html Part V columns (a)-(h).",
+      "start": 5
+    },
+    "frm2552:txtPg2Pt5Sch3_1Col8": {
+      "computed": true,
+      "evidence": "N04: (h) Tax Due is tax base x rate (form_2552.rs recompute)."
+    },
+    "frm2552:txtPg2Pt5Sch1_1Col7": {
+      "computed": true,
+      "evidence": "N04: Schedule 1's rate is fixed at 6/10 of 1% (form_2552.rs FORM_2552_LSE_RATE_TEXT)."
     }
   },
   "2553": {

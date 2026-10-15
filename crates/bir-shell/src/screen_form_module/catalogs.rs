@@ -4,7 +4,8 @@
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{
-    excise_places, form_1601c, form_1601fq, form_1702mx_official, form_1702q, form_2000, form_2550m,
+    excise_places, form_1601c, form_1601fq, form_1702mx_official, form_1702q, form_2000,
+    form_2200s, form_2550m,
 };
 use bir_core::reference;
 use serde_json::{Map, Value, json};
@@ -63,6 +64,12 @@ pub(super) fn fill(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
+    if inactive_schedule(kind, key, draft) {
+        return Err(
+            "Item 11 (Kind of Transaction) uses another Part V schedule; choose it there first."
+                .to_string(),
+        );
+    }
     if let Some(row) = atc_2550m_row(kind, key) {
         return fill_2550m_atc(draft, row, value);
     }
@@ -74,6 +81,9 @@ pub(super) fn fill(
     }
     if let Some(row) = month_year_1601c_row(kind, key) {
         return fill_1601c_month_year(draft, row, value);
+    }
+    if let Some(row) = rate_2200s_row(kind, key) {
+        return fill_2200s_rate(draft, row, value);
     }
     if let Some(row) = atc_2000_row(kind, key)
         && let Some(choice) = value
@@ -139,6 +149,29 @@ pub(super) fn fill(
     Ok(())
 }
 
+/// A 2552 Part V box of a schedule Item 11 does not select. All three
+/// schedules keep their rows in the one draft list (form_2552.rs
+/// `schedule`), so a box of another schedule would write over the
+/// selected schedule's rows; the page disables it (`enableSchedule`).
+pub(super) fn inactive_schedule(kind: AgentFormKind, key: &str, draft: &Value) -> bool {
+    if kind.form_code() != "2552" {
+        return false;
+    }
+    let Some(schedule) = key
+        .strip_prefix("frm2552:txtPg2Pt5Sch")
+        .and_then(|rest| rest.chars().next())
+        .and_then(|c| c.to_digit(10))
+    else {
+        return false;
+    };
+    let selected = serde_json::from_value::<bir_core::forms::form_2552::Form2552Transaction>(
+        draft["transaction"].clone(),
+    )
+    .ok()
+    .and_then(|transaction| transaction.schedule());
+    selected != u8::try_from(schedule).ok()
+}
+
 fn atc_2000_row(kind: AgentFormKind, key: &str) -> Option<usize> {
     if kind.form_code() != "2000" {
         return None;
@@ -174,6 +207,46 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || sales_2550m_row(kind, key).is_some()
         || rows_2550m::cell(kind, key).is_some()
         || month_year_1601c_row(kind, key).is_some()
+        || rate_2200s_row(kind, key).is_some()
+}
+
+/// 2200S Schedule 1 "Others" row of `frm2200S:txtsched1AppTaxRate<i>`. The
+/// page shows the rate it keeps reformatted (`others_rate_text`), so the
+/// probe could not tie the box to `others[i].rate` and left it unbound.
+fn rate_2200s_row(kind: AgentFormKind, key: &str) -> Option<usize> {
+    if kind.form_code() != "2200S" {
+        return None;
+    }
+    key.strip_prefix("frm2200S:txtsched1AppTaxRate")?
+        .parse()
+        .ok()
+}
+
+/// The row's applicable tax rate (the official box takes 0 to 999.99).
+/// Like the row's other boxes it starts the row and any before it.
+fn fill_2200s_rate(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+    let text = match value {
+        Value::Number(n) => n.to_string(),
+        other => other.as_str().unwrap_or_default().trim().to_string(),
+    };
+    let rate = if text.is_empty() {
+        0.0
+    } else {
+        agent::parse_amount(text.trim_end_matches('%'))
+            .filter(|rate| (0.0..=999.99).contains(rate))
+            .ok_or_else(|| "Enter a rate from 0 to 999.99.".to_string())?
+    };
+    let mut typed: form_2200s::Form2200SDraft =
+        serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    if row >= typed.others.len() {
+        if text.is_empty() {
+            return Ok(());
+        }
+        typed.others.resize(row + 1, Default::default());
+    }
+    typed.others[row].rate = rate;
+    *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// 1601C Schedule I row of `frm1601c:sched1:txtMonthYear<i>` (row `i`).

@@ -1249,7 +1249,7 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     // are saved, but a single row is already the filer's entry.
     let def = kind.definition();
     for entry in def.boxes.iter().filter(|entry| entry.family.is_some()) {
-        if map.contains_key(&entry.key) {
+        if map.contains_key(&entry.key) || catalogs::inactive_schedule(kind, &entry.key, draft) {
             continue;
         }
         let path = match def.bindings.get(&entry.key).map(|bound| &bound.binding) {
@@ -2556,6 +2556,125 @@ mod tests {
                 check.0
             );
         }
+    }
+
+    /// N04: 2200S "Others (specify)" rows are one table; an added row saves,
+    /// its rate through the host (the probe could not bind it) and its tax
+    /// due computed as rate x volume.
+    #[test]
+    fn rows_2200s_others_rows_save() {
+        setup();
+        let form = schema_entry("2200S").unwrap();
+        let table = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .find(|it| it["keys"][0][0] == "frm2200S:txtsched1Atc0")
+            .expect("Others table")
+            .clone();
+        assert_eq!(table["rows"], 12);
+        assert!(table["cols"][6].get("c").is_some() && table["cols"][3].get("c").is_none());
+
+        let opened = open("2200S", 7);
+        assert!(
+            opened["locks"]
+                .get("frm2200S:txtsched1AppTaxRate1")
+                .is_none()
+        );
+        let filled = fill(
+            "2200S",
+            &opened["draft"],
+            json!({
+                // Schedule 1 belongs to a payment on actual removal.
+                "frm2200S:chkPymntManner_1": "true",
+                "frm2200S:txtsched1Atc1": "XB999",
+                "frm2200S:txtsched1Desc1": "Other drink",
+                "frm2200S:txtsched1AppTaxRate1": "6.5",
+                "frm2200S:txtsched1VolumeRemovals1": "100",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(filled["draft"]["others"][1]["rate"], 6.5);
+        assert_eq!(
+            amount(&filled["values"], "frm2200S:txtsched1BasicTaxDue1"),
+            650.0
+        );
+        let bad = fill(
+            "2200S",
+            &filled["draft"],
+            json!({"frm2200S:txtsched1AppTaxRate1": "1000"}),
+        );
+        assert!(
+            bad["rejected"]
+                .get("frm2200S:txtsched1AppTaxRate1")
+                .is_some()
+        );
+        save("2200S", &filled["draft"]);
+        let reopened = open("2200S", 7);
+        assert_eq!(reopened["values"]["frm2200S:txtsched1Atc1"], "XB999");
+    }
+
+    /// N04: 2552 Part V popup rows (row 5 on) save for the schedule Item 11
+    /// selects; the other schedules' boxes refuse edits, since all three
+    /// keep their rows in one draft list.
+    #[test]
+    fn rows_2552_popup_rows_follow_item_11() {
+        use bir_core::forms::form_2552::{Form2552Draft, Form2552Transaction};
+
+        setup();
+        let form = schema_entry("2552").unwrap();
+        for s in 1..=3 {
+            let first = format!("frm2552:txtPg2Pt5Sch{s}_1Col1");
+            let table = form["parts"][4]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|it| it["keys"][0][0] == first.as_str())
+                .unwrap_or_else(|| panic!("2552 Schedule {s} table"))
+                .clone();
+            assert_eq!(
+                (table["rows"].clone(), table["start"].clone()),
+                (json!(9), json!(5))
+            );
+        }
+
+        let opened = open("2552", 3);
+        let mut typed: Form2552Draft = serde_json::from_value(opened["draft"].clone()).unwrap();
+        typed.set_transaction(Form2552Transaction::SecondaryOffering);
+        let draft = serde_json::to_value(&typed).unwrap();
+        let other = fill(
+            "2552",
+            &draft,
+            json!({"frm2552:txtPg2Pt5Sch2_1Col2": "Seller X"}),
+        );
+        assert!(
+            other["rejected"]
+                .get("frm2552:txtPg2Pt5Sch2_1Col2")
+                .is_some()
+        );
+        let filled = fill(
+            "2552",
+            &draft,
+            json!({
+                "frm2552:txtPg2Pt5Sch3_1Col1": "03/10/2026",
+                "frm2552:txtPg2Pt5Sch3_1Col2": "Seller Five",
+                "frm2552:txtPg2Pt5Sch3_1Col6": "1000",
+                "frm2552:txtPg2Pt5Sch3_1Col7": "4",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(filled["draft"]["schedule"][4]["seller"], "Seller Five");
+        // The other schedules' popup boxes show nothing of Schedule 3's rows.
+        assert_eq!(filled["values"].get("frm2552:txtPg2Pt5Sch2_1Col2"), None);
+        save("2552", &filled["draft"]);
+        let reopened = open("2552", 3);
+        assert_eq!(
+            reopened["values"]["frm2552:txtPg2Pt5Sch3_1Col2"]
+                .as_str()
+                .map(str::to_uppercase),
+            Some("SELLER FIVE".to_string())
+        );
     }
 
     /// N04: 1707A rows 4 and after save. Schedules 1 and 2 print rows 1-4;
