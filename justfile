@@ -54,7 +54,7 @@ help:
 
 # Run the app locally — the gpui-shell JS app (crates/bir-shell, a standalone
 # workspace). Frozen HTML print previews are compiled into bir-print.
-run: shell-run
+run *args="": (shell-run args)
 
 # The painted (native GPUI) app, kept buildable until the cutover completes.
 run-painted:
@@ -63,8 +63,8 @@ run-painted:
 # gpui-shell host — a standalone workspace under crates/bir-shell (its own
 # lockfile carries the LLRT/quickjs pins; see its Cargo.toml). `just check`
 # covers the root workspace only, so the shell gets its own targets.
-shell-run:
-    cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell
+shell-run *args="":
+    cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell {{args}}
 
 shell-check:
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml

@@ -1436,7 +1436,7 @@ declare module "gpui-kit" {
     /** Sets the width. */
     w<Self extends Element>(this: Self, value: Length): Self;
 
-    // The 3148 no-argument style methods, generated from GPUI's reflection
+    // The 3146 no-argument style methods, generated from GPUI's reflection
     // table. A name here is a name the runtime dispatches, and the
     // documentation is GPUI's own.
     /**
@@ -2917,10 +2917,6 @@ declare module "gpui-kit" {
      * [Docs](https://tailwindcss.com/docs/cursor)
      */
     cursor_w_resize<Self extends Element>(this: Self): Self;
-    /** Draws a debug border around this element. */
-    debug<Self extends Element>(this: Self): Self;
-    /** Draws a debug border on all conforming elements below this element. */
-    debug_below<Self extends Element>(this: Self): Self;
     debug_blue<Self extends Element>(this: Self): Self;
     debug_green<Self extends Element>(this: Self): Self;
     debug_pink<Self extends Element>(this: Self): Self;
