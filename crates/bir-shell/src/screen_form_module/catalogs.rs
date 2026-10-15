@@ -4,8 +4,8 @@
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{
-    excise_places, form_1600wp, form_1601c, form_1601fq, form_1701a, form_1702mx_official,
-    form_1702q, form_2000, form_2200s, form_2550m,
+    excise_places, form_1600wp, form_1601c, form_1601eq, form_1601fq, form_1701a,
+    form_1702mx_official, form_1702q, form_2000, form_2200s, form_2550m,
 };
 use bir_core::reference;
 use serde_json::{Map, Value, json};
@@ -54,6 +54,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
     if kind.form_code() == "1600WP" && key.starts_with("frm1600WP:txtTaxBase") {
         return 1;
     }
+    if kind.form_code() == "1601EQ" && key.starts_with("frm1601EQ:txtTaxBase") {
+        return 1;
+    }
     if let Some(order) = rows_2550m::edit_order(kind, key) {
         return order;
     }
@@ -94,6 +97,12 @@ pub(super) fn fill(
     }
     if let Some(row) = atc_1600wp_row(kind, key) {
         return fill_1600wp_atc(draft, row, value);
+    }
+    if let Some(row) = atc_1601eq_row(kind, key) {
+        return fill_1601eq_atc(draft, row, value);
+    }
+    if let Some(row) = base_1601eq_row(kind, key) {
+        return fill_1601eq_base(draft, row, value);
     }
     if let Some((part_b, row)) = spouse_1701a_more_row(kind, key) {
         return fill_1701a_more_spouse(draft, part_b, row, value);
@@ -225,6 +234,8 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || month_year_1601c_row(kind, key).is_some()
         || rate_2200s_row(kind, key).is_some()
         || atc_1600wp_row(kind, key).is_some()
+        || atc_1601eq_row(kind, key).is_some()
+        || base_1601eq_row(kind, key).is_some()
         || spouse_1701a_more_row(kind, key).is_some()
         || rows_2550q::cell(kind, key).is_some()
 }
@@ -278,6 +289,94 @@ fn fill_1701a_more_spouse(
         rows.resize(row + 1, Default::default());
     }
     rows[row].spouse = amount;
+    *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 1601EQ Part II row of `frm1601EQ:txtAtcCd<n>` (row `n - 1`). The page
+/// writes one row per ATC ticked in its popup, in popup order
+/// (`getATCCode`), so the probe saw codes move between rows and could not
+/// bind them; the host ticks and unticks them through the typed draft.
+fn atc_1601eq_row(kind: AgentFormKind, key: &str) -> Option<usize> {
+    if kind.form_code() != "1601EQ" {
+        return None;
+    }
+    let n: usize = key.strip_prefix("frm1601EQ:txtAtcCd")?.parse().ok()?;
+    (1..=form_1601eq::FORM_1601EQ_ATC_OPTIONS.len())
+        .contains(&n)
+        .then(|| n - 1)
+}
+
+/// 1601EQ Part II tax base of `frm1601EQ:txtTaxBase<n>` (row `n - 1`):
+/// rows re-sort with their ATC, so the probe tied row 1's box to the ATC
+/// as well and left it unbound; the host writes every row's base.
+fn base_1601eq_row(kind: AgentFormKind, key: &str) -> Option<usize> {
+    if kind.form_code() != "1601EQ" {
+        return None;
+    }
+    let n: usize = key.strip_prefix("frm1601EQ:txtTaxBase")?.parse().ok()?;
+    (1..=form_1601eq::FORM_1601EQ_ATC_OPTIONS.len())
+        .contains(&n)
+        .then(|| n - 1)
+}
+
+fn fill_1601eq_base(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+    let text = match value {
+        Value::Number(n) => n.to_string(),
+        other => other.as_str().unwrap_or_default().trim().to_string(),
+    };
+    let amount = if text.is_empty() {
+        0.0
+    } else {
+        agent::parse_amount(&text)
+            .filter(|amount| *amount >= 0.0)
+            .ok_or_else(|| format!("`{text}` is not an amount."))?
+    };
+    let mut typed: form_1601eq::Form1601EqDraft =
+        serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    let Some(entry) = typed.schedule.get_mut(row) else {
+        if text.is_empty() {
+            return Ok(());
+        }
+        return Err("Choose this row's ATC first.".to_string());
+    };
+    entry.tax_base = amount;
+    typed.recompute();
+    *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Choose a row's ATC: a new row ticks it, a changed row keeps its tax
+/// base, blank unticks it. Rows re-sort into popup order.
+fn fill_1601eq_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+    let code = value.as_str().unwrap_or_default().trim();
+    let mut typed: form_1601eq::Form1601EqDraft =
+        serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+    let current = typed.schedule.get(row).map(|r| r.atc_code.clone());
+    if code.is_empty() {
+        if let Some(current) = current {
+            typed.remove_atc(&current);
+        }
+    } else if current.as_deref() != Some(code) {
+        if typed.schedule.iter().any(|r| r.atc_code == code) {
+            return Err(format!("{code} is already selected."));
+        }
+        match typed.schedule.get_mut(row) {
+            Some(existing) => {
+                if form_1601eq::FORM_1601EQ_ATC_OPTIONS
+                    .iter()
+                    .all(|option| option.code != code)
+                {
+                    return Err(format!(
+                        "{code} is not an ATC on the official 1601-EQ list."
+                    ));
+                }
+                existing.atc_code = code.to_string();
+                typed.recompute();
+            }
+            None => typed.add_atc(code)?,
+        }
+    }
     *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -482,6 +581,12 @@ fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Va
         );
     }
     match code {
+        "1601EQ" if atc_1601eq_row(kind, key).is_some() => Some(
+            form_1601eq::FORM_1601EQ_ATC_OPTIONS
+                .iter()
+                .map(|option| code_option(option.code, option.description))
+                .collect(),
+        ),
         "1600WP" if atc_1600wp_row(kind, key).is_some() => {
             let category = serde_json::from_value::<form_1600wp::Form1600WpAgentCategory>(
                 draft["agent_category"].clone(),

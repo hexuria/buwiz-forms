@@ -2958,6 +2958,130 @@ mod tests {
         assert_eq!(amount(v, "frm2200ANv2018:txt16"), 1_750.5);
     }
 
+    /// Item 3: 1601EQ ATCs are chosen from the popup list on every row (the
+    /// probe could not bind them: rows re-sort into popup order); rows 7-30
+    /// are one table instead of loose boxes, and rows past 30 hide.
+    #[test]
+    fn atc_1601eq_rows_follow_the_popup() {
+        setup();
+        let form = schema_entry("1601EQ").unwrap();
+        let items: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .collect();
+        let more = items
+            .iter()
+            .find(|it| it["keys"][0][0] == "frm1601EQ:txtAtcCd7")
+            .expect("rows 7-30 table");
+        assert_eq!(
+            (more["rows"].clone(), more["start"].clone()),
+            (json!(24), json!(7))
+        );
+        assert_eq!(more["cols"][0]["t"], "sel");
+        let printed = items
+            .iter()
+            .find(|it| it["keys"][0][0] == "frm1601EQ:txtAtcCd1")
+            .expect("printed rows table");
+        assert_eq!(printed["cols"][0]["t"], "sel");
+
+        let opened = open("1601EQ", 3);
+        assert!(opened["locks"].get("frm1601EQ:txtAtcCd1").is_none());
+        let filled = fill(
+            "1601EQ",
+            &opened["draft"],
+            json!({
+                "frm1601EQ:optWithheld:Y": "true",
+                "frm1601EQ:optCategory:P": "true",
+                "frm1601EQ:txtAtcCd1": "WI020",
+                "frm1601EQ:txtAtcCd2": "WI010",
+                "frm1601EQ:txtTaxBase1": "1000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let codes: Vec<&str> = filled["draft"]["schedule"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["atc_code"].as_str().unwrap())
+            .collect();
+        // Popup order: WI010 before WI020.
+        assert_eq!(codes, ["WI010", "WI020"]);
+        assert!(
+            filled["options"]["frm1601EQ:txtAtcCd8"]
+                .as_array()
+                .is_some_and(|o| !o.is_empty())
+        );
+        let dup = fill(
+            "1601EQ",
+            &filled["draft"],
+            json!({"frm1601EQ:txtAtcCd3": "WI010"}),
+        );
+        assert!(dup["rejected"].get("frm1601EQ:txtAtcCd3").is_some());
+        save("1601EQ", &filled["draft"]);
+        let reopened = open("1601EQ", 3);
+        assert_eq!(reopened["values"]["frm1601EQ:txtAtcCd1"], "WI010");
+        let cleared = fill(
+            "1601EQ",
+            &reopened["draft"],
+            json!({"frm1601EQ:txtAtcCd1": ""}),
+        );
+        assert_eq!(cleared["draft"]["schedule"].as_array().unwrap().len(), 1);
+    }
+
+    /// Item 3: boxes the official page leaves open but the models never
+    /// stored now save: 1801/2200A/2200T Details of Payment, 2200C's number
+    /// of sheets attached and 1701MS's signatory name and representative.
+    #[test]
+    fn open_boxes_the_models_now_keep_save() {
+        setup();
+        for (code, period, edits, check) in [
+            (
+                "2200A",
+                7,
+                json!({
+                    "frm2200Av2020:cashBank": "BDO",
+                    "frm2200Av2020:cashAmt": "1,000.00",
+                    "frm2200Av2020:taxNum": "TDM-9",
+                }),
+                ("frm2200Av2020:taxNum", "TDM-9"),
+            ),
+            (
+                "2200T",
+                7,
+                json!({"frm2200Tv2020:checkNum": "CHK-1"}),
+                ("frm2200Tv2020:checkNum", "CHK-1"),
+            ),
+            (
+                "1801",
+                1,
+                json!({"frm1801v2018taxkNum": "TDM-2"}),
+                ("frm1801v2018taxkNum", "TDM-2"),
+            ),
+            (
+                "2200C",
+                7,
+                json!({"frm2200C:txtPg1I4NoSheets": "2"}),
+                ("frm2200C:txtPg1I4NoSheets", "2"),
+            ),
+            (
+                "1701MS",
+                0,
+                json!({"frm1701MS:printedName": "Juan Dela Cruz"}),
+                ("frm1701MS:printedName", "Juan Dela Cruz"),
+            ),
+        ] {
+            let opened = open(code, period);
+            assert!(opened["locks"].get(check.0).is_none(), "{code} {}", check.0);
+            let filled = fill(code, &opened["draft"], edits);
+            assert_eq!(filled["rejected"], json!({}), "{code}");
+            save(code, &filled["draft"]);
+            let reopened = open(code, period);
+            assert_eq!(reopened["values"][check.0], check.1, "{code} {}", check.0);
+        }
+    }
+
     /// N04: 1707A rows 4 and after save. Schedules 1 and 2 print rows 1-4;
     /// the official "More" pop-up holds row 4 onward, and its row k is draft
     /// row 3+k. Once a schedule has more than four rows, printed row 4 reads
