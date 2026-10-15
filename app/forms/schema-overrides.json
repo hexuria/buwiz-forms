@@ -10617,8 +10617,8 @@
       "evidence": "item (unnumbered): painted form_1707a_view.rs (local:lob via binding /line_of_business): 'Line of business (profile)'"
     },
     "item:3:0": {
-      "label": "For the",
-      "evidence": "item 1: painted: 'For the'"
+      "label": "Schedules 1 (gain) and 2 (loss), rows 1–4",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments. Row 4 shows the fourth row, or OTHERS with the continuation totals once a schedule has more than four rows (form_1707a.rs main_row); rows 4 and after are entered in the continuation tables."
     },
     "frm1707Av2021:txtI1YearEndMonth": {
       "kind": "sel",
@@ -10759,6 +10759,123 @@
     "frm1707Av2021:txtI5BranchMaskP2": {
       "label": "Page 2 header branch code",
       "evidence": "P4: key txtI5BranchMaskP2 is the page-2 copy of the branch code"
+    },
+    "table:3:sched1more": {
+      "no": "",
+      "label": "Schedule 1 – Continuation, rows 4 and after (List of Transactions Resulting to Gain)",
+      "templates": [
+        "frm1707Av2021:txtS1C1DateOfTransaction_{N>=1}",
+        "frm1707Av2021:txtS1C2NameOfCorporateStock_{N>=1}",
+        "frm1707Av2021:txtS1C3SellingPrice_{N>=1}",
+        "frm1707Av2021:txtS1C4Cost_{N>=1}",
+        "frm1707Av2021:txtS1C5CapitalGains_{N>=1}",
+        "frm1707Av2021:txtS1C6TaxPaid_{N>=1}"
+      ],
+      "row_keys": {
+        "frm1707Av2021:txtS1C1DateOfTransaction_{N>=1}": "frm1707Av2021:txtS1C1DateOfTransaction_{index}",
+        "frm1707Av2021:txtS1C2NameOfCorporateStock_{N>=1}": "frm1707Av2021:txtS1C2NameOfCorporateStock_{index}",
+        "frm1707Av2021:txtS1C3SellingPrice_{N>=1}": "frm1707Av2021:txtS1C3SellingPrice_{index}",
+        "frm1707Av2021:txtS1C4Cost_{N>=1}": "frm1707Av2021:txtS1C4Cost_{index}",
+        "frm1707Av2021:txtS1C5CapitalGains_{N>=1}": "frm1707Av2021:txtS1C5CapitalGains_{index}",
+        "frm1707Av2021:txtS1C6TaxPaid_{N>=1}": "frm1707Av2021:txtS1C6TaxPaid_{index}"
+      },
+      "rows": [
+        1,
+        11
+      ],
+      "start": 4,
+      "cols": [
+        "(A) Date of Transaction (MM/DD/YYYY)",
+        "(B) Name of Corporate Stock",
+        "(C) Selling Price",
+        "(D) Cost",
+        "(E) Capital Gains (C − D)",
+        "(F) Tax Paid"
+      ],
+      "evidence": "N04: html-frozen/1707a-2021/index.html 'Schedule 1 – List of Transactions Resulting to Gain ... 4 (Continuation of Schedule 1)' columns (A) Date of Transaction (MM/DD/YYYY), (B) Name of Corporate Stock, (C) Selling Price, (D) Cost, (E = C-D) Capital Gains, (F) Tax Paid. Row k of the official 'More' pop-up is draft row 3+k (agent bindings /gains/3.. and /losses/3..; form_1707a.rs official_layout splices the pop-up rows _1.._n, main_row shows printed row 4 as that row, or OTHERS with the pop-up totals once there are more than four), so the rows are numbered from 4. The probe bound _1.._11 for Schedule 1 and _1.._9 for Schedule 2, which sets the row counts."
+    },
+    "table:3:sched2more": {
+      "no": "",
+      "label": "Schedule 2 – Continuation, rows 4 and after (List of Transactions Resulting to Loss)",
+      "templates": [
+        "frm1707Av2021:txtS2C1DateOfTransaction_{N>=1}",
+        "frm1707Av2021:txtS2C2NameOfCorporateStock_{N>=1}",
+        "frm1707Av2021:txtS2C3SellingPrice_{N>=1}",
+        "frm1707Av2021:txtS2C4Cost_{N>=1}",
+        "frm1707Av2021:txtS2C5CapitalLoss_{N>=1}"
+      ],
+      "row_keys": {
+        "frm1707Av2021:txtS2C1DateOfTransaction_{N>=1}": "frm1707Av2021:txtS2C1DateOfTransaction_{index}",
+        "frm1707Av2021:txtS2C2NameOfCorporateStock_{N>=1}": "frm1707Av2021:txtS2C2NameOfCorporateStock_{index}",
+        "frm1707Av2021:txtS2C3SellingPrice_{N>=1}": "frm1707Av2021:txtS2C3SellingPrice_{index}",
+        "frm1707Av2021:txtS2C4Cost_{N>=1}": "frm1707Av2021:txtS2C4Cost_{index}",
+        "frm1707Av2021:txtS2C5CapitalLoss_{N>=1}": "frm1707Av2021:txtS2C5CapitalLoss_{index}"
+      },
+      "rows": [
+        1,
+        9
+      ],
+      "start": 4,
+      "cols": [
+        "(A) Date of Transaction (MM/DD/YYYY)",
+        "(B) Name of Corporate Stock",
+        "(C) Selling Price",
+        "(D) Cost",
+        "(E) Capital Loss"
+      ],
+      "evidence": "N04: html-frozen/1707a-2021/index.html 'Schedule 2 – List of Transactions Resulting to Loss ... 4 (Continuation of Schedule 2)' columns (A) Date of Transaction, (B) Name of Corporate Stock, (C) Selling Price, (D) Cost, (E) Capital Loss. Row k of the official 'More' pop-up is draft row 3+k (agent bindings /gains/3.. and /losses/3..; form_1707a.rs official_layout splices the pop-up rows _1.._n, main_row shows printed row 4 as that row, or OTHERS with the pop-up totals once there are more than four), so the rows are numbered from 4. The probe bound _1.._11 for Schedule 1 and _1.._9 for Schedule 2, which sets the row counts."
+    },
+    "frm1707Av2021:txtS1C5CapitalGains_1": {
+      "computed": true,
+      "evidence": "N04: column E is computed (form_1707a.rs recompute: gain = selling price - cost, loss = cost - selling price); the agent leaves every row's E unbound as derived."
+    },
+    "frm1707Av2021:txtS2C5CapitalLoss_1": {
+      "computed": true,
+      "evidence": "N04: column E is computed (form_1707a.rs recompute: gain = selling price - cost, loss = cost - selling price); the agent leaves every row's E unbound as derived."
+    },
+    "frm1707Av2021:txtS1C1DateOfTransactionI1": {
+      "label": "Sch. 1 (A) Date of Transaction",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS1C2NameOfCorporateStockI1": {
+      "label": "Sch. 1 (B) Name of Corporate Stock",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS1C3SellingPriceI1": {
+      "label": "Sch. 1 (C) Selling Price",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS1C4CostI1": {
+      "label": "Sch. 1 (D) Cost",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS1C5CapitalGainsI1": {
+      "label": "Sch. 1 (E) Capital Gains",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS1C6TaxPaidI1": {
+      "label": "Sch. 1 (F) Tax Paid",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS2C1DateOfTransactionI1": {
+      "label": "Sch. 2 (A) Date of Transaction",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS2C2NameOfCorporateStockI1": {
+      "label": "Sch. 2 (B) Name of Corporate Stock",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS2C3SellingPriceI1": {
+      "label": "Sch. 2 (C) Selling Price",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS2C4CostI1": {
+      "label": "Sch. 2 (D) Cost",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
+    },
+    "frm1707Av2021:txtS2C5CapitalLossI1": {
+      "label": "Sch. 2 (E) Capital Loss",
+      "evidence": "N04: the printed rows 1-4 table joins Schedules 1 and 2 (html-frozen/1707a-2021/index.html Part IV columns (A)-(F) and (A)-(E)); the extractor's captions ('T S1C1Date Of Transaction I') are id fragments."
     }
   },
   "1800": {

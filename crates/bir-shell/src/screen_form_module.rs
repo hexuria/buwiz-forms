@@ -595,14 +595,20 @@ fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
         }
     }
     if let Some(items) = part["items"].as_array_mut() {
-        items.push(json!({
+        let mut table = json!({
             "no": fix["no"].clone(),
             "l": fix["label"].clone(),
             "p": page,
             "cols": cols,
             "rows": keys.len(),
             "keys": keys,
-        }));
+        });
+        // `start`: the number the first row shows, when a continuation
+        // table picks up after the printed rows (1707A's row 4 onward).
+        if let Some(start) = fix["start"].as_u64() {
+            table["start"] = Value::from(start);
+        }
+        items.push(table);
     }
 }
 
@@ -2214,6 +2220,79 @@ mod tests {
         assert!(refused["rejected"].get("frm2550m:txtAtcCde3").is_some());
         assert_eq!(codes(&refused["draft"]), ["VB010", "VS010"]);
     }
+
+    /// N04: 1707A rows 4 and after save. Schedules 1 and 2 print rows 1-4;
+    /// the official "More" pop-up holds row 4 onward, and its row k is draft
+    /// row 3+k. Once a schedule has more than four rows, printed row 4 reads
+    /// OTHERS with the continuation totals.
+    #[test]
+    fn rows_1707a_continuation_tables_save() {
+        setup();
+        let form = schema_entry("1707A").unwrap();
+        let table = |first: &str| -> Value {
+            form["parts"][3]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|it| it["keys"][0][0] == first)
+                .unwrap_or_else(|| panic!("table starting {first}"))
+                .clone()
+        };
+        let s1 = table("frm1707Av2021:txtS1C1DateOfTransaction_1");
+        assert_eq!(
+            (s1["rows"].clone(), s1["start"].clone()),
+            (json!(11), json!(4))
+        );
+        assert_eq!(s1["keys"][10][5], "frm1707Av2021:txtS1C6TaxPaid_11");
+        assert!(s1["cols"][4].get("c").is_some() && s1["cols"][3].get("c").is_none());
+        let s2 = table("frm1707Av2021:txtS2C1DateOfTransaction_1");
+        assert_eq!(s2["rows"], 9);
+        assert!(s2["cols"][4].get("c").is_some());
+        let printed = table("frm1707Av2021:txtS1C1DateOfTransactionI1");
+        assert_eq!(printed["cols"][0]["l"], "Sch. 1 (A) Date of Transaction");
+
+        let opened = open("1707A", 1);
+        let mut edits = serde_json::Map::new();
+        for (n, key) in ["I1", "I2", "I3", "_1", "_2"].iter().enumerate() {
+            let put = |edits: &mut serde_json::Map<String, Value>, col: &str, value: Value| {
+                edits.insert(format!("frm1707Av2021:txtS1{col}{key}"), value);
+            };
+            put(&mut edits, "C1DateOfTransaction", json!("03/15/2026"));
+            put(
+                &mut edits,
+                "C2NameOfCorporateStock",
+                json!(format!("Corp {n}")),
+            );
+            put(&mut edits, "C3SellingPrice", json!("1000"));
+            put(&mut edits, "C4Cost", json!("400"));
+            put(&mut edits, "C6TaxPaid", json!("10"));
+        }
+        edits.insert(
+            "frm1707Av2021:txtS2C1DateOfTransaction_1".into(),
+            json!("03/16/2026"),
+        );
+        let filled = fill("1707A", &opened["draft"], Value::Object(edits));
+        assert_eq!(filled["rejected"], json!({}));
+        let gains = filled["draft"]["gains"].as_array().unwrap();
+        assert_eq!(gains.len(), 5);
+        assert_eq!(gains[4]["corporation"], "Corp 4");
+        assert_eq!(filled["draft"]["losses"][3]["date"], "03/16/2026");
+        let v = &filled["values"];
+        assert_eq!(amount(v, "frm1707Av2021:txtS1C5CapitalGains_2"), 600.0);
+        // Printed row 4 is OTHERS with rows 4 and 5 summed.
+        assert_eq!(v["frm1707Av2021:txtS1C2NameOfCorporateStockI4"], "OTHERS");
+        assert_eq!(amount(v, "frm1707Av2021:txtS1C3SellingPriceI4"), 2000.0);
+        assert_eq!(amount(v, "frm1707Av2021:txtS1I20TotalCapitalGains"), 3000.0);
+
+        save("1707A", &filled["draft"]);
+        let reopened = open("1707A", 1);
+        assert_eq!(reopened["draft"]["gains"], filled["draft"]["gains"]);
+        assert_eq!(
+            reopened["values"]["frm1707Av2021:txtS1C2NameOfCorporateStock_2"],
+            filled["values"]["frm1707Av2021:txtS1C2NameOfCorporateStock_2"]
+        );
+    }
+
     /// Item 1: 2550M Schedules 2, 3A, 3B, 6, 7 and 8 save. The page builds
     /// their rows in script; the host writes them into the typed draft, an
     /// amount fills its input tax at 12% before a typed input tax replaces

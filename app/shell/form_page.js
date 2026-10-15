@@ -700,8 +700,9 @@ function scheduleTable(cx, ui, it, width) {
   for (const c of it.cols) head.child(div().w(colW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", c.l, "fg3").whitespace_normal()));
   const body = div().flex().flex_col();
   it.keys.forEach((row, r) => {
+    const no = (it.start ?? 1) + r;
     const tr = div().flex().flex_row().items_center().when(r > 0, (el) => el.border_t(1).border_color(t.border));
-    tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(r + 1), "fg3")));
+    tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(no), "fg3")));
     row.forEach((k, c) => {
       const col = it.cols[c];
       const locked = !s.editable || col.c || s.locks[k] !== undefined;
@@ -709,13 +710,13 @@ function scheduleTable(cx, ui, it, width) {
       let cell;
       if (col.t === "radio" || col.t === "chk") {
         const on = value === "true";
-        cell = Checkbox(cx, `fp-${k}`, on, (v, cx) => (locked ? null : ui.choose({ [k]: v ? "true" : "false" }, cx)), `${col.l}, row ${r + 1}`);
+        cell = Checkbox(cx, `fp-${k}`, on, (v, cx) => (locked ? null : ui.choose({ [k]: v ? "true" : "false" }, cx)), `${col.l}, row ${no}`);
       } else if (col.t === "sel") {
-        cell = selectBox(cx, ui, k, `${col.l}, row ${r + 1}`, col.o, value, locked, colW - 16);
+        cell = selectBox(cx, ui, k, `${col.l}, row ${no}`, col.o, value, locked, colW - 16);
       } else if (locked || !s.inputs.get(k)) {
         cell = lockedBox(cx, col.t === "money" ? formatMoney(value) : value, colW - 16, { right: col.t === "money" });
       } else {
-        cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${r + 1}`, width: colW - 16 }).h(30);
+        cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 16 }).h(30);
       }
       tr.child(div().w(colW).flex_none().py(6).px(SPACE[2]).child(cell));
     });
