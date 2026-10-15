@@ -548,13 +548,6 @@ fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
     if templates.is_empty() || templates.len() != wanted.len() {
         return;
     }
-    for item in part["items"].as_array_mut().into_iter().flatten() {
-        for field in item["f"].as_array_mut().into_iter().flatten() {
-            if wanted.contains(&field["k"].as_str().unwrap_or_default()) {
-                field["t"] = Value::from("hidden");
-            }
-        }
-    }
     let cols: Vec<Value> = templates
         .iter()
         .enumerate()
@@ -583,6 +576,23 @@ fn append_table(parts: &mut [Value], spec: &str, fix: &Value) {
             )
         })
         .collect();
+    // A concrete row field the extractor listed is a table cell now: drop
+    // the loose copy (one control, one place). Row templates stay, hidden.
+    let cells: BTreeSet<&str> = keys
+        .iter()
+        .flat_map(|row| row.as_array().into_iter().flatten())
+        .filter_map(Value::as_str)
+        .collect();
+    for item in part["items"].as_array_mut().into_iter().flatten() {
+        if let Some(fields) = item["f"].as_array_mut() {
+            fields.retain(|field| !cells.contains(field["k"].as_str().unwrap_or_default()));
+            for field in fields.iter_mut() {
+                if wanted.contains(&field["k"].as_str().unwrap_or_default()) {
+                    field["t"] = Value::from("hidden");
+                }
+            }
+        }
+    }
     if let Some(items) = part["items"].as_array_mut() {
         items.push(json!({
             "no": fix["no"].clone(),
@@ -1118,7 +1128,9 @@ fn locks(kind: AgentFormKind) -> Map<String, Value> {
         .boxes
         .iter()
         .filter_map(|entry| {
-            lock_reason(def, entry).map(|reason| (entry.key.clone(), Value::String(reason)))
+            lock_reason(def, entry)
+                .filter(|_| !catalogs::host_writes(kind, &entry.key))
+                .map(|reason| (entry.key.clone(), Value::String(reason)))
         })
         .collect();
     // A duplicate occurrence shows its official field (see `values_json`)
@@ -2117,6 +2129,84 @@ mod tests {
         assert_eq!(invalid["draft"]["schedule1"], opened["draft"]["schedule1"]);
     }
 
+    /// N03: 2550M Schedule 1 ATC rows follow the official popup. A choice in
+    /// a new row ticks the ATC, rows sort into popup order, an existing row
+    /// keeps its amount when its code changes, an ATC appears once, blank
+    /// unticks it, and a queued return refuses the edit.
+    #[test]
+    fn catalog_2550m_schedule_1_atcs_follow_the_popup() {
+        use bir_core::forms::form_2550m::{FORM_2550M_ATCS, Form2550MDraft};
+
+        setup();
+        let opened = open("2550M", 7);
+        let listed = opened["options"]["frm2550m:txtAtcCde5"].as_array().unwrap();
+        assert_eq!(listed.len(), FORM_2550M_ATCS.len());
+        assert!(!opened["options"].to_string().contains("See fixtures"));
+        assert!(opened["locks"].get("frm2550m:txtAtcCde5").is_none());
+
+        // One batch, the way the page sends a route's edits: the amount is
+        // applied after the ATCs that make its row.
+        let two = fill(
+            "2550M",
+            &opened["draft"],
+            json!({
+                "frm2550m:txtAtcCde1": "VT010",
+                "frm2550m:txtAtcCde2": "VB010",
+                "frm2550m:txtAmountSales1": "500",
+            }),
+        );
+        assert_eq!(two["rejected"], json!({}));
+        let codes = |d: &Value| -> Vec<String> {
+            d["sales_schedule"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["atc_code"].as_str().unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(codes(&two["draft"]), ["VB010", "VT010"]);
+        assert_eq!(two["draft"]["sales_schedule"][0]["amount"], 500.0);
+        assert_eq!(two["draft"]["sales_schedule"][0]["output_tax"], 60.0);
+        assert_eq!(two["values"]["frm2550m:txtAtcCde1"], "VB010");
+        assert_eq!(two["values"]["frm2550m:txtAtcCde2"], "VT010");
+
+        let amount = fill(
+            "2550M",
+            &two["draft"],
+            json!({"frm2550m:txtAmountSales2": "1000"}),
+        );
+        assert_eq!(amount["rejected"], json!({}));
+        let changed = fill(
+            "2550M",
+            &amount["draft"],
+            json!({"frm2550m:txtAtcCde2": "VS010"}),
+        );
+        assert_eq!(changed["rejected"], json!({}));
+        assert_eq!(codes(&changed["draft"]), ["VB010", "VS010"]);
+        assert_eq!(changed["draft"]["sales_schedule"][1]["amount"], 1000.0);
+
+        let duplicate = fill(
+            "2550M",
+            &changed["draft"],
+            json!({"frm2550m:txtAtcCde1": "VS010"}),
+        );
+        assert!(duplicate["rejected"].get("frm2550m:txtAtcCde1").is_some());
+        let cleared = fill(
+            "2550M",
+            &changed["draft"],
+            json!({"frm2550m:txtAtcCde1": ""}),
+        );
+        assert_eq!(codes(&cleared["draft"]), ["VS010"]);
+
+        let mut queued_form: Form2550MDraft =
+            serde_json::from_value(changed["draft"].clone()).unwrap();
+        queued_form.lifecycle.status = FilingStatus::Queued;
+        let queued = serde_json::to_value(&queued_form).unwrap();
+        let refused = fill("2550M", &queued, json!({"frm2550m:txtAtcCde3": "VC010"}));
+        assert!(refused["rejected"].get("frm2550m:txtAtcCde3").is_some());
+        assert_eq!(codes(&refused["draft"]), ["VB010", "VS010"]);
+    }
+
     #[test]
     fn catalog_lists_have_unique_values_across_the_schema() {
         let mut supplied = 0;
@@ -2161,7 +2251,8 @@ mod tests {
         // They must not silently turn into an incomplete catalog rollout.
         // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
-        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05).
+        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
+        // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
         assert_eq!(supplied, 82);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }

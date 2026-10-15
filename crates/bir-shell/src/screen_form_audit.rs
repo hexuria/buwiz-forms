@@ -1812,7 +1812,8 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
-    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05).
+    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
+    // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
     assert_eq!(supplied, 82, "catalog lists, dependent ones included");
 }
 
@@ -2416,22 +2417,10 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             }
         }
     }
-    // N03 (open): 2550M's Schedule 1 ATC selects list extractor placeholder
-    // text, and their bindings know only the ATCs the samples used (VB010,
-    // VT010, VS062), not FORM_2550M_ATCS. Fixing needs the binding probe to
-    // try the form's ATC list; pinned here so it cannot grow silently.
-    let open_cases: Vec<&str> = refused
-        .iter()
-        .map(|r| r.split(' ').take(2).collect::<Vec<_>>().join(" "))
-        .map(|id| match id.as_str() {
-            "2550M frm2550m:txtAtcCde1" => "N03 2550M txtAtcCde1",
-            "2550M frm2550m:txtAtcCde2" => "N03 2550M txtAtcCde2",
-            _ => "unexpected",
-        })
-        .collect();
-    assert_eq!(
-        open_cases,
-        ["N03 2550M txtAtcCde1", "N03 2550M txtAtcCde2"],
+    // N03 (fixed): 2550M's Schedule 1 ATC selects list the form's own ATC
+    // popup and the host writes them through the typed draft.
+    assert!(
+        refused.is_empty(),
         "listed choices refused:\n{}",
         refused.join("\n")
     );

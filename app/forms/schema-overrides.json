@@ -19051,6 +19051,30 @@
     "frm2550m:txtTax18I": {
       "label": "18I Domestic Purchase of Services, amount",
       "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form2550M.hta '18I/J Domestic Purchase of Services', box 18I; html-frozen/2550m-2007/writer-cells.json joins 'Item 18I'"
+    },
+    "table:2:sched1": {
+      "no": "",
+      "label": "Schedule 1 – Schedule of Sales/Receipts and Output Tax (To Item 12A/B)",
+      "templates": [
+        "frm2550m:txtAtcCde1",
+        "frm2550m:txtAmountSales1",
+        "frm2550m:txtOutputTax1"
+      ],
+      "row_keys": {
+        "frm2550m:txtAtcCde1": "frm2550m:txtAtcCde{index}",
+        "frm2550m:txtAmountSales1": "frm2550m:txtAmountSales{index}",
+        "frm2550m:txtOutputTax1": "frm2550m:txtOutputTax{index}"
+      },
+      "rows": [
+        1,
+        36
+      ],
+      "cols": [
+        "ATC",
+        "Amount of Sales/Receipts for the Period",
+        "Output Tax for the Period"
+      ],
+      "evidence": "N03: html-frozen/2550m-2007/index.html page 2 'Schedule 1 Schedule of Sales/Receipts and Output Tax' with columns ATC, Amount of Sales/Receipts For the Period, Output Tax For the Period (To Item 12A/B); one row per ATC ticked in the popup, row n is sales_schedule[n-1] (form_2550m.rs schedule_row_controls); 36 rows, the length of the official ATC popup (FORM_2550M_ATCS)."
     }
   },
   "2550Q": {
