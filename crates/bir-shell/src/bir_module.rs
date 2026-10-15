@@ -1112,7 +1112,8 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
         .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
     with_database(|db| {
         let (fields, receipt) = print_fields(db, &tin, &form_code, year, quarter)?;
-        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref())
+        let profile = db.get_profile_by_tin(&tin).ok().flatten().map(|p| p.full_name.clone());
+        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref(), profile)
     })
 }
 
@@ -1124,6 +1125,7 @@ pub(crate) fn open_print_preview(
     year: u16,
     fields: &std::collections::BTreeMap<String, String>,
     receipt: Option<&bir_print::frozen_html::ReceiptPage>,
+    profile_name: Option<String>,
 ) -> HostResult {
     let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
         .map_err(HostError::new)?;
@@ -1137,7 +1139,13 @@ pub(crate) fn open_print_preview(
     let path =
         std::env::temp_dir().join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
     std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
-    open_in_system_browser(&path)?;
+    // In-app preview window (Blitz view + hidden WebKit PDF for Print/Share);
+    // one window per form, re-opening refreshes it in place.
+    let title = match profile_name.filter(|n| !n.trim().is_empty()) {
+        Some(name) => format!("BIR Form {form_code} \u{2014} {name}"),
+        None => format!("BIR Form {form_code}"),
+    };
+    crate::print_preview_window::request_keyed(path.clone(), title, form_code.to_string());
     Ok(HostObject::new()
         .field("path", path.display().to_string())
         .into())
@@ -1145,6 +1153,7 @@ pub(crate) fn open_print_preview(
 
 /// Launch the platform's default HTML viewer on `path` — detached, so the
 /// host call returns immediately like the painted preview window does.
+#[allow(dead_code)]
 fn open_in_system_browser(path: &std::path::Path) -> Result<(), HostError> {
     #[cfg(target_os = "windows")]
     let mut command = {

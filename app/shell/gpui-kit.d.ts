@@ -27978,7 +27978,7 @@ declare module "bir" {
   export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
   export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
   export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
-  /** Print preview of a saved draft (opens the filled official sheet in the browser). */
+  /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
   export function screen_form_print(form_code: string, draft: object): { path: string };
   /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
   export function screen_form_queue(form_code: string, draft: object): number;

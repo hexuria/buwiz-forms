@@ -121,6 +121,12 @@ fn wrap_sheets(html: &str) -> String {
     out
 }
 
+/// Files written by the old path (or `BIR_PREVIEW_HTML`) still carry
+/// scripts/inputs; convert those, pass static ones through.
+pub fn staticize_if_needed(html: String) -> String {
+    if html.contains("<script") || html.contains("<input") { staticize(&html) } else { html }
+}
+
 #[cfg(test)]
 mod tests {
     const DOC: &str = r##"<html><head></head><body><a class="doc-link" href="guide.html">Guide</a><div class="page page-1"><input type="text" class="fi fh4 fc" id="p1c1-i" style="inset:1pt" value="X"></div><div class="page page-2 page-receipt"><input type="text" class="fi fh22" id="p2c3-s0" data-slot-index="0" value="A&amp;B"></div><script>alert(1)</script></body></html>"##;

@@ -9,6 +9,8 @@
 //! slice plan.
 
 mod bir_module;
+mod blitz_render;
+pub mod print_preview_window;
 pub mod print_sheet;
 pub mod static_html;
 mod dashboard_module;
