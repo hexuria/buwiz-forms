@@ -1272,25 +1272,20 @@ fn status_name(status: &FilingStatus) -> String {
 /// phone check took the app down with SIGILL).
 const EVALUATE_STACK: usize = 16 * 1024 * 1024;
 
-/// [`evaluate_here`] on a thread of its own with [`EVALUATE_STACK`]. Called
-/// from the async halves, which are already off the UI thread.
-fn evaluate(
-    kind: AgentFormKind,
-    draft: &mut Value,
-) -> Result<(Value, Value, FilingStatus), String> {
-    let mut owned = std::mem::take(draft);
-    let (result, back) = std::thread::Builder::new()
+/// Run `work` on a thread of its own with [`EVALUATE_STACK`]. The async
+/// halves call it for everything that reads the typed draft: deserializing a
+/// large form (1702MX) in a debug build overflows a 512 KB worker stack too,
+/// and GPUI Fast runs host futures on those workers.
+fn on_large_stack<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    std::thread::Builder::new()
         .name("screen-form-evaluate".into())
         .stack_size(EVALUATE_STACK)
-        .spawn(move || {
-            let result = evaluate_here(kind, &mut owned);
-            (result, owned)
-        })
+        .spawn(work)
         .map_err(|error| error.to_string())?
         .join()
-        .map_err(|_| "validation stopped unexpectedly".to_string())?;
-    *draft = back;
-    result
+        .map_err(|_| "validation stopped unexpectedly".to_string())
 }
 
 /// Recompute and validate an editable draft in place; a filed return is
@@ -1343,22 +1338,27 @@ fn screen_form_open(
         load_draft(db, kind, &profile, year, period).map_err(host_error)
     })?;
     Ok(async move {
-        let mut draft = draft;
-        let (values, errors, status) = evaluate(kind, &mut draft).map_err(host_error)?;
-        Ok(json(json!({
-            "form_code": code,
-            "year": year,
-            "period": period,
-            "status": status_name(&status),
-            "editable": status == FilingStatus::Draft,
-            "stored_period": stored_period(kind, &draft),
-            "draft": draft,
-            "values": values,
-            "options": catalogs::options(kind, &draft),
-            "locks": locks(kind),
-            "profile": profile_keys(kind),
-            "errors": errors,
-        })))
+        let opened = on_large_stack(move || -> Result<Value, String> {
+            let mut draft = draft;
+            let (values, errors, status) = evaluate_here(kind, &mut draft)?;
+            Ok(json!({
+                "form_code": code,
+                "year": year,
+                "period": period,
+                "status": status_name(&status),
+                "editable": status == FilingStatus::Draft,
+                "stored_period": stored_period(kind, &draft),
+                "draft": draft,
+                "values": values,
+                "options": catalogs::options(kind, &draft),
+                "locks": locks(kind),
+                "profile": profile_keys(kind),
+                "errors": errors,
+            }))
+        })
+        .and_then(|result| result)
+        .map_err(host_error)?;
+        Ok(json(opened))
     })
 }
 
@@ -1406,14 +1406,19 @@ fn screen_form_validate(
     let kind = kind_of(arguments.string(0)?)?;
     let draft = draft_argument(arguments, 1)?;
     Ok(async move {
-        let mut draft = draft;
-        let (values, errors, _) = evaluate(kind, &mut draft).map_err(host_error)?;
-        Ok(json(json!({
-            "draft": draft,
-            "values": values,
-            "options": catalogs::options(kind, &draft),
-            "errors": errors,
-        })))
+        let checked = on_large_stack(move || -> Result<Value, String> {
+            let mut draft = draft;
+            let (values, errors, _) = evaluate_here(kind, &mut draft)?;
+            Ok(json!({
+                "draft": draft,
+                "values": values,
+                "options": catalogs::options(kind, &draft),
+                "errors": errors,
+            }))
+        })
+        .and_then(|result| result)
+        .map_err(host_error)?;
+        Ok(json(checked))
     })
 }
 
