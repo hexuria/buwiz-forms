@@ -41,9 +41,14 @@ fn capabilities() -> Capabilities {
         .exit(true)
         // The JS reads configuration env, never arbitrary secrets.
         .env_variables(
-            ["BIR_DATABASE_PATH", "BIR_SFTP_DRY_RUN", "EBIR_TEST_ENV"]
-                .iter()
-                .map(|name| name.to_string()),
+            [
+                "BIR_DATABASE_PATH",
+                "BIR_SFTP_DRY_RUN",
+                "EBIR_TEST_ENV",
+                "BIR_SHELL_START",
+            ]
+            .iter()
+            .map(|name| name.to_string()),
         )
 }
 

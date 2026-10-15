@@ -235,6 +235,33 @@ fn set_profile_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+/// Set or clear a taxpayer's authenticator. Setting needs a current code
+/// from the authenticator app, checked against the new secret, so a
+/// mistyped enrolment cannot lock the taxpayer out. `null` clears it.
+fn set_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let secret = arguments.value(1)?.as_str().map(str::to_owned);
+    let token = arguments
+        .get(2)
+        .and_then(HostValue::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    if let Some(secret) = &secret
+        && !bir_core::crypto::validate_totp(secret, &token)
+    {
+        return Err(HostError::new(
+            "That code does not match. Type the 6-digit code your authenticator app shows now.",
+        ));
+    }
+    with_database(|db| {
+        let mut profile = get_profile_by_tin(db, &tin)?;
+        profile.totp_secret = secret;
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))
+            .map(|_| HostValue::Null)
+    })
+}
+
 /// App-wide auth toggles the lock screen and profile unlock gate read once
 /// per render (same settings keys as the painted app reads at startup).
 fn auth_state() -> HostResult {
@@ -781,7 +808,7 @@ fn job_log_tail() -> HostResult {
 }
 
 /// The frozen print-sheet slug each form's painted `PRINT_SLUG` names.
-fn print_slug_for(form_code: &str) -> Option<&'static str> {
+pub(crate) fn print_slug_for(form_code: &str) -> Option<&'static str> {
     Some(match form_code {
         "0605" => "0605-1999",
         "0619E" => "0619e-2018",
@@ -832,7 +859,7 @@ fn print_slug_for(form_code: &str) -> Option<&'static str> {
 
 /// The receipt page a confirmed draft appends — the shell port of the painted
 /// `form_html_preview_launcher::receipt_page_for`.
-fn receipt_page(
+pub(crate) fn receipt_page(
     db: &Database,
     receipt_id: Option<i64>,
     mailbox: &str,
@@ -863,6 +890,63 @@ fn receipt_page(
     })
 }
 
+/// The stored draft's print field map (writer key -> value) and, for a
+/// confirmed return, its receipt page: what `form_print_html` fills the
+/// frozen sheet with.
+pub(crate) fn print_fields(
+    db: &Database,
+    tin: &str,
+    form_code: &str,
+    year: u16,
+    quarter: Option<u8>,
+) -> Result<
+    (
+        std::collections::BTreeMap<String, String>,
+        Option<bir_print::frozen_html::ReceiptPage>,
+    ),
+    HostError,
+> {
+    Ok(match form_code {
+        "2551Q" => {
+            let q = quarter.ok_or_else(|| HostError::new("2551Q drafts are quarterly"))?;
+            let draft = db
+                .get_2551q_draft(tin, year, q)
+                .map_err(|error| HostError::new(error.to_string()))?
+                .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
+            let page = receipt_page(db, draft.receipt_id, &draft.email);
+            (draft.to_print_field_map(), page)
+        }
+        "1601C" => {
+            let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
+            let draft = db
+                .get_1601c_draft(tin, year, month)
+                .map_err(|error| HostError::new(error.to_string()))?
+                .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
+            let page = receipt_page(db, draft.receipt_id, &draft.email_address);
+            (draft.to_print_field_map(), page)
+        }
+        _ => {
+            use bir_core::forms::queueable::QueueableKind;
+            let kind = QueueableKind::from_form_code(form_code)
+                .ok_or_else(|| HostError::new(format!("Form {form_code} is not printable")))?;
+            bir_core::with_queueable_kind!(kind, F => {
+                let draft: F = db
+                    .get_form_draft(tin, form_code, year, quarter)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| {
+                        HostError::new(format!("No saved {form_code} draft for that period"))
+                    })?;
+                let page = receipt_page(
+                    db,
+                    draft.lifecycle().receipt_id,
+                    draft.submission_email(),
+                );
+                (draft.print_field_map(), page)
+            })
+        }
+    })
+}
+
 /// Fill the form's frozen print sheet, write it to a temp HTML file, and open
 /// it with the platform's default handler (the painted app shows it in a wry
 /// preview window — the shell has no wry, and `cx.open_url` is HTTP-only, so
@@ -875,60 +959,33 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
     let slug = print_slug_for(&form_code)
         .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
     with_database(|db| {
-        let (fields, receipt) = match form_code.as_str() {
-            "2551Q" => {
-                let q = quarter.ok_or_else(|| HostError::new("2551Q drafts are quarterly"))?;
-                let draft = db
-                    .get_2551q_draft(&tin, year, q)
-                    .map_err(|error| HostError::new(error.to_string()))?
-                    .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
-                let page = receipt_page(db, draft.receipt_id, &draft.email);
-                (draft.to_print_field_map(), page)
-            }
-            "1601C" => {
-                let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
-                let draft = db
-                    .get_1601c_draft(&tin, year, month)
-                    .map_err(|error| HostError::new(error.to_string()))?
-                    .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
-                let page = receipt_page(db, draft.receipt_id, &draft.email_address);
-                (draft.to_print_field_map(), page)
-            }
-            _ => {
-                use bir_core::forms::queueable::QueueableKind;
-                let kind = QueueableKind::from_form_code(&form_code)
-                    .ok_or_else(|| HostError::new(format!("Form {form_code} is not printable")))?;
-                bir_core::with_queueable_kind!(kind, F => {
-                    let draft: F = db
-                        .get_form_draft(&tin, &form_code, year, quarter)
-                        .map_err(|error| HostError::new(error.to_string()))?
-                        .ok_or_else(|| {
-                            HostError::new(format!("No saved {form_code} draft for that period"))
-                        })?;
-                    let page = receipt_page(
-                        db,
-                        draft.lifecycle().receipt_id,
-                        draft.submission_email(),
-                    );
-                    (draft.print_field_map(), page)
-                })
-            }
-        };
-        let html =
-            bir_print::frozen_html::filled_document_with_receipt(slug, &fields, receipt.as_ref())
-                .map_err(HostError::new)?;
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_secs())
-            .unwrap_or(0);
-        let path =
-            std::env::temp_dir().join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
-        std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
-        open_in_system_browser(&path)?;
-        Ok(HostObject::new()
-            .field("path", path.display().to_string())
-            .into())
+        let (fields, receipt) = print_fields(db, &tin, &form_code, year, quarter)?;
+        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref())
     })
+}
+
+/// Fill `slug`'s frozen sheet with `fields`, write it to a temp HTML file and
+/// open it in the system browser. Answers `{ path }`.
+pub(crate) fn open_print_preview(
+    slug: &str,
+    form_code: &str,
+    year: u16,
+    fields: &std::collections::BTreeMap<String, String>,
+    receipt: Option<&bir_print::frozen_html::ReceiptPage>,
+) -> HostResult {
+    let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
+        .map_err(HostError::new)?;
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    let path =
+        std::env::temp_dir().join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
+    std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
+    open_in_system_browser(&path)?;
+    Ok(HostObject::new()
+        .field("path", path.display().to_string())
+        .into())
 }
 
 /// Launch the platform's default HTML viewer on `path` — detached, so the
@@ -1079,6 +1136,7 @@ pub fn module() -> HostModule {
         .function("profile_auth", profile_auth)
         .function("verify_profile_pin", verify_profile_pin)
         .function("verify_profile_totp", verify_profile_totp)
+        .function("set_profile_totp", set_profile_totp)
         .function("verify_admin_pin", verify_admin_pin)
         .function("verify_admin_totp", verify_admin_totp)
         .function("generate_totp_secret", generate_totp_secret)
@@ -1169,6 +1227,8 @@ export function auth_state(): AuthState;
 export function profile_auth(tin: string): ProfileAuth;
 export function verify_profile_pin(tin: string, pin: string): boolean;
 export function verify_profile_totp(tin: string, token: string): boolean;
+/** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
+export function set_profile_totp(tin: string, secret: string | null, token?: string): null;
 export function verify_admin_pin(pin: string): boolean;
 export function verify_admin_totp(token: string): boolean;
 export function generate_totp_secret(account: string): TotpSecret;
@@ -1235,3 +1295,76 @@ export interface JobLogTail {
 }
 export function job_log_tail(): JobLogTail;
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bir_core::profile::TaxpayerType;
+    use bir_core::tax_profile::{BranchFacts, NewTaxpayer};
+    use gpui_shell::HostArguments;
+
+    const TIN: &str = "12345678800000";
+
+    fn setup() {
+        use_ephemeral_database();
+        with_database(|db| {
+            db.create_taxpayer(NewTaxpayer {
+                tin_root: "123456788".into(),
+                name: "Example Trading Corp".into(),
+                taxpayer_type: TaxpayerType::Corporation,
+                birth_date: None,
+                head_office: BranchFacts {
+                    rdo_code: "040".into(),
+                    registered_address: "1 Example Street, Pasig".into(),
+                    zip_code: "1600".into(),
+                    phone: "0280000000".into(),
+                    email: "office@example.com".into(),
+                },
+            })
+            .map_err(|error| HostError::new(error.to_string()))?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn args(values: Vec<HostValue>) -> HostArguments {
+        HostArguments::new(values)
+    }
+
+    fn has_totp() -> bool {
+        with_database(|db| Ok(get_profile_by_tin(db, TIN)?.totp_secret.is_some())).unwrap()
+    }
+
+    fn current_code(secret: &str) -> String {
+        use totp_rs::{Algorithm, Secret, TOTP};
+        let bytes = Secret::Encoded(secret.to_string()).to_bytes().unwrap();
+        TOTP::new(Algorithm::SHA1, 6, 1, 30, bytes, None, String::new())
+            .unwrap()
+            .generate_current()
+            .unwrap()
+    }
+
+    #[test]
+    fn set_profile_totp_needs_a_matching_code_and_clears_with_null() {
+        setup();
+        let secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+        let wrong = set_profile_totp(&args(vec![
+            HostValue::Str(TIN.into()),
+            HostValue::Str(secret.into()),
+            HostValue::Str("000000".into()),
+        ]));
+        if current_code(secret) != "000000" {
+            assert!(wrong.unwrap_err().message().contains("does not match"));
+            assert!(!has_totp());
+        }
+        set_profile_totp(&args(vec![
+            HostValue::Str(TIN.into()),
+            HostValue::Str(secret.into()),
+            HostValue::Str(current_code(secret)),
+        ]))
+        .unwrap();
+        assert!(has_totp());
+        set_profile_totp(&args(vec![HostValue::Str(TIN.into()), HostValue::Null])).unwrap();
+        assert!(!has_totp());
+    }
+}

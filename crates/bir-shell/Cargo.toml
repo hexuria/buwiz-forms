@@ -52,6 +52,10 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[dev-dependencies]
+# Tests produce a current authenticator code for a generated secret.
+totp-rs = "5.7.1"
+
 # The monorepo's crates/shell/rquickjs-compat facade (a package named
 # `rquickjs`) routes LLRT stdlib's crates.io rquickjs dependency onto the
 # quickjs-jit VM gpui-shell actually runs. Without it two rquickjs_core

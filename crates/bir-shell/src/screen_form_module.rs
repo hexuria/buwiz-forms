@@ -54,6 +54,8 @@ export interface ScreenFormOpened {
     period: number;
     status: ScreenFormStatus;
     editable: boolean;
+    /** The period column the draft is stored under: pass it to queue and print. */
+    stored_period: number | null;
     draft: object;
     values: Record<string, string>;
     locks: Record<string, string>;
@@ -72,6 +74,7 @@ export interface ScreenFormValidated {
 export interface ScreenFormSaved {
     id: number;
     status: ScreenFormStatus;
+    stored_period: number | null;
     draft: object;
 }
 export function screen_form_schema(form_code: string): object;
@@ -80,6 +83,12 @@ export function screen_form_open(tin: string, form_code: string, year: number, p
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
+/** Print preview of a saved draft (opens the filled official sheet in the browser). */
+export function screen_form_print(form_code: string, draft: object): { path: string };
+/** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
+export function screen_form_queue(form_code: string, draft: object): number;
+/** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
+export function screen_form_cancel_queue(form_code: string, draft: object): null;
 "#;
 
 pub fn register(module: HostModule) -> HostModule {
@@ -90,6 +99,9 @@ pub fn register(module: HostModule) -> HostModule {
         .function("screen_form_fill", screen_form_fill)
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
+        .function("screen_form_print", screen_form_print)
+        .function("screen_form_queue", screen_form_queue)
+        .function("screen_form_cancel_queue", screen_form_cancel_queue)
 }
 
 fn host_error(message: impl Into<String>) -> HostError {
@@ -98,13 +110,83 @@ fn host_error(message: impl Into<String>) -> HostError {
 
 // ---------------------------------------------------------------- schema
 
-/// The on-screen form schema: one entry per form, parsed once.
+/// The on-screen form schema: one entry per form, parsed once, with the
+/// reviewed corrections in `app/forms/schema-overrides.json` applied.
 fn schema() -> &'static [Value] {
     static SCHEMA: OnceLock<Vec<Value>> = OnceLock::new();
     SCHEMA.get_or_init(|| {
-        serde_json::from_str(include_str!("../../../app/forms/forms-schema.json"))
-            .expect("app/forms/forms-schema.json is a JSON array of forms")
+        let mut forms: Vec<Value> =
+            serde_json::from_str(include_str!("../../../app/forms/forms-schema.json"))
+                .expect("app/forms/forms-schema.json is a JSON array of forms");
+        let overrides: Value =
+            serde_json::from_str(include_str!("../../../app/forms/schema-overrides.json"))
+                .expect("app/forms/schema-overrides.json is a JSON object");
+        for form in &mut forms {
+            let code = form["c"].as_str().unwrap_or_default().to_string();
+            if let Some(fixes) = overrides.get(&code).and_then(Value::as_object) {
+                apply_overrides(form, fixes);
+            }
+        }
+        forms
     })
+}
+
+/// Apply one form's corrections. Keys are a field key `k` (label, kind,
+/// options of that field, or of a schedule column when `k` is a table cell)
+/// or `item:<part>:<index>` (that item's printed label). `kind: "hidden"`
+/// keeps the field for validation placement but the page does not draw it.
+/// The `evidence` text is provenance only.
+fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
+    let set = |target: &mut Value, fix: &Value, kind_key: &str| {
+        if let Some(label) = fix.get("label") {
+            target["l"] = label.clone();
+        }
+        if let Some(kind) = fix.get("kind") {
+            target[kind_key] = kind.clone();
+        }
+        if let Some(options) = fix.get("options") {
+            target["o"] = options.clone();
+        }
+    };
+    let Some(parts) = form["parts"].as_array_mut() else {
+        return;
+    };
+    for (key, fix) in fixes {
+        if let Some(rest) = key.strip_prefix("item:") {
+            let mut indexes = rest.split(':').filter_map(|n| n.parse::<usize>().ok());
+            if let (Some(p), Some(i)) = (indexes.next(), indexes.next())
+                && let Some(item) = parts.get_mut(p).and_then(|part| part["items"].get_mut(i))
+                && let Some(label) = fix.get("label")
+            {
+                item["l"] = label.clone();
+            }
+            continue;
+        }
+        for part in parts.iter_mut() {
+            let Some(items) = part["items"].as_array_mut() else {
+                continue;
+            };
+            for item in items.iter_mut() {
+                if let Some(fields) = item["f"].as_array_mut() {
+                    for field in fields.iter_mut().filter(|f| f["k"] == key.as_str()) {
+                        set(field, fix, "t");
+                    }
+                }
+                let column = item["keys"].as_array().and_then(|rows| {
+                    rows.iter().find_map(|row| {
+                        row.as_array()?
+                            .iter()
+                            .position(|cell| cell.as_str() == Some(key.as_str()))
+                    })
+                });
+                if let Some(c) = column
+                    && let Some(col) = item["cols"].get_mut(c)
+                {
+                    set(col, fix, "t");
+                }
+            }
+        }
+    }
 }
 
 /// `1601-C`, `form 1601c` -> `1601C`.
@@ -603,10 +685,12 @@ fn lock_reason(def: &AgentFormDef, entry: &BoxDef) -> Option<String> {
     if !entry.is_user_box() {
         return None;
     }
+    // An income-tax election is the user's to answer: it is locked against
+    // the assistant only, so the page leaves it open.
     let bound_lock = |key: &str| match def.bindings.get(key) {
         Some(BoundBox {
             lock: Some(lock), ..
-        }) => Some(lock.reason().to_string()),
+        }) if *lock != bir_core::forms::agent::Lock::Election => Some(lock.reason().to_string()),
         _ => None,
     };
     if def.bindings.contains_key(&entry.key) {
@@ -624,10 +708,46 @@ fn lock_reason(def: &AgentFormDef, entry: &BoxDef) -> Option<String> {
 
 fn locks(kind: AgentFormKind) -> Map<String, Value> {
     let def = kind.definition();
-    def.boxes
+    let mut locks: Map<String, Value> = def
+        .boxes
         .iter()
         .filter_map(|entry| {
             lock_reason(def, entry).map(|reason| (entry.key.clone(), Value::String(reason)))
+        })
+        .collect();
+    // A duplicate occurrence shows its official field (see `values_json`)
+    // but is never written by key: say where that field is edited instead
+    // of "not written by this app's field map".
+    for (key, official) in occurrence_aliases(kind) {
+        let reason = match def.bindings.get(official) {
+            Some(BoundBox {
+                lock: Some(lock), ..
+            }) => lock.reason().to_string(),
+            Some(_) => format!("repeats `{official}`; fill it there"),
+            None => {
+                format!("repeats the official field `{official}`, which this page cannot write")
+            }
+        };
+        locks.insert(key.clone(), Value::String(reason));
+    }
+    locks
+}
+
+/// On-screen keys that repeat an official control id (`txtEmail#occurrence-2`,
+/// the rules corpus's name for the same `serialized_key` placed again on the
+/// official form) and have no binding of their own, each with that official
+/// key. The draft holds one value per official key and the field map, the
+/// XML and the print sheet all write it under the official key, so every
+/// occurrence shows that one value. Read-only: `fill` still refuses these
+/// keys, so every write goes through a bound box of the typed draft.
+fn occurrence_aliases(kind: AgentFormKind) -> Vec<(&'static String, &'static str)> {
+    let def = kind.definition();
+    schema_keys(kind.form_code())
+        .iter()
+        .filter(|key| !def.bindings.contains_key(*key))
+        .filter_map(|key| {
+            key.split_once("#occurrence-")
+                .map(|(official, _)| (key, official))
         })
         .collect()
 }
@@ -660,10 +780,19 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
     )
 }
 
+/// Every box as official key -> string, plus each duplicate occurrence the
+/// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
+    let mut map = agent::field_map(kind, draft)?;
+    for (key, official) in occurrence_aliases(kind) {
+        if !map.contains_key(key)
+            && let Some(value) = map.get(official).cloned()
+        {
+            map.insert(key.clone(), value);
+        }
+    }
     Ok(Value::Object(
-        agent::field_map(kind, draft)?
-            .into_iter()
+        map.into_iter()
             .map(|(key, value)| (key, Value::String(value)))
             .collect(),
     ))
@@ -673,9 +802,36 @@ fn status_name(status: &FilingStatus) -> String {
     format!("{status:?}")
 }
 
+/// Stack for form evaluation. The async halves run on the executor's worker
+/// threads (512 KB on macOS); a form's validators compile regexes on first
+/// use, and in debug builds that alone overflowed the worker stack (2551Q's
+/// phone check took the app down with SIGILL).
+const EVALUATE_STACK: usize = 16 * 1024 * 1024;
+
+/// [`evaluate_here`] on a thread of its own with [`EVALUATE_STACK`]. Called
+/// from the async halves, which are already off the UI thread.
+fn evaluate(
+    kind: AgentFormKind,
+    draft: &mut Value,
+) -> Result<(Value, Value, FilingStatus), String> {
+    let mut owned = std::mem::take(draft);
+    let (result, back) = std::thread::Builder::new()
+        .name("screen-form-evaluate".into())
+        .stack_size(EVALUATE_STACK)
+        .spawn(move || {
+            let result = evaluate_here(kind, &mut owned);
+            (result, owned)
+        })
+        .map_err(|error| error.to_string())?
+        .join()
+        .map_err(|_| "validation stopped unexpectedly".to_string())?;
+    *draft = back;
+    result
+}
+
 /// Recompute and validate an editable draft in place; a filed return is
 /// validated on a copy so it keeps the values it was filed with.
-fn evaluate(
+fn evaluate_here(
     kind: AgentFormKind,
     draft: &mut Value,
 ) -> Result<(Value, Value, FilingStatus), String> {
@@ -731,6 +887,7 @@ fn screen_form_open(
             "period": period,
             "status": status_name(&status),
             "editable": status == FilingStatus::Draft,
+            "stored_period": stored_period(kind, &draft),
             "draft": draft,
             "values": values,
             "locks": locks(kind),
@@ -754,7 +911,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             continue;
         }
         let mut next = draft.clone();
-        match agent::fill(kind, &mut next, key, &to_json(value)) {
+        match agent::fill_as_user(kind, &mut next, key, &to_json(value)) {
             Ok(()) => draft = next,
             Err(message) => {
                 rejected.insert(key.clone(), Value::String(message));
@@ -796,8 +953,139 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
     Ok(json(json!({
         "id": id,
         "status": status_name(&status),
+        "stored_period": stored_period(kind, &draft),
         "draft": draft,
     })))
+}
+
+/// The print sheet's field map and receipt page for a draft as saved.
+pub(crate) fn print_map(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<
+    (
+        BTreeMap<String, String>,
+        Option<bir_print::frozen_html::ReceiptPage>,
+    ),
+    HostError,
+> {
+    fn typed<F: serde::de::DeserializeOwned>(draft: &Value) -> Result<F, HostError> {
+        serde_json::from_value(draft.clone()).map_err(|error| host_error(error.to_string()))
+    }
+    Ok(match kind {
+        AgentFormKind::Form1601C => {
+            let d: bir_core::forms::Form1601CDraft = typed(draft)?;
+            let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email_address);
+            (d.to_print_field_map(), page)
+        }
+        AgentFormKind::Form2551Q => {
+            let d: bir_core::forms::Form2551QDraft = typed(draft)?;
+            let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email);
+            (d.to_print_field_map(), page)
+        }
+        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
+            let d: F = typed(draft)?;
+            let page = crate::bir_module::receipt_page(
+                db,
+                d.lifecycle().receipt_id,
+                d.submission_email(),
+            );
+            (d.print_field_map(), page)
+        }),
+    })
+}
+
+/// Print preview of the draft the page holds (save it first). Works from the
+/// draft itself, so forms stored under a transaction-date key print too.
+fn screen_form_print(arguments: &HostArguments) -> HostResult {
+    let code = arguments.string(0)?.to_owned();
+    let kind = kind_of(&code)?;
+    let draft = draft_argument(arguments, 1)?;
+    let slug = crate::bir_module::print_slug_for(kind.form_code())
+        .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
+    let year = agent::identity(kind, &draft)
+        .map_err(host_error)?
+        .taxable_year;
+    with_database(|db| {
+        let (fields, receipt) = print_map(db, kind, &draft)?;
+        crate::bir_module::open_print_preview(
+            slug,
+            kind.form_code(),
+            year,
+            &fields,
+            receipt.as_ref(),
+        )
+    })
+}
+
+/// Queue the saved draft the page holds for background submission. 1601C and
+/// 2551Q use their own queue path (`queue_form_draft`); every other form is
+/// queued from the draft itself, after it validates.
+fn screen_form_queue(arguments: &HostArguments) -> HostResult {
+    let code = arguments.string(0)?.to_owned();
+    let kind = kind_of(&code)?;
+    let draft = draft_argument(arguments, 1)?;
+    let AgentFormKind::Queueable(queueable) = kind else {
+        return Err(host_error(format!(
+            "{code} is queued with queue_form_draft (month or quarter)"
+        )));
+    };
+    with_database(|db| {
+        bir_core::with_queueable_kind!(queueable, F => {
+            let mut typed: F = serde_json::from_value(draft.clone())
+                .map_err(|error| host_error(error.to_string()))?;
+            if typed.draft_id().is_none() {
+                return Err(host_error("Save the draft before queueing it."));
+            }
+            typed
+                .queue(bir_core::filing_queue::QueueAuthSource::Gui)
+                .map_err(|errors| {
+                    host_error(
+                        errors
+                            .iter()
+                            .map(|(field, message)| format!("{field}: {message}"))
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                    )
+                })?;
+            db.save_queued_queueable(&typed)
+                .map(|id| HostValue::Number(id as f64))
+                .map_err(|error| host_error(error.to_string()))
+        })
+    })
+}
+
+/// Take a queued return out of the queue so it is an editable draft again.
+/// 1601C and 2551Q use `cancel_queued`.
+fn screen_form_cancel_queue(arguments: &HostArguments) -> HostResult {
+    let code = arguments.string(0)?.to_owned();
+    let kind = kind_of(&code)?;
+    let draft = draft_argument(arguments, 1)?;
+    let AgentFormKind::Queueable(queueable) = kind else {
+        return Err(host_error(format!(
+            "{code} is cancelled with cancel_queued"
+        )));
+    };
+    with_database(|db| {
+        bir_core::with_queueable_kind!(queueable, F => {
+            let typed: F = serde_json::from_value(draft.clone())
+                .map_err(|error| host_error(error.to_string()))?;
+            db.cancel_queued_queueable(&typed)
+                .map(|_| HostValue::Null)
+                .map_err(|error| host_error(error.to_string()))
+        })
+    })
+}
+
+/// The period column the draft is stored under, which is what the queue and
+/// print host functions look it up by. It differs from the page's period on
+/// the forms keyed by a transaction date (`MMDD`: 2000OT, 2200AN, 2200C,
+/// 2200S, 2552) and by a quarter the return names itself.
+fn stored_period(kind: AgentFormKind, draft: &Value) -> Option<i64> {
+    agent::identity(kind, draft)
+        .ok()
+        .map(|identity| bir_core::forms::queueable::period_column(&identity.period))
 }
 
 #[cfg(test)]
@@ -916,6 +1204,123 @@ mod tests {
         assert!(module.is_async("screen_form_open"));
         assert!(module.is_async("screen_form_validate"));
         assert!(!module.is_async("screen_form_fill"));
+    }
+
+    #[test]
+    fn schema_overrides_apply_to_labels_items_and_kinds() {
+        let form = schema_entry("2551Q").unwrap();
+        let field = |k: &str| {
+            form["parts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|p| p["items"].as_array().unwrap())
+                .flat_map(|it| it["f"].as_array().cloned().unwrap_or_default())
+                .find(|f| f["k"] == k)
+                .unwrap()
+        };
+        assert_eq!(field("frm2551Qv2018:taxTreaty_1")["l"], "Yes");
+        assert_eq!(field("frm2551Qv2018:taxTreaty_2")["l"], "No");
+        assert_eq!(
+            form["parts"][1]["items"][5]["l"],
+            "Tax relief under Special Law or Treaty?"
+        );
+        let overrides: Value =
+            serde_json::from_str(include_str!("../../../app/forms/schema-overrides.json")).unwrap();
+        // Every override names a field, a table cell or an item that exists.
+        for (code, fixes) in overrides.as_object().unwrap() {
+            if code.starts_with('_') {
+                continue;
+            }
+            let keys = schema_keys(code);
+            for key in fixes.as_object().unwrap().keys() {
+                assert!(
+                    key.starts_with("item:") || keys.contains(key),
+                    "{code}: override {key} names no control"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn screen_form_queue_queues_a_saved_draft_and_refuses_the_rest() {
+        setup();
+        let opened = open("0619E", 7);
+        let unsaved = call(
+            "screen_form_queue",
+            vec![
+                "0619E".into(),
+                crate::bir_module::json(opened["draft"].clone()),
+            ],
+        );
+        assert!(unsaved.unwrap_err().message().contains("Save the draft"));
+        let saved = save("0619E", &opened["draft"]);
+        let queued = call(
+            "screen_form_queue",
+            vec![
+                "0619E".into(),
+                crate::bir_module::json(saved["draft"].clone()),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("0619E queues: {}", error.message()));
+        assert!(queued.as_i64().is_some_and(|id| id > 0));
+        let reopened = open("0619E", 7);
+        assert_eq!(reopened["status"], "Queued");
+        call(
+            "screen_form_cancel_queue",
+            vec![
+                "0619E".into(),
+                crate::bir_module::json(reopened["draft"].clone()),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("0619E cancels: {}", error.message()));
+        assert_eq!(open("0619E", 7)["status"], "Draft");
+        let c = open("1601C", 7);
+        let refused = call(
+            "screen_form_queue",
+            vec!["1601C".into(), crate::bir_module::json(c["draft"].clone())],
+        );
+        assert!(refused.unwrap_err().message().contains("queue_form_draft"));
+    }
+
+    #[test]
+    fn the_user_answers_item_13_election_on_2551q() {
+        setup();
+        let opened = open("2551Q", 3);
+        assert!(
+            opened["locks"].get("frm2551Qv2018:taxRate1").is_none(),
+            "election radios are open"
+        );
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"frm2551Qv2018:taxRate": "2"}),
+        );
+        assert!(
+            filled["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            filled["rejected"]
+        );
+        assert_eq!(filled["draft"]["item_13_election"], "eight_percent");
+    }
+
+    #[test]
+    fn print_finds_date_keyed_drafts_by_their_stored_period() {
+        setup();
+        for code in ["2000OT", "2200AN", "2200C", "2200S", "2552"] {
+            let opened = open(code, 1);
+            let saved = save(code, &opened["draft"]);
+            assert!(
+                saved["stored_period"].as_i64().is_some(),
+                "{code} has a stored period"
+            );
+            assert_eq!(opened["stored_period"], saved["stored_period"], "{code}");
+            with_database(|db| {
+                let kind = kind_of(code)?;
+                print_map(db, kind, &saved["draft"]).map(|_| ())
+            })
+            .unwrap_or_else(|error| panic!("{code} prints: {}", error.message()));
+        }
     }
 
     #[test]
@@ -1274,6 +1679,117 @@ mod tests {
         round_trip("2551Q", 2, json!({ key: "750" }));
     }
 
+    #[test]
+    fn form_2551q_email_shows_on_both_occurrences() {
+        setup();
+        let opened = open("2551Q", 2);
+        let values = &opened["values"];
+        // The field map writes the email once, under its official key; the
+        // page binds the two places the official form shows it.
+        assert_eq!(values["txtEmail"], "books@example.com");
+        assert_eq!(values["txtEmail#occurrence-1"], "books@example.com");
+        assert_eq!(values["txtEmail#occurrence-2"], "books@example.com");
+        assert!(schema_keys("2551Q").contains("txtEmail#occurrence-1"));
+        // The print sheet prints the same value.
+        let draft: bir_core::forms::form_2551q::Form2551QDraft =
+            serde_json::from_value(opened["draft"].clone()).expect("typed 2551Q");
+        assert_eq!(
+            draft
+                .to_print_field_map()
+                .get("txtEmail")
+                .map(String::as_str),
+            Some("books@example.com")
+        );
+        // Still read-only: the box is locked with an accurate reason and a
+        // write by key is refused, so nothing bypasses the typed draft.
+        let lock = opened["locks"]["txtEmail#occurrence-1"].as_str().unwrap();
+        assert!(
+            lock.contains("repeats the official field `txtEmail`"),
+            "{lock}"
+        );
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"txtEmail#occurrence-1": "other@example.com"}),
+        );
+        assert!(filled["rejected"]["txtEmail#occurrence-1"].is_string());
+        assert_eq!(
+            filled["values"]["txtEmail#occurrence-2"],
+            "books@example.com"
+        );
+    }
+
+    #[test]
+    fn a_repeated_occurrence_follows_its_bound_box() {
+        setup();
+        // 1707A binds Item 11's email; its second occurrence mirrors it.
+        let opened = open("1707A", 1);
+        let base = "frm1707Av2021:txtI11Email";
+        let repeat = "frm1707Av2021:txtI11Email#occurrence-2";
+        assert_eq!(opened["values"][repeat], "books@example.com");
+        assert_eq!(opened["values"][repeat], opened["values"][base]);
+        // The email comes from the profile: the repeat says so too.
+        assert!(
+            opened["locks"][base]
+                .as_str()
+                .is_some_and(|lock| lock.contains("profile"))
+        );
+        assert_eq!(opened["locks"][repeat], opened["locks"][base]);
+        // 2200A repeats the TIN and name header on three sheets.
+        let opened = open("2200A", 3);
+        for official in [
+            "frm2200Av2020:tinA",
+            "frm2200Av2020:branchCode",
+            "frm2200Av2020:registeredName",
+        ] {
+            let value = &opened["values"][official];
+            assert!(value.as_str().is_some_and(|v| !v.is_empty()), "{official}");
+            for n in [2, 3] {
+                assert_eq!(
+                    &opened["values"][format!("{official}#occurrence-{n}")],
+                    value
+                );
+            }
+        }
+    }
+
+    /// Every `#occurrence-N` key on screen names the official control id the
+    /// rules corpus serializes it under (`serialized_key`), which is what
+    /// the alias reads.
+    #[test]
+    fn occurrence_keys_repeat_their_serialized_key() {
+        for form in schema() {
+            let package = form["id"].as_str().unwrap();
+            let code = form["c"].as_str().unwrap();
+            let occurrences: Vec<&String> = schema_keys(code)
+                .iter()
+                .filter(|key| key.contains("#occurrence-"))
+                .collect();
+            if occurrences.is_empty() {
+                continue;
+            }
+            let path = format!(
+                "{}/../../rules/forms/{package}/fields.json",
+                env!("CARGO_MANIFEST_DIR")
+            );
+            let fields: Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).expect(&path)).unwrap();
+            for key in occurrences {
+                let row = fields["fields"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["field_key"] == key.as_str())
+                    .unwrap_or_else(|| panic!("{package}: {key} in fields.json"));
+                assert_eq!(
+                    row["serialized_key"].as_str(),
+                    key.split_once("#occurrence-").map(|(official, _)| official),
+                    "{package}: {key}"
+                );
+            }
+        }
+    }
+
     /// The existing draft paths read a draft saved through screen_form_save.
     fn existing_paths_read(code: &str, period: i64, slug: &str, edits: Value, check: (&str, f64)) {
         let opened = open(code, period);
@@ -1368,3 +1884,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "screen_form_audit.rs"]
+mod audit;

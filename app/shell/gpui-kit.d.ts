@@ -27765,6 +27765,8 @@ declare module "bir" {
   export function profile_auth(tin: string): ProfileAuth;
   export function verify_profile_pin(tin: string, pin: string): boolean;
   export function verify_profile_totp(tin: string, token: string): boolean;
+  /** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
+  export function set_profile_totp(tin: string, secret: string | null, token?: string): null;
   export function verify_admin_pin(pin: string): boolean;
   export function verify_admin_totp(token: string): boolean;
   export function generate_totp_secret(account: string): TotpSecret;
@@ -27930,6 +27932,8 @@ declare module "bir" {
       period: number;
       status: ScreenFormStatus;
       editable: boolean;
+      /** The period column the draft is stored under: pass it to queue and print. */
+      stored_period: number | null;
       draft: object;
       values: Record<string, string>;
       locks: Record<string, string>;
@@ -27948,6 +27952,7 @@ declare module "bir" {
   export interface ScreenFormSaved {
       id: number;
       status: ScreenFormStatus;
+      stored_period: number | null;
       draft: object;
   }
   export function screen_form_schema(form_code: string): object;
@@ -27956,6 +27961,12 @@ declare module "bir" {
   export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
   export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
   export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
+  /** Print preview of a saved draft (opens the filled official sheet in the browser). */
+  export function screen_form_print(form_code: string, draft: object): { path: string };
+  /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
+  export function screen_form_queue(form_code: string, draft: object): number;
+  /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
+  export function screen_form_cancel_queue(form_code: string, draft: object): null;
 
   export interface DeadlineRow {
       tin: string;
