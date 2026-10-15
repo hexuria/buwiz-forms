@@ -1253,7 +1253,7 @@ mod tests {
         assert_eq!(field("frm2551Qv2018:taxTreaty_1")["l"], "Yes");
         assert_eq!(field("frm2551Qv2018:taxTreaty_2")["l"], "No");
         assert_eq!(
-            form["parts"][1]["items"][5]["l"],
+            form["parts"][1]["items"][6]["l"],
             "Tax relief under Special Law or Treaty?"
         );
         let overrides: Value =
