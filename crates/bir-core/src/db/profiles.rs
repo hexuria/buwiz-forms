@@ -302,6 +302,36 @@ fn validate_reviewed_confirmation_plan(
     Ok(())
 }
 
+/// Delete one branch profile and every row keyed by its TIN. The caller
+/// owns the transaction and re-syncs `taxpayers`.
+pub(super) fn delete_profile_rows(tx: &rusqlite::Connection, tin: &str) -> Result<(), DbError> {
+    for (table, column) in [
+        ("penalties_cache", "tin"),
+        ("submissions", "tin"),
+        ("legacy_filed_returns", "tin"),
+        ("form_drafts", "tin"),
+        ("submission_receipts", "tin"),
+        ("data_providers", "profile_tin"),
+        ("per_year_forms", "tin"),
+        ("profile_calendar_events", "profile_tin"),
+        ("form_templates", "tin"),
+    ] {
+        if table == "legacy_filed_returns" {
+            tx.execute(
+                &format!("DELETE FROM {table} WHERE {column} = ?1 OR {column} = ?2"),
+                params![tin, canonical_legacy_filed_return_tin(tin)],
+            )?;
+        } else {
+            tx.execute(
+                &format!("DELETE FROM {table} WHERE {column} = ?1"),
+                params![tin],
+            )?;
+        }
+    }
+    tx.execute("DELETE FROM profiles WHERE tin = ?1", params![tin])?;
+    Ok(())
+}
+
 pub(super) fn canonical_legacy_filed_return_tin(tin: &str) -> String {
     crate::naming::Tin::parse_digits(tin)
         .map(|parsed| {
@@ -616,30 +646,7 @@ impl Database {
             ));
         }
         let tx = self.conn.unchecked_transaction()?;
-        for (table, column) in [
-            ("penalties_cache", "tin"),
-            ("submissions", "tin"),
-            ("legacy_filed_returns", "tin"),
-            ("form_drafts", "tin"),
-            ("submission_receipts", "tin"),
-            ("data_providers", "profile_tin"),
-            ("per_year_forms", "tin"),
-            ("profile_calendar_events", "profile_tin"),
-            ("form_templates", "tin"),
-        ] {
-            if table == "legacy_filed_returns" {
-                tx.execute(
-                    &format!("DELETE FROM {table} WHERE {column} = ?1 OR {column} = ?2"),
-                    params![tin, canonical_legacy_filed_return_tin(tin)],
-                )?;
-            } else {
-                tx.execute(
-                    &format!("DELETE FROM {table} WHERE {column} = ?1"),
-                    params![tin],
-                )?;
-            }
-        }
-        tx.execute("DELETE FROM profiles WHERE tin = ?1", params![tin])?;
+        delete_profile_rows(&tx, tin)?;
         super::taxpayers::sync_taxpayer_rows(&tx)?;
         tx.commit()?;
         Ok(())

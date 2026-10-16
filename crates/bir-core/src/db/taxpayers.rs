@@ -29,6 +29,7 @@ use crate::tax_profile::{
     is_head_office_code, normalize_branch_code, parse_tin_root, resolve_facts,
     validate_template_fields,
 };
+use crate::tax_profile::{TaxpayerCredentials, reject_reserved_tin_root};
 
 type Result<T> = std::result::Result<T, TaxProfileError>;
 
@@ -335,6 +336,15 @@ fn load_taxpayer(conn: &Connection, root: &str) -> Result<Option<Taxpayer>> {
     .map(
         |(tin_root, name, taxpayer_type, data_json, created_at, updated_at)| {
             let data: TaxpayerData = serde_json::from_str(&data_json)?;
+            let archived = conn.query_row(
+                "SELECT COUNT(*) > 0
+                        AND COALESCE(SUM(CASE WHEN json_valid(data_json)
+                                AND json_extract(data_json, '$.is_archived') = 1
+                            THEN 0 ELSE 1 END), 0) = 0
+                 FROM profiles WHERE length(tin) >= 9 AND substr(tin, 1, 9) = ?1",
+                [&tin_root],
+                |row| row.get::<_, bool>(0),
+            )?;
             Ok(Taxpayer {
                 tin_root,
                 name,
@@ -343,6 +353,7 @@ fn load_taxpayer(conn: &Connection, root: &str) -> Result<Option<Taxpayer>> {
                 grouping_review: data.grouping_review,
                 created_at,
                 updated_at,
+                archived,
             })
         },
     )
@@ -929,6 +940,7 @@ impl Database {
     /// Create a taxpayer and its `00000` head office.
     pub fn create_taxpayer(&self, new: NewTaxpayer) -> Result<TaxpayerWithBranches> {
         let root = parse_tin_root(&new.tin_root)?;
+        reject_reserved_tin_root(&root)?;
         let name = non_empty(&new.name, "Taxpayer name")?;
         let tx = self.conn.unchecked_transaction()?;
         let taken = tx
@@ -1014,6 +1026,114 @@ impl Database {
         }
         tx.commit()?;
         load_taxpayer(&self.conn, &root)?.ok_or_else(|| TaxProfileError::NotFound(root))
+    }
+
+    /// The taxpayer's PIN hash and authenticator secret (one pair per TIN
+    /// root, shared by every branch).
+    pub fn taxpayer_credentials(&self, tin_root: &str) -> Result<TaxpayerCredentials> {
+        let root = parse_tin_root(tin_root)?;
+        self.conn
+            .query_row(
+                "SELECT pin_hash, totp_secret FROM taxpayers WHERE tin_root = ?1",
+                [&root],
+                |row| {
+                    Ok(TaxpayerCredentials {
+                        pin_hash: row.get(0)?,
+                        totp_secret: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?
+            .ok_or_else(|| {
+                TaxProfileError::NotFound(format!(
+                    "No taxpayer with TIN {}",
+                    format_tin_root(&root)
+                ))
+            })
+    }
+
+    /// Set (`Some`) or clear (`None`) the taxpayer's PIN hash.
+    pub fn set_taxpayer_pin_hash(&self, tin_root: &str, pin_hash: Option<&str>) -> Result<()> {
+        self.set_taxpayer_credential(tin_root, "pin_hash", pin_hash)
+    }
+
+    /// Set (`Some`) or clear (`None`) the taxpayer's authenticator secret.
+    pub fn set_taxpayer_totp_secret(&self, tin_root: &str, secret: Option<&str>) -> Result<()> {
+        self.set_taxpayer_credential(tin_root, "totp_secret", secret)
+    }
+
+    fn set_taxpayer_credential(
+        &self,
+        tin_root: &str,
+        column: &'static str,
+        value: Option<&str>,
+    ) -> Result<()> {
+        let root = parse_tin_root(tin_root)?;
+        let updated = self.conn.execute(
+            &format!(
+                "UPDATE taxpayers SET {column} = ?2, updated_at = datetime('now')
+                 WHERE tin_root = ?1"
+            ),
+            params![root, value],
+        )?;
+        if updated == 0 {
+            return Err(TaxProfileError::NotFound(format!(
+                "No taxpayer with TIN {}",
+                format_tin_root(&root)
+            )));
+        }
+        Ok(())
+    }
+
+    /// Archive or unarchive a taxpayer: the `is_archived` flag of every
+    /// branch profile. Only that key of `data_json` is edited.
+    pub fn set_taxpayer_archived(&self, tin_root: &str, archived: bool) -> Result<()> {
+        let root = parse_tin_root(tin_root)?;
+        if load_taxpayer(&self.conn, &root)?.is_none() {
+            return Err(TaxProfileError::NotFound(format!(
+                "No taxpayer with TIN {}",
+                format_tin_root(&root)
+            )));
+        }
+        self.conn.execute(
+            "UPDATE profiles
+             SET data_json = json_set(data_json, '$.is_archived', json(?2))
+             WHERE length(tin) >= 9 AND substr(tin, 1, 9) = ?1 AND json_valid(data_json)",
+            params![root, if archived { "true" } else { "false" }],
+        )?;
+        Ok(())
+    }
+
+    /// Delete a taxpayer and every branch (each branch exactly as
+    /// [`Database::delete_profile`] deletes it), in one transaction.
+    pub fn delete_taxpayer(&self, tin_root: &str) -> Result<()> {
+        let root = parse_tin_root(tin_root)?;
+        if load_taxpayer(&self.conn, &root)?.is_none() {
+            return Err(TaxProfileError::NotFound(format!(
+                "No taxpayer with TIN {}",
+                format_tin_root(&root)
+            )));
+        }
+        let tins: Vec<String> = load_branch_rows(&self.conn, &root)?
+            .into_iter()
+            .map(|row| row.tin)
+            .collect();
+        for tin in &tins {
+            if self.get_profile_calendar_link(tin)?.is_some() {
+                return Err(TaxProfileError::Conflict(
+                    "Delete or unlink the profile's Google Calendar before deleting the profile"
+                        .to_string(),
+                ));
+            }
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        for tin in &tins {
+            super::profiles::delete_profile_rows(&tx, tin)?;
+        }
+        tx.execute("DELETE FROM taxpayers WHERE tin_root = ?1", [&root])?;
+        sync_taxpayer_rows(&tx)?;
+        tx.commit()?;
+        Ok(())
     }
 
     /// Close the one-time D11 grouping review. Names are not changed.
@@ -1321,6 +1441,7 @@ impl Database {
     ) -> Result<TaxpayerWithBranches> {
         let old = parse_tin_root(old_root)?;
         let new = parse_tin_root(new_root)?;
+        reject_reserved_tin_root(&new)?;
         if load_taxpayer(&self.conn, &old)?.is_none() {
             return Err(TaxProfileError::NotFound(format!(
                 "No taxpayer with TIN {}",
@@ -1845,6 +1966,72 @@ mod tests {
         })
         .unwrap();
         db
+    }
+
+    #[test]
+    fn the_help_desk_admin_root_can_never_be_a_taxpayer() {
+        let db = db_with_taxpayer(TaxpayerType::Individual);
+        let created = db.create_taxpayer(NewTaxpayer {
+            tin_root: "000-000-000".into(),
+            name: "Help desk".into(),
+            taxpayer_type: TaxpayerType::Individual,
+            birth_date: None,
+            head_office: facts("039", "Quezon City"),
+        });
+        assert_eq!(
+            created.unwrap_err().to_string(),
+            "TIN 000-000-000 is reserved for the help desk admin."
+        );
+        let moved = db.move_taxpayer_tin(ROOT, "000000000");
+        assert_eq!(
+            moved.unwrap_err().to_string(),
+            "TIN 000-000-000 is reserved for the help desk admin."
+        );
+        assert!(db.get_taxpayer(ROOT).unwrap().is_some());
+    }
+
+    #[test]
+    fn credentials_are_stored_once_on_the_taxpayer_and_follow_a_tin_move() {
+        let db = db_with_taxpayer(TaxpayerType::Individual);
+        add_branch(&db, "00001", &[]);
+        assert_eq!(
+            db.taxpayer_credentials(ROOT).unwrap(),
+            TaxpayerCredentials::default()
+        );
+        db.set_taxpayer_pin_hash(ROOT, Some("hash")).unwrap();
+        db.set_taxpayer_totp_secret(ROOT, Some("SECRET")).unwrap();
+        for branch in db.get_taxpayer(ROOT).unwrap().unwrap().branches {
+            let profile = db.get_profile(&branch.tin).unwrap().unwrap();
+            assert_eq!(profile.profile_pin_hash, None);
+            assert_eq!(profile.totp_secret, None);
+        }
+        db.move_taxpayer_tin(ROOT, "987654321").unwrap();
+        let moved = db.taxpayer_credentials("987654321").unwrap();
+        assert_eq!(moved.pin_hash.as_deref(), Some("hash"));
+        assert_eq!(moved.totp_secret.as_deref(), Some("SECRET"));
+        db.set_taxpayer_pin_hash("987654321", None).unwrap();
+        assert_eq!(db.taxpayer_credentials("987654321").unwrap().pin_hash, None);
+        assert!(db.set_taxpayer_pin_hash(ROOT, Some("x")).is_err());
+    }
+
+    #[test]
+    fn archiving_and_deleting_a_taxpayer_covers_every_branch() {
+        let db = db_with_taxpayer(TaxpayerType::Individual);
+        let branch = add_branch(&db, "00001", &[]);
+        assert!(!db.get_taxpayer(ROOT).unwrap().unwrap().taxpayer.archived);
+        db.set_taxpayer_archived(ROOT, true).unwrap();
+        assert!(db.get_taxpayer(ROOT).unwrap().unwrap().taxpayer.archived);
+        assert!(db.get_profile(HEAD).unwrap().unwrap().is_archived);
+        assert!(db.get_profile(&branch).unwrap().unwrap().is_archived);
+        db.set_taxpayer_archived(ROOT, false).unwrap();
+        assert!(!db.get_taxpayer(ROOT).unwrap().unwrap().taxpayer.archived);
+        assert!(!db.get_profile(&branch).unwrap().unwrap().is_archived);
+
+        db.delete_taxpayer(ROOT).unwrap();
+        assert!(db.get_taxpayer(ROOT).unwrap().is_none());
+        assert!(db.get_profile(HEAD).unwrap().is_none());
+        assert!(db.get_profile(&branch).unwrap().is_none());
+        assert!(db.delete_taxpayer(ROOT).is_err());
     }
 
     fn add_branch(db: &Database, code: &str, fields: &[(BranchField, FieldSetting)]) -> String {
