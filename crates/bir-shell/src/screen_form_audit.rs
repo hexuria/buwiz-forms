@@ -1820,6 +1820,43 @@ fn write_effective_census() {
     );
 }
 
+/// Findings export (form-findings goal): for each screen form, the structure
+/// the host serves and what a fresh open returns, the way the Form library
+/// opens a return (the fixture taxpayer, the form's default period). The
+/// per-rule checks in `tools/form_findings.py` read it.
+#[test]
+#[ignore = "findings export; writes tmp/form-findings/screen.json"]
+fn write_form_findings_export() {
+    seed_fictional_profile();
+    let mut forms = Vec::new();
+    for form in schema() {
+        let code = form["c"].as_str().unwrap_or_default();
+        let period = page_period_for(code);
+        let opened = open(code, period).unwrap_or_else(|e| json!({ "error": e }));
+        forms.push(json!({
+            "code": code,
+            "period": period,
+            "year": YEAR,
+            "schema": form,
+            "values": opened["values"],
+            "locks": opened["locks"],
+            "profile": opened["profile"],
+            "options": opened["options"].as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()),
+            "errors": opened["errors"],
+            "open_error": opened["error"],
+        }));
+    }
+    let dir = format!("{}/../../tmp/form-findings", env!("CARGO_MANIFEST_DIR"));
+    std::fs::create_dir_all(&dir).expect("findings dir");
+    std::fs::write(
+        format!("{dir}/screen.json"),
+        serde_json::to_string(&json!({ "profile": profile_json(), "forms": forms }))
+            .expect("export json"),
+    )
+    .expect("screen.json");
+    println!("forms {}", forms.len());
+}
+
 // ------------------------------------------------ confirmed symptoms (P0.4)
 //
 // Each test states one confirmed defect from the continuation baseline and

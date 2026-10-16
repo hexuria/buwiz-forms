@@ -114,7 +114,7 @@ class BirApp extends View {
     // Development aid: BIR_SHELL_START="tp=123456788;theme=dark;view=library"
     // (also "palette=<query>", "edit=<profile section>", and on a form
     // "choose=<key>~<value>|...", "select=<key>", "more=<part>:<item>",
-    // "save"; none bypasses a PIN)
+    // "save", "items=<a>-<b>", "solo=<part>"; none bypasses a PIN)
     // or "...;form=2551Q/2026/3" opens a screen at launch, so a screen can be
     // checked headlessly (one launch, one screenshot). Unset in normal use.
     const start = process.env.BIR_SHELL_START;
@@ -225,6 +225,9 @@ class BirApp extends View {
       else if (key === "items") {
         const [from, to] = value.split("-").map(Number);
         this.formUi.devItems = { from, to: to ?? from };
+      } else if (key === "solo") {
+        this.formUi.devSolo = Number(value);
+        this.formUi.jumpTo(Number(value), cx);
       }
     }
     cx.notify();

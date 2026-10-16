@@ -1432,6 +1432,8 @@ function formContent(cx, app, width) {
 
   const parts = div().flex().flex_col().gap(SPACE[4]).w(partsW);
   f.parts.forEach((p, pi) => {
+    // Dev start route only (BIR_SHELL_START solo=<part>): draw that part alone.
+    if (ui.devSolo != null && pi !== ui.devSolo) return;
     const open = s.openParts.has(pi);
     const card = div()
       .id(`fp-part-${pi}`)
