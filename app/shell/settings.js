@@ -1,8 +1,9 @@
-// Settings: app-wide preferences for this computer. Taxpayer details live in
-// each tax profile. Every control the pre-redesign page had is kept (theme,
-// admin PIN, authenticator, profile PINs, import, background tasks); rows the
-// prototype shows for features this build does not have yet are left out
-// rather than drawn as dead switches (see docs/plans/gpui-shell-migration.md).
+// Settings: preferences for this computer and the signed-in account's own
+// PIN and authenticator. A taxpayer sees Appearance and Security; the admin
+// also sees Data, Background tasks, the recovery key and where the database
+// lives. Rows the prototype shows for features this build does not have yet
+// are left out rather than drawn as dead switches
+// (see docs/plans/gpui-shell-migration.md).
 
 import { div } from "gpui-kit";
 import {
@@ -19,8 +20,8 @@ import {
   SettingRow,
   PageHeader,
   SectionTitle,
-  PinCells,
 } from "./ui.js";
+import { SecurityCard } from "./security.js";
 
 
 function jobChip(cx, status) {
@@ -32,7 +33,6 @@ function jobChip(cx, status) {
 }
 
 export function renderSettings(cx, app, _width) {
-  const auth = app.store.authState();
   const os = app.isMac ? "macOS" : app.info.os === "windows" ? "Windows" : "system";
 
   const appearance = Card(cx, "settings-appearance", [
@@ -95,68 +95,20 @@ export function renderSettings(cx, app, _width) {
   );
   const tasks = Card(cx, "settings-tasks", jobRows);
 
-  const pinControls = div()
-    .flex()
-    .flex_row()
-    .flex_wrap()
-    .items_center()
-    .gap(SPACE[2])
-    .child(PinCells(cx, app.newAdminPinOtp, "settings-admin-pin"))
-    .child(
-      AppButton(cx, "settings-admin-pin-save", auth.has_admin_pin ? "Change PIN" : "Set PIN", {
-        size: "sm",
-        onClick: (_e, cx) => app.setAdminPin(cx),
-      }),
-    );
-  if (auth.has_admin_pin) {
-    pinControls.child(
-      AppButton(cx, "settings-admin-pin-clear", "Remove", { variant: "ghost", size: "sm", onClick: (_e, cx) => app.clearAdminPin(cx) }),
-    );
-  }
-  const totpHint = app.newTotpSecret
-    ? `Secret: ${app.newTotpSecret}`
-    : auth.has_admin_totp
-      ? "Codes from your authenticator app unlock the app"
-      : "Use a 6-digit code from an authenticator app";
-  const security = Card(cx, "settings-security", [
-    SettingRow(cx, "settings-admin-pin-row", "Admin PIN", auth.has_admin_pin ? "Asks for this PIN to unlock the app" : "Not set", pinControls),
-    SettingRow(
-      cx,
-      "settings-totp",
-      "Authenticator",
-      totpHint,
-      AppButton(cx, "settings-totp-btn", auth.has_admin_totp ? "Remove" : "Add", {
-        variant: auth.has_admin_totp ? "ghost" : "secondary",
-        size: "sm",
-        onClick: (_e, cx) => app.toggleAdminTotp(cx),
-      }),
-    ),
-    SettingRow(
-      cx,
-      "settings-profile-pins",
-      "Taxpayer PINs",
-      "Ask for a taxpayer's PIN before opening it",
-      Switch(cx, "settings-profile-pins-switch", auth.enable_profile_pins, (v, cx) => app.setAuthFlag("enable_profile_pins", v, cx), "Taxpayer PINs"),
-    ),
-    SettingRow(
-      cx,
-      "settings-hide-taxpayers",
-      "Hide other taxpayers",
-      "Leave them out of Switch taxpayer and Search",
-      Switch(cx, "settings-hide-taxpayers-switch", auth.hide_tax_profiles, (v, cx) => app.setAuthFlag("hide_tax_profiles", v, cx), "Hide other taxpayers"),
-    ),
-  ]);
-
   const page = div()
     .flex()
     .flex_col()
-    .child(PageHeader(cx, { title: "Settings", lede: "App-wide preferences for this computer. Taxpayer details live in each tax profile." }))
+    .child(PageHeader(cx, { title: "Settings", lede: "Preferences for this computer, and your PIN. Taxpayer details live in each tax profile." }))
     .child(div().mt(28).child(SectionTitle(cx, "Appearance", true)))
     .child(appearance);
-  // Signed in as a taxpayer: appearance only. Import, background tasks and
-  // the admin's security settings belong to the admin.
-  if (app.session.kind === "taxpayer") {
-    return page.child(Text(cx, "meta", "Signed in as one taxpayer. Data, background tasks and security are managed by the admin.", "fg3").mt(SPACE[6]).whitespace_normal());
+  const version = `eBIRForms ${app.info.app_version || ""}`;
+  // A taxpayer: appearance and its own PIN. Import, background tasks, the
+  // database's location and every other taxpayer belong to the admin.
+  if (!app.isAdmin()) {
+    return page
+      .child(SectionTitle(cx, "Security"))
+      .child(SecurityCard(cx, app))
+      .child(Text(cx, "meta", version, "fg3").mt(SPACE[6]).whitespace_normal());
   }
   return page
     .child(SectionTitle(cx, "Data"))
@@ -164,6 +116,6 @@ export function renderSettings(cx, app, _width) {
     .child(SectionTitle(cx, "Background tasks"))
     .child(tasks)
     .child(SectionTitle(cx, "Security"))
-    .child(security)
-    .child(Text(cx, "meta", `eBIRForms ${app.info.app_version || ""} · ${app.info.database_path || ""}`, "fg3").mt(SPACE[6]).whitespace_normal());
+    .child(SecurityCard(cx, app))
+    .child(Text(cx, "meta", `${version} · ${app.info.database_path || ""}`, "fg3").mt(SPACE[6]).whitespace_normal());
 }

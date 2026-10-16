@@ -1436,7 +1436,7 @@ declare module "gpui-kit" {
     /** Sets the width. */
     w<Self extends Element>(this: Self, value: Length): Self;
 
-    // The 3146 no-argument style methods, generated from GPUI's reflection
+    // The 3148 no-argument style methods, generated from GPUI's reflection
     // table. A name here is a name the runtime dispatches, and the
     // documentation is GPUI's own.
     /**
@@ -2917,6 +2917,10 @@ declare module "gpui-kit" {
      * [Docs](https://tailwindcss.com/docs/cursor)
      */
     cursor_w_resize<Self extends Element>(this: Self): Self;
+    /** Draws a debug border around this element. */
+    debug<Self extends Element>(this: Self): Self;
+    /** Draws a debug border on all conforming elements below this element. */
+    debug_below<Self extends Element>(this: Self): Self;
     debug_blue<Self extends Element>(this: Self): Self;
     debug_green<Self extends Element>(this: Self): Self;
     debug_pink<Self extends Element>(this: Self): Self;
@@ -27739,10 +27743,16 @@ declare module "bir" {
   export function set_setting(key: string, value: string): null;
 
   export interface AuthState {
-      enable_profile_pins: boolean;
-      has_admin_totp: boolean;
+      /** null on a fresh install that has not chosen yet. */
+      mode: "solo" | "helpdesk" | null;
+      /** solo: the owner's TIN root; helpdesk: "000000000"; null if unset. */
+      admin_root: string | null;
+      /** solo: the owner taxpayer's PIN; helpdesk: the admin PIN setting. */
       has_admin_pin: boolean;
-      hide_tax_profiles: boolean;
+      has_admin_totp: boolean;
+      has_recovery_key: boolean;
+      /** Touch ID / account password (macOS) or Windows Hello can confirm the admin. */
+      mac_login_available: boolean;
   }
   export interface ProfileAuth {
       has_pin: boolean;
@@ -27752,30 +27762,50 @@ declare module "bir" {
       secret: string;
       qr_path: string;
   }
+  export interface RecoveryKey {
+      /** Shown once, e.g. "7K3M-Q9TB-0XWD-H2RE"; only its hash is kept. */
+      recovery_key: string;
+  }
   export function profile_detail(tin: string): object;
   export function save_profile(profile: object): object;
   export function set_profile_archived(tin: string, archived: boolean): object;
   export function delete_profile(tin: string): null;
+  /** Sets the PIN of the branch's taxpayer (one PIN per TIN root). */
   export function set_profile_pin(tin: string, pin: string | null): null;
-  export function auth_state(): AuthState;
-  export function profile_auth(tin: string): ProfileAuth;
-  export function verify_profile_pin(tin: string, pin: string): boolean;
-  export function verify_profile_totp(tin: string, token: string): boolean;
-  /** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
+  /** Sets the authenticator of the branch's taxpayer; setting needs a current code. */
   export function set_profile_totp(tin: string, secret: string | null, token?: string): null;
+  export function auth_state(): AuthState;
   /** PIN and authenticator of a taxpayer (TIN root), shared by every branch. */
   export function taxpayer_auth(tin_root: string): ProfileAuth;
+  /** pin: exactly 4 digits, or null to clear. */
   export function set_taxpayer_pin(tin_root: string, pin: string | null): null;
-  export function set_taxpayer_totp(tin_root: string, secret: string | null, token?: string): null;
+  /** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
+  export function set_taxpayer_totp(tin_root: string, secret: string | null, code?: string): null;
   export function verify_taxpayer_pin(tin_root: string, pin: string): boolean;
-  export function verify_taxpayer_totp(tin_root: string, token: string): boolean;
-  /** Give every branch its taxpayer's PIN and authenticator; returns rows changed. */
-  export function unify_taxpayer_credentials(): number;
+  export function verify_taxpayer_totp(tin_root: string, code: string): boolean;
+  /** solo: the owner taxpayer's PIN; helpdesk: the admin PIN. false when not set up. */
   export function verify_admin_pin(pin: string): boolean;
-  export function verify_admin_totp(token: string): boolean;
+  export function verify_admin_totp(code: string): boolean;
+  /** Help desk refuses to clear the PIN while there is no admin authenticator. */
+  export function set_admin_pin(pin: string | null): null;
+  /** Setting needs a current code; help desk refuses to clear it while there is no admin PIN. */
+  export function set_admin_totp(secret: string | null, code?: string): null;
+  /** First launch, after creating the owner's taxpayer. Refused once set up. */
+  export function setup_solo(tin_root: string): null;
+  /** First launch for a help desk: admin PIN plus a new recovery key. Refused once set up. */
+  export function setup_helpdesk(pin: string): RecoveryKey;
+  /** Replace the admin recovery key. Needs the app set up. */
+  export function create_recovery_key(): RecoveryKey;
+  /** Single use: true (and the key is forgotten) on a match; case, dashes and spaces ignored. */
+  export function use_recovery_key(key: string): boolean;
+  /** Touch ID / account password (Windows Hello on Windows); false elsewhere or when cancelled. */
+  export function mac_login(reason: string): Promise<boolean>;
+  /** Archive or unarchive every branch. Archiving the admin taxpayer is refused. */
+  export function set_taxpayer_archived(tin_root: string, archived: boolean): null;
+  /** Delete the taxpayer and every branch. Refused for the admin taxpayer. */
+  export function delete_taxpayer(tin_root: string): null;
   export function generate_totp_secret(account: string): TotpSecret;
   export function delete_setting(key: string): null;
-  export function set_admin_pin(pin: string | null): null;
 
   export interface DraftSummary {
       id: number;
@@ -27862,6 +27892,8 @@ declare module "bir" {
       taxpayer_type: "Individual" | "Corporation" | "Partnership" | "Cooperative" | "Estate" | "Trust";
       birth_date: string | null;
       needs_grouping_review: boolean;
+      /** Every branch is archived (set_taxpayer_archived). Archived taxpayers stay listed. */
+      archived: boolean;
       branches: Branch[];
   }
   export interface NewTaxpayerInput {
@@ -27897,8 +27929,10 @@ declare module "bir" {
   }
   export function list_taxpayers(): Taxpayer[];
   export function get_taxpayer(tin_root: string): Taxpayer | null;
+  /** Refuses TIN root 000000000 (reserved for the help desk admin). */
   export function create_taxpayer(input: NewTaxpayerInput): Taxpayer;
   export function update_taxpayer(tin_root: string, update: TaxpayerUpdateInput): Taxpayer;
+  /** Refuses TIN root 000000000; moving the solo owner keeps it the admin. */
   export function move_taxpayer_tin(old_root: string, new_root: string): Taxpayer;
   export function create_branch(tin_root: string, input: NewBranchInput): Branch;
   export function update_branch(tin: string, update: BranchUpdateInput): Branch;

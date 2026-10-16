@@ -153,10 +153,12 @@ export class Store {
   }
   authState() {
     return this.read("auth_state", "auth_state", [], {
-      enable_profile_pins: false,
-      has_admin_totp: false,
+      mode: null,
+      admin_root: null,
       has_admin_pin: false,
-      hide_tax_profiles: false,
+      has_admin_totp: false,
+      has_recovery_key: false,
+      mac_login_available: false,
     });
   }
   backgroundJobs() {
