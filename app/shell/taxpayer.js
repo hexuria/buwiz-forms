@@ -42,6 +42,8 @@ import {
   Banner,
   DigitEntry,
   DigitCells,
+  ComboState,
+  ComboField,
 } from "./ui.js";
 import { formatTin, shortDate, daysUntil } from "./store.js";
 import { searchText } from "./library.js";
@@ -55,6 +57,28 @@ const ADDRESS_FIELDS = [
   ["phone", "Phone", false],
   ["email", "Email", true],
 ];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * What is wrong with an RDO, ZIP code or email as typed, or null. Empty is
+ * fine: none of them is required to create a taxpayer or branch.
+ */
+function factError(field, state) {
+  const v = state.value().trim();
+  if (!v) return null;
+  if (field === "rdo_code" && state instanceof ComboState && !state.isKnown()) return "Pick an RDO from the list. Type its code or district to search.";
+  if (field === "zip_code" && !/^\d{4}$/.test(v)) return "ZIP code is 4 digits, like 1226. Type a code or a place to search.";
+  if (field === "email" && !EMAIL_RE.test(v)) return "Type an email like name@example.com.";
+  return null;
+}
+
+/** An RDO or ZIP pick list over the reference lists, other facts a text box. */
+function factState(app, field, value) {
+  if (field === "rdo_code") return new ComboState(app.store.rdoOptions(), value, "Type a code or district, like 050 or Makati");
+  if (field === "zip_code") return new ComboState(app.store.zipOptions(), value, "Type a code or place, like 1226 or Makati");
+  return InputState.new({ value });
+}
 
 /** A host error as one sentence for a toast. */
 function message(e) {
@@ -75,6 +99,8 @@ export class TaxpayerActions {
     this.typeOpen = false;
     this.typeValue = null;
     this.tinError = null;
+    /** Per-field RDO, ZIP and email errors of the section being edited. @type {Record<string, string>} */
+    this.factErrors = {};
     this.panelEdit = null;
     this.forms = null; // staged Set while editing forms
     this.formsQuery = InputState.new({ placeholder: "Find a form, like 1601C or VAT" });
@@ -192,6 +218,7 @@ export class TaxpayerActions {
     const b = this.app.branch();
     this.editSec = sec;
     this.tinError = null;
+    this.factErrors = {};
     this.inputs = {};
     this.inherit = {};
     if (sec === "taxpayer") {
@@ -203,11 +230,11 @@ export class TaxpayerActions {
       // The branch code is edited here (the taxpayer's TIN shows 3 · 3 · 3).
       if (!b.is_head_office) this.inputs.code = new DigitEntry([5], b.code);
       this.inputs.name = InputState.new({ value: b.name });
-      this.inputs.rdo_code = InputState.new({ value: b.facts.rdo_code || "" });
+      this.inputs.rdo_code = factState(this.app, "rdo_code", b.facts.rdo_code || "");
       this.inherit.rdo_code = (b.inherited || []).includes("rdo_code");
     } else if (sec === "address") {
       for (const [f] of ADDRESS_FIELDS) {
-        this.inputs[f] = InputState.new({ value: b.facts[f] || "" });
+        this.inputs[f] = factState(this.app, f, b.facts[f] || "");
         this.inherit[f] = (b.inherited || []).includes(f);
       }
     }
@@ -224,6 +251,14 @@ export class TaxpayerActions {
     const app = this.app;
     const t = app.taxpayer();
     const b = app.branch();
+    this.factErrors = {};
+    for (const f of ["rdo_code", ...ADDRESS_FIELDS.map(([f]) => f)]) {
+      const state = this.inputs[f];
+      if (!state || (!b.is_head_office && this.inherit[f])) continue;
+      const error = factError(f, state);
+      if (error) this.factErrors[f] = error;
+    }
+    if (Object.keys(this.factErrors).length) return cx.notify();
     try {
       if (sec === "taxpayer") {
         const digits = this.inputs.tin.value();
@@ -476,35 +511,92 @@ export class TaxpayerActions {
   // ------------------------------------------------------------ new taxpayer / branch
 
   openNewTaxpayer(cx) {
-    this.newTp = {
+    const app = this.app;
+    const n = {
       tin: new DigitEntry([3, 3, 3]),
       name: InputState.new({ placeholder: "As registered with BIR" }),
       type: "Individual",
       typeOpen: false,
       registered_address: InputState.new({}),
-      zip_code: InputState.new({}),
-      rdo_code: InputState.new({ placeholder: "050" }),
+      zip_code: factState(app, "zip_code", ""),
+      rdo_code: factState(app, "rdo_code", ""),
       phone: InputState.new({}),
-      email: InputState.new({}),
+      email: InputState.new({ placeholder: "name@example.com" }),
       error: null,
+      // A field shows its error once it was left (or filled, for the TIN),
+      // and every field does after the first Create.
+      touched: new Set(),
+      submitted: false,
+      /** Errors the host returned on Create, by field. @type {Record<string, string>} */
+      hostErrors: {},
     };
-    this.app.panel = null;
-    this.app.go("new_taxpayer", cx);
+    const edited = (key) => (cx) => {
+      delete n.hostErrors[key];
+      n.error = null;
+      cx.notify();
+    };
+    n.tin.onChange = (cx) => {
+      if (n.tin.isComplete()) n.touched.add("tin");
+      edited("tin")(cx);
+    };
+    for (const key of ["name", "registered_address", "phone", "email"]) {
+      n[key].on("change", (_e, cx) => edited(key)(cx));
+      n[key].on("blur", (_e, cx) => {
+        n.touched.add(key);
+        cx.notify();
+      });
+    }
+    for (const key of ["zip_code", "rdo_code"]) {
+      n[key].onChange = edited(key);
+      n[key].input.on("blur", (_e, cx) => {
+        n.touched.add(key);
+        cx.notify();
+      });
+    }
+    this.newTp = n;
+    app.panel = null;
+    app.go("new_taxpayer", cx);
+  }
+
+  /** Every problem with the new taxpayer as typed, by field. */
+  newTpProblems() {
+    const n = this.newTp;
+    const e = {};
+    const digits = n.tin.value();
+    if (digits.length !== 9) e.tin = "TIN is 9 digits, like 123-456-789.";
+    else {
+      const taken = this.app.store.taxpayers().find((t) => t.tin_root === digits);
+      if (taken) e.tin = `TIN ${formatTin(digits)} is already ${taken.name}.`;
+    }
+    if (!n.name.value().trim()) e.name = "Type the registered name.";
+    for (const f of ["zip_code", "rdo_code", "email"]) {
+      const error = factError(f, n[f]);
+      if (error) e[f] = error;
+    }
+    return e;
+  }
+
+  /** The errors to show now: touched fields, all after Create, and the host's. */
+  newTpErrors() {
+    const n = this.newTp;
+    const all = this.newTpProblems();
+    const shown = { ...n.hostErrors };
+    for (const [k, v] of Object.entries(all)) {
+      // A TIN already in use is worth saying as soon as it is typed.
+      const duplicate = k === "tin" && n.tin.isComplete();
+      if (n.submitted || n.touched.has(k) || duplicate) shown[k] = shown[k] || v;
+    }
+    return shown;
   }
 
   createTaxpayer(cx) {
     const app = this.app;
     const n = this.newTp;
+    n.submitted = true;
+    n.error = null;
+    if (Object.keys(this.newTpProblems()).length) return cx.notify();
     const digits = n.tin.value();
     const name = n.name.value().trim();
-    if (digits.length !== 9) {
-      n.error = "TIN is 9 digits, like 123-456-789.";
-      return cx.notify();
-    }
-    if (!name) {
-      n.error = "Type the registered name.";
-      return cx.notify();
-    }
     try {
       app.store.write("create_taxpayer", {
         tin_root: digits,
@@ -528,7 +620,9 @@ export class TaxpayerActions {
       app.go("forms", cx);
       app.toast(`${name} added. Add a tax year to choose its forms.`, cx);
     } catch (e) {
-      n.error = message(e);
+      const text = message(e);
+      if (/\bTIN\b/i.test(text)) n.hostErrors.tin = text;
+      else n.error = text;
       cx.notify();
     }
   }
@@ -546,9 +640,11 @@ export class TaxpayerActions {
       inputs: {},
       inherit: {},
       error: null,
+      /** @type {Record<string, string>} */
+      errors: {},
     };
     for (const f of ["rdo_code", ...ADDRESS_FIELDS.map(([f]) => f)]) {
-      this.newBranch.inputs[f] = InputState.new({ value: head ? head.facts[f] || "" : "" });
+      this.newBranch.inputs[f] = factState(this.app, f, head ? head.facts[f] || "" : "");
       this.newBranch.inherit[f] = Boolean(head);
     }
     this.app.panel = null;
@@ -559,15 +655,16 @@ export class TaxpayerActions {
     const app = this.app;
     const nb = this.newBranch;
     const code = nb.code.value();
-    if (!/^\d{5}$/.test(code)) {
-      nb.error = "Branch code is 5 digits, like 00001.";
-      return cx.notify();
-    }
     const name = nb.name.value().trim();
-    if (!name) {
-      nb.error = "Type a branch name, like Cebu branch.";
-      return cx.notify();
+    nb.error = null;
+    nb.errors = {};
+    if (!/^\d{5}$/.test(code)) nb.errors.code = "Branch code is 5 digits, like 00001.";
+    if (!name) nb.errors.name = "Type a branch name, like Cebu branch.";
+    for (const f of Object.keys(nb.inputs)) {
+      const error = nb.inherit[f] ? null : factError(f, nb.inputs[f]);
+      if (error) nb.errors[f] = error;
     }
+    if (Object.keys(nb.errors).length) return cx.notify();
     const fields = {};
     for (const f of Object.keys(nb.inputs)) fields[f] = nb.inherit[f] ? null : nb.inputs[f].value().trim();
     try {
@@ -579,7 +676,9 @@ export class TaxpayerActions {
       app.go("profile", cx);
       app.toast(`${name} added.`, cx);
     } catch (e) {
-      nb.error = message(e);
+      const text = message(e);
+      if (/branch code/i.test(text)) nb.errors.code = text;
+      else nb.error = text;
       cx.notify();
     }
   }
@@ -643,12 +742,19 @@ function profileTab(cx, app, width) {
     let input = null;
     if (editing && ui.inputs[f] instanceof DigitEntry) {
       input = DigitCells(cx, ui.inputs[f], `tp-${sec}-${f}`, { error: Boolean(ui.tinError) });
+    } else if (editing && ui.inputs[f] instanceof ComboState) {
+      input = ComboField(cx, ui.inputs[f], {
+        id: `tp-${sec}-${f}`,
+        label,
+        disabled: inheritable && ui.inherit[f],
+        error: Boolean(ui.factErrors[f]),
+      });
     } else if (editing) {
       input = TextField(cx, ui.inputs[f], {
         id: `tp-${sec}-${f}`,
         label,
         disabled: inheritable && ui.inherit[f],
-        error: f === "tin" && Boolean(ui.tinError),
+        error: (f === "tin" && Boolean(ui.tinError)) || (editing && Boolean(ui.factErrors[f])),
       });
     }
     return {
@@ -656,7 +762,7 @@ function profileTab(cx, app, width) {
       el: Field(cx, label, {
         value,
         input,
-        error: f === "tin" || f === "code" ? ui.tinError : null,
+        error: f === "tin" || f === "code" ? ui.tinError : editing ? ui.factErrors[f] || null : null,
         inherited: !editing && inheritable && inherited(f),
         inheritSwitch:
           editing && inheritable
@@ -1135,9 +1241,14 @@ export function renderNewTaxpayer(cx, app, width) {
   if (app.view === "new_branch") return renderNewBranch(cx, app, width);
   const n = ui.newTp;
   if (!n) return div();
-  const input = (key, label) => ({ el: Field(cx, label, { input: TextField(cx, n[key], { id: `new-tp-${key}`, label }) }) });
+  const errors = ui.newTpErrors();
+  const input = (key, label) => {
+    const opts = { id: `new-tp-${key}`, label, error: Boolean(errors[key]) };
+    const el = n[key] instanceof ComboState ? ComboField(cx, n[key], opts) : TextField(cx, n[key], opts);
+    return { el: Field(cx, label, { input: el, error: errors[key] }) };
+  };
   const cells = [
-    { el: Field(cx, "TIN", { input: DigitCells(cx, n.tin, "new-tp-tin") }) },
+    { el: Field(cx, "TIN", { input: DigitCells(cx, n.tin, "new-tp-tin", { error: Boolean(errors.tin) }), error: errors.tin }) },
     {
       el: Field(cx, "Taxpayer type", {
         input: Dropdown(cx, "new-tp-type", {
@@ -1160,7 +1271,7 @@ export function renderNewTaxpayer(cx, app, width) {
     { ...input("name", "Registered name"), full: true },
     { ...input("registered_address", "Head-office address"), full: true },
     input("zip_code", "ZIP code"),
-    input("rdo_code", "RDO code"),
+    input("rdo_code", "RDO"),
     input("phone", "Phone"),
     input("email", "Email"),
   ];
@@ -1203,16 +1314,19 @@ function renderNewBranch(cx, app, width) {
   const nb = ui.newBranch;
   if (!nb) return div();
   const t = app.taxpayer();
-  const labels = { rdo_code: "RDO code", registered_address: "Registered address", zip_code: "ZIP code", phone: "Phone", email: "Email" };
+  const labels = { rdo_code: "RDO", registered_address: "Registered address", zip_code: "ZIP code", phone: "Phone", email: "Email" };
+  const errors = nb.errors || {};
   const cells = [
-    { el: Field(cx, "Branch code", { input: DigitCells(cx, nb.code, "new-branch-code") }) },
-    { el: Field(cx, "Branch name", { input: TextField(cx, nb.name, { id: "new-branch-name", label: "Branch name" }) }) },
+    { el: Field(cx, "Branch code", { input: DigitCells(cx, nb.code, "new-branch-code", { error: Boolean(errors.code) }), error: errors.code }) },
+    { el: Field(cx, "Branch name", { input: TextField(cx, nb.name, { id: "new-branch-name", label: "Branch name", error: Boolean(errors.name) }), error: errors.name }) },
   ];
   for (const f of Object.keys(nb.inputs)) {
+    const opts = { id: `new-branch-${f}`, label: labels[f], disabled: nb.inherit[f], error: Boolean(errors[f]) };
     cells.push({
       full: f === "registered_address" || f === "email",
       el: Field(cx, labels[f], {
-        input: TextField(cx, nb.inputs[f], { id: `new-branch-${f}`, label: labels[f], disabled: nb.inherit[f] }),
+        input: nb.inputs[f] instanceof ComboState ? ComboField(cx, nb.inputs[f], opts) : TextField(cx, nb.inputs[f], opts),
+        error: errors[f],
         inheritSwitch: Switch(
           cx,
           `new-branch-inherit-${f}`,

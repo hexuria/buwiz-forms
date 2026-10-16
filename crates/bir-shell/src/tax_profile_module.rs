@@ -97,6 +97,9 @@ export function list_form_templates(tin: string): FormTemplateSummary[];
 export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
 export function create_template_from_return(draft_id: number): FormTemplateSummary;
 export function delete_form_template(tin: string, form_code: string): boolean;
+export interface RdoOption { code: string; description: string; }
+export function list_rdos(): RdoOption[];
+export function list_zip_codes(): string[];
 "#;
 
 pub fn register(module: HostModule) -> HostModule {
@@ -120,6 +123,29 @@ pub fn register(module: HostModule) -> HostModule {
         .function("create_template_from_latest", create_template_from_latest)
         .function("create_template_from_return", create_template_from_return)
         .function("delete_form_template", delete_form_template)
+        .function("list_rdos", |_| list_rdos())
+        .function("list_zip_codes", |_| list_zip_codes())
+}
+
+// ---------- reference lists ----------
+
+fn list_rdos() -> HostResult {
+    Ok(HostValue::Array(
+        bir_core::reference::get_all_rdos()
+            .into_iter()
+            .map(|rdo| {
+                HostObject::new()
+                    .field("code", rdo.code)
+                    .field("description", rdo.description)
+                    .into()
+            })
+            .collect(),
+    ))
+}
+
+/// Each entry reads "1000 - Manila CPO - Ermita": the code, then the place.
+fn list_zip_codes() -> HostResult {
+    Ok(strings(bir_core::reference::get_all_zipcodes()))
 }
 
 // ---------- conversion helpers ----------
@@ -971,6 +997,21 @@ mod tests {
         assert_eq!(
             ok(delete_form_template, vec![json!(HEAD), json!("2551Q")]),
             false
+        );
+    }
+
+    #[test]
+    fn reference_lists_carry_codes_and_places() {
+        let rdos = to_json(&list_rdos().unwrap());
+        let rdos = rdos.as_array().unwrap();
+        assert!(rdos.iter().any(|r| r["code"] == "040"));
+        assert!(rdos.iter().all(|r| r["description"].is_string()));
+        let zips = to_json(&list_zip_codes().unwrap());
+        assert!(
+            zips.as_array()
+                .unwrap()
+                .iter()
+                .any(|z| z.as_str().unwrap().starts_with("1000 - "))
         );
     }
 }

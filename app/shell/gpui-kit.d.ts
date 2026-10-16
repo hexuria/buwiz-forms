@@ -27914,6 +27914,9 @@ declare module "bir" {
   export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
   export function create_template_from_return(draft_id: number): FormTemplateSummary;
   export function delete_form_template(tin: string, form_code: string): boolean;
+  export interface RdoOption { code: string; description: string; }
+  export function list_rdos(): RdoOption[];
+  export function list_zip_codes(): string[];
 
   export interface ScreenFormIndexEntry {
       c: string;

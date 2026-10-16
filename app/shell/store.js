@@ -25,6 +25,10 @@ export class Store {
     this.scopeRoot = null;
     /** @type {(root: string) => boolean} */
     this.canSee = (_root) => true;
+    /** @type {{ value: string, label: string }[] | null} */
+    this.rdoList = null;
+    /** @type {{ value: string, label: string }[] | null} */
+    this.zipList = null;
   }
 
   /** Drop every cached read. Call after any write. */
@@ -78,6 +82,27 @@ export class Store {
   }
   screenIndex() {
     return this.read("screen_forms_index", "screen_forms_index", [], []);
+  }
+  /** RDO and ZIP choices as `{ value, label }`. Static, so kept past `bump()`. */
+  rdoOptions() {
+    if (!this.rdoList) {
+      try {
+        this.rdoList = this.call("list_rdos").map((r) => ({ value: r.code, label: `${r.code} - ${r.description}` }));
+      } catch (_e) {
+        return [];
+      }
+    }
+    return this.rdoList;
+  }
+  zipOptions() {
+    if (!this.zipList) {
+      try {
+        this.zipList = this.call("list_zip_codes").map((z) => ({ value: z.split(" - ")[0].trim(), label: z }));
+      } catch (_e) {
+        return [];
+      }
+    }
+    return this.zipList;
   }
   taxpayers() {
     const all = this.read("taxpayers", "list_taxpayers", [], []);

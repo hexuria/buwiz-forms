@@ -10,7 +10,7 @@
 // it must not depend on list position or render order.
 
 import { div, svg } from "gpui-kit";
-import { Input, Popup, OtpInput, OtpState } from "gpui-base";
+import { Input, InputState, Popup, OtpInput, OtpState } from "gpui-base";
 
 // ---------------------------------------------------------------- tokens
 
@@ -716,6 +716,134 @@ export function Dropdown(cx, id, opts) {
   return popup;
 }
 
+/**
+ * A type-to-filter pick list (RDO, ZIP code) over `{ value, label }` options,
+ * where a label reads "050 - South Makati". `value()` and `set_value()` speak
+ * the code, so it stands in for an `InputState` wherever a code is saved; the
+ * text box shows the whole label. Text that matches no label is kept as
+ * typed, for the caller to validate.
+ */
+export class ComboState {
+  constructor(options, value = "", placeholder = "Type to search") {
+    this.options = options;
+    this.open = false;
+    /** Called after the person types or picks. @type {((cx: any) => void) | null} */
+    this.onChange = null;
+    this.input = InputState.new({ placeholder, value: this.labelOf(value) });
+    this.input.on("change", (_e, cx) => {
+      this.open = true;
+      if (this.onChange) this.onChange(cx);
+      cx.notify();
+    });
+    this.input.on("focus", (_e, cx) => {
+      this.open = true;
+      cx.notify();
+    });
+    this.input.on("submit", (_e, cx) => {
+      const first = this.matches()[0];
+      if (first && this.open) this.pick(first, cx);
+    });
+  }
+
+  labelOf(code) {
+    const o = this.options.find((x) => x.value === code);
+    return o ? o.label : code || "";
+  }
+
+  value() {
+    const text = this.input.value().trim();
+    const o = this.options.find((x) => x.label === text || x.value === text);
+    if (o) return o.value;
+    const m = /^(\S+)\s+-\s/.exec(text);
+    return m ? m[1] : text;
+  }
+
+  set_value(code) {
+    this.input.set_value(this.labelOf(String(code || "")));
+  }
+
+  /** True when the text is empty or names one of the options. */
+  isKnown() {
+    const v = this.value();
+    return !v || this.options.some((x) => x.value === v);
+  }
+
+  /** Options whose label holds every typed word; all of them once one is picked. */
+  matches(limit = 60) {
+    const text = this.input.value().trim().toLowerCase();
+    if (!text || this.options.some((x) => x.label.toLowerCase() === text)) return this.options.slice(0, limit);
+    const words = text.split(/\s+/);
+    const out = [];
+    for (const o of this.options) {
+      const label = o.label.toLowerCase();
+      if (words.every((w) => label.includes(w))) out.push(o);
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  pick(option, cx) {
+    this.input.set_value(option.label);
+    this.open = false;
+    if (this.onChange) this.onChange(cx);
+    cx.notify();
+  }
+
+  close(cx) {
+    if (!this.open) return;
+    this.open = false;
+    cx.notify();
+  }
+}
+
+/** The text box of a `ComboState` with its filtered list anchored below. */
+export function ComboField(cx, state, opts = {}) {
+  const t = tokens(cx);
+  const id = opts.id || "combo";
+  const trigger = div().w_full().child(TextField(cx, state.input, { ...opts, id: `${id}-input` }));
+  const popup = Popup.new(id, trigger).anchor("top_left");
+  if (state.open && !opts.disabled) {
+    const list = div()
+      .id(`${id}-list`)
+      .flex()
+      .flex_col()
+      .gap(2)
+      .mt(SPACE[1])
+      .p(SPACE[1])
+      .w(opts.menuWidth || 320)
+      .max_h(280)
+      .overflow_y_scroll()
+      .rounded(RADIUS.card)
+      .border(1)
+      .border_color(t.border)
+      .bg(t.raised)
+      .shadow_lg()
+      .on_mouse_down_out((_e, cx) => state.close(cx));
+    const found = state.matches();
+    if (!found.length) list.child(div().px(SPACE[2]).py(6).child(Text(cx, "meta", "No match. Try a code or a place name.", "fg3")));
+    const current = state.value();
+    found.forEach((option, i) => {
+      list.child(
+        div()
+          .id(`${id}-opt-${i}`)
+          .flex()
+          .items_center()
+          .min_h(SIZE.controlSm)
+          .flex_shrink(0)
+          .px(SPACE[2])
+          .rounded(RADIUS.ctl)
+          .cursor_pointer()
+          .when(option.value === current, (el) => el.bg(t.selected))
+          .hover((s) => s.bg(t.hover))
+          .on_click((_e, cx) => state.pick(option, cx))
+          .child(Text(cx, "body", option.label).whitespace_normal()),
+      );
+    });
+    popup.content(list);
+  }
+  return popup;
+}
+
 // ---------------------------------------------------------------- field
 
 /**
@@ -749,7 +877,7 @@ export function Field(cx, label, opts = {}) {
   const body = div().min_w(0);
   if (opts.input) {
     body.child(opts.input);
-    if (opts.error) body.child(Text(cx, "meta", opts.error, "danger").mt(SPACE[1]));
+    if (opts.error) body.child(Text(cx, "meta", opts.error, "danger").mt(SPACE[1]).whitespace_normal());
   } else {
     const empty = opts.value === undefined || opts.value === null || opts.value === "";
     body.child(
@@ -973,10 +1101,12 @@ export function Banner(cx, id, children) {
  * and trailing actions.
  */
 export function PageHeader(cx, opts) {
-  const text = div().flex().flex_col().flex_1().min_w(0).child(PageTitle(cx, opts.title));
+  // A floor on the text column: with min_w(0) a narrow pane squeezed the title
+  // to one glyph per line instead of wrapping the actions below it.
+  const text = div().flex().flex_col().flex_1().min_w(180).child(PageTitle(cx, opts.title));
   if (opts.meta) text.child(div().mt(2).child(opts.meta));
   if (opts.lede) text.child(Text(cx, "body", opts.lede, "fg2").mt(6).whitespace_normal());
-  const row = div().flex().flex_row().items_center().gap(14).w_full();
+  const row = div().flex().flex_row().flex_wrap().items_center().gap(14).w_full();
   if (opts.avatar) row.child(opts.avatar);
   row.child(text);
   if (opts.actions && opts.actions.length) {
@@ -1256,7 +1386,6 @@ export function DigitCells(cx, entry, id, opts = {}) {
     if (i) row.child(Text(cx, "body", "-", "fg3"));
     row.child(
       OtpInput.new(g)
-        .id(`${id}-${i}`)
         .flex()
         .gap(3)
         .cell_style((cell) =>
