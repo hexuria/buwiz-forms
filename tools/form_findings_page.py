@@ -165,6 +165,8 @@ def render(code):
     printed = "".join(f'<img src="{p}" alt="print preview page {i + 1}" loading="lazy">' for i, p in enumerate(prints))
     total = sum(1 for key, _, _ in SECTIONS for f in data["rules"][key]["findings"] if f["id"] not in dropped) + len(manual)
     notes = data.get("review_notes", "").strip()
+    manifest = OUT / "manifest.json"
+    index_url = json.loads(manifest.read_text()).get("index_url", "") if manifest.exists() else ""
     page = f"""<title>{esc(code)} Form Findings</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -173,6 +175,7 @@ def render(code):
 <div class="wrap">
 <header style="display:flex;flex-direction:column;gap:8px">
 <span class="badge" style="align-self:flex-start">BIR Form {esc(code)} · revision {esc(data.get("revision"))}</span>
+{f'<a href="{esc(index_url)}" style="font-size:13px">← All forms</a>' if index_url else ""}
 <h1>{esc(code)} findings</h1>
 <p class="lede">{esc(data.get("title"))}. Checked against the <a href="{RULES_URL}">approved rules</a>: the form page, the print preview and validation. {total} thing(s) to fix. Nothing has been changed yet.</p>
 </header>

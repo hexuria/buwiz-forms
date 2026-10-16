@@ -358,7 +358,7 @@ def analyse(form, runtime):
     r7f = []
     # A box whose label says it is a name, phone, TIN, code or number of
     # sheets is never an amount, whatever fields.json says.
-    amountish = re.compile(r"(?i)amount|tax|income|total|rate|payment|remittance|price|value|sales|credit|due|paid|withheld|base|fee|cost|deduction|penalt|export|taxable|exempt")
+    amountish = re.compile(r"(?i)amount|\btax(es)?\b|withholding tax|income|total|rate|payment|remittance|price|value|sales|credit|due|paid|withheld|base|fee|cost|deduction|penalt|export|taxable|exempt")
     not_amount = re.compile(r"(?i)\b(name|contact|telephone|phone|tin\b|code|number\b|no\. of|sheets?|foreign tax number|agency|activity|specify)")
     wrong = [k for k, f in fields.items() if f.get("t") == "money" and not amountish.search(f.get("l", "")) and (
         (lt(k) and lt(k) not in MONEY_TYPES and lt(k) not in ("decimal", "decimal-or-string"))
