@@ -158,7 +158,7 @@ def analyse(form, runtime):
     for k, f in fields.items():
         v = str(values.get(k, "")).strip()
         is_period = lt(k) in DATE_TYPES or (PERIOD_KEY.search(k.split(":")[-1]) and f.get("t") in ("sel", "int", "radio", "date", "text"))
-        if is_period and v and v not in ("false", "0", "00") and k not in profile and not re.search(r"(?i)birth", k):
+        if is_period and v and v not in ("false", "0", "00") and k not in profile and f.get("t") != "money" and not re.search(r"(?i)birth|incorporat|start", k):
             r1.append((k, v))
     r1f = []
     if r1:
@@ -226,6 +226,37 @@ def analyse(form, runtime):
             r3f.append(finding(f"'{p['n']}' has {len(groups)} unnumbered 'Additional details' group(s) with {len(keys)} box(es).",
                                "screen items without a printed number", keys, p["n"],
                                "Place each box under its printed item, or in 'Not on the printed sheet' if the paper has none."))
+    # Label quality (seen on many forms by hand): headings that repeat their
+    # options, options that repeat their question, cut words, lost ordinals,
+    # trailing item numbers and key text shown as a label.
+    lab = defaultdict(list)
+    keyish_words = re.compile(r"(?i)\b(txt|opt|chk|drp|pg\d+|sched\d+|slot \d+|row 0|selection|[a-z]+\d+[a-z]+\d*|\d+(?!st\b|nd\b|rd\b|th\b)[a-z]{2,}\d*)\b")
+    camel = re.compile(r"\b[a-z]+[A-Z][a-zA-Z]*\b")
+    keyish = type("K", (), {"search": staticmethod(lambda t: keyish_words.search(t) or camel.search(t))})
+    for p in parts:
+        for it in p["items"]:
+            head, fs = it["l"].strip(), it.get("f", [])
+            opts = [f for f in fs if f.get("t") in ("radio", "check")]
+            ol = [f.get("l", "").strip() for f in opts]
+            if len(ol) >= 2 and all(o and head.lower().endswith(o.lower()) or o.lower() in head.lower().split()[-3:] for o in ol[-1:]) and len(head.split()) > len(ol[-1].split()) + 1:
+                lab["heading repeats its options"].append((it["no"], head, fs[0]["k"]))
+            pref = [o for o in ol if head and len(head) > 6 and o.lower().startswith(head.lower()[:min(len(head), 18)])]
+            if pref or (len(ol) >= 2 and len(set(o.split(" ")[0] for o in ol)) == 1 and len(ol[0].split()) > 2):
+                lab["options repeat their question or a prefix"].append((it["no"], " / ".join(ol[:3]), opts[0]["k"]))
+            words = head.split()
+            if words and re.fullmatch(r"[a-z]{1,2}\*?", words[-1].rstrip("*")) and words[-1].rstrip("*") not in ("of", "to", "in", "on", "or", "by", "is", "an", "a"):
+                lab["caption cut mid-word"].append((it["no"], head[-40:], fs[0]["k"] if fs else ""))
+            if re.search(r"(?<!\d)(st|nd|rd|th) (Month|Quarter)", head) and not re.search(r"\d(st|nd|rd|th) ", head):
+                lab["ordinal lost ('st Month')"].append((it["no"], head[-40:], fs[0]["k"] if fs else ""))
+            if it["no"] and re.search(r"\s" + re.escape(it["no"]) + r"\s*\*?$", head):
+                lab["heading ends with its own item number"].append((it["no"], head[-40:], fs[0]["k"] if fs else ""))
+            for f in fs:
+                if keyish.search(f.get("l", "")) and not re.search(r"(?i)tin|atc|rdo code|zip", f.get("l", "")):
+                    lab["label is key text"].append((it["no"], f.get("l", ""), f["k"]))
+    for what, xs in lab.items():
+        r3f.append(finding(f"Labels: {what} ({len(xs)}), e.g. " + "; ".join(f"{no or '–'} '{t[:45]}'" for no, t, _ in xs[:4]) + ".",
+                           "screen labels (tmp/form-findings/screen.json)", [k for _, _, k in xs if k], "",
+                           "Use the printed captions and plain option names."))
     nf = rt.get("v_never_fillable_but_printed", [])
     if nf:
         r3f.append(finding(f"{len(nf)} printed box(es) the page cannot fill: "
@@ -309,10 +340,10 @@ def analyse(form, runtime):
     # Only conditions the filer controls: skip the official runtime's own
     # states (static-disabled boxes, ATC modal slots) and boxes the page
     # locks anyway (computed or profile).
-    internal = re.compile(r"(?i)disabled in the static form|rendered in the|runtime|modal|ui state")
+    internal = re.compile(r"(?i)disabled in the static form|rendered in the|runtime|modal|ui state|while editing|after successful validate|identity-owned|official edit path|official dependency/state transition")
     for k in fields:
         ew = (fj.get(k) or {}).get("enabled_when")
-        if ew and not internal.search(ew) and not fields[k].get("c") and k not in profile and not re.search(r"(?i)birth", k):
+        if ew and not internal.search(ew) and not fields[k].get("c") and k not in profile and not re.search(r"(?i)birth|incorporat|start", k):
             cond[ew].append(k)
     r6f = []
     for ew, ks in sorted(cond.items(), key=lambda x: -len(x[1]))[:25]:
@@ -325,7 +356,13 @@ def analyse(form, runtime):
 
     # R7 number formatting
     r7f = []
-    wrong = [k for k, f in fields.items() if f.get("t") == "money" and lt(k) and lt(k) not in MONEY_TYPES and lt(k) not in ("decimal", "decimal-or-string")]
+    # A box whose label says it is a name, phone, TIN, code or number of
+    # sheets is never an amount, whatever fields.json says.
+    amountish = re.compile(r"(?i)amount|tax|income|total|rate|payment|remittance|price|value|sales|credit|due|paid|withheld|base|fee|cost|deduction|penalt|export|taxable|exempt")
+    not_amount = re.compile(r"(?i)\b(name|contact|telephone|phone|tin\b|code|number\b|no\. of|sheets?|foreign tax number|agency|activity|specify)")
+    wrong = [k for k, f in fields.items() if f.get("t") == "money" and not amountish.search(f.get("l", "")) and (
+        (lt(k) and lt(k) not in MONEY_TYPES and lt(k) not in ("decimal", "decimal-or-string"))
+        or not_amount.search(f.get("l", "")))]
     if wrong:
         r7f.append(finding(f"{len(wrong)} non-amount box(es) are formatted as money: "
                            + "; ".join(f"{fields[k].get('l', '')[:30]} ({lt(k)})" for k in wrong[:5]) + ".",

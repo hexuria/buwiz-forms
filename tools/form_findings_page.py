@@ -91,7 +91,11 @@ def jpeg(src, dst, width=900, crop=None):
 def copy_shots(code, slug):
     d = OUT / code / "shots"
     names = []
-    for png in sorted((SHOTS / code).glob("p*.png")):
+    def order(png):
+        pi, a = png.stem[1:].split("-")
+        return int(pi), int(a)
+
+    for png in sorted((SHOTS / code).glob("p*.png"), key=order):
         out = d / (png.stem + ".jpg")
         if not out.exists() or out.stat().st_mtime < png.stat().st_mtime:
             # Drop the sidebar and the form's title band: the solo part's
