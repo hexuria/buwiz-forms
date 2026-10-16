@@ -76,6 +76,9 @@ def main():
         f'<div class="codes">{"".join(f"<a class=badge href={chr(34)}{esc(urls.get(c, chr(35)))}{chr(34)}>{esc(c)}</a>" for c in t["forms"])}</div></li>'
         for t in themes)
 
+    priority = (f' <a href="{esc(manifest["priority_url"])}">What to fix first →</a>'
+                if manifest.get("priority_url") else "")
+
     page = f"""<title>Form Page Findings</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -86,7 +89,7 @@ def main():
 <span class="badge" style="align-self:flex-start">{len(forms)} BIR forms · checked {esc(max(e["published"] for e in manifest["forms"].values()))}</span>
 <h1>Form page findings</h1>
 <p class="lede">Every form page, print preview and validation, checked against the <a href="{RULES_URL}">approved rules</a>.
-{total} thing(s) to fix across {len(forms)} forms, each with its picture on the form's own page. Nothing has been changed yet.</p>
+{total} thing(s) to fix across {len(forms)} forms, each with its picture on the form's own page. Nothing has been changed yet.{priority}</p>
 </header>
 <nav class="tiles" aria-label="Rules">{"".join(tiles)}</nav>
 {f'<section class="sec"><h2>What repeats across forms</h2><p class="ask">Fix these as one change each; the badges open the form pages that show them.</p><ul class="themes">{theme_items}</ul></section>' if themes else ""}

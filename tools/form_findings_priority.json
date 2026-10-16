@@ -1,0 +1,160 @@
+{
+  "as_of": "2026-10-17",
+  "note": "Order: Q3 quarterly due in October, monthly (October period), the rest of Q3 quarterly (November), yearly, as needed. Dates are the statutory deadlines for the 2026 Q3 / October periods; one that falls on a weekend or holiday moves to the next working day.",
+  "prs": [
+    {
+      "id": "PR 0",
+      "wave": "shared",
+      "name": "Shared shell fixes",
+      "why": "One change in the shell fixes every form below, the Q3 forms included.",
+      "branch": "fix/findings-shared-profile-and-library",
+      "shared": [
+        {"rule": "R2", "what": "Profile boxes get Edit on hover; a blank profile box stays open", "forms": 43},
+        {"rule": "R1", "what": "Form library opens with no year, month, quarter or date filled", "forms": 40}
+      ],
+      "forms": []
+    },
+    {
+      "id": "PR 1",
+      "wave": "q3oct",
+      "name": "Q3 business taxes",
+      "why": "Due first: October 25.",
+      "branch": "fix/findings-q3-2551q-2550q",
+      "forms": [
+        {"code": "2551Q", "due": "Oct 25", "worst": "A new, empty return already owes a ₱1,000 penalty"},
+        {"code": "2550Q", "due": "Oct 25", "worst": "TIN shows the branch code first; the VAT computation lines are not on the page", "note": "UI fixes only. Its v2 rules stay test-only and are never promoted."}
+      ]
+    },
+    {
+      "id": "PR 2",
+      "wave": "q3oct",
+      "name": "Q3 withholding remittances",
+      "why": "Due October 31.",
+      "branch": "fix/findings-q3-withholding",
+      "forms": [
+        {"code": "1601EQ", "due": "Oct 31", "worst": "111 stray tick boxes; item 24 is missing"},
+        {"code": "1601FQ", "due": "Oct 31", "worst": "Penalties locked; ATC rows drawn inside Part I"},
+        {"code": "1602Q", "due": "Oct 31", "worst": "Item 18 label broken; a dropdown shows a raw '0'"},
+        {"code": "1603Q", "due": "Oct 31", "worst": "Schedule I is split across item 4 and a loose group"}
+      ]
+    },
+    {
+      "id": "PR 3",
+      "wave": "monthly",
+      "name": "Monthly withholding",
+      "why": "October-period returns, due November 10.",
+      "branch": "fix/findings-monthly-withholding",
+      "forms": [
+        {"code": "1601C", "due": "Nov 10", "worst": "Payment rows all locked; internal page counters shown"},
+        {"code": "0619E", "due": "Nov 10", "worst": "Agent type stuck on Private; due-date day can disagree with the month"},
+        {"code": "0619F", "due": "Nov 10", "worst": "Payment rows merged into one locked table; agent type stuck on Private"},
+        {"code": "1600VT", "due": "Nov 10", "worst": "ATC rows drawn inside Part I; two RDO boxes"},
+        {"code": "1600PT", "due": "Nov 10", "worst": "ATC rows drawn inside Part I; two RDO boxes"},
+        {"code": "1600WP", "due": "Nov 10", "worst": "Item 11 is missing; the payee list is folded away"}
+      ]
+    },
+    {
+      "id": "PR 4",
+      "wave": "monthly",
+      "name": "Monthly stamp, percentage and VAT",
+      "why": "DST is due November 5; the others November 20.",
+      "branch": "fix/findings-monthly-dst-pt-vat",
+      "forms": [
+        {"code": "2000", "due": "Nov 5", "worst": "Schedules hidden in folds; RDO missing"},
+        {"code": "2553", "due": "Nov 20", "worst": "Pre-printed rows (PAGCOR, Clark…) not shown; payment part missing"},
+        {"code": "2550M", "due": "Nov 20", "worst": "Month and year captions swapped; payment part missing", "note": "Monthly VAT filing stopped being required in 2023, so this one can wait."}
+      ]
+    },
+    {
+      "id": "PR 5",
+      "wave": "q3nov",
+      "name": "Q3 income tax",
+      "why": "The rest of Q3: November 15 and 29.",
+      "branch": "fix/findings-q3-income-tax",
+      "forms": [
+        {"code": "1701Q", "due": "Nov 15", "worst": "A sheet instruction is used as item 43's heading; spouse deduction method offers Yes/No"},
+        {"code": "1702Q", "due": "Nov 29", "worst": "Schedules 1-4 squeezed into Part II as loose items"}
+      ]
+    },
+    {
+      "id": "PR 6",
+      "wave": "yearly",
+      "name": "Year-end information returns",
+      "why": "January 31 and March 1.",
+      "branch": "fix/findings-annual-1604",
+      "forms": [
+        {"code": "1604C", "due": "Jan 31", "worst": "RDO missing; months numbered 1-12 instead of January-December"},
+        {"code": "1604F", "due": "Jan 31", "worst": "Schedules inside Part I; two email boxes"},
+        {"code": "1604E", "due": "Mar 1", "worst": "Schedules inside Part I with clipped headings"}
+      ]
+    },
+    {
+      "id": "PR 7",
+      "wave": "yearly",
+      "name": "Annual income tax, individuals",
+      "why": "April 15. Shares the civil-status fix (married-only lines).",
+      "branch": "fix/findings-annual-individual",
+      "forms": [
+        {"code": "1701", "due": "Apr 15", "worst": "35 findings: schedules scattered; foreign tax number shown as money"},
+        {"code": "1701A", "due": "Apr 15", "worst": "RDO missing; foreign tax number shown as money"},
+        {"code": "1700", "due": "Apr 15", "worst": "Married-only lines are always open"},
+        {"code": "1701MS", "due": "Apr 15", "worst": "Opening from the library shows 'Future filing is not allowed'"}
+      ]
+    },
+    {
+      "id": "PR 8",
+      "wave": "yearly",
+      "name": "Annual income tax, corporations",
+      "why": "April 15.",
+      "branch": "fix/findings-annual-corporate",
+      "forms": [
+        {"code": "1702RT", "due": "Apr 15", "worst": "Boxes merged across parts by item number"},
+        {"code": "1702MX", "due": "Apr 15", "worst": "33 findings: parts named 'Page 5', 'Page 6'…"},
+        {"code": "1702EX", "due": "Apr 15", "worst": "Phone number shown as ₱280,000,000.00"},
+        {"code": "1707A", "due": "Apr 15", "worst": "The 'RDO Code' box holds the phone number"}
+      ]
+    },
+    {
+      "id": "PR 9",
+      "wave": "asneeded",
+      "name": "Payments, property and shares",
+      "why": "Filed only when a payment or sale happens.",
+      "branch": "fix/findings-as-needed-transfers",
+      "forms": [
+        {"code": "0605", "due": "as needed", "worst": "Labels cut; options shown as '1' and '2'"},
+        {"code": "1606", "due": "as needed", "worst": "Buyer and seller TINs are loose boxes"},
+        {"code": "1706", "due": "as needed", "worst": "ATC codes differ from the printed sheet"},
+        {"code": "1707", "due": "as needed", "worst": "Tax rate shows 0.00 where the sheet prints 15%"},
+        {"code": "2000OT", "due": "as needed", "worst": "Tax rate shown as a peso amount"},
+        {"code": "2552", "due": "as needed", "worst": "Transaction rows folded away (154 fields)"}
+      ]
+    },
+    {
+      "id": "PR 10",
+      "wave": "asneeded",
+      "name": "Donor's and estate tax",
+      "why": "Filed only after a donation or a death.",
+      "branch": "fix/findings-as-needed-donor-estate",
+      "forms": [
+        {"code": "1801", "due": "as needed", "worst": "Date of death shows '00/00/00' and an error before anything is typed"},
+        {"code": "1800", "due": "as needed", "worst": "Schedules inside Part IV; items 15 and 37 missing"}
+      ]
+    },
+    {
+      "id": "PR 11",
+      "wave": "asneeded",
+      "name": "Excise taxes (2200 family)",
+      "why": "Filed per removal. Same layout, so one PR.",
+      "branch": "fix/findings-as-needed-excise",
+      "forms": [
+        {"code": "2200S", "due": "as needed", "worst": "Penalties locked at 0.00"},
+        {"code": "2200T", "due": "as needed", "worst": "Still shows 2020 and 2021 rate rows"},
+        {"code": "2200A", "due": "as needed", "worst": "Payment items folded away"},
+        {"code": "2200AN", "due": "as needed", "worst": "Payment part missing"},
+        {"code": "2200C", "due": "as needed", "worst": "ATC has no box; payment part missing"},
+        {"code": "2200M", "due": "as needed", "worst": "Place of production and removal folded away"},
+        {"code": "2200P", "due": "as needed", "worst": "Contact, email and places folded away"}
+      ]
+    }
+  ]
+}
