@@ -154,6 +154,8 @@ const ZOOM_STEPS: [f32; 9] = [0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0];
 #[derive(Clone, Copy, PartialEq)]
 enum PdfState {
     Loading,
+    // Only macOS turns the loaded sheet into a PDF (mac::generate_pdf).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Generating(Instant),
     Ready,
     Failed,
