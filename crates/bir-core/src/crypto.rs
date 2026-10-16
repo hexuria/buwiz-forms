@@ -164,6 +164,50 @@ pub fn hash_pin(pin: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+/// Crockford base32: no I, L, O or U, so a key read aloud or retyped from
+/// paper cannot be confused.
+const CROCKFORD_ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// A fresh admin recovery key: 80 random bits as 16 Crockford base32
+/// characters, grouped `XXXX-XXXX-XXXX-XXXX`.
+pub fn generate_recovery_key() -> String {
+    let bytes = rand::random::<[u8; 10]>();
+    let mut bits: u128 = 0;
+    for byte in bytes {
+        bits = (bits << 8) | u128::from(byte);
+    }
+    let mut key = String::with_capacity(19);
+    for index in 0..16 {
+        if index > 0 && index % 4 == 0 {
+            key.push('-');
+        }
+        let symbol = (bits >> (75 - 5 * index)) & 0x1f;
+        key.push(CROCKFORD_ALPHABET[symbol as usize] as char);
+    }
+    key
+}
+
+/// A typed recovery key in canonical form: dashes and whitespace dropped,
+/// upper-cased, and Crockford's look-alikes folded (O -> 0, I/L -> 1).
+pub fn normalize_recovery_key(raw: &str) -> String {
+    raw.chars()
+        .filter(|ch| !ch.is_whitespace() && *ch != '-')
+        .map(|ch| match ch.to_ascii_uppercase() {
+            'O' => '0',
+            'I' | 'L' => '1',
+            other => other,
+        })
+        .collect()
+}
+
+/// The stored form of a recovery key (only the hash is ever kept).
+pub fn hash_recovery_key(raw: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(normalize_recovery_key(raw).as_bytes());
+    hasher.update(b"e-birforms-recovery-key-2026");
+    hex::encode(hasher.finalize())
+}
+
 pub fn generate_totp_secret(account_name: &str) -> (String, std::path::PathBuf) {
     use totp_rs::{Algorithm, Secret, TOTP};
     let secret = Secret::generate_secret().to_bytes().unwrap();
@@ -206,6 +250,34 @@ pub fn validate_totp(secret: &str, token: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn recovery_keys_are_grouped_crockford_and_typo_tolerant() {
+        let key = super::generate_recovery_key();
+        assert_eq!(key.len(), 19);
+        let groups: Vec<&str> = key.split('-').collect();
+        assert_eq!(groups.len(), 4);
+        assert!(groups.iter().all(|group| {
+            group.len() == 4
+                && group
+                    .bytes()
+                    .all(|byte| super::CROCKFORD_ALPHABET.contains(&byte))
+        }));
+        assert_ne!(key, super::generate_recovery_key());
+        let typed = format!(" {} ", key.to_lowercase().replace('-', " "));
+        assert_eq!(
+            super::hash_recovery_key(&typed),
+            super::hash_recovery_key(&key)
+        );
+        assert_eq!(
+            super::hash_recovery_key("o1l0-AAAA-BBBB-CCCC"),
+            super::hash_recovery_key("0110AAAABBBBCCCC")
+        );
+        assert_ne!(
+            super::hash_recovery_key("0000-0000-0000-0001"),
+            super::hash_recovery_key(&key)
+        );
+    }
+
     use super::*;
     use std::fs;
 

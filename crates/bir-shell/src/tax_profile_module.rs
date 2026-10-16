@@ -45,6 +45,8 @@ export interface Taxpayer {
     taxpayer_type: "Individual" | "Corporation" | "Partnership" | "Cooperative" | "Estate" | "Trust";
     birth_date: string | null;
     needs_grouping_review: boolean;
+    /** Every branch is archived (set_taxpayer_archived). Archived taxpayers stay listed. */
+    archived: boolean;
     branches: Branch[];
 }
 export interface NewTaxpayerInput {
@@ -80,8 +82,10 @@ export interface FormTemplateSummary {
 }
 export function list_taxpayers(): Taxpayer[];
 export function get_taxpayer(tin_root: string): Taxpayer | null;
+/** Refuses TIN root 000000000 (reserved for the help desk admin). */
 export function create_taxpayer(input: NewTaxpayerInput): Taxpayer;
 export function update_taxpayer(tin_root: string, update: TaxpayerUpdateInput): Taxpayer;
+/** Refuses TIN root 000000000; moving the solo owner keeps it the admin. */
 export function move_taxpayer_tin(old_root: string, new_root: string): Taxpayer;
 export function create_branch(tin_root: string, input: NewBranchInput): Branch;
 export function update_branch(tin: string, update: BranchUpdateInput): Branch;
@@ -282,6 +286,7 @@ fn taxpayer_record(entry: &TaxpayerWithBranches) -> HostValue {
                 .as_ref()
                 .is_some_and(|review| review.needs_review()),
         )
+        .field("archived", taxpayer.archived)
         .field(
             "branches",
             HostValue::Array(entry.branches.iter().map(branch_record).collect()),
@@ -393,6 +398,14 @@ fn move_taxpayer_tin(arguments: &HostArguments) -> HostResult {
         let moved = db
             .move_taxpayer_tin(old_root, new_root)
             .map_err(host_error)?;
+        // The solo owner is the admin: its new root stays the admin root.
+        let old = bir_core::tax_profile::parse_tin_root(old_root).map_err(host_error)?;
+        if db.get_setting("access_mode").ok().flatten().as_deref() == Some("solo")
+            && db.get_setting("admin_tin_root").ok().flatten().as_deref() == Some(old.as_str())
+        {
+            db.set_setting("admin_tin_root", &moved.taxpayer.tin_root)
+                .map_err(|error| HostError::new(error.to_string()))?;
+        }
         Ok(taxpayer_record(&moved))
     })
 }
@@ -752,6 +765,33 @@ mod tests {
             refused.unwrap_err(),
             "TIN 123-456-788 is already used by Sample Holdings Inc"
         );
+    }
+
+    #[test]
+    fn the_help_desk_root_is_refused_and_a_moved_owner_stays_the_admin() {
+        let created = setup();
+        assert_eq!(created["archived"], false);
+        let reserved = "TIN 000-000-000 is reserved for the help desk admin.";
+        let refused = call(
+            create_taxpayer,
+            vec![
+                json!({"tin_root": "000-000-000", "name": "Help desk", "taxpayer_type": "Individual",
+                "head_office": {}}),
+            ],
+        );
+        assert_eq!(refused.unwrap_err(), reserved);
+        let refused = call(move_taxpayer_tin, vec![json!(ROOT), json!("000000000")]);
+        assert_eq!(refused.unwrap_err(), reserved);
+
+        with_database(|db| {
+            db.set_setting("access_mode", "solo").unwrap();
+            db.set_setting("admin_tin_root", ROOT).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        ok(move_taxpayer_tin, vec![json!(ROOT), json!("987654320")]);
+        let admin_root = with_database(|db| Ok(db.get_setting("admin_tin_root").unwrap())).unwrap();
+        assert_eq!(admin_root.as_deref(), Some("987654320"));
     }
 
     #[test]

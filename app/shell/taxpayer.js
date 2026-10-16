@@ -8,7 +8,7 @@
 // file only shapes input and reports what the data layer answers.
 
 import { div } from "gpui-kit";
-import { InputState, OtpState } from "gpui-base";
+import { InputState } from "gpui-base";
 import {
   tokens,
   SPACE,
@@ -35,7 +35,8 @@ import {
   NameCell,
   EmptyRow,
   SettingRow,
-  PinCells,
+  Card,
+  SectionTitle,
   PageHeader,
   MetaLine,
   Tabs,
@@ -92,7 +93,7 @@ function message(e) {
 export class TaxpayerActions {
   constructor(app) {
     this.app = app;
-    this.open = { taxpayer: true, branch: true, address: true, security: false };
+    this.open = { taxpayer: true, branch: true, address: true };
     this.editSec = null;
     this.inputs = {};
     this.inherit = {};
@@ -112,79 +113,56 @@ export class TaxpayerActions {
     this.addYearOpen = false;
     this.newTp = null;
     this.newBranch = null;
-    // Taxpayer security (Profile › Security): one PIN per taxpayer.
-    this.pinOtp = OtpState.new(4, { masked: true });
-    this.totpOtp = OtpState.new(6);
-    this.totpSecret = null;
+    this.deleteArmed = false;
   }
 
-  /** PIN and authenticator of the selected taxpayer, shared by every branch. */
-  auth() {
-    const t = this.app.taxpayer();
-    return t ? this.app.taxpayerCreds(t.tin_root) : {};
-  }
-
-  setPin(cx) {
+  /** Archive and delete: the admin only, never on the admin's own account. */
+  canRemove() {
     const app = this.app;
-    const pin = this.pinOtp.value();
-    if (pin.length !== 4) return app.toast("Type all 4 digits of the new PIN first.", cx, "lock");
+    const t = app.taxpayer();
+    return Boolean(t) && app.isAdmin() && t.tin_root !== app.adminRoot();
+  }
+
+  toggleArchive(cx) {
+    const app = this.app;
+    const t = app.taxpayer();
     try {
-      const root = app.taxpayer().tin_root;
-      app.store.write("set_taxpayer_pin", root, pin);
-      // Whoever sets the PIN is already in: it is asked from the next visit.
-      app.unlockedRoots.add(root);
-      this.pinOtp.set_value("");
-      app.toast(app.store.authState().enable_profile_pins ? "PIN saved." : "PIN saved. Turn on Taxpayer PINs in Settings to ask for it.", cx, "lock");
+      app.store.write("set_taxpayer_archived", t.tin_root, !t.archived);
+      app.toast(t.archived ? `${t.name} is back in new work.` : `${t.name} archived.`, cx, "archive");
     } catch (e) {
       app.toast(message(e), cx, "triangle-alert");
     }
   }
 
-  clearPin(cx) {
-    try {
-      this.app.store.write("set_taxpayer_pin", this.app.taxpayer().tin_root, null);
-      this.app.toast("PIN removed.", cx, "lock");
-    } catch (e) {
-      this.app.toast(message(e), cx, "triangle-alert");
-    }
+  disarmDelete(cx) {
+    this.deleteArmed = false;
+    cx.notify();
   }
 
-  startTotp(cx) {
-    try {
-      const t = this.app.taxpayer();
-      this.totpSecret = this.app.store.call("generate_totp_secret", `eBIRForms ${t.tin_display || t.tin_root}`).secret;
-      this.totpOtp.set_value("");
-      cx.notify();
-    } catch (e) {
-      this.app.toast(message(e), cx, "triangle-alert");
+  /** First press arms it; the second deletes. */
+  deleteTaxpayer(cx) {
+    const app = this.app;
+    if (!this.deleteArmed) {
+      this.deleteArmed = true;
+      return cx.notify();
     }
-  }
-
-  confirmTotp(cx) {
+    const t = app.taxpayer();
     try {
-      const root = this.app.taxpayer().tin_root;
-      this.app.store.write("set_taxpayer_totp", root, this.totpSecret, this.totpOtp.value());
-      this.app.unlockedRoots.add(root);
-      this.totpSecret = null;
-      this.totpOtp.set_value("");
-      this.app.toast("Authenticator added.", cx, "lock");
+      app.store.write("delete_taxpayer", t.tin_root);
+      this.deleteArmed = false;
+      app.selRoot = null;
+      app.selCode = null;
+      app.writeLocal(SELECTION_KEY, { root: null, code: null });
+      app.go("home", cx);
+      app.toast(`${t.name} deleted.`, cx, "trash");
     } catch (e) {
-      this.app.toast(message(e), cx, "triangle-alert");
-    }
-  }
-
-  clearTotp(cx) {
-    try {
-      this.app.store.write("set_taxpayer_totp", this.app.taxpayer().tin_root, null);
-      this.totpSecret = null;
-      this.app.toast("Authenticator removed.", cx, "lock");
-    } catch (e) {
-      this.app.toast(message(e), cx, "triangle-alert");
+      app.toast(message(e), cx, "triangle-alert");
     }
   }
 
   /** Taxpayer or branch switched: drop every edit in progress. */
   reset() {
+    this.deleteArmed = false;
     this.editSec = null;
     this.tinError = null;
     this.panelEdit = null;
@@ -611,6 +589,8 @@ export class TaxpayerActions {
         },
       });
       this.newTp = null;
+      // First launch chose "Just me": this taxpayer is the owner, the admin.
+      app.finishSoloSetup(digits);
       app.selRoot = digits;
       app.selCode = "00000";
       app.selYear = null;
@@ -837,80 +817,6 @@ function profileTab(cx, app, width) {
     )
     .child(editAction("address"));
 
-  const auth = ui.auth();
-  const pinControls = div()
-    .flex()
-    .flex_row()
-    .flex_wrap()
-    .items_center()
-    .gap(SPACE[2])
-    .child(PinCells(cx, ui.pinOtp, "tp-security-pin-cells"))
-    .child(AppButton(cx, "tp-security-pin-save", auth.has_pin ? "Change PIN" : "Set PIN", { size: "sm", onClick: (_e, cx) => ui.setPin(cx) }));
-  if (auth.has_pin) {
-    pinControls.child(AppButton(cx, "tp-security-pin-clear", "Remove", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.clearPin(cx) }));
-  }
-  let totpControl;
-  if (ui.totpSecret) {
-    totpControl = div()
-      .flex()
-      .flex_row()
-      .flex_wrap()
-      .items_center()
-      .gap(SPACE[2])
-      .child(PinCells(cx, ui.totpOtp, "tp-security-totp-cells"))
-      .child(AppButton(cx, "tp-security-totp-confirm", "Confirm", { variant: "primary", size: "sm", onClick: (_e, cx) => ui.confirmTotp(cx) }))
-      .child(
-        AppButton(cx, "tp-security-totp-cancel", "Cancel", {
-          variant: "ghost",
-          size: "sm",
-          onClick: (_e, cx) => {
-            ui.totpSecret = null;
-            cx.notify();
-          },
-        }),
-      );
-  } else {
-    totpControl = AppButton(cx, "tp-security-totp-btn", auth.has_totp ? "Remove" : "Add", {
-      variant: auth.has_totp ? "ghost" : "secondary",
-      size: "sm",
-      onClick: (_e, cx) => (auth.has_totp ? ui.clearTotp(cx) : ui.startTotp(cx)),
-    });
-  }
-  const pinsOn = app.store.authState().enable_profile_pins;
-  const rows = [
-    SettingRow(
-      cx,
-      "tp-security-pin",
-      "Taxpayer PIN",
-      auth.has_pin
-        ? pinsOn
-          ? "Asked before this taxpayer or any of its branches opens"
-          : "Set. Turn on Taxpayer PINs in Settings to ask for it"
-        : "One 4-digit PIN for this taxpayer and all its branches",
-      pinControls,
-    ),
-    SettingRow(
-      cx,
-      "tp-security-totp",
-      "Authenticator",
-      ui.totpSecret
-        ? `Add this key to your authenticator app, then type the code it shows: ${ui.totpSecret}`
-        : auth.has_totp
-          ? "A code from your authenticator app also unlocks this taxpayer"
-          : "Use a 6-digit code from an authenticator app instead of the PIN",
-      totpControl,
-    ),
-    SettingRow(
-      cx,
-      "tp-security-archive",
-      "Archive or delete",
-      "Hide this taxpayer from new work, or remove it",
-      AppButton(cx, "tp-security-archive-btn", "Open", { size: "sm", onClick: (_e, cx) => app.openLegacyEditor(cx) }),
-    ),
-  ];
-  const securityBody = div().flex().flex_col();
-  rows.forEach((row, i) => securityBody.child(i ? row.border_t(1).border_color(tokens(cx).border) : row));
-
   const section = (id, title, meta, body, editable) =>
     Disclosure(cx, `tp-sec-${id}`, {
       title,
@@ -922,7 +828,7 @@ function profileTab(cx, app, width) {
       body,
     });
 
-  return DisclosureGroup(cx, "tp-profile", [
+  const group = DisclosureGroup(cx, "tp-profile", [
     section("taxpayer", "Taxpayer", "Shared by every branch", taxpayerBody, true),
     section("branch", "Branch", b.is_head_office ? "Head office" : `Branch ${b.code}`, branchBody, true),
     section(
@@ -932,8 +838,52 @@ function profileTab(cx, app, width) {
       addressBody,
       true,
     ),
-    section("security", "Security", "This taxpayer, every branch", securityBody, false),
   ]);
+  return ui.canRemove() ? div().flex().flex_col().child(group).child(removeCard(cx, app, t)) : group;
+}
+
+/**
+ * Archive or delete, at the foot of the profile: the admin's alone, and
+ * never for the admin's own account, so the way back in cannot be removed.
+ */
+function removeCard(cx, app, tp) {
+  const ui = app.taxpayerUi;
+  return div()
+    .flex()
+    .flex_col()
+    .child(SectionTitle(cx, "Archive or delete"))
+    .child(
+      Card(cx, "tp-remove", [
+        SettingRow(
+          cx,
+          "tp-archive",
+          tp.archived ? "Archived" : "Archive this taxpayer",
+          tp.archived ? "Kept with its returns, out of new work. Unarchive to file for it again" : "Keeps every return; it just leaves new work",
+          AppButton(cx, "tp-archive-btn", tp.archived ? "Unarchive" : "Archive", { size: "sm", icon: "archive", onClick: (_e, cx) => ui.toggleArchive(cx) }),
+        ),
+        SettingRow(
+          cx,
+          "tp-delete",
+          "Delete this taxpayer",
+          ui.deleteArmed ? "Every branch and return goes. This cannot be undone" : "Removes it and every branch and return",
+          div()
+            .flex()
+            .flex_row()
+            .gap(SPACE[2])
+            .when(ui.deleteArmed, (el) =>
+              el.child(AppButton(cx, "tp-delete-cancel", "Keep it", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.disarmDelete(cx) })),
+            )
+            .child(
+              AppButton(cx, "tp-delete-btn", ui.deleteArmed ? "Delete for good" : "Delete", {
+                variant: "danger",
+                size: "sm",
+                icon: "trash",
+                onClick: (_e, cx) => ui.deleteTaxpayer(cx),
+              }),
+            ),
+        ),
+      ]),
+    );
 }
 
 // ---------------------------------------------------------------- forms tab
@@ -1298,6 +1248,8 @@ export function renderNewTaxpayer(cx, app, width) {
               "new-tp",
               (_e, cx) => {
                 ui.newTp = null;
+                // Leaving first launch's "Just me" taxpayer goes back to the choice.
+                if (app.setupPending) app.cancelSetup(cx);
                 app.goBack(cx);
               },
               (_e, cx) => ui.createTaxpayer(cx),

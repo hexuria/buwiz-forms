@@ -74,6 +74,8 @@ zip = { version = "2", default-features = false, features = ["deflate", "time"] 
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Bridges the OS sign-in prompt (run on its own thread) into a host future.
+futures = "0.3"
 
 [dev-dependencies]
 # Tests produce a current authenticator code for a generated secret.
@@ -85,6 +87,11 @@ totp-rs = "5.7.1"
 # versions collide (`ModuleDef` trait conflict).
 [patch.crates-io]
 rquickjs = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
+
+# Admin recovery by OS sign-in (Touch ID / account password, Windows Hello);
+# same crate and version as bir-desktop.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+robius-authentication = { version = "0.1.1", features = ["async"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

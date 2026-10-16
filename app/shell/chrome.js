@@ -247,9 +247,9 @@ export function renderSidebar(cx, app) {
   ]) {
     nav.child(NavRow(cx, `nav-${view}`, icon, label, { current: app.view === view, onClick: (_e, cx) => app.go(view, cx) }));
   }
-  // Only returns whose TIN and branch exist in this database and whose
-  // taxpayer is open: a locked taxpayer's name never shows.
-  const recent = app.recent.filter((r) => app.branchFor(r.tin) && !app.isRootLocked(String(r.tin).slice(0, 9)));
+  // Only returns whose TIN and branch this session can see: another
+  // taxpayer's name never shows to a taxpayer.
+  const recent = app.recent.filter((r) => app.branchFor(r.tin));
   if (app.prefs.showRecent && !app.isFresh() && recent.length) {
     nav.child(GroupLabel(cx, "Recent"));
     recent.forEach((r) => {
@@ -287,11 +287,23 @@ export function renderSidebar(cx, app) {
 /** The app account row and its menu (Lock app, Account settings, Log out). */
 function accountRow(cx, app) {
   const t = tokens(cx);
-  // The app account is separate from tax profiles (DESIGN_SYSTEM.md "Left
-  // sidebar"). This build has no account record yet, so the row names the
-  // local account rather than guessing a person's name.
-  const name = "Local account";
-  const sub = "This computer";
+  // Who is signed in: the admin (a help desk's own account, or the owner's
+  // taxpayer), one taxpayer, or nobody yet on a computer without a PIN.
+  const a = app.authState();
+  const own = (root) => app.taxpayers().find((x) => x.tin_root === root);
+  let name = "Local account";
+  let sub = "This computer";
+  if (app.isAdmin() && app.isHelpdesk()) {
+    name = "Help desk admin";
+    sub = "TIN 000-000-000";
+  } else if (app.isAdmin()) {
+    name = (own(a.admin_root) || {}).name || name;
+    sub = "Admin · this computer";
+  } else if (app.session.kind === "taxpayer") {
+    const t = own(app.session.root);
+    name = (t || {}).name || name;
+    sub = t ? `TIN ${t.tin_display}` : sub;
+  }
   const row = div()
     .id("account-row")
     .flex()
@@ -310,7 +322,7 @@ function accountRow(cx, app) {
       app.accountMenu = !app.accountMenu;
       cx.notify();
     })
-    .child(Avatar(cx, "Local Account", 28, "account"))
+    .child(Avatar(cx, name, 28, "account"))
     .child(
       div()
         .flex()
@@ -432,13 +444,15 @@ function profilePanel(cx, app) {
           .max_w(240)
           .whitespace_normal(),
       )
-      .child(
-        AppButton(cx, "panel-new-taxpayer", "New taxpayer", {
-          variant: "primary",
-          size: "sm",
-          icon: "plus",
-          onClick: (_e, cx) => app.taxpayerUi.openNewTaxpayer(cx),
-        }).mt(SPACE[2]),
+      .when(app.canAddTaxpayer(), (el) =>
+        el.child(
+          AppButton(cx, "panel-new-taxpayer", "New taxpayer", {
+            variant: "primary",
+            size: "sm",
+            icon: "plus",
+            onClick: (_e, cx) => app.taxpayerUi.openNewTaxpayer(cx),
+          }).mt(SPACE[2]),
+        ),
       );
     return SidePanel(cx, "panel-profile", { body });
   }
@@ -555,9 +569,9 @@ function profilePanel(cx, app) {
     );
   }
   body.child(NavRow(cx, "panel-add-branch", "plus", "Add branch", { onClick: (_e, cx) => ui.openNewBranch(cx) }));
-  // Signed in as a taxpayer: that taxpayer and its branches only.
-  if (app.session.kind === "taxpayer") return SidePanel(cx, "panel-profile", { body });
-  const others = app.store.authState().hide_tax_profiles ? [] : app.taxpayers().filter((x) => x.tin_root !== tp.tin_root);
+  // Only the admin switches taxpayers; anyone else has just their own.
+  if (!app.isAdmin()) return SidePanel(cx, "panel-profile", { body });
+  const others = app.taxpayers().filter((x) => x.tin_root !== tp.tin_root);
   if (others.length) body.child(GroupLabel(cx, "Switch taxpayer"));
   for (const x of others) {
     body.child(
@@ -567,7 +581,7 @@ function profilePanel(cx, app) {
       }),
     );
   }
-  body.child(NavRow(cx, "panel-new-tp", "plus", "New taxpayer", { onClick: (_e, cx) => ui.openNewTaxpayer(cx) }));
+  if (app.canAddTaxpayer()) body.child(NavRow(cx, "panel-new-tp", "plus", "New taxpayer", { onClick: (_e, cx) => ui.openNewTaxpayer(cx) }));
   return SidePanel(cx, "panel-profile", { body });
 }
 

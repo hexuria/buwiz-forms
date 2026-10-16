@@ -35,8 +35,8 @@ import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
 import { renderFormPage, renderFormSplit, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
-import { renderSignIn, renderTaxpayerLock } from "./shell/auth.js";
-import { renderProfileManager, blankProfile, parseTin } from "./shell/profile_manager.js";
+import { renderSignIn, renderSetup } from "./shell/auth.js";
+import { SecurityActions } from "./shell/security.js";
 import { renderCronTasksPage } from "./shell/cron_tasks.js";
 
 /** Views that need a taxpayer; with none they fall back to Home. */
@@ -45,8 +45,6 @@ const RECENT_KEY = "redesign.recent";
 const SELECTION_KEY = "redesign.selection";
 const READ_KEY = "redesign.read_notifications";
 const PREFS_KEY = "redesign.prefs";
-/** `selRoot` after Back on a taxpayer's lock with nothing open before it. */
-const NO_TAXPAYER = "";
 
 // The retained app handle lets a form row request changes to shared chrome
 // without treating the row's own event context as the application's context.
@@ -114,7 +112,8 @@ class BirApp extends View {
     // Development aid: BIR_SHELL_START="tp=123456788;theme=dark;view=library"
     // (also "palette=<query>", "edit=<profile section>", and on a form
     // "choose=<key>~<value>|...", "select=<key>", "more=<part>:<item>",
-    // "save", "items=<a>-<b>", "solo=<part>"; none bypasses a PIN)
+    // "save", "items=<a>-<b>", "solo=<part>", and the sign-in steps listed
+    // at runAccessStep; none bypasses a PIN)
     // or "...;form=2551Q/2026/3" opens a screen at launch, so a screen can be
     // checked headlessly (one launch, one screenshot). Unset in normal use.
     const start = process.env.BIR_SHELL_START;
@@ -228,9 +227,59 @@ class BirApp extends View {
       } else if (key === "solo") {
         this.formUi.devSolo = Number(value);
         this.formUi.jumpTo(Number(value), cx);
-      }
+      } else this.runAccessStep(key, value, cx);
     }
     cx.notify();
+  }
+
+  /**
+   * First launch, sign-in and Settings › Security steps for dev start routes.
+   * Each types into the same cells a person does and presses the same
+   * button, so every PIN is still checked by the host:
+   * "setup=solo|helpdesk", "setuppin=<pin>" (logs the recovery key once),
+   * "keydone", "newtp=<root>:<name>", "lock", "tin=<root>", "forgot",
+   * "signin=<root>:<pin>", "override=<admin pin>", "recover=<key>",
+   * "mypin=<pin>", "arm" (arms Delete on the Tax profile, never deletes),
+   * "pick" (Enter in search).
+   */
+  runAccessStep(key, value, cx) {
+    const [a, b = ""] = value.split(":");
+    if (key === "setup") return a === "solo" ? this.chooseSolo(cx) : this.chooseHelpdesk(cx);
+    if (key === "setuppin") {
+      this.setup.pinOtp.set_value(a);
+      this.submitHelpdeskPin(cx);
+      if (this.setup.key) console.log(`dev route: recovery key ${this.setup.key}`);
+      return;
+    }
+    if (key === "keydone") return this.finishHelpdeskSetup(cx);
+    if (key === "newtp") {
+      if (!this.taxpayerUi.newTp) this.taxpayerUi.openNewTaxpayer(cx);
+      this.taxpayerUi.newTp.tin.set(a);
+      this.taxpayerUi.newTp.name.set_value(b);
+      return this.taxpayerUi.createTaxpayer(cx);
+    }
+    if (key === "lock") return this.lockApp(cx);
+    if (key === "tin") return this.signIn.tin.set(a);
+    if (key === "forgot") return this.toggleForgot(cx);
+    if (key === "signin") {
+      this.signIn.tin.set(a);
+      this.tpPinOtp.set_value(b);
+      return this.submitSignIn(cx);
+    }
+    if (key === "override") {
+      this.adminPinOtp.set_value(a);
+      return this.submitOverride(cx);
+    }
+    if (key === "recover") {
+      this.recoveryInput.set_value(value);
+      return this.submitRecoveryKey(cx);
+    }
+    if (key === "mypin") {
+      this.security.pinOtp.set_value(a);
+      return this.security.setPin(cx);
+    }
+    if (key === "arm") return this.taxpayerUi.deleteTaxpayer(cx);
+    if (key === "pick") return this.runPaletteItem(this.palette.index, cx);
   }
 
   /**
@@ -285,14 +334,10 @@ class BirApp extends View {
     return this.store.taxpayers();
   }
 
-  /**
-   * The selected taxpayer, or the first open one. A selected taxpayer that is
-   * locked is still returned: `render` then shows only its lock.
-   */
+  /** The selected taxpayer, or the first one. */
   taxpayer() {
-    if (this.selRoot === NO_TAXPAYER) return null;
     const list = this.taxpayers();
-    return list.find((t) => t.tin_root === this.selRoot) || list.find((t) => !this.isRootLocked(t.tin_root)) || null;
+    return list.find((t) => t.tin_root === this.selRoot) || list[0] || null;
   }
 
   branch() {
@@ -301,7 +346,7 @@ class BirApp extends View {
     return t.branches.find((b) => b.code === this.selCode) || t.branches[0] || null;
   }
 
-  /** No taxpayer is open: none exist yet, or every one is locked. */
+  /** No taxpayer is open: none exist yet. */
   isFresh() {
     return !this.taxpayer();
   }
@@ -336,22 +381,11 @@ class BirApp extends View {
   selectTaxpayer(root, cx, opts = {}) {
     const t = this.taxpayers().find((x) => x.tin_root === root);
     if (!t) return;
-    // Back on a taxpayer's lock returns here, never to the locked one.
-    const current = this.taxpayer();
-    if (current && current.tin_root !== root && !this.isRootLocked(current.tin_root)) {
-      this.prevSel = { root: current.tin_root, code: this.selCode };
-    }
     this.selRoot = root;
     this.selCode = opts.code && t.branches.some((b) => b.code === opts.code) ? opts.code : t.branches[0] ? t.branches[0].code : null;
     this.selYear = null;
     this.taxpayerUi.reset();
     this.writeLocal(SELECTION_KEY, { root: this.selRoot, code: this.selCode });
-    if (this.isRootLocked(root)) {
-      this.resetGate();
-      this.panel = null;
-      this.overlay = null;
-      return cx.notify();
-    }
     if (!opts.quiet) this.toast(`Switched to ${t.name}`, cx);
     cx.notify();
   }
@@ -378,6 +412,8 @@ class BirApp extends View {
 
   go(view, cx) {
     if (view !== this.view) {
+      // A recovery key on screen is shown once: leaving Settings hides it for good.
+      if (this.view === "settings") this.security.leave();
       this.history.push(this.view);
       this.forward = [];
       this.view = view;
@@ -487,14 +523,11 @@ class BirApp extends View {
 
   /** Why nothing can be opened yet. */
   freshHint() {
-    return this.taxpayers().length ? "Open a taxpayer first, then open a form for them." : "Add a taxpayer first, then open a form for them.";
+    return "Add a taxpayer first, then open a form for them.";
   }
 
   openForm(opts, cx) {
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
-    if (this.isRootLocked(String(opts.tin).slice(0, 9))) {
-      return this.selectTaxpayer(String(opts.tin).slice(0, 9), cx, { code: String(opts.tin).slice(9) });
-    }
     if (!this.branchFor(opts.tin)) {
       return this.toast("That return belongs to a taxpayer that is not in this database.", cx, "triangle-alert");
     }
@@ -608,9 +641,7 @@ class BirApp extends View {
     // a branch (root + branch code), so the matching branches are listed.
     const digits = q.replace(/[\s-]/g, "");
     const byTin = /^\d+$/.test(digits);
-    const hidden = this.store.authState().hide_tax_profiles && this.session.kind !== "taxpayer";
-    const current = this.taxpayer();
-    for (const t of hidden ? (current ? [current] : []) : this.taxpayers()) {
+    for (const t of this.taxpayers()) {
       if (byTin && digits.length > 9) {
         for (const b of t.branches) {
           if (!b.tin.startsWith(digits)) continue;
@@ -631,7 +662,7 @@ class BirApp extends View {
         hint: t.tin_display,
         avatar: t,
         match: byTin && t.tin_root.startsWith(digits),
-        run: (cx) => this.selectTaxpayer(t.tin_root, cx),
+        run: (cx) => this.openTaxpayer(t.tin_root, cx),
       });
       // Signed in as one taxpayer, its branches are one step away.
       if (this.session.kind === "taxpayer" && t.branches.length > 1 && !byTin) {
@@ -679,10 +710,17 @@ class BirApp extends View {
     return items.filter((x) => x.match || `${x.label} ${x.hint || ""}`.toLowerCase().includes(q));
   }
 
-  /** Select a taxpayer's branch; a locked taxpayer shows its lock first. */
+  /** Search picked a taxpayer: it opens on its Tax profile, wherever search was opened from. */
+  openTaxpayer(root, cx) {
+    if (!this.taxpayer() || this.taxpayer().tin_root !== root) this.selectTaxpayer(root, cx);
+    this.go("profile", cx);
+  }
+
+  /** Search picked a branch: select it and open the Tax profile, as for a taxpayer. */
   openBranch(root, code, cx) {
-    if (this.taxpayer() && this.taxpayer().tin_root === root && !this.isRootLocked(root)) return this.selectBranch(code, cx);
-    this.selectTaxpayer(root, cx, { code });
+    if (this.taxpayer() && this.taxpayer().tin_root === root) this.selectBranch(code, cx);
+    else this.selectTaxpayer(root, cx, { code });
+    this.go("profile", cx);
   }
 
   runPaletteItem(index, cx) {
@@ -722,49 +760,94 @@ class BirApp extends View {
 
   // ---------------------------------------------------------------- auth
   //
-  // Sessions: "open" (no one signed in; taxpayer PINs apply), "admin"
-  // (signed in with the admin PIN or authenticator; every taxpayer opens,
-  // since the admin PIN unlocks any of them anyway) and "taxpayer" (signed in
-  // with a TIN and its PIN; only that taxpayer and its branches exist).
-  // A PIN belongs to the taxpayer (TIN root): one unlock opens every branch.
+  // The admin is whoever set this computer up. First launch picks the access
+  // mode: "solo" (just me or my business: the owner's own taxpayer is the
+  // admin account, and its PIN is the admin PIN) or "helpdesk" (an RDO desk,
+  // an accountant: the admin account is the reserved TIN 000-000-000, and
+  // every other taxpayer signs in as itself).
+  //
+  // Sessions: "admin" (every taxpayer, the admin settings), "taxpayer" (only
+  // that taxpayer and its branches) and "open" (nobody signed in). "open"
+  // exists only while the admin has no PIN or authenticator, so the person at
+  // the keyboard is the owner and acts as the admin. A PIN guards one
+  // taxpayer's sign-in, never the whole app: nobody can lock everyone out.
 
   initAuth() {
-    // One PIN per taxpayer: give every branch its head office's PIN.
-    try {
-      this.store.write("unify_taxpayer_credentials");
-    } catch (_e) {}
-    this.auth = this.store.authState();
-    this.appLocked = (this.auth.enable_profile_pins && this.auth.has_admin_pin) || this.auth.has_admin_totp;
     this.session = { kind: "open" };
+    this.appLocked = this.adminHasCode();
     this.authError = null;
-    // Admin codes (sign-in and "Forgot PIN?") and the taxpayer's own codes
-    // (sign-in and the lock). The last digit submits.
-    this.adminPinOtp = OtpState.new(4, { masked: true });
-    this.adminTotpOtp = OtpState.new(6);
+    // Sign-in codes (the TIN's own PIN or authenticator), the admin's codes
+    // ("Forgot PIN? Ask the admin") and the admin's recovery key. The last
+    // digit of a code submits.
     this.tpPinOtp = OtpState.new(4, { masked: true });
     this.tpTotpOtp = OtpState.new(6);
-    this.adminPinOtp.on("complete", (_e, cx) => this.submitAdminCode(cx));
-    this.adminTotpOtp.on("complete", (_e, cx) => this.submitAdminCode(cx));
-    this.tpPinOtp.on("complete", (_e, cx) => this.submitTaxpayerCode(cx));
-    this.tpTotpOtp.on("complete", (_e, cx) => this.submitTaxpayerCode(cx));
-    // Settings' new admin PIN: never wired to an unlock.
-    this.newAdminPinOtp = OtpState.new(4, { masked: true });
-    // The legacy profile editor's new PIN, likewise.
-    this.profilePinOtp = OtpState.new(4, { masked: true });
-    this.signIn = { mode: "taxpayer", method: "pin", forgot: false, tin: new DigitEntry([3, 3, 3]) };
+    this.adminPinOtp = OtpState.new(4, { masked: true });
+    this.adminTotpOtp = OtpState.new(6);
+    this.tpPinOtp.on("complete", (_e, cx) => this.submitSignIn(cx));
+    this.tpTotpOtp.on("complete", (_e, cx) => this.submitSignIn(cx));
+    this.adminPinOtp.on("complete", (_e, cx) => this.submitOverride(cx));
+    this.adminTotpOtp.on("complete", (_e, cx) => this.submitOverride(cx));
+    this.recoveryInput = InputState.new({ placeholder: "XXXX-XXXX-XXXX-XXXX" });
+    this.recoveryInput.on("submit", (_e, cx) => this.submitRecoveryKey(cx));
+    this.signIn = { method: "pin", forgot: false, busy: false, tin: new DigitEntry([3, 3, 3]) };
     this.signIn.tin.groups[2].on("complete", () => this.tpPinOtp.focus());
-    this.gate = { forgot: false };
-    this.unlockedRoots = new Set();
-    this.prevSel = null;
+    // The cells below the TIN depend on whose TIN it is (the admin's recovery
+    // or a taxpayer's), so typing it redraws the card.
+    this.signIn.tin.onChange = (cx) => {
+      this.authError = null;
+      cx.notify();
+    };
+    // First launch: the chosen mode's next step, and "solo" while its first
+    // taxpayer is being typed on the New taxpayer page.
+    this.setup = { step: "choose", pinOtp: OtpState.new(4, { masked: true }), key: null };
+    this.setupPending = null;
+    this.security = new SecurityActions(this);
     this.applyScope();
-    this.settingsNotice = null;
+  }
+
+  authState() {
+    return this.store.authState();
+  }
+
+  /** First launch has not picked "Just me" or "I help other taxpayers" yet. */
+  needsSetup() {
+    return !this.authState().mode;
+  }
+
+  isHelpdesk() {
+    return this.authState().mode === "helpdesk";
+  }
+
+  /** The admin can sign in with a PIN or an authenticator code. */
+  adminHasCode() {
+    const a = this.authState();
+    return Boolean(a.has_admin_pin || a.has_admin_totp);
+  }
+
+  /** The admin account's TIN root: the owner's taxpayer, or 000000000 for a help desk. */
+  adminRoot() {
+    return this.authState().admin_root || null;
+  }
+
+  /** Admin rights: signed in as the admin, or nobody signed in while the admin has no code. */
+  isAdmin() {
+    return this.session.kind === "admin" || (this.session.kind === "open" && !this.adminHasCode());
+  }
+
+  /**
+   * New taxpayers: the first one on an empty computer, and afterwards only a
+   * help desk's admin. "Just me" stays one taxpayer with its branches.
+   */
+  canAddTaxpayer() {
+    if (!this.taxpayers().length) return true;
+    return this.isAdmin() && this.isHelpdesk();
   }
 
   /** Point the store's visibility at this session. */
   applyScope() {
     const scope = this.session.kind === "taxpayer" ? this.session.root : null;
     this.store.scopeRoot = scope;
-    this.store.canSee = (root) => (!scope || root === scope) && !this.isRootLocked(root);
+    this.store.canSee = (root) => !scope || root === scope;
   }
 
   /** PIN and authenticator of a taxpayer (shared by all its branches). */
@@ -772,37 +855,9 @@ class BirApp extends View {
     return this.store.read(`tpauth:${root}`, "taxpayer_auth", [root], { has_pin: false, has_totp: false });
   }
 
-  /** Whether a taxpayer still needs its PIN in this session. */
-  isRootLocked(root) {
-    if (!root || this.session.kind === "admin") return false;
-    if (this.session.kind === "taxpayer") return false; // only its own taxpayer is visible
-    if (!this.store.authState().enable_profile_pins || this.unlockedRoots.has(root)) return false;
-    const c = this.taxpayerCreds(root);
-    return Boolean(c.has_pin || c.has_totp);
-  }
-
-  /** Which sign-in doors exist. */
-  signInDoors() {
-    const a = this.store.authState();
-    return { taxpayer: Boolean(a.enable_profile_pins), admin: Boolean(a.has_admin_pin || a.has_admin_totp) };
-  }
-
   clearCodes() {
     for (const otp of [this.adminPinOtp, this.adminTotpOtp, this.tpPinOtp, this.tpTotpOtp]) otp.set_value("");
-  }
-
-  resetGate() {
-    this.gate = { forgot: false };
-    this.authError = null;
-    this.clearCodes();
-  }
-
-  setSignInMode(mode, cx) {
-    this.signIn.mode = mode;
-    this.signIn.forgot = false;
-    this.authError = null;
-    this.clearCodes();
-    cx.notify();
+    this.recoveryInput.set_value("");
   }
 
   toggleSignInMethod(cx) {
@@ -819,44 +874,15 @@ class BirApp extends View {
     cx.notify();
   }
 
-  toggleGateForgot(cx) {
-    this.gate.forgot = !this.gate.forgot;
-    this.authError = null;
-    this.clearCodes();
-    cx.notify();
-  }
-
-  /** The admin's PIN or authenticator code as typed; false when neither matches. */
-  checkAdminCode() {
-    const a = this.store.authState();
-    try {
-      if (a.has_admin_pin && this.adminPinOtp.value().length === 4 && this.store.call("verify_admin_pin", this.adminPinOtp.value())) return true;
-      if (a.has_admin_totp && this.adminTotpOtp.value().length === 6 && this.store.call("verify_admin_totp", this.adminTotpOtp.value())) return true;
-    } catch (_e) {}
-    return false;
-  }
-
-  /** Last digit of an admin code: sign in as admin, or let a taxpayer in. */
-  submitAdminCode(cx) {
-    if (this.appLocked && !(this.signIn.mode === "taxpayer" && this.signIn.forgot && this.signInDoors().taxpayer)) {
-      return this.submitAdminSignIn(cx);
-    }
-    return this.submitOverride(cx);
-  }
-
-  /** Last digit of a taxpayer code: sign in, or open the locked taxpayer. */
-  submitTaxpayerCode(cx) {
-    return this.appLocked ? this.submitTaxpayerSignIn(cx) : this.tryUnlockProfile(cx);
-  }
-
-  /** The TIN typed on the sign-in screen, if it names a taxpayer. */
-  signInRoot() {
+  /** The TIN typed on the sign-in screen: the admin account, a taxpayer, or why neither. */
+  signInTarget() {
     const root = this.signIn.tin.value();
     if (root.length !== 9) return { error: "Type all 9 digits of the TIN." };
+    if (root === this.adminRoot()) return { root, admin: true };
     if (!this.store.read("taxpayers", "list_taxpayers", [], []).some((t) => t.tin_root === root)) {
       return { error: "No taxpayer has that TIN on this computer." };
     }
-    return { root };
+    return { root, admin: false };
   }
 
   fail(message, cx) {
@@ -865,49 +891,79 @@ class BirApp extends View {
     cx.notify();
   }
 
-  submitAdminSignIn(cx) {
-    if (!this.checkAdminCode()) return this.fail("Wrong admin PIN or code. Try again.", cx);
-    this.startSession({ kind: "admin" }, cx);
-  }
-
-  submitTaxpayerSignIn(cx) {
-    const { root, error } = this.signInRoot();
-    if (error) return this.fail(error, cx);
-    const c = this.taxpayerCreds(root);
+  /** TIN plus that account's own PIN or authenticator code. */
+  submitSignIn(cx) {
+    const target = this.signInTarget();
+    if (target.error) return this.fail(target.error, cx);
+    const totp = this.signIn.method === "totp";
+    const code = totp ? this.tpTotpOtp.value() : this.tpPinOtp.value();
+    if (code.length !== (totp ? 6 : 4)) return this.fail(totp ? "Type all 6 digits of the code." : "Type all 4 digits of the PIN.", cx);
     let ok = false;
     try {
-      if (this.signIn.method === "totp") {
-        ok = c.has_totp && this.tpTotpOtp.value().length === 6 && this.store.call("verify_taxpayer_totp", root, this.tpTotpOtp.value());
-      } else {
-        ok = c.has_pin && this.tpPinOtp.value().length === 4 && this.store.call("verify_taxpayer_pin", root, this.tpPinOtp.value());
-      }
+      if (target.admin) ok = this.store.call(totp ? "verify_admin_totp" : "verify_admin_pin", code);
+      else ok = this.store.call(totp ? "verify_taxpayer_totp" : "verify_taxpayer_pin", target.root, code);
     } catch (_e) {}
     if (!ok) {
-      return this.fail(c.has_pin || c.has_totp ? "Wrong TIN or PIN. Try again." : "That taxpayer has no PIN yet. Ask the admin to open it.", cx);
+      if (!target.admin) {
+        const c = this.taxpayerCreds(target.root);
+        if (!c.has_pin && !c.has_totp) return this.fail("That taxpayer has no PIN yet. Ask the admin to open it.", cx);
+      }
+      return this.fail(totp ? "Wrong TIN or code. Try again." : "Wrong TIN or PIN. Try again.", cx);
     }
-    this.startSession({ kind: "taxpayer", root }, cx);
+    this.startSession(target.admin ? { kind: "admin" } : { kind: "taxpayer", root: target.root }, cx);
   }
 
-  /**
-   * "Forgot PIN?": the admin's code opens a taxpayer. On the sign-in screen
-   * that starts a session for the TIN typed there; on a taxpayer's lock it
-   * opens that taxpayer. Either way a new PIN is set under Security.
-   */
+  /** The admin's PIN or authenticator code as typed; false when neither matches. */
+  checkAdminCode() {
+    const a = this.authState();
+    try {
+      if (a.has_admin_pin && this.adminPinOtp.value().length === 4 && this.store.call("verify_admin_pin", this.adminPinOtp.value())) return true;
+      if (a.has_admin_totp && this.adminTotpOtp.value().length === 6 && this.store.call("verify_admin_totp", this.adminTotpOtp.value())) return true;
+    } catch (_e) {}
+    return false;
+  }
+
+  /** "Forgot PIN? Ask the admin": the admin's code opens the taxpayer typed above. */
   submitOverride(cx) {
-    if (this.appLocked) {
-      const { root, error } = this.signInRoot();
-      if (error) return this.fail(error, cx);
-      if (!this.checkAdminCode()) return this.fail("Wrong admin PIN or code. Try again.", cx);
-      this.startSession({ kind: "taxpayer", root }, cx);
-    } else {
-      const t = this.taxpayer();
-      if (!t || !this.checkAdminCode()) return this.fail("Wrong admin PIN or code. Try again.", cx);
-      this.unlockedRoots.add(t.tin_root);
-      this.store.bump();
-      this.resetGate();
-      cx.notify();
-    }
-    this.toast("Opened by the admin. Set a new PIN under Tax profile › Security.", cx, "lock");
+    const target = this.signInTarget();
+    if (target.error) return this.fail(target.error, cx);
+    if (target.admin) return this.fail("That is the admin's TIN. Use the recovery key or your Mac login below.", cx);
+    if (!this.checkAdminCode()) return this.fail("Wrong admin PIN or code. Try again.", cx);
+    this.startSession({ kind: "taxpayer", root: target.root }, cx);
+    this.toast("Opened by the admin. Set a new PIN in Settings.", cx, "lock");
+  }
+
+  /** The admin's one-time recovery key: signs the admin in, then a new PIN is set in Settings. */
+  submitRecoveryKey(cx) {
+    const key = this.recoveryInput.value().trim();
+    if (!key) return this.fail("Type the recovery key you wrote down when the admin PIN was set.", cx);
+    let ok = false;
+    try {
+      ok = this.store.write("use_recovery_key", key);
+    } catch (_e) {}
+    if (!ok) return this.fail("That recovery key does not match. Check it and try again.", cx);
+    this.recoveredAdmin(cx, "Recovery key used. It works only once: set a new admin PIN and make a new key.");
+  }
+
+  /** Last resort: whoever can log in to this Mac can reset the admin PIN. */
+  async submitMacLogin(cx) {
+    if (this.signIn.busy) return;
+    this.signIn.busy = true;
+    this.authError = null;
+    cx.notify();
+    let ok = false;
+    try {
+      ok = await this.store.call("mac_login", "reset the eBIRForms admin PIN");
+    } catch (_e) {}
+    this.signIn.busy = false;
+    if (!ok) return this.fail("Mac login was cancelled or did not match.", cx);
+    this.recoveredAdmin(cx, "Signed in with your Mac login. Set a new admin PIN now.");
+  }
+
+  recoveredAdmin(cx, message) {
+    this.startSession({ kind: "admin" }, cx);
+    this.go("settings", cx);
+    this.toast(message, cx, "lock");
   }
 
   startSession(session, cx) {
@@ -935,34 +991,33 @@ class BirApp extends View {
       this.panel = null;
       this.overlay = null;
       this.taxpayerUi.reset();
+      this.security.leave();
     }
     cx.notify();
   }
 
-  /** No admin credential exists, so there is no admin view to protect. */
+  /** The admin has no code, so there is nothing to sign in with: the owner is at the keyboard. */
   openWithoutSignIn(cx) {
-    if (this.signInDoors().admin) return;
+    if (this.adminHasCode()) return;
     this.startSession({ kind: "open" }, cx);
   }
 
   /** Lock app and Log out both end the session and show sign-in. */
   endSession(cx, message) {
-    const doors = this.signInDoors();
     this.accountMenu = false;
-    if (!doors.admin && !doors.taxpayer) {
-      return this.toast("Set an admin PIN, or turn on Taxpayer PINs, in Settings to lock the app.", cx, "lock");
+    if (this.session.kind !== "taxpayer" && !this.adminHasCode()) {
+      return this.toast("Set your PIN in Settings first. With no PIN there is nothing to sign back in with.", cx, "lock");
     }
     this.lockedFrom = { kind: this.session.kind, root: this.session.root };
     this.session = { kind: "open" };
-    this.unlockedRoots.clear();
     this.panel = null;
     this.overlay = null;
-    this.signIn.mode = this.lockedFrom.kind === "admin" || !doors.taxpayer ? "admin" : "taxpayer";
     this.signIn.method = "pin";
     this.signIn.forgot = false;
     this.signIn.tin.set("");
     this.authError = null;
     this.clearCodes();
+    this.security.leave();
     this.store.bump();
     this.applyScope();
     this.appLocked = true;
@@ -975,107 +1030,73 @@ class BirApp extends View {
   }
 
   logOut(cx) {
-    const doors = this.signInDoors();
-    if (!doors.admin && !doors.taxpayer) {
-      // Nothing to sign back in with: forget opened taxpayers, start over.
-      this.unlockedRoots.clear();
-      this.accountMenu = false;
-      this.view = "home";
-      this.history = [];
-      this.forward = [];
-      return this.toast("Signed out.", cx, "log-out");
-    }
     this.endSession(cx, "Signed out.");
     // A sign-in after Log out starts from Home, whoever signs in.
     this.lockedFrom = null;
   }
 
-  /** The lock on the selected taxpayer: its own PIN or authenticator code. */
-  tryUnlockProfile(cx) {
-    const t = this.taxpayer();
-    if (!t) return;
-    const c = this.taxpayerCreds(t.tin_root);
-    let ok = false;
-    try {
-      if (c.has_pin && this.tpPinOtp.value().length === 4) ok = this.store.call("verify_taxpayer_pin", t.tin_root, this.tpPinOtp.value());
-      if (!ok && c.has_totp && this.tpTotpOtp.value().length === 6) ok = this.store.call("verify_taxpayer_totp", t.tin_root, this.tpTotpOtp.value());
-    } catch (_e) {}
-    if (!ok) return this.fail("Wrong PIN or code. Try again.", cx);
-    this.unlockedRoots.add(t.tin_root);
-    this.store.bump();
-    this.resetGate();
+  // ---------------------------------------------------------------- first launch
+
+  /** "Just me or my business": the owner's taxpayer becomes the admin account. */
+  chooseSolo(cx) {
+    const first = this.store.read("taxpayers", "list_taxpayers", [], [])[0];
+    if (first) {
+      try {
+        this.store.write("setup_solo", first.tin_root);
+      } catch (e) {
+        return this.toast(String(e), cx, "triangle-alert");
+      }
+      return cx.notify();
+    }
+    // No taxpayer yet: type it first; Create finishes the setup.
+    this.setupPending = "solo";
+    this.taxpayerUi.openNewTaxpayer(cx);
+  }
+
+  /** The New taxpayer page was left during first launch: back to the choice. */
+  cancelSetup(cx) {
+    this.setupPending = null;
+    this.setup.step = "choose";
     cx.notify();
   }
 
-  /** Back on a taxpayer's lock: the taxpayer open before it, or none. */
-  cancelUnlock(cx) {
-    const prev = this.prevSel;
-    this.prevSel = null;
-    this.resetGate();
-    if (prev && this.taxpayers().some((t) => t.tin_root === prev.root) && !this.isRootLocked(prev.root)) {
-      this.selRoot = prev.root;
-      this.selCode = prev.code;
-    } else {
-      this.selRoot = NO_TAXPAYER;
-      this.selCode = null;
-      this.view = "home";
-    }
-    this.writeLocal(SELECTION_KEY, { root: this.selRoot, code: this.selCode });
+  /** Called once the first taxpayer exists, when first launch chose "solo". */
+  finishSoloSetup(root) {
+    if (this.setupPending !== "solo") return;
+    this.setupPending = null;
+    this.store.write("setup_solo", root);
+  }
+
+  /** "I help other taxpayers": choose the admin PIN, then show the recovery key once. */
+  chooseHelpdesk(cx) {
+    this.setup.step = "helpdesk-pin";
+    this.setup.pinOtp.set_value("");
+    this.authError = null;
     cx.notify();
+  }
+
+  submitHelpdeskPin(cx) {
+    const pin = this.setup.pinOtp.value();
+    if (pin.length !== 4) return this.fail("Type all 4 digits of the admin PIN.", cx);
+    try {
+      this.setup.key = this.store.write("setup_helpdesk", pin).recovery_key;
+      this.setup.step = "helpdesk-key";
+      this.authError = null;
+    } catch (e) {
+      this.authError = String(e);
+    }
+    cx.notify();
+  }
+
+  /** The recovery key was written down: the admin starts on an empty Home. */
+  finishHelpdeskSetup(cx) {
+    // Only the key screen right after choosing the PIN signs the admin in.
+    if (this.setup.step !== "helpdesk-key") return;
+    this.setup = { step: "choose", pinOtp: this.setup.pinOtp, key: null };
+    this.startSession({ kind: "admin" }, cx);
   }
 
   // ---------------------------------------------------------------- settings actions (retained)
-
-  setAuthFlag(key, checked, cx) {
-    try {
-      this.store.write("set_setting", key, String(checked));
-      this.auth = this.store.authState();
-    } catch (e) {
-      this.settingsNotice = String(e);
-    }
-    cx.notify();
-  }
-
-  setAdminPin(cx) {
-    const pin = this.newAdminPinOtp.value();
-    if (pin.length !== 4) return this.toast("Enter the new 4-digit PIN first.", cx, "lock");
-    try {
-      this.store.write("set_admin_pin", pin);
-      this.newAdminPinOtp.set_value("");
-      this.auth = this.store.authState();
-      this.toast("Admin PIN saved.", cx, "lock");
-    } catch (e) {
-      this.toast(String(e), cx, "triangle-alert");
-    }
-  }
-
-  clearAdminPin(cx) {
-    try {
-      this.store.write("set_admin_pin", null);
-      this.auth = this.store.authState();
-      this.toast("Admin PIN removed.", cx, "lock");
-    } catch (e) {
-      this.toast(String(e), cx, "triangle-alert");
-    }
-  }
-
-  toggleAdminTotp(cx) {
-    try {
-      if (this.store.authState().has_admin_totp) {
-        this.store.write("delete_setting", "app_totp_secret");
-        this.newTotpSecret = null;
-        this.toast("Authenticator removed.", cx, "lock");
-      } else {
-        const { secret } = this.store.call("generate_totp_secret", "e-BIRForms admin");
-        this.store.write("set_setting", "app_totp_secret", secret);
-        this.newTotpSecret = secret;
-        this.toast("Authenticator added. Copy the secret into your app now.", cx, "lock");
-      }
-      this.auth = this.store.authState();
-    } catch (e) {
-      this.toast(String(e), cx, "triangle-alert");
-    }
-  }
 
   runImport(cx) {
     try {
@@ -1160,140 +1181,6 @@ class BirApp extends View {
     }
   }
 
-  // ---------------------------------------------------------------- legacy profile editor (retained)
-  // Archive, delete and per-profile PIN live on the pre-redesign editor until
-  // the tax-profile screens absorb them; Profile › "Email, security and
-  // export" links here so none of them becomes unreachable.
-
-  openLegacyEditor(cx) {
-    const b = this.branch();
-    if (!b) return;
-    let record = null;
-    try {
-      record = this.store.call("profile_detail", b.tin);
-    } catch (e) {
-      this.editorError = String(e);
-    }
-    this.editing = record || blankProfile();
-    this.editingTinDisplay = b.tin;
-    this.editingAuth = { has_pin: false, has_totp: false };
-    try {
-      this.editingAuth = this.store.call("taxpayer_auth", b.tin_root);
-    } catch (_e) {}
-    this.deleteArmed = false;
-    this.editorError = null;
-    this.editorNotice = null;
-    const tin = this.editing.tin;
-    const values = {
-      full_name: this.editing.full_name || "",
-      tin: tin && tin.segment1 ? `${tin.segment1}${tin.segment2}${tin.segment3}${tin.branch}` : "",
-      rdo_code: this.editing.rdo_code || "",
-      email: this.editing.email || "",
-      phone: this.editing.phone || "",
-      line_of_business: this.editing.line_of_business || "",
-      registered_address: this.editing.registered_address || "",
-      zip_code: this.editing.zip_code || "",
-    };
-    this.editorInputs = {};
-    for (const [key, value] of Object.entries(values)) this.editorInputs[key] = InputState.new({ value });
-    this.go("profile_manager", cx);
-  }
-
-  navigate(view, cx) {
-    this.go(view === "global_dashboard" ? "home" : view === "dashboard" ? "profile" : view, cx);
-  }
-
-  editingTin() {
-    const t = this.editing.tin;
-    return `${t.segment1}${t.segment2}${t.segment3}${t.branch}`;
-  }
-
-  saveEditingProfile(cx) {
-    const tin = parseTin(this.editorInputs.tin.value());
-    if (!tin) {
-      this.editorError = "TIN must be 12–14 digits (dashes optional).";
-      return cx.notify();
-    }
-    const payload = { ...this.editing, tin };
-    for (const key of ["full_name", "rdo_code", "email", "phone", "line_of_business", "registered_address", "zip_code"]) {
-      payload[key] = this.editorInputs[key].value().trim();
-    }
-    if (!payload.full_name) {
-      this.editorError = "Full name is required.";
-      return cx.notify();
-    }
-    try {
-      this.store.write("save_profile", payload);
-      this.editing = null;
-      this.toast("Changes saved", cx);
-      this.go("profile", cx);
-    } catch (e) {
-      this.editorError = String(e);
-      cx.notify();
-    }
-  }
-
-  toggleArchiveProfile(cx) {
-    try {
-      this.store.write("set_profile_archived", this.editingTin(), !this.editing.is_archived);
-      this.editing.is_archived = !this.editing.is_archived;
-      this.editorNotice = this.editing.is_archived ? "Profile archived." : "Profile unarchived.";
-    } catch (e) {
-      this.editorError = String(e);
-    }
-    cx.notify();
-  }
-
-  deleteProfile(cx) {
-    if (!this.deleteArmed) {
-      this.deleteArmed = true;
-      return cx.notify();
-    }
-    try {
-      this.store.write("delete_profile", this.editingTin());
-      this.deleteArmed = false;
-      this.editing = null;
-      this.selRoot = null;
-      this.selCode = null;
-      this.go("home", cx);
-    } catch (e) {
-      this.editorError = String(e);
-      cx.notify();
-    }
-  }
-
-  setProfilePin(cx) {
-    const pin = this.profilePinOtp.value();
-    if (pin.length !== 4) {
-      this.editorError = "Enter the new 4-digit PIN first.";
-      return cx.notify();
-    }
-    try {
-      const root = this.editingTin().slice(0, 9);
-      this.store.write("set_taxpayer_pin", root, pin);
-      this.unlockedRoots.add(root);
-      this.profilePinOtp.set_value("");
-      this.editingAuth = this.store.call("taxpayer_auth", root);
-      this.editorError = null;
-      this.editorNotice = "PIN saved.";
-    } catch (e) {
-      this.editorError = String(e);
-    }
-    cx.notify();
-  }
-
-  clearProfilePin(cx) {
-    try {
-      const root = this.editingTin().slice(0, 9);
-      this.store.write("set_taxpayer_pin", root, null);
-      this.editingAuth = this.store.call("taxpayer_auth", root);
-      this.editorNotice = "PIN cleared.";
-    } catch (e) {
-      this.editorError = String(e);
-    }
-    cx.notify();
-  }
-
   // ---------------------------------------------------------------- render
 
   renderView(cx, width) {
@@ -1321,8 +1208,6 @@ class BirApp extends View {
         return renderFormPage(cx, this, width);
       case "gallery":
         return renderGallery(cx, this, width);
-      case "profile_manager":
-        return this.editing ? renderProfileManager(cx, this) : renderHome(cx, this, width);
       case "cron_tasks":
         return renderCronTasksPage(cx, this, width);
       default:
@@ -1347,11 +1232,12 @@ class BirApp extends View {
 
   render(cx) {
     const t = tokens(cx);
-    // Sign-in, then a locked taxpayer, take the whole window: nothing that
-    // names a taxpayer is drawn behind them.
+    // First launch and sign-in take the whole window: nothing that names a
+    // taxpayer is drawn behind them. First launch's "Just me" types its
+    // taxpayer on the normal New taxpayer page; a help desk's recovery key
+    // stays on screen after the mode is saved, until it was written down.
+    if ((this.needsSetup() && this.setupPending !== "solo") || this.setup.step === "helpdesk-key") return renderSetup(cx, this);
     if (this.appLocked) return renderSignIn(cx, this);
-    const current = this.taxpayer();
-    if (current && this.isRootLocked(current.tin_root)) return renderTaxpayerLock(cx, this, current.tin_root);
     const L = this.layout();
 
     // A form on a wide window brings its own two scroll areas (the part

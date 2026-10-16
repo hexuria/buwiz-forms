@@ -1,11 +1,11 @@
 //! Database schema migration engine.
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 21;
+const CURRENT_MIGRATION_VERSION: i32 = 22;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -354,6 +354,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         CREATE INDEX IF NOT EXISTS idx_legacy_filed_returns_tin
             ON legacy_filed_returns(tin);
         ",
+        // v22: One PIN and one authenticator per taxpayer, stored on the
+        // `taxpayers` row instead of on each branch profile, and the app's
+        // access mode (solo / helpdesk) inferred for existing installs.
+        "SELECT 1; -- v22 marker: taxpayer credentials and access mode (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -419,6 +423,11 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 20 {
                 migrate_v20_taxpayer_grouping(conn)?;
             }
+
+            if version == 22 {
+                migrate_v22_taxpayer_credentials(conn)?;
+                infer_v22_access_mode(conn)?;
+            }
         } else {
             break;
         }
@@ -458,6 +467,142 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // taxpayer. Only missing roots are inserted; existing rows never change.
     migrate_v20_taxpayer_grouping(conn)?;
 
+    // Heal partially upgraded v22 databases, and lift any PIN or
+    // authenticator a branch profile gained since (older build, profile
+    // import) onto its taxpayer. A taxpayer's own credential always wins.
+    migrate_v22_taxpayer_credentials(conn)?;
+
+    Ok(())
+}
+
+fn table_exists(conn: &Connection, table: &str) -> Result<bool, DbError> {
+    Ok(conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some())
+}
+
+/// v22: a PIN and an authenticator belong to the taxpayer, not the branch.
+///
+/// Adds nullable `taxpayers.pin_hash` / `taxpayers.totp_secret`, fills each
+/// one that is still NULL from the taxpayer's branch profiles (the head
+/// office first, else the lowest TIN that has one — the precedence the shell
+/// used while credentials lived on every branch), then clears
+/// `profile_pin_hash` / `totp_secret` on every profile row. Only those two
+/// keys of `profiles.data_json` are edited (`json_set`), so COR versions and
+/// every other stored byte stay as they were. Idempotent.
+fn migrate_v22_taxpayer_credentials(conn: &Connection) -> Result<(), DbError> {
+    if !table_exists(conn, "taxpayers")? {
+        return Ok(());
+    }
+    let columns = {
+        let mut stmt = conn.prepare("PRAGMA table_info(taxpayers)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?
+    };
+    for column in ["pin_hash", "totp_secret"] {
+        if !columns.contains(column) {
+            conn.execute(
+                &format!("ALTER TABLE taxpayers ADD COLUMN {column} TEXT"),
+                [],
+            )?;
+        }
+    }
+    if !table_exists(conn, "profiles")? {
+        return Ok(());
+    }
+
+    let mut lifted = 0usize;
+    for (key, column) in [
+        ("profile_pin_hash", "pin_hash"),
+        ("totp_secret", "totp_secret"),
+    ] {
+        lifted += conn.execute(
+            &format!(
+                "UPDATE taxpayers SET {column} = (
+                     SELECT json_extract(p.data_json, '$.{key}') FROM profiles p
+                     WHERE length(p.tin) >= 9 AND substr(p.tin, 1, 9) = taxpayers.tin_root
+                       AND json_valid(p.data_json)
+                       AND json_type(p.data_json, '$.{key}') = 'text'
+                       AND json_extract(p.data_json, '$.{key}') <> ''
+                     ORDER BY CASE WHEN length(p.tin) > 9
+                                    AND substr(p.tin, 10) NOT GLOB '*[^0]*'
+                               THEN 0 ELSE 1 END,
+                              p.tin
+                     LIMIT 1)
+                 WHERE {column} IS NULL"
+            ),
+            [],
+        )?;
+    }
+    let cleared = conn.execute(
+        "UPDATE profiles
+         SET data_json = json_set(data_json, '$.profile_pin_hash', NULL, '$.totp_secret', NULL)
+         WHERE json_valid(data_json)
+           AND (json_type(data_json, '$.profile_pin_hash') <> 'null'
+                OR json_type(data_json, '$.totp_secret') <> 'null')",
+        [],
+    )?;
+    if cleared > 0 {
+        info!(
+            "v22 migration: taxpayer credentials moved off {} branch profiles ({} taxpayer columns touched)",
+            cleared, lifted
+        );
+    }
+    Ok(())
+}
+
+/// v22, once: decide the access mode of an existing install. An admin PIN or
+/// authenticator in settings means a help desk; otherwise, with taxpayers,
+/// the earliest-created one is the owner of a solo install. A fresh install
+/// stays unset until first-launch setup.
+fn infer_v22_access_mode(conn: &Connection) -> Result<(), DbError> {
+    if !table_exists(conn, "settings")? {
+        return Ok(());
+    }
+    let setting = |key: &str| -> Result<Option<String>, DbError> {
+        Ok(conn
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+                row.get::<_, String>(0)
+            })
+            .optional()?)
+    };
+    if setting("access_mode")?.is_some() {
+        return Ok(());
+    }
+    let put = |key: &str, value: &str| -> Result<(), DbError> {
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = ?2",
+            [key, value],
+        )?;
+        Ok(())
+    };
+    if setting("app_lock_pin_hash")?.is_some() || setting("app_totp_secret")?.is_some() {
+        put("access_mode", "helpdesk")?;
+        info!("v22 migration: access mode helpdesk (admin credentials present)");
+        return Ok(());
+    }
+    if !table_exists(conn, "taxpayers")? {
+        return Ok(());
+    }
+    let owner: Option<String> = conn
+        .query_row(
+            "SELECT tin_root FROM taxpayers WHERE tin_root <> ?1
+             ORDER BY created_at, tin_root LIMIT 1",
+            [crate::tax_profile::RESERVED_ADMIN_TIN_ROOT],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(root) = owner {
+        put("access_mode", "solo")?;
+        put("admin_tin_root", &root)?;
+        info!("v22 migration: access mode solo, owner {}", root);
+    }
     Ok(())
 }
 
@@ -3408,6 +3553,194 @@ mod tests {
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap()
+    }
+
+    fn v21_profile_with_credentials(
+        name: &str,
+        tin: &str,
+        pin_hash: Option<&str>,
+        totp: Option<&str>,
+    ) -> String {
+        let mut value: serde_json::Value =
+            serde_json::from_str(&v19_profile_json(name, tin)).unwrap();
+        value["profile_pin_hash"] = serde_json::json!(pin_hash);
+        value["totp_secret"] = serde_json::json!(totp);
+        value.to_string()
+    }
+
+    fn setting(conn: &Connection, key: &str) -> Option<String> {
+        conn.query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+            row.get(0)
+        })
+        .optional()
+        .unwrap()
+    }
+
+    #[test]
+    fn test_v22_moves_credentials_onto_the_taxpayer_and_clears_branch_copies() {
+        let conn = v19_conn();
+        for (tin, pin, totp) in [
+            // Head office wins over a branch for the PIN; the authenticator
+            // only a branch had becomes the taxpayer's.
+            ("11111111100000", Some("head-pin"), None),
+            ("11111111100001", Some("branch-pin"), Some("BRANCHSECRET")),
+            // No head office: the lowest TIN that has one.
+            ("22222222200003", None, None),
+            ("22222222200002", Some("second-pin"), None),
+            // No credentials at all.
+            ("33333333300000", None, None),
+        ] {
+            conn.execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+                rusqlite::params![tin, v21_profile_with_credentials("Owner", tin, pin, totp)],
+            )
+            .unwrap();
+        }
+        let before_versions = all_rows(
+            &conn,
+            "SELECT tin, json_extract(data_json, '$.profile_versions') FROM profiles ORDER BY id",
+        );
+
+        migrate_database(&conn).unwrap();
+
+        let creds = all_rows(
+            &conn,
+            "SELECT tin_root, pin_hash, totp_secret FROM taxpayers ORDER BY tin_root",
+        );
+        let some = |v: &str| Some(v.to_string());
+        assert_eq!(
+            creds,
+            vec![
+                vec![some("111111111"), some("head-pin"), some("BRANCHSECRET")],
+                vec![some("222222222"), some("second-pin"), None],
+                vec![some("333333333"), None, None],
+            ]
+        );
+        let leftovers: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM profiles
+                 WHERE json_type(data_json, '$.profile_pin_hash') <> 'null'
+                    OR json_type(data_json, '$.totp_secret') <> 'null'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(leftovers, 0, "no branch profile keeps a credential");
+        let after_versions = all_rows(
+            &conn,
+            "SELECT tin, json_extract(data_json, '$.profile_versions') FROM profiles ORDER BY id",
+        );
+        assert_eq!(before_versions, after_versions, "COR versions untouched");
+
+        // A taxpayer's own credential wins over a branch copy that appears
+        // later (heal on every startup), and the copy is still cleared.
+        conn.execute(
+            "UPDATE profiles SET data_json = json_set(data_json, '$.profile_pin_hash', 'late')
+             WHERE tin = '11111111100001'",
+            [],
+        )
+        .unwrap();
+        migrate_database(&conn).unwrap();
+        let pin: Option<String> = conn
+            .query_row(
+                "SELECT pin_hash FROM taxpayers WHERE tin_root = '111111111'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(pin.as_deref(), Some("head-pin"));
+        let late: Option<String> = conn
+            .query_row(
+                "SELECT json_extract(data_json, '$.profile_pin_hash') FROM profiles
+                 WHERE tin = '11111111100001'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(late, None);
+    }
+
+    #[test]
+    fn test_v22_infers_helpdesk_from_admin_credentials() {
+        let conn = v19_conn();
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params![
+                "11111111100000",
+                v19_profile_json("Owner", "11111111100000")
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('app_totp_secret', 'ADMINSECRET')",
+            [],
+        )
+        .unwrap();
+        migrate_database(&conn).unwrap();
+        assert_eq!(setting(&conn, "access_mode").as_deref(), Some("helpdesk"));
+        assert_eq!(setting(&conn, "admin_tin_root"), None);
+    }
+
+    #[test]
+    fn test_v22_infers_solo_with_the_earliest_taxpayer_as_owner() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE taxpayers DROP COLUMN pin_hash;
+             ALTER TABLE taxpayers DROP COLUMN totp_secret;
+             PRAGMA user_version = 21;",
+        )
+        .unwrap();
+        for (tin, created_at) in [
+            ("33333333300000", "2024-05-01 00:00:00"),
+            ("22222222200000", "2023-01-01 00:00:00"),
+            ("11111111100000", "2023-01-01 00:00:00"),
+        ] {
+            conn.execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+                rusqlite::params![tin, v19_profile_json("Owner", tin)],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO taxpayers (tin_root, name, taxpayer_type, created_at)
+                 VALUES (?1, 'Owner', 'Individual', ?2)",
+                rusqlite::params![&tin[..9], created_at],
+            )
+            .unwrap();
+        }
+        migrate_database(&conn).unwrap();
+        assert_eq!(setting(&conn, "access_mode").as_deref(), Some("solo"));
+        assert_eq!(
+            setting(&conn, "admin_tin_root").as_deref(),
+            Some("111111111"),
+            "created_at first, then TIN root"
+        );
+    }
+
+    #[test]
+    fn test_v22_leaves_a_fresh_install_unset() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        assert_eq!(setting(&conn, "access_mode"), None);
+        assert_eq!(setting(&conn, "admin_tin_root"), None);
+    }
+
+    #[test]
+    fn test_v22_keeps_an_access_mode_already_chosen() {
+        let conn = v19_conn();
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params![
+                "11111111100000",
+                v19_profile_json("Owner", "11111111100000")
+            ],
+        )
+        .unwrap();
+        conn.execute_batch("INSERT INTO settings (key, value) VALUES ('access_mode', 'helpdesk');")
+            .unwrap();
+        migrate_database(&conn).unwrap();
+        assert_eq!(setting(&conn, "access_mode").as_deref(), Some("helpdesk"));
+        assert_eq!(setting(&conn, "admin_tin_root"), None);
     }
 
     #[test]

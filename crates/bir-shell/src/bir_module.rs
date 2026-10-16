@@ -206,6 +206,9 @@ fn set_profile_archived(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin = arguments.string(0)?.to_owned();
     let archived = arguments.boolean(1)?;
     with_database(|db| {
+        if archived {
+            guard_last_admin_branch(db, &tin, "archived", |profile| profile.is_archived)?;
+        }
         let mut profile = get_profile_by_tin(db, &tin)?;
         profile.is_archived = archived;
         db.save_profile(profile)
@@ -217,130 +220,132 @@ fn set_profile_archived(arguments: &gpui_shell::HostArguments) -> HostResult {
 fn delete_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
     with_database(|db| {
+        guard_last_admin_branch(db, tin, "deleted", |_| false)?;
         db.delete_profile(tin)
             .map(|_| HostValue::Null)
             .map_err(|error| HostError::new(error.to_string()))
     })
 }
 
-fn set_profile_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin = arguments.string(0)?.to_owned();
-    let pin = arguments.value(1)?.as_str().map(str::to_owned); // null clears
-    with_database(|db| {
-        let mut profile = get_profile_by_tin(db, &tin)?;
-        profile.profile_pin_hash = pin.map(|pin| bir_core::crypto::hash_pin(&pin));
-        db.save_profile(profile)
-            .map_err(|error| HostError::new(error.to_string()))
-            .map(|_| HostValue::Null)
+// ---------- sign-in: one lock per taxpayer, admin by access mode ----------
+//
+// A PIN and an authenticator belong to the taxpayer (9-digit TIN root) and
+// are stored once, on the `taxpayers` row; every branch shares them. The
+// admin account depends on the access mode chosen at first launch:
+// - `solo`: the admin IS the owner's taxpayer (`admin_tin_root`), so the
+//   admin PIN/authenticator are that taxpayer's.
+// - `helpdesk`: the admin is the reserved root `000000000`, not a taxpayer;
+//   its PIN/authenticator are the `app_lock_pin_hash` / `app_totp_secret`
+//   settings, and it must always keep at least one of them.
+// Recovery ladder: authenticator -> recovery key -> Mac login.
+
+const ACCESS_MODE: &str = "access_mode";
+const ADMIN_TIN_ROOT: &str = "admin_tin_root";
+const ADMIN_PIN_HASH: &str = "app_lock_pin_hash";
+const ADMIN_TOTP_SECRET: &str = "app_totp_secret";
+const RECOVERY_KEY_HASH: &str = "admin_recovery_key_hash";
+
+const WRONG_CODE: &str =
+    "That code does not match. Type the 6-digit code your authenticator app shows now.";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum AccessMode {
+    /// The owner's own taxpayer is the admin.
+    Solo(String),
+    Helpdesk,
+}
+
+fn db_error(error: impl std::fmt::Display) -> HostError {
+    HostError::new(error.to_string())
+}
+
+fn setting(db: &Database, key: &str) -> Result<Option<String>, HostError> {
+    db.get_setting(key).map_err(db_error)
+}
+
+/// The chosen access mode; `None` on a fresh install not yet set up.
+fn access_mode(db: &Database) -> Result<Option<AccessMode>, HostError> {
+    Ok(match setting(db, ACCESS_MODE)?.as_deref() {
+        Some("solo") => setting(db, ADMIN_TIN_ROOT)?.map(AccessMode::Solo),
+        Some("helpdesk") => Some(AccessMode::Helpdesk),
+        _ => None,
     })
 }
 
-/// Set or clear a taxpayer's authenticator. Setting needs a current code
-/// from the authenticator app, checked against the new secret, so a
-/// mistyped enrolment cannot lock the taxpayer out. `null` clears it.
-fn set_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin = arguments.string(0)?.to_owned();
-    let secret = arguments.value(1)?.as_str().map(str::to_owned);
-    let token = arguments
-        .get(2)
-        .and_then(HostValue::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    if let Some(secret) = &secret
-        && !bir_core::crypto::validate_totp(secret, &token)
-    {
-        return Err(HostError::new(
-            "That code does not match. Type the 6-digit code your authenticator app shows now.",
-        ));
+fn require_access_mode(db: &Database) -> Result<AccessMode, HostError> {
+    access_mode(db)?.ok_or_else(|| HostError::new("This app is not set up yet."))
+}
+
+/// The TIN root of the solo owner, whose taxpayer must never disappear.
+fn solo_admin_root(db: &Database) -> Result<Option<String>, HostError> {
+    Ok(match access_mode(db)? {
+        Some(AccessMode::Solo(root)) => Some(root),
+        _ => None,
+    })
+}
+
+fn tin_root_argument(raw: &str) -> Result<String, HostError> {
+    bir_core::tax_profile::parse_tin_root(raw).map_err(db_error)
+}
+
+/// A PIN argument: `null` clears, otherwise exactly 4 digits.
+fn pin_argument(value: &HostValue) -> Result<Option<String>, HostError> {
+    match value {
+        HostValue::Null => Ok(None),
+        HostValue::Str(pin) if pin.len() == 4 && pin.bytes().all(|b| b.is_ascii_digit()) => {
+            Ok(Some(pin.clone()))
+        }
+        _ => Err(HostError::new("A PIN is 4 digits.")),
     }
-    with_database(|db| {
-        let mut profile = get_profile_by_tin(db, &tin)?;
-        profile.totp_secret = secret;
-        db.save_profile(profile)
-            .map_err(|error| HostError::new(error.to_string()))
-            .map(|_| HostValue::Null)
-    })
 }
 
-/// App-wide auth toggles the lock screen and profile unlock gate read once
-/// per render (same settings keys as the painted app reads at startup).
-fn auth_state() -> HostResult {
-    with_database(|db| {
-        let flag = |key: &str| {
-            db.get_setting(key)
-                .ok()
-                .flatten()
-                .is_some_and(|v| v == "true")
-        };
-        let set = |key: &str| db.get_setting(key).ok().flatten().is_some();
-        Ok(HostObject::new()
-            .field("enable_profile_pins", flag("enable_profile_pins"))
-            .field("has_admin_totp", set("app_totp_secret"))
-            .field("has_admin_pin", set("app_lock_pin_hash"))
-            .field("hide_tax_profiles", flag("hide_tax_profiles"))
-            .into())
-    })
+/// An authenticator argument pair: `null` clears; a secret needs a current
+/// code from the app, checked against the new secret, so a mistyped
+/// enrolment cannot lock anyone out.
+fn totp_argument(
+    arguments: &gpui_shell::HostArguments,
+    secret_index: usize,
+) -> Result<Option<String>, HostError> {
+    let secret = arguments.value(secret_index)?.as_str().map(str::to_owned);
+    let token = arguments
+        .get(secret_index + 1)
+        .and_then(HostValue::as_str)
+        .unwrap_or_default();
+    if let Some(secret) = &secret
+        && !bir_core::crypto::validate_totp(secret, token)
+    {
+        return Err(HostError::new(WRONG_CODE));
+    }
+    Ok(secret)
 }
 
-fn profile_auth(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin = arguments.string(0)?;
-    with_database(|db| {
-        let profile = get_profile_by_tin(db, tin)?;
-        Ok(HostObject::new()
-            .field("has_pin", profile.profile_pin_hash.is_some())
-            .field("has_totp", profile.totp_secret.is_some())
-            .into())
-    })
+fn taxpayer_credentials(
+    db: &Database,
+    tin_root: &str,
+) -> Result<bir_core::tax_profile::TaxpayerCredentials, HostError> {
+    db.taxpayer_credentials(tin_root).map_err(db_error)
 }
 
-fn verify_profile_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin = arguments.string(0)?;
-    let pin = arguments.string(1)?;
-    let hashed = bir_core::crypto::hash_pin(pin);
-    with_database(|db| {
-        let profile = get_profile_by_tin(db, tin)?;
-        Ok(HostValue::Bool(
-            profile.profile_pin_hash.as_deref() == Some(hashed.as_str()),
-        ))
-    })
+/// The admin's PIN hash and authenticator secret under `mode`.
+fn admin_credentials(
+    db: &Database,
+    mode: &AccessMode,
+) -> Result<bir_core::tax_profile::TaxpayerCredentials, HostError> {
+    match mode {
+        AccessMode::Solo(root) => taxpayer_credentials(db, root),
+        AccessMode::Helpdesk => Ok(bir_core::tax_profile::TaxpayerCredentials {
+            pin_hash: setting(db, ADMIN_PIN_HASH)?,
+            totp_secret: setting(db, ADMIN_TOTP_SECRET)?,
+        }),
+    }
 }
 
-fn verify_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin = arguments.string(0)?;
-    let token = arguments.string(1)?;
-    with_database(|db| {
-        let profile = get_profile_by_tin(db, tin)?;
-        let ok = profile
-            .totp_secret
-            .as_deref()
-            .is_some_and(|secret| bir_core::crypto::validate_totp(secret, token));
-        Ok(HostValue::Bool(ok))
-    })
+fn pin_matches(stored: Option<&str>, pin: &str) -> bool {
+    stored.is_some_and(|stored| stored == bir_core::crypto::hash_pin(pin))
 }
 
-fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let pin = arguments.string(0)?;
-    let hashed = bir_core::crypto::hash_pin(pin);
-    with_database(|db| {
-        let ok = db
-            .get_setting("app_lock_pin_hash")
-            .ok()
-            .flatten()
-            .is_some_and(|stored| stored == hashed);
-        Ok(HostValue::Bool(ok))
-    })
-}
-
-fn verify_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let token = arguments.string(0)?;
-    with_database(|db| {
-        let ok = db
-            .get_setting("app_totp_secret")
-            .ok()
-            .flatten()
-            .is_some_and(|secret| bir_core::crypto::validate_totp(&secret, token));
-        Ok(HostValue::Bool(ok))
-    })
+fn totp_matches(secret: Option<&str>, token: &str) -> bool {
+    secret.is_some_and(|secret| bir_core::crypto::validate_totp(secret, token))
 }
 
 fn generate_totp_secret(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -357,159 +362,382 @@ fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     with_database(|db| {
         db.delete_setting(&key)
             .map(|_| HostValue::Null)
-            .map_err(|error| HostError::new(error.to_string()))
+            .map_err(db_error)
     })
 }
 
-// ---------- taxpayer credentials (one PIN per TIN root) ----------
-//
-// A PIN and an authenticator belong to the taxpayer, not the branch: every
-// branch of a TIN root shares them. They are still stored on each branch's
-// profile row (that is where `profile_pin_hash` lives), so writes go to every
-// branch and reads resolve the head office first, then the other branches.
-
-/// Branch profiles of a taxpayer, head office first. Branches without a
-/// profile row are skipped.
-fn taxpayer_profiles(
-    db: &Database,
-    tin_root: &str,
-) -> Result<Vec<bir_core::profile::TaxpayerProfile>, HostError> {
-    let taxpayer = db
-        .get_taxpayer(tin_root)
-        .map_err(|error| HostError::new(error.to_string()))?
-        .ok_or_else(|| HostError::new(format!("No taxpayer with TIN {tin_root}")))?;
-    let mut profiles = Vec::new();
-    for branch in &taxpayer.branches {
-        if let Some(profile) = db
-            .get_profile_by_tin(&branch.tin)
-            .map_err(|error| HostError::new(error.to_string()))?
-        {
-            profiles.push(profile);
-        }
-    }
-    if profiles.is_empty() {
-        return Err(HostError::new(format!(
-            "no taxpayer profile with TIN {tin_root}"
-        )));
-    }
-    Ok(profiles)
-}
-
-/// The taxpayer's PIN hash and authenticator secret: the head office's when
-/// set, otherwise the first branch's that has one.
-fn taxpayer_credentials(
-    profiles: &[bir_core::profile::TaxpayerProfile],
-) -> (Option<String>, Option<String>) {
-    let pin = profiles.iter().find_map(|p| p.profile_pin_hash.clone());
-    let totp = profiles.iter().find_map(|p| p.totp_secret.clone());
-    (pin, totp)
-}
-
-/// Write one PIN hash and authenticator secret to every branch of a taxpayer.
-/// Returns how many branch rows changed.
-fn write_taxpayer_credentials(
-    db: &Database,
-    profiles: Vec<bir_core::profile::TaxpayerProfile>,
-    pin: Option<String>,
-    totp: Option<String>,
-) -> Result<usize, HostError> {
-    let mut changed = 0;
-    for mut profile in profiles {
-        if profile.profile_pin_hash == pin && profile.totp_secret == totp {
-            continue;
-        }
-        profile.profile_pin_hash = pin.clone();
-        profile.totp_secret = totp.clone();
-        db.save_profile(profile)
-            .map_err(|error| HostError::new(error.to_string()))?;
-        changed += 1;
-    }
-    Ok(changed)
-}
-
-fn taxpayer_auth(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin_root = arguments.string(0)?;
+/// What the lock screen and first-launch setup read once per render.
+fn auth_state() -> HostResult {
     with_database(|db| {
-        let (pin, totp) = taxpayer_credentials(&taxpayer_profiles(db, tin_root)?);
+        let mode = access_mode(db)?;
+        let credentials = match &mode {
+            Some(mode) => admin_credentials(db, mode)?,
+            None => Default::default(),
+        };
+        let (mode_name, admin_root) = match &mode {
+            Some(AccessMode::Solo(root)) => {
+                (HostValue::from("solo"), HostValue::from(root.as_str()))
+            }
+            Some(AccessMode::Helpdesk) => (
+                HostValue::from("helpdesk"),
+                HostValue::from(bir_core::tax_profile::RESERVED_ADMIN_TIN_ROOT),
+            ),
+            None => (HostValue::Null, HostValue::Null),
+        };
         Ok(HostObject::new()
-            .field("has_pin", pin.is_some())
-            .field("has_totp", totp.is_some())
+            .field("mode", mode_name)
+            .field("admin_root", admin_root)
+            .field("has_admin_pin", credentials.pin_hash.is_some())
+            .field("has_admin_totp", credentials.totp_secret.is_some())
+            .field(
+                "has_recovery_key",
+                setting(db, RECOVERY_KEY_HASH)?.is_some(),
+            )
+            .field("mac_login_available", mac_login_available())
             .into())
     })
 }
 
-/// Set (`pin`) or clear (`null`) the PIN of every branch of a taxpayer.
-fn set_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin_root = arguments.string(0)?.to_owned();
-    let pin = arguments.value(1)?.as_str().map(bir_core::crypto::hash_pin);
+fn taxpayer_auth(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin_root = tin_root_argument(arguments.string(0)?)?;
     with_database(|db| {
-        let profiles = taxpayer_profiles(db, &tin_root)?;
-        let (_, totp) = taxpayer_credentials(&profiles);
-        write_taxpayer_credentials(db, profiles, pin, totp).map(|_| HostValue::Null)
+        let credentials = taxpayer_credentials(db, &tin_root)?;
+        Ok(HostObject::new()
+            .field("has_pin", credentials.pin_hash.is_some())
+            .field("has_totp", credentials.totp_secret.is_some())
+            .into())
     })
 }
 
-/// Set or clear a taxpayer's authenticator; setting needs a current code, as
-/// in `set_profile_totp`.
+/// Set (`pin`) or clear (`null`) a taxpayer's PIN.
+fn set_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin_root = tin_root_argument(arguments.string(0)?)?;
+    let pin = pin_argument(arguments.value(1)?)?;
+    with_database(|db| write_taxpayer_pin(db, &tin_root, pin.as_deref()))
+}
+
+fn write_taxpayer_pin(db: &Database, tin_root: &str, pin: Option<&str>) -> HostResult {
+    let hash = pin.map(bir_core::crypto::hash_pin);
+    db.set_taxpayer_pin_hash(tin_root, hash.as_deref())
+        .map(|_| HostValue::Null)
+        .map_err(db_error)
+}
+
+/// Set (with a current code) or clear (`null`) a taxpayer's authenticator.
 fn set_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin_root = arguments.string(0)?.to_owned();
-    let secret = arguments.value(1)?.as_str().map(str::to_owned);
-    let token = arguments
-        .get(2)
-        .and_then(HostValue::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    if let Some(secret) = &secret
-        && !bir_core::crypto::validate_totp(secret, &token)
-    {
-        return Err(HostError::new(
-            "That code does not match. Type the 6-digit code your authenticator app shows now.",
-        ));
-    }
+    let tin_root = tin_root_argument(arguments.string(0)?)?;
+    let secret = totp_argument(arguments, 1)?;
     with_database(|db| {
-        let profiles = taxpayer_profiles(db, &tin_root)?;
-        let (pin, _) = taxpayer_credentials(&profiles);
-        write_taxpayer_credentials(db, profiles, pin, secret).map(|_| HostValue::Null)
+        db.set_taxpayer_totp_secret(&tin_root, secret.as_deref())
+            .map(|_| HostValue::Null)
+            .map_err(db_error)
     })
 }
 
 fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin_root = arguments.string(0)?;
-    let hashed = bir_core::crypto::hash_pin(arguments.string(1)?);
+    let tin_root = tin_root_argument(arguments.string(0)?)?;
+    let pin = arguments.string(1)?;
     with_database(|db| {
-        let (pin, _) = taxpayer_credentials(&taxpayer_profiles(db, tin_root)?);
-        Ok(HostValue::Bool(pin.as_deref() == Some(hashed.as_str())))
+        let credentials = taxpayer_credentials(db, &tin_root)?;
+        Ok(HostValue::Bool(pin_matches(
+            credentials.pin_hash.as_deref(),
+            pin,
+        )))
     })
 }
 
 fn verify_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin_root = arguments.string(0)?;
+    let tin_root = tin_root_argument(arguments.string(0)?)?;
     let token = arguments.string(1)?;
     with_database(|db| {
-        let (_, totp) = taxpayer_credentials(&taxpayer_profiles(db, tin_root)?);
-        Ok(HostValue::Bool(totp.as_deref().is_some_and(|secret| {
-            bir_core::crypto::validate_totp(secret, token)
-        })))
+        let credentials = taxpayer_credentials(db, &tin_root)?;
+        Ok(HostValue::Bool(totp_matches(
+            credentials.totp_secret.as_deref(),
+            token,
+        )))
     })
 }
 
-/// One-time move to one PIN per taxpayer: every branch takes the head
-/// office's PIN and authenticator (or, without one, the first branch's that
-/// has one). Safe to run at every launch; returns how many rows changed.
-fn unify_taxpayer_credentials() -> HostResult {
+/// Legacy per-branch entry point: a branch TIN's PIN is its taxpayer's.
+fn set_profile_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let pin = pin_argument(arguments.value(1)?)?;
     with_database(|db| {
-        let mut changed = 0;
-        for entry in db
-            .list_taxpayers()
-            .map_err(|error| HostError::new(error.to_string()))?
-        {
-            let Ok(profiles) = taxpayer_profiles(db, &entry.taxpayer.tin_root) else {
-                continue;
-            };
-            let (pin, totp) = taxpayer_credentials(&profiles);
-            changed += write_taxpayer_credentials(db, profiles, pin, totp)?;
+        let root = get_profile_by_tin(db, &tin)?.tin.full()[..9].to_string();
+        write_taxpayer_pin(db, &root, pin.as_deref())
+    })
+}
+
+/// Legacy per-branch entry point: a branch TIN's authenticator is its
+/// taxpayer's. Setting needs a current code; `null` clears.
+fn set_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let secret = totp_argument(arguments, 1)?;
+    with_database(|db| {
+        let root = get_profile_by_tin(db, &tin)?.tin.full()[..9].to_string();
+        db.set_taxpayer_totp_secret(&root, secret.as_deref())
+            .map(|_| HostValue::Null)
+            .map_err(db_error)
+    })
+}
+
+fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let pin = arguments.string(0)?;
+    with_database(|db| {
+        let ok = match access_mode(db)? {
+            Some(mode) => pin_matches(admin_credentials(db, &mode)?.pin_hash.as_deref(), pin),
+            None => false,
+        };
+        Ok(HostValue::Bool(ok))
+    })
+}
+
+fn verify_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let token = arguments.string(0)?;
+    with_database(|db| {
+        let ok = match access_mode(db)? {
+            Some(mode) => totp_matches(admin_credentials(db, &mode)?.totp_secret.as_deref(), token),
+            None => false,
+        };
+        Ok(HostValue::Bool(ok))
+    })
+}
+
+const KEEP_ONE_WAY_IN: &str = "The admin must keep at least one way to sign in. Set up the other one (PIN or authenticator) before removing this one.";
+
+/// Set or clear the admin PIN. Solo: the owner taxpayer's PIN (clearing is
+/// allowed). Help desk: the settings PIN, refused to clear without an
+/// authenticator. Only the hash is stored; the script never sees it.
+fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let pin = pin_argument(arguments.value(0)?)?;
+    with_database(|db| match require_access_mode(db)? {
+        AccessMode::Solo(root) => write_taxpayer_pin(db, &root, pin.as_deref()),
+        AccessMode::Helpdesk => match pin {
+            Some(pin) => db.set_setting(ADMIN_PIN_HASH, &bir_core::crypto::hash_pin(&pin)),
+            None => {
+                if setting(db, ADMIN_TOTP_SECRET)?.is_none() {
+                    return Err(HostError::new(KEEP_ONE_WAY_IN));
+                }
+                db.delete_setting(ADMIN_PIN_HASH)
+            }
         }
-        Ok(HostValue::Number(changed as f64))
+        .map(|_| HostValue::Null)
+        .map_err(db_error),
+    })
+}
+
+/// Set (with a current code) or clear the admin authenticator, mode-aware
+/// like [`set_admin_pin`].
+fn set_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let secret = totp_argument(arguments, 0)?;
+    with_database(|db| match require_access_mode(db)? {
+        AccessMode::Solo(root) => db
+            .set_taxpayer_totp_secret(&root, secret.as_deref())
+            .map(|_| HostValue::Null)
+            .map_err(db_error),
+        AccessMode::Helpdesk => match secret {
+            Some(secret) => db.set_setting(ADMIN_TOTP_SECRET, &secret),
+            None => {
+                if setting(db, ADMIN_PIN_HASH)?.is_none() {
+                    return Err(HostError::new(KEEP_ONE_WAY_IN));
+                }
+                db.delete_setting(ADMIN_TOTP_SECRET)
+            }
+        }
+        .map(|_| HostValue::Null)
+        .map_err(db_error),
+    })
+}
+
+const ALREADY_SET_UP: &str = "This app is already set up.";
+
+/// First launch, "Just me or my business": the taxpayer the script just
+/// created is the owner and the admin.
+fn setup_solo(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let root = tin_root_argument(arguments.string(0)?)?;
+    with_database(|db| {
+        if setting(db, ACCESS_MODE)?.is_some() {
+            return Err(HostError::new(ALREADY_SET_UP));
+        }
+        bir_core::tax_profile::reject_reserved_tin_root(&root).map_err(db_error)?;
+        if db.get_taxpayer(&root).map_err(db_error)?.is_none() {
+            return Err(HostError::new(format!("No taxpayer with TIN {root}")));
+        }
+        db.set_setting(ADMIN_TIN_ROOT, &root).map_err(db_error)?;
+        db.set_setting(ACCESS_MODE, "solo").map_err(db_error)?;
+        Ok(HostValue::Null)
+    })
+}
+
+/// First launch, "I help other taxpayers": admin PIN plus a recovery key.
+fn setup_helpdesk(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let pin =
+        pin_argument(arguments.value(0)?)?.ok_or_else(|| HostError::new("A PIN is 4 digits."))?;
+    with_database(|db| {
+        if setting(db, ACCESS_MODE)?.is_some() {
+            return Err(HostError::new(ALREADY_SET_UP));
+        }
+        db.set_setting(ADMIN_PIN_HASH, &bir_core::crypto::hash_pin(&pin))
+            .map_err(db_error)?;
+        db.set_setting(ACCESS_MODE, "helpdesk").map_err(db_error)?;
+        db.delete_setting(ADMIN_TIN_ROOT).map_err(db_error)?;
+        store_new_recovery_key(db)
+    })
+}
+
+/// A fresh recovery key replaces any earlier one; only its hash is kept.
+fn store_new_recovery_key(db: &Database) -> HostResult {
+    let key = bir_core::crypto::generate_recovery_key();
+    db.set_setting(
+        RECOVERY_KEY_HASH,
+        &bir_core::crypto::hash_recovery_key(&key),
+    )
+    .map_err(db_error)?;
+    Ok(HostObject::new().field("recovery_key", key).into())
+}
+
+fn create_recovery_key() -> HostResult {
+    with_database(|db| {
+        require_access_mode(db)?;
+        store_new_recovery_key(db)
+    })
+}
+
+/// Single use: a match answers true and forgets the key. Case, dashes and
+/// spaces do not matter.
+fn use_recovery_key(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let typed = bir_core::crypto::hash_recovery_key(arguments.string(0)?);
+    with_database(|db| {
+        let matches = setting(db, RECOVERY_KEY_HASH)?.is_some_and(|stored| stored == typed);
+        if matches {
+            db.delete_setting(RECOVERY_KEY_HASH).map_err(db_error)?;
+        }
+        Ok(HostValue::Bool(matches))
+    })
+}
+
+fn mac_login_available() -> bool {
+    cfg!(any(target_os = "macos", target_os = "windows"))
+}
+
+/// Ask the operating system to confirm the signed-in user (Touch ID or the
+/// account password on macOS, Windows Hello elsewhere). The prompt runs on
+/// its own thread, so the UI thread never waits; other platforms answer
+/// false.
+fn mac_login(
+    arguments: &gpui_shell::HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let reason = arguments
+        .get(0)
+        .and_then(HostValue::as_str)
+        .filter(|reason| !reason.trim().is_empty())
+        .unwrap_or("sign in as the admin")
+        .to_owned();
+    let (sender, receiver) = futures::channel::oneshot::channel::<bool>();
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    std::thread::Builder::new()
+        .name("mac-login".into())
+        .spawn(move || {
+            let _ = sender.send(os_authenticate(&reason));
+        })
+        .map_err(db_error)?;
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = reason;
+        let _ = sender.send(false);
+    }
+    Ok(async move { Ok(HostValue::Bool(receiver.await.unwrap_or(false))) })
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn os_authenticate(reason: &str) -> bool {
+    use robius_authentication::{
+        AndroidText, BiometricStrength, Context, PolicyBuilder, Text, WindowsText,
+    };
+    let Some(policy) = PolicyBuilder::new()
+        .biometrics(Some(BiometricStrength::Strong))
+        .password(true)
+        .watch(true)
+        .build()
+    else {
+        tracing::warn!("OS sign-in policy unavailable");
+        return false;
+    };
+    let text = Text {
+        android: AndroidText {
+            title: "Admin sign-in",
+            subtitle: None,
+            description: None,
+        },
+        apple: reason,
+        windows: WindowsText::new_truncated("Admin sign-in", reason),
+    };
+    futures::executor::block_on(Context::new(()).authenticate(text, &policy)).is_ok()
+}
+
+/// Refuse to archive or delete the solo owner (the admin) or the reserved
+/// help desk root.
+fn guard_admin_taxpayer(db: &Database, root: &str, action: &str) -> Result<(), HostError> {
+    if root == bir_core::tax_profile::RESERVED_ADMIN_TIN_ROOT
+        || solo_admin_root(db)?.as_deref() == Some(root)
+    {
+        return Err(HostError::new(format!(
+            "This taxpayer is the admin account and cannot be {action}."
+        )));
+    }
+    Ok(())
+}
+
+/// Archiving or deleting one branch must not take the solo owner's last
+/// usable branch with it: refuse when every other branch of the admin
+/// taxpayer is already `gone`.
+fn guard_last_admin_branch(
+    db: &Database,
+    tin: &str,
+    action: &str,
+    gone: impl Fn(&bir_core::profile::TaxpayerProfile) -> bool,
+) -> Result<(), HostError> {
+    let Some(root) = solo_admin_root(db)? else {
+        return Ok(());
+    };
+    if tin.len() < 9 || tin[..9] != root {
+        return Ok(());
+    }
+    let Some(taxpayer) = db.get_taxpayer(&root).map_err(db_error)? else {
+        return Ok(());
+    };
+    for branch in taxpayer.branches.iter().filter(|branch| branch.tin != tin) {
+        if let Some(profile) = db.get_profile_by_tin(&branch.tin).map_err(db_error)?
+            && !gone(&profile)
+        {
+            return Ok(());
+        }
+    }
+    Err(HostError::new(format!(
+        "This is the admin taxpayer's last branch and cannot be {action}."
+    )))
+}
+
+fn set_taxpayer_archived(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let root = tin_root_argument(arguments.string(0)?)?;
+    let archived = arguments.boolean(1)?;
+    with_database(|db| {
+        if archived {
+            guard_admin_taxpayer(db, &root, "archived")?;
+        }
+        db.set_taxpayer_archived(&root, archived)
+            .map(|_| HostValue::Null)
+            .map_err(db_error)
+    })
+}
+
+fn delete_taxpayer(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let root = tin_root_argument(arguments.string(0)?)?;
+    with_database(|db| {
+        guard_admin_taxpayer(db, &root, "deleted")?;
+        db.delete_taxpayer(&root)
+            .map(|_| HostValue::Null)
+            .map_err(db_error)
     })
 }
 
@@ -1274,20 +1502,6 @@ fn list_deadlines() -> HostResult {
     })
 }
 
-/// Admin PIN lives only as its hash (`app_lock_pin_hash`); hashing stays
-/// host-side so the script never sees the stored digest.
-fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let pin = arguments.value(0)?.as_str().map(str::to_owned); // null clears
-    with_database(|db| {
-        match pin {
-            Some(pin) => db.set_setting("app_lock_pin_hash", &bir_core::crypto::hash_pin(&pin)),
-            None => db.delete_setting("app_lock_pin_hash"),
-        }
-        .map(|_| HostValue::Null)
-        .map_err(|error| HostError::new(error.to_string()))
-    })
-}
-
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
     let module = HostModule::new("bir")
@@ -1301,24 +1515,26 @@ pub fn module() -> HostModule {
         .function("set_profile_archived", set_profile_archived)
         .function("delete_profile", delete_profile)
         .function("set_profile_pin", set_profile_pin)
-        .function("auth_state", |_| auth_state())
-        .function("profile_auth", profile_auth)
-        .function("verify_profile_pin", verify_profile_pin)
-        .function("verify_profile_totp", verify_profile_totp)
         .function("set_profile_totp", set_profile_totp)
+        .function("auth_state", |_| auth_state())
         .function("taxpayer_auth", taxpayer_auth)
         .function("set_taxpayer_pin", set_taxpayer_pin)
         .function("set_taxpayer_totp", set_taxpayer_totp)
         .function("verify_taxpayer_pin", verify_taxpayer_pin)
         .function("verify_taxpayer_totp", verify_taxpayer_totp)
-        .function("unify_taxpayer_credentials", |_| {
-            unify_taxpayer_credentials()
-        })
         .function("verify_admin_pin", verify_admin_pin)
         .function("verify_admin_totp", verify_admin_totp)
+        .function("set_admin_pin", set_admin_pin)
+        .function("set_admin_totp", set_admin_totp)
+        .function("setup_solo", setup_solo)
+        .function("setup_helpdesk", setup_helpdesk)
+        .function("create_recovery_key", |_| create_recovery_key())
+        .function("use_recovery_key", use_recovery_key)
+        .async_function("mac_login", mac_login)
+        .function("set_taxpayer_archived", set_taxpayer_archived)
+        .function("delete_taxpayer", delete_taxpayer)
         .function("generate_totp_secret", generate_totp_secret)
         .function("delete_setting", delete_setting)
-        .function("set_admin_pin", set_admin_pin)
         .function("list_drafts", list_drafts)
         .function("get_form_draft", get_form_draft)
         .function("save_form_draft", save_form_draft)
@@ -1382,10 +1598,16 @@ export function get_setting(key: string): string | null;
 export function set_setting(key: string, value: string): null;
 
 export interface AuthState {
-    enable_profile_pins: boolean;
-    has_admin_totp: boolean;
+    /** null on a fresh install that has not chosen yet. */
+    mode: "solo" | "helpdesk" | null;
+    /** solo: the owner's TIN root; helpdesk: "000000000"; null if unset. */
+    admin_root: string | null;
+    /** solo: the owner taxpayer's PIN; helpdesk: the admin PIN setting. */
     has_admin_pin: boolean;
-    hide_tax_profiles: boolean;
+    has_admin_totp: boolean;
+    has_recovery_key: boolean;
+    /** Touch ID / account password (macOS) or Windows Hello can confirm the admin. */
+    mac_login_available: boolean;
 }
 export interface ProfileAuth {
     has_pin: boolean;
@@ -1395,30 +1617,50 @@ export interface TotpSecret {
     secret: string;
     qr_path: string;
 }
+export interface RecoveryKey {
+    /** Shown once, e.g. "7K3M-Q9TB-0XWD-H2RE"; only its hash is kept. */
+    recovery_key: string;
+}
 export function profile_detail(tin: string): object;
 export function save_profile(profile: object): object;
 export function set_profile_archived(tin: string, archived: boolean): object;
 export function delete_profile(tin: string): null;
+/** Sets the PIN of the branch's taxpayer (one PIN per TIN root). */
 export function set_profile_pin(tin: string, pin: string | null): null;
-export function auth_state(): AuthState;
-export function profile_auth(tin: string): ProfileAuth;
-export function verify_profile_pin(tin: string, pin: string): boolean;
-export function verify_profile_totp(tin: string, token: string): boolean;
-/** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
+/** Sets the authenticator of the branch's taxpayer; setting needs a current code. */
 export function set_profile_totp(tin: string, secret: string | null, token?: string): null;
+export function auth_state(): AuthState;
 /** PIN and authenticator of a taxpayer (TIN root), shared by every branch. */
 export function taxpayer_auth(tin_root: string): ProfileAuth;
+/** pin: exactly 4 digits, or null to clear. */
 export function set_taxpayer_pin(tin_root: string, pin: string | null): null;
-export function set_taxpayer_totp(tin_root: string, secret: string | null, token?: string): null;
+/** Set (with a current code from the app) or clear (null) a taxpayer's authenticator. */
+export function set_taxpayer_totp(tin_root: string, secret: string | null, code?: string): null;
 export function verify_taxpayer_pin(tin_root: string, pin: string): boolean;
-export function verify_taxpayer_totp(tin_root: string, token: string): boolean;
-/** Give every branch its taxpayer's PIN and authenticator; returns rows changed. */
-export function unify_taxpayer_credentials(): number;
+export function verify_taxpayer_totp(tin_root: string, code: string): boolean;
+/** solo: the owner taxpayer's PIN; helpdesk: the admin PIN. false when not set up. */
 export function verify_admin_pin(pin: string): boolean;
-export function verify_admin_totp(token: string): boolean;
+export function verify_admin_totp(code: string): boolean;
+/** Help desk refuses to clear the PIN while there is no admin authenticator. */
+export function set_admin_pin(pin: string | null): null;
+/** Setting needs a current code; help desk refuses to clear it while there is no admin PIN. */
+export function set_admin_totp(secret: string | null, code?: string): null;
+/** First launch, after creating the owner's taxpayer. Refused once set up. */
+export function setup_solo(tin_root: string): null;
+/** First launch for a help desk: admin PIN plus a new recovery key. Refused once set up. */
+export function setup_helpdesk(pin: string): RecoveryKey;
+/** Replace the admin recovery key. Needs the app set up. */
+export function create_recovery_key(): RecoveryKey;
+/** Single use: true (and the key is forgotten) on a match; case, dashes and spaces ignored. */
+export function use_recovery_key(key: string): boolean;
+/** Touch ID / account password (Windows Hello on Windows); false elsewhere or when cancelled. */
+export function mac_login(reason: string): Promise<boolean>;
+/** Archive or unarchive every branch. Archiving the admin taxpayer is refused. */
+export function set_taxpayer_archived(tin_root: string, archived: boolean): null;
+/** Delete the taxpayer and every branch. Refused for the admin taxpayer. */
+export function delete_taxpayer(tin_root: string): null;
 export function generate_totp_secret(account: string): TotpSecret;
 export function delete_setting(key: string): null;
-export function set_admin_pin(pin: string | null): null;
 
 export interface DraftSummary {
     id: number;
@@ -1517,7 +1759,7 @@ mod tests {
     }
 
     fn has_totp() -> bool {
-        with_database(|db| Ok(get_profile_by_tin(db, TIN)?.totp_secret.is_some())).unwrap()
+        with_database(|db| Ok(taxpayer_credentials(db, ROOT)?.totp_secret.is_some())).unwrap()
     }
 
     fn current_code(secret: &str) -> String {
@@ -1529,32 +1771,13 @@ mod tests {
             .unwrap()
     }
 
-    #[test]
-    fn set_profile_totp_needs_a_matching_code_and_clears_with_null() {
-        setup();
-        let secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
-        let wrong = set_profile_totp(&args(vec![
-            HostValue::Str(TIN.into()),
-            HostValue::Str(secret.into()),
-            HostValue::Str("000000".into()),
-        ]));
-        if current_code(secret) != "000000" {
-            assert!(wrong.unwrap_err().message().contains("does not match"));
-            assert!(!has_totp());
-        }
-        set_profile_totp(&args(vec![
-            HostValue::Str(TIN.into()),
-            HostValue::Str(secret.into()),
-            HostValue::Str(current_code(secret)),
-        ]))
-        .unwrap();
-        assert!(has_totp());
-        set_profile_totp(&args(vec![HostValue::Str(TIN.into()), HostValue::Null])).unwrap();
-        assert!(!has_totp());
-    }
-
     const ROOT: &str = "123456788";
     const BRANCH: &str = "12345678800001";
+    const SECRET: &str = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+
+    fn s(value: &str) -> HostValue {
+        HostValue::Str(value.into())
+    }
 
     fn add_branch() {
         with_database(|db| {
@@ -1572,75 +1795,255 @@ mod tests {
         .unwrap();
     }
 
-    fn pin_hash(tin: &str) -> Option<String> {
-        with_database(|db| Ok(get_profile_by_tin(db, tin)?.profile_pin_hash.clone())).unwrap()
-    }
-
-    fn set_branch_pin(tin: &str, pin: &str) {
-        set_profile_pin(&args(vec![
-            HostValue::Str(tin.into()),
-            HostValue::Str(pin.into()),
-        ]))
-        .unwrap();
-    }
-
-    fn verify(pin: &str) -> bool {
-        verify_taxpayer_pin(&args(vec![
-            HostValue::Str(ROOT.into()),
-            HostValue::Str(pin.into()),
-        ]))
+    fn profile_credentials(tin: &str) -> (Option<String>, Option<String>) {
+        with_database(|db| {
+            let profile = get_profile_by_tin(db, tin)?;
+            Ok((
+                profile.profile_pin_hash.clone(),
+                profile.totp_secret.clone(),
+            ))
+        })
         .unwrap()
-            == HostValue::Bool(true)
+    }
+
+    fn truthy(result: HostResult) -> bool {
+        result.unwrap() == HostValue::Bool(true)
+    }
+
+    fn state() -> serde_json::Value {
+        to_json(&auth_state().unwrap())
+    }
+
+    fn set(key: &str, value: &str) {
+        with_database(|db| db.set_setting(key, value).map_err(db_error)).unwrap();
     }
 
     #[test]
-    fn a_taxpayer_pin_is_written_to_every_branch_and_cleared_from_every_branch() {
+    fn set_taxpayer_totp_needs_a_matching_code_and_clears_with_null() {
+        setup();
+        let wrong = set_taxpayer_totp(&args(vec![s(ROOT), s(SECRET), s("000000")]));
+        if current_code(SECRET) != "000000" {
+            assert!(wrong.unwrap_err().message().contains("does not match"));
+            assert!(!has_totp());
+        }
+        set_taxpayer_totp(&args(vec![s(ROOT), s(SECRET), s(&current_code(SECRET))])).unwrap();
+        assert!(has_totp());
+        assert!(truthy(verify_taxpayer_totp(&args(vec![
+            s(ROOT),
+            s(&current_code(SECRET))
+        ]))));
+        set_taxpayer_totp(&args(vec![s(ROOT), HostValue::Null])).unwrap();
+        assert!(!has_totp());
+    }
+
+    #[test]
+    fn credentials_are_stored_once_per_taxpayer_not_on_branches() {
         setup();
         add_branch();
-        set_taxpayer_pin(&args(vec![
-            HostValue::Str(ROOT.into()),
-            HostValue::Str("0817".into()),
-        ]))
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        assert_eq!(profile_credentials(TIN), (None, None));
+        assert_eq!(profile_credentials(BRANCH), (None, None));
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1234")
+        ]))));
+        assert_eq!(
+            to_json(&taxpayer_auth(&args(vec![s(ROOT)])).unwrap()),
+            serde_json::json!({"has_pin": true, "has_totp": false})
+        );
+
+        // The legacy per-branch setter writes the same taxpayer PIN.
+        set_profile_pin(&args(vec![s(BRANCH), s("2222")])).unwrap();
+        assert_eq!(profile_credentials(BRANCH), (None, None));
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("2222")]))));
+
+        assert!(set_taxpayer_pin(&args(vec![s(ROOT), s("12345")])).is_err());
+        set_taxpayer_pin(&args(vec![s(ROOT), HostValue::Null])).unwrap();
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("2222")
+        ]))));
+    }
+
+    #[test]
+    fn auth_state_is_unset_until_first_launch_setup() {
+        setup();
+        assert_eq!(
+            state(),
+            serde_json::json!({
+                "mode": null,
+                "admin_root": null,
+                "has_admin_pin": false,
+                "has_admin_totp": false,
+                "has_recovery_key": false,
+                "mac_login_available": mac_login_available(),
+            })
+        );
+        assert!(!truthy(verify_admin_pin(&args(vec![s("0817")]))));
+        assert!(set_admin_pin(&args(vec![s("0817")])).is_err());
+        assert!(create_recovery_key().is_err());
+    }
+
+    #[test]
+    fn solo_admin_is_the_owner_taxpayer() {
+        setup();
+        assert!(setup_solo(&args(vec![s("000000000")])).is_err());
+        assert!(
+            setup_solo(&args(vec![s("999999999")])).is_err(),
+            "no such taxpayer"
+        );
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        assert!(setup_solo(&args(vec![s(ROOT)])).is_err(), "only once");
+        assert!(setup_helpdesk(&args(vec![s("1111")])).is_err(), "only once");
+        assert_eq!(state()["mode"], "solo");
+        assert_eq!(state()["admin_root"], ROOT);
+
+        // One code: the owner's taxpayer PIN is the admin PIN.
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        assert_eq!(state()["has_admin_pin"], true);
+        assert!(truthy(verify_admin_pin(&args(vec![s("0817")]))));
+        set_admin_pin(&args(vec![s("4321")])).unwrap();
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("4321")]))));
+        set_admin_totp(&args(vec![s(SECRET), s(&current_code(SECRET))])).unwrap();
+        assert!(has_totp());
+        assert!(truthy(verify_admin_totp(&args(vec![s(&current_code(
+            SECRET
+        ))]))));
+        // The help desk settings play no part in solo mode.
+        set(ADMIN_PIN_HASH, &bir_core::crypto::hash_pin("9999"));
+        assert!(!truthy(verify_admin_pin(&args(vec![s("9999")]))));
+
+        // Clearing the owner's PIN and authenticator is allowed in solo.
+        set_admin_pin(&args(vec![HostValue::Null])).unwrap();
+        set_admin_totp(&args(vec![HostValue::Null])).unwrap();
+        assert_eq!(state()["has_admin_pin"], false);
+        assert_eq!(state()["has_admin_totp"], false);
+    }
+
+    #[test]
+    fn helpdesk_admin_uses_the_settings_and_keeps_one_way_in() {
+        setup();
+        assert!(setup_helpdesk(&args(vec![s("12")])).is_err());
+        let created = to_json(&setup_helpdesk(&args(vec![s("0817")])).unwrap());
+        assert_eq!(created["recovery_key"].as_str().unwrap().len(), 19);
+        let st = state();
+        assert_eq!(st["mode"], "helpdesk");
+        assert_eq!(st["admin_root"], "000000000");
+        assert_eq!(st["has_admin_pin"], true);
+        assert_eq!(st["has_admin_totp"], false);
+        assert_eq!(st["has_recovery_key"], true);
+        assert!(truthy(verify_admin_pin(&args(vec![s("0817")]))));
+        assert!(!truthy(verify_admin_pin(&args(vec![s("1234")]))));
+
+        // A taxpayer's PIN is not the admin PIN in help desk mode.
+        set_taxpayer_pin(&args(vec![s(ROOT), s("5555")])).unwrap();
+        assert!(!truthy(verify_admin_pin(&args(vec![s("5555")]))));
+
+        // The only way in cannot be removed.
+        let refused = set_admin_pin(&args(vec![HostValue::Null])).unwrap_err();
+        assert!(refused.message().contains("at least one way"));
+        assert_eq!(state()["has_admin_pin"], true);
+
+        set_admin_totp(&args(vec![s(SECRET), s(&current_code(SECRET))])).unwrap();
+        assert!(truthy(verify_admin_totp(&args(vec![s(&current_code(
+            SECRET
+        ))]))));
+        set_admin_pin(&args(vec![HostValue::Null])).unwrap();
+        assert_eq!(state()["has_admin_pin"], false);
+        let refused = set_admin_totp(&args(vec![HostValue::Null])).unwrap_err();
+        assert!(refused.message().contains("at least one way"));
+        assert_eq!(state()["has_admin_totp"], true);
+    }
+
+    #[test]
+    fn a_recovery_key_works_once_and_a_new_one_replaces_it() {
+        setup();
+        let first = to_json(&setup_helpdesk(&args(vec![s("0817")])).unwrap())["recovery_key"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let second = to_json(&create_recovery_key().unwrap())["recovery_key"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(
+            !truthy(use_recovery_key(&args(vec![s(&first)]))),
+            "replaced"
+        );
+        let typed = second.to_lowercase().replace('-', " ");
+        assert!(truthy(use_recovery_key(&args(vec![s(&typed)]))));
+        assert_eq!(state()["has_recovery_key"], false);
+        assert!(
+            !truthy(use_recovery_key(&args(vec![s(&second)]))),
+            "single use"
+        );
+    }
+
+    #[test]
+    fn the_admin_taxpayer_cannot_be_archived_or_deleted() {
+        setup();
+        add_branch();
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        for result in [
+            set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(true)])),
+            delete_taxpayer(&args(vec![s(ROOT)])),
+            delete_taxpayer(&args(vec![s("000000000")])),
+        ] {
+            assert!(result.unwrap_err().message().contains("admin account"));
+        }
+        // One branch may go, but not the last one.
+        delete_profile(&args(vec![s(BRANCH)])).unwrap();
+        assert!(delete_profile(&args(vec![s(TIN)])).is_err());
+        assert!(set_profile_archived(&args(vec![s(TIN), HostValue::Bool(true)])).is_err());
+        with_database(|db| {
+            assert!(db.get_taxpayer(ROOT).map_err(db_error)?.is_some());
+            Ok(())
+        })
         .unwrap();
-        let hash = Some(bir_core::crypto::hash_pin("0817"));
-        assert_eq!(pin_hash(TIN), hash);
-        assert_eq!(pin_hash(BRANCH), hash);
-        assert!(verify("0817"));
-        assert!(!verify("1234"));
-
-        set_taxpayer_pin(&args(vec![HostValue::Str(ROOT.into()), HostValue::Null])).unwrap();
-        assert_eq!(pin_hash(TIN), None);
-        assert_eq!(pin_hash(BRANCH), None);
-        assert!(!verify("0817"));
     }
 
     #[test]
-    fn unifying_gives_every_branch_the_head_office_pin() {
+    fn other_taxpayers_archive_and_delete_across_every_branch() {
         setup();
         add_branch();
-        set_branch_pin(TIN, "1111");
-        set_branch_pin(BRANCH, "2222");
-        assert!(verify("1111"), "the head office's PIN wins");
-        assert!(!verify("2222"));
-        assert_eq!(
-            unify_taxpayer_credentials().unwrap(),
-            HostValue::Number(1.0)
-        );
-        assert_eq!(pin_hash(BRANCH), Some(bir_core::crypto::hash_pin("1111")));
-        assert_eq!(
-            unify_taxpayer_credentials().unwrap(),
-            HostValue::Number(0.0),
-            "a second run changes nothing"
-        );
+        set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(true)])).unwrap();
+        assert!(profile_detail_archived(TIN) && profile_detail_archived(BRANCH));
+        with_database(|db| {
+            assert!(
+                db.get_taxpayer(ROOT)
+                    .map_err(db_error)?
+                    .unwrap()
+                    .taxpayer
+                    .archived
+            );
+            Ok(())
+        })
+        .unwrap();
+        set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(false)])).unwrap();
+        assert!(!profile_detail_archived(TIN));
+        delete_taxpayer(&args(vec![s(ROOT)])).unwrap();
+        with_database(|db| {
+            assert!(db.get_taxpayer(ROOT).map_err(db_error)?.is_none());
+            assert!(db.get_profile_by_tin(BRANCH).map_err(db_error)?.is_none());
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn profile_detail_archived(tin: &str) -> bool {
+        with_database(|db| Ok(get_profile_by_tin(db, tin)?.is_archived)).unwrap()
     }
 
     #[test]
-    fn a_pin_only_a_branch_had_becomes_the_taxpayer_pin() {
-        setup();
-        add_branch();
-        set_branch_pin(BRANCH, "2222");
-        assert!(verify("2222"));
-        unify_taxpayer_credentials().unwrap();
-        assert_eq!(pin_hash(TIN), Some(bir_core::crypto::hash_pin("2222")));
+    fn mac_login_answers_without_blocking_the_caller_off_macos() {
+        if mac_login_available() {
+            return; // would show a real OS prompt
+        }
+        let future = module()
+            .begin("mac_login", &args(vec![s("unlock")]))
+            .expect("sync half");
+        let answer = futures::executor::block_on(future).unwrap();
+        assert_eq!(answer, HostValue::Bool(false));
     }
 }

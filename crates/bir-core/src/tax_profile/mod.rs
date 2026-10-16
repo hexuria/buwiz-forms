@@ -61,6 +61,29 @@ impl From<serde_json::Error> for TaxProfileError {
     }
 }
 
+/// TIN root of the help desk admin account. It is not a real taxpayer, so no
+/// taxpayer may ever be created under it or moved onto it.
+pub const RESERVED_ADMIN_TIN_ROOT: &str = "000000000";
+
+/// Refuse the reserved help desk admin root (`root` already parsed).
+pub fn reject_reserved_tin_root(root: &str) -> Result<(), TaxProfileError> {
+    if root == RESERVED_ADMIN_TIN_ROOT {
+        Err(TaxProfileError::Invalid(
+            "TIN 000-000-000 is reserved for the help desk admin.".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+/// A taxpayer's sign-in credentials: one PIN hash and one authenticator
+/// secret per taxpayer (TIN root), shared by every branch.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaxpayerCredentials {
+    pub pin_hash: Option<String>,
+    pub totp_secret: Option<String>,
+}
+
 /// A 9-digit TIN root, or an error naming the bad input.
 pub fn parse_tin_root(raw: &str) -> Result<String, TaxProfileError> {
     let root: String = raw.chars().filter(|ch| !matches!(ch, '-' | ' ')).collect();
@@ -140,6 +163,8 @@ pub struct Taxpayer {
     pub grouping_review: Option<GroupingReview>,
     pub created_at: String,
     pub updated_at: String,
+    /// Every branch profile is archived (`profiles.data_json.is_archived`).
+    pub archived: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
