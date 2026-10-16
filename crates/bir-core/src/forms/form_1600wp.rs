@@ -534,7 +534,12 @@ impl Form1600WpDraft {
             fields.insert(format!("derived:{key}"), value);
         };
         put("from_date", self.date_code());
-        for row in &self.atc_rows {
+        // A row without an ATC has no fixed row on the sheet to print on.
+        for row in self
+            .atc_rows
+            .iter()
+            .filter(|row| !row.atc_code.trim().is_empty())
+        {
             put(
                 &format!("{}_base", row.atc_code),
                 official_amount(row.tax_base),
@@ -833,6 +838,9 @@ impl Form1600WpDraft {
 }
 
 impl QueueableForm for Form1600WpDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }
@@ -999,6 +1007,17 @@ mod tests {
             "12345678800000-1600WP-06152025#sample.club@example.com#.xml"
         );
         assert!(draft.to_bir_xml_payload().is_ok());
+    }
+
+    #[test]
+    fn print_map_places_part_ii_rows_on_their_atc_rows_only() {
+        let mut draft = sample();
+        draft.atc_rows[1].atc_code.clear();
+        let fields = draft.to_print_field_map();
+        assert_eq!(fields["derived:WB193_base"], "10,000.00");
+        assert!(!fields.contains_key("derived:WB194_base"));
+        assert!(!fields.contains_key("derived:_base"));
+        assert!(!fields.contains_key("derived:_withheld"));
     }
 
     #[test]

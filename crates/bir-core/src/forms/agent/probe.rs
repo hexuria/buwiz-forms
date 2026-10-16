@@ -18,8 +18,87 @@ use serde_json::Value;
 
 use super::{
     AgentFormDef, AgentFormKind, Binding, BoundBox, BoxDef, BoxOption, ChoiceOption, DateFormat,
-    Lock, parse_amount, parse_error, probe_eval, probe_identity,
+    DatePart, Lock, parse_amount, parse_error, probe_eval, probe_identity,
 };
+
+/// Boxes the rules corpus marks computed although the official page lets the
+/// filer choose them. The corpus is not edited here (its digest and counts
+/// are guarded by its own objective); the projection corrects it, and each
+/// entry carries its evidence. Bindings are still derived by probing.
+const USER_CHOSEN: &[(&str, &str)] = &[
+    (
+        "frm1606:txtTaxRate",
+        "official BIR-Form1606.hta: a select titled \"Please select Tax Rate\" \
+     (0%, 1.5%, 3%, 5%, 6%) that the page enables for the filer; form_1606.rs \
+     keeps the choice in `tax_rate` (Form1606TaxRate) and checks it \
+     (\"Please select the tax rate on Item 31.\")",
+    ),
+    (
+        "frm1601EQ:ifRefund",
+        "official BIR-Form1601EQ.hta: Item 30 checkbox \"To be Refunded\" \
+         (onclick checkRefund), enabled for the filer when Item 30 is an \
+         over-remittance; form_1601eq.rs keeps `over_remittance` and asks \
+         \"Please select an Overpayment option in Part II Item 30.\"",
+    ),
+    (
+        "frm1601EQ:ifIssueCert",
+        "official BIR-Form1601EQ.hta: Item 30 checkbox \"To be issued Tax \
+         Credit Certificate\" (onclick checkIssueCert), enabled on an \
+         over-remittance; form_1601eq.rs `over_remittance`",
+    ),
+    (
+        "frm1601EQ:ifCarriedOver",
+        "official BIR-Form1601EQ.hta: Item 30 checkbox (onclick \
+         checkCarriedOver), enabled on an over-remittance; form_1601eq.rs \
+         `over_remittance`",
+    ),
+];
+
+/// Boxes whose value only coincides with the sample profile's: the recorded
+/// samples put the property and the spouse in the filer's own RDO (039), so
+/// the probe would lock them as the profile's. They are the filer's answers.
+const NOT_PROFILE: &[(&str, &str)] = &[
+    (
+        "frm1606:txtRDOCode16A",
+        "Item 16A: the RDO where the property is",
+    ),
+    (
+        "frm1706:txtRDOCode14A",
+        "Item 14A: the RDO where the property is",
+    ),
+    (
+        "frm1701:txtPg2I2SpouseRDOCode",
+        "Part IV Item 2: the spouse's RDO",
+    ),
+    ("frm1701A:txtSpouseRDOCode", "the spouse's RDO"),
+    ("frm1701MS:txtRDOCodeb", "the spouse's RDO"),
+];
+
+/// Amounts the filer types that another field only clears. The probe sees
+/// the box move with that other field and would call it a combination; here
+/// the other field closes a gate (no overpayment left) and `compute` empties
+/// the entry. They are bound to the one path they echo.
+const GATED_ENTRY: &[(&str, &str)] = &[
+    (
+        "frm1701MS:txtToBeRefunded1",
+        "Item 31 \"To be refunded\" amount: the filer types it once the box \
+         is ticked (official validate: \"The total amount in Item 31 must \
+         equal the sum of Item 27A and Item 27B\"); form_1701ms.rs \
+         `compute` clears it when a penalty such as the compromise ends the \
+         overpayment",
+    ),
+    (
+        "frm1701MS:txtToBeIssued1",
+        "Item 31 \"To be issued a Tax Credit Certificate\" amount: typed by \
+         the filer; cleared by `compute` with its box when the overpayment \
+         ends",
+    ),
+    (
+        "frm1701MS:txtToBeCarried1",
+        "Item 31 \"To be carried over\" amount: typed by the filer; cleared \
+         by `compute` with its box when the overpayment ends",
+    ),
+];
 
 /// Project `fields.json` onto the boxes the assistant needs.
 pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
@@ -38,13 +117,19 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                 .filter_map(Value::as_array)
                 .flatten()
                 .find(|meaning| meaning["stored_value"] == "true");
+            let key = text(field, "field_key");
+            let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
             BoxDef {
-                key: text(field, "field_key"),
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
-                computed: field["computed"].as_bool().unwrap_or(false),
-                required: text(field, "required"),
+                computed: !chosen_by_user && field["computed"].as_bool().unwrap_or(false),
+                required: if chosen_by_user {
+                    "conditional".to_string()
+                } else {
+                    text(field, "required")
+                },
+                key,
                 options: values
                     .iter()
                     .filter_map(|value| match value {
@@ -67,6 +152,7 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                     .map(|c| text(c, "choice_meaning"))
                     .unwrap_or_default(),
                 choice_value: chosen.map(|c| text(c, "control_value")).unwrap_or_default(),
+                family: None,
             }
         })
         .collect())
@@ -119,6 +205,8 @@ const PROBE_ROWS: usize = 12;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum ValueKind {
     Text(Option<DateFormatKey>),
+    /// One part of a probed date, shown on its own (see [`DatePart`]).
+    DatePart(DateFormatKey, DatePart),
     Amount,
     Whole,
 }
@@ -159,6 +247,21 @@ impl DateFormatKey {
         }
     }
 
+    /// The part of the probe date a box shows on its own, if it shows
+    /// exactly one: `07` (month), `19` (day) or `2031` (year).
+    fn part_shown_by(self, official: &str) -> Option<DatePart> {
+        let digits: String = official.chars().filter(char::is_ascii_digit).collect();
+        if digits.len() != official.trim().len() {
+            return None;
+        }
+        match digits.as_str() {
+            "07" | "7" => Some(DatePart::Month),
+            "19" if self != Self::MonthYear => Some(DatePart::Day),
+            "2031" => Some(DatePart::Year),
+            _ => None,
+        }
+    }
+
     fn format(self) -> DateFormat {
         match self {
             Self::Iso => DateFormat::Iso,
@@ -187,6 +290,7 @@ fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
                 || (value - (AMOUNT_PROBE * 10.0).round() / 10.0).abs() < 0.005
         }),
         ValueKind::Whole => official.trim().parse::<i64>().ok() == probe.as_i64(),
+        ValueKind::DatePart(date, part) => date.part_shown_by(official) == Some(part),
     }
 }
 
@@ -430,10 +534,16 @@ fn row_templates(kind: AgentFormKind, seed: &Value, out: &mut BTreeMap<String, V
             let mut row_leaves = Vec::new();
             leaves(last, "", 1, &mut row_leaves);
             for (leaf_path, leaf) in row_leaves {
-                let mut trial = row.clone();
-                pointer_set(&mut trial, &leaf_path, blank(&leaf));
-                if with_row(&trial) {
-                    row = trial;
+                // A blank, else null (an optional identity such as 2550Q's
+                // row instance_id, which an empty string does not parse as):
+                // a copied value would give every added row the same one.
+                for candidate in [blank(&leaf), Value::Null] {
+                    let mut trial = row.clone();
+                    pointer_set(&mut trial, &leaf_path, candidate);
+                    if with_row(&trial) {
+                        row = trial;
+                        break;
+                    }
                 }
             }
             row
@@ -613,6 +723,17 @@ fn probe_seed(
             let official = map.get(key).cloned().unwrap_or_default();
             match candidate {
                 Candidate::Value(value_kind, nullable, probe) => {
+                    // A box that shows one part of the probed date (a month
+                    // select, a day box) echoes that part.
+                    let value_kind = match value_kind {
+                        ValueKind::Text(Some(date)) if !echoes(*value_kind, probe, &official) => {
+                            date.part_shown_by(&official)
+                                .map(|part| ValueKind::DatePart(*date, part))
+                                .unwrap_or(*value_kind)
+                        }
+                        _ => *value_kind,
+                    };
+                    let value_kind = &value_kind;
                     if echoes(*value_kind, probe, &official) {
                         evidence.echoes.entry(key.clone()).or_default().insert((
                             path.clone(),
@@ -1011,6 +1132,7 @@ pub fn group_radios(def: &mut AgentFormDef) {
             members: keys.iter().map(|key| key.to_string()).collect(),
             choice: String::new(),
             choice_value: String::new(),
+            family: None,
         };
         let binding = Binding::Choice {
             options: options
@@ -1172,6 +1294,9 @@ fn verify(kind: AgentFormKind, def: &mut AgentFormDef, seeds: &[&Value]) {
                 };
                 let shown = map.get(key).cloned().unwrap_or_default();
                 let ok = match &bound.binding {
+                    Binding::Text {
+                        part: Some(part), ..
+                    } => DateFormatKey::Mdy.part_shown_by(&shown) == Some(*part),
                     Binding::Text { date: Some(_), .. } => DateFormatKey::Mdy.echoed_by(&shown),
                     Binding::Text { .. } => shown.to_ascii_uppercase().contains(expected.as_str()),
                     Binding::Amount { .. } => echoes(ValueKind::Amount, &Value::Null, &shown),
@@ -1251,10 +1376,33 @@ type RowPattern = (String, String, isize, String, String);
 /// with the same offset, every unbound `<prefix><m><suffix>` box of the form
 /// is row `m - offset` of that list.
 fn extend_rows(def: &mut AgentFormDef) {
+    // A row family's row number is where the family says, not the key's
+    // last number (`txtPg2Pt4I54.5C1` is row 5, column 1).
+    // Every key a family matches (rows `fields.json` lists too), so listed
+    // and supplemented rows of one family share their pattern.
+    let families: Vec<String> = def
+        .boxes
+        .iter()
+        .filter(|entry| family_parts(&entry.key).is_some())
+        .map(|entry| entry.key.clone())
+        .collect();
+    let split = |key: &str| -> Option<(String, usize, String)> {
+        let mut found = families.iter().filter_map(|family| {
+            let row = family_match(&family_parts(family)?, key, None)?;
+            Some((family.clone(), row, String::new()))
+        });
+        if let Some(first) = found.next()
+            && found.next().is_none()
+        {
+            return Some(first);
+        }
+        split_index(key)
+            .map(|(prefix, number, suffix)| (prefix.to_string(), number, suffix.to_string()))
+    };
     let mut patterns: BTreeMap<RowPattern, (usize, BoundBox)> = BTreeMap::new();
     for (key, bound) in &def.bindings {
         let (Some((prefix, number, suffix)), Some((row, parts))) =
-            (split_index(key), row_of(&bound.binding))
+            (split(key), row_of(&bound.binding))
         else {
             continue;
         };
@@ -1263,13 +1411,7 @@ fn extend_rows(def: &mut AgentFormDef) {
         };
         let offset = number as isize - row as isize;
         patterns
-            .entry((
-                prefix.to_string(),
-                suffix.to_string(),
-                offset,
-                list.clone(),
-                field.clone(),
-            ))
+            .entry((prefix, suffix, offset, list.clone(), field.clone()))
             .and_modify(|entry| entry.0 += 1)
             .or_insert((1, bound.clone()));
     }
@@ -1281,11 +1423,11 @@ fn extend_rows(def: &mut AgentFormDef) {
         .map(|(key, _)| key.clone())
         .collect();
     for key in unbound {
-        let Some((prefix, number, suffix)) = split_index(&key) else {
+        let Some((prefix, number, suffix)) = split(&key) else {
             continue;
         };
         let found = patterns.iter().find(|((p, s, offset, _, _), (seen, _))| {
-            p == prefix && s == suffix && *seen >= 2 && number as isize >= *offset
+            *p == prefix && *s == suffix && *seen >= 2 && number as isize >= *offset
         });
         let Some(((_, _, offset, list, field), (_, template))) = found else {
             continue;
@@ -1293,10 +1435,16 @@ fn extend_rows(def: &mut AgentFormDef) {
         let row = (number as isize - offset) as usize;
         let path = format!("{list}/{row}/{field}");
         let binding = match &template.binding {
-            Binding::Text { nullable, date, .. } => Binding::Text {
+            Binding::Text {
+                nullable,
+                date,
+                part,
+                ..
+            } => Binding::Text {
                 path,
                 nullable: *nullable,
                 date: *date,
+                part: *part,
             },
             Binding::Amount { nullable, .. } => Binding::Amount {
                 path,
@@ -1366,22 +1514,32 @@ fn decide(
             .cloned()
             .expect("non-empty echo set");
         // Another field's amount or text also moves this box: it is a sum
-        // or a combination (Total Remitted = Tax + Penalty), not an entry.
-        if let Some((_, other)) = evidence
-            .misses
-            .iter()
-            .find(|(missed, other)| missed == key && *other != path)
+        // or a combination (Total Remitted = Tax + Penalty), not an entry,
+        // unless the other field only clears it (`GATED_ENTRY`).
+        if !GATED_ENTRY.iter().any(|(k, _)| *k == key)
+            && let Some((_, other)) = evidence
+                .misses
+                .iter()
+                .find(|(missed, other)| missed == key && *other != path)
         {
             return Err(format!(
                 "derived by the app: shows {path} combined with {other}"
             ));
         }
-        let lock = lock_for(&[path.as_str()]);
+        let lock = lock_for(&[path.as_str()])
+            .filter(|lock| *lock != Lock::Profile || !NOT_PROFILE.iter().any(|(k, _)| *k == key));
         let binding = match value_kind {
             ValueKind::Text(date) => Binding::Text {
                 path,
                 nullable,
                 date: date.map(DateFormatKey::format),
+                part: None,
+            },
+            ValueKind::DatePart(date, part) => Binding::Text {
+                path,
+                nullable,
+                date: Some(date.format()),
+                part: Some(part),
             },
             ValueKind::Amount => Binding::Amount { path, nullable },
             ValueKind::Whole => Binding::Whole { path, nullable },
@@ -1467,8 +1625,191 @@ pub fn supplement_from_field_map(
                 members: Vec::new(),
                 choice: String::new(),
                 choice_value: String::new(),
+                family: None,
                 key,
             }
+        })
+        .collect()
+}
+
+/// One piece of a row family key: `txtAmt{N>=0}`, `txtPg2Sc3_{N>=1}Col2`,
+/// `txtSched1ATC{n>=28}`, `txtTaxBase{index}`, `..._1A{EX|SP}{N>=1}`.
+enum FamilyPart<'a> {
+    Text(&'a str),
+    /// The row number, at least this.
+    Number(usize),
+    OneOf(Vec<&'a str>),
+}
+
+/// The pieces of a row family key, or `None` when it has no row number.
+fn family_parts(template: &str) -> Option<Vec<FamilyPart<'_>>> {
+    let mut parts = Vec::new();
+    let mut rest = template;
+    while let Some(open) = rest.find('{') {
+        if open > 0 {
+            parts.push(FamilyPart::Text(&rest[..open]));
+        }
+        let close = open + rest[open..].find('}')?;
+        let inner = &rest[open + 1..close];
+        let lower = inner.to_ascii_lowercase();
+        if let Some(min) = lower.strip_prefix("n>=") {
+            parts.push(FamilyPart::Number(min.parse().ok()?));
+        } else if lower == "index" {
+            parts.push(FamilyPart::Number(0));
+        } else if inner.contains('|') {
+            parts.push(FamilyPart::OneOf(inner.split('|').collect()));
+        } else {
+            return None;
+        }
+        rest = &rest[close + 1..];
+    }
+    if !rest.is_empty() {
+        parts.push(FamilyPart::Text(rest));
+    }
+    parts
+        .iter()
+        .any(|part| matches!(part, FamilyPart::Number(_)))
+        .then_some(parts)
+}
+
+/// `Some(row)` when `key` is a row of the family (the first number in it).
+fn family_match(parts: &[FamilyPart], key: &str, row: Option<usize>) -> Option<usize> {
+    let Some((first, rest)) = parts.split_first() else {
+        return if key.is_empty() { row } else { None };
+    };
+    match first {
+        FamilyPart::Text(text) => family_match(rest, key.strip_prefix(text)?, row),
+        FamilyPart::OneOf(options) => options
+            .iter()
+            .find_map(|option| family_match(rest, key.strip_prefix(option)?, row)),
+        FamilyPart::Number(min) => {
+            let digits = key.bytes().take_while(u8::is_ascii_digit).count();
+            (1..=digits).rev().find_map(|len| {
+                if len > 1 && key.starts_with('0') {
+                    return None;
+                }
+                let number: usize = key[..len].parse().ok()?;
+                if number < *min {
+                    return None;
+                }
+                family_match(rest, &key[len..], row.or(Some(number)))
+            })
+        }
+    }
+}
+
+/// Rows past a list's own (and past [`PROBE_ROWS`]) that
+/// [`supplement_row_families`] grows it by, so a form whose list starts
+/// long (2200P's 27 rows) still gets rows the filer can add.
+const FAMILY_ROWS: usize = 10;
+
+/// `seed` with each non-empty list grown by `extra` rows past its own
+/// length and past [`PROBE_ROWS`], repeating its last row. A list is grown
+/// only where the draft still parses with it: a fixed-length field
+/// (1702RT's three address lines) is a JSON array too.
+fn grow_rows_past(kind: AgentFormKind, seed: &Value, extra: usize) -> Value {
+    let mut grown = seed.clone();
+    let mut lists = Vec::new();
+    collect_lists(seed, "", 0, &mut lists);
+    for (path, _) in lists {
+        let Some(Value::Array(items)) = grown.pointer(&path) else {
+            continue;
+        };
+        let Some(last) = items.last().cloned() else {
+            continue;
+        };
+        let target = (items.len() + extra).max(PROBE_ROWS);
+        let mut trial = grown.clone();
+        if let Some(Value::Array(items)) = trial.pointer_mut(&path) {
+            while items.len() < target {
+                items.push(last.clone());
+            }
+        }
+        if parse_error(kind, &trial).is_none() {
+            grown = trial;
+        }
+    }
+    grown
+}
+
+/// The rows of each row family the app's field map writes, as boxes of
+/// their own. The official page builds these rows in script, so
+/// `fields.json` lists only the family (`txtAmt{N>=0}`); the probe needs
+/// each row's key to bind it. Rows come from every sample and from the
+/// sample with its lists grown ([`grow_rows_past`]). A key two
+/// families both match is left out.
+pub fn supplement_row_families(
+    kind: AgentFormKind,
+    seeds: &[Value],
+    boxes: &[BoxDef],
+) -> Vec<BoxDef> {
+    let families: Vec<(&BoxDef, Vec<FamilyPart>)> = boxes
+        .iter()
+        .filter_map(|entry| family_parts(&entry.key).map(|parts| (entry, parts)))
+        .collect();
+    if families.is_empty() {
+        return Vec::new();
+    }
+    let mut written: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut note = |map: BTreeMap<String, String>| {
+        for (key, value) in map {
+            written.entry(key).or_default().insert(value);
+        }
+    };
+    for seed in seeds {
+        let Some((computed, map)) = probe_eval(kind, seed) else {
+            continue;
+        };
+        note(map);
+        let grown = grow_rows_past(kind, &computed, FAMILY_ROWS);
+        if grown != computed
+            && let Some((_, map)) = probe_eval(kind, &grown)
+        {
+            note(map);
+        }
+    }
+    let listed: BTreeSet<&str> = boxes.iter().map(|entry| entry.key.as_str()).collect();
+    written
+        .into_iter()
+        .filter(|(key, _)| !listed.contains(key.as_str()))
+        // A row tick box the app always writes unticked (a Delete
+        // selector) is a constant, not a box: a probe flipping another
+        // field could only tie it to that field by coincidence.
+        .filter(|(_, values)| values.iter().any(|value| value != "false"))
+        .filter_map(|(key, values)| {
+            let mut found = families
+                .iter()
+                .filter_map(|(family, parts)| Some((*family, family_match(parts, &key, None)?)));
+            let (family, row) = found.next()?;
+            if found.next().is_some() {
+                return None;
+            }
+            let control = key.rsplit(':').next().unwrap_or(&key).to_string();
+            let flag = values
+                .iter()
+                .all(|value| value == "true" || value == "false");
+            Some(BoxDef {
+                label: format!("{}, row {row}", family.label),
+                item: family.item.clone(),
+                kind: if !flag {
+                    "text".to_string()
+                } else if control.starts_with("rdo") {
+                    "radio".to_string()
+                } else {
+                    "checkbox".to_string()
+                },
+                computed: family.computed,
+                required: family.required.clone(),
+                options: family.options.clone(),
+                layout_only: false,
+                group: None,
+                radio_group: false,
+                members: Vec::new(),
+                choice: String::new(),
+                choice_value: String::new(),
+                family: Some(family.key.clone()),
+                key,
+            })
         })
         .collect()
 }
@@ -1558,6 +1899,56 @@ fn choice_binding(
     }
     if best.len() < 2 {
         return Ok(None);
+    }
+    // One path that alone decides the box answers it: its own changes (with
+    // the seeds) produce every value the box takes, each from a different
+    // value of that path. The flags that merely open the box (1701MS Item
+    // 31's checkboxes open only for some Item 12 tax options) stay out of its
+    // options, so ticking it never rewrites them. When several paths decide
+    // it, the one that moves the fewest other boxes is the answer (a gate
+    // opens many); a tie keeps every path.
+    let deciding = |path: &String| -> Option<Vec<ChoiceOption>> {
+        let mut options = Vec::new();
+        let mut taken: Vec<&Value> = Vec::new();
+        for official in best.keys() {
+            let obs = observations
+                .iter()
+                .filter(|obs| obs.official == *official)
+                .filter(|obs| {
+                    obs.change
+                        .as_ref()
+                        .is_none_or(|(changed, _)| changed == path)
+                })
+                .min_by_key(|obs| (!obs.answered, usize::from(obs.change.is_some()), obs.seed))?;
+            let value = match &obs.change {
+                Some((_, value)) => value,
+                None => evidence.seed_leaves.get(&obs.seed)?.get(path)?,
+            };
+            if taken.contains(&value) {
+                return None;
+            }
+            taken.push(value);
+            options.push(ChoiceOption {
+                value: official.to_string(),
+                set: BTreeMap::from([(path.clone(), value.clone())]),
+            });
+        }
+        Some(options)
+    };
+    if paths.len() > 1 {
+        let mut deciders: Vec<(usize, Vec<ChoiceOption>)> = paths
+            .iter()
+            .filter_map(|path| {
+                let moved = evidence.gates.get(*path).map_or(0, BTreeSet::len);
+                deciding(path).map(|options| (moved, options))
+            })
+            .collect();
+        deciders.sort_by_key(|(moved, _)| *moved);
+        if let Some((fewest, _)) = deciders.first()
+            && deciders.iter().filter(|(moved, _)| moved == fewest).count() == 1
+        {
+            return Ok(Some(deciders.remove(0).1));
+        }
     }
     let options = best
         .into_iter()

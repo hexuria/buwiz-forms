@@ -166,6 +166,21 @@ pub struct Form1702RTAtcSelection {
     pub other_code: String,
 }
 
+impl Form1702RTAtcSelection {
+    /// Item 5's other ATC as the filer elected it: blank unless "Other" is
+    /// selected, then the chosen code, or IC010 (the select's first option)
+    /// when none was picked. The official page keeps IC010 in the disabled
+    /// select either way; that raw default stays in the upload
+    /// (`to_official_field_map`), while page and print show the election.
+    pub fn elected_other_code(&self) -> String {
+        if !self.other_selected {
+            return String::new();
+        }
+        let code = self.other_code.trim();
+        if code.is_empty() { "IC010" } else { code }.to_string()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Form1702RTDate {
     pub year: u16,
@@ -636,6 +651,10 @@ impl Form1702RTDraft {
             ],
         );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
+        fields.insert(
+            "frm1702RT:drpPg1I5AtcOther".to_string(),
+            self.atc.elected_other_code(),
+        );
         for (key, name) in [
             ("frm1702RT:ddlPg1I2Month", "mm"),
             ("frm1702RT:txtPg1I2Year", "yy"),

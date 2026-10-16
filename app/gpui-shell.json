@@ -1,0 +1,7 @@
+{
+  "id": "buwiz-bir",
+  "name": "buwiz BIR eFiling",
+  "version": "0.1.0",
+  "entry": "main.js",
+  "window": { "width": 1440, "height": 900 }
+}

@@ -29,7 +29,7 @@ pub use field_kinds::{
 };
 pub use templates::{
     FormTemplate, GuidedStop, PrefillPlan, TemplateChoice, TemplateField, TemplateFieldError,
-    TemplateSource, validate_template_fields,
+    TemplateSource, snapshot_setup_answers, validate_template_fields,
 };
 
 /// Default name of the `00000` branch.
@@ -59,6 +59,29 @@ impl From<serde_json::Error> for TaxProfileError {
     fn from(error: serde_json::Error) -> Self {
         Self::Db(DbError::Serialization(error))
     }
+}
+
+/// TIN root of the help desk admin account. It is not a real taxpayer, so no
+/// taxpayer may ever be created under it or moved onto it.
+pub const RESERVED_ADMIN_TIN_ROOT: &str = "000000000";
+
+/// Refuse the reserved help desk admin root (`root` already parsed).
+pub fn reject_reserved_tin_root(root: &str) -> Result<(), TaxProfileError> {
+    if root == RESERVED_ADMIN_TIN_ROOT {
+        Err(TaxProfileError::Invalid(
+            "TIN 000-000-000 is reserved for the help desk admin.".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+/// A taxpayer's sign-in credentials: one PIN hash and one authenticator
+/// secret per taxpayer (TIN root), shared by every branch.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaxpayerCredentials {
+    pub pin_hash: Option<String>,
+    pub totp_secret: Option<String>,
 }
 
 /// A 9-digit TIN root, or an error naming the bad input.
@@ -140,6 +163,8 @@ pub struct Taxpayer {
     pub grouping_review: Option<GroupingReview>,
     pub created_at: String,
     pub updated_at: String,
+    /// Every branch profile is archived (`profiles.data_json.is_archived`).
+    pub archived: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -252,6 +277,10 @@ pub(crate) struct BranchSettings {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub inherited: BTreeSet<BranchField>,
+    /// Tax years the user added to this branch, kept even while a year has
+    /// no forms (a `per_year_forms` set only exists once a form is listed).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub tax_years: BTreeSet<u16>,
 }
 
 /// One effective branch fact and where it came from.
@@ -313,6 +342,58 @@ pub(crate) fn resolve_facts(
             (field, resolved)
         })
         .collect()
+}
+
+/// The earliest tax year a branch may add or edit.
+pub const MIN_TAX_YEAR: u16 = 2010;
+
+/// Allowed tax years: 2010 through one year after the current calendar year.
+pub fn tax_year_bounds() -> (u16, u16) {
+    use chrono::Datelike;
+    tax_year_bounds_for(chrono::Local::now().year())
+}
+
+pub(crate) fn tax_year_bounds_for(current_year: i32) -> (u16, u16) {
+    let max = u16::try_from(current_year.saturating_add(1)).unwrap_or(u16::MAX);
+    (MIN_TAX_YEAR, max.max(MIN_TAX_YEAR))
+}
+
+/// Refuse a tax year outside [`tax_year_bounds`]. Every yearly-forms write
+/// path calls this, so no caller can store a year the UI would not offer.
+pub fn check_tax_year(year: u16) -> Result<(), TaxProfileError> {
+    use chrono::Datelike;
+    check_tax_year_for(year, chrono::Local::now().year())
+}
+
+pub(crate) fn check_tax_year_for(year: u16, current_year: i32) -> Result<(), TaxProfileError> {
+    let (min, max) = tax_year_bounds_for(current_year);
+    if (min..=max).contains(&year) {
+        Ok(())
+    } else {
+        Err(TaxProfileError::Invalid(format!(
+            "Choose a tax year from {min} to {max}."
+        )))
+    }
+}
+
+/// `9 digits` -> `000-000-000`.
+pub fn format_tin_root(root: &str) -> String {
+    if root.len() == 9 && root.is_ascii() {
+        format!("{}-{}-{}", &root[0..3], &root[3..6], &root[6..9])
+    } else {
+        root.to_string()
+    }
+}
+
+/// Result of [`crate::db::Database::add_tax_year`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddedTaxYear {
+    pub year: u16,
+    /// The branch's latest earlier-added year whose forms were copied, when
+    /// copying was asked for and the branch had a year.
+    pub copied_from: Option<u16>,
+    /// Active form codes of the new year.
+    pub forms: Vec<String>,
 }
 
 /// D5 starter packs. Each adds its forms to a branch's yearly list.
@@ -394,6 +475,24 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn tax_year_bound_is_2010_to_next_year() {
+        assert_eq!(tax_year_bounds_for(2026), (2010, 2027));
+        for ok in [2010, 2026, 2027] {
+            assert!(check_tax_year_for(ok, 2026).is_ok(), "{ok}");
+        }
+        for bad in [2009, 2028, 0] {
+            let error = check_tax_year_for(bad, 2026).unwrap_err();
+            assert_eq!(error.to_string(), "Choose a tax year from 2010 to 2027.");
+        }
+        assert!(check_tax_year_for(2030, 2029).is_ok());
+        assert_eq!(
+            check_tax_year_for(2031, 2029).unwrap_err().to_string(),
+            "Choose a tax year from 2010 to 2030."
+        );
+        assert_eq!(format_tin_root("123456788"), "123-456-788");
     }
 
     #[test]

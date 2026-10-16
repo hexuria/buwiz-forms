@@ -57,6 +57,7 @@ pub mod form_2552;
 pub mod form_2553;
 pub mod forms_set;
 pub mod official_inputs;
+pub mod payment_cells;
 pub mod penalty_items;
 pub mod print_map;
 pub mod queueable;

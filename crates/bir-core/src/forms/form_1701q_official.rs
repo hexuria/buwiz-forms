@@ -815,6 +815,9 @@ fn party_name(party: Form1701QParty) -> &'static str {
 }
 
 impl QueueableForm for Form1701QDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     const FORM_CODE: &'static str = "1701Q";
     const FORM_TYPE: &'static str = FORM_1701Q_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1701Q_LAYOUT_ID;

@@ -293,6 +293,12 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
     /// Official control ids and values (see [`crate::official_xml::write`]).
     fn field_map(&self) -> BTreeMap<String, String>;
 
+    /// The field map the form's Print preview fills its frozen sheet with —
+    /// `to_print_field_map` where the draft has print-only `derived:` keys,
+    /// otherwise `to_bir_field_map` (the same map each desktop view's
+    /// `print_fields` builds for `bir_print::frozen_html::filled_document`).
+    fn print_field_map(&self) -> BTreeMap<String, String>;
+
     /// Set the form's "Amended Return?" item to Yes the way its own editor
     /// does. Returns false for a form that has no such item.
     fn mark_amended(&mut self) -> bool {
@@ -658,10 +664,36 @@ impl QueueableKind {
 }
 
 /// Run `$body` with `$ty` bound to the draft type of a [`QueueableKind`].
+#[cfg(test)]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __queueable_kind_match {
+    ($kind:expr, $ty:ident => $body:expr; $($arms:tt)*) => {
+        match $kind {
+            $($arms)*
+            $crate::forms::queueable::QueueableKind::Test => {
+                type $ty = $crate::forms::queueable::test_support::TestForm;
+                $body
+            }
+        }
+    };
+}
+
+#[cfg(not(test))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __queueable_kind_match {
+    ($kind:expr, $ty:ident => $body:expr; $($arms:tt)*) => {
+        match $kind {
+            $($arms)*
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! with_queueable_kind {
     ($kind:expr, $ty:ident => $body:expr) => {
-        match $kind {
+        $crate::__queueable_kind_match!($kind, $ty => $body;
             $crate::forms::queueable::QueueableKind::Form2553 => {
                 type $ty = $crate::forms::form_2553::Form2553Draft;
                 $body
@@ -826,12 +858,7 @@ macro_rules! with_queueable_kind {
                 type $ty = $crate::forms::form_2550q::Form2550QDraft;
                 $body
             }
-            #[cfg(test)]
-            $crate::forms::queueable::QueueableKind::Test => {
-                type $ty = $crate::forms::queueable::test_support::TestForm;
-                $body
-            }
-        }
+        )
     };
 }
 
@@ -878,6 +905,9 @@ pub(crate) mod test_support {
     }
 
     impl QueueableForm for TestForm {
+        fn print_field_map(&self) -> BTreeMap<String, String> {
+            self.field_map()
+        }
         const FORM_CODE: &'static str = Self::CODE;
         const FORM_TYPE: &'static str = Self::TYPE;
         const LAYOUT_ID: &'static str = "1601c-v2018";

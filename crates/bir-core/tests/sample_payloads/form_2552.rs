@@ -193,5 +193,16 @@ pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![
         serde_json::to_value(sample_2552()).expect("sample serializes"),
         serde_json::to_value(sample_2552_add_more()).expect("sample serializes"),
+        serde_json::to_value(sample_2552_secondary()).expect("sample serializes"),
     ]
+}
+
+/// The add-more sample as a secondary offering (Item 11C, Schedule 3), so
+/// the probe reaches Schedule 3's rows and popup too. `set_transaction`
+/// would clear the rows, as the page's `kindOfTransaction` does.
+fn sample_2552_secondary() -> Form2552Draft {
+    let mut draft = sample_2552_add_more();
+    draft.transaction = Form2552Transaction::SecondaryOffering;
+    draft.recompute();
+    draft
 }

@@ -133,6 +133,40 @@ fn fill_text_input(
     let comb = indices.iter().any(|&index| tags[index].slot.is_some());
     if comb {
         let ordered = ordered_comb_indices(tags, indices);
+        // Attachment counts occupy the sheet's existing digit boxes.
+        // Pad the displayed count only; the upload value stays as written.
+        if is_attachment_count_key(name)
+            && !print.is_empty()
+            && print.bytes().all(|b| b.is_ascii_digit())
+            && print.len() < ordered.len()
+        {
+            let padded = format!("{print:0>width$}", width = ordered.len());
+            for (offset, (index, ch)) in ordered.into_iter().zip(padded.chars()).enumerate() {
+                let writer = (via_cell && offset == 0).then_some(print);
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &ch.to_string(), writer),
+                ));
+            }
+            return;
+        }
+        // An amount into a comb drawn with a decimal-point column (one gap in
+        // the slot indices, exactly two slots after it): right-align the peso
+        // digits into the slots before the point and put the two centavo
+        // digits after it. Spreading the text left-to-right put `0.00` as
+        // `0 . 0 0` from the first box (#print-audit decimal mapping).
+        if let Some(writes) = money_comb_values(tags, &ordered, print) {
+            for (offset, (index, ch)) in writes.into_iter().enumerate() {
+                let writer = (via_cell && offset == 0).then_some(print);
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &ch, writer),
+                ));
+            }
+            return;
+        }
         let chars: Vec<char> = print.chars().collect();
         // An email (or a `derived:line:` print value) longer than its
         // comb prints whole on one line across the comb instead of losing
@@ -169,6 +203,71 @@ fn fill_text_input(
             ));
         }
     }
+}
+
+/// Attachment-count writer keys used by the reviewed frozen-sheet joins.
+/// In particular, 1702RT calls its count PagesFilled. Split tens/units joins
+/// already supply one digit each and do not need a different layout.
+fn is_attachment_count_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    matches!(
+        key.rsplit(':').next().unwrap_or(&key),
+        "txtsheets"
+            | "txtnosheets"
+            | "txtnoofsheets"
+            | "txtpg1i3nosheets"
+            | "txtpg1i3noofsheets"
+            | "txtpg1i4nosheets"
+            | "txtpg1i4noofsheets"
+            | "txti3sheets"
+            | "txtpg1p2i23numofattachments"
+            | "txtpg1pt2pagesfilled"
+            | "attachments"
+            | "attachments_tens"
+            | "attachments_units"
+    )
+}
+
+/// `(slot tag index, char)` for an amount printed into a point-column comb,
+/// or `None` when the comb has no point column or the value is not an amount.
+fn money_comb_values(
+    tags: &[InputTag<'_>],
+    ordered: &[usize],
+    value: &str,
+) -> Option<Vec<(usize, String)>> {
+    let slots: Vec<usize> = ordered
+        .iter()
+        .map(|&i| tags[i].slot)
+        .collect::<Option<_>>()?;
+    let gaps: Vec<usize> = (1..slots.len())
+        .filter(|&k| slots[k] != slots[k - 1] + 1)
+        .collect();
+    let [gap] = gaps.as_slice() else {
+        return None;
+    };
+    if slots.len() - gap != 2 || *gap < 1 {
+        return None;
+    }
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || !trimmed
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '-' | ' '))
+        || !trimmed.chars().any(|c| c.is_ascii_digit())
+    {
+        return None;
+    }
+    let (negative, peso, cents) = split_writer_money(trimmed)?;
+    let peso = signed_digits(negative, &peso, &cents);
+    let peso_values = right_aligned_slot_values(*gap, &peso)?;
+    let mut out: Vec<(usize, String)> = ordered[..*gap].iter().copied().zip(peso_values).collect();
+    out.extend(
+        ordered[*gap..]
+            .iter()
+            .copied()
+            .zip(cents.chars().map(|c| c.to_string())),
+    );
+    Some(out)
 }
 
 fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>) -> String {
@@ -690,7 +789,7 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
             _ => {
                 return Err(
                     "writer-cells.json not_joined row needs writer_key or writer_keys".to_string(),
-                )
+                );
             }
         };
         let reason = required_str(row, "reason")
@@ -853,7 +952,19 @@ fn fill_money_joins(
                 // left blank (the sheet prints the point there).
                 None if peso_ordered.len() >= 5 => {
                     let cents = peso_ordered.split_off(peso_ordered.len() - 2);
-                    if cells.point_slot {
+                    // The point is a real slot only when the slot indices run
+                    // straight into the cents; a sheet that already leaves the
+                    // point column out of the comb (an index gap) must not
+                    // lose its last peso box to it (2200-S shifted every
+                    // amount one box left).
+                    let point_is_gap = match (peso_ordered.last(), cents.first()) {
+                        (Some(&last), Some(&first)) => matches!(
+                            (tags[last].slot, tags[first].slot),
+                            (Some(a), Some(b)) if b > a + 1
+                        ),
+                        _ => false,
+                    };
+                    if cells.point_slot && !point_is_gap {
                         let point = peso_ordered.pop().expect("comb has a decimal slot");
                         replacements.push((
                             tags[point].start,
@@ -1606,6 +1717,126 @@ fn is_email_key(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn attachment_counts_fill_both_digits_for_one_through_ninety_nine() {
+        let html = r#"<input name="frm1601c:txtSheets" data-slot-index="0" value=""><input name="frm1601c:txtSheets" data-slot-index="1" value="">"#;
+        for n in 0..=99 {
+            let fields = BTreeMap::from([("frm1601c:txtSheets".to_string(), n.to_string())]);
+            let filled = super::fill_by_name(html, &fields);
+            assert_eq!(comb_text(&filled, "frm1601c:txtSheets"), format!("{n:02}"));
+        }
+        let fields = BTreeMap::from([("frm1601c:txtSheets".to_string(), String::new())]);
+        assert_eq!(
+            comb_text(&super::fill_by_name(html, &fields), "frm1601c:txtSheets"),
+            ""
+        );
+    }
+
+    #[test]
+    fn every_frozen_attachment_count_join_pads_to_its_existing_capacity() {
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(root).unwrap() {
+            let dir = entry.unwrap().path();
+            let path = dir.join("writer-cells.json");
+            if !path.exists() {
+                continue;
+            }
+            let doc: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+            let slug = dir.file_name().unwrap().to_str().unwrap();
+            for join in doc["joins"].as_array().unwrap() {
+                let caption = join["printed"].as_str().unwrap_or("").to_ascii_lowercase();
+                if !(caption.contains("number of sheet")
+                    || caption.contains("no. of sheet")
+                    || caption.contains("number of attachment"))
+                {
+                    continue;
+                }
+                let key = join["writer_key"].as_str().unwrap();
+                let cell = join["html_id"].as_str().unwrap();
+                assert!(
+                    super::is_attachment_count_key(key),
+                    "{slug}: missing count key {key}"
+                );
+                let empty = super::filled_document(slug, &BTreeMap::new()).unwrap();
+                let capacity = super::input_tags(&empty)
+                    .iter()
+                    .filter(|t| t.name == cell && t.slot.is_some())
+                    .count();
+                if capacity < 2 {
+                    continue;
+                } // Separate tens/units or plain fields.
+                for value in ["", "0", "1", "9", "10", "99"] {
+                    let fields = BTreeMap::from([(key.to_string(), value.to_string())]);
+                    let filled = super::filled_document(slug, &fields).unwrap();
+                    let expected = if value.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{value:0>capacity$}")
+                    };
+                    assert_eq!(
+                        comb_text(&filled, cell),
+                        expected,
+                        "{slug}: {key} = {value}"
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 30,
+            "attachment coverage unexpectedly fell to {checked}"
+        );
+    }
+
+    /// A comb drawn with a decimal-point column: slots 0..=4 for pesos, an
+    /// index gap where the point is printed, then two centavo slots.
+    fn point_column_comb() -> String {
+        [0, 1, 2, 3, 4, 6, 7]
+            .iter()
+            .map(|i| format!("<input name=\"amt\" data-slot-index=\"{i}\" value=\"\">"))
+            .collect()
+    }
+
+    fn money_writes(value: &str) -> Option<Vec<String>> {
+        let html = point_column_comb();
+        let tags = super::input_tags(&html);
+        let ordered: Vec<usize> = (0..tags.len()).collect();
+        super::money_comb_values(&tags, &ordered, value)
+            .map(|w| w.into_iter().map(|(_, ch)| ch).collect())
+    }
+
+    #[test]
+    fn amounts_right_align_pesos_and_put_cents_after_the_point_gap() {
+        // Before the fix `0.00` spread from the first box as `0 . 0 0`.
+        assert_eq!(
+            money_writes("0.00").unwrap(),
+            ["", "", "", "", "0", "0", "0"]
+        );
+        assert_eq!(
+            money_writes("1,234.56").unwrap(),
+            ["", "1", "2", "3", "4", "5", "6"]
+        );
+        assert_eq!(
+            money_writes("12").unwrap(),
+            ["", "", "", "1", "2", "0", "0"]
+        );
+    }
+
+    #[test]
+    fn non_amounts_and_plain_combs_keep_the_left_to_right_spread() {
+        assert!(money_writes("ABC").is_none());
+        assert!(money_writes("").is_none());
+        // No index gap: not a point-column comb.
+        let html: String = (0..7)
+            .map(|i| format!("<input name=\"amt\" data-slot-index=\"{i}\" value=\"\">"))
+            .collect();
+        let tags = super::input_tags(&html);
+        let ordered: Vec<usize> = (0..tags.len()).collect();
+        assert!(super::money_comb_values(&tags, &ordered, "0.00").is_none());
+    }
+
     #[test]
     fn every_print_map_is_registered_and_fills_its_sheet() {
         use std::collections::BTreeMap;

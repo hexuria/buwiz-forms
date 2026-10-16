@@ -646,6 +646,9 @@ impl Form1603QDraft {
 }
 
 impl QueueableForm for Form1603QDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }

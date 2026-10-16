@@ -1145,6 +1145,9 @@ impl Form1702RTDraft {
 }
 
 impl QueueableForm for Form1702RTDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }
@@ -1600,5 +1603,28 @@ mod tests {
         draft.part_ii.item_17_surcharge = WholePeso(99);
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn other_atc_prints_the_election_and_uploads_the_official_default() {
+        let mut draft = sample();
+        draft.atc = Default::default();
+        let shown = |d: &Form1702RTDraft| {
+            (
+                d.to_print_field_map()["frm1702RT:drpPg1I5AtcOther"].clone(),
+                d.to_official_field_map()["frm1702RT:drpPg1I5AtcOther"].clone(),
+            )
+        };
+        // Inactive: nothing elected; the official select keeps IC010.
+        assert_eq!(shown(&draft), (String::new(), "IC010".to_string()));
+        // "Other" chosen, no code picked: the select's IC010 is the election.
+        draft.atc.other_selected = true;
+        assert_eq!(shown(&draft), ("IC010".to_string(), "IC010".to_string()));
+        // A picked code.
+        draft.atc.other_code = "IC011".into();
+        assert_eq!(shown(&draft), ("IC011".to_string(), "IC011".to_string()));
+        // Cleared again.
+        draft.atc.other_selected = false;
+        assert_eq!(shown(&draft).0, "");
     }
 }

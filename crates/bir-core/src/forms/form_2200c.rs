@@ -220,6 +220,11 @@ pub struct Form2200CDraft {
     #[serde(default)]
     pub balance_carried_forward: f64,
 
+    /// Item 4, number of sheets attached (`txtPg1I4NoSheets`; the page
+    /// uploads it as typed, `0` by default).
+    #[serde(default)]
+    pub number_of_attached_sheets: u16,
+
     #[serde(flatten)]
     pub lifecycle: SubmissionLifecycle,
 }
@@ -303,6 +308,7 @@ impl Form2200CDraft {
             penalties_paid: 0.0,
             total_payment: 0.0,
             balance_carried_forward: 0.0,
+            number_of_attached_sheets: 0,
             lifecycle: SubmissionLifecycle::default(),
         };
         draft.recompute();
@@ -549,6 +555,10 @@ impl Form2200CDraft {
         put("txtLOB", self.line_of_business.trim().to_string());
         // The page the filer is on; the return is validated from page 1.
         put("txtCurrentPage", "1".to_string());
+        fields.insert(
+            "frm2200C:txtPg1I4NoSheets".to_string(),
+            self.number_of_attached_sheets.to_string(),
+        );
         fields
     }
 
@@ -755,6 +765,9 @@ impl Form2200CDraft {
 }
 
 impl QueueableForm for Form2200CDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }
@@ -884,6 +897,7 @@ mod tests {
             penalties_paid: 0.0,
             total_payment: 0.0,
             balance_carried_forward: 0.0,
+            number_of_attached_sheets: 0,
             lifecycle: SubmissionLifecycle::default(),
         };
         draft.recompute();

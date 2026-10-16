@@ -1084,6 +1084,13 @@ pub struct Form1701MsDraft {
     #[serde(default)]
     pub perjury_agreed: bool,
 
+    /// The signature block's printed name and authorized representative
+    /// (`printedName`, `authorizeRepresentative`), uploaded as typed.
+    #[serde(default)]
+    pub signatory_name: String,
+    #[serde(default)]
+    pub authorized_representative: String,
+
     #[serde(flatten)]
     pub lifecycle: SubmissionLifecycle,
 }
@@ -1126,6 +1133,8 @@ impl Form1701MsDraft {
             to_be_carried_over: false,
             carry_over_amount: 0.0,
             perjury_agreed: false,
+            signatory_name: String::new(),
+            authorized_representative: String::new(),
             lifecycle: SubmissionLifecycle::default(),
         };
         draft.recompute();
@@ -1428,6 +1437,14 @@ impl Form1701MsDraft {
         put("txtToBeIssued", self.to_be_issued_tcc);
         put("txtToBeCarried", self.to_be_carried_over);
         put("perjuryClause", self.perjury_agreed);
+        fields.insert(
+            "frm1701MS:printedName".to_string(),
+            self.signatory_name.trim().to_string(),
+        );
+        fields.insert(
+            "frm1701MS:authorizeRepresentative".to_string(),
+            self.authorized_representative.trim().to_string(),
+        );
         fields
     }
 
@@ -2039,6 +2056,9 @@ impl Form1701MsDraft {
 }
 
 impl QueueableForm for Form1701MsDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         Self::penalty_declarations()
     }
@@ -2171,6 +2191,8 @@ mod tests {
             to_be_carried_over: false,
             carry_over_amount: 0.0,
             perjury_agreed: true,
+            signatory_name: String::new(),
+            authorized_representative: String::new(),
             lifecycle: SubmissionLifecycle::default(),
         };
         // This sample enters its penalties by hand.
@@ -2268,7 +2290,8 @@ mod tests {
         assert_eq!(fields["frm1701MS:txtTaxpayerNo17b"], "true");
         assert_eq!(fields["frm1701MS:txtSpouseNo17b"], "false");
         assert_eq!(fields["frm1701MS:perjuryClause"], "true");
-        assert_eq!(fields.len(), 183);
+        // 183 return cells plus the printed name and authorized representative.
+        assert_eq!(fields.len(), 185);
         assert_eq!(
             d.submission_filename(),
             "12345678800000-1701MS-122025#sample.taxpayer@example.com#.xml"
@@ -2634,5 +2657,43 @@ mod tests {
         d.taxpayer.deduction = Form1701MsDeduction::Osd;
         d.recompute();
         assert!(d.taxpayer.itemized_rows.is_empty());
+    }
+
+    /// N07: the Item 31 amounts are the filer's entries. The page writes them
+    /// through the agent bindings, they reach the draft and the official box,
+    /// and `compute` still clears them once the overpayment is gone.
+    #[test]
+    fn item_31_amounts_are_typed_by_the_filer_and_cleared_without_overpayment() {
+        use crate::forms::agent::{self, AgentFormKind};
+        let kind = AgentFormKind::from_code("1701MS").unwrap();
+        let mut d = sample();
+        d.taxpayer.cwt_2316 = 500_000.0;
+        d.recompute();
+        d.to_be_refunded = true;
+        let mut value = serde_json::to_value(&d).unwrap();
+        agent::fill_as_user(
+            kind,
+            &mut value,
+            "frm1701MS:txtToBeRefunded1",
+            &serde_json::json!("221,500.00"),
+        )
+        .unwrap();
+        let mut d: Form1701MsDraft = serde_json::from_value(value).unwrap();
+        d.recompute();
+        assert_eq!(d.refund_amount, 221_500.0);
+        assert_eq!(
+            d.to_bir_field_map()["frm1701MS:txtToBeRefunded1"],
+            "221,500.00"
+        );
+        assert!(
+            !d.validate_on(today())
+                .iter()
+                .any(|(_, m)| m.contains("Item 31")),
+            "{:?}",
+            d.validate_on(today())
+        );
+        d.taxpayer.cwt_2316 = 0.0;
+        d.recompute();
+        assert_eq!(d.refund_amount, 0.0);
     }
 }

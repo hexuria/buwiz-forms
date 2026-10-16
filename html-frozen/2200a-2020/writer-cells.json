@@ -1519,6 +1519,26 @@
     "frm2200Av2020:txtSched1_xa_others3_Check"
    ],
    "reason": "row-enable checkbox of the page; the paper Others rows have no box for it"
+  },
+  {
+   "writer_keys": [
+    "frm2200Av2020:cashAmt",
+    "frm2200Av2020:cashBank",
+    "frm2200Av2020:cashDate",
+    "frm2200Av2020:cashNum",
+    "frm2200Av2020:checkAmt",
+    "frm2200Av2020:checkBank",
+    "frm2200Av2020:checkDate",
+    "frm2200Av2020:checkNum",
+    "frm2200Av2020:othersAmt",
+    "frm2200Av2020:othersBank",
+    "frm2200Av2020:othersDate",
+    "frm2200Av2020:othersNum",
+    "frm2200Av2020:taxAmt",
+    "frm2200Av2020:taxDate",
+    "frm2200Av2020:taxNum"
+   ],
+   "reason": "Part IV payment detail (drawee bank, number, date, amount): each Part IV row is one comb spanning all four columns (not_joined_cells p1c108, p1c110, p1c111, p1c114), so the keys cannot be placed in their columns"
   }
  ],
  "not_joined_cells": [

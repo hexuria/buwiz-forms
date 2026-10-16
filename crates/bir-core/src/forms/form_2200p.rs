@@ -10,8 +10,9 @@
 //! descriptions, units and applicable rates (XP010 … XP220); rows 26 and 27
 //! are "others" rows where the filer types the ATC digits (after the printed
 //! `XP`), description, unit of measure and rate. The page can append rows
-//! past 27 (`addRowSched1`), but those controls are not part of the official
-//! submit layout, so the model stops at 27.
+//! past 27 (`addRowSched1`); each added row's controls follow the previous
+//! row's in the upload (see [`Form2200PDraft::official_layout`]), up to
+//! [`FORM_2200P_MAX_ROWS`] rows.
 //!
 //! Every Schedule 1 cell is free filer input: the official page computes no
 //! row arithmetic. Item 16 is the sum of the Basic Excise Tax Due column over
@@ -1131,6 +1132,9 @@ impl Form2200PDraft {
 }
 
 impl QueueableForm for Form2200PDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }

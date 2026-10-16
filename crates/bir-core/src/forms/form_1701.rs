@@ -487,6 +487,9 @@ impl Form1701Draft {
     ///   combs (the sheet preprints the branch 00000 after them).
     /// - `derived:attachments_tens` / `derived:attachments_units`: Item 33
     ///   over its two digit boxes.
+    ///
+    /// The page 2-4 header names are the last name the sheet prints
+    /// ([`Self::page_header_name`]), not the upload map's full name.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         let tin_digits = super::print_map::digits_of(
@@ -515,6 +518,31 @@ impl Form1701Draft {
             ("attachments_units", units),
         ] {
             fields.insert(format!("derived:{key}"), value);
+        }
+        // Item 6 (and the spouse's Part IV Item 3) and Item 7 print what the
+        // page shows: the official map ticks Compensation Earner beside a
+        // business type for mixed income, which the upload map cannot.
+        for (key, value) in super::queueable::QueueableForm::field_map(self) {
+            let tail = key.rsplit(':').next().unwrap_or(&key);
+            if tail.starts_with("rdoPg1I6TaxpayerType")
+                || tail.starts_with("rdoPg2I3SpouseType")
+                || tail.starts_with("rdoPg1I7ATC_")
+            {
+                let key = if key.contains(':') {
+                    key.clone()
+                } else {
+                    format!("frm1701:{key}")
+                };
+                fields.insert(key, value);
+            }
+        }
+        // The page 2-4 headers print "Taxpayer/Filer's Last Name", as the
+        // official page fills them; the XML map keeps its full name.
+        for page in [2, 3, 4] {
+            fields.insert(
+                format!("frm1701:txtPg{page}TaxpayerName"),
+                self.page_header_name(),
+            );
         }
         fields
     }

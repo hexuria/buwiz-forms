@@ -146,11 +146,14 @@ impl Form0605Draft {
                 .unwrap_or_default(),
         );
 
+        // Control order of the official BIR-Form0605.hta (Item 17, left
+        // column): _1 Self-Assessment, _2 Penalties, _3 Tax Deposit/Advance
+        // Payment, _4 Income Tax Second Installment, _5 Others; then B _1/_2.
         let manner_index = self.manner_of_payment.map(|value| match value {
             Form0605MannerOfPayment::SelfAssessment => 1,
-            Form0605MannerOfPayment::TaxDepositOrAdvancePayment => 2,
-            Form0605MannerOfPayment::IncomeTaxSecondInstallmentIndividual => 3,
-            Form0605MannerOfPayment::Penalties => 4,
+            Form0605MannerOfPayment::Penalties => 2,
+            Form0605MannerOfPayment::TaxDepositOrAdvancePayment => 3,
+            Form0605MannerOfPayment::IncomeTaxSecondInstallmentIndividual => 4,
             Form0605MannerOfPayment::Others => 5,
             Form0605MannerOfPayment::PreliminaryOrFinalAssessmentOrDeficiencyTax => 6,
             Form0605MannerOfPayment::AccountsReceivableOrDelinquentAccount => 7,
@@ -312,9 +315,9 @@ impl Form0605Draft {
                     .or_else(|| manner_b.first().copied().map(|index| index + 5));
                 index.map(|index| match index {
                     1 => Form0605MannerOfPayment::SelfAssessment,
-                    2 => Form0605MannerOfPayment::TaxDepositOrAdvancePayment,
-                    3 => Form0605MannerOfPayment::IncomeTaxSecondInstallmentIndividual,
-                    4 => Form0605MannerOfPayment::Penalties,
+                    2 => Form0605MannerOfPayment::Penalties,
+                    3 => Form0605MannerOfPayment::TaxDepositOrAdvancePayment,
+                    4 => Form0605MannerOfPayment::IncomeTaxSecondInstallmentIndividual,
                     5 => Form0605MannerOfPayment::Others,
                     6 => Form0605MannerOfPayment::PreliminaryOrFinalAssessmentOrDeficiencyTax,
                     _ => Form0605MannerOfPayment::AccountsReceivableOrDelinquentAccount,
@@ -844,6 +847,61 @@ mod tests {
         Form0605CodeEvidence, Form0605ReviewedAtc, Form0605ReviewedTaxType, Form0605TypeOfPayment,
     };
     use sha2::{Digest, Sha256};
+
+    /// Item 17 follows the official BIR-Form0605.hta control order:
+    /// `_1` Self-Assessment, `_2` Penalties, `_3` Tax Deposit/Advance Payment,
+    /// `_4` Income Tax Second Installment, `_5` Others, then B `_1`, `_2`.
+    #[test]
+    fn manner_of_payment_follows_the_official_control_order() {
+        use crate::forms::form_0605::Form0605MannerOfPayment as M;
+        let official = [
+            ("frm0605:itemMannerOfPayment:_1", M::SelfAssessment),
+            ("frm0605:itemMannerOfPayment:_2", M::Penalties),
+            (
+                "frm0605:itemMannerOfPayment:_3",
+                M::TaxDepositOrAdvancePayment,
+            ),
+            (
+                "frm0605:itemMannerOfPayment:_4",
+                M::IncomeTaxSecondInstallmentIndividual,
+            ),
+            ("frm0605:itemMannerOfPayment:_5", M::Others),
+            (
+                "frm0605:itemMannerOfPaymentB:_1",
+                M::PreliminaryOrFinalAssessmentOrDeficiencyTax,
+            ),
+            (
+                "frm0605:itemMannerOfPaymentB:_2",
+                M::AccountsReceivableOrDelinquentAccount,
+            ),
+        ];
+        // The B options (6, 7) need approval answers to parse; their order was
+        // never in question, so the round trip covers the five A options.
+        for (key, manner) in &official[..5] {
+            let (key, manner) = (*key, *manner);
+            let mut fields = reviewed_sample_fields(ReviewedSample::January2026);
+            for (other, _) in official {
+                fields.insert(other.to_string(), "false".to_string());
+            }
+            fields.insert(key.to_string(), "true".to_string());
+            if manner == M::Others {
+                fields.insert("frm0605:txtOthersName".to_string(), "EXAMPLE".to_string());
+            }
+            let mut draft = Form0605Draft::from_bir_field_map(&fields)
+                .unwrap_or_else(|errors| panic!("{key}: {errors:?}"));
+            assert_eq!(draft.manner_of_payment, Some(manner), "{key} reads back");
+            draft.manner_of_payment = Some(manner);
+            let written = draft.to_bir_field_map();
+            for (other, _) in official {
+                let expected = if other == key { "true" } else { "false" };
+                assert_eq!(
+                    written.get(other).map(String::as_str),
+                    Some(expected),
+                    "{manner:?} -> {other}"
+                );
+            }
+        }
+    }
 
     #[derive(Clone, Copy)]
     enum ReviewedSample {

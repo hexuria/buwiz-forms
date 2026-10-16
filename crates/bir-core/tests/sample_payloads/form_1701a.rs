@@ -105,11 +105,8 @@ fn more_row(description: &str, taxpayer: f64, spouse: f64) -> Form1701AMoreRow {
     }
 }
 
-/// Part IV.A "(add more...)" with three rows on the joint return: Item 42
-/// is typed, transferred into the modal as row 1, two rows are added, and
-/// SAVE AND CLOSE folds Item 42 into OTHERS with the whole-peso subtotal.
-#[test]
-fn form_1701a_joint_more_sample_payload_is_current() {
+/// The joint return with three Part IV.A "(add more...)" rows.
+fn sample_1701a_joint_more() -> Form1701ADraft {
     let mut draft = sample_1701a_joint();
     draft.other_income_more = vec![
         more_row("Rental income", 500.0, 0.0),
@@ -118,6 +115,37 @@ fn form_1701a_joint_more_sample_payload_is_current() {
     ];
     draft.keep_entered_penalties();
     draft.recompute();
+    draft
+}
+
+/// An 8% return with two Part IV.B "(add more...)" rows.
+fn sample_1701a_more() -> Form1701ADraft {
+    let mut draft = sample_1701a();
+    draft.atc = Form1701AAtc::II015;
+    draft.taxpayer.sales = 0.0;
+    draft.taxpayer.sales_returns = 0.0;
+    draft.taxpayer.other_income_41 = 0.0;
+    draft.taxpayer.gpp_share = 0.0;
+    draft.other_income_41_description = String::new();
+    draft.taxpayer.eight_sales = 1_234_567.89;
+    draft.taxpayer.eight_sales_returns = 10_000.5;
+    draft.eight_other_income_50_description = "Interest income".to_string();
+    draft.taxpayer.eight_other_income_50 = 5_000.55;
+    draft.eight_other_income_more = vec![
+        more_row("Rental income", 500.0, 0.0),
+        more_row("Consulting", 1_500.25, 0.0),
+    ];
+    draft.keep_entered_penalties();
+    draft.recompute();
+    draft
+}
+
+/// Part IV.A "(add more...)" with three rows on the joint return: Item 42
+/// is typed, transferred into the modal as row 1, two rows are added, and
+/// SAVE AND CLOSE folds Item 42 into OTHERS with the whole-peso subtotal.
+#[test]
+fn form_1701a_joint_more_sample_payload_is_current() {
+    let draft = sample_1701a_joint_more();
     assert_eq!(draft.other_income_42_description, "OTHERS");
     assert_eq!(draft.taxpayer.other_income_42, 13_250.0);
     assert_eq!(draft.aggregate_amount_payable, 106_997.0);
@@ -137,23 +165,7 @@ fn form_1701a_joint_more_sample_payload_is_current() {
 /// a second row through the modal.
 #[test]
 fn form_1701a_more_sample_payload_is_current() {
-    let mut draft = sample_1701a();
-    draft.atc = Form1701AAtc::II015;
-    draft.taxpayer.sales = 0.0;
-    draft.taxpayer.sales_returns = 0.0;
-    draft.taxpayer.other_income_41 = 0.0;
-    draft.taxpayer.gpp_share = 0.0;
-    draft.other_income_41_description = String::new();
-    draft.taxpayer.eight_sales = 1_234_567.89;
-    draft.taxpayer.eight_sales_returns = 10_000.5;
-    draft.eight_other_income_50_description = "Interest income".to_string();
-    draft.taxpayer.eight_other_income_50 = 5_000.55;
-    draft.eight_other_income_more = vec![
-        more_row("Rental income", 500.0, 0.0),
-        more_row("Consulting", 1_500.25, 0.0),
-    ];
-    draft.keep_entered_penalties();
-    draft.recompute();
+    let draft = sample_1701a_more();
     assert_eq!(draft.eight_other_income_51_description, "OTHERS");
     assert_eq!(draft.taxpayer.eight_other_income_51, 2_000.0);
     assert_eq!(draft.aggregate_amount_payable, 60_925.0);
@@ -214,5 +226,8 @@ pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![
         serde_json::to_value(sample_1701a()).expect("sample serializes"),
         serde_json::to_value(sample_1701a_joint()).expect("sample serializes"),
+        // The "(add more...)" rows reach the upload only once two are saved.
+        serde_json::to_value(sample_1701a_joint_more()).expect("sample serializes"),
+        serde_json::to_value(sample_1701a_more()).expect("sample serializes"),
     ]
 }

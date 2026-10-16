@@ -58,8 +58,7 @@ fn form_1700_sample_payload_is_current() {
 }
 
 /// Joint filing: the spouse is an employee with their own employer row.
-#[test]
-fn form_1700_joint_sample_payload_is_current() {
+fn sample_1700_joint() -> Form1700Draft {
     let mut draft = sample_1700();
     draft.civil_status = Form1700CivilStatus::Married;
     draft.spouse_has_income = Some(true);
@@ -85,6 +84,12 @@ fn form_1700_joint_sample_payload_is_current() {
     });
     draft.keep_entered_penalties();
     draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1700_joint_sample_payload_is_current() {
+    let draft = sample_1700_joint();
     assert_eq!(draft.aggregate_amount_payable, 9_900.0);
     let payload = draft
         .to_bir_xml_payload()
@@ -103,8 +108,7 @@ fn form_1700_joint_sample_payload_is_current() {
 /// leaves them in `frmMain`. The steps first give the popup's empty tables
 /// the `<tbody>` IE inserts implicitly (jsdom does not), which the page's
 /// `$("#tbl… tbody").append(...)` needs.
-#[test]
-fn form_1700_sample_with_popup_rows_is_current() {
+fn sample_1700_others() -> Form1700Draft {
     let mut draft = sample_1700();
     draft.employers.resize_with(3, Form1700Employer::default);
     for (name, tin, regular, withheld) in [
@@ -129,6 +133,12 @@ fn form_1700_sample_with_popup_rows_is_current() {
     }
     draft.keep_entered_penalties();
     draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1700_sample_with_popup_rows_is_current() {
+    let draft = sample_1700_others();
     assert!(draft.schedule_is_folded());
     let payload = draft
         .to_bir_xml_payload()
@@ -150,5 +160,29 @@ fn form_1700_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_1700()).expect("sample serializes")]
+    vec![
+        serde_json::to_value(sample_1700()).expect("sample serializes"),
+        // The spouse's items and column B are written only on a joint return.
+        serde_json::to_value(sample_1700_joint()).expect("sample serializes"),
+        // Items 25, 55 and 56 are written only on an amended return whose
+        // filers claim foreign tax credits. The "(add more...)" popup rows
+        // are left out: folding moves Item 4's employer to row 4_1, and the
+        // screen writes those rows itself (bir-shell rows_1700).
+        serde_json::to_value(sample_1700_joint_amended_credits()).expect("sample serializes"),
+    ]
+}
+
+fn sample_1700_joint_amended_credits() -> Form1700Draft {
+    let mut draft = sample_1700_joint();
+    draft.is_amended = true;
+    draft.foreign_tax_credits = Some(true);
+    draft.foreign_tax_number = "FTN-0001".to_string();
+    draft.spouse.foreign_tax_credits = Some(true);
+    draft.spouse.foreign_tax_number = "FTN-0002".to_string();
+    draft.taxpayer.previously_filed = 100.0;
+    draft.taxpayer.foreign_tax_credits = 50.0;
+    draft.spouse_column.previously_filed = 200.0;
+    draft.spouse_column.foreign_tax_credits = 75.0;
+    draft.recompute();
+    draft
 }

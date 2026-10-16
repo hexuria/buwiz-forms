@@ -18,7 +18,9 @@
 "frm1604c:topAgent_1": {"options":[{"set":{"/top_withholding_agent":false},"value":"false"},{"set":{"/top_withholding_agent":true},"value":"true"}],"type":"choice"},
 "frm1604c:topAgent_2": {"options":[{"set":{"/top_withholding_agent":true},"value":"false"},{"set":{"/top_withholding_agent":false},"value":"true"}],"type":"choice"},
 "frm1604c:txt12": {"path":"/overremittance","type":"amount"},
-"frm1604c:txtRefMonth": {"options":[{"set":{"/refunds_released":false},"value":"00"},{"set":{"/refunds_released":true},"value":"03"}],"type":"choice"},
+"frm1604c:txtRefDate": {"date":"mdy","part":"day","path":"/refund_date","type":"text"},
+"frm1604c:txtRefMonth": {"date":"mdy","part":"month","path":"/refund_date","type":"text"},
+"frm1604c:txtRefYear": {"date":"mdy","part":"year","path":"/refund_date","type":"text"},
 "frm1604c:txtSched1Adj1": {"path":"/months/0/adjustment","type":"amount"},
 "frm1604c:txtSched1Adj10": {"path":"/months/9/adjustment","type":"amount"},
 "frm1604c:txtSched1Adj11": {"path":"/months/10/adjustment","type":"amount"},
@@ -230,8 +232,6 @@
 "frm1604c:branchCode": "written by the app without a draft field (a constant or the period)",
 "frm1604c:tinA": "derived by the app: changes with /tin but never shows one field's value",
 "frm1604c:tinB": "derived by the app: changes with /tin but never shows one field's value",
-"frm1604c:tinC": "derived by the app: changes with /tin but never shows one field's value",
-"frm1604c:txtRefDate": "derived by the app: changes with /refund_date, /refunds_released but never shows one field's value",
-"frm1604c:txtRefYear": "derived by the app: changes with /refund_date, /refunds_released but never shows one field's value"
+"frm1604c:tinC": "derived by the app: changes with /tin but never shows one field's value"
 }
 }

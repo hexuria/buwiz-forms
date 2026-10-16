@@ -1108,8 +1108,7 @@ impl Form1701Draft {
             put(&mut f, &format!("{prefix}TIN3"), t3.clone());
             put(&mut f, &format!("{prefix}BranchCode"), branch.clone());
         }
-        // loadBGData: later pages show the name up to its first comma.
-        let short_name = up(self.taxpayer_name.split(',').next().unwrap_or(""));
+        let short_name = self.page_header_name();
         for page in [
             "txtPg2", "txtPg3", "txtPg4", "txtPg1m", "txtPg2m", "txtPg3m", "txtPg4m",
         ] {
@@ -1657,6 +1656,9 @@ fn zero_nolco() -> Form1701NolcoRow {
 }
 
 impl QueueableForm for Form1701Draft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     const FORM_CODE: &'static str = "1701";
     const FORM_TYPE: &'static str = FORM_1701_FORM_TYPE;
     const LAYOUT_ID: &'static str = FORM_1701_LAYOUT_ID;
@@ -1714,6 +1716,19 @@ impl QueueableForm for Form1701Draft {
     }
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_official_field_map()
+    }
+}
+
+impl Form1701Draft {
+    /// The page 2-4 header name ("Taxpayer/Filer's Last Name"): the
+    /// official loadBGData shows the registered name up to its first comma.
+    pub fn page_header_name(&self) -> String {
+        self.taxpayer_name
+            .split(',')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_uppercase()
     }
 }
 
@@ -2068,5 +2083,22 @@ pub(crate) mod tests {
             Some(9.0),
         );
         assert!(d.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn page_headers_print_the_last_name_and_the_upload_map_keeps_the_full_name() {
+        let mut draft = sample();
+        draft.taxpayer_name = "Dela Cruz, Juan Santos".into();
+        let print = draft.to_print_field_map();
+        let upload = draft.to_bir_field_map();
+        for page in [2, 3, 4] {
+            let key = format!("frm1701:txtPg{page}TaxpayerName");
+            assert_eq!(print[&key], "DELA CRUZ", "{key} prints the last name");
+            assert_eq!(
+                upload[&key], draft.taxpayer_name,
+                "{key} upload map unchanged"
+            );
+        }
+        assert_eq!(draft.page_header_name(), "DELA CRUZ");
     }
 }

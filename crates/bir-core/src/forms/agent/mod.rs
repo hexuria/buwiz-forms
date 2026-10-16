@@ -435,6 +435,11 @@ pub struct BoxDef {
     pub choice: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub choice_value: String,
+    /// One row of a row family (`txtAmt{N>=0}`): the family's key. The
+    /// official page builds these rows in script, so `fields.json` lists
+    /// only the family (see `probe::supplement_row_families`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
 }
 
 impl BoxDef {
@@ -497,6 +502,27 @@ pub enum DateFormat {
     MonthYear,
 }
 
+/// One part of a date that a box shows on its own: 1604C's Item 11
+/// refund date is one `MM/DD/YYYY` field written to a month select and
+/// day and year boxes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DatePart {
+    Month,
+    Day,
+    Year,
+}
+
+impl DatePart {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Month => "month (01-12)",
+            Self::Day => "day (01-31)",
+            Self::Year => "four-digit year",
+        }
+    }
+}
+
 /// How an official box is written into the draft.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -508,6 +534,10 @@ pub enum Binding {
         nullable: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         date: Option<DateFormat>,
+        /// The box shows only this part of the date in `path` (`date` is
+        /// then that field's format); filling it rewrites that part.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<DatePart>,
     },
     /// The box shows an amount field.
     Amount {
@@ -633,8 +663,40 @@ pub fn fill(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
+    fill_box(kind, draft, key, value, false)
+}
+
+/// [`fill`] for the user's own form page. The one difference: an income-tax
+/// election ([`Lock::Election`]) is the user's to answer, so it is written;
+/// the assistant is still refused it through [`fill`]. Identity, profile,
+/// computed, hidden and unbound boxes are refused exactly as in [`fill`].
+pub fn fill_as_user(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    fill_box(kind, draft, key, value, true)
+}
+
+fn fill_box(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+    user: bool,
+) -> Result<(), String> {
     let def = kind.definition();
-    if let Some(reason) = def.refusal(key) {
+    let election = matches!(
+        def.bindings.get(key),
+        Some(BoundBox {
+            lock: Some(Lock::Election),
+            ..
+        })
+    );
+    if let Some(reason) = def.refusal(key)
+        && !(user && election)
+    {
         return Err(reason);
     }
     let bound = def
@@ -645,8 +707,24 @@ pub fn fill(
     match &bound.binding {
         Binding::Text {
             path,
+            date: Some(format),
+            part: Some(part),
+            ..
+        } => {
+            let current = draft.pointer(path).and_then(Value::as_str).unwrap_or("");
+            let leaf = set_date_part(current, *format, *part, &text).ok_or_else(|| {
+                format!(
+                    "`{key}` must be the {} of a date (got `{text}`)",
+                    part.name()
+                )
+            })?;
+            set_path(draft, path, Value::String(leaf), &def.rows)
+        }
+        Binding::Text {
+            path,
             nullable,
             date,
+            ..
         } => {
             let leaf = if text.trim().is_empty() && *nullable {
                 Value::Null
@@ -672,6 +750,14 @@ pub fn fill(
         Binding::Whole { path, nullable } => {
             let leaf = if text.trim().is_empty() && *nullable {
                 Value::Null
+            } else if text.trim().is_empty()
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.kind.contains("select"))
+            {
+                // A month or day select's blank official choice (`00`): the
+                // draft keeps 0 for "not chosen" and its validation says so.
+                Value::from(0)
             } else {
                 let number = text
                     .trim()
@@ -680,6 +766,20 @@ pub fn fill(
                 Value::from(number)
             };
             set_path(draft, path, leaf, &def.rows)
+        }
+        // A select's blank official choice ("Select Tax Rate") when the
+        // binding lists none: every option sets the same one field, so blank
+        // clears it. The typed draft decides whether that field may be empty.
+        Binding::Choice { options }
+            if text.trim().is_empty()
+                && !options.iter().any(|option| option.value.is_empty())
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.kind.contains("select"))
+                && single_choice_path(options).is_some() =>
+        {
+            let path = single_choice_path(options).expect("checked in the guard");
+            set_path(draft, path, Value::Null, &def.rows)
         }
         Binding::Choice { options } => {
             let option = choose(def, key, options, &text).ok_or_else(|| {
@@ -717,6 +817,20 @@ pub fn fill(
     // Typed values must still make a draft (an integer field refuses 1.5).
     with_agent_kind!(kind, F => parse::<F>(kind, draft).map(|_| ()))
         .map_err(|error| format!("`{key}` = `{text}` does not fit this box: {error}"))
+}
+
+/// The one draft field every option of a choice sets, if they all set
+/// exactly that field.
+fn single_choice_path(options: &[ChoiceOption]) -> Option<&str> {
+    let mut paths = options.iter().map(|option| {
+        let mut keys = option.set.keys();
+        match (keys.next(), keys.next()) {
+            (Some(path), None) => Some(path.as_str()),
+            _ => None,
+        }
+    });
+    let first = paths.next()??;
+    paths.all(|path| path == Some(first)).then_some(first)
 }
 
 fn choose<'a>(
@@ -785,6 +899,52 @@ pub fn parse_amount(text: &str) -> Option<f64> {
 }
 
 /// Accept MM/DD/YYYY (the official box format) or the field's own format.
+/// `current` (a date in `format`, possibly partial or empty) with one part
+/// replaced by `text`: `01` or `1 - January` for a month, `5` for a day, a
+/// four-digit year. Blank text clears the part; all parts blank is `""`.
+/// The other parts are kept as they are, so a date can be entered one box
+/// at a time; the form's own validation judges the finished date.
+fn set_date_part(current: &str, format: DateFormat, part: DatePart, text: &str) -> Option<String> {
+    let digits: String = text
+        .trim()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if digits.is_empty() && !text.trim().is_empty() {
+        return None;
+    }
+    let value = if digits.is_empty() {
+        String::new()
+    } else {
+        let number: u32 = digits.parse().ok()?;
+        match part {
+            DatePart::Month if (1..=12).contains(&number) => format!("{number:02}"),
+            DatePart::Day if (1..=31).contains(&number) => format!("{number:02}"),
+            DatePart::Year if digits.len() == 4 => digits,
+            _ => return None,
+        }
+    };
+    let (separator, order): (char, &[DatePart]) = match format {
+        DateFormat::Mdy => ('/', &[DatePart::Month, DatePart::Day, DatePart::Year]),
+        DateFormat::Iso => ('-', &[DatePart::Year, DatePart::Month, DatePart::Day]),
+        DateFormat::MonthYear => ('/', &[DatePart::Month, DatePart::Year]),
+    };
+    let at = order.iter().position(|p| *p == part)?;
+    let mut parts: Vec<String> = current
+        .trim()
+        .split(separator)
+        .map(|piece| piece.trim().to_string())
+        .collect();
+    parts.resize(order.len(), String::new());
+    parts.truncate(order.len());
+    parts[at] = value;
+    Some(if parts.iter().all(String::is_empty) {
+        String::new()
+    } else {
+        parts.join(&separator.to_string())
+    })
+}
+
 fn reformat_date(text: &str, format: DateFormat) -> Option<String> {
     let digits: Vec<&str> = text
         .trim()
@@ -941,7 +1101,129 @@ pub fn error_keys(kind: AgentFormKind, field: &str) -> Vec<String> {
     if def.box_def(field).is_some() {
         return vec![field.to_string()];
     }
-    let pointer = format!("/{}", field.replace('.', "/"));
+    let pointer = error_pointer(field);
+    let direct = bound_error_keys(def, field, &pointer);
+    if !direct.is_empty() {
+        return direct;
+    }
+    let related = related_error_keys(def, &pointer);
+    if !related.is_empty() {
+        return related;
+    }
+    aliased_error_keys(kind, def, field)
+}
+
+/// Error names that are neither a draft field nor its parent, with the
+/// fields the form's own check reads (reviewed against its `validate`).
+const ERROR_ALIASES: &[(&str, &str, &[&str])] = &[(
+    // form_1701ms.rs Item 31: "Item 31 is mandatory because Item 30 is has
+    // negative value." / "The total amount in Item 31 must equal ...".
+    "1701MS",
+    "overpayment",
+    &[
+        "/to_be_refunded",
+        "/to_be_issued_tcc",
+        "/to_be_carried_over",
+        "/refund_amount",
+        "/tcc_amount",
+        "/carry_over_amount",
+    ],
+)];
+
+fn aliased_error_keys(kind: AgentFormKind, def: &AgentFormDef, field: &str) -> Vec<String> {
+    let Some((_, _, paths)) = ERROR_ALIASES
+        .iter()
+        .find(|(form, name, _)| *form == kind.form_code() && *name == field)
+    else {
+        return Vec::new();
+    };
+    def.bindings
+        .iter()
+        .filter(|(_, bound)| match &bound.binding {
+            Binding::Text { path, .. }
+            | Binding::Amount { path, .. }
+            | Binding::Whole { path, .. } => paths.contains(&path.as_str()),
+            Binding::Choice { options } => options
+                .iter()
+                .flat_map(|option| option.set.keys())
+                .any(|path| paths.contains(&path.as_str())),
+        })
+        .map(|(key, _)| key.clone())
+        .collect()
+}
+
+/// `atc_rows[0].atc_code` / `schedules[0][0].reference` -> a JSON pointer.
+fn error_pointer(field: &str) -> String {
+    let mut pointer = String::from("/");
+    for c in field.chars() {
+        match c {
+            '.' | '[' => {
+                if !pointer.ends_with('/') {
+                    pointer.push('/');
+                }
+            }
+            ']' => {}
+            c => pointer.push(c),
+        }
+    }
+    pointer
+}
+
+/// When no box is bound to the named field itself: the boxes bound under it
+/// (an object or a row: `place_of_production`, `sellers[0]`), the month,
+/// day and year boxes of a split date (`donation_date` or `year_end` ->
+/// `donation_month`/`year_end_month`, `_day`, `_year` in the same object),
+/// else the boxes the
+/// probe saw the field change without binding them (a TIN written over
+/// four boxes: "derived by the app: changes with /seller_tin").
+fn related_error_keys(def: &AgentFormDef, pointer: &str) -> Vec<String> {
+    let under = format!("{pointer}/");
+    // `donation_date` -> `donation_month`/...; `year_end` -> `year_end_month`/...
+    let date_parts: Vec<String> = [Some(pointer), pointer.strip_suffix("_date")]
+        .into_iter()
+        .flatten()
+        .flat_map(|stem| ["month", "day", "year"].map(|part| format!("{stem}_{part}")))
+        .collect();
+    let names = |path: &str| path.starts_with(&under) || date_parts.iter().any(|p| p == path);
+    let mut keys: Vec<String> = def
+        .bindings
+        .iter()
+        .filter(|(_, bound)| match &bound.binding {
+            Binding::Text { path, .. }
+            | Binding::Amount { path, .. }
+            | Binding::Whole { path, .. } => names(path),
+            Binding::Choice { options } => options
+                .iter()
+                .flat_map(|option| option.set.keys())
+                .any(|path| names(path)),
+        })
+        .map(|(key, _)| key.clone())
+        .collect();
+    if keys.is_empty() {
+        let mentions = |reason: &str| {
+            reason
+                .strip_prefix("derived by the app: changes with ")
+                .map(|rest| rest.split(" but ").next().unwrap_or(""))
+                .is_some_and(|paths| {
+                    paths
+                        .split(", ")
+                        .any(|path| path == pointer || path.starts_with(&under))
+                })
+        };
+        keys = def
+            .unmapped
+            .iter()
+            .filter(|(_, reason)| mentions(reason))
+            .map(|(key, _)| key.clone())
+            .collect();
+    }
+    keys
+}
+
+/// The keys bound to the draft field a validation error names (see
+/// [`error_keys`]).
+fn bound_error_keys(def: &AgentFormDef, field: &str, pointer: &str) -> Vec<String> {
+    let pointer = pointer.to_string();
     let leaf = |path: &str| path == pointer || path.rsplit('/').next() == Some(field);
     let decided = |bound: &BoundBox| -> Option<usize> {
         match &bound.binding {
@@ -1072,6 +1354,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_user_answers_an_election_the_assistant_may_not() {
+        let kind = AgentFormKind::Form2551Q;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "store@example.test",
+            "default_form_type": "2551Qv2018"
+        }))
+        .unwrap();
+        let mut draft =
+            serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+        let refused = fill(kind, &mut draft, "frm2551Qv2018:taxRate", &Value::from("2"));
+        assert!(refused.unwrap_err().contains("election"));
+        fill_as_user(kind, &mut draft, "frm2551Qv2018:taxRate", &Value::from("2")).unwrap();
+        assert_eq!(draft["item_13_election"], "eight_percent");
+        // Profile and identity boxes stay refused for the user too.
+        let def = kind.definition();
+        for (key, bound) in &def.bindings {
+            if matches!(bound.lock, Some(Lock::Profile | Lock::Identity)) {
+                assert!(
+                    fill_as_user(kind, &mut draft, key, &Value::from("x")).is_err(),
+                    "{key}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn every_form_has_pinned_data_for_its_package() {
         let kinds = AgentFormKind::all();
         assert_eq!(kinds.len(), 43);
@@ -1111,6 +1427,48 @@ mod tests {
             Some("07/2031")
         );
         assert_eq!(reformat_date("13/40/2031", DateFormat::Mdy), None);
+    }
+
+    #[test]
+    fn a_date_part_box_rewrites_only_its_part() {
+        use DatePart::{Day, Month, Year};
+        let mdy = DateFormat::Mdy;
+        // Entered one box at a time, from empty.
+        assert_eq!(set_date_part("", mdy, Month, "3").as_deref(), Some("03//"));
+        assert_eq!(
+            set_date_part("03//", mdy, Day, "15").as_deref(),
+            Some("03/15/")
+        );
+        assert_eq!(
+            set_date_part("03/15/", mdy, Year, "2026").as_deref(),
+            Some("03/15/2026")
+        );
+        // A select's label carries its code first.
+        assert_eq!(
+            set_date_part("03/15/2026", mdy, Month, "12 - December").as_deref(),
+            Some("12/15/2026")
+        );
+        // Clearing a part keeps the others; clearing all leaves nothing.
+        assert_eq!(
+            set_date_part("03/15/2026", mdy, Day, "").as_deref(),
+            Some("03//2026")
+        );
+        assert_eq!(set_date_part("03//", mdy, Month, "").as_deref(), Some(""));
+        // Out of range or not a number is refused.
+        assert_eq!(set_date_part("", mdy, Month, "13"), None);
+        assert_eq!(set_date_part("", mdy, Month, "00"), None);
+        assert_eq!(set_date_part("", mdy, Day, "32"), None);
+        assert_eq!(set_date_part("", mdy, Year, "26"), None);
+        assert_eq!(set_date_part("", mdy, Month, "March"), None);
+        // Other formats keep their own order.
+        assert_eq!(
+            set_date_part("2031-07-19", DateFormat::Iso, Month, "2").as_deref(),
+            Some("2031-02-19")
+        );
+        assert_eq!(
+            set_date_part("07/2031", DateFormat::MonthYear, Year, "2032").as_deref(),
+            Some("07/2032")
+        );
     }
 
     #[test]

@@ -665,6 +665,9 @@ impl FormValidator for Form1604cDraft {
 }
 
 impl QueueableForm for Form1604cDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     const FORM_CODE: &'static str = "1604C";
     /// Official `formType` and SFTP folder (`ftpTargetFolder.PROD['1604C']`).
     const FORM_TYPE: &'static str = "1604C";

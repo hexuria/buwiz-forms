@@ -19,19 +19,28 @@ pub enum TemplateField {
     Marked,
 }
 
-/// How the template came to exist. Persisted as `filed:<draft id>`, `blank`
-/// or `copy:<from full TIN>`.
+/// How the template came to exist. Persisted as `filed:<draft id>`,
+/// `return:<draft id>`, `blank` or `copy:<from full TIN>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TemplateSource {
-    Filed { draft_id: i64 },
+    Filed {
+        draft_id: i64,
+    },
+    /// Snapshot of a return that was not filed (Draft or Queued) at the time.
+    Return {
+        draft_id: i64,
+    },
     Blank,
-    Copy { from_tin: String },
+    Copy {
+        from_tin: String,
+    },
 }
 
 impl TemplateSource {
     pub fn to_db(&self) -> String {
         match self {
             Self::Filed { draft_id } => format!("filed:{draft_id}"),
+            Self::Return { draft_id } => format!("return:{draft_id}"),
             Self::Blank => "blank".to_string(),
             Self::Copy { from_tin } => format!("copy:{from_tin}"),
         }
@@ -45,6 +54,11 @@ impl TemplateSource {
             && let Ok(draft_id) = id.parse()
         {
             return Ok(Self::Filed { draft_id });
+        }
+        if let Some(id) = value.strip_prefix("return:")
+            && let Ok(draft_id) = id.parse()
+        {
+            return Ok(Self::Return { draft_id });
         }
         if let Some(from_tin) = value.strip_prefix("copy:")
             && !from_tin.is_empty()
@@ -152,6 +166,50 @@ pub(crate) fn value_at_path<'a>(
         }
     }
     Some(current)
+}
+
+/// D8/D17 snapshot of a stored return: every **setup** answer the return
+/// holds, kept with its value. Amounts, Auto (period, identity) and computed
+/// fields are dropped, as are null and empty-string values.
+pub fn snapshot_setup_answers(
+    kinds: &FormFieldKinds,
+    draft: &serde_json::Value,
+) -> BTreeMap<String, TemplateField> {
+    let mut fields = BTreeMap::new();
+    for (id, kind) in kinds.templatable_fields() {
+        if kind != TemplatableKind::Setup {
+            continue;
+        }
+        let mut concrete = Vec::new();
+        match id.split_once("[].") {
+            Some((list, field)) => {
+                let rows = draft
+                    .get(list)
+                    .and_then(serde_json::Value::as_array)
+                    .map_or(0, Vec::len);
+                for index in 0..rows {
+                    concrete.push(format!("{list}[{index}].{field}"));
+                }
+            }
+            None => concrete.push(id.to_string()),
+        }
+        for field in concrete {
+            let Some(value) = value_at_path(draft, &field) else {
+                continue;
+            };
+            let blank =
+                value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty());
+            if !blank {
+                fields.insert(
+                    field,
+                    TemplateField::Kept {
+                        value: value.clone(),
+                    },
+                );
+            }
+        }
+    }
+    fields
 }
 
 /// One stop of guided mode, in order (D14).
@@ -322,15 +380,48 @@ mod tests {
         for source in [
             TemplateSource::Blank,
             TemplateSource::Filed { draft_id: 42 },
+            TemplateSource::Return { draft_id: 7 },
             TemplateSource::Copy {
                 from_tin: "12345678900001".into(),
             },
         ] {
             assert_eq!(TemplateSource::from_db(&source.to_db()).unwrap(), source);
         }
-        for bad in ["", "filed:", "filed:x", "copy:", "kept"] {
+        for bad in ["", "filed:", "filed:x", "return:", "copy:", "kept"] {
             assert!(TemplateSource::from_db(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn snapshot_keeps_setup_answers_and_drops_amounts_auto_and_blanks() {
+        let kinds = super::super::field_kinds_for("2551Q").unwrap();
+        let draft = json!({
+            "tin": "12345678800000",
+            "quarter": 2,
+            "item_13_election": "graduated",
+            "tax_relief": false,
+            "tax_relief_specification": "",
+            "other_tax_credit_description": null,
+            "creditable_tax_withheld": 500.0,
+            "total_tax_due": 4500.0,
+            "schedule_1": [
+                {"atc": "PT010", "taxable_amount": 150000.0, "tax_due": 4500.0},
+                {"atc": "", "taxable_amount": 0.0}
+            ]
+        });
+        let fields = snapshot_setup_answers(kinds, &draft);
+        assert_eq!(
+            fields,
+            BTreeMap::from([
+                ("item_13_election".to_string(), kept(json!("graduated"))),
+                ("schedule_1[0].atc".to_string(), kept(json!("PT010"))),
+                ("tax_relief".to_string(), kept(json!(false))),
+            ])
+        );
+        assert!(
+            validate_template_fields("2551Q", &fields, &TemplateSource::Return { draft_id: 1 })
+                .is_ok()
+        );
     }
 
     #[test]

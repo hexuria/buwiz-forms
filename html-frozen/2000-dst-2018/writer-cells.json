@@ -672,6 +672,44 @@
   {
    "writer_key": "frm2000:txtCurrentPage",
    "reason": "page counter of the eBIRForms page, not a box on the paper form"
+  },
+  {
+   "writer_keys": [
+    "drpATCCode10",
+    "drpATCCode11",
+    "drpATCCode12",
+    "drpATCCode13",
+    "drpATCCode3",
+    "drpATCCode4",
+    "drpATCCode5",
+    "drpATCCode6",
+    "drpATCCode7",
+    "drpATCCode8",
+    "drpATCCode9",
+    "frm2000:sched1:txtTaxBase10",
+    "frm2000:sched1:txtTaxBase11",
+    "frm2000:sched1:txtTaxBase12",
+    "frm2000:sched1:txtTaxBase13",
+    "frm2000:sched1:txtTaxBase3",
+    "frm2000:sched1:txtTaxBase4",
+    "frm2000:sched1:txtTaxBase5",
+    "frm2000:sched1:txtTaxBase6",
+    "frm2000:sched1:txtTaxBase7",
+    "frm2000:sched1:txtTaxBase8",
+    "frm2000:sched1:txtTaxBase9",
+    "frm2000:sched1:txtTaxDue10",
+    "frm2000:sched1:txtTaxDue11",
+    "frm2000:sched1:txtTaxDue12",
+    "frm2000:sched1:txtTaxDue13",
+    "frm2000:sched1:txtTaxDue3",
+    "frm2000:sched1:txtTaxDue4",
+    "frm2000:sched1:txtTaxDue5",
+    "frm2000:sched1:txtTaxDue6",
+    "frm2000:sched1:txtTaxDue7",
+    "frm2000:sched1:txtTaxDue8",
+    "frm2000:sched1:txtTaxDue9"
+   ],
+   "reason": "Schedule 1 row past the 3 rows the sheet prints: an add-more row of the page, uploaded with the return; the sheet has no box for it"
   }
  ],
  "not_joined_cells": [

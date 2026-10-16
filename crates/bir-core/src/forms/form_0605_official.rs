@@ -908,16 +908,17 @@ impl Form0605Draft {
         );
         use Form0605MannerOfPayment as M;
         for (key, manner) in [
+            // Official BIR-Form0605.hta control order (see form_0605_xml.rs).
             ("frm0605:itemMannerOfPayment:_1", M::SelfAssessment),
+            ("frm0605:itemMannerOfPayment:_2", M::Penalties),
             (
-                "frm0605:itemMannerOfPayment:_2",
+                "frm0605:itemMannerOfPayment:_3",
                 M::TaxDepositOrAdvancePayment,
             ),
             (
-                "frm0605:itemMannerOfPayment:_3",
+                "frm0605:itemMannerOfPayment:_4",
                 M::IncomeTaxSecondInstallmentIndividual,
             ),
-            ("frm0605:itemMannerOfPayment:_4", M::Penalties),
             ("frm0605:itemMannerOfPayment:_5", M::Others),
             (
                 "frm0605:itemMannerOfPaymentB:_1",
@@ -1014,6 +1015,9 @@ impl Form0605Draft {
 }
 
 impl QueueableForm for Form0605Draft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_bir_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }

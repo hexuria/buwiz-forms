@@ -52,9 +52,35 @@ bump-build:
 help:
     @just --list
 
-# Run the app locally. Frozen HTML print previews are compiled into bir-print.
-run:
+# Run the app locally — the gpui-shell JS app (crates/bir-shell, a standalone
+# workspace). Frozen HTML print previews are compiled into bir-print.
+run *args="": (shell-run args)
+
+# The painted (native GPUI) app, kept buildable until the cutover completes.
+run-painted:
     cargo run --locked --bin bir-desktop --features dev-tools
+
+# gpui-shell host — a standalone workspace under crates/bir-shell (its own
+# lockfile carries the LLRT/quickjs pins; see its Cargo.toml). `just check`
+# covers the root workspace only, so the shell gets its own targets.
+# Development runs use GPUI Fast (the `gpui-fast` feature), which drew the
+# Form library's rebuilds at a higher rate than upstream GPUI in a debug
+# build. `run-upstream` runs the upstream engine the app ships on today, to
+# reproduce release behaviour.
+shell-run *args="":
+    cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell --features gpui-fast {{args}}
+
+run-upstream *args="":
+    cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell {{args}}
+
+shell-ui-test:
+    node --experimental-vm-modules tools/test_form_row_invalidation.mjs
+
+shell-check: shell-ui-test
+    cargo fmt --manifest-path crates/bir-shell/Cargo.toml
+    cargo check --locked --manifest-path crates/bir-shell/Cargo.toml
+    cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features gpui-fast
+    cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets -- -D warnings
 
 # Run code formatting, linting, and type checking
 [unix]

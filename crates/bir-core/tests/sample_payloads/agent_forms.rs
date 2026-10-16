@@ -93,6 +93,8 @@ fn derived(kind: AgentFormKind, seeds: &[Value]) -> AgentFormDef {
     let mut boxes = probe::catalog(&raw).expect("fields.json projects");
     let extra = probe::supplement_from_field_map(kind, seeds, &boxes);
     boxes.extend(extra);
+    let rows = probe::supplement_row_families(kind, seeds, &boxes);
+    boxes.extend(rows);
     probe::apply_labels(&mut boxes, captions());
     probe::derive(kind, seeds, &profile_values(), boxes)
 }

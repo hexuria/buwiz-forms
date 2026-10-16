@@ -639,6 +639,9 @@ pub struct Form2200TDraft {
     #[serde(default)]
     pub balance_to_carry_over: f64,
 
+    /// Details of Payment, as typed (`cashBank` ... `othersAmt`).
+    #[serde(default)]
+    pub payment: super::payment_cells::PaymentCells,
     #[serde(flatten)]
     pub lifecycle: SubmissionLifecycle,
 }
@@ -753,6 +756,7 @@ impl Form2200TDraft {
             penalties_paid: 0.0,
             total_payment: 0.0,
             balance_to_carry_over: 0.0,
+            payment: Default::default(),
             lifecycle: SubmissionLifecycle::default(),
         };
         draft.recompute();
@@ -998,6 +1002,10 @@ impl Form2200TDraft {
         put("txtSched1_TotalDue", official_amount(self.schedule_total));
         // sleeptime() sets the pager to page 1 at load.
         put("txtCurrentPage", "1".to_string());
+        fields.extend(
+            self.payment
+                .controls("frm2200Tv2020", "frm2200Tv2020:taxNum"),
+        );
         fields
     }
 
@@ -1258,6 +1266,9 @@ impl Form2200TDraft {
 }
 
 impl QueueableForm for Form2200TDraft {
+    fn print_field_map(&self) -> BTreeMap<String, String> {
+        self.to_print_field_map()
+    }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
     }
