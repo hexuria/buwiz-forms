@@ -528,7 +528,11 @@ impl Form1701Draft {
                 || tail.starts_with("rdoPg2I3SpouseType")
                 || tail.starts_with("rdoPg1I7ATC_")
             {
-                let key = if key.contains(':') { key.clone() } else { format!("frm1701:{key}") };
+                let key = if key.contains(':') {
+                    key.clone()
+                } else {
+                    format!("frm1701:{key}")
+                };
                 fields.insert(key, value);
             }
         }
