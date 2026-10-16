@@ -1215,6 +1215,13 @@
     "frm1701MS:txtYearNo1"
    ],
    "reason": "upload control of a value the sheet prints from a derived: key of to_print_field_map (identity tp_*/sp_*, the period, Parts II, IV, V and VI amounts as whole pesos per column, Item 31 aggregate): the official submit loop writes only the radios and the name, so the print recomputes every other value from the draft"
+  },
+  {
+   "writer_keys": [
+    "frm1701MS:authorizeRepresentative",
+    "frm1701MS:printedName"
+   ],
+   "reason": "signatory printed name / authorized representative, uploaded as typed; the signature block (Printed Name and Signature of Taxpayer/Authorized Representative) has no fillable cell"
   }
  ]
 }
