@@ -10,7 +10,7 @@ use bir_core::forms::{
 use bir_core::reference;
 use serde_json::{Map, Value, json};
 
-use super::{rows_1700, rows_2550m, rows_2550q, rows_withholding, schema_entry};
+use super::{rows_1700, rows_2550m, rows_2550q, rows_monthly, rows_withholding, schema_entry};
 
 fn option(value: &str, label: &str) -> Value {
     json!({"value": value, "label": label})
@@ -69,6 +69,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
     if let Some(order) = rows_withholding::edit_order(kind, key) {
         return order;
     }
+    if let Some(order) = rows_monthly::edit_order(kind, key) {
+        return order;
+    }
     location(kind, key).map_or(0, |(_, level)| level + 1)
 }
 
@@ -98,6 +101,11 @@ pub(super) fn fill(
         );
     }
     if let Some(done) = rows_withholding::fill(kind, draft, key, value, |draft| {
+        agent::fill_as_user(kind, draft, key, value)
+    }) {
+        return done;
+    }
+    if let Some(done) = rows_monthly::fill(kind, draft, key, value, |draft| {
         agent::fill_as_user(kind, draft, key, value)
     }) {
         return done;
@@ -268,6 +276,7 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || rows_2550q::cell(kind, key).is_some()
         || rows_1700::cell(kind, key).is_some()
         || rows_withholding::host_writes(kind, key)
+        || rows_monthly::host_writes(kind, key)
 }
 
 /// 1701A "(add more...)" spouse cell `frm1701A:txtmodalPartIV<A|B>_<n>C3`:
@@ -590,6 +599,9 @@ fn fill_2550m_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), St
 
 fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Value>> {
     if let Some(rows) = rows_withholding::options(kind, key, draft) {
+        return Some(rows);
+    }
+    if let Some(rows) = rows_monthly::options(kind, key, draft) {
         return Some(rows);
     }
     let code = kind.form_code();

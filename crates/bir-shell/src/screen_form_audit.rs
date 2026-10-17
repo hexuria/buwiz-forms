@@ -1811,7 +1811,7 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // Treaty Code and ATC lists (PR 2), table cells now: 82 - 6 - 10. Table
     // cells are counted apart (the 36 2550M Schedule 1 ATC lists, N03;
     // catalog_lists_have_unique_values_across_the_schema checks every one).
-    assert_eq!(supplied, 66, "catalog lists, dependent ones included");
+    assert_eq!(supplied, 64, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and

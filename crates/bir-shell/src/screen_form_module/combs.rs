@@ -23,8 +23,11 @@
 //!     joins to it (0619E and 0619F's `registered_address_2`), the text is
 //!     split at the first line's boxes so both lines fill.
 //!   - `write` is every line where each has its own entry of one draft list
-//!     (1702RT's `registered_address_lines`): the text is split over them
-//!     (provisional: rules page question 5).
+//!     (1702RT's `registered_address_lines`), or where two lines are two
+//!     fields of their own (1601C's `registered_address` and
+//!     `registered_address_2`, which its print fills through `derived:`
+//!     keys): the text is split over them (provisional: rules page question
+//!     5).
 //!   - A split ([`split_lines`]) ends a line at the last space run that
 //!     starts within its boxes, the run kept at its end, or cuts a word
 //!     longer than the line at its last box; the lines put end to end are
@@ -120,9 +123,17 @@ fn list_entry(path: &str) -> Option<(&str, usize)> {
 /// one pool (see the module docs).
 fn pool_write(def: &AgentFormDef, lines: &[String]) -> Option<Vec<String>> {
     let paths: Vec<Option<&str>> = lines.iter().map(|key| text_path(def, key)).collect();
-    paths[0]?;
+    let first = paths[0]?;
     if paths[1..].iter().all(Option::is_none) {
         return Some(vec![lines[0].clone()]);
+    }
+    // Two lines the draft keeps as two fields of their own (1601C's
+    // `registered_address` and `registered_address_2`, each its own
+    // official control): the text is split over both.
+    if let [_, Some(second)] = paths.as_slice()
+        && *second == format!("{first}_2")
+    {
+        return Some(lines.to_vec());
     }
     let entries: Option<Vec<(&str, usize)>> =
         paths.iter().map(|path| path.and_then(list_entry)).collect();
@@ -305,7 +316,72 @@ pub(super) fn pool_text(kind: AgentFormKind, pool: &Pool, draft: &Value) -> Stri
         return format!("{}{second}", read(draft, path)).trim().to_string();
     }
     let lines: Vec<String> = paths.iter().map(|p| read(draft, p)).collect();
+    if two_fields(def, pool).is_some() {
+        // Two lines of their own, joined as the print joins them.
+        return lines
+            .iter()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
     join_lines(&lines, &write_slots(pool)).trim().to_string()
+}
+
+/// 1601C's address: two lines that are two fields of their own
+/// (`<path>` and `<path>_2`, each an official control), not one text the
+/// form cuts. `None` for every other pool.
+fn two_fields<'a>(def: &'a AgentFormDef, pool: &Pool) -> Option<(&'a str, &'a str)> {
+    let [first, second] = pool.write.as_slice() else {
+        return None;
+    };
+    let (first, second) = (text_path(def, first)?, text_path(def, second)?);
+    (second == format!("{first}_2")).then_some((first, second))
+}
+
+/// The official lengths of 1601C's two address fields (form_1601c.rs
+/// validate: "Address exceeds the official 100-character field", "Address
+/// (line 2) exceeds the official 50-character field").
+pub(super) const TWO_FIELD_MAX: [usize; 2] = [100, 50];
+
+/// What the page refuses past what the two fields can file.
+pub(super) const TWO_FIELD_TOO_LONG: &str = "This address is longer than the two official address fields take (100 characters on line 1, 50 on line 2); shorten it.";
+
+/// Split an address typed in one box over two fields of their own. At the
+/// last space before the first line's `first`th letter (rules page question
+/// 5) when both parts fit the boxes' line and the second field's official
+/// length; otherwise the whole text stays in the first field, as a filer
+/// typing it there could; past that field's official length, at its last
+/// space with the rest in the second field. Both lines are stored trimmed.
+/// An error past what the two fields can file.
+pub(super) fn split_two_fields(text: &str, first: usize) -> Result<(String, String), String> {
+    let chars: Vec<char> = text.trim().chars().collect();
+    let [max1, max2] = TWO_FIELD_MAX;
+    let at_space = |limit: usize| -> Option<(String, String)> {
+        (1..limit.min(chars.len()))
+            .rev()
+            .find(|&p| chars[p].is_whitespace() && !chars[p - 1].is_whitespace())
+            .map(|p| {
+                let one: String = chars[..p].iter().collect();
+                let two: String = chars[p..].iter().collect();
+                (one.trim().to_string(), two.trim().to_string())
+            })
+    };
+    let fits = |(one, two): &(String, String), limit: usize| {
+        one.chars().count() <= limit && two.chars().count() <= max2
+    };
+    if chars.len() <= first {
+        return Ok((chars.iter().collect(), String::new()));
+    }
+    if let Some(lines) = at_space(first).filter(|lines| fits(lines, first)) {
+        return Ok(lines);
+    }
+    if chars.len() <= max1 {
+        return Ok((chars.iter().collect(), String::new()));
+    }
+    at_space(max1 + 1)
+        .filter(|lines| fits(lines, max1))
+        .ok_or_else(|| TWO_FIELD_TOO_LONG.to_string())
 }
 
 /// Each pool's address, by its first line (what the page shows).
@@ -331,6 +407,8 @@ pub(super) fn split_lines(text: &str, slots: &[usize]) -> Vec<String> {
             lines.push(rest.drain(..).collect());
             continue;
         }
+        // A space right after the `n`th letter ends the line too: the line
+        // then holds `n` letters and keeps the space at its end.
         let space = (1..=n)
             .rev()
             .find(|&p| rest[p].is_whitespace() && !rest[p - 1].is_whitespace());
@@ -410,6 +488,13 @@ pub(super) fn write_pool(
             None => write(draft, head, &text),
         };
     }
+    if two_fields(def, pool).is_some() {
+        let first = pool.slots.first().copied().unwrap_or(0);
+        let (one, two) = split_two_fields(&text, first)?;
+        write(draft, &pool.write[0], &one)?;
+        write(draft, &pool.write[1], &two)?;
+        return Ok(());
+    }
     for (key, line) in pool
         .write
         .iter()
@@ -448,6 +533,20 @@ mod tests {
             .collect()
     }
 
+    /// Page boxes the print sheet fills through a print-only `derived:` key
+    /// rather than their own: `(form, writer key, page box)`. 1601C's item 9
+    /// prints the draft's address over both combs, line 2 after the rest of
+    /// line 1 (form_1601c.rs `to_print_field_map`: `derived:address_line1`,
+    /// `derived:line:address_line2`); the two page boxes are those lines.
+    const PRINTED_THROUGH: [(&str, &str, &str); 2] = [
+        ("1601C", "derived:address_line1", "frm1601c:txtAddress"),
+        (
+            "1601C",
+            "derived:line:address_line2",
+            "frm1601c:txtAddress2",
+        ),
+    ];
+
     /// What `app/forms/print-cells.json` should hold, read from the sheets.
     fn derived() -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
@@ -472,9 +571,13 @@ mod tests {
                     continue;
                 };
                 if let Some(slots) = combs.get(id) {
-                    keys.entry(key.to_string()).or_insert_with(|| {
-                        json!({"slots": slots, "printed": join["printed"].as_str().unwrap_or_default()})
-                    });
+                    let cell = json!({"slots": slots, "printed": join["printed"].as_str().unwrap_or_default()});
+                    for (form, writer, page) in PRINTED_THROUGH {
+                        if form == code && writer == key {
+                            keys.entry(page.to_string()).or_insert_with(|| cell.clone());
+                        }
+                    }
+                    keys.entry(key.to_string()).or_insert_with(|| cell);
                 }
             }
             for join in cells["date_joins"].as_array().into_iter().flatten() {
@@ -527,8 +630,10 @@ mod tests {
     }
 
     /// The lines put end to end are what was typed (a space run kept at the
-    /// end of its line), joining them gives it back, a line's letters fit its
-    /// boxes, and only a word longer than its line is cut, at the last box.
+    /// end of its line, so the next line starts on a letter), joining them
+    /// gives it back, every line but the last fits its boxes (the last takes
+    /// the rest, which can be longer than its boxes), and only a word longer
+    /// than its line is cut, at the last box.
     #[test]
     fn a_split_address_joins_back_to_what_was_typed() {
         let cases = [
@@ -541,6 +646,10 @@ mod tests {
                 vec![38, 38, 30],
             ),
             ("SHORT", vec![38, 38, 30]),
+            (
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB",
+                vec![40, 31],
+            ),
             (
                 "UNIT 5  BLDG A,   123 AYALA AVENUE  CORNER PASEO",
                 vec![10, 10, 40],
@@ -555,8 +664,17 @@ mod tests {
             assert_eq!(lines.len(), slots.len(), "{text}");
             assert_eq!(lines.concat(), text, "{lines:?}");
             assert_eq!(join_lines(&lines, &slots), text, "{lines:?}");
-            for (line, n) in lines.iter().zip(&slots).take(slots.len() - 1) {
-                assert!(line.trim_end().chars().count() <= *n, "{line:?} > {n}");
+            // Every line but the last fits its boxes; the last takes the
+            // rest, which fits its boxes unless the breaks at spaces left
+            // more than they hold (the Ñ address: 30 letters for 20 boxes).
+            let last = slots.len() - 1;
+            for (i, (line, n)) in lines.iter().zip(&slots).enumerate() {
+                let letters = line.trim_end().chars().count();
+                if i < last || !text.starts_with('Ñ') {
+                    assert!(letters <= *n, "{line:?} > {n}");
+                } else {
+                    assert_eq!((letters, *n), (30, 20), "{line:?}");
+                }
             }
         }
         // A word longer than its line is cut at the last box and rejoined

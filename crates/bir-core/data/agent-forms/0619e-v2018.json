@@ -6,7 +6,7 @@
 "frm0619E:optWithheld": {"options":[{"set":{"/any_taxes_withheld":true},"value":"Y"},{"set":{"/any_taxes_withheld":false},"value":"N"}],"type":"choice"},
 "frm0619E:optWithheld:N": {"options":[{"set":{"/any_taxes_withheld":true},"value":"false"},{"set":{"/any_taxes_withheld":false},"value":"true"}],"type":"choice"},
 "frm0619E:optWithheld:Y": {"options":[{"set":{"/any_taxes_withheld":false},"value":"false"},{"set":{"/any_taxes_withheld":true},"value":"true"}],"type":"choice"},
-"frm0619E:txtAddress": {"path":"/registered_address","type":"text"},
+"frm0619E:txtAddress": {"lock":"profile","path":"/registered_address","type":"text"},
 "frm0619E:txtDueDay": {"path":"/due_day","type":"whole"},
 "frm0619E:txtLineBus": {"lock":"profile","path":"/line_of_business","type":"text"},
 "frm0619E:txtMonth": {"lock":"identity","path":"/month","type":"whole"},

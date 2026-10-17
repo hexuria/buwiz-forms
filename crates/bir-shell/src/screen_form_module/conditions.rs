@@ -173,11 +173,14 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         return off;
     };
     // A box the host itself closes while its answer does not hold (it
-    // refuses what is typed there, rows_withholding.rs) is off whatever it
-    // shows: a legacy draft's value there is faded, not hidden.
+    // refuses what is typed there, rows_withholding.rs and rows_monthly.rs)
+    // is off whatever it shows: a legacy draft's value there is faded, not
+    // hidden.
     let mut gated = std::collections::BTreeSet::new();
     for (key, condition) in list {
-        if let Some(closed) = super::rows_withholding::gated(kind, draft, key) {
+        if let Some(closed) = super::rows_withholding::gated(kind, draft, key)
+            .or_else(|| super::rows_monthly::gated(kind, draft, key))
+        {
             gated.insert(key);
             if closed {
                 off.insert(key.clone(), label(code, key, condition));

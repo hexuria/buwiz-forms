@@ -720,21 +720,31 @@ export class FormPageActions {
       this.choose({ [f.k]: text }, cx);
       return;
     }
-    const edits = {};
-    const put = (f, v) => {
-      if (!f || f.c || this.isLocked(f.k)) return;
-      let value = v;
-      if (f.t === "sel" && f.o) {
-        const hit = f.o.map(optionOf).find((o) => o && (o.value === v || o.value === String(Number(v))));
-        value = hit ? hit.value : v;
-      }
-      edits[f.k] = value;
-      const input = s.inputs.get(f.k);
-      if (input) input.set_value(String(value));
+    // Each open part's value: a listed choice by its value, or a year list
+    // by the whole year it shows (1600PT/1600VT item 1 lists "26" as 2026);
+    // `null` where the part's list does not hold the pick.
+    const value = (f, v) => {
+      if (!(f.t === "sel" && f.o)) return v;
+      const listed = f.o.map(optionOf).filter(Boolean);
+      // A select with no listed choices takes what is picked, as before.
+      if (!listed.length) return v;
+      const hit = listed.find((o) => o.value === v || o.value === String(Number(v)) || (f === date.year && o.label === String(Number(v))));
+      return hit ? hit.value : null;
     };
-    put(date.month, m);
-    put(date.day, d);
-    put(date.year, y);
+    const parts = [
+      [date.month, m],
+      [date.day, d],
+      [date.year, y],
+    ].filter(([f]) => f && !f.c && !this.isLocked(f.k));
+    const edits = {};
+    for (const [f, v] of parts) {
+      const chosen = value(f, v);
+      // One part the form cannot hold refuses the whole pick: nothing is
+      // written, so the date is never half changed.
+      if (chosen === null) return this.app.toast("That date is not on this form's list.", cx, "triangle-alert");
+      edits[f.k] = chosen;
+    }
+    for (const [k, v] of Object.entries(edits)) s.inputs.get(k)?.set_value(String(v));
     s.picker = null;
     this.choose(edits, cx);
   }

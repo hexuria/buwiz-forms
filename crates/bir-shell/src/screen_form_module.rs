@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_monthly;
 mod rows_withholding;
 
 /// TypeScript appended to the `bir` module's declarations.
@@ -778,7 +779,30 @@ fn apply_layout(form: &mut Value, layout: &Value) {
     let remainder = |item: &Value, claimed: &BTreeSet<String>, number: bool| -> Option<Value> {
         if item.get("rows").is_some() {
             let keys = table_keys(item);
-            return (!keys.iter().any(|k| claimed.contains(k))).then(|| item.clone());
+            if keys.iter().any(|k| claimed.contains(k)) {
+                return None;
+            }
+            // A table whose every column an override hides (0619F's Part
+            // III, which the official program keeps disabled) is no table
+            // on the page: its cells stay in the form as hidden boxes.
+            let cols = item["cols"].as_array().cloned().unwrap_or_default();
+            if !cols.is_empty() && cols.iter().all(|col| col["t"] == "hidden") {
+                let mut hidden = item.clone();
+                let object = hidden.as_object_mut()?;
+                for gone in ["rows", "cols", "keys", "start"] {
+                    object.remove(gone);
+                }
+                hidden["f"] = Value::Array(
+                    keys.iter()
+                        .map(|key| json!({ "k": key, "l": key, "t": "hidden" }))
+                        .collect(),
+                );
+                if !number {
+                    hidden["no"] = Value::from("");
+                }
+                return Some(hidden);
+            }
+            return Some(item.clone());
         }
         let left: Vec<Value> = item["f"]
             .as_array()
@@ -2880,6 +2904,10 @@ fn opened_json(
             json!({ "key": key, "part": part.name(), "quarter": quarter })
         })
         .collect();
+    // What a box waits for, from every form group's rows (each returns
+    // nothing for a form it does not own).
+    let mut waits = rows_withholding::waits(kind);
+    waits.extend(rows_monthly::waits(kind));
     Ok(json!({
         "form_code": code,
         "year": year,
@@ -2898,7 +2926,7 @@ fn opened_json(
         "blank": blank,
         "needs": needs,
         "whys": whys,
-        "waits": rows_withholding::waits(kind),
+        "waits": waits,
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -3733,7 +3761,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
         // Rows the filer typed that this edit removed: the page asks first.
-        "removes": rows_withholding::removes(kind, &before, &draft, &edits),
+        "removes": rows_withholding::removes(kind, &before, &draft, &edits)
+            .or_else(|| rows_monthly::removes(kind, &before, &draft, &edits)),
     })))
 }
 
@@ -7972,9 +8001,10 @@ mod tests {
 
     /// Table cells whose dropdown list a catalog supplies: 1601FQ's 41 Part
     /// II ATC rows and Schedule 1's ten lists, 2550M's 36 Schedule 1 ATCs,
-    /// 1601EQ's 30 Part II ATC rows, 1801's seven, 1600WP's two and 2551Q's
-    /// six Schedule 1 ATCs.
-    const CATALOG_TABLE_CELLS: usize = 51 + 36 + 30 + 7 + 2 + 6;
+    /// 1601EQ's 30 Part II ATC rows, 1801's seven, 1600WP's two, 2551Q's
+    /// six Schedule 1 ATCs (PR 1), and 1600PT's 31 and 1600VT's 13 Part II
+    /// ATC rows (PR 3).
+    const CATALOG_TABLE_CELLS: usize = 51 + 36 + 30 + 7 + 2 + 6 + 31 + 13;
 
     #[test]
     fn catalog_lists_have_unique_values_across_the_schema() {
@@ -8038,11 +8068,13 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), less
         // 2551Q's six Schedule 1 ATC lists (PR 1) and 1601FQ Schedule 1's
-        // ten Treaty Code and ATC lists (PR 2), table cells now: 82 - 6 - 10.
+        // ten Treaty Code and ATC lists (PR 2), table cells now, and less
+        // 1600PT's and 1600VT's mirrored item 6 RDO list (rdoPg1Pt1I6RDO),
+        // hidden since PR 3: 82 - 6 - 10 - 2.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 66);
+        assert_eq!(supplied, 64);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
@@ -11045,7 +11077,7 @@ mod tests {
         let notes = strings(&reopened["profile_updates"]);
         assert!(notes.contains("RDO 039 → 043"), "{notes:?}");
         assert!(
-            notes.contains("Email address books@example.com → accounts@example.com"),
+            notes.contains("Email Address books@example.com → accounts@example.com"),
             "{notes:?}"
         );
         assert!(
@@ -11416,17 +11448,45 @@ mod tests {
                     )
                 })
                 .collect();
-            // form_page.js `isTinItem`: three to five text boxes of a TIN.
+            // form_page.js `isTinItem`, on the boxes it draws (hidden ones
+            // left out, as `withoutHidden` does): three to five text or
+            // number boxes, the item's label matching /\bTIN\b|Identification/i
+            // or a box's `${label} ${key}` matching /\bTIN\d?\b|txtTIN/i.
             let tin_item = {
+                // `\b<word>\b` in a JavaScript regex: a token between
+                // non-word characters (word: ASCII letter, digit or `_`).
+                let tokens = |text: &str| -> Vec<String> {
+                    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                        .map(str::to_ascii_lowercase)
+                        .collect()
+                };
                 let label = item["l"].as_str().unwrap_or("");
-                let named = label
-                    .split(|c: char| !c.is_ascii_alphanumeric())
-                    .any(|w| w == "TIN")
-                    || label.contains("Identification")
-                    || fields.iter().any(|(k, _)| k.contains("txtTIN"));
+                let shown: Vec<&Value> = item["f"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|f| f["t"] != "hidden")
+                    .collect();
+                let box_named = |f: &Value| {
+                    let text = format!(
+                        "{} {}",
+                        f["l"].as_str().unwrap_or(""),
+                        f["k"].as_str().unwrap_or("")
+                    );
+                    text.to_ascii_lowercase().contains("txttin")
+                        || tokens(&text).iter().any(|w| {
+                            w == "tin"
+                                || (w.len() == 4
+                                    && w.starts_with("tin")
+                                    && w.as_bytes()[3].is_ascii_digit())
+                        })
+                };
+                let named = tokens(label).iter().any(|w| w == "tin")
+                    || label.to_ascii_lowercase().contains("identification")
+                    || shown.iter().any(|f| box_named(f));
                 named
-                    && (3..=5).contains(&fields.len())
-                    && fields.iter().all(|(_, t)| t == "text" || t == "int")
+                    && (3..=5).contains(&shown.len())
+                    && shown.iter().all(|f| f["t"] == "text" || f["t"] == "int")
             };
             // A radio group is one box: shut and blank when every radio is
             // locked and none is ticked.
@@ -11909,15 +11969,6 @@ mod tests {
     /// own identity) or whose typed date its form clears (a schedule another
     /// answer turns off): each for its form's group, not for rule 4.
     const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
-        "0619F txtDate20: cannot be filled here: not written by this app's field map for any sample draft",
-        "0619F txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
-        "0619F txtDate22: cannot be filled here: not written by this app's field map for any sample draft",
-        "1601C frm1601c:txtDate37: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C frm1601c:txtDate38: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C frm1601c:txtDate39: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C frm1601c:txtDate40: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16b1: cannot be filled here: written by the app without a draft field (a constant or the period)",
@@ -11979,12 +12030,13 @@ mod tests {
             .collect::<String>()
     }
 
-    /// The whole address the draft holds, read by hand per form: 0619E and
-    /// 0619F join two fields, 1702RT keeps a list of lines, the rest one field.
+    /// The whole address the draft holds, read by hand per form: 0619E,
+    /// 0619F and 1601C join two fields, 1702RT keeps a list of lines, the
+    /// rest one field.
     fn draft_address(code: &str, draft: &Value) -> String {
         let s = |v: &Value| v.as_str().unwrap_or_default().to_string();
         match code {
-            "0619E" | "0619F" => format!(
+            "0619E" | "0619F" | "1601C" => format!(
                 "{}{}",
                 s(&draft["registered_address"]),
                 s(&draft["registered_address_2"])
@@ -12011,14 +12063,24 @@ mod tests {
     /// map's cut lines. The oracle is the list of two-line addresses the form
     /// review found (docs/form-findings, R5 "Two-line address") with 1702RT's
     /// three-line one; 1702MX keeps three boxes (its first line is the whole
-    /// address but its print reads the list), and the review's 1601C, 1701A,
-    /// 1702EX and 1707 print their address through the print map's own lines,
-    /// so the sheet gives their boxes no slots. The print side is
+    /// address but its print reads the list), and the review's 1701A, 1702EX
+    /// and 1707 print their address through the print map's own lines, so
+    /// the sheet gives their boxes no slots. 1601C prints its two lines
+    /// through `derived:` keys too, and since PR 3 the sheet's slots for
+    /// those keys are its two boxes' (combs.rs PRINTED_THROUGH): its two
+    /// fields are one pool. The print side is
     /// `a_long_pooled_address_prints_whole_on_every_pooled_form`.
     #[test]
     fn a_printed_address_over_stacked_lines_is_one_pool() {
         setup();
         let expected: BTreeMap<&str, (Vec<&str>, Vec<u64>)> = BTreeMap::from([
+            (
+                "1601C",
+                (
+                    vec!["frm1601c:txtAddress", "frm1601c:txtAddress2"],
+                    vec![40, 31],
+                ),
+            ),
             (
                 "0619E",
                 (
@@ -12162,6 +12224,34 @@ mod tests {
                 // again changes nothing (no space is ever inserted).
                 let filled =
                     fill_unlocked(code, &opened["draft"], json!({ &head: long }), &unlocked);
+                // 1601C's two fields file 100 + 50 characters at most: the
+                // 158 are refused on the box (tests::monthly::
+                // form_1601c_address_lines_are_one_pool covers its pool).
+                if code == "1601C" {
+                    assert_eq!(
+                        filled["rejected"][&head],
+                        combs::TWO_FIELD_TOO_LONG,
+                        "{code}"
+                    );
+                    // An address the two fields file: the XML carries it.
+                    let fits = &long[..90];
+                    let typed =
+                        fill_unlocked(code, &opened["draft"], json!({ &head: fits }), &unlocked);
+                    assert_eq!(typed["rejected"], json!({}), "{code}");
+                    assert_eq!(
+                        squeezed(&xml_pool(kind, &typed["draft"], &keys)),
+                        squeezed(fits),
+                        "{code}: the XML carries it"
+                    );
+                    found.insert(
+                        code,
+                        (
+                            keys,
+                            pool.slots.iter().map(|n| *n as u64).collect::<Vec<_>>(),
+                        ),
+                    );
+                    continue;
+                }
                 assert_eq!(filled["rejected"], json!({}), "{code}");
                 assert_eq!(
                     filled["pools"][&head], long,
@@ -12177,8 +12267,18 @@ mod tests {
                     again["pools"][&head], long,
                     "{code}: unchanged on the next edit"
                 );
+                // 1601C stamps `updated_at` on every fill: the clock moves,
+                // nothing the filer typed does.
+                let unstamped = |draft: &Value| {
+                    let mut draft = draft.clone();
+                    if let Some(object) = draft.as_object_mut() {
+                        object.remove("updated_at");
+                    }
+                    draft
+                };
                 assert_eq!(
-                    again["draft"], filled["draft"],
+                    unstamped(&again["draft"]),
+                    unstamped(&filled["draft"]),
                     "{code}: the draft does not move"
                 );
                 // The page value is the draft's whole address, and the XML
@@ -13089,6 +13189,15 @@ mod tests {
             let Some(slug) = crate::bir_module::print_slug_for(code) else {
                 continue;
             };
+            // 1601C's two address fields are one pool since PR 3, but its
+            // sheet prints them through the print map's `derived:` keys (no
+            // writer-cells join), and it refuses an address past what its
+            // fields file (100 + 50), so it has no 200-character case here:
+            // form_1601c_address_lines_are_one_pool checks its split and
+            // field map, and the reviewed-box test above its print.
+            if code == "1601C" {
+                continue;
+            }
             for (head, pool) in combs::pools(code) {
                 forms.push(code);
                 let cells = print_cells_of(slug, &pool.keys);
@@ -13359,21 +13468,41 @@ mod tests {
     /// alone: blank now, at least one probe taken, and every probe taken
     /// cleared by the form through the page's own fill, or refused because
     /// the answer it waits for does not hold (the host's gate refusal,
-    /// rows_withholding.rs: 1602Q item 13, 1601FQ item 25).
+    /// rows_withholding.rs: 1602Q item 13, 1601FQ item 25). 1600WP Schedule
+    /// 1.1's filer boxes (a hand list) are off, whatever they show, while the
+    /// draft's item 4 is not Yes, which is their corpus condition ("Item 4
+    /// Yes."): the form's computation keeps what is typed there, so probing
+    /// cannot tell, and the host's own refusal is no oracle.
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
+        const WP_SCHEDULE: [&str; 4] = [
+            "frm1600WP:dtSched:txtTin",
+            "frm1600WP:dtSched:txtFullname",
+            "frm1600WP:dtSched:drpAtcCode",
+            "frm1600WP:dtSched:amount",
+        ];
         let corpus = conditions::tests::derived();
         corpus[code]
             .as_object()
             .into_iter()
             .flatten()
-            .map(|(key, _)| key.clone())
-            .filter(|key| {
-                if !shows_nothing(&checked["values"][key]) {
+            .filter(|(key, condition)| {
+                let item_4 = code == "1600WP"
+                    && condition.as_str() == Some("Item 4 Yes.")
+                    && WP_SCHEDULE.iter().any(|stem| {
+                        key.strip_prefix(stem)
+                            .and_then(|n| n.parse::<usize>().ok())
+                            .is_some_and(|n| (1..=10).contains(&n))
+                    });
+                if item_4 {
+                    return checked["draft"]["taxes_withheld"] != json!(true);
+                }
+                if !shows_nothing(&checked["values"][key.as_str()]) {
                     return false;
                 }
                 let taken: Vec<bool> = test_probes(checked, code, key)
                     .into_iter()
                     .filter_map(|probe| {
+                        let key = key.as_str();
                         let filled = fill(code, &checked["draft"], json!({ key: probe }));
                         match filled["rejected"][key].as_str() {
                             None => Some(shows_nothing(&filled["values"][key])),
@@ -13384,6 +13513,7 @@ mod tests {
                     .collect();
                 !taken.is_empty() && taken.iter().all(|cleared| *cleared)
             })
+            .map(|(key, _)| key.clone())
             .collect()
     }
 
@@ -13428,6 +13558,9 @@ mod tests {
             BTreeMap::from([
                 ("0605", 3),
                 ("0619F", 2),
+                // PR 3: Schedule 1.1's TIN, payee, ATC and amount, ten rows,
+                // wait for item 4 Yes (the host refuses them until then).
+                ("1600WP", 40),
                 ("1601C", 2),
                 ("1601EQ", 4),
                 // PR 2 review: 1601FQ item 25 waits for Amended Return Yes.
@@ -13647,6 +13780,19 @@ mod tests {
                 "2200A",
                 vec!["frm2200Av2020:treatyY"],
                 Box::new(by(json!({"frm2200Av2020:optTreaty_1": "true"}))),
+            ),
+            // PR 3: Schedule 1.1 opens with item 4 Yes.
+            (
+                "1600WP",
+                vec![
+                    "frm1600WP:dtSched:txtTin1",
+                    "frm1600WP:dtSched:txtFullname1",
+                    "frm1600WP:dtSched:drpAtcCode1",
+                    "frm1600WP:dtSched:amount1",
+                    "frm1600WP:dtSched:txtTin10",
+                    "frm1600WP:dtSched:amount10",
+                ],
+                Box::new(by(json!({"frm1600WP:AnyTaxHeld_1": "true"}))),
             ),
         ];
         for (code, keys, turn_on) in cases {
@@ -15297,6 +15443,9 @@ mod tests {
             assert_eq!(printed[key], "false", "{key}");
         }
     }
+
+    /// PR 3: the monthly withholding forms.
+    mod monthly;
 }
 
 #[cfg(test)]
