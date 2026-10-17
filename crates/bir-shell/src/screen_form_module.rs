@@ -3585,17 +3585,20 @@ fn stored_return(
 
 /// The stored return a sample's completed period matches: the return of the
 /// same period (monthly: month and year; quarterly: quarter and year;
-/// annual: year; per transaction: its date). A monthly form whose rows are
-/// keyed by date (`MMDD`: 2200AN, 2200C, 2200S) matches any day of the
-/// month, the day does not matter.
+/// annual: year; per transaction: its date). How often the form is filed
+/// is the screen index's (`freq`): a monthly form whose rows are keyed by
+/// date (`MMDD`: 2200AN, 2200C, 2200S) matches any day of the month, the
+/// day does not matter; an "As needed" form keyed by its transaction date
+/// (2000OT, 2552) matches only that exact date, so a second transaction in
+/// the same month is a return of its own.
 fn stored_for_period(
     db: &Database,
     kind: AgentFormKind,
     draft: &Value,
 ) -> Result<Option<Value>, String> {
     let identity = agent::identity(kind, draft)?;
-    let monthly = bir_core::forms::find_form(kind.form_code())
-        .is_some_and(|form| matches!(form.frequency, FilingFrequency::Monthly));
+    let monthly =
+        schema_entry(kind.form_code()).and_then(|form| form["freq"].as_str()) == Some("Monthly");
     match (kind, identity.period) {
         (AgentFormKind::Queueable(queueable), FilingPeriod::OpenEnded(key))
             if monthly && key >= 101 =>
@@ -7121,6 +7124,68 @@ mod tests {
         let found = existing("2000OT", typed_parts("2000OT", 2024, 3, 15, 1));
         assert_eq!(found["label"], "03/15/2024", "{found}");
         assert!(existing("2000OT", typed_parts("2000OT", 2024, 3, 16, 1)).is_null());
+    }
+
+    /// Decided 2026-10-17: a form filed "As needed" and keyed by its
+    /// transaction date matches a stored return by that exact date; a
+    /// monthly form keeps matching by month and year, whatever the day. On
+    /// every form whose period parts include a day (entry-numbered forms
+    /// never match), a return stored for 03/15/2024 is found on 03/15; on
+    /// 03/16 a monthly form finds it and a per-transaction form builds a
+    /// fresh sample, the second transaction of the month; April is new.
+    #[test]
+    fn a_transaction_date_matches_exactly_and_a_month_by_month() {
+        setup();
+        let mut exact = Vec::new();
+        let mut by_month = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let has_day = sample_period_parts(kind)
+                .iter()
+                .any(|(_, part)| matches!(part, PeriodPart::Day | PeriodPart::Date));
+            if !has_day || NUMBERED_FORMS.contains(&code) {
+                continue;
+            }
+            let built = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
+            let mut draft = built["sample"]["draft"].clone();
+            draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+            save(code, &draft);
+            let same = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
+            assert!(
+                same["existing"].is_object(),
+                "{code}: the same date: {same}"
+            );
+            let next_day = sample_period(TIN, code, typed_parts(code, 2024, 3, 16, 1));
+            if next_day["existing"].is_object() {
+                by_month.push(code);
+            } else {
+                assert!(
+                    next_day["sample"].is_object(),
+                    "{code}: a fresh sample for the second transaction"
+                );
+                assert_eq!(next_day["sample"]["sample"], true, "{code}");
+                exact.push(code);
+            }
+            let april = sample_period(TIN, code, typed_parts(code, 2024, 4, 15, 1));
+            assert!(april["existing"].is_null(), "{code}: April is new");
+        }
+        exact.sort_unstable();
+        by_month.sort_unstable();
+        assert_eq!(exact, ["2000OT", "2552"], "As needed, keyed by the date");
+        assert_eq!(
+            by_month,
+            [
+                "1600WP", "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S", "2200T"
+            ],
+            "Monthly, the day does not matter"
+        );
+        // The screen index says how often each is filed.
+        for code in &exact {
+            assert_eq!(schema_entry(code).unwrap()["freq"], "As needed", "{code}");
+        }
+        for code in &by_month {
+            assert_eq!(schema_entry(code).unwrap()["freq"], "Monthly", "{code}");
+        }
     }
 
     #[test]
