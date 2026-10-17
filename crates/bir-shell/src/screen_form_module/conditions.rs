@@ -273,13 +273,34 @@ pub(super) mod tests {
 
     /// 1702Q's gates the corpus records only as "Enabled only by the
     /// official dependency/state transition" (PR 5): `(form, key,
-    /// condition)`. form_1702q.rs `recompute` clears each box while its
-    /// condition does not hold (no ATC at item 5 closes Schedules 1, 2 and
-    /// 4, the official ATCEnableDisableSchedules, rules/forms/1702q-v2018c/
-    /// validations.json 1702q-change-007; `mcit_open` closes Schedule 3;
-    /// `previous_quarters_open` the previous quarters' lines;
-    /// `previously_filed_open`, 1702q-change-009, Schedule 4 item 6; a
-    /// relief not availed clears item 13A; `prior_mcit_open` item 15).
+    /// condition)`. Each box's own value is cleared or overwritten by
+    /// crates/bir-core/src/forms/form_1702q.rs `recompute` while its
+    /// condition does not hold:
+    /// - Item 5's ATC, Schedules 1, 2 and 4: the port clears them with no ATC
+    ///   ("ATCEnableDisableSchedules: no ATC closes Schedules 1, 2 and 4"),
+    ///   the gate the tracked rules/forms/1702q-v2018c/validations.json
+    ///   1702q-change-007 records ("Schedule 1A-only, Schedule 1B-only, or
+    ///   combined Schedules 1-4 are enabled according to the exact ATC
+    ///   switch").
+    /// - Item 13A: the port clears it while item 13 is No (`if
+    ///   !self.tax_relief`); validations.json 1702q-validate-020 asks for
+    ///   it when Yes ("Please specify Special Law/International Tax Treaty
+    ///   on Item 13A.").
+    /// - Schedule 4 item 6: the port zeroes it unless amended (`if
+    ///   !self.previously_filed_open()`); validations.json
+    ///   1702q-change-009 records the same reset, citing
+    ///   official-hta-runtime#ProcessAmended, the untracked
+    ///   ebirforms-mirror HTA.
+    /// - Port behaviour only, not an official rule the tracked corpus
+    ///   records: Schedule 1 items 8A/8B, Schedule 2 item 8 and Schedule 4
+    ///   items 2-4 are cleared before the 2nd quarter (`if !previous`, from
+    ///   `previous_quarters_open`); Schedule 3 items 1-3 are cleared unless
+    ///   both item 5 boxes are ticked (`if !self.mcit_open()`) and items 2
+    ///   and 3 before their quarter (`if self.quarter < 2` / `< 3`);
+    ///   Schedule 2 item 6 is overwritten (not cleared) with 40% of the
+    ///   total gross income under OSD (`if self.deduction ==
+    ///   Form1702qDeduction::Osd`); item 15 is cleared unless the regular
+    ///   tax exceeds the MCIT (`if !self.prior_mcit_open()`).
     const CORPUS_GAPS_PR5: &[(&str, &str, &str)] = &[
         ("1702Q", "frm1702q:Sched1:txtTax1A", GAP_ATC),
         ("1702Q", "frm1702q:Sched1:txtTax1B", GAP_ATC),
