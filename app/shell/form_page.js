@@ -34,19 +34,12 @@ import {
   PageHeader,
   MetaLine,
 } from "./ui.js";
-import { formatTin } from "./store.js";
+import { errorText as message, formatTin } from "./store.js";
 import { periodLabel } from "./periods.js";
 
 const VALIDATE_DELAY = 300;
 /** Debounce for live print-preview sync (ms after the last keystroke). */
 const LIVE_PREVIEW_DELAY = 120;
-
-function message(e) {
-  // Host errors arrive as "`bir.fn`: text"; the person needs only the text.
-  return String(e && e.message ? e.message : e)
-    .replace(/^Error:\s*/, "")
-    .replace(/^`[^`]+`:\s*/, "");
-}
 
 /**
  * A listed dropdown option as `{ value, label }`. The schema writes many
@@ -196,7 +189,9 @@ export class FormPageActions {
   /** Load the schema now and the return in the background. */
   open(opts, cx) {
     const app = this.app;
+    // The last form's retained views and text states go with it.
     for (const row of this.state?.rowViews?.values() || []) row.entity.release();
+    for (const input of this.state?.inputs?.values() || []) input.release();
     this.state?.checkButton?.entity.release();
     const token = ++this.token;
     let schema = null;
@@ -346,8 +341,27 @@ export class FormPageActions {
       width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value()] : null,
-      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.options[k]]),
+      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), this.optionsSignature(k)]),
     ]);
+  }
+
+  /**
+   * One box's choices as text, computed once per host reply rather than once
+   * per row per refresh: `s.options` is replaced whole on every fill, so the
+   * memo lives as long as that object.
+   */
+  optionsSignature(k) {
+    const s = this.state;
+    if (s.optionSigsFor !== s.options) {
+      s.optionSigsFor = s.options;
+      s.optionSigs = new Map();
+    }
+    let sig = s.optionSigs.get(k);
+    if (sig === undefined) {
+      sig = s.options[k] === undefined ? "" : JSON.stringify(s.options[k]);
+      s.optionSigs.set(k, sig);
+    }
+    return sig;
   }
 
   /** Retained rows keep their snapshots until something they display changes. */
@@ -523,6 +537,9 @@ export class FormPageActions {
           for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
         }
       } catch (e) {
+        // The draft never took these edits: keep them staged (under anything
+        // typed since) so the next flush or save sends them again.
+        s.pending = { ...edits, ...s.pending };
         this.app.toast(message(e), cx, "triangle-alert");
       }
     }
@@ -675,13 +692,14 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.draft) return;
     // Take whatever is staged before saving, without waiting for the debounce.
-    const edits = s.pending;
+    let edits = s.pending;
     s.pending = {};
     try {
       if (Object.keys(edits).length) {
         const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
         s.draft = f.draft;
         s.values = f.values;
+        edits = {};
       }
       const r = this.app.store.write("screen_form_save", s.code, s.draft);
       s.draft = r.draft;
@@ -691,6 +709,8 @@ export class FormPageActions {
       this.app.toast("Draft saved.", cx, "save");
       this.validate(cx);
     } catch (e) {
+      // Edits the draft never took stay staged for the next try.
+      s.pending = { ...edits, ...s.pending };
       this.app.toast(message(e), cx, "triangle-alert");
     }
   }
