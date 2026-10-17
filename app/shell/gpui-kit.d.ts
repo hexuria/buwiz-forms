@@ -27999,6 +27999,11 @@ declare module "bir" {
       period_set: boolean;
       /** A sample's taxpayer's saved returns of the form, for a picker that marks them. */
       saved_periods: ScreenFormSavedPeriod[];
+      /** When a return was sent to BIR and confirmed (a read-only view says so). */
+      submitted_at: string | null;
+      confirmed_at: string | null;
+      /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
+      amends?: ScreenFormStatus;
       errors: ScreenFormError[];
   }
   export interface ScreenFormPeriodPart {
@@ -28022,6 +28027,10 @@ declare module "bir" {
       status: ScreenFormStatus;
       updated_at: string;
       total_payable: number | null;
+      /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
+      actions: ("load" | "view" | "amend" | "keep")[];
+      submitted_at: string | null;
+      confirmed_at: string | null;
   }
   export interface ScreenFormSamplePeriod {
       complete: boolean;
@@ -28066,6 +28075,8 @@ declare module "bir" {
   /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
   export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
   /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
+  /** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved, and the filed return is kept as its amendment snapshot. */
+  export function screen_form_amend(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
   export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
   /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
   export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;

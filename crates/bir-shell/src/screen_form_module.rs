@@ -87,6 +87,11 @@ export interface ScreenFormOpened {
     period_set: boolean;
     /** A sample's taxpayer's saved returns of the form, for a picker that marks them. */
     saved_periods: ScreenFormSavedPeriod[];
+    /** When a return was sent to BIR and confirmed (a read-only view says so). */
+    submitted_at: string | null;
+    confirmed_at: string | null;
+    /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
+    amends?: ScreenFormStatus;
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -110,6 +115,10 @@ export interface ScreenFormExisting {
     status: ScreenFormStatus;
     updated_at: string;
     total_payable: number | null;
+    /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
+    actions: ("load" | "view" | "amend" | "keep")[];
+    submitted_at: string | null;
+    confirmed_at: string | null;
 }
 export interface ScreenFormSamplePeriod {
     complete: boolean;
@@ -154,6 +163,8 @@ export function screen_form_open(tin: string, form_code: string, year: number, p
 /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
 export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
 /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
+/** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved, and the filed return is kept as its amendment snapshot. */
+export function screen_form_amend(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
@@ -176,6 +187,7 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("screen_form_open", screen_form_open)
         .async_function("screen_form_sample", screen_form_sample)
         .async_function("screen_form_sample_period", screen_form_sample_period)
+        .async_function("screen_form_amend", screen_form_amend)
         .function("screen_form_fill", screen_form_fill)
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
@@ -1921,6 +1933,8 @@ fn opened_json(
         "period_parts": period_parts,
         "period_set": sample.as_ref().is_some_and(|build| build.other.is_none()),
         "saved_periods": sample.map(|build| build.saved).unwrap_or_default(),
+        "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
+        "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
         "errors": errors,
     }))
 }
@@ -2576,7 +2590,28 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
         .as_str()
         .or_else(|| stored["lifecycle"]["updated_at"].as_str())
         .unwrap_or("");
+    // Draft: load it. Queued: view it while it waits. Reached BIR: view it,
+    // or amend it where the form has an amended-return answer (never a
+    // Paid return, which the app cannot revert).
+    let amend = agent::amended_copy(kind, stored).is_ok();
+    let mut actions = match identity.status {
+        FilingStatus::Draft => vec!["load"],
+        _ => vec!["view"],
+    };
+    if amend {
+        actions.push("amend");
+    }
+    actions.push("keep");
+    let stamp = |name: &str| {
+        stored[name]
+            .as_str()
+            .or_else(|| stored["lifecycle"][name].as_str())
+            .map(str::to_string)
+    };
     Ok(json!({
+        "actions": actions,
+        "submitted_at": stamp("submitted_at"),
+        "confirmed_at": stamp("confirmed_at"),
         "form_code": kind.form_code(),
         "year": identity.taxable_year,
         "period": bir_core::forms::queueable::period_column(&identity.period),
@@ -2591,6 +2626,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
+    let amendment = take_amendment_mark(&mut draft);
     let edits = arguments
         .value(2)?
         .as_object()
@@ -2625,6 +2661,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         mark
     });
     put_sample_mark(&mut draft, sample.as_ref());
+    put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
         "draft": draft,
         "values": values,
@@ -2926,6 +2963,7 @@ fn screen_form_validate(
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
+    let amendment = take_amendment_mark(&mut draft);
     Ok(async move {
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
@@ -2936,6 +2974,7 @@ fn screen_form_validate(
             let options = catalogs::options(kind, &draft);
             let blank = sample.as_ref().map(|mark| mark.blank.clone());
             put_sample_mark(&mut draft, sample.as_ref());
+            put_amendment_mark(&mut draft, amendment);
             Ok(json!({
                 "draft": draft,
                 "values": values,
@@ -2954,7 +2993,15 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
     refuse_sample(&mut draft, "saved")?;
+    let amendment = take_amendment_mark(&mut draft);
     let id = with_database(|db| {
+        if amendment.is_some() {
+            // An amendment's first save: the filed return goes through the
+            // user's "Revert to Draft" (kept as an amendment snapshot), and
+            // this draft takes its row.
+            let row = revert_for_amendment(db, kind, &draft).map_err(host_error)?;
+            draft["id"] = Value::from(row);
+        }
         refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
         agent::save_draft(kind, db, &mut draft).map_err(host_error)
     })?;
@@ -3073,6 +3120,95 @@ fn refuse_replacing_a_stored_return(
     }
 }
 
+/// Marks a new amended return (`screen_form_amend`) until its first save:
+/// the status of the filed return it amends.
+const AMENDMENT_MARK: &str = "screen_form_amendment";
+
+fn take_amendment_mark(draft: &mut Value) -> Option<Value> {
+    match draft {
+        Value::Object(object) => object.remove(AMENDMENT_MARK).filter(|mark| !mark.is_null()),
+        _ => None,
+    }
+}
+
+fn put_amendment_mark(draft: &mut Value, mark: Option<Value>) {
+    if let (Some(mark), Value::Object(object)) = (mark, draft) {
+        object.insert(AMENDMENT_MARK.into(), mark);
+    }
+}
+
+/// The user's "Revert to Draft" for the filed return an amendment replaces:
+/// its row id.
+fn revert_for_amendment(db: &Database, kind: AgentFormKind, draft: &Value) -> Result<i64, String> {
+    let identity = agent::identity(kind, draft)?;
+    let (tin, year) = (identity.tin.as_str(), identity.taxable_year);
+    let column = bir_core::forms::queueable::period_column(&identity.period);
+    let slot = u8::try_from(column).unwrap_or(0);
+    let id = match kind {
+        AgentFormKind::Form1601C => {
+            db.revert_1601c_for_amendment(tin, year, slot)
+                .map_err(|error| error.to_string())?
+                .draft
+                .id
+        }
+        AgentFormKind::Form2551Q => {
+            db.revert_2551q_for_amendment(tin, year, slot)
+                .map_err(|error| error.to_string())?
+                .draft
+                .id
+        }
+        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
+            db.revert_queueable_for_amendment::<F>(tin, year, column)
+                .map_err(|error| error.to_string())?
+                .draft
+                .draft_id()
+        }),
+    };
+    id.ok_or_else(|| format!("the filed {} return has no row", kind.form_code()))
+}
+
+/// Open a NEW amended return for a stored return that reached BIR, copied
+/// from it (`agent::amended_copy`). Nothing is stored and the filed return
+/// is not touched until the amendment is first saved.
+fn screen_form_amend(
+    arguments: &HostArguments,
+) -> Result<impl Future<Output = HostResult> + Send + use<>, HostError> {
+    let tin: String = arguments
+        .string(0)?
+        .chars()
+        .filter(char::is_ascii_digit)
+        .collect();
+    let kind = kind_of(arguments.string(1)?)?;
+    let code = kind.form_code();
+    let year =
+        u16::try_from(arguments.integer(2)?).map_err(|_| host_error("year is out of range"))?;
+    let period = page_period(code, arguments.integer(3)?).map_err(host_error)?;
+    let (amended, from_profile, status) = with_database(|db| {
+        let profile = db
+            .get_profile_by_tin(&tin)
+            .map_err(|error| host_error(error.to_string()))?
+            .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
+        let filed = load_draft(db, kind, &profile, year, period, false).map_err(host_error)?;
+        let status = agent::identity(kind, &filed).map_err(host_error)?.status;
+        let amended = agent::amended_copy(kind, &filed).map_err(host_error)?;
+        let from_profile =
+            load_draft(db, kind, &profile, year, period, true).map_err(host_error)?;
+        Ok((amended, from_profile, status))
+    })?;
+    Ok(async move {
+        let mut opened =
+            on_large_stack(move || opened_json(kind, year, period, amended, from_profile, None))
+                .and_then(|result| result)
+                .map_err(host_error)?;
+        put_amendment_mark(
+            &mut opened["draft"],
+            Some(json!({ "amends": status_name(&status) })),
+        );
+        opened["amends"] = json!(status_name(&status));
+        Ok(json(opened))
+    })
+}
+
 /// The print sheet's field map and receipt page for a draft as saved.
 pub(crate) fn print_map(
     db: &Database,
@@ -3118,6 +3254,7 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(&code)?;
     let mut draft = draft_argument(arguments, 1)?;
     refuse_sample(&mut draft, "printed")?;
+    take_amendment_mark(&mut draft);
     let slug = crate::bir_module::print_slug_for(kind.form_code())
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
     let identity = agent::identity(kind, &draft).map_err(host_error)?;
@@ -3155,6 +3292,7 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     if take_sample_mark(&mut draft).is_some() {
         return Ok(HostValue::Bool(false));
     }
+    take_amendment_mark(&mut draft);
     if let Some(edits) = arguments.value(2).ok().and_then(|v| v.as_object()) {
         let edits: Map<String, Value> =
             edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
@@ -3192,6 +3330,7 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(&code)?;
     let mut draft = draft_argument(arguments, 1)?;
     refuse_sample(&mut draft, "queued")?;
+    take_amendment_mark(&mut draft);
     let AgentFormKind::Queueable(queueable) = kind else {
         return Err(host_error(format!(
             "{code} is queued with queue_form_draft (month or quarter)"
@@ -6403,6 +6542,93 @@ mod tests {
             refused["rejected"].get(month).is_some(),
             "{}",
             refused["rejected"]
+        );
+    }
+
+    /// A stored draft's JSON with its status set (top level, or in its lifecycle).
+    fn with_status(draft: &Value, status: &str) -> Value {
+        let mut draft = draft.clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        if draft["lifecycle"].is_object() {
+            draft["lifecycle"]["status"] = json!(status);
+        } else {
+            draft["status"] = json!(status);
+        }
+        draft
+    }
+
+    #[test]
+    fn an_existing_returns_offer_follows_its_status() {
+        setup();
+        let offer = |code: &str, status: &str| {
+            let kind = kind_of(code).unwrap();
+            let stored = with_status(&open(code, page_period_of(code).max(1))["draft"], status);
+            with_database(|db| existing_return(db, kind, &stored).map_err(HostError::new)).unwrap()
+                ["actions"]
+                .clone()
+        };
+        for code in ["0619E", "1601C", "2551Q"] {
+            assert_eq!(offer(code, "Draft"), json!(["load", "keep"]), "{code}");
+            assert_eq!(offer(code, "Queued"), json!(["view", "keep"]), "{code}");
+            assert_eq!(
+                offer(code, "Submitted"),
+                json!(["view", "amend", "keep"]),
+                "{code}"
+            );
+            assert_eq!(
+                offer(code, "Confirmed"),
+                json!(["view", "amend", "keep"]),
+                "{code}"
+            );
+            // A Paid return cannot be reverted, so it is never amended here.
+            assert_eq!(offer(code, "Paid"), json!(["view", "keep"]), "{code}");
+        }
+    }
+
+    /// Forms with no "Amended Return?" answer (`QueueableForm::mark_amended`
+    /// is false): the host never offers to amend them.
+    const FORMS_WITHOUT_AN_AMENDED_ANSWER: &[&str] = &["0605"];
+
+    #[test]
+    fn amend_is_offered_only_where_the_form_has_an_amended_answer() {
+        setup();
+        let mut without = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let stored = with_status(&open(code, page_period_of(code))["draft"], "Submitted");
+            let actions =
+                with_database(|db| existing_return(db, kind, &stored).map_err(HostError::new))
+                    .unwrap()["actions"]
+                    .clone();
+            let amend = actions.as_array().unwrap().iter().any(|a| a == "amend");
+            match agent::amended_copy(kind, &stored) {
+                Ok(copy) => {
+                    assert!(amend, "{code}: amendable, so offered");
+                    let identity = agent::identity(kind, &copy).unwrap();
+                    assert_eq!(identity.status, FilingStatus::Draft, "{code}");
+                    assert!(copy["id"].is_null(), "{code}: a new return, no row");
+                }
+                Err(error) => {
+                    assert!(!amend, "{code}: {error}");
+                    without.push(code);
+                }
+            }
+        }
+        assert_eq!(without, FORMS_WITHOUT_AN_AMENDED_ANSWER, "{without:?}");
+    }
+
+    #[test]
+    fn the_host_amends_only_a_return_that_reached_bir() {
+        setup();
+        save("0619E", &open("0619E", 6)["draft"]);
+        let refused = call_async(
+            "screen_form_amend",
+            vec![TIN.into(), "0619E".into(), YEAR.into(), 6.into()],
+        )
+        .expect_err("a stored Draft is loaded, never amended");
+        assert!(
+            refused.to_string().contains("submitted or confirmed"),
+            "{refused}"
         );
     }
 

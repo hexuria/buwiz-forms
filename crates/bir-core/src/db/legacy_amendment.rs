@@ -85,8 +85,7 @@ impl LegacyAmendable for Form1601CDraft {
         Form1601CDraft::revert_to_draft(self);
     }
     fn mark_amended(&mut self) {
-        self.is_amended = true;
-        self.compute();
+        Form1601CDraft::mark_amended(self);
     }
     fn set_id(&mut self, id: Option<i64>) {
         self.id = id;
@@ -133,10 +132,7 @@ impl LegacyAmendable for Form2551QDraft {
         Form2551QDraft::revert_to_draft(self);
     }
     fn mark_amended(&mut self) {
-        // The editor's Amended toggle: Yes keeps Items 16 and the on-time
-        // answer as entered and recomputes.
-        self.is_amended = true;
-        self.recompute(None);
+        Form2551QDraft::mark_amended(self);
     }
     fn set_id(&mut self, id: Option<i64>) {
         self.id = id;

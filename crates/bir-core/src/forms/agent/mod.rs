@@ -321,6 +321,49 @@ pub fn identity(kind: AgentFormKind, draft: &Value) -> Result<DraftIdentity, Str
     })
 }
 
+/// A new amended return copied from one that reached BIR (Submitted or
+/// Confirmed), the way the user's "Revert to Draft" amends it
+/// (`Database::revert_queueable_for_amendment` and its 1601C/2551Q twins),
+/// but in memory: back to Draft, its "Amended Return?" answer set to Yes the
+/// way its editor does, and no row id. Nothing is stored and the filed
+/// original is not touched; saving it goes through that revert, which keeps
+/// the original as an amendment snapshot. Refused for a return that never
+/// left the app, a Paid one, and a form with no amended-return answer.
+pub fn amended_copy(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
+    let status = identity(kind, draft)?.status;
+    if !matches!(status, FilingStatus::Submitted | FilingStatus::Confirmed) {
+        return Err(format!(
+            "only a submitted or confirmed {} return can be amended (this one is {status:?})",
+            kind.form_code()
+        ));
+    }
+    match kind {
+        AgentFormKind::Form1601C => {
+            let mut copy: Form1601CDraft = parse(kind, draft)?;
+            copy.revert_to_draft();
+            copy.mark_amended();
+            copy.id = None;
+            to_json(&copy)
+        }
+        AgentFormKind::Form2551Q => {
+            let mut copy: Form2551QDraft = parse(kind, draft)?;
+            copy.revert_to_draft();
+            copy.mark_amended();
+            copy.id = None;
+            to_json(&copy)
+        }
+        AgentFormKind::Queueable(queueable) => crate::with_queueable_kind!(queueable, F => {
+            let mut copy: F = parse(kind, draft)?;
+            copy.lifecycle_mut().revert_to_draft();
+            if !copy.mark_amended() {
+                return Err(format!("{} has no amended-return answer", kind.form_code()));
+            }
+            copy.set_draft_id(None);
+            to_json(&copy)
+        }),
+    }
+}
+
 /// Save an editable Draft the way its page's "Save draft" does, recomputed
 /// first; returns the `form_drafts` row id (also written into `draft`).
 /// Refuses anything that is not a Draft. Never queues.
@@ -1545,6 +1588,82 @@ mod tests {
         assert!(!writes_only_the_period(&text("/estimated_life_months")));
         assert!(!writes_only_the_period(&choice(&["/quarter", "/tin"])));
         assert!(!writes_only_the_period(&choice(&[])));
+    }
+
+    #[test]
+    fn an_amended_copy_is_new_and_the_filed_return_stays_byte_for_byte() {
+        use crate::db::Database;
+        use crate::forms::form_0619e::Form0619EDraft;
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "store@example.test",
+            "default_form_type": "0619E"
+        }))
+        .unwrap();
+        let kind = AgentFormKind::from_code("0619E").unwrap();
+        let draft = Form0619EDraft::new_from_profile(&profile, 2025, 6);
+        let tin = draft.tin().to_string();
+        let id = db.save_queueable_draft(&draft).unwrap();
+        // A return that reached BIR, stored the way submission leaves it.
+        let mut filed: Form0619EDraft = db.get_queueable_draft(&tin, 2025, 6).unwrap().unwrap();
+        filed.lifecycle.status = FilingStatus::Submitted;
+        filed.lifecycle.submitted_at = Some("2025-07-10T01:02:03+00:00".into());
+        filed.lifecycle.submission_filename = Some(filed.submission_filename());
+        let filed_json = serde_json::to_string(&filed).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+                rusqlite::params![filed_json, id],
+            )
+            .unwrap();
+        let row = |db: &Database| -> (String, String) {
+            db.conn
+                .query_row(
+                    "SELECT status, data_json FROM form_drafts WHERE id = ?1",
+                    rusqlite::params![id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap()
+        };
+        let before = row(&db);
+
+        // The copy: a Draft, "Amended Return?" Yes, no row id.
+        let amended = amended_copy(kind, &serde_json::to_value(&filed).unwrap()).unwrap();
+        let copy: Form0619EDraft = serde_json::from_value(amended.clone()).unwrap();
+        assert_eq!(copy.lifecycle.status, FilingStatus::Draft);
+        assert_eq!(copy.amended_return_answer(), Some(true));
+        assert_eq!(copy.draft_id(), None);
+        assert_eq!(
+            row(&db),
+            before,
+            "nothing stored: the filed row is byte-for-byte"
+        );
+
+        // Its first save goes through the user's revert: the filed return is
+        // kept byte-for-byte as the amendment snapshot.
+        let reverted = db
+            .revert_queueable_for_amendment::<Form0619EDraft>(&tin, 2025, 6)
+            .unwrap();
+        let snapshots = db
+            .list_amendment_snapshots("0619E", &tin, 2025, &filed.filing_period().to_period_key())
+            .unwrap();
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(
+            snapshots[0].draft_json, before.1,
+            "the original, byte for byte"
+        );
+        assert_eq!(Some(id), reverted.draft.draft_id());
+
+        // Never for a return that did not reach BIR.
+        assert!(amended_copy(kind, &serde_json::to_value(&draft).unwrap()).is_err());
     }
 
     #[test]
