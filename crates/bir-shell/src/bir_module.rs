@@ -585,6 +585,128 @@ fn setup_helpdesk(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+// ---------- change mode / owner (admin only, after first launch) ----------
+//
+// Settings › Computer setup. Each change re-checks the current admin's PIN
+// or authenticator code here, never trusting the script, refuses a change
+// that would leave nobody able to sign in as admin, and replaces the
+// recovery key so the previous admin's key stops working.
+
+const NOT_THE_ADMIN: &str =
+    "That PIN or code is not the admin's. Type the current admin PIN or authenticator code.";
+
+/// The current admin's PIN (`pin`) or authenticator code (`code`), checked
+/// against the stored credentials of `mode`.
+fn confirm_admin(
+    db: &Database,
+    mode: &AccessMode,
+    pin: Option<&str>,
+    code: Option<&str>,
+) -> Result<(), HostError> {
+    let credentials = admin_credentials(db, mode)?;
+    let by_pin = pin.is_some_and(|pin| pin_matches(credentials.pin_hash.as_deref(), pin));
+    let by_code = code.is_some_and(|code| totp_matches(credentials.totp_secret.as_deref(), code));
+    if by_pin || by_code {
+        Ok(())
+    } else {
+        Err(HostError::new(NOT_THE_ADMIN))
+    }
+}
+
+/// `null` or a non-empty string.
+fn optional_text(arguments: &gpui_shell::HostArguments, index: usize) -> Option<String> {
+    arguments
+        .get(index)
+        .and_then(HostValue::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+/// A taxpayer that can become the owner: exists, not the reserved root,
+/// has a branch that is not archived, and has a PIN or authenticator so
+/// someone can sign in as admin afterwards.
+fn check_new_owner(db: &Database, root: &str) -> Result<(), HostError> {
+    bir_core::tax_profile::reject_reserved_tin_root(root).map_err(db_error)?;
+    let Some(taxpayer) = db.get_taxpayer(root).map_err(db_error)? else {
+        return Err(HostError::new(format!("No taxpayer with TIN {root}")));
+    };
+    let mut active = false;
+    for branch in &taxpayer.branches {
+        if let Some(profile) = db.get_profile_by_tin(&branch.tin).map_err(db_error)?
+            && !profile.is_archived
+        {
+            active = true;
+            break;
+        }
+    }
+    if !active {
+        return Err(HostError::new(
+            "This taxpayer is archived. Unarchive it before making it the owner.",
+        ));
+    }
+    let credentials = taxpayer_credentials(db, root)?;
+    if credentials.pin_hash.is_none() && credentials.totp_secret.is_none() {
+        return Err(HostError::new(
+            "This taxpayer has no PIN or authenticator yet. Set one for them first, so the new owner can sign in as admin.",
+        ));
+    }
+    Ok(())
+}
+
+/// Make `tin_root` the owner (solo mode), from solo or from help desk.
+/// Arguments: `tin_root`, then the current admin's `pin` and `code` (either
+/// may be `null`). Help desk's admin PIN and authenticator are removed.
+/// Answers a new recovery key.
+fn change_owner(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let root = tin_root_argument(arguments.string(0)?)?;
+    let pin = optional_text(arguments, 1);
+    let code = optional_text(arguments, 2);
+    with_database(|db| {
+        let mode = require_access_mode(db)?;
+        confirm_admin(db, &mode, pin.as_deref(), code.as_deref())?;
+        if mode == AccessMode::Solo(root.clone()) {
+            return Err(HostError::new("This taxpayer is already the owner."));
+        }
+        check_new_owner(db, &root)?;
+        // Owner first, then the mode: a failure in between leaves a working
+        // setup either way.
+        db.set_setting(ADMIN_TIN_ROOT, &root).map_err(db_error)?;
+        db.set_setting(ACCESS_MODE, "solo").map_err(db_error)?;
+        db.delete_setting(ADMIN_PIN_HASH).map_err(db_error)?;
+        db.delete_setting(ADMIN_TOTP_SECRET).map_err(db_error)?;
+        store_new_recovery_key(db)
+    })
+}
+
+/// Switch from solo to help desk. Arguments: the current admin's `pin` and
+/// `code` (either may be `null`), then the new admin PIN. The former owner
+/// stays an ordinary taxpayer with their own PIN. Answers a new recovery
+/// key.
+fn change_to_helpdesk(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let pin = optional_text(arguments, 0);
+    let code = optional_text(arguments, 1);
+    let new_pin =
+        pin_argument(arguments.value(2)?)?.ok_or_else(|| HostError::new("A PIN is 4 digits."))?;
+    with_database(|db| {
+        let mode = require_access_mode(db)?;
+        if mode == AccessMode::Helpdesk {
+            return Err(HostError::new(
+                "This computer is already set up for a help desk.",
+            ));
+        }
+        confirm_admin(db, &mode, pin.as_deref(), code.as_deref())?;
+        // The admin PIN first, then the mode: a failure in between leaves a
+        // working solo setup.
+        db.set_setting(ADMIN_PIN_HASH, &bir_core::crypto::hash_pin(&new_pin))
+            .map_err(db_error)?;
+        db.delete_setting(ADMIN_TOTP_SECRET).map_err(db_error)?;
+        db.set_setting(ACCESS_MODE, "helpdesk").map_err(db_error)?;
+        db.delete_setting(ADMIN_TIN_ROOT).map_err(db_error)?;
+        store_new_recovery_key(db)
+    })
+}
+
 /// A fresh recovery key replaces any earlier one; only its hash is kept.
 fn store_new_recovery_key(db: &Database) -> HostResult {
     let key = bir_core::crypto::generate_recovery_key();
@@ -1528,6 +1650,8 @@ pub fn module() -> HostModule {
         .function("set_admin_totp", set_admin_totp)
         .function("setup_solo", setup_solo)
         .function("setup_helpdesk", setup_helpdesk)
+        .function("change_owner", change_owner)
+        .function("change_to_helpdesk", change_to_helpdesk)
         .function("create_recovery_key", |_| create_recovery_key())
         .function("use_recovery_key", use_recovery_key)
         .async_function("mac_login", mac_login)
@@ -1649,6 +1773,10 @@ export function set_admin_totp(secret: string | null, code?: string): null;
 export function setup_solo(tin_root: string): null;
 /** First launch for a help desk: admin PIN plus a new recovery key. Refused once set up. */
 export function setup_helpdesk(pin: string): RecoveryKey;
+/** Admin only: make this taxpayer the owner (solo), from solo or help desk. Needs the current admin PIN or code; the taxpayer needs a PIN or authenticator and an active branch. Help desk's admin PIN and authenticator are removed. Answers a new recovery key. */
+export function change_owner(tin_root: string, pin: string | null, code: string | null): RecoveryKey;
+/** Admin only: switch from solo to help desk with a new admin PIN. Needs the current admin PIN or code. Answers a new recovery key. */
+export function change_to_helpdesk(pin: string | null, code: string | null, new_pin: string): RecoveryKey;
 /** Replace the admin recovery key. Needs the app set up. */
 export function create_recovery_key(): RecoveryKey;
 /** Single use: true (and the key is forgotten) on a match; case, dashes and spaces ignored. */
@@ -1883,6 +2011,143 @@ mod tests {
         assert!(!truthy(verify_admin_pin(&args(vec![s("0817")]))));
         assert!(set_admin_pin(&args(vec![s("0817")])).is_err());
         assert!(create_recovery_key().is_err());
+    }
+
+    const OTHER_ROOT: &str = "987654321";
+
+    fn add_other_taxpayer() {
+        with_database(|db| {
+            db.create_taxpayer(NewTaxpayer {
+                tin_root: OTHER_ROOT.into(),
+                name: "Maria Santos".into(),
+                taxpayer_type: TaxpayerType::Individual,
+                birth_date: None,
+                head_office: BranchFacts {
+                    rdo_code: "043".into(),
+                    registered_address: "2 Sample Road, Makati".into(),
+                    zip_code: "1200".into(),
+                    phone: String::new(),
+                    email: String::new(),
+                },
+            })
+            .map_err(|error| HostError::new(error.to_string()))?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn null() -> HostValue {
+        HostValue::Null
+    }
+
+    fn message(result: HostResult) -> String {
+        result.unwrap_err().message().to_owned()
+    }
+
+    fn key_of(result: HostResult) -> String {
+        to_json(&result.unwrap())["recovery_key"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[test]
+    fn change_owner_moves_the_admin_to_another_taxpayer() {
+        setup();
+        add_other_taxpayer();
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let old_key = key_of(create_recovery_key());
+
+        let to_other = |pin: &str| change_owner(&args(vec![s(OTHER_ROOT), s(pin), null()]));
+        assert!(message(to_other("1111")).contains("not the admin"));
+        assert!(message(to_other("0817")).contains("no PIN or authenticator"));
+        set_taxpayer_pin(&args(vec![s(OTHER_ROOT), s("2468")])).unwrap();
+        with_database(|db| db.set_taxpayer_archived(OTHER_ROOT, true).map_err(db_error)).unwrap();
+        assert!(message(to_other("0817")).contains("archived"));
+        with_database(|db| {
+            db.set_taxpayer_archived(OTHER_ROOT, false)
+                .map_err(db_error)
+        })
+        .unwrap();
+        assert!(change_owner(&args(vec![s("000000000"), s("0817"), null()])).is_err());
+        assert!(message(change_owner(&args(vec![s(ROOT), s("0817"), null()]))).contains("already"));
+        assert_eq!(state()["admin_root"], ROOT, "refusals change nothing");
+
+        let new_key = key_of(to_other("0817"));
+        assert_eq!(state()["mode"], "solo");
+        assert_eq!(state()["admin_root"], OTHER_ROOT);
+        assert!(truthy(verify_admin_pin(&args(vec![s("2468")]))));
+        assert!(!truthy(verify_admin_pin(&args(vec![s("0817")]))));
+        // The old owner keeps their own PIN and is now an ordinary taxpayer.
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(true)])).unwrap();
+        assert!(set_taxpayer_archived(&args(vec![s(OTHER_ROOT), HostValue::Bool(true)])).is_err());
+        // The previous admin's recovery key is dead; the new one works once.
+        assert!(!truthy(use_recovery_key(&args(vec![s(&old_key)]))));
+        assert!(truthy(use_recovery_key(&args(vec![s(&new_key)]))));
+    }
+
+    #[test]
+    fn change_to_helpdesk_and_back_to_an_owner() {
+        setup();
+        add_other_taxpayer();
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        set_admin_totp(&args(vec![s(SECRET), s(&current_code(SECRET))])).unwrap();
+
+        assert!(
+            message(change_to_helpdesk(&args(vec![
+                s("1111"),
+                null(),
+                s("4321")
+            ])))
+            .contains("not the admin")
+        );
+        assert!(change_to_helpdesk(&args(vec![s("0817"), null(), s("12")])).is_err());
+        assert_eq!(state()["mode"], "solo", "refusals change nothing");
+
+        // Confirming with the authenticator code works as well as the PIN.
+        let key = key_of(change_to_helpdesk(&args(vec![
+            null(),
+            s(&current_code(SECRET)),
+            s("4321"),
+        ])));
+        assert_eq!(key.len(), 19);
+        assert_eq!(state()["mode"], "helpdesk");
+        assert_eq!(state()["admin_root"], "000000000");
+        assert_eq!(
+            state()["has_admin_totp"],
+            false,
+            "no authenticator carried over"
+        );
+        assert!(truthy(verify_admin_pin(&args(vec![s("4321")]))));
+        assert!(!truthy(verify_admin_pin(&args(vec![s("0817")]))));
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        // The former owner is no longer protected from archiving.
+        set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(true)])).unwrap();
+        set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(false)])).unwrap();
+        assert!(
+            message(change_to_helpdesk(&args(vec![
+                s("4321"),
+                null(),
+                s("5555")
+            ])))
+            .contains("already")
+        );
+
+        // Back to solo with another taxpayer as the owner.
+        set_taxpayer_pin(&args(vec![s(OTHER_ROOT), s("2468")])).unwrap();
+        assert!(
+            change_owner(&args(vec![s(OTHER_ROOT), s("0817"), null()])).is_err(),
+            "help desk PIN needed"
+        );
+        change_owner(&args(vec![s(OTHER_ROOT), s("4321"), null()])).unwrap();
+        assert_eq!(state()["mode"], "solo");
+        assert_eq!(state()["admin_root"], OTHER_ROOT);
+        assert!(truthy(verify_admin_pin(&args(vec![s("2468")]))));
+        let leftover = with_database(|db| Ok(setting(db, ADMIN_PIN_HASH)?.is_some())).unwrap();
+        assert!(!leftover, "the help desk admin PIN is removed");
     }
 
     #[test]
