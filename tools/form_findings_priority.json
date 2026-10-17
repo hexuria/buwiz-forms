@@ -58,6 +58,41 @@
       "forms": []
     },
     {
+      "id": "PR 0c",
+      "wave": "shared",
+      "name": "Maintainer decisions (shared)",
+      "why": "The maintainer's 2026-10-17 decisions that change every form: saving a library sample, printing long text, following profile changes, 0605 penalties and exact-date matching.",
+      "branch": "fix/findings-maintainer-decisions",
+      "shared": [
+        {
+          "rule": "R1",
+          "what": "A library sample can be saved as a real return; Save asks for the period first",
+          "forms": 43
+        },
+        {
+          "rule": "R5",
+          "what": "Printout: boxes while text fits both lines; past 71, plain text on both lines, shrunk to fit",
+          "forms": 40
+        },
+        {
+          "rule": "R2",
+          "what": "Boxes the filer didn't edit follow later profile changes, quietly on open, drafts only",
+          "forms": 43
+        },
+        {
+          "rule": "R8",
+          "what": "0605 penalties are plain open boxes",
+          "forms": 1
+        },
+        {
+          "rule": "R1",
+          "what": "Per-transaction forms match a saved return by exact date; monthly forms by month",
+          "forms": 2
+        }
+      ],
+      "forms": []
+    },
+    {
       "id": "PR 1",
       "wave": "q3oct",
       "name": "Q3 business taxes",
