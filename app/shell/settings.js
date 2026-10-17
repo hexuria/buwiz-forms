@@ -1,7 +1,7 @@
 // Settings: preferences for this computer and the signed-in account's own
 // PIN and authenticator. A taxpayer sees Appearance and Security; the admin
-// also sees Data, Background tasks, the recovery key and where the database
-// lives. Rows the prototype shows for features this build does not have yet
+// also sees Data, Background tasks, Computer setup (who this computer is set
+// up for), the recovery key and where the database lives. Rows the prototype shows for features this build does not have yet
 // are left out rather than drawn as dead switches
 // (see docs/plans/gpui-shell-migration.md).
 
@@ -22,6 +22,7 @@ import {
   SectionTitle,
 } from "./ui.js";
 import { SecurityCard } from "./security.js";
+import { SetupCard } from "./setup_change.js";
 
 
 function jobChip(cx, status) {
@@ -102,6 +103,12 @@ export function renderSettings(cx, app, _width) {
     .child(div().mt(28).child(SectionTitle(cx, "Appearance", true)))
     .child(appearance);
   const version = `eBIRForms ${app.info.app_version || ""}`;
+  // A setup change just moved the admin. Until the old session signs out,
+  // show only the new recovery key: the rest of Settings already belongs to
+  // the new admin.
+  if (app.setupChange.step === "key") {
+    return page.child(SectionTitle(cx, "Computer setup")).child(SetupCard(cx, app));
+  }
   // A taxpayer: appearance and its own PIN. Import, background tasks, the
   // database's location and every other taxpayer belong to the admin.
   if (!app.isAdmin()) {
@@ -115,6 +122,8 @@ export function renderSettings(cx, app, _width) {
     .child(data)
     .child(SectionTitle(cx, "Background tasks"))
     .child(tasks)
+    .child(SectionTitle(cx, "Computer setup"))
+    .child(SetupCard(cx, app))
     .child(SectionTitle(cx, "Security"))
     .child(SecurityCard(cx, app))
     .child(Text(cx, "meta", `${version} · ${app.info.database_path || ""}`, "fg3").mt(SPACE[6]).whitespace_normal());
