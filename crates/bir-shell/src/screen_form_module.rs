@@ -233,20 +233,51 @@ fn schema() -> &'static [Value] {
                 }
             }
             hide_repeated_occurrences(form);
-            retype_money_text_boxes(form, &code);
+            retype_by_binding(form, &code);
         }
         forms
     })
 }
 
-/// A field the extractor typed `money` whose draft field is text (2550Q's
-/// contact number, 1701MS's taxpayer name) is a text box on the page: it
-/// takes what the filer types, never "₱ 281,234,567.00".
-fn retype_money_text_boxes(form: &mut Value, code: &str) {
+/// Amount bindings that hold a number of shares, not pesos (1707 Schedule 2
+/// rows 2-3: the draft keeps shares as a decimal number). They keep the
+/// schema's own type.
+const AMOUNT_BOUND_COUNTS: &[&str] = &[
+    "frm1707:txtPg2P4Sch2NoOfShares2",
+    "frm1707:txtPg2P4Sch2NoOfShares3",
+];
+
+/// How a bound box is typed on the page: money only where its binding is
+/// an amount (rule 7). A field the extractor typed `money` whose draft field
+/// is text (2550Q's contact number, 1701MS's taxpayer name) is a text box
+/// that takes what the filer types, never "₱ 281,234,567.00"; an amount it
+/// typed as text (1606's 17B Interest) is a peso box. A whole-number binding
+/// says nothing about pesos, so its schema type stands, and a money box over
+/// one shows whole pesos (`w`): its draft field holds no centavos.
+/// Unbound and computed boxes keep the schema's type.
+fn page_type(binding: Option<&Binding>, key: &str, schema_type: &str) -> (String, bool) {
+    let kept = (schema_type.to_string(), false);
+    match binding {
+        Some(Binding::Text { .. }) if schema_type == "money" => ("text".into(), false),
+        Some(Binding::Amount { .. })
+            if matches!(schema_type, "text" | "int" | "date")
+                && !AMOUNT_BOUND_COUNTS.contains(&key) =>
+        {
+            ("money".into(), false)
+        }
+        Some(Binding::Whole { .. }) if schema_type == "money" => ("money".into(), true),
+        _ => kept,
+    }
+}
+
+/// Apply [`page_type`] to every field, and to every schedule column whose
+/// bound cells all agree.
+fn retype_by_binding(form: &mut Value, code: &str) {
     let Some(kind) = AgentFormKind::from_code(code) else {
         return;
     };
     let def = kind.definition();
+    let binding = |key: &str| def.bindings.get(key).map(|bound| &bound.binding);
     let items = form["parts"]
         .as_array_mut()
         .into_iter()
@@ -254,14 +285,47 @@ fn retype_money_text_boxes(form: &mut Value, code: &str) {
         .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
     for item in items {
         for field in item["f"].as_array_mut().into_iter().flatten() {
-            let text = field["k"].as_str().is_some_and(|key| {
-                matches!(
-                    def.bindings.get(key).map(|bound| &bound.binding),
-                    Some(Binding::Text { .. })
-                )
-            });
-            if text && field["t"] == "money" {
-                field["t"] = Value::from("text");
+            let (Some(key), Some(t)) = (field["k"].as_str(), field["t"].as_str()) else {
+                continue;
+            };
+            let (t, whole) = page_type(binding(key), key, t);
+            field["t"] = Value::from(t);
+            if whole {
+                field["w"] = Value::Bool(true);
+            }
+        }
+        let rows: Vec<Vec<String>> = item["keys"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|row| {
+                row.as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|key| key.as_str().map(str::to_string))
+                    .collect()
+            })
+            .collect();
+        for (c, col) in item["cols"]
+            .as_array_mut()
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let Some(t) = col["t"].as_str().map(str::to_string) else {
+                continue;
+            };
+            let typed: BTreeSet<(String, bool)> = rows
+                .iter()
+                .filter_map(|row| row.get(c))
+                .filter(|key| binding(key).is_some())
+                .map(|key| page_type(binding(key), key, &t))
+                .collect();
+            if let [(t, whole)] = typed.into_iter().collect::<Vec<_>>().as_slice() {
+                col["t"] = Value::from(t.as_str());
+                if *whole {
+                    col["w"] = Value::Bool(true);
+                }
             }
         }
         // A table column whose every cell is bound to text (2200S's
@@ -8499,6 +8563,109 @@ mod tests {
                 .find(|field| field["k"] == key)
                 .unwrap_or_else(|| panic!("{code}: {key} on screen"));
             assert_eq!(field["t"], "text", "{code}: {key}");
+        }
+    }
+
+    /// Every visible box with a binding, with its page type and whole flag
+    /// (fields and schedule cells).
+    fn bound_page_types(code: &str) -> Vec<(String, String, bool)> {
+        let def = AgentFormKind::from_code(code).unwrap().definition();
+        let form = schema_entry(code).unwrap();
+        let mut out = Vec::new();
+        let items = form["parts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten());
+        for item in items {
+            for field in item["f"].as_array().into_iter().flatten() {
+                out.push((
+                    field["k"].as_str().unwrap_or("").to_string(),
+                    field["t"].as_str().unwrap_or("").to_string(),
+                    field["w"].as_bool().unwrap_or(false),
+                ));
+            }
+            let cols = item["cols"].as_array();
+            for row in item["keys"].as_array().into_iter().flatten() {
+                for (c, key) in row.as_array().into_iter().flatten().enumerate() {
+                    let col = cols.and_then(|cols| cols.get(c));
+                    out.push((
+                        key.as_str().unwrap_or("").to_string(),
+                        col.and_then(|col| col["t"].as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        col.and_then(|col| col["w"].as_bool()).unwrap_or(false),
+                    ));
+                }
+            }
+        }
+        out.retain(|(key, t, _)| t != "hidden" && def.bindings.contains_key(key));
+        out
+    }
+
+    /// Rule 7: only an amount looks like money. The oracle is the binding
+    /// data: an amount binding is a peso box (or a rate), a text binding
+    /// never is, and a peso box over a whole-number binding shows no
+    /// centavos.
+    #[test]
+    fn only_an_amount_binding_looks_like_money_on_every_form() {
+        // Shares the draft keeps as an amount; the review wants them plain.
+        let shares = [
+            "frm1707:txtPg2P4Sch2NoOfShares2",
+            "frm1707:txtPg2P4Sch2NoOfShares3",
+        ];
+        let (mut amounts, mut wholes) = (0, 0);
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let def = kind.definition();
+            for (key, t, whole) in bound_page_types(code) {
+                match &def.bindings[&key].binding {
+                    Binding::Amount { .. } if shares.contains(&key.as_str()) => {
+                        assert_eq!(t, "text", "{code}: {key}")
+                    }
+                    Binding::Amount { .. } => {
+                        amounts += 1;
+                        assert!(
+                            t == "money" || t == "pct",
+                            "{code}: {key} is an amount drawn as {t}"
+                        );
+                        assert!(!whole, "{code}: {key} takes centavos");
+                    }
+                    Binding::Text { .. } => assert_ne!(t, "money", "{code}: {key} is text"),
+                    Binding::Whole { .. } => {
+                        if t == "money" {
+                            wholes += 1;
+                        }
+                        assert_eq!(whole, t == "money", "{code}: {key} ({t})");
+                    }
+                    Binding::Choice { .. } => assert_ne!(t, "money", "{code}: {key}"),
+                }
+            }
+        }
+        assert!(amounts > 2500, "{amounts} amount boxes");
+        assert!(wholes > 200, "{wholes} whole-peso boxes");
+        // The ones the review found, each way.
+        for (code, key, t) in [
+            ("1606", "frm1606:txtInterest", "money"),
+            ("1606", "frm1606:txtInstallment", "money"),
+            ("1706", "frm1706:txtInterest", "money"),
+            ("1706", "frm1706:txtInstallment", "money"),
+            ("1701", "frm1701:txtPg1I14ForeignTaxNumber", "text"),
+            ("1701A", "frm1701A:txtForeignTaxNumber", "text"),
+            ("1701MS", "frm1701MS:txtTaxpayerNo14a", "text"),
+            ("1701MS", "frm1701MS:txtTaxpayerNo15a", "text"),
+            ("1800", "frm1800v2018:TaxTreaty", "text"),
+            ("1801", "frm1801v2018taxkNum", "text"),
+            ("2200T", "frm2200Tv2020:taxNum", "text"),
+            ("2200A", "frm2200Av2020:paymentOther", "text"),
+            ("1702RT", "frm1702RT:txtPg1Pt3I23DebitMemoC2", "text"),
+            ("1707", "frm1707:txtPg2P4Sch1I4NumInstallments", "text"),
+        ] {
+            let found = bound_page_types(code)
+                .into_iter()
+                .find(|(k, _, _)| k == key)
+                .unwrap_or_else(|| panic!("{code}: {key} on screen"));
+            assert_eq!(found.1, t, "{code}: {key}");
         }
     }
 

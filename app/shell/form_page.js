@@ -184,13 +184,19 @@ function itemKeys(it) {
   return (it.f || []).map((f) => f.k);
 }
 
-/** "1,234.50" from a number-ish string; empty stays empty. */
-function formatMoney(text) {
+/**
+ * "1,234.50" from a number-ish string; empty stays empty. `whole`: a box
+ * over a whole-number field shows whole pesos ("1,234"); a typed fraction
+ * stays as typed so the box's own message explains it.
+ */
+export function formatMoney(text, whole = false) {
   const n = Number(String(text).replace(/[₱,\s]/g, ""));
   if (String(text).trim() === "" || Number.isNaN(n)) return String(text);
+  if (whole && !Number.isInteger(n)) return String(text);
   // QuickJS has no Intl, so group the digits by hand.
-  const [whole, frac] = Math.abs(n).toFixed(2).split(".");
-  return `${n < 0 ? "-" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${frac}`;
+  const [int, frac] = Math.abs(n).toFixed(whole ? 0 : 2).split(".");
+  const grouped = `${n < 0 ? "-" : ""}${int.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+  return whole ? grouped : `${grouped}.${frac}`;
 }
 
 export class FormPageActions {
@@ -352,7 +358,7 @@ export class FormPageActions {
     const make = (k, t) => {
       if (s.inputs.has(k)) return;
       let value = s.values[k] ?? "";
-      if (t === "money" && value !== "") value = formatMoney(value);
+      if (t === "money" && value !== "") value = formatMoney(value, this.isWhole(k));
       const input = InputState.new({ value: String(value) });
       if (t === "date") {
         // Typing stays as typed; the draft gets MM/DD/YYYY as soon as it
@@ -381,7 +387,7 @@ export class FormPageActions {
       }
       input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
       input.on("blur", (_e, cx) => {
-        if (t === "money") input.set_value(formatMoney(input.value()));
+        if (t === "money") input.set_value(formatMoney(input.value(), this.isWhole(k)));
         // Leaving an edited profile item keeps the value on this return and
         // gives its boxes their profile look (and Edit) back.
         this.leaveBox(k, cx);
@@ -1016,7 +1022,7 @@ export class FormPageActions {
       const was = before[k] ?? "";
       const now = s.values[k] ?? "";
       if (was === now) continue;
-      const shown = s.inputKinds?.get(k) === "money" && now !== "" ? formatMoney(now) : String(now);
+      const shown = s.inputKinds?.get(k) === "money" && now !== "" ? formatMoney(now, this.isWhole(k)) : String(now);
       if (input.value() !== shown) input.set_value(shown);
     }
   }
@@ -1089,6 +1095,21 @@ export class FormPageActions {
   /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */
   isComputedBox(k) {
     return this.isComputed(k) || /^computed/.test(this.state.locks[k] || "");
+  }
+
+  /** A peso box over a whole-number field (the host's `w`): no centavos. */
+  isWhole(k) {
+    const s = this.state;
+    if (!s.wholeKeys) {
+      s.wholeKeys = new Set();
+      for (const p of s.schema.parts) {
+        for (const it of p.items) {
+          if (it.rows) it.cols.forEach((c, ci) => c.w && it.keys.forEach((row) => s.wholeKeys.add(row[ci])));
+          else for (const f of it.f || []) if (f.w) s.wholeKeys.add(f.k);
+        }
+      }
+    }
+    return s.wholeKeys.has(k);
   }
 
   /** Locked on the page: a host lock, unless it is a profile box opened with Edit. */
@@ -1495,7 +1516,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
     // A computed amount shows 0.00 for zero, never an empty box.
-    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : "")) : value;
+    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : ""), f.w) : value;
     // Locked and blank only with a reason: what it waits for.
     const hint = !shown ? ui.reasonFor(f.k) : "";
     el = lockedBox(cx, shown || hint, width, { right: !hint && (f.t === "money" || f.t === "pct"), hint: Boolean(hint) });
@@ -1650,7 +1671,7 @@ function scheduleTable(cx, ui, it, width) {
       } else if (col.t === "sel") {
         cell = selectBox(cx, ui, k, `${col.l}, row ${no}`, col.o, value, locked, colW - 16);
       } else if (locked || !s.inputs.get(k)) {
-        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : "")) : value;
+        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : ""), col.w) : value;
         const hint = !shown ? ui.reasonFor(k) : "";
         cell = lockedBox(cx, shown || hint, colW - 16, { right: !hint && col.t === "money", hint: Boolean(hint) });
       } else {
