@@ -802,6 +802,24 @@ fn pr4_answers_that_remove_typed_entries_ask_first() {
         cleared["removes"]["message"],
         "Clearing this ATC removes its row and its amount of ₱1,000.00. Continue?"
     );
+    // One batch clearing two rows states each row's amount, not a sum.
+    let two = fill("2000", &based["draft"], json!({"drpATCCode1": "catalog:1"}));
+    let two = fill(
+        "2000",
+        &two["draft"],
+        json!({"frm2000:sched1:txtTaxBase1": "250"}),
+    );
+    assert_eq!(two["rejected"], json!({}));
+    let both = fill(
+        "2000",
+        &two["draft"],
+        json!({"drpATCCode0": "", "drpATCCode1": ""}),
+    );
+    assert_eq!(
+        both["removes"]["message"],
+        "Clearing these ATCs removes their rows and amounts of ₱1,000.00 and ₱250.00. Continue?"
+    );
+    assert_eq!(both["removes"]["done"], "Removed 2 rows");
     // Amended Return No clears the previous return's payment.
     for (code, period, yes, no, key, field, item) in [
         (
@@ -883,18 +901,21 @@ fn pr4_answers_that_remove_typed_entries_ask_first() {
     let cleared = fill("2553", &typed["draft"], json!({"frm2553:txt18B": ""}));
     assert_eq!(
         cleared["removes"]["message"],
-        "Clearing this ATC removes its row and its amount of ₱2,000.00. Continue?"
+        "Clearing row 18 removes its entry (OT010, ₱2,000.00). Continue?"
     );
 }
 
 /// 2553 manual-0, manual-1: Part II rows 14-18 are one table of the printed
 /// columns (A classification, B ATC, C taxable amount, D rate, E tax due).
-/// A blank row 14-17 shows the sheet's printed classification, ATC and rate
-/// as its default (the oracle: html-frozen/2553-1999/index.html's text);
-/// typing its amount gives it that ATC unless another row already holds
-/// it. Every row's ATC stays a choice from the official list (the official
-/// popup lets any row hold any entry), so a stored row keeps its ATC and
-/// can be changed or cleared. Validation is the form's own.
+/// The sheet preprints rows 14-17's classification, ATC and rate as static
+/// text next to the amounts it prints (the oracle:
+/// html-frozen/2553-1999/index.html's text), so a new entry there is the
+/// row's printed one: typing the amount gives the row that ATC (unless
+/// another row holds it, then nothing is stored), its ATC and 5% rate are
+/// shut, a rate never makes a row, and clearing the amount or the rate
+/// clears the row after asking. A stored row holding another entry opens
+/// unchanged, open, with a notice; it can be cleared (asking first) or set
+/// to the printed entry. Row 18 is the free row. Validation is the form's.
 #[test]
 fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
     setup();
@@ -914,42 +935,46 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
         "Printed: Philippine Amusement and Gaming Corp. (Pagcor), OT010, 5%"
     );
     assert_eq!(
-        waits["frm2553:txt15A"],
-        "Printed: Clark Development Corporations, OT011, 5%"
-    );
-    assert_eq!(
-        waits["frm2553:txt16A"],
-        "Printed: Special/Regular Economic/Free Port Zone Enterprises, OT011, 5%"
-    );
-    assert_eq!(
         waits["frm2553:txt17A"],
         "Printed: Others, OT012, rate you enter"
     );
     assert_eq!(waits["frm2553:txt18A"], rows_dst_pt_vat::ATC_18_WAITS);
+    for (row, atc) in [(14, "OT010"), (15, "OT011"), (16, "OT011"), (17, "OT012")] {
+        assert_eq!(
+            waits[format!("frm2553:txt{row}B")],
+            format!("Printed: {atc}")
+        );
+        assert_eq!(
+            opened["locks"][format!("frm2553:txt{row}B")],
+            rows_dst_pt_vat::PRINTED_LOCK,
+            "row {row}'s ATC is the printed one"
+        );
+        assert!(opened["locks"].get(format!("frm2553:txt{row}C")).is_none());
+    }
+    for row in [14, 15, 16] {
+        assert_eq!(waits[format!("frm2553:txt{row}D")], "Printed: 5%");
+        assert_eq!(
+            opened["locks"][format!("frm2553:txt{row}D")],
+            rows_dst_pt_vat::PRINTED_LOCK
+        );
+    }
+    assert!(
+        opened["locks"].get("frm2553:txt17D").is_none(),
+        "Others' rate is typed"
+    );
+    for col in ["B", "C", "D"] {
+        assert!(
+            opened["locks"].get(format!("frm2553:txt18{col}")).is_none(),
+            "row 18 is free"
+        );
+    }
     for row in 14..=18 {
         assert_eq!(
             opened["locks"][format!("frm2553:txt{row}A")],
-            rows_dst_pt_vat::CLASSIFICATION_LOCK,
-            "row {row}"
-        );
-        for col in ["B", "C", "D"] {
-            assert!(
-                opened["locks"]
-                    .get(format!("frm2553:txt{row}{col}"))
-                    .is_none(),
-                "row {row} {col} is the filer's"
-            );
-        }
-        assert_eq!(
-            opened["options"][format!("frm2553:txt{row}B")]
-                .as_array()
-                .unwrap()
-                .len(),
-            4,
-            "row {row}'s ATC list"
+            rows_dst_pt_vat::CLASSIFICATION_LOCK
         );
     }
-    // The table, its ATC column a list.
+    // The table.
     let form = schema_entry("2553").unwrap();
     let part = form["parts"]
         .as_array()
@@ -957,25 +982,18 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
         .iter()
         .find(|p| p["n"] == "Part II · Computation of Tax")
         .unwrap();
-    let tables: Vec<&Value> = part["items"]
+    let rows: Vec<Value> = part["items"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|it| it.get("rows").is_some())
-        .collect();
-    let rows: Vec<Value> = tables
-        .iter()
         .flat_map(|it| it["keys"].as_array().unwrap().clone())
         .collect();
     let expected: Vec<Value> = (14..=18)
         .map(|n| json!(["A", "B", "C", "D", "E"].map(|c| format!("frm2553:txt{n}{c}"))))
         .collect();
     assert_eq!(rows, expected);
-    for table in &tables {
-        assert_eq!(table["cols"][1]["t"], "sel");
-    }
-    // A blank draft follows the printed defaults: typing 15C gives row 15
-    // its printed ATC; the due and item 19 follow.
+    // A blank draft: typing 15C gives row 15 its printed entry.
     let filled = fill("2553", &opened["draft"], json!({"frm2553:txt15C": "10000"}));
     assert_eq!(filled["rejected"], json!({}));
     let v = &filled["values"];
@@ -984,11 +1002,28 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
     assert_eq!(v["frm2553:txt15D"], "5.0");
     assert_eq!(amount(v, "frm2553:txt15E"), 500.0);
     assert_eq!(amount(v, "frm2553:txt19"), 500.0);
-    assert_eq!(filled["draft"]["schedule"][0]["atc_code"], "");
-    let map = printed("2553", &filled["draft"]);
-    assert_eq!(map["frm2553:txt15C"], "10,000.00");
-    assert_eq!(map["frm2553:txt15E"], "500.00");
-    // The official rate of a 5% entry is not typed; Others' is.
+    assert!(notices(&filled["draft"]).is_empty());
+    // The print: row 15's amount prints next to the sheet's own
+    // "Clark Development ... OT 0 1 1 5 %" text, the entry the draft holds.
+    let html = document("2553", "2553-1999", &filled["draft"]);
+    let cell = |key: &str| -> String {
+        writer_cells("2553-1999")["joins"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|j| j["writer_key"] == key)
+            .unwrap()["html_id"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(
+        bir_print::frozen_html::printed_text(&html, &cell("frm2553:txt15C")),
+        "10,000.00"
+    );
+    assert!(sheet_text("2553-1999").contains("Clark Development OT 0 1 1 5 % Corporations 15A"));
+    assert_eq!(filled["draft"]["schedule"][1]["atc_code"], "OT011");
+    // The official rate of a 5% row is not typed.
     let rate = fill("2553", &filled["draft"], json!({"frm2553:txt15D": "3"}));
     assert!(
         rate["rejected"]["frm2553:txt15D"]
@@ -996,6 +1031,14 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
             .unwrap()
             .contains("official rate of 5.0%")
     );
+    // A rate never makes a row.
+    let early = fill("2553", &opened["draft"], json!({"frm2553:txt17D": "2.5"}));
+    assert_eq!(
+        early["rejected"]["frm2553:txt17D"],
+        "Type the taxable amount in 17C first."
+    );
+    assert_eq!(early["draft"]["schedule"], json!([]));
+    // Row 17: C then D; clearing D, like clearing C, clears the row, asking.
     let others = fill(
         "2553",
         &filled["draft"],
@@ -1004,18 +1047,29 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
     assert_eq!(others["rejected"], json!({}));
     assert_eq!(others["values"]["frm2553:txt17B"], "OT012");
     assert_eq!(amount(&others["values"], "frm2553:txt17E"), 50.0);
-    assert_eq!(amount(&others["values"], "frm2553:txt19"), 550.0);
-    // The popup's duplicate check is the form's.
-    let duplicate = fill(
+    for key in ["frm2553:txt17C", "frm2553:txt17D"] {
+        let cleared = fill("2553", &others["draft"], json!({ key: "" }));
+        assert_eq!(cleared["rejected"], json!({}), "{key}");
+        assert_eq!(cleared["values"]["frm2553:txt17B"], "", "{key}");
+        assert_eq!(
+            cleared["removes"]["message"],
+            "Clearing row 17 removes its entry (OT012, ₱2,000.00). Continue?",
+            "{key}"
+        );
+        assert_eq!(cleared["removes"]["done"], "Removed row 17");
+    }
+    // One batch clearing two rows states each row's amount.
+    let both = fill(
         "2553",
         &others["draft"],
-        json!({"frm2553:txt18B": "catalog:1"}),
+        json!({"frm2553:txt15C": "", "frm2553:txt17C": ""}),
     );
     assert_eq!(
-        duplicate["rejected"]["frm2553:txt18B"],
-        "Invalid input. Selected ATC already defined."
+        both["removes"]["message"],
+        "Clearing rows 15 and 17 removes their entries (OT011, ₱10,000.00; OT012, ₱2,000.00). Continue?"
     );
-    // Row 18 holds OT010: a blank row 14 then takes no default.
+    // Row 18 holds OT010: row 14's amount is refused and not stored; row
+    // 18's own list refuses an entry another row holds, in the same words.
     let pagcor = fill(
         "2553",
         &opened["draft"],
@@ -1023,28 +1077,27 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
     );
     assert_eq!(pagcor["rejected"], json!({}));
     assert_eq!(pagcor["values"]["frm2553:txt18A"], "PAGCOR");
-    assert_eq!(amount(&pagcor["values"], "frm2553:txt18E"), 5.0);
     let taken = fill("2553", &pagcor["draft"], json!({"frm2553:txt14C": "1000"}));
     assert_eq!(
         taken["rejected"]["frm2553:txt14C"],
         "Choose this row's ATC; OT010 is already on row 18."
     );
     assert_eq!(taken["values"]["frm2553:txt14B"], "");
-    // The filer chooses row 14's ATC instead, and types its amount.
-    let chosen = fill(
+    assert_eq!(taken["values"]["frm2553:txt14C"], "0.00");
+    assert_eq!(taken["draft"]["schedule"].as_array().unwrap().len(), 5);
+    assert_eq!(taken["draft"]["schedule"][0]["taxable_amount"], 0.0);
+    let duplicate = fill(
         "2553",
-        &pagcor["draft"],
-        json!({"frm2553:txt14B": "catalog:2", "frm2553:txt14C": "1000"}),
+        &others["draft"],
+        json!({"frm2553:txt18B": "catalog:1"}),
     );
-    assert_eq!(chosen["rejected"], json!({}));
-    assert_eq!(chosen["values"]["frm2553:txt14B"], "OT011");
-    assert_eq!(amount(&chosen["values"], "frm2553:txt14E"), 50.0);
-    // Clearing a defaulted row's amount puts the row back to blank.
-    let cleared = fill("2553", &others["draft"], json!({"frm2553:txt15C": ""}));
-    assert_eq!(cleared["values"]["frm2553:txt15B"], "");
-    assert_eq!(amount(&cleared["values"], "frm2553:txt19"), 50.0);
-    // A stored row 14 holding OT020 opens unchanged, can be changed to an
-    // entry of the list (keeping its amount) and can be cleared.
+    assert_eq!(
+        duplicate["rejected"]["frm2553:txt18B"],
+        "Choose this row's ATC; OT012 is already on row 17."
+    );
+    // A stored row 14 holding OT020 opens unchanged, open, with a notice
+    // (its amount would print under the Pagcor caption); it can be set to
+    // the printed entry or cleared, asking first, and nothing else.
     let mut legacy = opened["draft"].clone();
     legacy["schedule"] = json!([
         {"atc_code": "OT020", "description": "OLD ENTRY", "taxable_amount": 1000.0, "tax_rate": 5.0, "tax_due": 50.0}
@@ -1056,6 +1109,37 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
     assert_eq!(reopened["values"]["frm2553:txt14B"], "OT020");
     assert_eq!(reopened["values"]["frm2553:txt14C"], "1,000.00");
     assert!(reopened["locks"].get("frm2553:txt14B").is_none());
+    let notice = "Row 14 prints OT010 (Pagcor); your OT020 entry won't print on this row. Clear it or move it to row 18.";
+    assert!(
+        reopened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["message"] == notice && e["keys"] == json!(["frm2553:txt14B"])),
+        "{}",
+        reopened["errors"]
+    );
+    let checked = call_async(
+        "screen_form_validate",
+        vec!["2553".into(), json(reopened["draft"].clone())],
+    )
+    .unwrap();
+    assert!(
+        checked["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["message"] == notice)
+    );
+    let other = fill(
+        "2553",
+        &reopened["draft"],
+        json!({"frm2553:txt14B": "catalog:1"}),
+    );
+    assert_eq!(
+        other["rejected"]["frm2553:txt14B"],
+        "Row 14 prints OT010 (Pagcor); use row 18 for OT012."
+    );
     let changed = fill(
         "2553",
         &reopened["draft"],
@@ -1064,15 +1148,52 @@ fn pr4_form_2553_rows_14_to_17_follow_the_printed_sheet() {
     assert_eq!(changed["rejected"], json!({}));
     assert_eq!(changed["draft"]["schedule"][0]["atc_code"], "OT010");
     assert_eq!(changed["draft"]["schedule"][0]["taxable_amount"], 1000.0);
-    assert_eq!(amount(&changed["values"], "frm2553:txt14E"), 50.0);
+    assert!(notices(&changed["draft"]).is_empty());
     let gone = fill("2553", &reopened["draft"], json!({"frm2553:txt14B": ""}));
     assert_eq!(gone["rejected"], json!({}));
     assert_eq!(gone["values"]["frm2553:txt14B"], "");
-    assert_eq!(amount(&gone["values"], "frm2553:txt19"), 0.0);
     assert_eq!(
         gone["removes"]["message"],
-        "Clearing this ATC removes its row and its amount of ₱1,000.00. Continue?"
+        "Clearing row 14 removes its entry (OT020, ₱1,000.00). Continue?"
     );
+    // A stored draft with Others on row 15 (the official popup let it)
+    // opens as it is, keeps its amount on that row when retyped, and is
+    // reported, never printed silently under the Clark caption.
+    let mut stored = gone["draft"].clone();
+    stored["schedule"] = json!([
+        {"atc_code": "", "description": "", "taxable_amount": 0.0, "tax_rate": 0.0, "tax_due": 0.0},
+        {"atc_code": "OT012", "description": "OTHERS", "taxable_amount": 1000.0, "tax_rate": 3.5, "tax_due": 35.0}
+    ]);
+    save("2553", &stored);
+    let reopened = open("2553", 1);
+    assert_eq!(reopened["values"]["frm2553:txt15B"], "OT012");
+    assert_eq!(reopened["draft"]["schedule"][1]["taxable_amount"], 1000.0);
+    assert!(reopened["locks"].get("frm2553:txt15B").is_none());
+    assert!(reopened["locks"].get("frm2553:txt15D").is_none());
+    assert!(reopened["errors"].as_array().unwrap().iter().any(|e| e["message"]
+        == "Row 15 prints OT011 (Clark Development Corporations); your OT012 entry won't print on this row. Clear it or move it to row 18."));
+    let retyped = fill(
+        "2553",
+        &reopened["draft"],
+        json!({"frm2553:txt15C": "2000"}),
+    );
+    assert_eq!(retyped["draft"]["schedule"][1]["atc_code"], "OT012");
+    assert_eq!(amount(&retyped["values"], "frm2553:txt15E"), 70.0);
+    let html = document("2553", "2553-1999", &retyped["draft"]);
+    assert_eq!(
+        bir_print::frozen_html::printed_text(&html, &cell("frm2553:txt15C")),
+        "2,000.00"
+    );
+    assert_eq!(
+        notices(&retyped["draft"]).len(),
+        1,
+        "the misplaced row stays reported"
+    );
+}
+
+/// The page notices the host adds to a 2553 draft's messages.
+fn notices(draft: &Value) -> Vec<Value> {
+    rows_dst_pt_vat::notices(kind_of("2553").unwrap(), draft)
 }
 
 /// 2553 R6.0, manual-3: item 13's list is off while item 13 is No (rule 6:
@@ -1309,9 +1430,10 @@ fn pr4_form_2550m_row_4_atc_is_the_drafts() {
     assert_eq!(bir_print::frozen_html::printed_text(&html, &cell), codes[3]);
 }
 
-/// 2550M manual-3: page 1 prints the TIN in item 4's combs and items 5 and
-/// 10 one digit per box (writer-cells.json joins; the print fill's own
-/// test is bir-print's
+/// 2550M manual-3: page 1 prints the TIN and branch in item 4's combs
+/// (bir-print's Rust-side SHEET_JOINS; the frozen writer-cells.json leaves
+/// them out) and items 5 and 10 one digit per box (their writer-cells.json
+/// joins); the print fill's own test is bir-print's
 /// filled_document_2550m_prints_the_tin_and_one_character_per_box).
 #[test]
 fn pr4_form_2550m_print_carries_the_tin_rdo_and_zip_of_the_draft() {

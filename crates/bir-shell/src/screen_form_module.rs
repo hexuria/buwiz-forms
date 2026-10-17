@@ -2056,11 +2056,13 @@ fn evaluate_here(
     } else {
         agent::validate(kind, &mut draft.clone())?
     };
-    Ok((
-        values_json(kind, draft)?,
-        errors_json(kind, &errors),
-        status,
-    ))
+    let mut errors = errors_json(kind, &errors);
+    // A page notice beside the form's own messages (PR 4: a stored 2553 row
+    // whose entry is not the one the sheet prints there).
+    if let Value::Array(list) = &mut errors {
+        list.extend(rows_dst_pt_vat::notices(kind, draft));
+    }
+    Ok((values_json(kind, draft)?, errors, status))
 }
 
 // --------------------------------------------------------- host functions
@@ -2317,7 +2319,7 @@ fn opened_json(
         draft: from_profile_draft,
     };
     let mut locks = locks(kind, &from_profile);
-    rows_dst_pt_vat::relock(kind, &mut locks);
+    rows_dst_pt_vat::relock(kind, &draft, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group.
     for group in penalties::groups(kind) {
         if !penalties::edited(&group, &draft) {
@@ -9567,6 +9569,11 @@ mod tests {
             ("2551Q", "frm2551Qv2018:registeredName", 40),
             ("1601C", "frm1601c:txtZipCode", 4),
             ("2552", "frm2552:txtPg1Pt1I7RegisteredAddress", 40),
+            // PR 4: 2550M item 4, joined on the Rust side (bir-print SHEET_JOINS).
+            ("2550M", "frm2550m:txtTIN1", 3),
+            ("2550M", "frm2550m:txtTIN2", 3),
+            ("2550M", "frm2550m:txtTIN3", 3),
+            ("2550M", "frm2550m:txtBranchCode", 5),
         ] {
             let field = schema_fields(code)
                 .into_iter()

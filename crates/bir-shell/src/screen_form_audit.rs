@@ -343,16 +343,12 @@ fn compare(form: &str, print: &str) -> &'static str {
 // ----------------------------------------------------------- print sheet
 
 /// `writer-cells.json` `not_joined`: writer key -> reviewed reason the sheet
-/// prints it nowhere.
+/// prints it nowhere, after bir-print's Rust-side joins (SHEET_JOINS), as
+/// the print fills it.
 fn not_joined(slug: &str) -> BTreeMap<String, String> {
-    let path = format!(
-        "{}/../../html-frozen/{slug}/writer-cells.json",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let Ok(raw) = std::fs::read_to_string(&path) else {
+    let Some(payload) = bir_print::frozen_html::merged_writer_cells_json(slug) else {
         return BTreeMap::new();
     };
-    let payload: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
     let mut out = BTreeMap::new();
     for row in payload["not_joined"].as_array().into_iter().flatten() {
         let reason = row["reason"].as_str().unwrap_or_default().to_string();

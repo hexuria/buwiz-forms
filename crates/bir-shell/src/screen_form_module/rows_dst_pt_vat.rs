@@ -14,13 +14,16 @@
 //!   OT010 5%, Clark Development Corporations OT011 5%, Special/Regular
 //!   Economic/Free Port Zone Enterprises OT011 5%, Others OT012), and the
 //!   print fills only their amounts (writer-cells.json rule: "rows 14-17
-//!   expose only some columns"). That printed entry is a blank row's
-//!   default: typing a blank row's taxable amount gives it its printed ATC
-//!   through `Form2553Draft::set_atc` (the rate and the tax due follow),
-//!   unless another row already holds that entry. Every row's ATC (14B-18B)
-//!   stays a choice from the official popup's list (`FORM_2553_ATC_OPTIONS`,
-//!   `getATCCode`), whose duplicate check is the form's own, so any row may
-//!   hold any entry and a stored row can be changed or cleared.
+//!   expose only some columns"), next to that static text. So a new entry
+//!   on rows 14-17 is that row's printed entry: typing a blank row's
+//!   taxable amount gives it its printed ATC through `Form2553Draft::set_atc`
+//!   (the rate and the tax due follow), unless another row already holds
+//!   it, and the row's ATC and preprinted rate are shut. A stored row that
+//!   holds another entry (the official popup lets any row hold any entry)
+//!   opens unchanged with its ATC open and a notice ([`notices`]) that the
+//!   sheet prints the row's own entry; the filer clears it or sets the
+//!   printed one. Row 18 is the free row: its ATC is a choice from the
+//!   official popup's list (`FORM_2553_ATC_OPTIONS`, `getATCCode`).
 //! - 2553 Item 13: Yes opens the list blank (`YesUnspecified`, which
 //!   validation asks for), No closes it; while it is No the list takes
 //!   nothing (fields.json `enabled_when`: "Item 13 Yes is selected."), so
@@ -90,6 +93,18 @@ const PT_FIRST_ITEM: usize = 14;
 pub(super) const RATE_WAITS: &str = "Shows the ATC's rate once this row's ATC is chosen.";
 /// What 2553's item 18A waits for.
 pub(super) const ATC_18_WAITS: &str = "Shows the classification of the ATC chosen in 18B.";
+/// The lock reason of a 2553 row 14-17 ATC (B) or 5% rate (D): the sheet
+/// preprints them next to the row's amounts.
+pub(super) const PRINTED_LOCK: &str =
+    "printed on the form: a new entry on this row is the row's printed entry";
+/// The 2553 rows' short printed names, rows 14-17.
+const PT_SHORT_NAMES: [&str; 4] = [
+    "Pagcor",
+    "Clark Development Corporations",
+    "Special/Regular Economic/Free Port Zone Enterprises",
+    "Others",
+];
+
 /// The lock reason of a 2553 classification box (column A): the official
 /// popup writes it with the row's ATC (`getATCCode`), so it follows the
 /// ATC chosen in the row's B box.
@@ -105,6 +120,69 @@ fn printed_option(row: usize) -> Option<&'static Form2553AtcOption> {
     PT_PRINTED_ROWS
         .get(row)
         .map(|(index, _, _, _)| pt_option(*index))
+}
+
+fn same_entry(
+    row: &bir_core::forms::form_2553::Form2553AtcRow,
+    option: &Form2553AtcOption,
+) -> bool {
+    row.atc_code == option.code && row.description == option.description
+}
+
+/// What a row whose entry is held on another row says (the amount path and
+/// the ATC list alike).
+fn held_elsewhere(form: &Form2553Draft, row: usize, option: &Form2553AtcOption) -> Option<String> {
+    form.schedule
+        .iter()
+        .enumerate()
+        .find(|(other, entry)| *other != row && same_entry(entry, option))
+        .map(|(other, _)| {
+            format!(
+                "Choose this row's ATC; {} is already on row {}.",
+                option.code,
+                PT_FIRST_ITEM + other
+            )
+        })
+}
+
+/// A stored row 14-17 holding another entry than the one the sheet prints
+/// there: `(item, its ATC, what it says)`.
+fn misplaced(form: &Form2553Draft, row: usize) -> Option<String> {
+    let printed = printed_option(row)?;
+    let entry = form.schedule.get(row).filter(|entry| !entry.is_empty())?;
+    if same_entry(entry, printed) {
+        return None;
+    }
+    Some(format!(
+        "Row {} prints {} ({}); your {} entry won't print on this row. Clear it or move it to row 18.",
+        PT_FIRST_ITEM + row,
+        printed.code,
+        PT_SHORT_NAMES[row],
+        entry.atc_code
+    ))
+}
+
+/// The page's notices for a draft, shown with its messages: each stored
+/// 2553 row 14-17 whose entry is not the one the sheet prints there (its
+/// amount would print under another caption). Validation is unchanged.
+pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
+    if kind.form_code() != "2553" {
+        return Vec::new();
+    }
+    let Ok(form) = typed::<Form2553Draft>(draft) else {
+        return Vec::new();
+    };
+    (0..PT_PRINTED_ROWS.len())
+        .filter_map(|row| {
+            misplaced(&form, row).map(|message| {
+                json!({
+                    "field": format!("schedule[{row}].atc_code"),
+                    "message": message,
+                    "keys": [format!("frm2553:txt{}B", PT_FIRST_ITEM + row)],
+                })
+            })
+        })
+        .collect()
 }
 
 /// What a schedule the 2000 Item 13 answer has not opened says when it is
@@ -275,16 +353,11 @@ fn fill_pt_amount(draft: &mut Value, row: usize, value: &Value) -> Result<(), St
         }
         (None, _) if amount == 0.0 => return Ok(()),
         (None, Some(printed)) => {
-            // The printed ATC is the blank row's default, unless another
-            // row already holds it (the official popup's duplicate check).
-            if let Some(other) = form.schedule.iter().position(|entry| {
-                entry.atc_code == printed.code && entry.description == printed.description
-            }) {
-                return Err(format!(
-                    "Choose this row's ATC; {} is already on row {}.",
-                    printed.code,
-                    PT_FIRST_ITEM + other
-                ));
+            // A new entry is the row's printed one, unless another row
+            // already holds it (the official popup's duplicate check);
+            // refused, nothing is stored.
+            if let Some(why) = held_elsewhere(&form, row, printed) {
+                return Err(why);
             }
             form.set_atc(row, printed)?;
             form.schedule[row].taxable_amount = amount;
@@ -304,21 +377,21 @@ fn fill_pt_rate(draft: &mut Value, row: usize, value: &Value) -> Result<(), Stri
     let mut form: Form2553Draft = typed(draft)?;
     let item = PT_FIRST_ITEM + row;
     let option = match form.schedule.get(row).filter(|entry| !entry.is_empty()) {
-        Some(entry) => FORM_2553_ATC_OPTIONS.iter().find(|option| {
-            option.code == entry.atc_code && option.description == entry.description
-        }),
+        // Clearing the rate of a row holding its printed entry clears the
+        // row, as clearing its amount does.
+        Some(entry)
+            if rate == 0.0
+                && printed_option(row).is_some_and(|printed| same_entry(entry, printed)) =>
+        {
+            form.clear_atc(row);
+            return store(draft, &form);
+        }
+        Some(entry) => FORM_2553_ATC_OPTIONS
+            .iter()
+            .find(|option| same_entry(entry, option)),
         None if rate == 0.0 => return Ok(()),
-        None => match printed_option(row) {
-            Some(printed) if printed.rate_is_editable => {
-                form.set_atc(row, printed)?;
-                Some(printed)
-            }
-            Some(_) | None => {
-                return Err(format!(
-                    "Type the taxable amount in {item}C first; the rate follows its ATC."
-                ));
-            }
-        },
+        // A rate never makes a row: the amount does.
+        None => return Err(format!("Type the taxable amount in {item}C first.")),
     };
     match option {
         Some(option) if option.rate_is_editable => {
@@ -356,9 +429,31 @@ fn fill_pt_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), Strin
     let mut form: Form2553Draft = typed(draft)?;
     match popup_entry(value)? {
         None => form.clear_atc(row),
-        Some(option) => form.set_atc(row, option)?,
+        Some(option) => {
+            // Rows 14-17 take only their printed entry (a stored row holding
+            // another can be cleared or set to it); row 18 takes any.
+            if let Some(printed) = printed_option(row)
+                && !same_entry_option(option, printed)
+            {
+                return Err(format!(
+                    "Row {} prints {} ({}); use row 18 for {}.",
+                    PT_FIRST_ITEM + row,
+                    printed.code,
+                    PT_SHORT_NAMES[row],
+                    option.code
+                ));
+            }
+            if let Some(why) = held_elsewhere(&form, row, option) {
+                return Err(why);
+            }
+            form.set_atc(row, option)?;
+        }
     }
     store(draft, &form)
+}
+
+fn same_entry_option(a: &Form2553AtcOption, b: &Form2553AtcOption) -> bool {
+    a.code == b.code && a.description == b.description
 }
 
 fn fill_pt_item_13(draft: &mut Value, yes: bool, value: &Value) -> Result<(), String> {
@@ -474,6 +569,16 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
                     format!("frm2553:txt{item}A"),
                     json!(format!("Printed: {caption}, {atc}, {rate}")),
                 );
+                out.insert(
+                    format!("frm2553:txt{item}B"),
+                    json!(format!("Printed: {atc}")),
+                );
+                if rate != "rate you enter" {
+                    out.insert(
+                        format!("frm2553:txt{item}D"),
+                        json!(format!("Printed: {rate}")),
+                    );
+                }
             }
             out.insert("frm2553:txt18A".into(), json!(ATC_18_WAITS));
         }
@@ -485,7 +590,7 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
 /// The boxes this module shuts, and why, over the probed locks: 2553's
 /// classification boxes (14A-18A), its quarter boxes (the return's own period),
 /// and 2000's 15B and 15C, which `recompute` totals from Schedules 2 and 3.
-pub(super) fn relock(kind: AgentFormKind, locks: &mut Map<String, Value>) {
+pub(super) fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
     match kind.form_code() {
         "2000" => {
             for key in ["frm2000:txtTax15B", "frm2000:txtTax15C"] {
@@ -495,6 +600,25 @@ pub(super) fn relock(kind: AgentFormKind, locks: &mut Map<String, Value>) {
         "2553" => {
             for item in PT_FIRST_ITEM..PT_FIRST_ITEM + PT_ROWS {
                 locks.insert(format!("frm2553:txt{item}A"), json!(CLASSIFICATION_LOCK));
+            }
+            // Rows 14-17: a new entry's ATC and preprinted rate are the
+            // sheet's; a stored row holding another entry stays open so the
+            // filer can clear it ([`notices`] says why).
+            let form = typed::<Form2553Draft>(draft).ok();
+            for (row, printed) in
+                (0..PT_PRINTED_ROWS.len()).filter_map(|r| Some((r, printed_option(r)?)))
+            {
+                if form
+                    .as_ref()
+                    .is_some_and(|form| misplaced(form, row).is_some())
+                {
+                    continue;
+                }
+                let item = PT_FIRST_ITEM + row;
+                locks.insert(format!("frm2553:txt{item}B"), json!(PRINTED_LOCK));
+                if !printed.rate_is_editable {
+                    locks.insert(format!("frm2553:txt{item}D"), json!(PRINTED_LOCK));
+                }
             }
             for quarter in 1..=4 {
                 locks.insert(
@@ -645,38 +769,100 @@ pub(super) fn removes(
             }));
         }
     }
-    // A cleared ATC takes its row's base with it.
-    let cleared_atc = edits.iter().any(|(key, value)| {
-        text(value).is_empty()
-            && ((code == "2000" && key.starts_with("drpATCCode"))
-                || (code == "2550M" && key.starts_with("frm2550m:txtAtcCde"))
-                || matches!(cell(kind, key), Some(Cell::PtAtc(_))))
-    });
-    if cleared_atc {
-        let (list, field) = match code {
-            "2000" => ("schedule1", "tax_base"),
-            "2550M" => ("sales_schedule", "amount"),
-            _ => ("schedule", "taxable_amount"),
-        };
-        let base = |draft: &Value| -> f64 {
-            rows(draft, list)
+    // Rows the edit removed, each with what it held (counted per row, so
+    // one batch over two rows states both amounts).
+    let atc = |row: &Value| row["atc_code"].as_str().unwrap_or("").trim().to_string();
+    match code {
+        "2000" | "2550M" => {
+            let (list, field, stem) = if code == "2000" {
+                ("schedule1", "tax_base", "drpATCCode")
+            } else {
+                ("sales_schedule", "amount", "frm2550m:txtAtcCde")
+            };
+            if !edits
+                .iter()
+                .any(|(key, value)| key.starts_with(stem) && text(value).is_empty())
+            {
+                return None;
+            }
+            let after_rows = rows(after, list);
+            let lost: Vec<f64> = rows(before, list)
                 .into_iter()
-                .map(|row| amount_of(row, field))
-                .sum()
-        };
-        let lost = base(before) - base(after);
-        if lost > 0.0 {
-            return Some(json!({
-                "message": format!(
-                    "Clearing this ATC removes its row and its amount of ₱{}. Continue?",
-                    pesos(lost)
-                ),
-                "done": "Removed the row",
-                "rows": 1,
-            }));
+                .enumerate()
+                .filter(|(i, row)| {
+                    let code_before = atc(row);
+                    !code_before.is_empty()
+                        && if code == "2000" {
+                            // 2000 rows keep their place.
+                            after_rows.get(*i).is_none_or(|r| atc(r).is_empty())
+                        } else {
+                            // 2550M rows re-sort by the popup's order.
+                            !after_rows.iter().any(|r| atc(r) == code_before)
+                        }
+                })
+                .map(|(_, row)| amount_of(row, field))
+                .filter(|amount| *amount > 0.0)
+                .collect();
+            match lost.as_slice() {
+                [] => None,
+                [one] => Some(json!({
+                    "message": format!(
+                        "Clearing this ATC removes its row and its amount of ₱{}. Continue?",
+                        pesos(*one)
+                    ),
+                    "done": "Removed the row",
+                    "rows": 1,
+                })),
+                many => Some(json!({
+                    "message": format!(
+                        "Clearing these ATCs removes their rows and amounts of {}. Continue?",
+                        many.iter().map(|a| format!("₱{}", pesos(*a))).collect::<Vec<_>>().join(" and ")
+                    ),
+                    "done": format!("Removed {} rows", many.len()),
+                    "rows": many.len(),
+                })),
+            }
         }
+        // 2553: a row cleared through its ATC, amount or rate.
+        "2553" => {
+            let after_rows = rows(after, "schedule");
+            let lost: Vec<(usize, String, f64)> = rows(before, "schedule")
+                .into_iter()
+                .enumerate()
+                .filter(|(i, row)| {
+                    !atc(row).is_empty() && after_rows.get(*i).is_none_or(|r| atc(r).is_empty())
+                })
+                .map(|(i, row)| {
+                    (
+                        PT_FIRST_ITEM + i,
+                        atc(row),
+                        amount_of(row, "taxable_amount"),
+                    )
+                })
+                .filter(|(_, _, amount)| *amount > 0.0)
+                .collect();
+            let entry =
+                |(_, code, amount): &(usize, String, f64)| format!("{code}, ₱{}", pesos(*amount));
+            match lost.as_slice() {
+                [] => None,
+                [one] => Some(json!({
+                    "message": format!("Clearing row {} removes its entry ({}). Continue?", one.0, entry(one)),
+                    "done": format!("Removed row {}", one.0),
+                    "rows": 1,
+                })),
+                many => Some(json!({
+                    "message": format!(
+                        "Clearing rows {} removes their entries ({}). Continue?",
+                        many.iter().map(|r| r.0.to_string()).collect::<Vec<_>>().join(" and "),
+                        many.iter().map(entry).collect::<Vec<_>>().join("; ")
+                    ),
+                    "done": format!("Removed {} rows", many.len()),
+                    "rows": many.len(),
+                })),
+            }
+        }
+        _ => None,
     }
-    None
 }
 
 #[cfg(test)]
