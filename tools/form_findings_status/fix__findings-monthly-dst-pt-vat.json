@@ -84,7 +84,7 @@
   },
   "manual-3": {
    "pr": "PR 4",
-   "proof": "bir-print frozen_html::tests::filled_document_2550m_prints_the_tin_and_one_character_per_box (item 4 prints the TIN's three parts and the branch in the row's combs, joined in frozen_html.rs SHEET_JOINS because html-frozen stays as synced, so a branch such as 00001 prints instead of the sheet's 00000; items 3, 5 and 10, rows of one-character boxes, print one character per box, the writer's whole value kept on the first box only, a longer value whole in the first box); screen_form_module::tests::dst_pt_vat::pr4_form_2550m_print_carries_the_tin_rdo_and_zip_of_the_draft (the page's values, and a 00001 branch, print in those cells)",
+   "proof": "bir-print frozen_html::tests::filled_document_2550m_prints_the_tin_and_one_character_per_box (item 4 prints the TIN's three parts and the branch in the row's combs, joined in frozen_html.rs SHEET_JOINS because html-frozen stays as synced, so a branch such as 00001 prints instead of the sheet's 00000; items 3, 5 and 10, rows of one-character boxes, print one character per box, the writer's whole value kept on the first box only, a longer value whole in the first box); screen_form_module::tests::dst_pt_vat::pr4_form_2550m_print_carries_the_tin_rdo_and_zip_of_the_draft (the page's values, and a 00001 branch, print in those cells); screen_form_module::combs::tests::print_cells_match_the_print_sheets (the page's comb capacities include the Rust-side joins, through bir-print's merged_writer_cells_json and sheet_join_combs, while app/forms/print-cells.json stays as written from the frozen sheets); screen_form_module::tests::fixed_formats_keep_their_printed_boxes (2550M TIN 3, 3, 3, branch 5); bir-print frozen_html::tests::a_sheet_join_the_writer_cells_already_have_is_not_added_twice",
    "status": "fixed"
   },
   "manual-4": {
@@ -121,7 +121,7 @@
   },
   "manual-1": {
    "pr": "PR 4",
-   "proof": "screen_form_module::tests::dst_pt_vat::pr4_form_2553_rows_14_to_17_follow_the_printed_sheet (a blank row 14-17 shows the sheet's printed classification, ATC and rate, read from html-frozen/2553-1999/index.html, as its default; typing its amount gives it that ATC through Form2553Draft::set_atc unless another row holds it (\"Choose this row's ATC; OT010 is already on row 18.\"); every row's ATC stays a choice from the official list, so a stored row 14 holding OT020 opens unchanged and can be changed or cleared; validation is the form's own)",
+   "proof": "screen_form_module::tests::dst_pt_vat::pr4_form_2553_rows_14_to_17_follow_the_printed_sheet (the sheet preprints rows 14-17's classification, ATC and rate as static text, read from html-frozen/2553-1999/index.html, and prints only their amounts beside it, so a new entry there is the row's printed one: typing a blank row's amount gives it that ATC through Form2553Draft::set_atc, its ATC and 5% rate are shut, a rate never makes a row, clearing the amount or the rate clears the row after asking, and with the entry on another row the amount is refused and not stored (\"Choose this row's ATC; OT010 is already on row 18.\"); a stored row holding another entry (OT020 on row 14, Others on row 15) opens unchanged and open, is reported with \"Row 14 prints OT010 (Pagcor); your OT020 entry won't print on this row. Clear it or move it to row 18.\" on open and validate, and can be cleared (asking) or set to the printed entry; the print shows each row's amount beside its printed caption; row 18 is the free row)",
    "status": "fixed"
   },
   "manual-2": {
