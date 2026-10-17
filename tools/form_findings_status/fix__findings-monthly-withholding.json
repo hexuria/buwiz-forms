@@ -1,0 +1,269 @@
+{
+ "0619E": {
+  "R3.1": {
+   "reason": "These 19 boxes (tax agent accreditation number and dates, Part III rows 19-22) are disabled on the official page: ebirforms-mirror/forms/BIR-Form0619E.hta gives each the `disabled` attribute (txtTaxAgentNo line 786, txtAgency19 line 853, and the lines the existing hidden-box entries in app/forms/schema-overrides.json cite), and crates/bir-core/src/forms/form_0619e_official.rs to_official_field_map leaves them out ('The tax-agent and Part III payment controls are disabled on the official page, so they keep their blank defaults'). The tracked runtime-control inventory records them as disabled false, which is the inventory not reading the bare attribute, so the evidence is the mirror .hta and the official field map. This app's agent form never writes them ('not written by this app's field map for any sample draft'), so a box would need a new draft field (Rule 0). The page shows each printed item with a note instead (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "manual-0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_line_of_business_is_not_on_the_printed_sheet (frm0619E:txtLineBus is in 'Not on the printed sheet'); screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note (item 19 shows its own caption with a note)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_category_is_the_filers_choice_on_0619e_and_0619f",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_captions_read_as_printed (item 10 reads the whole printed caption, checked against the sheet's text)",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_0619e_address_is_a_profile_box (profile-locked and folded with Edit while the profile has an address, open where it has none; both lines one pool); bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (0619e-v2018.json: txtAddress lock profile, probe.rs PROFILE_FACT); screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "reason": "Item 2 is as the official page has it: rules/forms/0619e-v2018/fields.json makes frm0619E:txtDueDay an ordinary required box (computed false, default 10) and txtDueMonth and txtDueYear computed; the runtime inventory records txtDueDay enabled with default 10. The day is the filer's to change and the maintainer decided dates stay normal fields, so the page keeps the day open and the month and year locked with their values (screen_form_module::tests::monthly::monthly_due_date_day_is_the_filers_as_on_the_official_page).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "preview.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_category_is_the_filers_choice_on_0619e_and_0619f (item 12 is open; Private or Government sets withholding_agent_category, which the field map, the XML and the print write both boxes from; a legacy opt_category_g draft opens as it saved)",
+   "status": "fixed"
+  }
+ },
+ "0619F": {
+  "R3.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers (no drawn box sits under another number than writer-cells prints it at); screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note (items 20, 21, 22 and 23 each show their own number; the payment boxes are not drawn)",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers (items 3 and 4 options read Yes/No as writer-cells prints them); screen_form_module::tests::monthly::monthly_captions_read_as_printed",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "reason": "rules/forms/0619f-v2018/fields.json enabled_when for each of these boxes (tax agent number and dates, Part III items 20-23): 'Official runtime leaves this field disabled in the observed form workflow.' (the official .hta marks each `disabled`; the runtime inventory records the bare attribute as disabled false), and this app's field map never writes them ('not written by this app's field map for any sample draft'), so a box would need a new draft field (Rule 0). The page shows each printed item with a note (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note checks every printed payment box's enabled_when and that none is drawn, written or fillable).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "manual-0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note (one item per printed row: 20 Cash/Bank Debit Memo, 21 Check, 22 Tax Debit Memo, 23 Others, with a note; none of their boxes is drawn); screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_line_of_business_is_not_on_the_printed_sheet (frm0619F:txtLineBus, which writer-cells says this sheet does not print, is in 'Not on the printed sheet')",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_category_is_the_filers_choice_on_0619e_and_0619f; screen_form_module::tests::monthly::monthly_captions_read_as_printed (item 11 reads 'Category of Withholding Agent')",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "reason": "Item 2 is as the official page has it: rules/forms/0619f-v2018/fields.json makes frm0619F:txtDueDay an ordinary required box (computed false, default 10) and txtDueMonth and txtDueYear computed. The day is the filer's to change and the maintainer decided dates stay normal fields, so the page keeps the day open and the month and year locked with their values (screen_form_module::tests::monthly::monthly_due_date_day_is_the_filers_as_on_the_official_page).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "preview.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_category_is_the_filers_choice_on_0619e_and_0619f (item 11 is open; Private or Government sets withholding_agent_category, which the field map, the XML and the print write both boxes from)",
+   "status": "fixed"
+  }
+ },
+ "1600PT": {
+  "R3.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (the ATC popup slots AtcCode1-31 are not drawn)",
+   "status": "fixed"
+  },
+  "R5.2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_schedule_1_is_a_table (Schedule 1 is one table; each row's payee TIN is one box of its row, and no TIN part is drawn outside Part I)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_captions_read_as_printed (item 2 reads 'Amended Return?'); screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers (its options read Yes/No as writer-cells prints them)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (item 6 draws one RDO box; rdoPg1Pt1I6RDO, which writer-cells not_joined calls a duplicate printed in item 6, is hidden)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_part_ii_rows_are_chosen_on_the_page (rows 13-17 are one table at the top of Part II with ATC, Tax Base, Tax Rate and Tax Withheld; the ATC is chosen from the category's popup through toggle_atc, the rate follows, item 18 follows; items 3 and 10 go through the form's setters); screen_form_module::tests::monthly::monthly_removing_typed_rows_is_reported; screen_form_module::tests::monthly::a_legacy_typed_1600pt_row_opens_and_files_as_it_saved; screen_form_module::tests::monthly::monthly_rates_wait_for_their_atc; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt); tools/test_form_monthly_withholding.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (txtPg2TinC1-4 and txtPg2RegisteredName are not drawn; the print still writes writer-cells' 'Page 2' joins)",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_schedule_1_is_a_table (a part 'Schedule 1 – Monthly Alphalist of Payees from Whom Taxes were Withheld' with one table of the five printed rows, the printed columns and the total)",
+   "status": "fixed"
+  },
+  "manual-5": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year (display only: the month shows '03 - March' and the two-digit year 26 shows as 2026; the draft and the field map keep MM and YY); screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form (blank on a library opening); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (26 shows as 2026)",
+   "status": "fixed"
+  }
+ },
+ "1600VT": {
+  "R3.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (the page-2 header TIN, txtPg2TinC1-4, is not drawn; the print still writes it); screen_form_module::tests::monthly::form_1600pt_and_1600vt_schedule_1_is_a_table",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers (item 12 options read Yes/No as writer-cells prints them); screen_form_module::tests::monthly::monthly_captions_read_as_printed; screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (the ATC popup slots AtcCode1-13 are not drawn)",
+   "status": "fixed"
+  },
+  "R5.2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_schedule_1_is_a_table (Schedule 1 is one table; each row's payee TIN is one box of its row, and no TIN part is drawn outside Part I)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_captions_read_as_printed (item 12 reads 'Are you availing of tax relief under Special Law or International Tax Treaty?', 12A 'If Yes, specify'); screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (item 6 draws one RDO box; rdoPg1Pt1I6RDO, which writer-cells not_joined calls a duplicate printed in item 6, is hidden)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_part_ii_rows_are_chosen_on_the_page (rows 13-17 are one table at the top of Part II with ATC, Tax Base, Tax Rate and Tax Withheld; the ATC is chosen from the category's popup through toggle_atc, the rate follows, item 18 follows; items 3 and 10 go through the form's setters); screen_form_module::tests::monthly::monthly_removing_typed_rows_is_reported; screen_form_module::tests::monthly::a_legacy_typed_1600pt_row_opens_and_files_as_it_saved; screen_form_module::tests::monthly::monthly_rates_wait_for_their_atc; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt); tools/test_form_monthly_withholding.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (txtPg2TinC1-4 and txtPg2RegisteredName are not drawn; the print still writes writer-cells' 'Page 2' joins)",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_schedule_1_is_a_table (a part 'Schedule 1 – Monthly Alphalist of Payees from Whom Taxes were Withheld' with one table of the five printed rows, the printed columns and the total)",
+   "status": "fixed"
+  },
+  "manual-5": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year (display only: the month shows '03 - March' and the two-digit year 26 shows as 2026; the draft and the field map keep MM and YY); screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form (blank on a library opening); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (26 shows as 2026)",
+   "status": "fixed"
+  }
+ },
+ "1600WP": {
+  "R3.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (AtcCd1/2 and SchedIIAtcCde1/2, the ATC popup's slots, are not drawn); screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet (Schedule 1.1 is one table in its own part); screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt)",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers (item 7 options read Private/Government as writer-cells prints them); screen_form_module::tests::monthly::monthly_captions_read_as_printed; screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "reason": "Item 11 has no box the filer fills in the official program: rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json records frm1600WP:SpecialLaw_1 (line 819), SpecialLaw_2 (823) and SpecialLawSelect (833) disabled at load, and this app's draft has no field for them ('not written by this app's field map for any sample draft'), so a box would need a new draft field (Rule 0). The page shows item 11 with its printed caption and a note (screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R5.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet (Schedule 1.1's TIN is one box of its row in the table, column 'TIN (Including Branch Code)')",
+   "status": "fixed"
+  },
+  "R6.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600wp_schedule_waits_for_item_4_and_answers_use_the_setters (Schedule 1.1's TIN, payee, ATC and amount, ten rows, are faded with 'Needs item 4 = Yes' and refused until item 4 is Yes, open once it is; fields.json enabled_when 'Item 4 Yes.'); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1600WP: 40); screen_form_module::tests::a_box_comes_alive_when_its_answer_holds (1600WP item 4 Yes); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::monthly::monthly_rates_wait_for_their_atc (the nature of payment and rate say what they wait for); screen_form_module::tests::monthly::monthly_removing_typed_rows_is_reported; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet (a part 'Schedule 1.1 – Alphabetical List of Payees from Whom Taxes Were Withheld' after Part II, one table with the printed columns and the total)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet (the ATC table is the first item of Part II, before item 12)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "reason": "Item 11 is on the page now, between items 10 and 12, with its printed caption and a note (screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet), but it cannot be bound to the Special law boxes: the official program keeps SpecialLaw_1, SpecialLaw_2 and SpecialLawSelect disabled at load (rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json, disabled true), and this app's draft has no field for them ('not written by this app's field map for any sample draft'), so Yes/No boxes would need a new draft field (Rule 0).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "manual-3": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers (item 7 options read Private/Government); screen_form_module::tests::monthly::monthly_captions_read_as_printed (items 12 and 16 drop the trailing number; no heading on the form ends with its own number)",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet (item 1 is two items, From and To, each with its month, day and year); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (From has its own calendar; To, which the form computes, has none). How the split parts display is PR 0b's 1600WP R4.0 verdict: the official form stores the date split and rule 4 keeps the split",
+   "status": "fixed"
+  }
+ },
+ "1601C": {
+  "R3.0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_boxes_sit_under_their_printed_item_numbers (item 3, 11 and 13 options read Yes/No and Private/Government as writer-cells prints them); screen_form_module::tests::monthly::monthly_captions_read_as_printed",
+   "status": "fixed"
+  },
+  "R4.0": {
+   "reason": "None of the six is a date the filer types. rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json records each disabled at load (txtDateIssue line 1055, txtDateExpiry 1068, frm1601c:txtDate37 1112, txtDate38 1119, txtDate39 1125, txtDate40 1135: disabled true), and this app's field map writes them blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'). The page no longer draws them (manual-4): the tax agent line and items 37-40 show their printed captions with a note, so no date box is left to show (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R5.2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1601c_address_lines_are_one_pool (item 9's two lines are one box over 40 + 31 slots; a stored draft's two lines show joined and are not changed by opening; a typed address splits at line 1's 40 boxes into registered_address and registered_address_2, both still filed as their own official controls; the print carries the whole address); screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (1601C added); screen_form_module::combs::tests::print_cells_match_the_print_sheets (PRINTED_THROUGH gives the boxes writer-cells' derived:address_line1 and derived:line:address_line2 slots)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_forms_draw_no_popup_slot_header_copy_or_page_counter (txtCurrentPage and txtMaxPage are not drawn; writer-cells not_joined: 'page counter of the eBIRForms page, not a box on the paper form')",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1601c_schedule_i_is_its_own_part (a part 'Part IV · Schedule' after Part III with the Schedule I table and item 4, the total, as page 2 prints them)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_line_of_business_is_not_on_the_printed_sheet (txtLineBus, which writer-cells says the 1601-C sheet does not print, is in 'Not on the printed sheet'; item 8 shows one name box)",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::form_1601c_item_13a_lists_the_reliefs_by_name (13A lists Special Rate, International Tax Treaty and Both by the names the draft keeps; a chosen relief is filed and printed); screen_form_module::tests::monthly::monthly_captions_read_as_printed (item 11 reads 'Category of Withholding Agent'); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (the official blank 0 shows Choose...)",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 3",
+   "proof": "screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note (items 37-40 and the tax agent line show their printed captions with a note; none of their boxes is drawn, written or fillable); screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt)",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "reason": "What the print writes is right: the tax agent accreditation number and dates and Part III items 37-40 are disabled at load in the official runtime with an empty value (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: disabled true, value \"\" for each), and this app's field map writes them blank whatever the draft holds. The page now agrees with that print: it shows each printed item with a note and no box (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note checks the print map and the upload's field map hold nothing there and a typed value is refused).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  }
+ }
+}
