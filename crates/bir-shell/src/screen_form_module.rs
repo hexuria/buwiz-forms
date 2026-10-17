@@ -2214,8 +2214,9 @@ fn opened_json(
         draft: from_profile_draft,
     };
     let mut locks = locks(kind, &from_profile);
-    // A computed penalty is locked until Edit penalties opens its group.
-    for group in penalties::groups(kind) {
+    // A computed penalty is locked until Edit penalties opens its group; a
+    // return with no due date computes none, and its boxes stay open.
+    for group in penalties::computed_groups(kind, &draft) {
         if !penalties::edited(&group, &draft) {
             let reason = if penalties::applies(kind, &group, &draft) {
                 penalties::LOCK
@@ -3152,11 +3153,13 @@ fn apply_screen_edits(
     let pools = combs::pools(kind.form_code());
     // Whether each penalty group was edited before this batch: an amount in
     // one box of a batch does not open the others, and blanking the group
-    // from a partly edited state clears all of it.
+    // from a partly edited state clears all of it. A group the model does
+    // not compute (no due date) is open: it is always "edited".
+    let computes = penalties::computes(kind, draft);
     let penalty_groups: Vec<(penalties::Group, bool)> = penalties::groups(kind)
         .into_iter()
         .map(|group| {
-            let edited = penalties::edited(&group, draft);
+            let edited = !computes || penalties::edited(&group, draft);
             (group, edited)
         })
         .collect();
@@ -10025,14 +10028,15 @@ mod tests {
     fn penalties_are_computed_and_one_edit_overrides_all_three_on_every_form() {
         setup();
         // Parties with all three overrides on the page, read off
-        // crates/bir-core/data/agent-forms (`.../penalty_overrides/...`).
+        // crates/bir-core/data/agent-forms (`.../penalty_overrides/...`),
+        // on the returns the penalty model computes (a due date for the
+        // period opened). The rest compute none and their boxes are open:
+        // a_penalty_with_no_due_date_is_three_open_boxes_on_every_form.
         let expected: BTreeMap<&str, usize> = BTreeMap::from([
-            ("0605", 1),
             ("0619E", 1),
             ("0619F", 1),
             ("1600PT", 1),
             ("1600VT", 1),
-            ("1600WP", 1),
             ("1601C", 1),
             ("1601EQ", 1),
             ("1602Q", 1),
@@ -10044,22 +10048,7 @@ mod tests {
             ("1702MX", 1),
             ("1702Q", 1),
             ("1702RT", 1),
-            ("1706", 1),
-            ("1707", 1),
             ("1707A", 1),
-            ("1800", 1),
-            ("1801", 1),
-            ("2000", 1),
-            ("2000OT", 1),
-            ("2200A", 1),
-            ("2200AN", 1),
-            ("2200C", 1),
-            ("2200M", 1),
-            ("2200P", 1),
-            ("2200T", 1),
-            ("2550M", 1),
-            ("2552", 1),
-            ("2553", 1),
         ]);
         let mut found = BTreeMap::new();
         let mut not_on_return = Vec::new();
@@ -10230,6 +10219,96 @@ mod tests {
     /// tax due. Blanking a partly edited group clears all of it, a box not
     /// opened stays refused even in a batch with an opened one, and a
     /// penalty message lands on its box.
+    /// Decision of 2026-10-17: 0605 has no due date to compute a penalty
+    /// from, so its Surcharge, Interest and Compromise (20A-20C) are plain
+    /// open boxes, with no Edit and no lock, and 20D Total Penalties stays
+    /// computed. Generic: every return the penalty model has no due date
+    /// for (the calendar's event-based forms, and 2550M after its last
+    /// year) gets the same three open boxes.
+    #[test]
+    fn a_penalty_with_no_due_date_is_three_open_boxes_on_every_form() {
+        setup();
+        let mut open_forms = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let groups = penalties::groups(kind);
+            let opened = open(code, page_period_of(code));
+            if groups.is_empty() || penalties::computes(kind, &opened["draft"]) {
+                continue;
+            }
+            open_forms.push(code);
+            assert_eq!(opened["penalties"], json!([]), "{code}: no Edit");
+            let def = kind.definition();
+            for group in &groups {
+                let typed = |key: &str| match &def.bindings[key].binding {
+                    Binding::Amount { path, .. } if path.ends_with("/surcharge") => 100.0,
+                    Binding::Amount { path, .. } if path.ends_with("/interest") => 200.0,
+                    _ => 300.0,
+                };
+                for key in &group.keys {
+                    assert!(opened["locks"][key].is_null(), "{code}: {key} is open");
+                    assert!(opened["lock_notes"][key].is_null(), "{code}: {key}");
+                }
+                // Typed with nothing opened first, and filed as typed.
+                let edits: Map<String, Value> = group
+                    .keys
+                    .iter()
+                    .map(|k| (k.clone(), json!(typed(k).to_string())))
+                    .collect();
+                let filled = fill(code, &opened["draft"], Value::Object(edits));
+                assert_eq!(filled["rejected"], json!({}), "{code}");
+                let map = agent::field_map(kind, &filled["draft"]).unwrap();
+                for key in &group.keys {
+                    assert_eq!(amount(&filled["values"], key), typed(key), "{code}: {key}");
+                    assert_eq!(
+                        agent::parse_amount(&map[key]),
+                        Some(typed(key)),
+                        "{code}: {key} files the entry"
+                    );
+                }
+                // The total still adds them up.
+                let total = filled["values"].as_object().unwrap().iter().any(|(k, v)| {
+                    !group.keys.contains(k)
+                        && agent::parse_amount(v.as_str().unwrap_or("")) == Some(600.0)
+                });
+                assert!(total, "{code}: a total shows 600.00");
+                // A blank box clears its amount (nothing is computed: 0).
+                let blanks: Map<String, Value> =
+                    group.keys.iter().map(|k| (k.clone(), json!(""))).collect();
+                let back = fill(code, &filled["draft"], Value::Object(blanks));
+                assert_eq!(back["rejected"], json!({}), "{code}");
+                for key in &group.keys {
+                    assert_eq!(amount(&back["values"], key), 0.0, "{code}: {key}");
+                }
+            }
+        }
+        open_forms.sort_unstable();
+        assert_eq!(
+            open_forms,
+            [
+                "0605", "1600WP", "1706", "1707", "1800", "1801", "2000", "2000OT", "2200A",
+                "2200AN", "2200C", "2200M", "2200P", "2200T", "2550M", "2552", "2553"
+            ]
+        );
+        // 0605 by name: 20A-20C open, 20D Total Penalties computed.
+        let opened = open("0605", 1);
+        for key in [
+            "frm0605:txtTax20A",
+            "frm0605:txtTax20B",
+            "frm0605:txtTax20C",
+        ] {
+            assert!(opened["locks"][key].is_null(), "{key}");
+        }
+        assert_eq!(opened["lock_notes"]["frm0605:txtTax20D"], NOTE_COMPUTED);
+        let filled = fill(
+            "0605",
+            &opened["draft"],
+            json!({"frm0605:txtTax20A": "10", "frm0605:txtTax20B": "20.50", "frm0605:txtTax20C": "30"}),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(amount(&filled["values"], "frm0605:txtTax20D"), 60.5);
+    }
+
     #[test]
     fn only_a_typed_penalty_overrides_and_the_others_keep_computing() {
         setup();

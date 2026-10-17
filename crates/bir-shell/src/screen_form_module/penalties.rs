@@ -15,6 +15,11 @@
 //!   that). A blank box clears its override: "Use the computed amounts"
 //!   blanks all three.
 //!
+//! - A return with no due date to compute from (0605, decided 2026-10-17:
+//!   the model's calendar has no deadline for it) computes no penalty, so
+//!   its three boxes are plain open boxes: no lock and no Edit. They still
+//!   write the overrides, and Total Penalties still adds them up.
+//!
 //! Validation, the assistant's `form.fill` and the XML are untouched; the
 //! XML carries whatever the filer entered, which is the point of the rule.
 
@@ -124,6 +129,42 @@ pub(super) fn error_keys(kind: AgentFormKind, field: &str) -> Vec<String> {
         .collect()
 }
 
+/// Whether the penalty model computes this return's penalties: it has a
+/// due date to measure them from (the calendar's deadline for the return's
+/// period, or the one the app resolved when it opened). Without one (0605)
+/// nothing is computed and the boxes are the filer's to type.
+pub(super) fn computes(kind: AgentFormKind, draft: &Value) -> bool {
+    use bir_core::forms::queueable::QueueableForm;
+    match kind {
+        AgentFormKind::Queueable(kind) => bir_core::with_queueable_kind!(kind, F => {
+            serde_json::from_value::<F>(draft.clone()).is_ok_and(|typed| {
+                <F as QueueableForm>::penalty_items()
+                    .iter()
+                    .any(|items| items.due_date(&typed).is_some())
+            })
+        }),
+        AgentFormKind::Form1601C => {
+            serde_json::from_value::<bir_core::forms::form_1601c::Form1601CDraft>(draft.clone())
+                .is_ok_and(|typed| {
+                    bir_core::forms::form_1601c::Form1601CDraft::penalty_items()
+                        .due_date(&typed)
+                        .is_some()
+                })
+        }
+        AgentFormKind::Form2551Q => false,
+    }
+}
+
+/// The groups the model computes, locked until Edit opens them: every
+/// group, or none on a return with no due date ([`computes`]).
+pub(super) fn computed_groups(kind: AgentFormKind, draft: &Value) -> Vec<Group> {
+    if computes(kind, draft) {
+        groups(kind)
+    } else {
+        Vec::new()
+    }
+}
+
 /// Whether the filer has entered any of the group's amounts.
 pub(super) fn edited(group: &Group, draft: &Value) -> bool {
     COMPONENTS.iter().any(|component| {
@@ -155,11 +196,13 @@ pub(super) fn applies(kind: AgentFormKind, group: &Group, draft: &Value) -> bool
     bir_core::forms::agent::compute(kind, &mut copy).is_ok() && edited(group, &copy)
 }
 
-/// What the page needs: each group's boxes, whether the filer entered its
-/// amounts, and whether it is part of the return (Edit is offered).
+/// What the page needs: each computed group's boxes, whether the filer
+/// entered its amounts, and whether it is part of the return (Edit is
+/// offered). A group the model does not compute is not listed: its boxes
+/// are plain open boxes.
 pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
     Value::Array(
-        groups(kind)
+        computed_groups(kind, draft)
             .iter()
             .map(|group| {
                 json!({
