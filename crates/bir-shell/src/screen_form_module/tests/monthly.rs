@@ -1456,15 +1456,20 @@ fn a_legacy_typed_1600pt_row_opens_and_files_as_it_saved() {
 }
 
 /// 1601C R5.2: item 9's two lines are one pool. A stored draft whose two
-/// lines were typed apart shows them joined and is not changed by opening;
-/// a typed address splits at line 1's 40 boxes into the draft's two fields
-/// (saved as two official controls, as before), and the print carries the
-/// whole of it over both combs (form_1601c.rs `to_print_field_map`).
+/// lines were typed apart shows them joined and is not changed by opening.
+/// A typed address splits at the last space before line 1's 40th letter
+/// only when both parts fit (line 1 its 40 boxes, line 2 its official 50
+/// characters); otherwise it stays whole in line 1 (up to its official
+/// 100, as the page took before), and past that it splits at line 1's last
+/// space within 100. What the two fields cannot file is refused on the
+/// address box, never accepted for the queue to refuse later. Both lines
+/// are stored trimmed, and showing them again changes nothing.
 #[test]
 fn form_1601c_address_lines_are_one_pool() {
     setup();
+    let head = "frm1601c:txtAddress";
     let pool = combs::pools("1601C");
-    let item = &pool["frm1601c:txtAddress"];
+    let item = &pool[head];
     assert_eq!(item.keys, ["frm1601c:txtAddress", "frm1601c:txtAddress2"]);
     assert_eq!(item.slots, [40, 31]);
     let opened = open("1601C", 3);
@@ -1473,30 +1478,49 @@ fn form_1601c_address_lines_are_one_pool() {
     legacy["registered_address_2"] = json!("BLDG 5");
     let kind = kind_of("1601C").unwrap();
     let shown = fill("1601C", &legacy, json!({}));
-    assert_eq!(shown["pools"]["frm1601c:txtAddress"], "12 MAIN ST BLDG 5");
+    assert_eq!(shown["pools"][head], "12 MAIN ST BLDG 5");
     assert_eq!(shown["draft"]["registered_address"], "12 MAIN ST");
     assert_eq!(shown["draft"]["registered_address_2"], "BLDG 5");
     let xml = agent::field_map(kind, &shown["draft"]).unwrap();
     assert_eq!(xml["frm1601c:txtAddress2"], "BLDG 5");
+    let address_errors = |draft: &Value| -> Vec<String> {
+        validated("1601C", draft)["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e.to_string())
+            .filter(|e| e.contains("Address") || e.contains("address"))
+            .collect()
+    };
+    let typed_in = |draft: &Value, text: &str| -> Value {
+        fill_unlocked("1601C", draft, json!({ head: text }), &[head])
+    };
+    let lines = |filled: &Value| {
+        (
+            filled["draft"]["registered_address"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            filled["draft"]["registered_address_2"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+        )
+    };
+    // Both parts fit: split at the last space among the first 40 letters.
     let typed = "UNIT 4 SAMPLE TOWER 456 EXAMPLE AVENUE CORNER PLACEHOLDER ST QUEZON CITY";
-    let filled = fill_unlocked(
-        "1601C",
-        &opened["draft"],
-        json!({"frm1601c:txtAddress": typed}),
-        &["frm1601c:txtAddress"],
-    );
+    let filled = typed_in(&opened["draft"], typed);
     assert_eq!(filled["rejected"], json!({}));
-    let line1 = filled["draft"]["registered_address"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let line2 = filled["draft"]["registered_address_2"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    assert!(line1.trim_end().len() <= 40, "{line1:?}");
-    assert_eq!(format!("{line1}{line2}"), typed);
-    assert_eq!(filled["pools"]["frm1601c:txtAddress"], typed);
+    let cut = typed[..40].rfind(' ').unwrap();
+    assert_eq!(
+        lines(&filled),
+        (typed[..cut].to_string(), typed[cut + 1..].to_string())
+    );
+    assert_eq!(filled["pools"][head], typed);
+    assert!(address_errors(&filled["draft"]).is_empty());
+    // Showing it again changes nothing (the round trip).
+    let again = typed_in(&filled["draft"], filled["pools"][head].as_str().unwrap());
+    assert_eq!(lines(&again), lines(&filled));
     let printed = print_of("1601C", &filled["draft"]);
     let whole = format!(
         "{} {}",
@@ -1506,6 +1530,61 @@ fn form_1601c_address_lines_are_one_pool() {
         whole.split_whitespace().collect::<Vec<_>>(),
         typed.split_whitespace().collect::<Vec<_>>()
     );
+    // A space right after the 40th letter does not end line 1 at 40
+    // letters: no space among them, so the text stays whole.
+    let edge = format!("{} {}", "A".repeat(40), "B".repeat(20));
+    let filled = typed_in(&opened["draft"], &edge);
+    assert_eq!(lines(&filled), (edge.clone(), String::new()));
+    assert_eq!(filled["pools"][head], edge.as_str());
+    // 91 to 100 characters, with and without spaces: whole in line 1,
+    // which files them, as before.
+    for n in 91..=100 {
+        for text in [
+            "X".repeat(n),
+            format!("{} {}", "A".repeat(39), "B".repeat(n - 40)),
+            format!("{} {}", "A".repeat(30), "B".repeat(n - 31)),
+        ] {
+            let filled = typed_in(&opened["draft"], &text);
+            assert_eq!(filled["rejected"], json!({}), "{n}");
+            assert_eq!(lines(&filled), (text.clone(), String::new()), "{n}");
+            assert!(address_errors(&filled["draft"]).is_empty(), "{n}");
+            assert_eq!(filled["pools"][head], text.as_str(), "{n}");
+        }
+    }
+    // A stored 96-character line 1 is still fileable after one edit.
+    let mut long = opened["draft"].clone();
+    let stored = format!("{} {}", "A".repeat(20), "B".repeat(75));
+    long["registered_address"] = json!(stored);
+    long["registered_address_2"] = json!("");
+    assert!(address_errors(&long).is_empty());
+    let shown = fill("1601C", &long, json!({}));
+    assert_eq!(shown["pools"][head], stored.as_str());
+    let edited = typed_in(&long, &format!("{stored}X"));
+    assert_eq!(edited["rejected"], json!({}));
+    assert!(address_errors(&edited["draft"]).is_empty());
+    // Past 100: line 1's last space within 100, the rest on line 2.
+    let over = format!("{} {}", "A".repeat(60), "B".repeat(45));
+    let filled = typed_in(&opened["draft"], &over);
+    assert_eq!(lines(&filled), ("A".repeat(60), "B".repeat(45)));
+    assert!(address_errors(&filled["draft"]).is_empty());
+    assert_eq!(filled["pools"][head], over.as_str());
+    // Past what the two fields file: refused on the address box.
+    for text in [
+        "X".repeat(101),
+        format!("{} {}", "A".repeat(60), "B".repeat(60)),
+    ] {
+        let refused = typed_in(&opened["draft"], &text);
+        assert_eq!(
+            refused["rejected"][head],
+            combs::TWO_FIELD_TOO_LONG,
+            "{}",
+            text.len()
+        );
+        assert_eq!(
+            refused["draft"]["registered_address"],
+            opened["draft"]["registered_address"]
+        );
+    }
 }
 
 /// 0619E manual-4, 0619F manual-3: item 2 is as the official page has it:

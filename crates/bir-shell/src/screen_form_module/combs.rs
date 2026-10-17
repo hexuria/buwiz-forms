@@ -314,7 +314,72 @@ pub(super) fn pool_text(kind: AgentFormKind, pool: &Pool, draft: &Value) -> Stri
         return format!("{}{second}", read(draft, path)).trim().to_string();
     }
     let lines: Vec<String> = paths.iter().map(|p| read(draft, p)).collect();
+    if two_fields(def, pool).is_some() {
+        // Two lines of their own, joined as the print joins them.
+        return lines
+            .iter()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
     join_lines(&lines, &write_slots(pool)).trim().to_string()
+}
+
+/// 1601C's address: two lines that are two fields of their own
+/// (`<path>` and `<path>_2`, each an official control), not one text the
+/// form cuts. `None` for every other pool.
+fn two_fields<'a>(def: &'a AgentFormDef, pool: &Pool) -> Option<(&'a str, &'a str)> {
+    let [first, second] = pool.write.as_slice() else {
+        return None;
+    };
+    let (first, second) = (text_path(def, first)?, text_path(def, second)?);
+    (second == format!("{first}_2")).then_some((first, second))
+}
+
+/// The official lengths of 1601C's two address fields (form_1601c.rs
+/// validate: "Address exceeds the official 100-character field", "Address
+/// (line 2) exceeds the official 50-character field").
+pub(super) const TWO_FIELD_MAX: [usize; 2] = [100, 50];
+
+/// What the page refuses past what the two fields can file.
+pub(super) const TWO_FIELD_TOO_LONG: &str = "This address is longer than the two official address fields take (100 characters on line 1, 50 on line 2); shorten it.";
+
+/// Split an address typed in one box over two fields of their own. At the
+/// last space before the first line's `first`th letter (rules page question
+/// 5) when both parts fit the boxes' line and the second field's official
+/// length; otherwise the whole text stays in the first field, as a filer
+/// typing it there could; past that field's official length, at its last
+/// space with the rest in the second field. Both lines are stored trimmed.
+/// An error past what the two fields can file.
+pub(super) fn split_two_fields(text: &str, first: usize) -> Result<(String, String), String> {
+    let chars: Vec<char> = text.trim().chars().collect();
+    let [max1, max2] = TWO_FIELD_MAX;
+    let at_space = |limit: usize| -> Option<(String, String)> {
+        (1..limit.min(chars.len()))
+            .rev()
+            .find(|&p| chars[p].is_whitespace() && !chars[p - 1].is_whitespace())
+            .map(|p| {
+                let one: String = chars[..p].iter().collect();
+                let two: String = chars[p..].iter().collect();
+                (one.trim().to_string(), two.trim().to_string())
+            })
+    };
+    let fits = |(one, two): &(String, String), limit: usize| {
+        one.chars().count() <= limit && two.chars().count() <= max2
+    };
+    if chars.len() <= first {
+        return Ok((chars.iter().collect(), String::new()));
+    }
+    if let Some(lines) = at_space(first).filter(|lines| fits(lines, first)) {
+        return Ok(lines);
+    }
+    if chars.len() <= max1 {
+        return Ok((chars.iter().collect(), String::new()));
+    }
+    at_space(max1 + 1)
+        .filter(|lines| fits(lines, max1))
+        .ok_or_else(|| TWO_FIELD_TOO_LONG.to_string())
 }
 
 /// Each pool's address, by its first line (what the page shows).
@@ -340,7 +405,9 @@ pub(super) fn split_lines(text: &str, slots: &[usize]) -> Vec<String> {
             lines.push(rest.drain(..).collect());
             continue;
         }
-        let space = (1..=n)
+        // A space at index `n` would leave `n` letters and the space on
+        // this line: only a space among the first `n` letters ends it.
+        let space = (1..n)
             .rev()
             .find(|&p| rest[p].is_whitespace() && !rest[p - 1].is_whitespace());
         let cut = match space {
@@ -418,6 +485,13 @@ pub(super) fn write_pool(
             }
             None => write(draft, head, &text),
         };
+    }
+    if two_fields(def, pool).is_some() {
+        let first = pool.slots.first().copied().unwrap_or(0);
+        let (one, two) = split_two_fields(&text, first)?;
+        write(draft, &pool.write[0], &one)?;
+        write(draft, &pool.write[1], &two)?;
+        return Ok(());
     }
     for (key, line) in pool
         .write
@@ -568,6 +642,10 @@ mod tests {
                 vec![38, 38, 30],
             ),
             ("SHORT", vec![38, 38, 30]),
+            (
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB",
+                vec![40, 31],
+            ),
             (
                 "UNIT 5  BLDG A,   123 AYALA AVENUE  CORNER PASEO",
                 vec![10, 10, 40],

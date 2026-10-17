@@ -9444,6 +9444,24 @@ mod tests {
                 // again changes nothing (no space is ever inserted).
                 let filled =
                     fill_unlocked(code, &opened["draft"], json!({ &head: long }), &unlocked);
+                // 1601C's two fields file 100 + 50 characters at most: the
+                // 158 are refused on the box (tests::monthly::
+                // form_1601c_address_lines_are_one_pool covers its pool).
+                if code == "1601C" {
+                    assert_eq!(
+                        filled["rejected"][&head],
+                        combs::TWO_FIELD_TOO_LONG,
+                        "{code}"
+                    );
+                    found.insert(
+                        code,
+                        (
+                            keys,
+                            pool.slots.iter().map(|n| *n as u64).collect::<Vec<_>>(),
+                        ),
+                    );
+                    continue;
+                }
                 assert_eq!(filled["rejected"], json!({}), "{code}");
                 assert_eq!(
                     filled["pools"][&head], long,
