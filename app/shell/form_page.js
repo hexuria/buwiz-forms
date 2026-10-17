@@ -453,6 +453,9 @@ export class FormPageActions {
         input.on("change", (_e, cx) => {
           const raw = input.value();
           const date = parseTypedDate(raw);
+          // Only a box the filer edited is told it holds no date: a stored
+          // legacy text left as it was opens and blurs quietly.
+          (s.datesEdited ||= new Set()).add(k);
           if (date || !raw.trim()) this.setDateError(k, "");
           this.edit(k, date ? formatMDY(date) : raw, cx);
         });
@@ -463,7 +466,7 @@ export class FormPageActions {
             const text = formatLongDate(date);
             if (text !== raw) input.set_value(text);
             this.setDateError(k, "");
-          } else this.setDateError(k, raw.trim() ? DATE_ERROR : "");
+          } else this.setDateError(k, raw.trim() && s.datesEdited?.has(k) ? DATE_ERROR : "");
           this.leaveBox(k, cx);
           this.flush(cx);
         });
@@ -1969,22 +1972,26 @@ function scheduleTable(cx, ui, it, width) {
   const numW = 36;
   // A column an override hides (a row template another table now holds).
   const shown = it.cols.map((c, i) => (c.t === "hidden" ? -1 : i)).filter((i) => i >= 0);
-  // The sheet's preprinted row captions (1603Q Schedule I's recipients,
-  // 1604C's months, 1604F's quarters) stand in for the row numbers; a
-  // table without them is numbered.
+  // The sheet's preprinted row captions (1603Q Schedule I's recipients)
+  // show beside the row numbers. A layout that marks the table
+  // `numbered: false` (1604C/E/F Part II, whose sheets print no row
+  // numbers) shows the captions in their place.
   const labels = it.row_labels || null;
+  const numbered = !labels || it.numbered !== false;
   const labelW = labels ? 220 : 0;
-  const tableW = (labels ? labelW : numW) + shown.length * colW;
+  const tableW = (numbered ? numW : 0) + labelW + shown.length * colW;
   const head = div().flex().flex_row().items_end().bg(t.bg).border_b(1).border_color(t.border);
+  if (numbered) head.child(div().w(numW).flex_none().py(SPACE[2]).flex().justify_center().child(Text(cx, "meta", "#", "fg3")));
   if (labels) head.child(div().w(labelW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", labels.caption, "fg3").whitespace_normal()));
-  else head.child(div().w(numW).flex_none().py(SPACE[2]).flex().justify_center().child(Text(cx, "meta", "#", "fg3")));
   for (const i of shown) head.child(div().w(colW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", it.cols[i].l, "fg3").whitespace_normal()));
   const body = div().flex().flex_col();
   it.keys.forEach((row, r) => {
-    const no = labels ? labels.rows[r] || String((it.start ?? 1) + r) : (it.start ?? 1) + r;
+    // How a control's label names its row: the number, or the caption
+    // where the caption stands in for the number.
+    const no = numbered ? (it.start ?? 1) + r : labels.rows[r] || String((it.start ?? 1) + r);
     const tr = div().flex().flex_row().items_center().when(r > 0, (el) => el.border_t(1).border_color(t.border));
+    if (numbered) tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(no), "fg3")));
     if (labels) tr.child(div().w(labelW).flex_none().py(6).px(SPACE[2]).child(Text(cx, "body", labels.rows[r] || "", "fg2").whitespace_normal()));
-    else tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(no), "fg3")));
     row.forEach((k, c) => {
       const col = it.cols[c];
       if (col.t === "hidden") return;

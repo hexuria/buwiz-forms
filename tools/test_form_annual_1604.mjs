@@ -1,72 +1,28 @@
 // The form page as the annual information returns (PR 6: 1604C, 1604F,
-// 1604E) use it, driven through the real app/shell/form_page.js with a
-// mocked host. Which boxes these are, and what the host says, is the
-// host's to pin (crates/bir-shell screen_form_module/tests/annual_1604.rs:
-// pr6_part_ii_schedules_follow_the_printed_rows_and_columns,
-// pr6_item_11_no_asks_before_clearing_what_was_typed); this proves what the
-// page does with it:
+// 1604E) use it, driven through the real app/shell/form_page.js. The host
+// side is the host's own: tools/fixtures/form_1604_page.json holds the
+// real schema entries of 1604C and 1604F, their opened locks, the drafts
+// and values a typed return has, and what item 11 No returns (draft,
+// values and removes), pinned by crates/bir-shell
+// screen_form_module/tests/annual_1604.rs pr6_page_fixture_is_the_hosts.
+// This proves what the page does with it:
 //  - a Part II schedule draws its printed column heads, each row's printed
-//    month (1604C) or quarter (1604F) caption in place of a row number, and
-//    its TOTAL row under it; a table without printed row captions is still
-//    numbered;
-//  - 1604C item 11 No (clears items 11A to 13) and 1604F item 11 No (clears
-//    item 11A) ask first: Cancel keeps the answer and what was typed,
-//    Continue applies it and offers Undo naming what was cleared, and Undo
-//    brings both back.
-// The page code is PR 2's (fix/findings-q3-withholding); PR 6 makes printed
-// row captions stand in for the row numbers.
+//    month or quarter caption in place of a row number (the layout's
+//    `numbered: false`), and its TOTAL row; without that flag the number
+//    column comes back beside the captions;
+//  - item 11 No on 1604C (clears items 11A to 13) and on 1604F (clears item
+//    11A, tax_relief_details) asks first: Cancel keeps the answer and what
+//    was typed, Continue takes the host's draft and offers the host's Undo
+//    text, and Undo brings the typed draft back;
+//  - a date box holding text that is not a date says so only once the
+//    filer has edited it (a stored legacy "4/10/26" opens and blurs quietly).
+// The page code is PR 2's (fix/findings-q3-withholding).
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 const root = new URL("../", import.meta.url);
-
-const K = (tail) => `frm1604c:${tail}`;
-const MONTHS = ["January", "February", "March"];
-const COLS = ["Date of Remittance (MM/DD/YYYY)", "Drawee Bank/Bank Code/Agency", "TRA/eROR/eAR Number", "Taxes Withheld", "Adjustment", "Penalties", "Total Amount Remitted"];
-const STEMS = ["txtSched1Date", "txtSched1BankVal", "txtTra", "txtSched1TaxWheld", "txtSched1Adj", "txtSched1Pen", "txtSched1TotalAmt"];
-const TYPES = ["date", "text", "text", "money", "money", "money", "money"];
-const MESSAGE = "Changing item 11 to No clears item 11A (date of refund 03/15/2026), item 12 (₱1,234.50) and item 13 (April). Continue?";
-const F = (tail) => `frm1604f:${tail}`;
-const QUARTERS = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
-const F_MESSAGE = "Changing item 11 to No clears item 11A (PEZA). Continue?";
-const schema = {
-  c: "1604C", t: "Test return", rev: "2018", freq: "Annual", pages: 1, n: 4, q: 1,
-  parts: [
-    {
-      n: "Part I · Background Information",
-      items: [
-        { no: "11", l: "In case of overwithholding/overremittance after the year-end adjustments on compensation, have you released the refund/s to your employee/s?", f: [{ k: K("releasedOfFunds_1"), t: "radio", l: "Yes" }, { k: K("releasedOfFunds_2"), t: "radio", l: "No" }] },
-        { no: "12", l: "Total amount of overremittance on Tax withheld under compensation", f: [{ k: K("txt12"), t: "money", l: "Total amount of overremittance" }] },
-      ],
-    },
-    {
-      n: "Part II · Summary of Remittances per BIR Form No. 1601-C",
-      items: [
-        {
-          no: "", l: "January to December (Part II and its Continuation)", rows: 3,
-          cols: COLS.map((l, c) => ({ l, t: TYPES[c], ...(c === 6 ? { c: 1 } : {}) })),
-          keys: MONTHS.map((_m, r) => STEMS.map((s) => K(`${s}${r + 1}`))),
-          row_labels: { caption: "Month", rows: MONTHS },
-        },
-        { no: "", l: "TOTAL", f: [{ k: K("txtSched1TaxWheldTotal"), t: "money", l: "Taxes Withheld", c: 1 }, { k: K("txtSched1Total"), t: "money", l: "Total Amount Remitted", c: 1 }] },
-      ],
-    },
-    {
-      n: "1604F",
-      items: [
-        { no: "11", l: "Are there payees availing of tax relief under Special Law or International Tax Treaty?", f: [{ k: F("taxRelief_1"), t: "radio", l: "Yes" }, { k: F("taxRelief_2"), t: "radio", l: "No" }] },
-        { no: "11A", l: "If yes, specify", f: [{ k: F("availedTaxRelief"), t: "text", l: "If yes, specify" }] },
-        {
-          no: "", l: "Schedule 1 – Remittance per BIR Form No. 1601-FQ on Final Taxes Withheld", rows: 4,
-          cols: [{ l: "Date of Remittance (MM/DD/YYYY)", t: "date" }, { l: "Taxes Withheld", t: "money" }],
-          keys: QUARTERS.map((_q, r) => [F(`txtSched1Date${r + 1}`), F(`txtSched1TaxWheld${r + 1}`)]),
-          row_labels: { caption: "Quarter", rows: QUARTERS },
-        },
-        { no: "", l: "A table with no printed row captions", rows: 2, cols: [{ l: "Plain", t: "text" }], keys: [["plain1"], ["plain2"]] },
-      ],
-    },
-  ],
-};
+const FIX = JSON.parse(fs.readFileSync(new URL("tools/fixtures/form_1604_page.json", root), "utf8"));
+const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
 
 const entities = [], tasks = [], texts = [], timers = [], undos = [];
 const ids = new Set();
@@ -107,7 +63,7 @@ function element() {
 }
 function act(fn, ...args) { return fn(...args, context()); }
 function mount(e) { if (e?.view && e.dirty && !e.released) { e.dirty = false; const old = owner; owner = e; e.view.render(context(e)); owner = old; } }
-const InputState = { new({ value = "" } = {}) { let text = value; const on = {}; return { value: () => text, set_value: (v) => { text = v; }, on(ev, fn) { on[ev] = fn; }, release() { return true; } }; } };
+const InputState = { new({ value = "" } = {}) { let text = value; const on = {}; return { value: () => text, set_value: (v) => { text = v; }, on(ev, fn) { on[ev] = fn; }, fire(ev) { on[ev]?.({}, context()); }, release() { return true; } }; } };
 const CalendarState = { new() { return { set_value() {}, value: () => null, year: () => 2026, month: () => 10, today: () => "2026-10-17", month_days: () => [[]], on() {}, release() { return true; } }; } };
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, Math, Number, String, Object, Array, window: { viewport_size: () => ({ width: 1400, height: 900 }) } });
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
@@ -132,24 +88,12 @@ await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": c
 await mod.evaluate();
 const { FormPageActions, renderFormPage, renderRemovalConfirm } = mod.namespace;
 
-let hostValues = {
-  [K("releasedOfFunds_1")]: "true", [K("releasedOfFunds_2")]: "false", [K("txt12")]: "1,234.50",
-  [K("txtSched1TaxWheldTotal")]: "1,000.00", [K("txtSched1Total")]: "1,075.00",
-  [K("txtSched1Date1")]: "01/10/2026", [K("txtSched1TaxWheld1")]: "1,000.00", [K("txtSched1TotalAmt1")]: "1,075.00",
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// The host's values for a draft it returned.
+const valuesFor = (code, draft) => {
+  const f = FIX[code];
+  return same(draft, f.cleared.draft) ? f.cleared.values : f.typed.values;
 };
-// What the host shows for a draft's answers.
-const shown = (d) => ({
-  [K("txt12")]: d.overremittance ? "1,234.50" : "0.00",
-  [K("releasedOfFunds_1")]: String(d.refunds_released), [K("releasedOfFunds_2")]: String(!d.refunds_released),
-  [F("taxRelief_1")]: String(d.tax_relief), [F("taxRelief_2")]: String(!d.tax_relief), [F("availedTaxRelief")]: d.relief,
-});
-hostValues = { ...hostValues, ...shown({ refunds_released: true, overremittance: 1234.5, tax_relief: true, relief: "PEZA" }) };
-const opened = () => ({
-  draft: { id: 7, refunds_released: true, overremittance: 1234.5, tax_relief: true, relief: "PEZA" }, status: "Draft", editable: true, values: { ...hostValues }, options: {},
-  locks: { [K("txtSched1TaxWheldTotal")]: "computed by BIR's own formulas", [K("txtSched1Total")]: "computed by BIR's own formulas" },
-  lock_notes: {}, profile: [], profile_edit: [], sample: false, blank: [], needs: {},
-  off: {}, penalties: [], pools: {}, errors: [],
-});
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
   invalidate() {}, toast() {}, startNewReturn() {},
@@ -159,30 +103,27 @@ const app = {
     write(name, ...args) { calls.push([name, ...args]); return { id: 7, status: "Draft", draft: args[1] }; },
     call(name, ...args) {
       calls.push([name, ...args]);
-      if (name === "screen_form_schema") return schema;
-      if (name === "screen_form_open") return Promise.resolve(opened());
+      if (name === "screen_form_schema") return FIX[args[0]].schema;
+      if (name === "screen_form_open") {
+        const f = FIX[args[1]];
+        return Promise.resolve({
+          draft: f.typed.draft, status: "Draft", editable: true, values: { ...f.typed.values }, options: {},
+          locks: f.locks, lock_notes: f.lock_notes, profile: [], profile_edit: [], sample: false, blank: [], needs: {},
+          off: {}, penalties: [], pools: {}, errors: [],
+        });
+      }
       if (name === "screen_form_fill") {
-        // The host: item 11 No clears item 12 and says so (its own test pins
-        // the message).
-        const draft = { ...args[1] }, edits = args[2];
-        let removes = null;
-        if (edits[F("taxRelief_2")] === "true" && draft.tax_relief) {
-          if (draft.relief) removes = { message: F_MESSAGE, done: "Cleared item 11A", rows: 0 };
-          draft.tax_relief = false;
-          draft.relief = "";
+        const [code, draft, edits] = args;
+        const f = FIX[code];
+        const no = Object.entries(f.no).every(([k, v]) => edits[k] === v);
+        if (no && same(draft, f.typed.draft)) {
+          return { draft: f.cleared.draft, values: { ...f.cleared.values }, options: {}, rejected: {}, penalties: [], pools: {}, removes: f.cleared.removes };
         }
-        if (edits[K("releasedOfFunds_2")] === "true" && draft.refunds_released) {
-          if (draft.overremittance) removes = { message: MESSAGE, done: "Cleared items 11A, 12 and 13", rows: 0 };
-          draft.refunds_released = false;
-          draft.overremittance = 0;
-        }
-        if (edits[K("releasedOfFunds_1")] === "true") draft.refunds_released = true;
-        const values = { ...hostValues, ...edits, ...shown(draft) };
-        return { draft, values, options: {}, rejected: {}, penalties: [], pools: {}, removes };
+        return { draft, values: { ...valuesFor(code, draft), ...edits }, options: {}, rejected: {}, penalties: [], pools: {}, removes: null };
       }
       if (name === "screen_form_validate") {
-        const d = args[1];
-        return Promise.resolve({ draft: d, values: { ...hostValues, ...shown(d) }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
+        const [code, draft] = args;
+        return Promise.resolve({ draft, values: { ...valuesFor(code, draft) }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
       }
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
@@ -194,89 +135,93 @@ const ui = app.formUi;
 const cx = context();
 async function settle() { while (tasks.length) await Promise.all(tasks.splice(0)); }
 function frame() { owner = null; texts.length = 0; ids.clear(); for (const e of entities) e.dirty = true; renderFormPage(cx, app, 1056); }
-ui.open({ code: "1604C", tin: "12345678800000", year: 2026, period: 0 }, cx);
-await settle();
-for (let i = 0; i < schema.parts.length; i++) ui.ensureInputs(i, cx);
-ui.state.openParts = new Set(schema.parts.map((_p, i) => i));
-frame();
-
-// ---- Part II: the printed heads, months and TOTAL row.
-for (const head of COLS) assert.ok(texts.includes(head), `column head ${head}`);
-assert.ok(texts.includes("Month"), "the row captions' head");
-for (const month of MONTHS) assert.ok(texts.includes(month), `row caption ${month}`);
-assert.ok(ids.has(`fp-table-${K("txtSched1Date1")}`), "one table");
-assert.ok(texts.includes("TOTAL"), "the TOTAL row's caption");
-assert.ok(texts.includes("1,075.00"), "a computed total shows its value");
-assert.ok(!texts.some((t) => /^Schedule \d (month|quarter) \d/.test(t)), "no key-text row numbers");
-for (const quarter of QUARTERS) assert.ok(texts.includes(quarter), `1604F row caption ${quarter}`);
-assert.ok(texts.includes("Quarter"), "1604F's row captions' head");
-// Printed captions stand in for the numbers: drawn again without its
-// captions, each captioned table gains a "#" head and its row numbers (the
-// 1604C table 1-3, the 1604F quarters 1-4); the uncaptioned table has them
-// either way.
-{
-  const count = (t) => texts.filter((x) => x === t).length;
-  const asIs = Object.fromEntries(["#", "1", "2", "3", "4"].map((t) => [t, count(t)]));
-  const captioned = ui.state.schema.parts.flatMap((p) => p.items).filter((it) => it.row_labels);
-  assert.equal(captioned.length, 2);
-  const saved = captioned.map((it) => it.row_labels);
-  for (const it of captioned) delete it.row_labels;
-  frame();
-  assert.ok(!MONTHS.some((m) => texts.includes(m)), "without captions no month shows");
-  for (const [t, more] of [["#", 2], ["1", 2], ["2", 2], ["3", 2], ["4", 1]]) assert.equal(count(t) - asIs[t], more, `captions replace ${t}`);
-  captioned.forEach((it, i) => (it.row_labels = saved[i]));
-  frame();
-}
-console.log("PASS a Part II schedule shows its printed heads, row captions and TOTAL row.");
-
-// ---- Item 11 No asks first.
 const click = (id) => { const fn = clicks.get(id); assert.ok(fn, `button ${id}`); act(fn, {}); };
 const ask = () => { clicks.clear(); dismiss.clear(); texts.length = 0; renderRemovalConfirm(cx, app); };
-const no = { [K("releasedOfFunds_1")]: "false", [K("releasedOfFunds_2")]: "true" };
-const kept = ui.state.draft;
-ui.choose(no, cx);
-assert.equal(app.overlay, "removal", "item 11 No asks first");
-assert.equal(ui.state.draft, kept, "the draft is the old one while it asks");
-ask();
-assert.ok(texts.includes(MESSAGE), "with what it clears");
-click("removal-cancel");
-assert.equal(app.overlay, null, "Cancel closes it");
-assert.equal(ui.state.draft, kept, "Cancel keeps item 12");
-assert.equal(ui.state.values[K("releasedOfFunds_1")], "true", "and the Yes");
-ui.choose(no, cx);
-ask();
-click("removal-continue");
-await settle();
-assert.equal(ui.state.draft.overremittance, 0, "Continue clears item 12");
-assert.equal(ui.state.values[K("releasedOfFunds_2")], "true", "and answers No");
-assert.equal(undos.at(-1).message, "Cleared items 11A, 12 and 13.");
-act(undos.at(-1).undo);
-await settle();
-assert.equal(ui.state.draft.overremittance, 1234.5, "Undo brings item 12 back");
-assert.equal(ui.state.values[K("releasedOfFunds_1")], "true", "and the Yes");
-console.log("PASS 1604C item 11 No asks first; Cancel keeps, Continue clears, Undo brings back.");
+const count = (t) => texts.filter((x) => x === t).length;
 
-// ---- 1604F item 11 No asks first, too.
-{
-  const noF = { [F("taxRelief_1")]: "false", [F("taxRelief_2")]: "true" };
-  const keptF = ui.state.draft;
-  ui.choose(noF, cx);
-  assert.equal(app.overlay, "removal", "1604F item 11 No asks first");
+async function openForm(code) {
+  ui.open({ code, tin: "12345678800000", year: 2026, period: 0 }, cx);
+  await settle();
+  for (let i = 0; i < ui.state.schema.parts.length; i++) ui.ensureInputs(i, cx);
+  ui.state.openParts = new Set(ui.state.schema.parts.map((_p, i) => i));
+  frame();
+}
+
+for (const code of ["1604C", "1604F"]) {
+  const f = FIX[code];
+  await openForm(code);
+  // ---- Part II: printed heads, captions in place of numbers, TOTAL rows.
+  const tables = ui.state.schema.parts.flatMap((p) => p.items).filter((it) => it.rows);
+  assert.equal(tables.length, code === "1604C" ? 1 : 3, code);
+  for (const it of tables) {
+    assert.equal(it.numbered, false, `${code} ${it.l}: the layout replaces the numbers`);
+    assert.ok(texts.includes(it.l), `${code}: the title ${it.l}`);
+    assert.ok(texts.includes(it.row_labels.caption), `${code}: ${it.row_labels.caption}`);
+    for (const c of it.cols) assert.ok(texts.includes(c.l), `${code}: column ${c.l}`);
+    for (const r of it.row_labels.rows) assert.ok(texts.includes(r), `${code}: row ${r}`);
+  }
+  assert.ok(count("TOTAL") >= tables.length, `${code}: a TOTAL row per schedule`);
+  // Without `numbered: false` each table gains its "#" head and numbers.
+  const before = Object.fromEntries(["#", "1", "4", "12"].map((t) => [t, count(t)]));
+  for (const it of tables) delete it.numbered;
+  frame();
+  for (const it of tables) for (const r of it.row_labels.rows) assert.ok(texts.includes(r), `${code}: captions stay beside numbers`);
+  const rows = tables.map((it) => it.rows);
+  assert.equal(count("#") - before["#"], tables.length, `${code}: a # column per table`);
+  assert.equal(count("1") - before["1"], tables.length, `${code}: row 1 numbered`);
+  assert.equal(count("4") - before["4"], rows.filter((n) => n >= 4).length, `${code}: row 4 numbered`);
+  assert.equal(count("12") - before["12"], rows.filter((n) => n >= 12).length, `${code}: row 12 numbered`);
+  for (const it of tables) it.numbered = false;
+  frame();
+  console.log(`PASS ${code} Part II shows its printed heads, row captions in place of numbers, and TOTAL rows.`);
+
+  // ---- Item 11 No asks first.
+  const kept = ui.state.draft;
+  assert.ok(same(kept, f.typed.draft), `${code}: the typed return`);
+  ui.choose(f.no, cx);
+  assert.equal(app.overlay, "removal", `${code} item 11 No asks first`);
+  assert.equal(ui.state.draft, kept, `${code}: the draft is the old one while it asks`);
   ask();
-  assert.ok(texts.includes(F_MESSAGE), "with what it clears");
+  assert.ok(texts.includes(f.cleared.removes.message), `${code}: ${f.cleared.removes.message}`);
   click("removal-cancel");
-  assert.equal(ui.state.draft, keptF, "Cancel keeps item 11A");
-  assert.equal(ui.state.values[F("availedTaxRelief")], "PEZA");
-  ui.choose(noF, cx);
+  assert.equal(app.overlay, null, `${code}: Cancel closes it`);
+  assert.equal(ui.state.draft, kept, `${code}: Cancel keeps what was typed`);
+  ui.choose(f.no, cx);
   ask();
   click("removal-continue");
   await settle();
-  assert.equal(ui.state.draft.relief, "", "Continue clears item 11A");
-  assert.equal(ui.state.values[F("taxRelief_2")], "true", "and answers No");
-  assert.equal(undos.at(-1).message, "Cleared item 11A.");
+  assert.ok(same(ui.state.draft, f.cleared.draft), `${code}: Continue takes the host's draft`);
+  if (code === "1604F") {
+    assert.equal(kept.tax_relief_details, "PEZA");
+    assert.equal(ui.state.draft.tax_relief_details, "", "item 11A is cleared");
+    assert.equal(ui.state.values["frm1604f:taxRelief_2"], "true", "and item 11 reads No");
+  } else {
+    assert.equal(ui.state.draft.refund_date, "", "item 11A is cleared");
+    assert.equal(ui.state.draft.overremittance, 0, "item 12 too");
+  }
+  assert.equal(undos.at(-1).message, `${f.cleared.removes.done}.`, `${code}: the host's Undo text`);
   act(undos.at(-1).undo);
   await settle();
-  assert.equal(ui.state.draft.relief, "PEZA", "Undo brings item 11A back");
-  assert.equal(ui.state.values[F("taxRelief_1")], "true", "and the Yes");
+  assert.ok(same(ui.state.draft, f.typed.draft), `${code}: Undo brings the typed return back`);
+  if (code === "1604F") assert.equal(ui.state.draft.tax_relief_details, "PEZA");
+  console.log(`PASS ${code} item 11 No asks first; Cancel keeps, Continue clears, Undo brings back.`);
 }
-console.log("PASS 1604F item 11 No asks first; Cancel keeps, Continue clears, Undo brings back.");
+
+// ---- A date box with text that is not a date (a stored legacy "4/10/26").
+{
+  const k = "frm1604f:txtSched1Date2";
+  const input = ui.state.inputs.get(k);
+  assert.ok(input, "the date box has an input");
+  input.set_value("4/10/26");
+  input.fire("focus");
+  input.fire("blur");
+  assert.ok(!Object.values(ui.state.dateErrors || {}).includes(DATE_ERROR), "untouched, it blurs quietly");
+  input.fire("change");
+  input.fire("blur");
+  assert.ok(Object.values(ui.state.dateErrors || {}).includes(DATE_ERROR), "edited, it says what a date is");
+  input.set_value("04/10/2026");
+  input.fire("change");
+  input.fire("blur");
+  assert.ok(!Object.values(ui.state.dateErrors || {}).includes(DATE_ERROR), "a whole date clears the message");
+}
+console.log("PASS a date box says it holds no date only after the filer edits it.");
