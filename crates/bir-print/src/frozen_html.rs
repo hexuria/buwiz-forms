@@ -60,13 +60,16 @@ pub fn html_2551q() -> &'static str {
 /// Rewrite matching `<input name>` tags. Comb slots (`data-slot-index`) receive
 /// one character each. Unknown keys are ignored. `id=` is never changed.
 pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
-    fill_by_name_with_cells(html, fields, &BTreeMap::new())
+    fill_by_name_with_cells(html, fields, &BTreeMap::new(), &BTreeMap::new())
 }
 
+/// `plan`: the stacked-line cells whose item's text overflows its boxes
+/// ([`line_group_plan`]), printed as planned instead of from their key.
 fn fill_by_name_with_cells(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &BTreeMap<String, Vec<String>>,
+    plan: &BTreeMap<String, CellFill>,
 ) -> String {
     let tags = input_tags(html);
     if tags.is_empty() {
@@ -88,6 +91,10 @@ fn fill_by_name_with_cells(
             let Some(indices) = grouped.get(input_name) else {
                 continue;
             };
+            // A stacked line whose item overflows prints as planned below.
+            if via_cell && plan.contains_key(input_name) {
+                continue;
+            }
             let target = TextTarget {
                 name,
                 input_name,
@@ -97,8 +104,312 @@ fn fill_by_name_with_cells(
             fill_text_input(html, &tags, indices, &target, &mut replacements);
         }
     }
+    // An overflowing stacked item: re-split over its boxes, or, past them,
+    // every slot left empty and each line's part laid over its cell as
+    // plain type.
+    for (cell, fill) in plan {
+        let Some(indices) = grouped.get(cell.as_str()) else {
+            continue;
+        };
+        match fill {
+            CellFill::Boxes(key, line) => {
+                let target = TextTarget {
+                    name: key,
+                    input_name: cell,
+                    value: line,
+                    via_cell: true,
+                };
+                fill_text_input(html, &tags, indices, &target, &mut replacements);
+            }
+            CellFill::Plain(text, size) => {
+                for &index in indices {
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, "", None),
+                    ));
+                }
+                if let Some((at, line)) =
+                    overflow_input(html, cell, text, *size).filter(|_| !text.is_empty())
+                {
+                    replacements.push((at, at, line));
+                }
+            }
+        }
+    }
 
     apply_replacements(html, replacements)
+}
+
+/// How one stacked-line cell prints when its item's text overflows the
+/// boxes as the print map laid it out.
+#[derive(Debug, Clone, PartialEq)]
+enum CellFill {
+    /// The item re-split over its boxes (it fits them): this line,
+    /// printed as the cell's key (`.0`) prints.
+    Boxes(String, String),
+    /// Past the boxes: the slots stay empty and this part of the text
+    /// prints as plain type of `size` pt over the cell.
+    Plain(String, f64),
+}
+
+/// The type a comb's boxes print in: the largest an overflow line uses.
+const PLAIN_MAX_PT: f64 = 9.0;
+/// Arimo averages about 0.55 em per character; keep a small margin.
+const EM_PER_CHAR: f64 = 0.58;
+
+/// One stacked line of a printed item: its cell, the key that fills it,
+/// its boxes and its width (pt).
+#[derive(Debug, Clone)]
+struct LineCell {
+    cell: String,
+    key: String,
+    slots: usize,
+    width: f64,
+}
+
+/// A printed caption's stem and line number: "9 Registered Address" and
+/// "9 Registered Address (second line)" are lines 0 and 1 of one item.
+fn caption_line(caption: &str) -> (String, usize) {
+    let lower = caption.trim().to_ascii_lowercase();
+    const MARKERS: [(&str, usize); 12] = [
+        (" (first line)", 0),
+        (" (second line)", 1),
+        (" (third line)", 2),
+        (", first line", 0),
+        (", second line", 1),
+        (", third line", 2),
+        (" (line 1)", 0),
+        (" (line 2)", 1),
+        (" (line 3)", 2),
+        (", line 1", 0),
+        (", line 2", 1),
+        (", line 3", 2),
+    ];
+    for (marker, line) in MARKERS {
+        if let Some(stem) = lower.strip_suffix(marker) {
+            return (stem.trim().to_string(), line);
+        }
+    }
+    (lower, 0)
+}
+
+/// A comb cell's boxes and width (pt), read from its `<div id>`.
+fn comb_cell(html: &str, cell: &str) -> Option<(usize, f64)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let tag = &html[open..open + html[open..].find('>')?];
+    if attr(tag, "data-field-kind") != Some("comb") {
+        return None;
+    }
+    let slots = attr(tag, "data-comb-slots")?.parse().ok()?;
+    let width_at = tag.find(";width:")? + ";width:".len();
+    let width = tag[width_at..].split("pt").next()?.parse().ok()?;
+    Some((slots, width))
+}
+
+/// The sheet's items printed over stacked comb lines (a two-line address,
+/// a three-line registered name), each its lines in order: text joins
+/// whose captions name lines 1, 2 (and 3) of one item.
+fn line_groups(html: &str, cells: &WriterCells) -> Vec<Vec<LineCell>> {
+    let mut items: BTreeMap<String, BTreeMap<usize, LineCell>> = BTreeMap::new();
+    for (key, ids) in &cells.joins {
+        let Some(first) = ids.first() else {
+            continue;
+        };
+        let (Some(caption), Some((slots, width))) =
+            (cells.captions.get(first), comb_cell(html, first))
+        else {
+            continue;
+        };
+        let (stem, line) = caption_line(caption);
+        items.entry(stem).or_default().insert(
+            line,
+            LineCell {
+                cell: first.clone(),
+                key: key.clone(),
+                slots,
+                width,
+            },
+        );
+    }
+    items
+        .into_values()
+        .filter(|lines| lines.len() >= 2 && lines.keys().copied().eq(0..lines.len()))
+        .map(|lines| lines.into_values().collect())
+        .collect()
+}
+
+/// Lay `text` over lines of `slots` boxes, each line but the last ending at
+/// the last space run that starts within its boxes (kept at its end), or
+/// at its last box for a word longer than the line; the last line takes
+/// the rest (the page's own split, `combs::split_lines` in bir-shell).
+fn split_lines(text: &str, slots: &[usize]) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut rest: Vec<char> = text.trim().chars().collect();
+    for (i, &n) in slots.iter().enumerate() {
+        if i + 1 == slots.len() || rest.len() <= n {
+            lines.push(rest.drain(..).collect());
+            continue;
+        }
+        let space = (1..=n)
+            .rev()
+            .find(|&p| rest[p].is_whitespace() && !rest[p - 1].is_whitespace());
+        let cut = match space {
+            Some(p) => {
+                let mut end = p;
+                while end < rest.len() && rest[end].is_whitespace() {
+                    end += 1;
+                }
+                end
+            }
+            None => n,
+        };
+        lines.push(rest.drain(..cut).collect());
+    }
+    lines
+}
+
+/// The item's lines put back together: end to end where a line ends or
+/// the next starts with a space, or the line runs past its boxes (a field
+/// map's fixed-width cut, 1600PT's and 2552's 80 characters), else with
+/// one space (a map that broke at a space and dropped it). A word longer
+/// than a whole line, cut at its last box, reads as two words.
+fn join_lines(lines: &[String], slots: &[usize]) -> String {
+    let mut text = String::new();
+    let mut previous: Option<usize> = None;
+    for (i, line) in lines.iter().enumerate() {
+        if line.is_empty() {
+            continue;
+        }
+        let glued = previous.is_none_or(|j| {
+            text.ends_with(char::is_whitespace)
+                || line.starts_with(char::is_whitespace)
+                || lines[j].chars().count() > slots[j]
+        });
+        if !glued {
+            text.push(' ');
+        }
+        text.push_str(line);
+        previous = Some(i);
+    }
+    text
+}
+
+/// The type size (pt) `chars` characters fit `width` pt at, at most
+/// [`PLAIN_MAX_PT`].
+fn fit_size(width: f64, chars: usize) -> f64 {
+    if chars == 0 {
+        return PLAIN_MAX_PT;
+    }
+    ((width - 2.0).max(1.0) / (chars as f64 * EM_PER_CHAR)).min(PLAIN_MAX_PT)
+}
+
+/// `text` as plain type over lines of `widths` pt, broken only between
+/// words: the breaks that let the largest common type size fit, and among
+/// those the nearest each line's share of the width, so the text runs
+/// across every line. Each line's part, and the size.
+fn plain_lines(text: &str, widths: &[f64]) -> (Vec<String>, f64) {
+    fn walk(level: usize, words: usize, cuts: &mut Vec<usize>, visit: &mut dyn FnMut(&[usize])) {
+        if level == cuts.len() - 1 {
+            visit(cuts);
+            return;
+        }
+        for cut in cuts[level - 1]..=words {
+            cuts[level] = cut;
+            walk(level + 1, words, cuts, visit);
+        }
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let total: f64 = widths.iter().sum();
+    let length =
+        words.iter().map(|w| w.chars().count()).sum::<usize>() + words.len().saturating_sub(1);
+    let line_text = |cuts: &[usize], k: usize| words[cuts[k]..cuts[k + 1]].join(" ");
+    let mut cuts = vec![0usize; widths.len() + 1];
+    cuts[widths.len()] = words.len();
+    let mut best: Option<(i64, f64, Vec<usize>)> = None;
+    let mut visit = |cuts: &[usize]| {
+        let (mut size, mut deviation, mut so_far, mut share) = (PLAIN_MAX_PT, 0.0, 0usize, 0.0);
+        for (k, width) in widths.iter().enumerate() {
+            let chars = line_text(cuts, k).chars().count();
+            size = size.min(fit_size(*width, chars));
+            so_far += chars;
+            share += width / total;
+            deviation += (so_far as f64 - share * length as f64).abs();
+        }
+        // Sizes within a hundredth of a point are the same size.
+        let rank = (size * 100.0).floor() as i64;
+        if best
+            .as_ref()
+            .is_none_or(|(r, d, _)| rank > *r || (rank == *r && deviation < *d))
+        {
+            best = Some((rank, deviation, cuts.to_vec()));
+        }
+    };
+    walk(1, words.len(), &mut cuts, &mut visit);
+    let cuts = best.map(|(_, _, cuts)| cuts).unwrap_or(cuts);
+    let lines: Vec<String> = (0..widths.len()).map(|k| line_text(&cuts, k)).collect();
+    let size = lines
+        .iter()
+        .zip(widths)
+        .map(|(line, width)| fit_size(*width, line.chars().count()))
+        .fold(PLAIN_MAX_PT, f64::min);
+    (lines, size)
+}
+
+/// For each stacked-line item whose text overflows a line's boxes as the
+/// print map laid it out, how each of its cells prints: re-split over the
+/// boxes while the whole text fits them, else plain type across its lines,
+/// shrunk until it fits. An item whose lines all fit their boxes prints
+/// exactly as its keys say (no entry).
+fn line_group_plan(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &WriterCells,
+) -> BTreeMap<String, CellFill> {
+    let mut plan = BTreeMap::new();
+    for group in line_groups(html, cells) {
+        // As the fill prints a text join: in BIR capital letters.
+        let values: Vec<String> = group
+            .iter()
+            .map(|line| {
+                let value = fields.get(&line.key).map(String::as_str).unwrap_or("");
+                if is_email_key(&line.key) {
+                    value.to_string()
+                } else {
+                    value.to_ascii_uppercase()
+                }
+            })
+            .collect();
+        let slots: Vec<usize> = group.iter().map(|line| line.slots).collect();
+        if values
+            .iter()
+            .zip(&slots)
+            .all(|(value, n)| value.chars().count() <= *n)
+        {
+            continue;
+        }
+        let text = join_lines(&values, &slots).trim().to_string();
+        let boxed = split_lines(&text, &slots);
+        let fits = boxed
+            .iter()
+            .zip(&slots)
+            .all(|(line, n)| line.trim_end().chars().count() <= *n);
+        if fits {
+            for (line, part) in group.iter().zip(boxed) {
+                plan.insert(
+                    line.cell.clone(),
+                    CellFill::Boxes(line.key.clone(), part.trim_end().to_string()),
+                );
+            }
+            continue;
+        }
+        let widths: Vec<f64> = group.iter().map(|line| line.width).collect();
+        let (parts, size) = plain_lines(&text, &widths);
+        for (line, part) in group.iter().zip(parts) {
+            plan.insert(line.cell.clone(), CellFill::Plain(part, size));
+        }
+    }
+    plan
 }
 
 /// Writer key `name` printed into input `input_name`: a stamped `name=`
@@ -168,10 +479,11 @@ fn fill_text_input(
             return;
         }
         let chars: Vec<char> = print.chars().collect();
-        // An email (or a `derived:line:` print value) longer than its
-        // comb prints whole on one line across the comb instead of losing
-        // the characters past the last box.
-        let whole_line = is_email_key(name) || name.starts_with("derived:line:");
+        // Text longer than its comb (a long name, an email, a
+        // `derived:line:` print value) prints whole as plain type across
+        // the comb, shrunk to fit, instead of losing the characters past
+        // the last box.
+        let whole_line = via_cell || is_email_key(name) || name.starts_with("derived:line:");
         let overflow = (whole_line && chars.len() > ordered.len())
             .then(|| comb_overflow_line(html, input_name, print, chars.len()))
             .flatten();
@@ -477,6 +789,9 @@ struct WriterCells {
     /// Text joins: one writer key, every cell it prints in (page-1 box and
     /// the later pages' header repeats).
     joins: BTreeMap<String, Vec<String>>,
+    /// A text join's first cell -> its printed caption (`printed`), which
+    /// says when cells are the stacked lines of one item.
+    captions: BTreeMap<String, String>,
     money_joins: Vec<MoneyJoin>,
     xbox_joins: Vec<XboxJoin>,
     peso_joins: Vec<PesoJoin>,
@@ -491,6 +806,7 @@ impl WriterCells {
     fn empty() -> Self {
         Self {
             joins: BTreeMap::new(),
+            captions: BTreeMap::new(),
             money_joins: Vec::new(),
             xbox_joins: Vec::new(),
             peso_joins: Vec::new(),
@@ -679,6 +995,9 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         let key = row_key(row, "join")?;
         let ids = cell_ids(row, key, "html_id", "html_ids")?;
         claim(key)?;
+        if let (Some(first), Some(caption)) = (ids.first(), required_str(row, "printed")) {
+            cells.captions.insert(first.clone(), caption.to_string());
+        }
         cells.joins.insert(key.to_string(), ids);
     }
 
@@ -1359,7 +1678,8 @@ fn fill_bundle(
 ) -> Result<String, String> {
     let cells = writer_cells(slug)?;
     validate_writer_cells(html, slug, &cells)?;
-    let filled = fill_by_name_with_cells(html, fields, &cells.joins);
+    let plan = line_group_plan(html, fields, &cells);
+    let filled = fill_by_name_with_cells(html, fields, &cells.joins, &plan);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
     let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -1694,19 +2014,51 @@ fn base64_encode(bytes: &[u8]) -> String {
 /// insert position just inside the cell and the input tag.
 fn comb_overflow_line(html: &str, cell: &str, text: &str, len: usize) -> Option<(usize, String)> {
     let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let close = open + html[open..].find('>')?;
-    let tag = &html[open..close];
+    let tag = &html[open..open + html[open..].find('>')?];
     let width_at = tag.find(";width:")? + ";width:".len();
     let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
-    // Arimo averages about 0.55 em per character; keep a small margin.
-    let size = (width / (len as f64 * 0.58)).clamp(4.0, 9.0);
+    overflow_input(html, cell, text, fit_size(width, len))
+}
+
+/// [`comb_overflow_line`] at type `size` (pt). The input names the cell
+/// it lies over (`data-overflow-of`).
+fn overflow_input(html: &str, cell: &str, text: &str, size: f64) -> Option<(usize, String)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let close = open + html[open..].find('>')?;
     Some((
         close + 1,
         format!(
-            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:left;padding-left:1pt;z-index:1\">",
+            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"{cell}\">",
             html_escape(text)
         ),
     ))
+}
+
+/// What a filled document prints over comb cell `cell`: its boxes'
+/// characters in slot order, or, where every box is empty, the plain line
+/// laid over the cell (`data-overflow-of`) with its type size.
+pub fn printed_cell(document: &str, cell: &str) -> (String, Option<f64>) {
+    let boxes = printed_text(document, cell);
+    if !boxes.trim().is_empty() {
+        return (boxes, None);
+    }
+    let needle = format!(" data-overflow-of=\"{cell}\">");
+    let Some(end) = document.find(&needle) else {
+        return (boxes, None);
+    };
+    let start = document[..end].rfind("<input").unwrap_or(0);
+    let tag = &document[start..end + needle.len()];
+    let text = attr(tag, "value")
+        .unwrap_or("")
+        .replace("&quot;", "\"")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&");
+    let size = tag
+        .find("font-size:")
+        .and_then(|at| tag[at + "font-size:".len()..].split("pt").next())
+        .and_then(|size| size.parse().ok());
+    (text, size)
 }
 
 /// Email inputs (`txtEmail`, `txtI11Email`, `txtPg1Pt1I12Email`, ...) are
@@ -1976,7 +2328,7 @@ mod tests {
         fields.insert("k".to_string(), "Ab1".to_string());
         let mut cells = BTreeMap::new();
         cells.insert("k".to_string(), vec!["a".to_string(), "b".to_string()]);
-        let doc = super::fill_by_name_with_cells(&html, &fields, &cells);
+        let doc = super::fill_by_name_with_cells(&html, &fields, &cells, &BTreeMap::new());
         assert_eq!(comb_values(&doc, "a"), ["A", "B", "1", ""]);
         assert_eq!(comb_values(&doc, "b"), ["A", "B", "1"]);
     }
@@ -2357,7 +2709,7 @@ mod tests {
             "frm1601c:txtTaxpayerName".to_string(),
             vec!["p1c36".to_string()],
         );
-        let filled = fill_by_name_with_cells(html, &fields, &cells);
+        let filled = fill_by_name_with_cells(html, &fields, &cells, &BTreeMap::new());
         assert_eq!(comb_text(&filled, "p1c36"), "AB");
         assert!(filled.contains("data-writer-value=\"AB\""));
         assert!(!filled.contains("data-writer-value=\"Ab\""));
@@ -3872,7 +4224,13 @@ mod tests {
         assert_eq!(comb_text(&html, "p2c5"), "123456788");
         assert_eq!(comb_text(&html, "p3c5"), "123456788");
         assert!(comb_text(&html, "p1c36").starts_with("EXEMPT FIXTURE FOUNDATION INC"));
-        assert!(comb_text(&html, "p2c6").starts_with("EXEMPT FIXTURE FOUNDATIO"));
+        // 29 characters past the page-2 header's 24 boxes: the whole name
+        // as plain type over the boxes (was cut at 24); at the boxes' 9 pt
+        // it fits, so it is not shrunk.
+        assert_eq!(comb_text(&html, "p2c6"), "");
+        let (header, size) = printed_cell(&html, "p2c6");
+        assert_eq!(header, "EXEMPT FIXTURE FOUNDATION INC");
+        assert_eq!(size, Some(9.0));
         assert_eq!(comb_text(&html, "p1c50"), "2010");
         assert_eq!(named_values(&html, "p1c19"), vec!["1".to_string()]);
         assert_eq!(named_values(&html, "p1c20"), vec!["2".to_string()]);
@@ -3883,7 +4241,9 @@ mod tests {
         assert_eq!(comb_text(&html, "p3c52"), "SAMPLE EXPENSE");
         assert_eq!(comb_text(&html, "p3c54"), "        5000");
         assert_eq!(comb_text(&html, "p3c58"), "");
-        assert_eq!(comb_text(&html, "p3c81"), "SAMPLE DEDUCTIO");
+        // Past its 15 boxes the description prints whole (was cut at 15).
+        assert_eq!(comb_text(&html, "p3c81"), "");
+        assert_eq!(printed_cell(&html, "p3c81").0, "SAMPLE DEDUCTION");
         assert_eq!(comb_text(&html, "p3c87"), "");
         assert_eq!(comb_text(&html, "p2c47"), "        1000");
         assert_eq!(comb_text(&html, "p1c83"), "      (1000)");
@@ -3968,5 +4328,253 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Every frozen sheet slug with a writer-cells file.
+    fn sheet_slugs() -> Vec<String> {
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let mut slugs: Vec<String> = std::fs::read_dir(root)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                entry
+                    .path()
+                    .join("writer-cells.json")
+                    .exists()
+                    .then(|| entry.file_name().to_string_lossy().into_owned())
+            })
+            .collect();
+        slugs.sort();
+        slugs
+    }
+
+    /// Upper-case text of exactly `len` characters: an address's words
+    /// with single spaces, never ending in a space.
+    fn words_of(len: usize) -> String {
+        const WORDS: [&str; 12] = [
+            "UNIT",
+            "1203",
+            "TWELFTH",
+            "FLOOR",
+            "CURVE",
+            "BUILDING",
+            "BONIFACIO",
+            "GLOBAL",
+            "CITY",
+            "TAGUIG",
+            "METRO",
+            "MANILA",
+        ];
+        let mut text = String::new();
+        for word in WORDS.iter().cycle() {
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            text.push_str(word);
+            if text.len() >= len {
+                break;
+            }
+        }
+        text.truncate(len);
+        if text.ends_with(' ') {
+            text.pop();
+            text.push('X');
+        }
+        assert_eq!(text.chars().count(), len);
+        text
+    }
+
+    /// An independent reading of a printed cell, straight from the
+    /// document's tags: the slot inputs' values, and the plain overlay
+    /// (`data-overflow-of`) with its type size.
+    fn read_cell(document: &str, cell: &str) -> (String, Option<(String, f64)>) {
+        let boxes: String = named_values(document, cell).concat();
+        let needle = format!("data-overflow-of=\"{cell}\"");
+        let overlay = document.find(&needle).map(|at| {
+            let start = document[..at].rfind("<input").unwrap();
+            let tag = &document[start..at];
+            let value = tag
+                .split("value=\"")
+                .nth(1)
+                .unwrap()
+                .split('"')
+                .next()
+                .unwrap();
+            let size: f64 = tag
+                .split("font-size:")
+                .nth(1)
+                .unwrap()
+                .split("pt")
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
+            (value.replace("&amp;", "&"), size)
+        });
+        (boxes, overlay)
+    }
+
+    /// Rules page question 4 (decided 2026-10-17) on every sheet's item
+    /// printed over stacked comb lines: text that fits the boxes prints
+    /// exactly as before; past them, the whole text prints as plain type
+    /// across every line, broken between words; too long for that at the
+    /// boxes' 9 pt, it shrinks until it fits. Nothing is lost.
+    #[test]
+    fn a_stacked_item_past_its_boxes_prints_whole_as_plain_type_on_every_sheet() {
+        let mut items = 0;
+        for slug in sheet_slugs() {
+            let loaded = bundle(&slug).unwrap();
+            let cells = writer_cells(&slug).unwrap();
+            for group in line_groups(loaded.html, &cells) {
+                items += 1;
+                let slots: Vec<usize> = group.iter().map(|l| l.slots).collect();
+                let capacity: usize = slots.iter().sum();
+                let fill = |values: &[String]| {
+                    let mut fields = BTreeMap::new();
+                    for (line, value) in group.iter().zip(values) {
+                        fields.insert(line.key.clone(), value.clone());
+                    }
+                    let document = filled_document(&slug, &fields).unwrap();
+                    let before = fill_by_name_with_cells(
+                        loaded.html,
+                        &fields,
+                        &cells.joins,
+                        &BTreeMap::new(),
+                    );
+                    (document, before)
+                };
+                // Fits: each line within its boxes prints exactly as the
+                // fill without this rule prints it.
+                let fitting: Vec<String> = slots.iter().map(|n| words_of((*n).min(12))).collect();
+                let (document, before) = fill(&fitting);
+                assert!(!document.contains("data-overflow-of"), "{slug}");
+                for (line, value) in group.iter().zip(&fitting) {
+                    assert_eq!(
+                        read_cell(&document, &line.cell),
+                        (value.clone(), None),
+                        "{slug}"
+                    );
+                    assert_eq!(
+                        read_cell(&before, &line.cell),
+                        (value.clone(), None),
+                        "{slug}"
+                    );
+                }
+                // Past the boxes: plain type, every line used, nothing lost,
+                // each line inside its cell. Fed whole into the first line,
+                // and as a print map cuts it (the first line at its boxes).
+                let plain_at_9: usize = group
+                    .iter()
+                    .map(|l| ((l.width - 2.0) / (9.0 * 0.58)) as usize)
+                    .sum();
+                for (len, shrunk) in [
+                    (90.max(capacity + 10), false),
+                    (200.max(plain_at_9 + 20), true),
+                ] {
+                    let text = words_of(len);
+                    let cut = text[..=slots[0]].rfind(' ').unwrap();
+                    let mut first_cut = vec![text[..cut].to_string(), text[cut + 1..].to_string()];
+                    first_cut.resize(group.len(), String::new());
+                    let mut whole = vec![text.clone()];
+                    whole.resize(group.len(), String::new());
+                    for values in [whole, first_cut] {
+                        let (document, _) = fill(&values);
+                        let mut parts = Vec::new();
+                        let mut sizes = Vec::new();
+                        for line in &group {
+                            let (boxes, overlay) = read_cell(&document, &line.cell);
+                            assert_eq!(boxes.trim(), "", "{slug} {}: boxes empty", line.cell);
+                            let (part, size) = overlay
+                                .unwrap_or_else(|| panic!("{slug} {}: a plain line", line.cell));
+                            assert!(!part.is_empty(), "{slug} {}: every line used", line.cell);
+                            assert!(
+                                part.chars().count() as f64 * 0.55 * size <= line.width,
+                                "{slug} {}: {part:?} at {size}pt fits {}pt",
+                                line.cell,
+                                line.width
+                            );
+                            assert_eq!(
+                                printed_cell(&document, &line.cell),
+                                (part.clone(), Some(size))
+                            );
+                            parts.push(part);
+                            sizes.push(size);
+                        }
+                        assert_eq!(parts.join(" "), text, "{slug}: the whole text, in order");
+                        assert!(
+                            sizes.iter().all(|s| (s - sizes[0]).abs() < 1e-9),
+                            "{slug}: one size {sizes:?}"
+                        );
+                        if shrunk {
+                            assert!(
+                                sizes[0] < 9.0,
+                                "{slug}: {len} characters shrink ({})",
+                                sizes[0]
+                            );
+                        } else {
+                            assert_eq!(
+                                sizes[0], 9.0,
+                                "{slug}: {len} characters at the boxes' size"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(items >= 40, "{items} stacked items");
+    }
+
+    /// A single-line name past its boxes prints whole as plain type across
+    /// them, shrunk to fit; within them it prints in the boxes as before.
+    #[test]
+    fn a_single_line_name_past_its_boxes_prints_whole_on_every_sheet() {
+        let mut names = 0;
+        for slug in sheet_slugs() {
+            let loaded = bundle(&slug).unwrap();
+            let cells = writer_cells(&slug).unwrap();
+            let stacked: BTreeSet<String> = line_groups(loaded.html, &cells)
+                .into_iter()
+                .flatten()
+                .map(|line| line.cell)
+                .collect();
+            for (key, ids) in &cells.joins {
+                let cell = &ids[0];
+                let caption = cells.captions.get(cell).map(|c| c.to_ascii_lowercase());
+                if !caption.is_some_and(|c| c.contains("name") && !c.contains("tin"))
+                    || stacked.contains(cell)
+                {
+                    continue;
+                }
+                let Some((slots, width)) = comb_cell(loaded.html, cell) else {
+                    continue;
+                };
+                names += 1;
+                let print = |value: &str| {
+                    let fields = BTreeMap::from([(key.clone(), value.to_string())]);
+                    filled_document(&slug, &fields).unwrap()
+                };
+                let short = words_of(slots.min(14));
+                let document = print(&short);
+                assert_eq!(
+                    read_cell(&document, cell),
+                    (short.clone(), None),
+                    "{slug} {key}"
+                );
+                let plain_at_9 = ((width - 2.0) / (9.0 * 0.58)) as usize;
+                for (len, shrunk) in [(slots + 5, false), (200.max(plain_at_9 + 20), true)] {
+                    let text = words_of(len);
+                    let document = print(&text);
+                    let (boxes, overlay) = read_cell(&document, cell);
+                    assert_eq!(boxes.trim(), "", "{slug} {key}");
+                    let (part, size) = overlay.unwrap_or_else(|| panic!("{slug} {key}: plain"));
+                    assert_eq!(part, text, "{slug} {key}: whole");
+                    assert!(len as f64 * 0.55 * size <= width, "{slug} {key}");
+                    if shrunk {
+                        assert!(size < 9.0, "{slug} {key}: {size}");
+                    }
+                }
+            }
+        }
+        assert!(names >= 40, "{names} single-line names");
     }
 }

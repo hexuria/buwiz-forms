@@ -9139,8 +9139,8 @@ mod tests {
     /// three-line one; 1702MX keeps three boxes (its first line is the whole
     /// address but its print reads the list), and the review's 1601C, 1701A,
     /// 1702EX and 1707 print their address through the print map's own lines,
-    /// so the sheet gives their boxes no slots. The print side is not
-    /// compared: how it shows an address past its boxes is open.
+    /// so the sheet gives their boxes no slots. The print side is
+    /// `a_long_pooled_address_prints_whole_on_every_pooled_form`.
     #[test]
     fn a_printed_address_over_stacked_lines_is_one_pool() {
         setup();
@@ -9309,8 +9309,7 @@ mod tests {
                 );
                 // The page value is the draft's whole address, and the XML
                 // carries it (its lines cut where the field map cuts them).
-                // How the print shows an address past its boxes is open
-                // (rules page question 4), so the print is not compared.
+                // The print is a_long_pooled_address_prints_whole_on_every_pooled_form.
                 assert_eq!(
                     draft_address(code, &filled["draft"]),
                     long,
@@ -9340,6 +9339,166 @@ mod tests {
             })
             .collect();
         assert_eq!(found, expected);
+    }
+
+    /// Upper-case address words, exactly `len` characters, single spaces.
+    fn address_of(len: usize) -> String {
+        const WORDS: [&str; 10] = [
+            "UNIT",
+            "1203",
+            "TWELFTH",
+            "FLOOR",
+            "CURVE",
+            "BUILDING",
+            "BONIFACIO",
+            "TAGUIG",
+            "METRO",
+            "MANILA",
+        ];
+        let mut text = String::new();
+        for word in WORDS.iter().cycle() {
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            text.push_str(word);
+            if text.len() >= len {
+                break;
+            }
+        }
+        text.truncate(len);
+        if text.ends_with(' ') {
+            text.pop();
+            text.push('X');
+        }
+        text
+    }
+
+    /// The print cell (first `html_id`) of each writer key, read from the
+    /// sheet's writer-cells.json.
+    fn print_cells_of(slug: &str, keys: &[String]) -> Vec<String> {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/writer-cells.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cells: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        keys.iter()
+            .map(|key| {
+                cells["joins"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|join| join["writer_key"] == key.as_str())
+                    .and_then(|join| join["html_id"].as_str())
+                    .unwrap_or_else(|| panic!("{slug}: {key} prints in a cell"))
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// A sheet cell's printed width (pt), read from its `<div id>` style.
+    fn cell_width(slug: &str, cell: &str) -> f64 {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/index.html",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let html = std::fs::read_to_string(path).unwrap();
+        let at = html.find(&format!("<div id=\"{cell}\"")).unwrap();
+        let tag = &html[at..at + html[at..].find('>').unwrap()];
+        tag.split(";width:")
+            .nth(1)
+            .unwrap()
+            .split("pt")
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap()
+    }
+
+    /// Rules page question 4, decided 2026-10-17, end to end on every pooled
+    /// address: typed on the page, saved in the draft, through the form's
+    /// print map onto its sheet. Within the boxes the lines fill them; past
+    /// them the whole address prints as plain type across every line; too
+    /// long for that, smaller type. Nothing is lost: the printed lines put
+    /// together are what the XML carries, and as much as the form keeps.
+    #[test]
+    fn a_long_pooled_address_prints_whole_on_every_pooled_form() {
+        setup();
+        let mut forms = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let Some(slug) = crate::bir_module::print_slug_for(code) else {
+                continue;
+            };
+            for (head, pool) in combs::pools(code) {
+                forms.push(code);
+                let cells = print_cells_of(slug, &pool.keys);
+                let capacity: usize = pool.slots.iter().sum();
+                for len in [capacity - 10, 90, 200] {
+                    let typed = address_of(len);
+                    let opened = open(code, page_period_of(code));
+                    let filled =
+                        fill_unlocked(code, &opened["draft"], json!({ &head: typed }), &[&head]);
+                    assert_eq!(filled["rejected"], json!({}), "{code} {len}");
+                    let draft = &filled["draft"];
+                    let kept = squeezed(&xml_pool(kind, draft, &pool.keys));
+                    let (fields, _) = with_database(|db| print_map(db, kind, draft)).unwrap();
+                    let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
+                    let printed: Vec<(String, Option<f64>)> = cells
+                        .iter()
+                        .map(|cell| bir_print::frozen_html::printed_cell(&document, cell))
+                        .collect();
+                    let text: String = printed.iter().map(|(t, _)| t.as_str()).collect();
+                    // What the return holds: as typed, or, where the form's
+                    // own field map cuts the address (1600PT/VT, 2200C/M/P
+                    // and 2552 keep 160 characters, as the official form
+                    // does), what it files.
+                    let expected = if !kept.is_empty() && kept.len() < squeezed(&typed).len() {
+                        kept.clone()
+                    } else {
+                        squeezed(&typed)
+                    };
+                    assert_eq!(squeezed(&text), expected, "{code} {len}: nothing is lost");
+                    let sizes: Vec<f64> = printed.iter().filter_map(|(_, size)| *size).collect();
+                    if len < capacity {
+                        assert!(sizes.is_empty(), "{code} {len}: in the boxes {printed:?}");
+                        continue;
+                    }
+                    assert_eq!(
+                        sizes.len(),
+                        cells.len(),
+                        "{code} {len}: plain on every line {printed:?}"
+                    );
+                    assert!(
+                        printed.iter().all(|(t, _)| !t.trim().is_empty()),
+                        "{code} {len}: every line used"
+                    );
+                    // At the boxes' 9 pt, plain type holds about
+                    // width / (0.58 * 9) characters across the lines.
+                    let room: f64 = cells
+                        .iter()
+                        .map(|cell| (cell_width(slug, cell) - 2.0) / (0.58 * 9.0))
+                        .sum();
+                    let chars = text.chars().count() + cells.len() - 1;
+                    if chars as f64 > room {
+                        assert!(
+                            sizes.iter().all(|s| *s < 9.0),
+                            "{code} {len}: shrunk {sizes:?}"
+                        );
+                    } else {
+                        assert!(sizes.iter().all(|s| *s == 9.0), "{code} {len}: {sizes:?}");
+                    }
+                }
+            }
+        }
+        forms.sort_unstable();
+        assert_eq!(
+            forms,
+            [
+                "0619E", "0619F", "1600PT", "1600VT", "1701", "1702RT", "2200C", "2200M", "2200P",
+                "2552"
+            ],
+            "every pooled form"
+        );
     }
 
     /// Rule 5 on 0619E and 0619F, whose draft keeps a second address line

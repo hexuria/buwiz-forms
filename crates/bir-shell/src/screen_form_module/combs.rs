@@ -28,8 +28,10 @@
 //!   - A split ([`split_lines`]) ends a line at the last space run that
 //!     starts within its boxes, the run kept at its end, or cuts a word
 //!     longer than the line at its last box; the lines put end to end are
-//!     what was typed. How the print shows an address past its boxes is
-//!     open (rules page question 4); the print maps are not changed.
+//!     what was typed. The print (rules page question 4, decided
+//!     2026-10-17, in bir-print's fill): within the boxes the lines fill
+//!     them; past them the whole text prints as plain type across the
+//!     lines, shrunk until it fits. The print maps are not changed.
 //!   - Any other mix (1702MX: its first line is the whole address, the
 //!     others list entries, and its print reads the list) is not pooled.
 
