@@ -162,9 +162,9 @@ const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 1201202
 
 /**
  * A Form library sample is a preview and is never saved (provisional: the
- * findings rules page, question 1). A return starts from the taxpayer.
+ * findings rules page, question 1). A return starts with New return.
  */
-const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, open this form from the taxpayer's Forms tab or a tax year.";
+const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, choose Start a return, or New return (the + button or Cmd/Ctrl+N).";
 
 /** One box holding a whole MM/DD/YYYY date. */
 function isDateField(f, it) {
@@ -224,6 +224,11 @@ export class FormPageActions {
       // Filled profile boxes the filer may open with Edit, and the ones open.
       profileEdit: new Set(),
       editing: new Set(),
+      // Profile boxes the filer opened with Edit on this visit (sent as
+      // `unlocked`), the item under the pointer, and the box that has focus.
+      opened: new Set(),
+      hoverItem: null,
+      focusKey: null,
       editFocus: new Map(),
       // Parts whose "From tax profile" group is unfolded.
       profileOpen: new Set(),
@@ -253,7 +258,7 @@ export class FormPageActions {
     cx.spawn(async (acx) => {
       try {
         const r = opts.sample
-          ? await app.store.call("screen_form_sample", opts.tin, opts.code, opts.year)
+          ? await app.store.call("screen_form_sample", opts.tin, opts.code)
           : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
         if (token !== this.token) return;
         const s = this.state;
@@ -311,9 +316,10 @@ export class FormPageActions {
             if (text !== raw) input.set_value(text);
             this.setDateError(k, "");
           } else this.setDateError(k, raw.trim() ? DATE_ERROR : "");
-          this.endProfileEdit([k]);
+          this.leaveBox(k, cx);
           this.flush(cx);
         });
+        input.on("focus", () => this.enterBox(k));
         s.inputs.set(k, input);
         (s.inputKinds ||= new Map()).set(k, t);
         return;
@@ -321,11 +327,12 @@ export class FormPageActions {
       input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
       input.on("blur", (_e, cx) => {
         if (t === "money") input.set_value(formatMoney(input.value()));
-        // Clicking away from an edited profile box keeps the value on this
-        // return and gives the box its profile look (and Edit) back.
-        this.endProfileEdit([k]);
+        // Leaving an edited profile item keeps the value on this return and
+        // gives its boxes their profile look (and Edit) back.
+        this.leaveBox(k, cx);
         this.flush(cx);
       });
+      input.on("focus", () => this.enterBox(k));
       s.inputs.set(k, input);
       (s.inputKinds ||= new Map()).set(k, t);
     };
@@ -370,6 +377,7 @@ export class FormPageActions {
       width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value()] : null,
+      s.hoverItem === id,
       keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
   }
@@ -462,7 +470,6 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.editable) return;
     s.pending[k] = value;
-    s.typed.add(k);
     s.dirty = true;
     const token = this.token;
     s.editSeq = (s.editSeq || 0) + 1;
@@ -540,10 +547,7 @@ export class FormPageActions {
     if (!s || !s.editable) return;
     Object.assign(s.pending, edits);
     s.dirty = true;
-    for (const [k, v] of Object.entries(edits)) {
-      s.values[k] = String(v);
-      s.typed.add(k);
-    }
+    for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
     // flush() syncs the preview from the host-applied draft.
     this.flush(cx);
   }
@@ -557,6 +561,7 @@ export class FormPageActions {
     if (Object.keys(edits).length) {
       try {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        this.accepted(edits, r.rejected);
         const before = s.values;
         s.draft = r.draft;
         s.values = this.shown(r.values);
@@ -639,19 +644,63 @@ export class FormPageActions {
     return out;
   }
 
-  /** The boxes of an edit batch the page has open, profile boxes included (screen_form_fill's `unlocked`). */
+  /**
+   * The boxes of an edit batch the page has open (screen_form_fill's
+   * `unlocked`): a box with no lock, and a profile box the filer opened
+   * with Edit. A box locked for any other reason is never sent.
+   */
   unlockedFor(edits) {
     const s = this.state;
-    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.profileEdit.has(k));
+    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.opened.has(k));
+  }
+
+  /** A sample shows a box it blanked once the host has taken an edit for it. */
+  accepted(edits, rejected) {
+    const s = this.state;
+    for (const k of Object.keys(edits)) if (!(rejected && k in rejected)) s.typed.add(k);
   }
 
   /** Edit on a profile item: its profile boxes take typing; the edit stays on this return. */
   startProfileEdit(keys, cx) {
     const s = this.state;
     if (!s.editable) return;
-    for (const k of keys) if (s.profileEdit.has(k)) s.editing.add(k);
+    for (const k of keys) {
+      if (!s.profileEdit.has(k)) continue;
+      s.editing.add(k);
+      s.opened.add(k);
+    }
     this.refreshRows();
     cx.notify();
+  }
+
+  /** The profile boxes of the item that holds `k`. */
+  itemEditKeys(k) {
+    const s = this.state;
+    const id = this.itemIdForKey(k);
+    if (!id) return [k];
+    const [pi, ii] = id.split(":").map(Number);
+    return (s.schema.parts[pi].items[ii].f || []).map((f) => f.k).filter((key) => s.profileEdit.has(key));
+  }
+
+  enterBox(k) {
+    this.state.focusKey = k;
+  }
+
+  /**
+   * A box lost focus: once focus has not landed on another box of the same
+   * item, the item's profile boxes go back to their profile look.
+   */
+  leaveBox(k, cx) {
+    const s = this.state;
+    if (s.focusKey === k) s.focusKey = null;
+    if (!this.itemEditKeys(k).some((key) => s.editing.has(key))) return;
+    const token = this.token;
+    cx.timer.after(50, () => {
+      if (token !== this.token) return;
+      const now = this.state.focusKey;
+      if (now && this.itemIdForKey(now) === this.itemIdForKey(k)) return;
+      this.endProfileEdit(this.itemEditKeys(k));
+    });
   }
 
   /** Back to the profile look; the value stays (the draft has it, unsaved). */
@@ -729,8 +778,9 @@ export class FormPageActions {
   setErrors(errors) {
     const s = this.state;
     // A sample's blank period is not judged until the filer types one.
+    // Dropped only when every box it names is still blank.
     const untyped = (k) => s.blank.has(k) && !s.typed.has(k);
-    s.errors = (errors || []).filter((e) => !s.sample || !(e.keys || []).some(untyped));
+    s.errors = (errors || []).filter((e) => !s.sample || !(e.keys || []).length || !e.keys.every(untyped));
     s.messages = {};
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
@@ -794,6 +844,7 @@ export class FormPageActions {
     try {
       if (Object.keys(edits).length) {
         const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);
         edits = {};
@@ -1239,20 +1290,25 @@ function itemRow(cx, ui, it, pi, ii, width) {
   // The host says which boxes the profile fills (the schema's auto flag is
   // only the extractor's guess).
   const fromProfile = tin || fs.some((x) => s.profile.has(x.k));
-  // Profile boxes keep the profile mark and an Edit button: the edit stays
-  // on this return, never in the profile (rule 2). Edit shows at rest too,
-  // so a screen without hover and the keyboard (Tab, then Enter) reach it.
+  // Profile boxes keep the profile mark, which turns into Edit while the
+  // pointer is over the item or the keyboard is on the button (Tab, then
+  // Enter): the edit stays on this return, never in the profile (rule 2).
   const editKeys = fs.filter((x) => s.profileEdit.has(x.k)).map((x) => x.k);
   const editingHere = editKeys.some((k) => s.editing.has(k));
-  const canEdit = editKeys.length > 0 && s.editable && !editingHere;
+  const hasEdit = editKeys.length > 0 && s.editable;
   // Markers are 16 px icons that explain themselves on hover, so a long
   // printed label is never covered; the label gets a pixel width.
   const markers = [];
   if (fromProfile) {
-    markers.push(["user", editKeys.length ? "From tax profile. Edit changes this return only; the profile stays as it is." : "From tax profile. Change it in the tax profile."]);
+    const tip = editKeys.length
+      ? "From tax profile. Edit changes this return only; the profile stays as it is."
+      : tin
+        ? "From tax profile. Change it in the tax profile."
+        : "From tax profile. It repeats a box above; use Edit there.";
+    markers.push(["user", tip]);
   }
   if (allCalc) markers.push(["lock", "Computed from other items"]);
-  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (canEdit ? 56 : 0);
+  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0);
   const label = div()
     .flex()
     .flex_row()
@@ -1269,7 +1325,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
   for (const [icon, tip] of markers) {
     label.child(div().id(`fp-mark-${icon}-${id}`).flex_none().pt(3).tooltip(tip).accessibility_label(tip).child(Icon(cx, icon, { size: 14, color: "fg3" })));
   }
-  if (canEdit) {
+  if (hasEdit) {
+    // The button stays in place (and keeps the keyboard) while the boxes
+    // are open, only hidden, so Tab from it goes on into the box.
+    const shown = !editingHere && s.hoverItem === id;
     const edit = div()
       .id(`fp-edit-${id}`)
       .flex()
@@ -1280,17 +1339,22 @@ function itemRow(cx, ui, it, pi, ii, width) {
       .h(22)
       .px(SPACE[2])
       .rounded(RADIUS.ctl)
-      .cursor_pointer()
-      .hover((st) => st.bg(t.hover))
-      .tooltip("Change it on this return only")
-      .accessibility_label(`Edit ${it.l} on this return`)
-      .on_click((_e, cx) => ui.startProfileEdit(editKeys, cx))
+      .opacity(shown ? 1 : 0)
+      .accessibility_label(editingHere ? `${it.l}: editing on this return` : `Edit ${it.l} on this return`)
       .child(Icon(cx, "pencil", { size: 12, color: "fg2" }))
       .child(Text(cx, "meta", "Edit", "fg2"));
+    if (!editingHere) {
+      edit
+        .cursor_pointer()
+        .hover((st) => st.bg(t.hover))
+        .focus((st) => st.opacity(1).bg(t.hover))
+        .tooltip("Change it on this return only")
+        .on_click((_e, cx) => ui.startProfileEdit(editKeys, cx));
+    }
     const focus = s.editFocus.get(id);
     if (focus) {
       edit.track_focus(focus).tab_index(0).on_key_down((e, cx) => {
-        if (e.key !== "enter" && e.key !== "space") return;
+        if (editingHere || (e.key !== "enter" && e.key !== "space")) return;
         ui.startProfileEdit(editKeys, cx);
         cx.stop_propagation();
       });
@@ -1356,6 +1420,16 @@ function itemRow(cx, ui, it, pi, ii, width) {
     .pb(SPACE[2])
     .pl(SPACE[3])
     .when(allCalc, (el) => el.bg(t.bg))
+    // The pointer over a profile item turns its mark into Edit.
+    .when(hasEdit, (el) =>
+      el.on_hover((hovered, cx) => {
+        const next = hovered ? id : s.hoverItem === id ? null : s.hoverItem;
+        if (next === s.hoverItem) return;
+        s.hoverItem = next;
+        ui.refreshRows();
+        cx.notify();
+      }),
+    )
     // Clicking away from an item opened with Edit gives it the profile look
     // back; what was typed stays on this return. A list still open is the
     // item's own and does not count as away.
@@ -1459,6 +1533,7 @@ function formContent(cx, app, width) {
   const actions = s.sample ? [] : [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
   if (s.sample) {
     if (s.editable) actions.push(s.checkButton.entity);
+    actions.push(AppButton(cx, "fp-start-return", "Start a return", { variant: "primary", size: "sm", icon: "plus", onClick: (_e, cx) => app.startNewReturn(cx, s.code) }));
   } else if (s.status === "Queued") {
     actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
   } else if (s.editable) {
@@ -1691,7 +1766,9 @@ function formContent(cx, app, width) {
         if (tucked.includes(ii)) {
           if (ii !== tucked[0]) return;
           body.child(profileGroup(cx, ui, pi, tucked, ii > 0));
-          if (s.profileOpen.has(pi)) for (const tj of tucked) body.child(rowOf(tj));
+          if (s.profileOpen.has(pi)) {
+            for (const tj of tucked) body.child(tj === 0 ? div().border_t(1).border_color(t.border).child(rowOf(tj)) : rowOf(tj));
+          }
           return;
         }
         body.child(rowOf(ii));

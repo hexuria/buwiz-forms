@@ -1415,28 +1415,41 @@ mod tests {
                 let Some(lock @ (Lock::Profile | Lock::Identity)) = bound.lock else {
                     continue;
                 };
+                let entry = def.box_def(key).expect("a bound key is a box");
+                // The refusal each writer must give, checked before any value.
+                let computed = entry.computed || entry.required == "computed";
+                let expected = if computed {
+                    "is computed by BIR's own formulas"
+                } else if !entry.is_user_box() {
+                    "is a hidden control"
+                } else {
+                    lock.reason()
+                };
                 let mut draft = Value::Null;
-                // The assistant and the plain user fill keep both locks.
-                assert!(
-                    fill(kind, &mut draft, key, &Value::from("x")).is_err(),
-                    "{key}"
-                );
-                assert!(
-                    fill_as_user(kind, &mut draft, key, &Value::from("x")).is_err(),
-                    "{key}"
-                );
-                let refused = fill_profile_box_as_user(kind, &mut draft, key, &Value::from("x"))
-                    .err()
-                    .unwrap_or_default();
-                let open = def
-                    .box_def(key)
-                    .is_some_and(|entry| entry.is_user_box() && entry.required != "computed");
-                if lock == Lock::Profile && open {
-                    assert!(!refused.contains(lock.reason()), "{key}: {refused}");
+                let value = Value::from("x");
+                for (writer, result) in [
+                    ("fill", fill(kind, &mut draft, key, &value)),
+                    ("fill_as_user", fill_as_user(kind, &mut draft, key, &value)),
+                ] {
+                    let refused = result.expect_err(key);
+                    assert!(refused.contains(expected), "{writer} {key}: {refused}");
+                }
+                let page = fill_profile_box_as_user(kind, &mut draft, key, &value);
+                if lock == Lock::Profile && !computed && entry.is_user_box() {
+                    // Past every refusal: what fails now is the empty draft.
+                    let error = page.expect_err("a null draft takes no value");
+                    for reason in [
+                        Lock::Profile.reason(),
+                        Lock::Identity.reason(),
+                        "is computed by BIR's own formulas",
+                        "is a hidden control",
+                    ] {
+                        assert!(!error.contains(reason), "{key}: {error}");
+                    }
                     lifted += 1;
                 } else {
-                    // Identity (TIN, year, period) and computed boxes stay refused.
-                    assert!(!refused.is_empty(), "{key}");
+                    let refused = page.expect_err(key);
+                    assert!(refused.contains(expected), "page {key}: {refused}");
                 }
             }
         }

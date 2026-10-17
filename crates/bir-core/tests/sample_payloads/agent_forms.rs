@@ -385,3 +385,57 @@ fn radio_items_are_one_box_with_options() {
         }
     }
 }
+
+/// The page's profile edit writes every open profile box with a value of
+/// its own type, and still refuses every identity box (TIN, year, period).
+#[test]
+fn the_page_writes_profile_boxes_and_never_identity_boxes() {
+    use agent::{DatePart, Lock};
+    let mut written = 0;
+    for kind in AgentFormKind::all() {
+        let def = kind.definition();
+        let seed = seeds_for(kind).remove(0);
+        for (key, bound) in &def.bindings {
+            let Some(lock @ (Lock::Profile | Lock::Identity)) = bound.lock else {
+                continue;
+            };
+            let entry = def.box_def(key).expect("a bound key is a box");
+            if entry.computed || entry.required == "computed" || !entry.is_user_box() {
+                continue;
+            }
+            let value = match &bound.binding {
+                Binding::Text {
+                    part: Some(DatePart::Month),
+                    ..
+                } => Value::from("01"),
+                Binding::Text {
+                    part: Some(DatePart::Day),
+                    ..
+                } => Value::from("02"),
+                Binding::Text {
+                    part: Some(DatePart::Year),
+                    ..
+                } => Value::from("2020"),
+                Binding::Text { date: Some(_), .. } => Value::from("01/02/2020"),
+                Binding::Text { .. } => Value::from("7193"),
+                Binding::Amount { .. } | Binding::Whole { .. } => Value::from("1"),
+                Binding::Choice { options } => Value::from(options[0].value.clone()),
+            };
+            let mut draft = seed.clone();
+            let result = agent::fill_profile_box_as_user(kind, &mut draft, key, &value);
+            match lock {
+                Lock::Identity => {
+                    let refused = result.expect_err(key);
+                    assert!(refused.contains(lock.reason()), "{key}: {refused}");
+                }
+                _ => {
+                    result.unwrap_or_else(|error| {
+                        panic!("{} {key} = {value}: {error}", kind.form_code())
+                    });
+                    written += 1;
+                }
+            }
+        }
+    }
+    assert!(written > 100, "{written} profile boxes written");
+}

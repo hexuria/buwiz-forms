@@ -27,7 +27,7 @@
 "frm1707:txtPg1I6SellerAddr0": {"path":"/sellers/0/address","type":"text"},
 "frm1707:txtPg1I6SellerAddr1": {"path":"/sellers/1/address","type":"text"},
 "frm1707:txtPg1I6SellerAddr2": {"path":"/sellers/2/address","type":"text"},
-"frm1707:txtPg1I6SellerName0": {"lock":"profile","path":"/sellers/0/name","type":"text"},
+"frm1707:txtPg1I6SellerName0": {"path":"/sellers/0/name","type":"text"},
 "frm1707:txtPg1I6SellerName1": {"path":"/sellers/1/name","type":"text"},
 "frm1707:txtPg1I6SellerName2": {"path":"/sellers/2/name","type":"text"},
 "frm1707:txtPg1I6SellerTIN0": {"path":"/sellers/0/tin","type":"text"},

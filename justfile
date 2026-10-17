@@ -79,10 +79,11 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_date_field_rows.mjs
 
 shell-check: shell-ui-test
-    cargo fmt --manifest-path crates/bir-shell/Cargo.toml
+    cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features gpui-fast
     cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets -- -D warnings
+    cargo test --locked --manifest-path crates/bir-shell/Cargo.toml
 
 # Run code formatting, linting, and type checking
 [unix]

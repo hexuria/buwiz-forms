@@ -28020,8 +28020,8 @@ declare module "bir" {
   export function screen_form_schema(form_code: string): object;
   export function screen_forms_index(): ScreenFormIndexEntry[];
   export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
-  /** The Form library's blank sample of a form for this taxpayer: reads no stored return, and is never saved. */
-  export function screen_form_sample(tin: string, form_code: string, year: number): Promise<ScreenFormOpened>;
+  /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
+  export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
   /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
   export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
   export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
