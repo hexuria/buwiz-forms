@@ -1363,7 +1363,76 @@ fn fill_bundle(
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
     let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
-    Ok(fill_xbox_joins(&filled, fields, &cells.xbox_joins))
+    Ok(split_single_character_cells(
+        slug,
+        &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
+    ))
+}
+
+/// Text cells drawn as a row of one-character inputs that are not a comb
+/// (no `data-slot-index`), per sheet, each with how a code shorter than its
+/// boxes sits in them. A text join writes its whole value into every input
+/// of its cell, so these are re-split one character per box. Only the
+/// sheets listed: 1600wp-2010's attachment-period dates (p1c62-p1c67) have
+/// the same cells and are left to its own group (PR 3).
+const SINGLE_CHARACTER_CELLS: &[(&str, &[(&str, bool)])] = &[(
+    "2550m-2007",
+    // Item 3 sheets (a count, right-aligned), item 5 RDO, item 10 ZIP.
+    &[("p1c3", true), ("p1c130", false), ("p1c21", false)],
+)];
+
+/// One character per input of `slug`'s [`SINGLE_CHARACTER_CELLS`], in the
+/// inputs' order. A value with more characters than boxes, or with
+/// characters other than letters and digits, prints whole in the first box
+/// (nothing is cut) and the other boxes stay empty.
+fn split_single_character_cells(slug: &str, html: &str) -> String {
+    let Some((_, cells)) = SINGLE_CHARACTER_CELLS.iter().find(|(s, _)| *s == slug) else {
+        return html.to_string();
+    };
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements = Vec::new();
+    for (cell, right) in *cells {
+        let Some(indices) = grouped.get(cell) else {
+            continue;
+        };
+        if indices.len() < 2
+            || indices.iter().any(|&index| {
+                tags[index].slot.is_some() || attr(tags[index].tag, "maxlength") != Some("1")
+            })
+        {
+            continue;
+        }
+        let first = tags[indices[0]].tag;
+        let value = attr(first, "data-writer-value")
+            .or_else(|| attr(first, "value"))
+            .unwrap_or("");
+        let chars: Vec<char> = value.chars().collect();
+        let boxes = indices.len();
+        let fits = chars.len() <= boxes && chars.iter().all(char::is_ascii_alphanumeric);
+        let pad = if fits && *right { boxes - chars.len() } else { 0 };
+        for (offset, &index) in indices.iter().enumerate() {
+            // Not fitting, the first box keeps the whole value as written.
+            if !fits && offset == 0 {
+                continue;
+            }
+            let shown = if !fits {
+                String::new()
+            } else {
+                offset
+                    .checked_sub(pad)
+                    .and_then(|at| chars.get(at))
+                    .map(char::to_string)
+                    .unwrap_or_default()
+            };
+            replacements.push((
+                tags[index].start,
+                tags[index].end,
+                set_value(tags[index].tag, &shown, None),
+            ));
+        }
+    }
+    apply_replacements(html, replacements)
 }
 
 /// Writer keys in `fields` holding a value that `slug`'s sheet prints
@@ -3225,6 +3294,43 @@ mod tests {
         assert!(html.contains("AGENT CORP"));
         assert_eq!(named_values(&html, "p1c5"), vec!["X".to_string()]);
         assert_eq!(named_values(&html, "p1c25"), vec!["X".to_string()]);
+    }
+
+    /// PR 4 (2550M manual-3): item 4 prints the TIN's three parts in the
+    /// row's three 3-slot combs (p1c127, p1c9, p1c11; the branch comb
+    /// p1c13 is the sheet's preprinted read-only 00000), and items 3, 5 and
+    /// 10, rows of one-character boxes, print one character per box: never
+    /// the whole value in each.
+    #[test]
+    fn filled_document_2550m_prints_the_tin_and_one_character_per_box() {
+        use bir_core::forms::form_2550m::Form2550MDraft;
+        let mut draft = Form2550MDraft::new_from_profile(&fixture_profile("2550M"), 2022, 6);
+        draft.number_of_attached_sheets = 3;
+        draft.recompute();
+        let fields = draft.to_bir_field_map();
+        let tin: String = draft.tin.chars().filter(char::is_ascii_digit).collect();
+        let html = filled_document("2550m-2007", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c127"), tin[0..3]);
+        assert_eq!(comb_text(&html, "p1c9"), tin[3..6]);
+        assert_eq!(comb_text(&html, "p1c11"), tin[6..9]);
+        assert_eq!(comb_text(&html, "p1c13"), "00000");
+        let boxes = |name: &str| named_values(&html, name);
+        let one_each = |value: &str| value.chars().map(String::from).collect::<Vec<_>>();
+        assert_eq!(boxes("p1c130"), one_each(&fields["frm2550m:txtRDOCode"]));
+        assert_eq!(fields["frm2550m:txtRDOCode"].len(), 3);
+        assert_eq!(boxes("p1c21"), one_each(&fields["frm2550m:txtZipCode"]));
+        assert_eq!(fields["frm2550m:txtZipCode"].len(), 4);
+        // A one-digit count sits in the right-hand box.
+        assert_eq!(fields["frm2550m:txtSheets"], "3");
+        assert_eq!(boxes("p1c3"), vec![String::new(), "3".to_string()]);
+        // A value longer than its boxes prints whole in the first one.
+        let mut long = fields.clone();
+        long.insert("frm2550m:txtZipCode".into(), "123456".into());
+        let html = filled_document("2550m-2007", &long).unwrap();
+        assert_eq!(
+            named_values(&html, "p1c21"),
+            vec!["123456".to_string(), String::new(), String::new(), String::new()]
+        );
     }
 
     #[test]
