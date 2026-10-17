@@ -1,0 +1,380 @@
+{
+ "1702EX": {
+  "R2.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_only_named_boxes_are_drawn_off_the_printed_sheet; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (1702EX's three pinned unplaced boxes removed)",
+   "status": "fixed"
+  },
+  "R2.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "R3.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details; screen_form_module::tests::annual_corporate::pr8_only_named_boxes_are_drawn_off_the_printed_sheet",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_shut_items_show_their_caption_and_a_note; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.5": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.6": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_options_read_as_their_printed_captions",
+   "status": "fixed"
+  },
+  "R3.7": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_options_read_as_their_printed_captions; screen_form_module::tests::annual_corporate::pr8_method_of_deduction_options_read_as_printed",
+   "status": "fixed"
+  },
+  "R3.8": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R5.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_name_and_address_are_one_box_each",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_contact_number_is_a_phone_from_the_profile; bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "reason": "1702-EX prints one penalty line, item 21 'Add: Penalty - Compromise' (html-frozen/1702ex-2018/index.html, which prints no surcharge or interest), the official page leaves it open for the filer (rules/forms/1702ex-v2018c/fixtures/runtime-control-inventory-v796.json: frm1702EX:txtPg1Pt2I21PenaltyCompromise disabled false, source line 886), and form_1702ex.rs keeps it as the entered `penalties`, with no surcharge or interest to compute. Rule 8's computed group has nothing to compute here (penalties::groups is empty for 1702EX); the box stays the filer's entry and item 22 recomputes from it (pr8_form_1702ex_compromise_stays_the_filers_entry).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "manual-0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_contact_number_is_a_phone_from_the_profile; bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_shut_items_show_their_caption_and_a_note",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "preview.1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_other_credits_and_schedule_rows_take_entries; screen_form_module::tests::annual_corporate::pr8_form_1702ex_folded_lines_say_what_fills_them; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the 73 PR 8 lines of locked_and_blank.txt removed); bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical)",
+   "status": "fixed"
+  }
+ },
+ "1702MX": {
+  "R2.2": {
+   "reason": "txtPg1AttMPt5ScAIt6 is not the TIN: it is item 6 of the Attachment M annex (rules/forms/1702mx-v2018c/fields.json: label txtPg1AttMPt5ScAIt6, item_number 6, max_length 10), and html-frozen/1702mx-2018c/writer-cells.json not_joined lists it under 'annex (Attachment M / exempt and special-rate attachment) control of the page; the four-page frozen sheet has no annex pages' (pr8_form_1702mx_annex_box_is_not_the_tin).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R3.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702mx_item_10_is_the_date_of_incorporation; screen_form_module::tests::annual_corporate::pr8_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details; screen_form_module::tests::annual_corporate::pr8_options_read_as_their_printed_captions",
+   "status": "fixed"
+  },
+  "R3.10": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R3.11": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_method_of_deduction_options_read_as_printed; screen_form_module::tests::annual_corporate::pr8_options_read_as_their_printed_captions",
+   "status": "fixed"
+  },
+  "R3.12": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R3.13": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R3.14": {
+   "reason": "The twenty boxes are Part III (txtPg1Pt1I26Cash*, I27Check*, I28TaxDebit*, I29Others*) and the signatories' title and TIN, which the official program disables at load (rules/forms/1702mx-v2018c/fixtures/runtime-control-inventory-v796.json: disabled true, source lines 934-975 and 1014-1093) and this app's field map never writes (agent form: 'not written by this app's field map for any sample draft'), so they file and print blank as the official program files them. The page shows each printed item (23-26 and the signature block) with a note instead of a box (pr8_form_1702mx_shut_items_show_their_caption_and_a_note), as PR 4 does for 2000's tax agent boxes.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R3.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details; screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_numbers_run_forward_in_every_part; screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "R3.4": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.5": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.6": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details; screen_form_module::tests::annual_corporate::pr8_item_numbers_run_forward_in_every_part; screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "R3.7": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.8": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.9": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_options_read_as_their_printed_captions",
+   "status": "fixed"
+  },
+  "R4.1": {
+   "reason": "the official form stores Item 2 and the NOLCO years split (month select, two-digit year, Year Incurred per row); rule 4 keeps the split, and a library opening shows the period parts blank (screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form), as PR 0b found for 1702EX R4.1.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R5.2": {
+   "reason": "1702MX keeps the whole registered address in item 9's first line (Form1702MXDraft.registered_address, bound to txtPg1Pt1I10RegisteredAddress and printed whole since PR 0c); lines 2 and 3 are separate optional entries (registered_address_lines[1..3]) the official program files under their own keys (form_1702mx_official.rs to_field_map). There is no split of one text over the lines to pool, which is why combs.rs leaves it unpooled (its doc: '1702MX: its first line is the whole address, the others list entries ... is not pooled').",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R7.0": {
+   "reason": "Schedule 2 item 16 B and D are pesos: 'Less: Share of Other Government Agency, if remitted directly' (html-frozen/1702mx-2018c/index.html): B is bound to /schedule_2/items/15/special/amount as a whole-peso amount and D is its computed column total, so a peso box is right for both; Schedule 1 items 1 and 3 (txtPg2Pt4I31CA-CC, I33CA-CC) are bound to text and drawn as text (screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form).",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "manual-0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes; screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter; screen_form_module::tests::annual_corporate::pr8_item_numbers_run_forward_in_every_part",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes; screen_form_module::tests::annual_corporate::pr8_item_numbers_run_forward_in_every_part",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_whole_peso_amounts_and_counts",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "validation.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702mx_item_10_is_the_date_of_incorporation",
+   "status": "fixed"
+  }
+ },
+ "1702RT": {
+  "R3.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702rt_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702rt_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.4": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.5": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702rt_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.6": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_options_read_as_their_printed_captions",
+   "status": "fixed"
+  },
+  "R3.7": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R3.8": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R4.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702rt_dates_are_typed_dates; screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form (the five 1702RT lines removed from DATE_BOXES_LOCKED_FOR_OTHER_REASONS)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes; screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_whole_peso_amounts_and_counts",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "preview.1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702rt_overpayment_choice_is_the_drafts; screen_form_module::tests::annual_corporate::pr8_form_1702rt_dates_are_typed_dates; screen_form_module::tests::annual_corporate::pr8_form_1702rt_entries_open_and_computed_boxes_say_so; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the 73 PR 8 lines of locked_and_blank.txt removed); bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical)",
+   "status": "fixed"
+  }
+ },
+ "1707A": {
+  "R2.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "R3.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_box_is_left_in_additional_details",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_labels_read_as_printed; screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R3.4": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_labels_read_as_printed; screen_form_module::tests::annual_corporate::pr8_options_read_as_their_printed_captions",
+   "status": "fixed"
+  },
+  "R3.5": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_no_label_is_key_text_or_a_counter",
+   "status": "fixed"
+  },
+  "R3.6": {
+   "reason": "Tax Agent Accreditation No., Date of Issue and Date of Expiry are disabled at load in the official program (rules/forms/1707a-v2021/fixtures/runtime-control-inventory-v796.json: disabled true, source lines 896, 902 and 908) and this app's field map never writes them (agent form: 'not written by this app's field map for any sample draft'), so they file and print blank as the official program files them. The page shows the printed caption with a note instead of a box (pr8_form_1707a_shut_items_show_their_caption_and_a_note), as PR 4 does for 2000's tax agent boxes.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R5.2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_page_2_tin_prints_from_the_tin",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_only_named_boxes_are_drawn_off_the_printed_sheet",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form",
+   "status": "fixed"
+  },
+  "preview.1": {
+   "pr": "PR 8",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_item_12_is_the_returns_tax_relief; screen_form_module::tests::annual_corporate::pr8_form_1707a_row_4_and_column_e_say_what_fills_them; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the 73 PR 8 lines of locked_and_blank.txt removed)",
+   "status": "fixed"
+  },
+  "validation.0": {
+   "reason": "The message is the official runtime's own text: rules/forms/1707a-v2021/validations.json records the exact_message 'Year Ended should not be a future date on Item 1.' (a tracked rule record of the untracked official HTA runtime), and form_1707a.rs raises it unchanged (Rule 0). The box it concerns sits under printed item 2, where html-frozen/1707a-2021/writer-cells.json joins it ('2 For the Year Ended'), and the page shows the message there. Whether the page should add the printed item number beside an official message is left to the maintainer.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  }
+ }
+}
