@@ -212,7 +212,7 @@ export class FormPageActions {
    * Load the schema now and the return in the background. `keep`: the form
    * on screen is kept alive (not released) for an Undo to bring back.
    * `then(error, cx)` runs once the host answered (error null on success).
-   * `opts.key`: the stored return's exact key (a transaction's MMDD, 2553's
+   * `opts.returnKey`: the stored return's exact key (a transaction's MMDD, 2553's
    * quarter); `opts.filedOriginal`: an amended return's filed version.
    */
   open(opts, cx, keep = false, then = null) {
@@ -283,7 +283,7 @@ export class FormPageActions {
     };
     cx.spawn(async (acx) => {
       try {
-        const key = opts.key ?? null;
+        const key = opts.returnKey ?? null;
         const r = opts.sample
           ? await app.store.call("screen_form_sample", opts.tin, opts.code)
           : opts.filedOriginal
@@ -819,7 +819,7 @@ export class FormPageActions {
     }
     const sample = s;
     const { year, period, key } = s.opens;
-    const opts = { tin: s.tin, code: s.code, year, period, ...(key != null ? { key } : {}) };
+    const opts = { tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : {}) };
     const what = {
       load: auto ? `Loaded your saved ${existing.label} draft (you chose not to be asked again)` : `Loaded your saved ${existing.label} draft`,
       view: `Opened ${existing.label} read-only`,
@@ -967,7 +967,7 @@ export class FormPageActions {
     if (!s.opens) return this.app.startNewReturn(cx, s.code);
     if (s.existing) return this.offerExisting(s.existing, cx);
     const { year, period, key } = s.opens;
-    this.app.openForm({ tin: s.tin, code: s.code, year, period, ...(key != null ? { key } : {}) }, cx);
+    this.app.openForm({ tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : {}) }, cx);
   }
 
   /** Computed and locked boxes follow the draft; user boxes keep what was typed. */
@@ -1352,7 +1352,7 @@ export class FormPageActions {
     if (s.dirty || Object.keys(s.pending || {}).length) {
       return this.app.toast("Save your edits first: viewing the filed original leaves this return.", cx, "triangle-alert");
     }
-    const back = { tin: s.tin, code: s.code, year: s.year, period: s.period, ...(s.key != null ? { key: s.key } : {}) };
+    const back = { tin: s.tin, code: s.code, year: s.year, period: s.period, ...(s.returnKey != null ? { returnKey: s.returnKey } : {}) };
     this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period, filedOriginal: s.filedOriginal.id, back }, cx);
     cx.notify();
   }

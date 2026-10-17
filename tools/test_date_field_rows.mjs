@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { kitMethods } from "./kit_surface.mjs";
 const root=new URL("../",import.meta.url);
+// Mock elements answer only the methods the real kit declares.
+const KIT = kitMethods(root);
 const schema=JSON.parse(fs.readFileSync(new URL("app/forms/screen-1700-v2018.json",root)));
 const cat=schema.parts.flatMap((p,pi)=>p.items.map((it,ii)=>({it,pi,ii}))).find(x=>(x.it.f||[]).some(f=>/BirthDate$/.test(f.k)));
 assert.ok(cat,"real 1700 date of birth item");
@@ -24,7 +27,7 @@ function element(){
  const creationOwner=owner;
  const target={};
  let el=new Proxy(target,{get(o,k){
- if(k==="then")return undefined;
+ if(typeof k!=="string"||!KIT.has(k))return undefined;
  return (...args)=>{
  if(k==="id"){o.id=args[0];if(String(o.id).startsWith("fp-item-"))traces.push(o.id);}
  if(k==="on_click")clicks.set(o.id,{fn:args[0],entity:creationOwner});

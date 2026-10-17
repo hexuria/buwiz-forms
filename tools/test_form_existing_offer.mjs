@@ -15,7 +15,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { kitMethods, strictElement } from "./kit_surface.mjs";
 const root = new URL("../", import.meta.url);
+// Mock elements answer only the methods the real kit declares.
+const KIT = kitMethods(root);
 const schema = JSON.parse(fs.readFileSync(new URL("app/forms/forms-schema.json", root))).find((f) => f.c === "2551Q");
 const K = (tail) => `frm2551Qv2018:${tail}`;
 
@@ -39,39 +42,46 @@ function context(entity = null) {
   };
 }
 function element() {
-  const el = new Proxy({}, { get(o, k) {
-    if (k === "then") return undefined;
-    return (...args) => {
-      if (k === "when" && args[0]) args[1](el);
-      if (k === "child") mount(args[0]);
-      if (k === "children") for (const c of args[0]) mount(c);
-      return el;
-    };
-  } });
-  return el;
+  return strictElement(KIT, (k, args, el) => {
+    if (k === "when" && args[0]) args[1](el);
+    if (k === "child") mount(args[0]);
+    if (k === "children") for (const c of args[0]) mount(c);
+  });
 }
 function mount(e) { if (e?.view && e.dirty && !e.released) { e.dirty = false; const old = owner; owner = e; e.view.render(context(e)); owner = old; } }
 const InputState = { new({ value = "" } = {}) { let text = value; return { value: () => text, set_value: (v) => { text = v; }, on() {}, release() { return true; } }; } };
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, window: { viewport_size: () => ({ width: 1400, height: 900 }) } });
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
-for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel"]) uiExports[n] = element;
+for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel", "NavRow", "GroupLabel", "Kbd", "StepCircle", "ContextPill", "SidePanel", "DigitCells"]) uiExports[n] = element;
 uiExports.Text = (_cx, _v, text) => { texts.push(String(text)); return element(); };
 // A choice's hint is drawn inside its button, under the label.
 uiExports.AppButton = (_cx, id, label, opts = {}) => { buttons.set(id, { label, variant: opts.variant, onClick: opts.onClick, block: opts.block, hint: opts.hint }); if (opts.hint) texts.push(opts.hint); return element(); };
 const overlays = new Map();
 uiExports.Overlay = (_cx, id, card, onDismiss, opts = {}) => { dismissers.set(id, onDismiss); overlays.set(id, opts); return element().child(card); };
 uiExports.CheckboxLabel = (_cx, id, checked, onChange, label) => { checkboxes.set(id, { checked, onChange, label }); return element(); };
-const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
-await mod.link((s) => ({
+const source = (path) => new vm.SourceTextModule(fs.readFileSync(new URL(path, root), "utf8"), { context: contextVM, identifier: path });
+const mod = source("app/shell/form_page.js");
+// The sidebar (real app/shell/chrome.js) draws Recent from what an open
+// pushed, through the real app/shell/recent.js.
+const chrome = source("app/shell/chrome.js");
+const recentMod = source("app/shell/recent.js");
+const linked = {
   "gpui-kit": mock("gpui-kit", { div: element, svg: element, View }),
   "gpui-base": mock("gpui-base", { InputState, CalendarState: {}, Popup: { new: element } }),
   "gpui-component": mock("gpui-component", { Spinner: { new: element } }),
+  process: mock("process", { default: { platform: "darwin" } }),
   "./ui.js": mock("./ui.js", uiExports),
-  "./store.js": mock("./store.js", { formatTin: (x) => x, errorText: (e) => String(e && e.message ? e.message : e) }),
-  "./periods.js": mock("./periods.js", { periodLabel: () => "Q1 2024" }),
-})[s]);
+  "./theme.js": mock("./theme.js", { themeIcon: () => "sun" }),
+  "./recent.js": recentMod,
+  "./store.js": mock("./store.js", { formatTin: (x) => x, shortDate: (x) => x, errorText: (e) => String(e && e.message ? e.message : e) }),
+  "./periods.js": mock("./periods.js", { periodLabel: () => "Q1 2024", periodOptions: () => [], frequencyOf: () => "quarterly" }),
+};
+await recentMod.link(() => null);
+await mod.link((s) => linked[s]);
+await chrome.link((s) => linked[s]);
 await mod.evaluate();
+await chrome.evaluate();
 
 const quarterKeys = [1, 2, 3, 4].map((n) => K(`qtr_${n}`));
 const periodParts = [{ key: K("txtYear"), part: "year", quarter: null }, ...quarterKeys.map((key, i) => ({ key, part: "quarter", quarter: i + 1 }))];
@@ -99,12 +109,23 @@ const freshSample = (year, quarter) => withDraftValues({
 const returnOpened = (draft, extra = {}) => ({ draft, status: "Draft", editable: true, values: {}, options: {}, locks: {}, profile: [], profile_edit: [], sample: false, blank: [], needs: {}, period_parts: [], errors: [], ...extra });
 let failOpen = null;
 const app = {
-  prefs: {}, branchFor: () => ({ tin: "12345678800000" }), taxpayers: () => [], layout: () => ({ column: 1056 }),
+  prefs: { showRecent: true }, branchFor: () => ({ tin: "12345678800000" }), taxpayers: () => [], layout: () => ({ column: 1056 }),
   overlay: null, existingOffer: null, fastLane: { drafts: false }, undo: null, undos: [],
   invalidate() {}, toast(text) { toasts.push(text); }, go() {}, startNewReturn() { calls.push(["startNewReturn"]); }, templates: () => [],
   toastUndo(message, undo) { this.undos.push(message); this.undo = undo; },
-  openForm(opts, cx, keep, then) { calls.push(["openForm", opts]); this.formUi.open(opts, cx, keep, then); },
+  // As main.js openForm: open, then push a Recent entry (the real recentEntry).
+  recent: [], isMac: true, accountMenu: false, view: "form", session: { kind: "open" },
+  isFresh: () => false, openPalette() {}, authState: () => ({}), isAdmin: () => false, isHelpdesk: () => false,
+  openForm(opts, cx, keep, then) {
+    calls.push(["openForm", opts]);
+    this.formUi.open(opts, cx, keep, then);
+    if (!opts.sample) {
+      const entry = recentMod.namespace.recentEntry(opts);
+      this.recent = [entry, ...this.recent.filter((r) => r.key !== entry.key)];
+    }
+  },
   store: {
+    screenIndex: () => [],
     templates: () => [],
     write(name, ...args) {
       calls.push([name, ...args]);
@@ -238,7 +259,13 @@ await tick(1);
 offer();
 await press("existing-load");
 assert.notEqual(ui.state, sample, "the saved draft is open");
-assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, key: 101 }));
+assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, returnKey: 101 }));
+// The sidebar draws the loaded return in Recent (a headed run crashed here:
+// the stored key had taken the Recent entry's own text id).
+assert.equal(app.recent[0].key, "12345678800000|2551Q|2024|1|101", "Recent's id stays text");
+assert.equal(app.recent[0].returnKey, 101);
+chrome.namespace.renderSidebar(cx, app);
+assert.equal(json(recentMod.namespace.recentOpenOptions(app.recent[0])), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, returnKey: 101 }), "Recent reopens that very return");
 assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 1, 101]), "opened by its stored key");
 assert.match(app.undos.at(-1), /Loaded your saved Q1 2024 draft/);
 await undo();
@@ -452,7 +479,7 @@ assert.equal(yearInput.value(), "2031", "the year box shows the year set");
 
 // D4: an amended return names its filed original; View the filed original
 // opens it read-only from the history, with a strip saying what it is.
-ui.open({ code: "2551Q", tin: "12345678800000", year: 2024, period: 3, key: 103 }, cx);
+ui.open({ code: "2551Q", tin: "12345678800000", year: 2024, period: 3, returnKey: 103 }, cx);
 await settle();
 assert.equal(ui.state.filedOriginal.id, 5);
 ui.openFiledOriginal(cx);

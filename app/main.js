@@ -28,6 +28,7 @@ import {
   renderNewReturn,
 } from "./shell/chrome.js";
 import { renderHome } from "./shell/home.js";
+import { recentEntry } from "./shell/recent.js";
 import { renderLibrary } from "./shell/library.js";
 import { renderCalendar } from "./shell/calendar_page.js";
 import { renderFilings } from "./shell/filings.js";
@@ -91,7 +92,9 @@ class BirApp extends View {
     this.selRoot = stored.root || null;
     this.selCode = stored.code || null;
     this.selYear = null;
-    this.recent = this.readLocal(RECENT_KEY, []);
+    // An entry always has a text id (one written with a number by an earlier
+    // build is rebuilt).
+    this.recent = this.readLocal(RECENT_KEY, []).map((r) => (typeof r.key === "string" ? r : recentEntry(r)));
     // First run against this database: what already happened is not news.
     this.readIds = new Set();
     const storedRead = this.readLocal(READ_KEY, null);
@@ -598,16 +601,13 @@ class BirApp extends View {
 
   /** Rewrite Recent after a TIN or branch-code move, so the entries still open. */
   remapRecent(map) {
-    this.recent = this.recent.map((r) => {
-      const tin = map(String(r.tin));
-      return { ...r, tin, key: `${tin}|${r.code}|${r.year}|${r.period}` };
-    });
+    this.recent = this.recent.map((r) => recentEntry({ ...r, tin: map(String(r.tin)) }));
     this.writeLocal(RECENT_KEY, this.recent);
   }
 
   pushRecent(opts) {
-    const key = `${opts.tin}|${opts.code}|${opts.year}|${opts.period}`;
-    this.recent = [{ key, ...opts }, ...this.recent.filter((r) => r.key !== key)].slice(0, 4);
+    const entry = recentEntry(opts);
+    this.recent = [entry, ...this.recent.filter((r) => r.key !== entry.key)].slice(0, 4);
     this.writeLocal(RECENT_KEY, this.recent);
   }
 
