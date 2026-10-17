@@ -280,10 +280,10 @@ macro_rules! popup_form {
                 ));
                 match (wanted, current) {
                     (None, None) => return Ok(()),
-                    (None, Some((Some(at), _))) => form.toggle_atc(at)?,
-                    // A row the official list does not have (a legacy
-                    // typed code): blank removes it.
-                    (None, Some((None, _))) => {
+                    // Blank unticks the row's ATC (the popup's untick
+                    // removes its row), a code the list does not have (a
+                    // legacy typed row) included.
+                    (None, Some(_)) => {
                         form.atc_rows.remove(row);
                         form.recompute();
                     }
@@ -300,12 +300,8 @@ macro_rules! popup_form {
                             return Err(format!("{} ({}%) is already chosen.", option.code, option.rate_text));
                         }
                         let base = current.map(|(_, base)| base);
-                        match current {
-                            Some((Some(now), _)) => form.toggle_atc(now)?,
-                            Some((None, _)) => {
-                                form.atc_rows.remove(row);
-                            }
-                            None => {}
+                        if current.is_some() {
+                            form.atc_rows.remove(row);
                         }
                         form.toggle_atc(at)?;
                         if let Some(base) = base
@@ -440,8 +436,8 @@ fn write(
         Cell::Base(Popup::Pt, row) => pt::fill_base(draft, row, value),
         Cell::Base(Popup::Vt, row) => vt::fill_base(draft, row, value),
         Cell::Rate(..) => {
-            // The page never sends it (the box follows the ATC); a value
-            // equal to what the row shows is no change.
+            // The page never sends it (the box follows the ATC); blank is
+            // no write, anything typed is refused.
             if text(value).is_empty() {
                 Ok(())
             } else {

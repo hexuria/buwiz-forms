@@ -1447,6 +1447,12 @@ fn a_legacy_typed_1600pt_row_opens_and_files_as_it_saved() {
     let cleared = fill("1600PT", &legacy, json!({"frm1600PT:txtAtcCd1": ""}));
     assert_eq!(cleared["rejected"], json!({}));
     assert_eq!(cleared["draft"]["atc_rows"], json!([]));
+    // A saved row under item 3 No (which the popup would refuse to tick)
+    // still clears.
+    legacy["taxes_withheld"] = json!(false);
+    let cleared = fill("1600PT", &legacy, json!({"frm1600PT:txtAtcCd1": ""}));
+    assert_eq!(cleared["rejected"], json!({}));
+    assert_eq!(cleared["draft"]["atc_rows"], json!([]));
 }
 
 /// 1601C R5.2: item 9's two lines are one pool. A stored draft whose two
