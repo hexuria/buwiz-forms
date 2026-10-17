@@ -11,8 +11,8 @@ use bir_core::reference;
 use serde_json::{Map, Value, json};
 
 use super::{
-    rows_1700, rows_2550m, rows_2550q, rows_dst_pt_vat, rows_monthly, rows_withholding,
-    schema_entry,
+    rows_1700, rows_2550m, rows_2550q, rows_dst_pt_vat, rows_income_q, rows_monthly,
+    rows_withholding, schema_entry,
 };
 
 fn option(value: &str, label: &str) -> Value {
@@ -76,6 +76,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
         return order;
     }
     if let Some(order) = rows_monthly::edit_order(kind, key) {
+        return order;
+    }
+    if let Some(order) = rows_income_q::edit_order(kind, key) {
         return order;
     }
     location(kind, key).map_or(0, |(_, level)| level + 1)
@@ -150,6 +153,11 @@ pub(super) fn fill(
         return rows_1700::fill(draft, cell, value);
     }
     if let Some(done) = rows_dst_pt_vat::fill(kind, draft, key, value, |draft| {
+        agent::fill_as_user(kind, draft, key, value)
+    }) {
+        return done;
+    }
+    if let Some(done) = rows_income_q::fill(kind, draft, key, value, |draft| {
         agent::fill_as_user(kind, draft, key, value)
     }) {
         return done;
@@ -277,6 +285,7 @@ fn atc_2550m_row(kind: AgentFormKind, key: &str) -> Option<usize> {
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     atc_2550m_row(kind, key).is_some()
         || rows_dst_pt_vat::host_writes(kind, key)
+        || rows_income_q::host_writes(kind, key)
         || sales_2550m_row(kind, key).is_some()
         || rows_2550m::cell(kind, key).is_some()
         || month_year_1601c_row(kind, key).is_some()

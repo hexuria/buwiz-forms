@@ -41,20 +41,31 @@
    "Item 36 is negative.": "Needs item 18 below zero (an over-remittance)"
   },
   "1701Q": {
-   "Base spouse branch is enabled for taxpayer type Single Proprietor or Professional and disabled/reset for Estate or Trust.": "Spouse details can't be entered on this page yet",
-   "Within the spouse branch, spouse-type changes reset ATCs. Compensation Earner selects II011 and disables other ATCs; if multiple spouse types are selected, only II013 and II016 are re-enabled.": "Spouse details can't be entered on this page yet",
-   "General Edit enables Item 23. After Estate/Trust disables spouse and taxpayer type returns to Single Proprietor/Professional, enableSpouse mistakenly enables taxpayer Item 14, leaving spouse Item 23 disabled.": "Spouse details can't be entered on this page yet",
-   "Within the spouse branch, ATC selects and locks Graduated or 8%; Compensation Income disables both; multiple spouse types re-enable both.": "Spouse details can't be entered on this page yet",
-   "Enabled only for spouse graduated-rate ATCs; disabled for 8% or Compensation Income. General Edit initially enables it before schedule state is restored.": "Spouse details can't be entered on this page yet",
+   "Base spouse branch is enabled for taxpayer type Single Proprietor or Professional and disabled/reset for Estate or Trust.": "Needs item 7 = Single Proprietor or Professional",
+   "Within the spouse branch, spouse-type changes reset ATCs. Compensation Earner selects II011 and disables other ATCs; if multiple spouse types are selected, only II013 and II016 are re-enabled.": "Needs item 19 = Single Proprietor or Professional",
+   "General Edit enables Item 23. After Estate/Trust disables spouse and taxpayer type returns to Single Proprietor/Professional, enableSpouse mistakenly enables taxpayer Item 14, leaving spouse Item 23 disabled.": "Needs item 7 = Single Proprietor or Professional",
+   "Within the spouse branch, ATC selects and locks Graduated or 8%; Compensation Income disables both; multiple spouse types re-enable both.": "Needs item 20 other than II011 Compensation Income",
+   "Enabled only for spouse graduated-rate ATCs; disabled for 8% or Compensation Income. General Edit initially enables it before schedule state is restored.": "Needs item 25 = Graduated Rates",
    "Schedule I input: enabled for the matching party under graduated rate; Items 37 and 39 additionally require Itemized deduction. On Edit, spouse B-state is incorrectly derived from taxpayer rate/method.": "Needs the graduated income tax rate",
    "Shared description enabled by Schedule I and disabled when Schedule I is disabled; because it is shared, either party transition can overwrite the other party state.": "Needs the graduated income tax rate",
    "Schedule II input: enabled for the matching party under 8% rate. On Edit, spouse B-state is incorrectly derived from taxpayer rate; Item 52 has additional ATC-specific behavior.": "Needs the 8% income tax rate",
    "Shared description enabled by Schedule II and disabled when Schedule II is disabled; because it is shared, either party transition can overwrite the other party state.": "Needs the 8% income tax rate",
    "Enabled for 8% Schedule II except taxpayer ATC II016, which forces 0.00 and disables the field.": "Needs the 8% income tax rate and an ATC other than II016",
-   "Official source disables Item 52B for spouse ATC II016 only when spouse type Compensation Earner is false; it remains enabled in the ordinary compensation-earner mixed-income case, contrary to the guide.": "Spouse details can't be entered on this page yet",
-   "Normal ATC transitions enable this for a non-compensation spouse; Edit incorrectly enables it even with no spouse.": "Spouse details can't be entered on this page yet",
+   "Official source disables Item 52B for spouse ATC II016 only when spouse type Compensation Earner is false; it remains enabled in the ordinary compensation-earner mixed-income case, contrary to the guide.": "Needs item 25 = 8% and item 20 other than II016",
+   "Normal ATC transitions enable this for a non-compensation spouse; Edit incorrectly enables it even with no spouse.": "Needs item 20 other than II011 Compensation Income",
    "Enabled only when Amended Return Yes is selected.": "Needs Amended Return = Yes",
-   "Enabled only for Amended Return Yes with a nonempty spouse name.": "Spouse details can't be entered on this page yet"
+   "Enabled only for Amended Return Yes with a nonempty spouse name.": "Needs Amended Return = Yes"
+  },
+  "1702Q": {
+   "Item 5 has an ATC.": "Needs item 5 = an ATC",
+   "Item 5 has an ATC, on a 2nd or 3rd quarter return.": "Needs item 5 = an ATC, on a 2nd or 3rd quarter return",
+   "Item 5 has an ATC and Item 12 is Itemized Deductions.": "Needs item 5 = an ATC and item 12 = Itemized Deductions",
+   "Item 5 has an ATC and Item 4 Amended Return is Yes.": "Needs item 5 = an ATC and item 4 = Yes",
+   "Both Item 5 boxes are ticked (MCIT and an ATC).": "Needs both item 5 boxes ticked (MCIT and an ATC)",
+   "Both Item 5 boxes are ticked, on a 2nd or 3rd quarter return.": "Needs both item 5 boxes ticked, on a 2nd or 3rd quarter return",
+   "Both Item 5 boxes are ticked, on a 3rd quarter return.": "Needs both item 5 boxes ticked, on a 3rd quarter return",
+   "Item 13 Yes.": "Needs item 13 = Yes",
+   "The regular income tax (Schedule 2 Item 11) is above the MCIT (Item 12).": "Needs the regular income tax above the MCIT (Schedule 2)"
   },
   "1706": {
    "Item 4 indicates the applicable seller category.": "Needs item 3 = an individual seller's ATC",
@@ -101,17 +112,17 @@
  },
  "keys": {
   "1701Q": {
-   "frm1701q:txt36B": "Spouse details can't be entered on this page yet",
+   "frm1701q:txt36B": "Needs item 25 = Graduated Rates",
    "frm1701q:txt37A": "Needs the graduated income tax rate and itemized deductions",
-   "frm1701q:txt37B": "Spouse details can't be entered on this page yet",
+   "frm1701q:txt37B": "Needs item 25 = Graduated Rates and item 25A = Itemized Deduction",
    "frm1701q:txt39A": "Needs the graduated income tax rate and itemized deductions",
-   "frm1701q:txt39B": "Spouse details can't be entered on this page yet",
-   "frm1701q:txt42B": "Spouse details can't be entered on this page yet",
-   "frm1701q:txt43B": "Spouse details can't be entered on this page yet",
-   "frm1701q:txt44B": "Spouse details can't be entered on this page yet",
-   "frm1701q:txt47B": "Spouse details can't be entered on this page yet",
-   "frm1701q:txt48B": "Spouse details can't be entered on this page yet",
-   "frm1701q:txt50B": "Spouse details can't be entered on this page yet"
+   "frm1701q:txt39B": "Needs item 25 = Graduated Rates and item 25A = Itemized Deduction",
+   "frm1701q:txt42B": "Needs item 25 = Graduated Rates",
+   "frm1701q:txt43B": "Needs item 25 = Graduated Rates",
+   "frm1701q:txt44B": "Needs item 25 = Graduated Rates",
+   "frm1701q:txt47B": "Needs item 25 = 8%",
+   "frm1701q:txt48B": "Needs item 25 = 8%",
+   "frm1701q:txt50B": "Needs item 25 = 8%"
   }
  }
 }

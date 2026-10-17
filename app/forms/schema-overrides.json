@@ -15626,6 +15626,1002 @@
     "frm1701q:txtMaxPage": {
       "kind": "hidden",
       "evidence": "Item 3: internal page state of the official program (which inputs to enable, the page shown, a modal's row count, the page version), set by the page's own script, not a box the filer types; this app's field map never writes it, so it is hidden."
+    },
+    "frm1701q:DateQuarter_1": {
+      "label": "First",
+      "evidence": "R3.0 (PR 5): the printed option; html-frozen/1701q-2018/writer-cells.json xbox_joins frm1701q:DateQuarter_1, caption '2 Quarter: First'"
+    },
+    "frm1701q:DateQuarter_2": {
+      "label": "Second",
+      "evidence": "R3.0 (PR 5): the printed option; html-frozen/1701q-2018/writer-cells.json xbox_joins frm1701q:DateQuarter_2, caption '2 Quarter: Second'"
+    },
+    "frm1701q:DateQuarter_3": {
+      "label": "Third",
+      "evidence": "R3.0 (PR 5): the printed option; html-frozen/1701q-2018/writer-cells.json xbox_joins frm1701q:DateQuarter_3, caption '2 Quarter: Third'"
+    },
+    "frm1701q:optSpouseMethod:_1": {
+      "label": "Itemized Deduction",
+      "evidence": "manual-2 (PR 5): the printed option; html-frozen/1701q-2018/writer-cells.json xbox_joins frm1701q:optSpouseMethod:_1, caption '25A Method of Deduction (spouse): Itemized Deduction'"
+    },
+    "frm1701q:optSpouseMethod:_2": {
+      "label": "Optional Standard Deduction (OSD)",
+      "evidence": "manual-2 (PR 5): the printed option; html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018) item 25A prints 'Optional Standard Deduction (OSD)' (html-frozen/1701q-2018/writer-cells.json xbox_joins frm1701q:optSpouseMethod:_2)"
+    },
+    "frm1701q:txt26A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 26 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt26A)"
+    },
+    "frm1701q:txt26B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 26 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt26B)"
+    },
+    "frm1701q:txt27A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 27 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt27A)"
+    },
+    "frm1701q:txt27B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 27 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt27B)"
+    },
+    "frm1701q:txt28A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 28 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt28A)"
+    },
+    "frm1701q:txt28B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 28 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt28B)"
+    },
+    "frm1701q:txt29A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 29 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt29A)"
+    },
+    "frm1701q:txt29B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 29 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt29B)"
+    },
+    "frm1701q:txt30A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 30 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt30A)"
+    },
+    "frm1701q:txt30B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 30 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt30B)"
+    },
+    "frm1701q:txt36A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 36 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt36A)"
+    },
+    "frm1701q:txt36B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 36 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt36B)"
+    },
+    "frm1701q:txt37A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 37 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt37A)"
+    },
+    "frm1701q:txt37B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 37 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt37B)"
+    },
+    "frm1701q:txt38A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 38 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt38A)"
+    },
+    "frm1701q:txt38B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 38 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt38B)"
+    },
+    "frm1701q:txt39A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 39 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt39A)"
+    },
+    "frm1701q:txt39B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 39 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt39B)"
+    },
+    "frm1701q:txt40A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 40 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt40A)"
+    },
+    "frm1701q:txt40B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 40 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt40B)"
+    },
+    "frm1701q:txt41A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 41 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt41A)"
+    },
+    "frm1701q:txt41B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 41 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt41B)"
+    },
+    "frm1701q:txt42A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 42 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt42A)"
+    },
+    "frm1701q:txt42B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 42 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt42B)"
+    },
+    "frm1701q:txt43A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 43 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt43A)"
+    },
+    "frm1701q:txt43B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 43 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt43B)"
+    },
+    "frm1701q:txt44A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 44 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt44A)"
+    },
+    "frm1701q:txt44B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 44 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt44B)"
+    },
+    "frm1701q:txt45A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 45 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt45A)"
+    },
+    "frm1701q:txt45B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 45 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt45B)"
+    },
+    "frm1701q:txt46A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 46 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt46A)"
+    },
+    "frm1701q:txt46B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 46 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt46B)"
+    },
+    "frm1701q:txt47A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 47 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt47A)"
+    },
+    "frm1701q:txt47B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 47 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt47B)"
+    },
+    "frm1701q:txt48A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 48 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt48A)"
+    },
+    "frm1701q:txt48B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 48 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt48B)"
+    },
+    "frm1701q:txt49A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 49 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt49A)"
+    },
+    "frm1701q:txt49B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 49 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt49B)"
+    },
+    "frm1701q:txt50A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 50 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt50A)"
+    },
+    "frm1701q:txt50B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 50 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt50B)"
+    },
+    "frm1701q:txt51A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 51 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt51A)"
+    },
+    "frm1701q:txt51B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 51 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt51B)"
+    },
+    "frm1701q:txt52A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 52 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt52A)"
+    },
+    "frm1701q:txt52B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 52 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt52B)"
+    },
+    "frm1701q:txt53A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 53 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt53A)"
+    },
+    "frm1701q:txt53B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 53 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt53B)"
+    },
+    "frm1701q:txt54A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 54 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt54A)"
+    },
+    "frm1701q:txt54B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 54 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt54B)"
+    },
+    "frm1701q:txt55A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 55 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt55A)"
+    },
+    "frm1701q:txt55B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 55 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt55B)"
+    },
+    "frm1701q:txt56A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 56 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt56A)"
+    },
+    "frm1701q:txt56B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 56 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt56B)"
+    },
+    "frm1701q:txt57A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 57 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt57A)"
+    },
+    "frm1701q:txt57B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 57 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt57B)"
+    },
+    "frm1701q:txt58A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 58 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt58A)"
+    },
+    "frm1701q:txt58B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 58 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt58B)"
+    },
+    "frm1701q:txt59A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 59 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt59A)"
+    },
+    "frm1701q:txt59B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 59 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt59B)"
+    },
+    "frm1701q:txt60A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 60 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt60A)"
+    },
+    "frm1701q:txt60B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 60 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt60B)"
+    },
+    "frm1701q:txt61A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 61 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt61A)"
+    },
+    "frm1701q:txt61B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 61 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt61B)"
+    },
+    "frm1701q:txt62A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 62 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt62A)"
+    },
+    "frm1701q:txt62B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 62 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt62B)"
+    },
+    "frm1701q:txt63A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 63 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt63A)"
+    },
+    "frm1701q:txt63B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 63 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt63B)"
+    },
+    "frm1701q:txt64A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 64 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt64A)"
+    },
+    "frm1701q:txt64B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 64 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt64B)"
+    },
+    "frm1701q:txt65A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 65 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt65A)"
+    },
+    "frm1701q:txt65B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 65 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt65B)"
+    },
+    "frm1701q:txt66A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 66 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt66A)"
+    },
+    "frm1701q:txt66B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 66 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt66B)"
+    },
+    "frm1701q:txt67A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 67 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt67A)"
+    },
+    "frm1701q:txt67B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 67 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt67B)"
+    },
+    "frm1701q:txt68A": {
+      "label": "A) Taxpayer/Filer",
+      "evidence": "PR 5: the sheet's column heading over item 68 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt68A)"
+    },
+    "frm1701q:txt68B": {
+      "label": "B) Spouse",
+      "evidence": "PR 5: the sheet's column heading over item 68 (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): 'A) Taxpayer/Filer', 'B) Spouse'; html-frozen/1701q-2018/writer-cells.json peso_joins frm1701q:txt68B)"
+    },
+    "frm1701q:txt43Desc": {
+      "label": "Specify",
+      "evidence": "PR 5: item 43's '(specify)' box (html-frozen/1701q-2018/writer-cells.json joins frm1701q:txt43Desc, caption '43 (specify)')"
+    },
+    "frm1701q:txt48Desc": {
+      "label": "Specify",
+      "evidence": "PR 5: item 48's '(specify)' box (html-frozen/1701q-2018/writer-cells.json joins frm1701q:txt48Desc, caption '48 (specify)')"
+    },
+    "frm1701q:txt61Desc": {
+      "label": "Specify",
+      "evidence": "PR 5: item 61's '(specify)' box (html-frozen/1701q-2018/writer-cells.json joins frm1701q:txt61Desc, caption '61 (specify)')"
+    },
+    "frm1701q:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "manual-0 (PR 5): the official page's page counter, not a box on the paper form (html-frozen/1701q-2018/writer-cells.json not_joined frm1701q:txtCurrentPage: 'page counter of the eBIRForms page, not a box on the paper form'); the field map writes the constant 1, so it is hidden."
+    },
+    "add:2:0": {
+      "fields": [
+        {
+          "k": "page:1701Q:civilStatus",
+          "l": "Civil Status",
+          "t": "sel",
+          "o": [
+            "Single",
+            "Married",
+            "Legally Separated",
+            "Widow/er"
+          ]
+        }
+      ],
+      "evidence": "Maintainer decision 11 (PR 5): the 1701Q spouse part turns on from Civil status = Married. The January 2018 sheet and its upload have no civil status, so this is a page box (no official key; crates/bir-shell/src/screen_form_module/rows_income_q.rs) whose answer the draft keeps (Form1701QDraft::set_civil_status); the options are the four BIR prints at Form 1701 item 16. Placed by the layout at the head of Part II."
+    },
+    "layout": {
+      "evidence": "PR 5: the printed sheet's parts and items in paper order (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): items 1-4, Part I 5-16A, Part II 17-25A, Part III 26-31, Part IV 32-35, and page 2's Part V with Schedules I-IV, items 36-68; captions from its text). Item 49 'Total Income for the quarter' sits in Schedule II between items 48 and 50, as printed (the extractor had read the centavos note '49 Centavos or Less drop down' as its heading, manual-1). Civil Status heads Part II (decision 11). The contact number is not on this sheet (html-frozen/1701q-2018/writer-cells.json not_joined frm1701q:txtTelno) and goes with Line of Business to Not on the printed sheet (manual-0). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Year",
+              "k": [
+                "frm1701q:txtYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Quarter",
+              "k": [
+                "frm1701q:DateQuarter_1",
+                "frm1701q:DateQuarter_2",
+                "frm1701q:DateQuarter_3"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Amended Return?",
+              "k": [
+                "frm1701q:AmendedRtn_1",
+                "frm1701q:AmendedRtn_2"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1701q:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information on Taxpayer/filer",
+          "items": [
+            {
+              "no": "5",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1701q:txtTIN1",
+                "frm1701q:txtTIN2",
+                "frm1701q:txtTIN3",
+                "frm1701q:txtBranchCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "RDO Code",
+              "k": [
+                "frm1701q:txtRDOCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Taxpayer/Filer Type",
+              "k": [
+                "frm1701q:optType_1",
+                "frm1701q:optType_2",
+                "frm1701q:optType_3",
+                "frm1701q:optType_4"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Alphanumeric Tax Code (ATC)",
+              "k": [
+                "frm1701q:optATC_1",
+                "frm1701q:optATC_2",
+                "frm1701q:optATC_3",
+                "frm1701q:optATC_4",
+                "frm1701q:optATC_5",
+                "frm1701q:optATC_6"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Taxpayer/Filer's Name",
+              "k": [
+                "frm1701q:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Registered Address",
+              "k": [
+                "frm1701q:txtAddress"
+              ]
+            },
+            {
+              "no": "10A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1701q:txtZipCode"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Date of Birth (MM/DD/YYYY)",
+              "k": [
+                "frm1701q:txtBirthMonth",
+                "frm1701q:txtBirthDay",
+                "frm1701q:txtBirthYear"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Citizenship",
+              "k": [
+                "frm1701q:txtCitizenship"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Foreign Tax Number",
+              "k": [
+                "frm1701q:txtForeignTaxNumber"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Claiming Foreign Tax Credits?",
+              "k": [
+                "frm1701q:optForeignTaxCredits_1",
+                "frm1701q:optForeignTaxCredits_2"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Tax Rate",
+              "k": [
+                "frm1701q:optTaxRate_1",
+                "frm1701q:optTaxRate_2"
+              ]
+            },
+            {
+              "no": "16A",
+              "l": "Method of Deduction",
+              "k": [
+                "frm1701q:optMethodOfDeduction:_1",
+                "frm1701q:optMethodOfDeduction:_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · BACKGROUND INFORMATION ON SPOUSE (if applicable)",
+          "items": [
+            {
+              "no": "",
+              "l": "Civil Status",
+              "k": [
+                "page:1701Q:civilStatus"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Spouse's TIN",
+              "k": [
+                "frm1701q:txtSpouseTIN1",
+                "frm1701q:txtSpouseTIN2",
+                "frm1701q:txtSpouseTIN3",
+                "frm1701q:txtSpouseBranchCode"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "RDO Code",
+              "k": [
+                "frm1701q:txtSpouseRDOCode"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Filer's Spouse Type",
+              "k": [
+                "frm1701q:optSpouseType_1",
+                "frm1701q:optSpouseType_2",
+                "frm1701q:optSpouseType_3"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "ATC",
+              "k": [
+                "frm1701q:optSpouseATC_1",
+                "frm1701q:optSpouseATC_2",
+                "frm1701q:optSpouseATC_3",
+                "frm1701q:optSpouseATC_4",
+                "frm1701q:optSpouseATC_5",
+                "frm1701q:optSpouseATC_6",
+                "frm1701q:optSpouseATC_7"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Spouse's Name",
+              "k": [
+                "frm1701q:txtSpouseName"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Citizenship",
+              "k": [
+                "frm1701q:txtSpouseCitizenship"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Foreign Tax Number",
+              "k": [
+                "frm1701q:txtSpouseForeignTaxNum"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Claiming Foreign Tax Credits?",
+              "k": [
+                "frm1701q:optSpouseForeignTaxCred_1",
+                "frm1701q:optSpouseForeignTaxCred_2"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Tax Rate",
+              "k": [
+                "frm1701q:optSpouseTaxRate_1",
+                "frm1701q:optSpouseTaxRate_2"
+              ]
+            },
+            {
+              "no": "25A",
+              "l": "Method of Deduction",
+              "k": [
+                "frm1701q:optSpouseMethod:_1",
+                "frm1701q:optSpouseMethod:_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Total Tax Payable",
+          "items": [
+            {
+              "no": "26",
+              "l": "Tax Due (From Part V, Schedule I-Item 46 OR Schedule II-Item 54)",
+              "k": [
+                "frm1701q:txt26A",
+                "frm1701q:txt26B"
+              ]
+            },
+            {
+              "no": "27",
+              "l": "Less: Tax Credits/Payments (From Part V, Schedule III-Item 62)",
+              "k": [
+                "frm1701q:txt27A",
+                "frm1701q:txt27B"
+              ]
+            },
+            {
+              "no": "28",
+              "l": "Tax Payable/(Overpayment) (Item 26 Less Item 27) (From Part V, Item 63)",
+              "k": [
+                "frm1701q:txt28A",
+                "frm1701q:txt28B"
+              ]
+            },
+            {
+              "no": "29",
+              "l": "Add: Total Penalties (From Part V, Schedule IV-Item 67)",
+              "k": [
+                "frm1701q:txt29A",
+                "frm1701q:txt29B"
+              ]
+            },
+            {
+              "no": "30",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Items 28 and 29) (From Part V, Item 68)",
+              "k": [
+                "frm1701q:txt30A",
+                "frm1701q:txt30B"
+              ]
+            },
+            {
+              "no": "31",
+              "l": "Aggregate Amount Payable/(Overpayment) (Sum of Items 30A and 30B)",
+              "k": [
+                "frm1701q:txt31"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Details of Payment",
+          "items": [
+            {
+              "no": "32",
+              "l": "Cash/Bank Debit Memo",
+              "k": [
+                "frm1701q:txtAgency32",
+                "frm1701q:txtNumber32",
+                "frm1701q:txtDate32",
+                "frm1701q:txtAmount32"
+              ]
+            },
+            {
+              "no": "33",
+              "l": "Check",
+              "k": [
+                "frm1701q:txtAgency33",
+                "frm1701q:txtNumber33",
+                "frm1701q:txtDate33",
+                "frm1701q:txtAmount33"
+              ]
+            },
+            {
+              "no": "34",
+              "l": "Tax Debit Memo",
+              "k": [
+                "frm1701q:txtNumber34",
+                "frm1701q:txtDate34",
+                "frm1701q:txtAmount34"
+              ]
+            },
+            {
+              "no": "35",
+              "l": "Others (specify)",
+              "k": [
+                "frm1701q:txtParticular35",
+                "frm1701q:txtAgency35",
+                "frm1701q:txtNumber35",
+                "frm1701q:txtDate35",
+                "frm1701q:txtAmount35"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedule I – For Graduated IT Rate",
+          "items": [
+            {
+              "no": "36",
+              "l": "Sales/Revenues/Receipts/Fees (net of sales returns, allowances and discounts)",
+              "k": [
+                "frm1701q:txt36A",
+                "frm1701q:txt36B"
+              ]
+            },
+            {
+              "no": "37",
+              "l": "Less: Cost of Sales/Services (applicable only if availing Itemized Deductions)",
+              "k": [
+                "frm1701q:txt37A",
+                "frm1701q:txt37B"
+              ]
+            },
+            {
+              "no": "38",
+              "l": "Gross Income/(Loss) from Operation (Item 36 Less Item 37)",
+              "k": [
+                "frm1701q:txt38A",
+                "frm1701q:txt38B"
+              ]
+            },
+            {
+              "no": "39",
+              "l": "Less: Allowable Deductions: Total Allowable Itemized Deductions",
+              "k": [
+                "frm1701q:txt39A",
+                "frm1701q:txt39B"
+              ]
+            },
+            {
+              "no": "40",
+              "l": "OR Optional Standard Deduction (OSD) (40% of Item 36)",
+              "k": [
+                "frm1701q:txt40A",
+                "frm1701q:txt40B"
+              ]
+            },
+            {
+              "no": "41",
+              "l": "Net Income/(Loss) This Quarter (If Itemized: Item 38 Less Item 39; If OSD: Item 38 Less Item 40)",
+              "k": [
+                "frm1701q:txt41A",
+                "frm1701q:txt41B"
+              ]
+            },
+            {
+              "no": "42",
+              "l": "Add: Taxable Income/(Loss) Previous Quarter/s",
+              "k": [
+                "frm1701q:txt42A",
+                "frm1701q:txt42B"
+              ]
+            },
+            {
+              "no": "43",
+              "l": "Non-Operating Income (specify)",
+              "k": [
+                "frm1701q:txt43Desc",
+                "frm1701q:txt43A",
+                "frm1701q:txt43B"
+              ]
+            },
+            {
+              "no": "44",
+              "l": "Amount Received/Share in Income by a Partner from General Professional Partnership (GPP)",
+              "k": [
+                "frm1701q:txt44A",
+                "frm1701q:txt44B"
+              ]
+            },
+            {
+              "no": "45",
+              "l": "Total Taxable Income/(Loss) To Date (Sum of Items 41 to 44)",
+              "k": [
+                "frm1701q:txt45A",
+                "frm1701q:txt45B"
+              ]
+            },
+            {
+              "no": "46",
+              "l": "TAX DUE (Item 45 x Applicable Tax Rate based on Tax Table below) (To Part III, Item 26)",
+              "k": [
+                "frm1701q:txt46A",
+                "frm1701q:txt46B"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedule II – For 8% IT Rate",
+          "items": [
+            {
+              "no": "47",
+              "l": "Sales/Revenues/Receipts/Fees (net of sales returns, allowances and discounts)",
+              "k": [
+                "frm1701q:txt47A",
+                "frm1701q:txt47B"
+              ]
+            },
+            {
+              "no": "48",
+              "l": "Add: Non-Operating Income (specify)",
+              "k": [
+                "frm1701q:txt48Desc",
+                "frm1701q:txt48A",
+                "frm1701q:txt48B"
+              ]
+            },
+            {
+              "no": "49",
+              "l": "Total Income for the quarter (Sum of Items 47 and 48)",
+              "k": [
+                "frm1701q:txt49A",
+                "frm1701q:txt49B"
+              ]
+            },
+            {
+              "no": "50",
+              "l": "Add: Total Taxable Income/(Loss) Previous Quarter (Item 51 of previous quarter)",
+              "k": [
+                "frm1701q:txt50A",
+                "frm1701q:txt50B"
+              ]
+            },
+            {
+              "no": "51",
+              "l": "Cumulative Taxable Income/(Loss) as of This Quarter (Sum of Items 49 and 50)",
+              "k": [
+                "frm1701q:txt51A",
+                "frm1701q:txt51B"
+              ]
+            },
+            {
+              "no": "52",
+              "l": "Less: Allowable reduction from gross sales/receipts and other non-operating income of purely self-employed individuals and/or professionals in the amount of P 250,000",
+              "k": [
+                "frm1701q:txt52A",
+                "frm1701q:txt52B"
+              ]
+            },
+            {
+              "no": "53",
+              "l": "Taxable Income/(Loss) To Date (Item 51 Less Item 52)",
+              "k": [
+                "frm1701q:txt53A",
+                "frm1701q:txt53B"
+              ]
+            },
+            {
+              "no": "54",
+              "l": "TAX DUE (Item 53 x 8% Tax Rate) (To Part III, Item 26)",
+              "k": [
+                "frm1701q:txt54A",
+                "frm1701q:txt54B"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedule III – Tax Credits/Payments",
+          "items": [
+            {
+              "no": "55",
+              "l": "Prior Year's Excess Credits",
+              "k": [
+                "frm1701q:txt55A",
+                "frm1701q:txt55B"
+              ]
+            },
+            {
+              "no": "56",
+              "l": "Tax Payment/s for the Previous Quarter/s",
+              "k": [
+                "frm1701q:txt56A",
+                "frm1701q:txt56B"
+              ]
+            },
+            {
+              "no": "57",
+              "l": "Creditable Tax Withheld for the Previous Quarter/s",
+              "k": [
+                "frm1701q:txt57A",
+                "frm1701q:txt57B"
+              ]
+            },
+            {
+              "no": "58",
+              "l": "Creditable Tax Withheld per BIR Form No. 2307 for this Quarter",
+              "k": [
+                "frm1701q:txt58A",
+                "frm1701q:txt58B"
+              ]
+            },
+            {
+              "no": "59",
+              "l": "Tax Paid in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm1701q:txt59A",
+                "frm1701q:txt59B"
+              ]
+            },
+            {
+              "no": "60",
+              "l": "Foreign Tax Credits, if applicable",
+              "k": [
+                "frm1701q:txt60A",
+                "frm1701q:txt60B"
+              ]
+            },
+            {
+              "no": "61",
+              "l": "Other Tax Credits/Payments (specify)",
+              "k": [
+                "frm1701q:txt61Desc",
+                "frm1701q:txt61A",
+                "frm1701q:txt61B"
+              ]
+            },
+            {
+              "no": "62",
+              "l": "Total Tax Credits/Payments (Sum of Items 55 to 61) (To Part III, Item 27)",
+              "k": [
+                "frm1701q:txt62A",
+                "frm1701q:txt62B"
+              ]
+            },
+            {
+              "no": "63",
+              "l": "Tax Payable/(Overpayment) (Item 46 or 54, Less Item 62) (To Part III, Item 28)",
+              "k": [
+                "frm1701q:txt63A",
+                "frm1701q:txt63B"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedule IV – Penalties",
+          "items": [
+            {
+              "no": "64",
+              "l": "Surcharge",
+              "k": [
+                "frm1701q:txt64A",
+                "frm1701q:txt64B"
+              ]
+            },
+            {
+              "no": "65",
+              "l": "Interest",
+              "k": [
+                "frm1701q:txt65A",
+                "frm1701q:txt65B"
+              ]
+            },
+            {
+              "no": "66",
+              "l": "Compromise",
+              "k": [
+                "frm1701q:txt66A",
+                "frm1701q:txt66B"
+              ]
+            },
+            {
+              "no": "67",
+              "l": "Total Penalties (Sum of Items 64 to 66) (To Part III, Item 29)",
+              "k": [
+                "frm1701q:txt67A",
+                "frm1701q:txt67B"
+              ]
+            },
+            {
+              "no": "68",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Items 63 and 67) (To Part III, Item 30)",
+              "k": [
+                "frm1701q:txt68A",
+                "frm1701q:txt68B"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "1702EX": {
@@ -19063,6 +20059,737 @@
     "frm1702q:txtATC_1": {
       "kind": "hidden",
       "evidence": "Item 3: a label control (official layout default 'IC055-Minimum Corporate Income Tax (MCIT)'), not a box the filer types; hidden."
+    },
+    "frm1702q:rbQuarter_1": {
+      "label": "1st",
+      "evidence": "PR 5: the printed option; html-frozen/1702q-2018/writer-cells.json xbox_joins frm1702q:rbQuarter_1, caption '3 Quarter 1st'"
+    },
+    "frm1702q:rbQuarter_2": {
+      "label": "2nd",
+      "evidence": "PR 5: the printed option; html-frozen/1702q-2018/writer-cells.json xbox_joins frm1702q:rbQuarter_2, caption '3 Quarter 2nd'"
+    },
+    "frm1702q:rbQuarter_3": {
+      "label": "3rd",
+      "evidence": "PR 5: the printed option; html-frozen/1702q-2018/writer-cells.json xbox_joins frm1702q:rbQuarter_3, caption '3 Quarter 3rd'"
+    },
+    "frm1702q:rbTxRlf_1": {
+      "label": "Yes",
+      "evidence": "R3.1 (PR 5): the printed option; html-frozen/1702q-2018/writer-cells.json xbox_joins frm1702q:rbTxRlf_1, caption '13 Tax relief? Yes'"
+    },
+    "frm1702q:rbTxRlf_2": {
+      "label": "No",
+      "evidence": "R3.1 (PR 5): the printed option; html-frozen/1702q-2018/writer-cells.json xbox_joins frm1702q:rbTxRlf_2, caption '13 Tax relief? No'"
+    },
+    "frm1702q:rbATC_1": {
+      "label": "IC 055 Minimum Corporate Income Tax (MCIT)",
+      "evidence": "manual-2 (PR 5): the printed line; html-frozen/1702q-2018/writer-cells.json xbox_joins frm1702q:rbATC_1, caption '5 ATC IC 055 Minimum Corporate Income Tax (MCIT)'"
+    },
+    "frm1702q:rbATC_2": {
+      "label": "Other ATC",
+      "evidence": "manual-2 (PR 5): the sheet's second ATC line, where the chosen ATC prints (html-frozen/1702q-2018/writer-cells.json xbox_joins frm1702q:rbATC_2, caption '5 ATC (second line)')"
+    },
+    "frm1702q:cbATC_2": {
+      "label": "ATC",
+      "evidence": "manual-2 (PR 5): the list of the second ATC line (html-frozen/1702q-2018/writer-cells.json not_joined frm1702q:cbATC_2: prints from derived:atc_code / derived:atc_description)"
+    },
+    "frm1702q:Sched4:chkOthrTxCrdts0": {
+      "kind": "hidden",
+      "evidence": "R3.2 (PR 5): html-frozen/1702q-2018/writer-cells.json not_joined frm1702q:Sched4:chkOthrTxCrdts0: 'row checkbox of the page's other-credits list, not on the paper form'; the field map writes it false always, so it is hidden."
+    },
+    "frm1702q:Sched4:txtOthrTxCrdts0": {
+      "label": "Specify",
+      "evidence": "R3.2 (PR 5): html-frozen/1702q-2018/writer-cells.json joins frm1702q:Sched4:txtOthrTxCrdts0, caption 'Schedule 4 Item 6a Other Tax Credits/Payments (specify)'"
+    },
+    "frm1702q:Sched4:txtOthrTxCrdtAmnt0": {
+      "label": "Amount",
+      "evidence": "R3.2 (PR 5): html-frozen/1702q-2018/writer-cells.json joins derived:Sched4:txtOthrTxCrdtAmnt0, caption 'Schedule 4 Item 6a Other Tax Credits/Payments amount'"
+    },
+    "frm1702q:Sched4:chkOthrTxCrdts1": {
+      "kind": "hidden",
+      "evidence": "R3.2 (PR 5): html-frozen/1702q-2018/writer-cells.json not_joined frm1702q:Sched4:chkOthrTxCrdts1: 'row checkbox of the page's other-credits list, not on the paper form'; the field map writes it false always, so it is hidden."
+    },
+    "frm1702q:Sched4:txtOthrTxCrdts1": {
+      "label": "Specify",
+      "evidence": "R3.2 (PR 5): html-frozen/1702q-2018/writer-cells.json joins frm1702q:Sched4:txtOthrTxCrdts1, caption 'Schedule 4 Item 6b Other Tax Credits/Payments (specify)'"
+    },
+    "frm1702q:Sched4:txtOthrTxCrdtAmnt1": {
+      "label": "Amount",
+      "evidence": "R3.2 (PR 5): html-frozen/1702q-2018/writer-cells.json joins derived:Sched4:txtOthrTxCrdtAmnt1, caption 'Schedule 4 Item 6b Other Tax Credits/Payments amount'"
+    },
+    "frm1702q:txtPg2TIN1": {
+      "kind": "hidden",
+      "evidence": "manual-1 (PR 5): the page 2 header's copy of items 6 and 8; it repeats them (the field map writes it from the same TIN and registered name; html-frozen/1702q-2018/writer-cells.json prints the header from derived:tin_digits and frm1702q:txtPg2TaxpayerName), so the page shows items 6 and 8 once."
+    },
+    "frm1702q:txtPg2TIN2": {
+      "kind": "hidden",
+      "evidence": "manual-1 (PR 5): the page 2 header's copy of items 6 and 8; it repeats them (the field map writes it from the same TIN and registered name; html-frozen/1702q-2018/writer-cells.json prints the header from derived:tin_digits and frm1702q:txtPg2TaxpayerName), so the page shows items 6 and 8 once."
+    },
+    "frm1702q:txtPg2TIN3": {
+      "kind": "hidden",
+      "evidence": "manual-1 (PR 5): the page 2 header's copy of items 6 and 8; it repeats them (the field map writes it from the same TIN and registered name; html-frozen/1702q-2018/writer-cells.json prints the header from derived:tin_digits and frm1702q:txtPg2TaxpayerName), so the page shows items 6 and 8 once."
+    },
+    "frm1702q:txtPg2BranchCode": {
+      "kind": "hidden",
+      "evidence": "manual-1 (PR 5): the page 2 header's copy of items 6 and 8; it repeats them (the field map writes it from the same TIN and registered name; html-frozen/1702q-2018/writer-cells.json prints the header from derived:tin_digits and frm1702q:txtPg2TaxpayerName), so the page shows items 6 and 8 once."
+    },
+    "frm1702q:txtPg2TaxpayerName": {
+      "kind": "hidden",
+      "evidence": "manual-1 (PR 5): the page 2 header's copy of items 6 and 8; it repeats them (the field map writes it from the same TIN and registered name; html-frozen/1702q-2018/writer-cells.json prints the header from derived:tin_digits and frm1702q:txtPg2TaxpayerName), so the page shows items 6 and 8 once."
+    },
+    "frm1702q:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "manual-1 (PR 5): the official page's page counter (html-frozen/1702q-2018/writer-cells.json not_joined frm1702q:txtCurrentPage: 'page counter of the eBIRForms page, not a box on the paper form'); the field map writes the constant 1."
+    },
+    "resultOtherSpecify": {
+      "kind": "hidden",
+      "evidence": "manual-1 (PR 5): not a box of the sheet or of the official page (rules/forms/1702q-v2018c/fields.json: page null, 'Schedule 4 various-details total'); this app never writes it and the upload carries its default 0.00 (tests/sample-payloads/1702Q-2025Q2.official.xml 'resultOtherSpecify=0.00' with an other credit of 1,234.00), so a box showing it would read 0.00 beside typed credits. Schedule 4's own total is item 7, which closes Schedule 4."
+    },
+    "frm1702q:Sched1:txtTax1A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 1 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax1B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 1 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax2A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 2 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax2B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 2 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax3A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 3 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax3B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 3 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax4A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 4 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax4B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 4 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax5A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 5 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax5B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 5 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax6A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 6 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax6B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 6 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax7A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 7 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax7B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 7 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax8A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 8 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax8B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 8 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax9A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 9 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax9B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 9 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax10A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 10 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax10B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 10 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax11A": {
+      "label": "A. Exempt",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 11 ... A. Exempt')"
+    },
+    "frm1702q:Sched1:txtTax11B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 11 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax12B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 12 ... B. Special')"
+    },
+    "frm1702q:Sched1:txtTax13B": {
+      "label": "B. Special",
+      "evidence": "manual-0 (PR 5): the column heading of Schedule 1 (html-frozen/1702q-2018/writer-cells.json: 'Schedule 1 Item 13 ... B. Special')"
+    },
+    "layout": {
+      "evidence": "PR 5: the printed sheet's parts and items in paper order (html-frozen/1702q-2018/index.html (BIR Form 1702Q January 2018): items 1-5, Part I 6-13A, Part II 14-26, and page 2's Part IV Schedules 1-4 with their own item numbers 1-13, 1-13, 1-6 and 1-7; captions from its text and html-frozen/1702q-2018/writer-cells.json). Each schedule is its own part with its printed item numbers (manual-0); the page 2 header copies, the page counter and the unprinted various-details total are not drawn (manual-1); Part II keeps its reviewed captions (item:2:<n>). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For",
+              "k": [
+                "frm1702q:rbForClndrFscl_1",
+                "frm1702q:rbForClndrFscl_2"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Year Ended (MM/20YY)",
+              "k": [
+                "frm1702q:rbYrEndMonth",
+                "frm1702q:txtYrEndYear"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Quarter",
+              "k": [
+                "frm1702q:rbQuarter_1",
+                "frm1702q:rbQuarter_2",
+                "frm1702q:rbQuarter_3"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Amended Return?",
+              "k": [
+                "frm1702q:rbAmendedRtn_1",
+                "frm1702q:rbAmendedRtn_2"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Alphanumeric Tax Code (ATC)",
+              "k": [
+                "frm1702q:txtATC_1",
+                "frm1702q:rbATC_1",
+                "frm1702q:rbATC_2",
+                "frm1702q:cbATC_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1702q:txtTIN1",
+                "frm1702q:txtTIN2",
+                "frm1702q:txtTIN3",
+                "frm1702q:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm1702q:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Registered Name",
+              "k": [
+                "frm1702q:txtTaxpayerName1"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address",
+              "k": [
+                "frm1702q:txtAddress"
+              ]
+            },
+            {
+              "no": "9A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1702q:txtZipCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Contact Number",
+              "k": [
+                "frm1702q:txtTelNum#occurrence-1"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Method of Deductions",
+              "k": [
+                "frm1702q:rbMthdOfDdctns_1",
+                "frm1702q:rbMthdOfDdctns_2"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Are you availing of tax relief under Special Law/International Tax Treaty?",
+              "k": [
+                "frm1702q:rbTxRlf_1",
+                "frm1702q:rbTxRlf_2"
+              ]
+            },
+            {
+              "no": "13A",
+              "l": "If yes, specify",
+              "k": [
+                "frm1702q:txtTxRlfSpcfy"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Total Tax Payable",
+          "items": [
+            {
+              "no": "14",
+              "l": "Income tax due, regular/normal rate",
+              "k": [
+                "frm1702q:txtTax14"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Less: unexpired excess of prior year's MCIT",
+              "k": [
+                "frm1702q:txtTax15"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Balance/income tax still due, regular rate",
+              "k": [
+                "frm1702q:txtTax16"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Add: income tax due, special rate",
+              "k": [
+                "frm1702q:txtTax17"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Aggregate income tax due",
+              "k": [
+                "frm1702q:txtTax18"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Less: total tax credits/payments",
+              "k": [
+                "frm1702q:txtTax19"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Net tax payable (overpayment)",
+              "k": [
+                "frm1702q:txtTax20"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Surcharge",
+              "k": [
+                "frm1702q:txtTax21"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Interest",
+              "k": [
+                "frm1702q:txtTax22"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Compromise",
+              "k": [
+                "frm1702q:txtTax23"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Total penalties",
+              "k": [
+                "frm1702q:txtTax24"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Total amount payable (overpayment)",
+              "k": [
+                "frm1702q:txtTax25"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Number of Attachments",
+              "k": [
+                "frm1702q:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 1 – Declaration this Quarter (A. Exempt, B. Special)",
+          "items": [
+            {
+              "no": "1",
+              "l": "Sales/Receipts/Revenues/Fees",
+              "k": [
+                "frm1702q:Sched1:txtTax1A",
+                "frm1702q:Sched1:txtTax1B"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Less: Cost of Sales/Services",
+              "k": [
+                "frm1702q:Sched1:txtTax2A",
+                "frm1702q:Sched1:txtTax2B"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Gross Income from Operation (Item 1 Less Item 2)",
+              "k": [
+                "frm1702q:Sched1:txtTax3A",
+                "frm1702q:Sched1:txtTax3B"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Add: Non-Operating and Other Taxable Income",
+              "k": [
+                "frm1702q:Sched1:txtTax4A",
+                "frm1702q:Sched1:txtTax4B"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Total Gross Income (Sum of Items 3 and 4)",
+              "k": [
+                "frm1702q:Sched1:txtTax5A",
+                "frm1702q:Sched1:txtTax5B"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Less: Deductions",
+              "k": [
+                "frm1702q:Sched1:txtTax6A",
+                "frm1702q:Sched1:txtTax6B"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Taxable Income this Quarter (Item 5 less Item 6)",
+              "k": [
+                "frm1702q:Sched1:txtTax7A",
+                "frm1702q:Sched1:txtTax7B"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Add: Taxable Income Previous Quarter/s",
+              "k": [
+                "frm1702q:Sched1:txtTax8A",
+                "frm1702q:Sched1:txtTax8B"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Total Taxable Income to Date (Sum of Items 7 & 8)",
+              "k": [
+                "frm1702q:Sched1:txtTax9A",
+                "frm1702q:Sched1:txtTax9B"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Applicable Income Tax Rate [except minimum corporate income tax (MCIT) rate]",
+              "k": [
+                "frm1702q:Sched1:txtTax10A",
+                "frm1702q:Sched1:txtTax10B"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Income Tax Due Other than MCIT (Item 9 x Item 10)",
+              "k": [
+                "frm1702q:Sched1:txtTax11A",
+                "frm1702q:Sched1:txtTax11B"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Less: Share of Other Agencies, if remitted directly",
+              "k": [
+                "frm1702q:Sched1:txtTax12B"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Net Income Tax Due to National Government (Item 11 Less Item 12) (To Part II Item 17)",
+              "k": [
+                "frm1702q:Sched1:txtTax13B"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 2 – Declaration this Quarter, Regular/Normal Rate",
+          "items": [
+            {
+              "no": "1",
+              "l": "Sales/Receipts/Revenues/Fees",
+              "k": [
+                "frm1702q:Sched2:txtTax1"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Less: Cost of Sales/Services",
+              "k": [
+                "frm1702q:Sched2:txtTax2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Gross Income from Operation (Item 1 Less Item 2)",
+              "k": [
+                "frm1702q:Sched2:txtTax3"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Add: Non-Operating and Other Taxable Income",
+              "k": [
+                "frm1702q:Sched2:txtTax4"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Total Gross Income (Sum of Items 3 and 4)",
+              "k": [
+                "frm1702q:Sched2:txtTax5"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Less: Deductions",
+              "k": [
+                "frm1702q:Sched2:txtTax6"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Taxable Income this Quarter (Item 5 less Item 6)",
+              "k": [
+                "frm1702q:Sched2:txtTax7"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Add: Taxable Income Previous Quarter/s",
+              "k": [
+                "frm1702q:Sched2:txtTax8"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Total Taxable Income to Date (Sum of Items 7 and 8)",
+              "k": [
+                "frm1702q:Sched2:txtTax9"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Applicable Income Tax Rate (except MCIT rate)",
+              "k": [
+                "frm1702q:Sched2:txtTax10"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Income Tax Due Other than MCIT (Item 9 multiply by Item 10)",
+              "k": [
+                "frm1702q:Sched2:txtTax11"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Minimum Corporate Income Tax (MCIT) (From Schedule 3 Item 6)",
+              "k": [
+                "frm1702q:Sched2:txtTax12"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Income Tax Due (Normal Income Tax in Item 11 or MCIT in Item 12 whichever is higher) (To Part II Item 14)",
+              "k": [
+                "frm1702q:Sched2:txtTax13"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 3 – Computation of Minimum Corporate Income Tax (MCIT) for the Quarter/s",
+          "items": [
+            {
+              "no": "1",
+              "l": "Gross Income Regular/Normal Rate - 1st Quarter",
+              "k": [
+                "frm1702q:Sched3:txtTax1"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Gross Income Regular/Normal Rate - 2nd Quarter",
+              "k": [
+                "frm1702q:Sched3:txtTax2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Gross Income Regular/Normal Rate - 3rd Quarter",
+              "k": [
+                "frm1702q:Sched3:txtTax3"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Total Gross Income (Sum of Items 1 to 3)",
+              "k": [
+                "frm1702q:Sched3:txtTax4"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "MCIT Rate",
+              "k": [
+                "frm1702q:Sched3:txtTax5"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Minimum Corporate Income Tax (To Schedule 2 Item 12)",
+              "k": [
+                "frm1702q:Sched3:txtTax6"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 4 – Tax Credits/Payments",
+          "items": [
+            {
+              "no": "1",
+              "l": "Prior Year's Excess Credits",
+              "k": [
+                "frm1702q:Sched4:txtTax1"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Tax payment/s for the previous quarter/s of the same taxable year other than MCIT",
+              "k": [
+                "frm1702q:Sched4:txtTax2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "MCIT payment/s for the previous quarter/s of the same taxable year",
+              "k": [
+                "frm1702q:Sched4:txtTax3"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Creditable Tax Withheld for the previous quarter/s",
+              "k": [
+                "frm1702q:Sched4:txtTax4"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Creditable Tax Withheld per BIR Form No. 2307 for this quarter",
+              "k": [
+                "frm1702q:Sched4:txtTax5"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Tax paid in return previously filed if this is an amended return",
+              "k": [
+                "frm1702q:Sched4:txtTax6"
+              ]
+            },
+            {
+              "no": "6a",
+              "l": "Other Tax Credits/Payments (specify below)",
+              "k": [
+                "frm1702q:Sched4:chkOthrTxCrdts0",
+                "frm1702q:Sched4:txtOthrTxCrdts0",
+                "frm1702q:Sched4:txtOthrTxCrdtAmnt0"
+              ]
+            },
+            {
+              "no": "6b",
+              "l": "Other Tax Credits/Payments (specify below)",
+              "k": [
+                "frm1702q:Sched4:chkOthrTxCrdts1",
+                "frm1702q:Sched4:txtOthrTxCrdts1",
+                "frm1702q:Sched4:txtOthrTxCrdtAmnt1"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Total Tax Credits/Payments (Sum of Items 1 to 6b) (To Part II Item 19)",
+              "k": [
+                "frm1702q:Sched4:txtTax7"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "1702RT": {

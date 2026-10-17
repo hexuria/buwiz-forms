@@ -173,9 +173,9 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         return off;
     };
     // A box the host itself closes while its answer does not hold (it
-    // refuses what is typed there, rows_withholding.rs and rows_monthly.rs)
-    // is off whatever it shows: a legacy draft's value there is faded, not
-    // hidden.
+    // refuses what is typed there: rows_withholding.rs, rows_monthly.rs and
+    // rows_income_q.rs, 1701Q's spouse part and 1702Q's schedules) is off
+    // whatever it shows: a legacy draft's value there is faded, not hidden.
     let mut gated = std::collections::BTreeSet::new();
     for (key, condition) in list {
         if let Some(closed) = super::rows_withholding::gated(kind, draft, key)
@@ -185,6 +185,9 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             if closed {
                 off.insert(key.clone(), label(code, key, condition));
             }
+        } else if let Some(tag) = super::rows_income_q::gated(kind, draft, key) {
+            gated.insert(key);
+            off.insert(key.clone(), json!(tag));
         }
     }
     let blank: Vec<(&String, &Value, &str)> = list
@@ -291,9 +294,99 @@ pub(super) mod tests {
          carries this text",
     )];
 
+    /// 1702Q's gates the corpus records only as "Enabled only by the
+    /// official dependency/state transition" (PR 5): `(form, key,
+    /// condition)`. Each box's own value is cleared or overwritten by
+    /// crates/bir-core/src/forms/form_1702q.rs `recompute` while its
+    /// condition does not hold:
+    /// - Item 5's ATC, Schedules 1, 2 and 4: the port clears them with no ATC
+    ///   ("ATCEnableDisableSchedules: no ATC closes Schedules 1, 2 and 4");
+    ///   tracked rule record (rules/forms/1702q-v2018c/validations.json
+    ///   1702q-change-007) of the untracked official HTA runtime: "Schedule
+    ///   1A-only, Schedule 1B-only, or combined Schedules 1-4 are enabled
+    ///   according to the exact ATC switch".
+    /// - Item 13A: the port clears it while item 13 is No (`if
+    ///   !self.tax_relief`); tracked rule record
+    ///   (rules/forms/1702q-v2018c/validations.json 1702q-validate-020) of
+    ///   the untracked official HTA runtime: "Please specify Special
+    ///   Law/International Tax Treaty on Item 13A."
+    /// - Schedule 4 item 6: the port zeroes it unless amended (`if
+    ///   !self.previously_filed_open()`); tracked rule record
+    ///   (rules/forms/1702q-v2018c/validations.json 1702q-change-009) of the
+    ///   untracked official HTA runtime: "Schedule 4 Item 6 is reset to 0.00
+    ///   and disabled."
+    /// - Port behaviour only, not an official rule the tracked corpus
+    ///   records: Schedule 1 items 8A/8B, Schedule 2 item 8 and Schedule 4
+    ///   items 2-4 are cleared before the 2nd quarter (`if !previous`, from
+    ///   `previous_quarters_open`); Schedule 3 items 1-3 are cleared unless
+    ///   both item 5 boxes are ticked (`if !self.mcit_open()`) and items 2
+    ///   and 3 before their quarter (`if self.quarter < 2` / `< 3`);
+    ///   Schedule 2 item 6 is overwritten (not cleared) with 40% of the
+    ///   total gross income under OSD (`if self.deduction ==
+    ///   Form1702qDeduction::Osd`); item 15 is cleared unless the regular
+    ///   tax exceeds the MCIT (`if !self.prior_mcit_open()`).
+    const CORPUS_GAPS_PR5: &[(&str, &str, &str)] = &[
+        ("1702Q", "frm1702q:Sched1:txtTax1A", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax1B", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax2A", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax2B", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax4A", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax4B", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax6A", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax6B", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax8A", GAP_ATC_LATER_QUARTER),
+        ("1702Q", "frm1702q:Sched1:txtTax8B", GAP_ATC_LATER_QUARTER),
+        ("1702Q", "frm1702q:Sched1:txtTax10B", GAP_ATC),
+        ("1702Q", "frm1702q:Sched1:txtTax12B", GAP_ATC),
+        ("1702Q", "frm1702q:Sched2:txtTax1", GAP_ATC),
+        ("1702Q", "frm1702q:Sched2:txtTax2", GAP_ATC),
+        ("1702Q", "frm1702q:Sched2:txtTax4", GAP_ATC),
+        (
+            "1702Q",
+            "frm1702q:Sched2:txtTax6",
+            "Item 5 has an ATC and Item 12 is Itemized Deductions.",
+        ),
+        ("1702Q", "frm1702q:Sched2:txtTax8", GAP_ATC_LATER_QUARTER),
+        ("1702Q", "frm1702q:Sched3:txtTax1", GAP_MCIT),
+        (
+            "1702Q",
+            "frm1702q:Sched3:txtTax2",
+            "Both Item 5 boxes are ticked, on a 2nd or 3rd quarter return.",
+        ),
+        (
+            "1702Q",
+            "frm1702q:Sched3:txtTax3",
+            "Both Item 5 boxes are ticked, on a 3rd quarter return.",
+        ),
+        ("1702Q", "frm1702q:Sched4:txtTax1", GAP_ATC),
+        ("1702Q", "frm1702q:Sched4:txtTax2", GAP_ATC_LATER_QUARTER),
+        ("1702Q", "frm1702q:Sched4:txtTax3", GAP_ATC_LATER_QUARTER),
+        ("1702Q", "frm1702q:Sched4:txtTax4", GAP_ATC_LATER_QUARTER),
+        ("1702Q", "frm1702q:Sched4:txtTax5", GAP_ATC),
+        (
+            "1702Q",
+            "frm1702q:Sched4:txtTax6",
+            "Item 5 has an ATC and Item 4 Amended Return is Yes.",
+        ),
+        ("1702Q", "frm1702q:Sched4:txtOthrTxCrdts0", GAP_ATC),
+        ("1702Q", "frm1702q:Sched4:txtOthrTxCrdtAmnt0", GAP_ATC),
+        ("1702Q", "frm1702q:Sched4:txtOthrTxCrdts1", GAP_ATC),
+        ("1702Q", "frm1702q:Sched4:txtOthrTxCrdtAmnt1", GAP_ATC),
+        ("1702Q", "frm1702q:txtTxRlfSpcfy", "Item 13 Yes."),
+        (
+            "1702Q",
+            "frm1702q:txtTax15",
+            "The regular income tax (Schedule 2 Item 11) is above the MCIT (Item 12).",
+        ),
+    ];
+    const GAP_ATC: &str = "Item 5 has an ATC.";
+    const GAP_ATC_LATER_QUARTER: &str = "Item 5 has an ATC, on a 2nd or 3rd quarter return.";
+    const GAP_MCIT: &str = "Both Item 5 boxes are ticked (MCIT and an ATC).";
+
     /// What `app/forms/conditions.json` should hold, read from the corpus:
     /// every box the page draws whose `enabled_when` names an answer,
-    /// computed boxes left out, and the reviewed [`CORPUS_GAPS`].
+    /// computed boxes left out, and the reviewed [`CORPUS_GAPS`] and
+    /// [`CORPUS_GAPS_PR5`].
     pub(crate) fn derived() -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
         let mut out = Map::new();
@@ -321,6 +414,11 @@ pub(super) mod tests {
             }
             for (form, key, condition, _evidence) in CORPUS_GAPS {
                 if form == code && shown.contains(key) {
+                    keys.insert(key.to_string(), json!(condition));
+                }
+            }
+            for (form, key, condition) in CORPUS_GAPS_PR5 {
+                if *form == code && shown.contains(*key) {
                     keys.insert(key.to_string(), json!(condition));
                 }
             }
@@ -389,12 +487,11 @@ pub(super) mod tests {
     /// condition.
     #[test]
     fn every_condition_has_a_short_tag_for_filers() {
-        const SPOUSE: &str = "Spouse details can't be entered on this page yet";
+        // PR 5: 1701Q's spouse part opens from Civil Status (decision 11),
+        // so no tag says it cannot be entered any more: every tag names
+        // what turns its box on.
         let check = |code: &str, tag: &str| {
-            assert!(
-                tag.starts_with("Needs ") || tag == SPOUSE,
-                "{code}: {tag:?}"
-            );
+            assert!(tag.starts_with("Needs "), "{code}: {tag:?}");
             assert!(tag.len() <= 90, "{code}: {tag:?} is long");
             for word in [
                 "incorrect",
@@ -484,6 +581,15 @@ pub(super) mod tests {
             labels()["keys"]["1701Q"]["frm1701q:txt37A"],
             "Needs the graduated income tax rate and itemized deductions"
         );
-        assert_eq!(labels()["keys"]["1701Q"]["frm1701q:txt36B"], SPOUSE);
+        // PR 5: the spouse's column B names the spouse's own answer (item 25),
+        // replacing "Spouse details can't be entered on this page yet".
+        assert_eq!(
+            labels()["keys"]["1701Q"]["frm1701q:txt36B"],
+            "Needs item 25 = Graduated Rates"
+        );
+        assert_eq!(
+            labels()["conditions"]["1701Q"]["Normal ATC transitions enable this for a non-compensation spouse; Edit incorrectly enables it even with no spouse."],
+            "Needs item 20 other than II011 Compensation Income"
+        );
     }
 }

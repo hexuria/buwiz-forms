@@ -45,6 +45,7 @@ mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
 mod rows_dst_pt_vat;
+mod rows_income_q;
 mod rows_monthly;
 mod rows_withholding;
 
@@ -150,6 +151,8 @@ export interface ScreenFormPenalties {
     keys: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
+    /** The amounts are kept as entered before penalties were computed (1701Q): "Use the computed amounts" works once Edit opens them. */
+    kept?: boolean;
     /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
     applies: boolean;
 }
@@ -281,6 +284,7 @@ fn schema() -> &'static [Value] {
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
             rows_dst_pt_vat::mark_calendar_tables(form, &code);
+            rows_income_q::mark_one_date(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -2446,6 +2450,8 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
             map.insert(key.clone(), value);
         }
     }
+    // 1701Q's Civil Status, a page box with no official key (PR 5).
+    rows_income_q::values(kind, draft, &mut map);
     Ok(Value::Object(
         map.into_iter()
             .map(|(key, value)| (key, Value::String(value)))
@@ -2729,6 +2735,8 @@ const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
 const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
+/// 1701Q's penalties kept as the filer entered them (PR 5).
+const NOTE_KEPT: &str = "Kept as entered before penalties were computed.";
 /// Only for a box a form group is assigned to open (the pinned list).
 const NOTE_ASSIGNED: &str = "Can't be filled on this page yet. It will be added for this form.";
 
@@ -2779,6 +2787,8 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_IDENTITY
     } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
         NOTE_REPEAT
+    } else if reason == rows_income_q::KEPT_AS_ENTERED {
+        NOTE_KEPT
     } else {
         // Unmapped, derived, written by the app, or a field this page
         // cannot write: shut until the form's own work opens it.
@@ -2817,10 +2827,17 @@ fn opened_json(
         if !penalties::edited(&group, &draft) {
             for key in &group.keys {
                 let reason = penalties::lock_reason(kind, &group, &draft, key);
+                // A 1701Q column still on the filer's typed amounts (PR 5).
+                let reason = rows_income_q::penalty_lock(kind, &draft, key)
+                    .filter(|_| reason == penalties::LOCK)
+                    .unwrap_or(reason);
                 locks.insert(key.clone(), json!(reason));
             }
         }
     }
+    // 1701Q's spouse penalties while column B is not on the return: faded
+    // with what opens them, not locked (PR 5, rows_income_q.rs).
+    rows_income_q::relock(kind, &draft, &mut locks);
     let profile = profile_keys(kind, &from_profile);
     let profile_edit = profile_edit_keys(kind, &from_profile);
     let parts = if sample.is_some() {
@@ -3757,8 +3774,10 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's forms; the integration merge chains the other form groups').
-    let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits);
+    // 4's and PR 5's forms; the integration merge chains PR 2's and PR 3's
+    // below).
+    let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
+        .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits));
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3859,6 +3878,14 @@ fn apply_screen_edits(
             rejected.insert(key.clone(), Value::String(reason));
             continue;
         }
+        // 1701Q's spouse part while it is closed says what opens it, its
+        // penalty boxes too (PR 5, rows_income_q.rs).
+        if let ChoiceStep::Fill(value) = &step
+            && let Some(why) = rows_income_q::closed_refusal(kind, draft, &key, value)
+        {
+            rejected.insert(key.clone(), json!(why));
+            continue;
+        }
         let mut next = draft.clone();
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
@@ -3896,16 +3923,18 @@ fn apply_screen_edits(
                 continue;
             }
             if !unlocked.contains(&key) && !edited {
-                rejected.insert(
-                    key.clone(),
-                    json!(format!("`{key}` is {}", penalties::LOCK)),
-                );
+                let lock =
+                    rows_income_q::penalty_lock(kind, draft, &key).unwrap_or(penalties::LOCK);
+                rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
                 continue;
             }
             if let (ChoiceStep::Fill(value), Some(path)) = (&step, penalties::path_of(kind, &key))
                 && (value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty()))
             {
                 set_draft_path(&mut next, &path, Value::Null);
+                // "Use the computed amounts" on a 1701Q column still on its
+                // typed amounts joins the model (PR 5).
+                rows_income_q::join_model(kind, &mut next, &key);
                 *draft = next;
                 continue;
             }
@@ -4920,6 +4949,8 @@ mod tests {
 
     // PR 4: 2000, 2553 and 2550M against their printed sheets.
     mod dst_pt_vat;
+    // PR 5: 1701Q and 1702Q against their printed sheets.
+    mod income_q;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -13156,6 +13187,17 @@ mod tests {
                     address_of(length).replace("UNIT", "ZQXJ")
                 };
                 let mut draft = opened["draft"].clone();
+                // 1701Q's spouse part opens with Civil Status = Married
+                // (decision 11, PR 5).
+                if *code == "1701Q" && key.contains("Spouse") {
+                    let married = fill(
+                        code,
+                        &draft,
+                        json!({ rows_income_q::CIVIL_STATUS: "Married" }),
+                    );
+                    assert_eq!(married["rejected"], json!({}), "{code} Married");
+                    draft = married["draft"].clone();
+                }
                 for answer in answers.get(key).copied().unwrap_or_default() {
                     let on = fill(code, &draft, json!({ *answer: "true" }));
                     assert_eq!(on["rejected"], json!({}), "{code} {answer}");
@@ -13497,7 +13539,8 @@ mod tests {
     /// alone: blank now, at least one probe taken, and every probe taken
     /// cleared by the form through the page's own fill, or refused because
     /// the answer it waits for does not hold (the host's gate refusal,
-    /// rows_withholding.rs: 1602Q item 13, 1601FQ item 25). 1600WP Schedule
+    /// rows_withholding.rs: 1602Q item 13, 1601FQ item 25; rows_income_q.rs:
+    /// 1701Q's spouse part). 1600WP Schedule
     /// 1.1's filer boxes (a hand list) are off, whatever they show, while the
     /// draft's item 4 is not Yes, which is their corpus condition ("Item 4
     /// Yes."): the form's computation keeps what is typed there, so probing
@@ -13535,7 +13578,12 @@ mod tests {
                         let filled = fill(code, &checked["draft"], json!({ key: probe }));
                         match filled["rejected"][key].as_str() {
                             None => Some(shows_nothing(&filled["values"][key])),
-                            Some(why) if rows_withholding::is_gate_refusal(why) => Some(true),
+                            Some(why)
+                                if rows_withholding::is_gate_refusal(why)
+                                    || rows_income_q::is_gate_refusal(why) =>
+                            {
+                                Some(true)
+                            }
                             Some(_) => None,
                         }
                     })
@@ -13569,6 +13617,18 @@ mod tests {
                 let tag = tags["keys"][code][key]
                     .as_str()
                     .or_else(|| tags["conditions"][code][condition].as_str());
+                // PR 5: 1701Q's Part II and column B, on a draft with no
+                // spouse, need Civil Status = Married first (maintainer
+                // decision 11's words), whatever else they need.
+                let spouse_part = key.starts_with("frm1701q:txtSpouse")
+                    || key.starts_with("frm1701q:optSpouse")
+                    || (key.starts_with("frm1701q:txt") && key.ends_with('B'));
+                let tag = if code == "1701Q" && spouse_part && opened["draft"]["has_spouse"] != true
+                {
+                    Some("Needs Civil Status = Married")
+                } else {
+                    tag
+                };
                 assert_eq!(why.as_str(), tag, "{code}: {key} says what turns it on");
                 assert!(
                     opened["locks"][key].is_null(),
@@ -13599,7 +13659,17 @@ mod tests {
                 ("1604C", 5),
                 ("1604F", 1),
                 ("1606", 2),
-                ("1701Q", 39),
+                // Plus 18 for 1701Q (PR 5): item 17's four TIN boxes (the
+                // host writes them now), item 25A's two boxes, 36B-44B and
+                // 47A-52A, which the probe binds now, are off on a draft
+                // with no spouse and no rate, like the rest of their part,
+                // and so are items 43 and 48's "(specify)" boxes, which the
+                // host closes (rows_income_q.rs).
+                ("1701Q", 57),
+                // 1702Q, 32 (PR 5): its schedules wait for item 5's ATC
+                // (CORPUS_GAPS_PR5), 13A for item 13, 15 for the MCIT; at
+                // pr0b-push 1702Q had no conditional box and no entry here.
+                ("1702Q", 32),
                 ("1800", 1),
                 ("1801", 1),
                 ("2000OT", 2),
@@ -13824,6 +13894,34 @@ mod tests {
                 ],
                 Box::new(by(json!({"frm1600WP:AnyTaxHeld_1": "true"}))),
             ),
+            // PR 5: 1701Q's spouse part comes alive with Civil Status =
+            // Married (decision 11), its TIN boxes too.
+            (
+                "1701Q",
+                vec![
+                    "frm1701q:txtSpouseTIN1",
+                    "frm1701q:txtSpouseName",
+                    "frm1701q:txtSpouseRDOCode",
+                    "frm1701q:optSpouseType_1",
+                    "frm1701q:txt55B",
+                ],
+                Box::new(by(
+                    json!({"page:1701Q:civilStatus": "Married", "frm1701q:optType_1": "true"}),
+                )),
+            ),
+            // PR 5: 1702Q's schedules come alive with an ATC at item 5.
+            (
+                "1702Q",
+                vec![
+                    "frm1702q:Sched2:txtTax1",
+                    "frm1702q:Sched1:txtTax1A",
+                    "frm1702q:Sched4:txtOthrTxCrdts0",
+                    "frm1702q:Sched4:txtTax5",
+                ],
+                Box::new(by(
+                    json!({"frm1702q:cbATC_2": "IC010_25%", "frm1702q:rbATC_2": "true"}),
+                )),
+            ),
         ];
         for (code, keys, turn_on) in cases {
             let opened = open(code, page_period_of(code));
@@ -13886,6 +13984,59 @@ mod tests {
                 "1701Q",
                 json!({"frm1701q:optType_1": "true", "frm1701q:txtSpouseName": "JUAN DELA CRUZ"}),
             ),
+            // PR 5: the spouse part opened from Civil Status (decision 11),
+            // through each spouse answer that turns column B on or off.
+            (
+                "1701Q",
+                json!({"page:1701Q:civilStatus": "Married", "frm1701q:optType_1": "true"}),
+            ),
+            (
+                "1701Q",
+                json!({
+                    "page:1701Q:civilStatus": "Married",
+                    "frm1701q:optType_1": "true",
+                    "frm1701q:optSpouseType_1": "true",
+                    "frm1701q:optSpouseATC_1": "true",
+                    "frm1701q:optSpouseMethod:_1": "true",
+                }),
+            ),
+            (
+                "1701Q",
+                json!({
+                    "page:1701Q:civilStatus": "Married",
+                    "frm1701q:optType_2": "true",
+                    "frm1701q:optSpouseType_2": "true",
+                    "frm1701q:optSpouseATC_7": "true",
+                    "frm1701q:AmendedRtn_1": "true",
+                }),
+            ),
+            (
+                "1701Q",
+                json!({
+                    "page:1701Q:civilStatus": "Married",
+                    "frm1701q:optType_1": "true",
+                    "frm1701q:optSpouseType_3": "true",
+                }),
+            ),
+            (
+                "1701Q",
+                json!({"page:1701Q:civilStatus": "Married", "frm1701q:optType_3": "true"}),
+            ),
+            // PR 5: 1702Q's schedules open with item 5's ATC.
+            (
+                "1702Q",
+                json!({"frm1702q:cbATC_2": "IC010_25%", "frm1702q:rbATC_2": "true"}),
+            ),
+            (
+                "1702Q",
+                json!({
+                    "frm1702q:cbATC_2": "IC010_25%",
+                    "frm1702q:rbATC_2": "true",
+                    "frm1702q:rbATC_1": "true",
+                    "frm1702q:rbTxRlf_1": "true",
+                    "frm1702q:rbAmendedRtn_1": "true",
+                }),
+            ),
             ("2000OT", json!({"frm2000OT:rbTransNature_2": "true"})),
             ("2200A", json!({"frm2200Av2020:optTreaty_1": "true"})),
             ("2553", json!({"frm2553:txt13_1": "true"})),
@@ -13930,6 +14081,8 @@ mod tests {
             ("1700", 2),
             ("1701A", 2),
             ("1701MS", 2),
+            // PR 5: 1701Q's items 64-66, columns A and B, joined the model.
+            ("1701Q", 2),
             ("1702MX", 1),
             ("1702Q", 1),
             ("1702RT", 1),
@@ -13983,8 +14136,19 @@ mod tests {
                 let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
                 if group["applies"] == false {
                     // A party not on this return: no Edit, and what is typed
-                    // there would not file.
+                    // there would not file. 1701Q's spouse column (PR 5) is
+                    // faded instead, with what opens it (Civil Status =
+                    // Married, decision 11): rule 6, not a lock.
                     for key in &keys {
+                        if code == "1701Q" {
+                            assert!(opened["locks"][key].is_null(), "{code}: {key}");
+                            assert_eq!(
+                                opened["off"][key],
+                                rows_income_q::NEEDS_MARRIED,
+                                "{code}: {key}"
+                            );
+                            continue;
+                        }
                         assert_eq!(
                             opened["locks"][key],
                             penalties::NOT_ON_RETURN,
@@ -14007,10 +14171,18 @@ mod tests {
                     not_on_return.push(format!("{code} {}", keys[0]));
                     continue;
                 }
+                // A 1701Q column still on the filer's typed amounts
+                // (penalty_model_version 0, PR 5) says so; every other
+                // locked penalty is computed from the due date.
+                let kept = group["kept"] == true;
                 for key in &keys {
                     assert_eq!(
                         opened["locks"][key],
-                        penalties::LOCK,
+                        if kept {
+                            rows_income_q::KEPT_AS_ENTERED
+                        } else {
+                            penalties::LOCK
+                        },
                         "{code}: {key} is locked"
                     );
                 }
@@ -14111,6 +14283,7 @@ mod tests {
                 "1700 frm1700:txtPg1I31B",
                 "1701A frm1701A:txt25B",
                 "1701MS frm1701MS:txtCompromise28b",
+                "1701Q frm1701q:txt64B",
             ]
         );
     }

@@ -82,6 +82,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_form_shared_mechanisms.mjs
     node --experimental-vm-modules tools/test_form_q3_withholding.mjs
     node --experimental-vm-modules tools/test_form_monthly_withholding.mjs
+    node --experimental-vm-modules tools/test_form_q3_income_tax.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check

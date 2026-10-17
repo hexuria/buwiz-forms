@@ -2487,6 +2487,32 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                 )
                 .expect("fill runs");
                 if let Some(reason) = filled["rejected"].get(key) {
+                    // PR 5: 1701Q's spouse part takes nothing until Civil
+                    // Status is Married (decision 11); the same choice is
+                    // taken once it is.
+                    if code == "1701Q"
+                        && reason
+                            .as_str()
+                            .is_some_and(super::rows_income_q::is_gate_refusal)
+                    {
+                        let married = call(
+                            "screen_form_fill",
+                            vec![
+                                code.into(),
+                                json(opened["draft"].clone()),
+                                json(json!({
+                                    super::rows_income_q::CIVIL_STATUS: "Married",
+                                    "frm1701q:optType_1": "true",
+                                    key: value,
+                                })),
+                            ],
+                        )
+                        .expect("fill runs");
+                        if let Some(reason) = married["rejected"].get(key) {
+                            refused.push(format!("{code} {key} {value:?} (Married): {reason}"));
+                        }
+                        continue;
+                    }
                     refused.push(format!("{code} {key} {value:?}: {reason}"));
                 }
             }
