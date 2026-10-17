@@ -1,0 +1,170 @@
+{
+ "1601EQ": {
+  "R3.2": {
+   "reason": "Tax Agent Accreditation No., Date of Issue, Date of Expiry and Part III items 32-35 are disabled in the official program's static form and saved blank (rules/forms/1601eq-v2018/fixtures/runtime-control-inventory-v796.json: disabled true; rules/forms/1601eq-v2018/fields.json enabled_when 'Disabled in the static form'): the tax agent's accreditation and the Part III payment details are written on the printed sheet by hand or by the bank, not in eBIRForms. The page leaves them out (schema-overrides.json evidence) and the print leaves them blank, as the program does; giving them boxes would file values the official upload never carries.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "manual-0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's pinned lines removed)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::form_1601eq_item_24_is_shown_with_its_printed_caption; tools/test_form_q3_withholding.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_line_of_business_is_not_on_the_printed_sheet",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_boxes_sit_under_their_printed_item_numbers (quarter options 1st-4th); screen_form_module::tests::q3_withholding_labels_read_as_printed (item 11 heading)",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "reason": "The quarter boxes are the return's own period (the draft's quarter, the return's identity): each is ticked from the draft on the page and on the print alike, for every quarter (screen_form_module::tests::q3_withholding_page_and_print_agree_on_the_period_boxes). Nothing is a constant; the probe called them one because every sample draft is first-quarter.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  }
+ },
+ "1601FQ": {
+  "R3.0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_boxes_sit_under_their_printed_item_numbers (quarter options read 1st-4th as printed); screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy (the ATC catalog slots are not drawn); screen_form_module::tests::q3_withholding_labels_read_as_printed",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_labels_read_as_printed (item 9 'Registered Address')",
+   "status": "fixed"
+  },
+  "R3.4": {
+   "reason": "Tax Agent Accreditation No., Date of Issue, Date of Expiry and Part III items 33-36 are disabled in the official program's static form and saved blank (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json: disabled true; rules/forms/1601fq-v2018/fields.json enabled_when 'Disabled in the static form'): the tax agent's accreditation and the Part III payment details are written on the printed sheet by hand or by the bank, not in eBIRForms. The page leaves them out (schema-overrides.json evidence) and the print leaves them blank, as the program does; giving them boxes would file values the official upload never carries.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R5.1": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy (the page 2 header TIN is not drawn; no TIN part outside Part I)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form (1601FQ now one group); screen_form_module::tests::form_1601fq_remittances_are_typed_and_the_totals_follow; bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (1601fq-v2018.json binds items 23-25 and 28-30, probe.rs FILER_TYPED)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::form_1601fq_part_ii_rows_are_chosen_on_the_page_and_print; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's pinned lines removed); tools/test_form_q3_withholding.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's pinned lines removed)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_schedules_are_tables_of_their_printed_columns; screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_labels_read_as_printed (item 23 '1st Month')",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form (1601FQ now one group); screen_form_module::tests::form_1601fq_remittances_are_typed_and_the_totals_follow; bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (1601fq-v2018.json binds items 23-25 and 28-30, probe.rs FILER_TYPED)",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_item_13_is_answered_on_the_page_and_prints (Item 13 Yes/No is answered on the page through set_tax_relief and prints as shown); screen_form_module::tests::q3_withholding_page_and_print_agree_on_the_period_boxes (quarters, Item 13 and Schedule 1 Nature of Income Payment agree with the print for every quarter)",
+   "status": "fixed"
+  }
+ },
+ "1602Q": {
+  "R3.0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_boxes_sit_under_their_printed_item_numbers (quarter options 1st-4th); screen_form_module::tests::q3_withholding_labels_read_as_printed (item 28's options are the printed ones)",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_schedules_are_tables_of_their_printed_columns (Schedules 2 and 3 are tables); screen_form_module::tests::q3_withholding_labels_read_as_printed (no item named 'Row N')",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "reason": "None of the four is printed: html-frozen/1602q-2019/writer-cells.json not_joined says the Tax Rate column of items 13-14 is preprinted (txtSched1TaxRate13/14 have no box) and that the 2019 sheet prints 14 Schedule 1 rows, its item 15 being the total, so layout row 15 (txtSched1Amount15/Tax15) has no printed row. They stay in 'Not on the printed sheet'.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R6.0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1602Q: 12 off boxes); screen_form_module::tests::a_box_comes_alive_when_its_answer_holds (1602Q Item 13 Yes); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers (1602Q Item 13 Yes and No); screen_form_module::tests::q3_withholding_item_13_is_answered_on_the_page_and_prints",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_labels_read_as_printed (item 18 '1st Month')",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 2",
+   "proof": "tools/test_form_q3_withholding.mjs (just shell-ui-test) (13A's 0 shows Choose...); screen_form_module::tests::q3_withholding_labels_read_as_printed (13A lists Special Rate, International Tax Treaty, Both)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "reason": "The quarter boxes are the return's own period (the draft's quarter, the return's identity): each is ticked from the draft on the page and on the print alike, for every quarter (screen_form_module::tests::q3_withholding_page_and_print_agree_on_the_period_boxes). Nothing is a constant; the probe called them one because every sample draft is first-quarter.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  }
+ },
+ "1603Q": {
+  "R3.3": {
+   "reason": "Tax Agent Accreditation No., Date of Issue, Date of Expiry and Part III items 24-27 are disabled in the official program's static form and saved blank (rules/forms/1603q-v2018/fixtures/runtime-control-inventory-v796.json: disabled true; rules/forms/1603q-v2018/fields.json enabled_when 'Disabled in the static form'): the tax agent's accreditation and the Part III payment details are written on the printed sheet by hand or by the bank, not in eBIRForms. The page leaves them out (schema-overrides.json evidence) and the print leaves them blank, as the program does; giving them boxes would file values the official upload never carries.",
+   "reviewer": "",
+   "status": "not_a_bug"
+  },
+  "R5.1": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy (the page 2 header TIN is not drawn; no TIN part outside Part I)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_schedules_are_tables_of_their_printed_columns (item 4 keeps only Yes/No)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_schedules_are_tables_of_their_printed_columns (Part IV Schedule 1 table with its recipients and item 3 total); screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_labels_read_as_printed (item 16 'Specify' and 'Amount')",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_labels_read_as_printed (item 9); screen_form_module::tests::q3_withholding_boxes_sit_under_their_printed_item_numbers (quarter options 1st-4th)",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 2",
+   "proof": "screen_form_module::tests::q3_withholding_item_13_is_answered_on_the_page_and_prints (Item 13 Yes/No is answered on the page and prints as shown); screen_form_module::tests::q3_withholding_page_and_print_agree_on_the_period_boxes",
+   "status": "fixed"
+  }
+ }
+}
