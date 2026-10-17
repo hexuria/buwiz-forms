@@ -2253,6 +2253,13 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
 /// A lock's reason as a filer reads it (see the NOTE_* texts).
 fn lock_note(reason: &str) -> &'static str {
     use bir_core::forms::agent::Lock;
+    // 2551Q's 8% penalty reasons are already the filer's words.
+    if reason == penalties::KEPT_ON_EIGHT_PERCENT {
+        return penalties::KEPT_ON_EIGHT_PERCENT;
+    }
+    if reason == penalties::EIGHT_PERCENT {
+        return penalties::EIGHT_PERCENT;
+    }
     if reason.starts_with("computed") {
         NOTE_COMPUTED
     } else if reason == Lock::Profile.reason() || reason.contains("from the tax profile") {
@@ -2289,12 +2296,8 @@ fn opened_json(
     // A computed penalty is locked until Edit penalties opens its group.
     for group in penalties::groups(kind) {
         if !penalties::edited(&group, &draft) {
-            let reason = if penalties::applies(kind, &group, &draft) {
-                penalties::LOCK
-            } else {
-                penalties::off_reason(kind, &draft)
-            };
             for key in &group.keys {
+                let reason = penalties::lock_reason(kind, &group, &draft, key);
                 locks.insert(key.clone(), json!(reason));
             }
         }
@@ -3236,6 +3239,12 @@ fn apply_screen_edits(
     let mut rejected = Map::new();
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
+    // 2551Q's penalty boxes come last, so they are judged on the batch's
+    // own Item 13 answer (an 8% answer in the same batch refuses them).
+    if kind == AgentFormKind::Form2551Q {
+        let groups = penalties::groups(kind);
+        edits.sort_by_key(|(key, _)| groups.iter().any(|group| group.keys.contains(key)));
+    }
     let shown = values_json(kind, draft).map_err(host_error)?;
     let pools = combs::pools(kind.form_code());
     // Whether each penalty group was edited before this batch: an amount in
@@ -3277,19 +3286,36 @@ fn apply_screen_edits(
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
         // override, so the computed amount files again (rule 8).
-        if let Some((group, edited)) = penalty_groups
+        if let Some((_, edited)) = penalty_groups
             .iter()
             .find(|(group, _)| group.keys.contains(&key))
         {
             // 2551Q's Items 20-22 on an 8% return take no amount (the
             // official page zeroes and disables them): refused with the
-            // reason, read on the draft as it stands at this edit, rather
-            // than dropped by the compute.
-            if kind == AgentFormKind::Form2551Q && !penalties::applies(kind, group, draft) {
-                rejected.insert(
-                    key.clone(),
-                    json!(format!("`{key}`: {}", penalties::off_reason(kind, draft))),
-                );
+            // reason, judged on the Item 13 answer this batch leaves, rather
+            // than dropped by the compute. A blank only clears an amount an
+            // older manual draft kept there.
+            if penalties::eight_percent(kind, draft) {
+                let blank = matches!(&step, ChoiceStep::Fill(value)
+                    if value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty()));
+                match penalties::kept_amount_path(kind, draft, &key) {
+                    Some(path) if blank => {
+                        set_draft_path(&mut next, &path, json!(0.0));
+                        *draft = next;
+                    }
+                    Some(_) => {
+                        rejected.insert(
+                            key.clone(),
+                            json!(format!("`{key}`: {}", penalties::KEPT_ON_EIGHT_PERCENT)),
+                        );
+                    }
+                    None => {
+                        rejected.insert(
+                            key.clone(),
+                            json!(format!("`{key}`: {}", penalties::EIGHT_PERCENT)),
+                        );
+                    }
+                }
                 continue;
             }
             if !unlocked.contains(&key) && !edited {
@@ -11233,6 +11259,101 @@ mod tests {
     /// penalty; a late one shows the computed amounts locked, one Edit opens
     /// the three, only the typed one becomes an override (the others keep
     /// computing), the totals and the upload follow, a blank computes again.
+    /// A 2551Q draft saved with the old manual switch on Item 13 = 8% keeps
+    /// the amount it filed: the box says so truthfully, a blank clears it
+    /// (then it is nil like any 8% return), and any other amount is refused.
+    #[test]
+    fn form_2551q_kept_eight_percent_amount_says_so_and_a_blank_clears_it() {
+        setup();
+        let kind = AgentFormKind::Form2551Q;
+        let [sur, int, comp] = [
+            "frm2551Qv2018:txt20",
+            "frm2551Qv2018:txt21",
+            "frm2551Qv2018:txt22",
+        ];
+        let unlocked = [sur, int, comp];
+        let late = open_for(TIN, "2551Q", 2024, 1);
+        let mut legacy = late["draft"].clone();
+        legacy["item_13_election"] = json!("eight_percent");
+        legacy["auto_compute_penalties"] = json!(false);
+        legacy["surcharge"] = json!(10.0);
+        legacy["interest"] = json!(0.0);
+        legacy["compromise"] = json!(0.0);
+        legacy["penalty_overrides"] = json!({});
+        let shown = fill("2551Q", &legacy, json!({}));
+        assert_eq!(amount(&shown["values"], sur), 10.0);
+        assert_eq!(
+            agent::field_map(kind, &shown["draft"]).unwrap()[sur],
+            "10.00"
+        );
+        let group = &penalties::groups(kind)[0];
+        assert_eq!(
+            penalties::lock_reason(kind, group, &shown["draft"], sur),
+            penalties::KEPT_ON_EIGHT_PERCENT
+        );
+        assert_eq!(
+            penalties::lock_reason(kind, group, &shown["draft"], int),
+            penalties::EIGHT_PERCENT
+        );
+        assert_eq!(
+            lock_note(penalties::KEPT_ON_EIGHT_PERCENT),
+            penalties::KEPT_ON_EIGHT_PERCENT
+        );
+        assert_eq!(
+            shown["penalties"][0]["applies"], true,
+            "Edit opens it to clear"
+        );
+        // Any other amount is refused, with the reason.
+        let typed = fill_unlocked("2551Q", &shown["draft"], json!({ sur: "50" }), &unlocked);
+        let reason = typed["rejected"][sur].as_str().unwrap_or("");
+        assert!(
+            reason.contains(penalties::KEPT_ON_EIGHT_PERCENT),
+            "{reason}"
+        );
+        assert_eq!(amount(&typed["values"], sur), 10.0);
+        // A blank clears it: nil, filed as nil.
+        let cleared = fill_unlocked("2551Q", &shown["draft"], json!({ sur: "" }), &unlocked);
+        assert_eq!(cleared["rejected"], json!({}));
+        assert_eq!(amount(&cleared["values"], sur), 0.0);
+        assert_eq!(amount(&cleared["values"], "frm2551Qv2018:txt23"), 0.0);
+        assert_eq!(
+            agent::field_map(kind, &cleared["draft"]).unwrap()[sur],
+            "0.00"
+        );
+        // Now it is nil like any 8% return.
+        assert_eq!(cleared["penalties"][0]["applies"], false);
+        assert_eq!(
+            penalties::lock_reason(kind, group, &cleared["draft"], sur),
+            penalties::EIGHT_PERCENT
+        );
+        let again = fill_unlocked("2551Q", &cleared["draft"], json!({ sur: "50" }), &unlocked);
+        let reason = again["rejected"][sur].as_str().unwrap_or("");
+        assert!(reason.contains(penalties::EIGHT_PERCENT), "{reason}");
+    }
+
+    /// One batch that answers Item 13 = 8% and types Item 20: the amount is
+    /// judged on the batch's 8% answer and refused with the reason, never
+    /// silently zeroed by the compute.
+    #[test]
+    fn form_2551q_eight_percent_in_the_same_batch_refuses_item_20() {
+        setup();
+        let late = open_for(TIN, "2551Q", 2024, 1);
+        let sur = "frm2551Qv2018:txt20";
+        let unlocked = [sur, "frm2551Qv2018:txt21", "frm2551Qv2018:txt22"];
+        let batch = fill_unlocked(
+            "2551Q",
+            &late["draft"],
+            json!({ sur: "50", "frm2551Qv2018:taxRate": "2" }),
+            &unlocked,
+        );
+        assert_eq!(batch["draft"]["item_13_election"], "eight_percent");
+        let reason = batch["rejected"][sur].as_str().unwrap_or("");
+        assert!(reason.contains(penalties::EIGHT_PERCENT), "{reason}");
+        assert!(batch["rejected"].get("frm2551Qv2018:taxRate").is_none());
+        assert_eq!(amount(&batch["values"], sur), 0.0);
+        assert!(batch["draft"]["penalty_overrides"]["surcharge"].is_null());
+    }
+
     #[test]
     fn form_2551q_penalties_are_computed_and_only_a_typed_one_overrides() {
         setup();

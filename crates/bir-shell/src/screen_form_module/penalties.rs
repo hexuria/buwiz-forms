@@ -33,12 +33,55 @@ pub(super) const NOT_ON_RETURN: &str = "computed; not part of this return as it 
 /// zeroes and disables them (`taxRateOption()`), so they take no amount.
 pub(super) const EIGHT_PERCENT: &str = "nil on this return: Item 13 is the 8% income tax rate, which the official form files with no penalties";
 
+/// Why a 2551Q penalty box on an 8% return still shows an amount: a draft
+/// saved with the old manual switch keeps what it filed (bir-core
+/// `adopt_legacy_manual_penalties`), and a blank clears it.
+pub(super) const KEPT_ON_EIGHT_PERCENT: &str = "Kept from an earlier version of this return. On the 8% rate the official form files no penalties; clear it to follow the official form.";
+
+/// Whether `draft` is a 2551Q return on Item 13 = 8%, whose Items 20-22
+/// take no amount.
+pub(super) fn eight_percent(kind: AgentFormKind, draft: &Value) -> bool {
+    kind == AgentFormKind::Form2551Q && draft["item_13_election"] == "eight_percent"
+}
+
+/// On a 2551Q 8% return saved with the old manual switch, the draft path of
+/// the non-zero amount `key`'s component still files (`/surcharge`, ...).
+pub(super) fn kept_amount_path(kind: AgentFormKind, draft: &Value, key: &str) -> Option<String> {
+    if !eight_percent(kind, draft) || draft["auto_compute_penalties"] != false {
+        return None;
+    }
+    let (_, component) = override_of(kind, key)?;
+    let path = format!("/{component}");
+    draft
+        .pointer(&path)
+        .and_then(Value::as_f64)
+        .filter(|amount| *amount != 0.0)
+        .map(|_| path)
+}
+
 /// Why a penalty group that is not part of the return is locked.
 pub(super) fn off_reason(kind: AgentFormKind, draft: &Value) -> &'static str {
-    if kind == AgentFormKind::Form2551Q && draft["item_13_election"] == "eight_percent" {
+    if eight_percent(kind, draft) {
         EIGHT_PERCENT
     } else {
         NOT_ON_RETURN
+    }
+}
+
+/// Why `key` of a group is locked while no amount was entered there: a
+/// kept 8% amount, the computed amount, or not on the return.
+pub(super) fn lock_reason(
+    kind: AgentFormKind,
+    group: &Group,
+    draft: &Value,
+    key: &str,
+) -> &'static str {
+    if kept_amount_path(kind, draft, key).is_some() {
+        KEPT_ON_EIGHT_PERCENT
+    } else if applies(kind, group, draft) {
+        LOCK
+    } else {
+        off_reason(kind, draft)
     }
 }
 
@@ -178,7 +221,9 @@ pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
                 json!({
                     "keys": group.keys,
                     "edited": edited(group, draft),
-                    "applies": applies(kind, group, draft),
+                    // A kept 8% amount opens with Edit so a blank can clear it.
+                    "applies": applies(kind, group, draft)
+                        || group.keys.iter().any(|key| kept_amount_path(kind, draft, key).is_some()),
                 })
             })
             .collect(),
