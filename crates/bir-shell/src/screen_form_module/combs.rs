@@ -1,35 +1,51 @@
-//! Character boxes on the form page (rule 5): which boxes the printed sheet
-//! gives a fixed number of character slots, and which stacked lines of one
-//! printed address the page shows as one pool.
+//! What the print sheets say about a box (rule 5, and rule 4's dates):
+//! which boxes the printed sheet gives a fixed number of character slots,
+//! which it prints as a whole date, and which stacked lines of one printed
+//! address the page shows as one box.
 //!
-//! The slot counts come from the print sheets (`html-frozen/<slug>/`: a
+//! The facts come from the print sheets (`html-frozen/<slug>/`: a
 //! writer-cells join puts a key in a comb cell, whose `data-comb-slots` is
-//! its capacity), copied into `app/forms/comb-slots.json` by the ignored
-//! test `write_comb_slots`; `comb_slots_match_the_print_sheets` keeps the
-//! copy in step. The page reads them from the schema:
+//! its capacity; a date join prints a key over MM, DD and YYYY combs),
+//! copied into `app/forms/print-cells.json` by the ignored test
+//! `write_print_cells`; `print_cells_match_the_print_sheets` keeps the copy
+//! in step. The page reads them from the schema:
 //!
 //! - `slots: N` on a text, phone or number box: boxes until the text no
 //!   longer fits, then a plain field. Email, amounts and dates have none.
 //! - `pool: {keys, slots, write}` on the first line of a printed address
-//!   that runs over stacked lines (2552's 40 + 31 slots): the page shows one
-//!   box for the whole address, laid over the lines' slots while it fits.
-//!   `write` are the lines with a draft field of their own; the page splits
-//!   the text over them (the last one takes the rest), or gives it whole to
-//!   the first line when that is the only one (its form's print splits it).
-//!   The later lines are hidden: they are part of the pool.
+//!   that runs over stacked lines (2552's 40 + 31 slots): one box for the
+//!   whole address, laid over the lines' slots while it fits. The later
+//!   lines are hidden: they are part of the pool. The host reads and writes
+//!   the pool from the draft (`pool_texts`, `write_pool`), never from the
+//!   field map, whose lines are cut at a fixed width:
+//!   - `write` is the first line alone where only it has a draft field: the
+//!     whole text goes there, and a second draft line the print joins to it
+//!     (0619E and 0619F's `registered_address_2`) is emptied.
+//!   - `write` is every line where each has its own entry of one draft list
+//!     (1702RT's `registered_address_lines`): the text is split at the last
+//!     space that fits each line, the last taking the rest (provisional:
+//!     rules page question 5). Lines joined by one space give the text back.
+//!   - Any other mix (1702MX: its first line is the whole address, the
+//!     others list entries, and its print reads the list) is not pooled.
 
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
-use bir_core::forms::agent::{AgentFormKind, Binding};
+use bir_core::forms::agent::{AgentFormDef, AgentFormKind, Binding};
 use serde_json::{Map, Value, json};
 
-/// `app/forms/comb-slots.json`: form code -> key -> `[slots, printed caption]`.
-fn comb_slots() -> &'static Value {
-    static SLOTS: OnceLock<Value> = OnceLock::new();
-    SLOTS.get_or_init(|| {
-        serde_json::from_str(include_str!("../../../../app/forms/comb-slots.json"))
-            .expect("app/forms/comb-slots.json is a JSON object")
+/// `app/forms/print-cells.json`: form code -> key -> `{slots?, date?, printed}`.
+fn print_cells() -> &'static Value {
+    static CELLS: OnceLock<Value> = OnceLock::new();
+    CELLS.get_or_init(|| {
+        serde_json::from_str(include_str!("../../../../app/forms/print-cells.json"))
+            .expect("app/forms/print-cells.json is a JSON object")
     })
+}
+
+/// Whether the sheet prints `key` as one whole date (MM, DD and YYYY combs).
+pub(super) fn printed_as_date(code: &str, key: &str) -> bool {
+    print_cells()[code][key]["date"].as_bool() == Some(true)
 }
 
 /// A printed caption without its line marker: "9 Registered Address (second
@@ -58,23 +74,67 @@ fn caption_stem(caption: &str) -> String {
         .to_string()
 }
 
+/// The draft path a text box writes, if it writes one whole text.
+fn text_path<'a>(def: &'a AgentFormDef, key: &str) -> Option<&'a str> {
+    match def.bindings.get(key).map(|bound| &bound.binding) {
+        Some(Binding::Text {
+            path,
+            date: None,
+            part: None,
+            ..
+        }) => Some(path),
+        _ => None,
+    }
+}
+
+/// An email box, by its page type, its key or the draft field it writes.
+fn is_email(def: Option<&AgentFormDef>, field: &Value) -> bool {
+    let key = field["k"].as_str().unwrap_or_default();
+    field["t"] == "email"
+        || key.to_ascii_lowercase().contains("email")
+        || def
+            .and_then(|def| text_path(def, key))
+            .is_some_and(|path| path.to_ascii_lowercase().contains("email"))
+}
+
 /// Boxes that keep character slots: text, phone and number boxes. An email
 /// is always a plain field, and amounts and dates have their own look.
-fn takes_slots(field: &Value) -> bool {
-    matches!(field["t"].as_str(), Some("text" | "phone" | "int"))
+fn takes_slots(def: Option<&AgentFormDef>, field: &Value) -> bool {
+    matches!(field["t"].as_str(), Some("text" | "phone" | "int")) && !is_email(def, field)
+}
+
+/// `/a/b/2` -> `("/a/b", 2)`.
+fn list_entry(path: &str) -> Option<(&str, usize)> {
+    let (list, index) = path.rsplit_once('/')?;
+    Some((list, index.parse().ok()?))
+}
+
+/// Which lines of a run the page writes, or `None` when the run cannot be
+/// one pool (see the module docs).
+fn pool_write(def: &AgentFormDef, lines: &[String]) -> Option<Vec<String>> {
+    let paths: Vec<Option<&str>> = lines.iter().map(|key| text_path(def, key)).collect();
+    paths[0]?;
+    if paths[1..].iter().all(Option::is_none) {
+        return Some(vec![lines[0].clone()]);
+    }
+    let entries: Option<Vec<(&str, usize)>> =
+        paths.iter().map(|path| path.and_then(list_entry)).collect();
+    let entries = entries?;
+    let list = entries[0].0;
+    entries
+        .iter()
+        .enumerate()
+        .all(|(i, (l, index))| *l == list && *index == i)
+        .then(|| lines.to_vec())
 }
 
 /// Give each box its printed slots and gather each stacked address into one
 /// pool (see the module docs).
 pub(super) fn apply_combs(form: &mut Value, code: &str) {
-    let Some(slots) = comb_slots()[code].as_object() else {
+    let Some(cells) = print_cells()[code].as_object() else {
         return;
     };
     let def = AgentFormKind::from_code(code).map(|kind| kind.definition());
-    let bound = |key: &str| {
-        def.and_then(|def| def.bindings.get(key))
-            .is_some_and(|bound| matches!(bound.binding, Binding::Text { .. }))
-    };
     let items = form["parts"]
         .as_array_mut()
         .into_iter()
@@ -85,11 +145,14 @@ pub(super) fn apply_combs(form: &mut Value, code: &str) {
             continue;
         };
         let slot = |field: &Value| -> Option<(u64, String)> {
-            let entry = slots.get(field["k"].as_str()?)?;
-            Some((entry[0].as_u64()?, entry[1].as_str()?.to_string()))
+            let cell = cells.get(field["k"].as_str()?)?;
+            Some((
+                cell["slots"].as_u64()?,
+                cell["printed"].as_str()?.to_string(),
+            ))
         };
         for field in fields.iter_mut() {
-            if let (true, Some((n, _))) = (takes_slots(field), slot(field)) {
+            if let (true, Some((n, _))) = (takes_slots(def, field), slot(field)) {
                 field["slots"] = json!(n);
             }
         }
@@ -112,22 +175,18 @@ pub(super) fn apply_combs(form: &mut Value, code: &str) {
             {
                 end += 1;
             }
-            let head_key = head["k"].as_str().unwrap_or_default().to_string();
-            if end - start >= 2 && bound(&head_key) {
-                let lines: Vec<(String, u64)> = fields[start..end]
-                    .iter()
-                    .filter_map(|field| Some((field["k"].as_str()?.to_string(), slot(field)?.0)))
-                    .collect();
-                let write: Vec<&String> = lines
-                    .iter()
-                    .map(|(key, _)| key)
-                    .filter(|key| bound(key))
-                    .collect();
+            let lines: Vec<(String, u64)> = fields[start..end]
+                .iter()
+                .filter_map(|field| Some((field["k"].as_str()?.to_string(), slot(field)?.0)))
+                .collect();
+            let keys: Vec<String> = lines.iter().map(|line| line.0.clone()).collect();
+            let write = def
+                .filter(|_| keys.len() >= 2)
+                .and_then(|def| pool_write(def, &keys));
+            if let Some(write) = write {
+                let head_key = keys[0].clone();
                 let mut pool = Map::new();
-                pool.insert(
-                    "keys".into(),
-                    json!(lines.iter().map(|l| &l.0).collect::<Vec<_>>()),
-                );
+                pool.insert("keys".into(), json!(keys));
                 pool.insert(
                     "slots".into(),
                     json!(lines.iter().map(|l| l.1).collect::<Vec<_>>()),
@@ -142,6 +201,172 @@ pub(super) fn apply_combs(form: &mut Value, code: &str) {
             start = end;
         }
     }
+}
+
+/// One pooled address: its lines, their slots, and the lines it writes.
+#[derive(Debug, Clone)]
+pub(super) struct Pool {
+    pub keys: Vec<String>,
+    pub slots: Vec<usize>,
+    pub write: Vec<String>,
+}
+
+/// The form's pools, by their first line.
+pub(super) fn pools(code: &str) -> BTreeMap<String, Pool> {
+    let strings = |value: &Value| -> Vec<String> {
+        value
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect()
+    };
+    super::schema_entry(code)
+        .map(|form| {
+            form["parts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|part| part["items"].as_array().into_iter().flatten())
+                .flat_map(|item| item["f"].as_array().into_iter().flatten())
+                .filter(|field| field["pool"].is_object())
+                .map(|field| {
+                    let pool = &field["pool"];
+                    let slots = pool["slots"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|n| n.as_u64().and_then(|n| usize::try_from(n).ok()))
+                        .collect();
+                    (
+                        field["k"].as_str().unwrap_or_default().to_string(),
+                        Pool {
+                            keys: strings(&pool["keys"]),
+                            slots,
+                            write: strings(&pool["write"]),
+                        },
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// A second draft line the print joins to the first (`<path>_2`), when the
+/// draft has one.
+fn second_line(draft: &Value, path: &str) -> Option<String> {
+    let path = format!("{path}_2");
+    draft.pointer(&path).filter(|v| v.is_string()).map(|_| path)
+}
+
+/// The pool's address as the draft holds it.
+pub(super) fn pool_text(kind: AgentFormKind, pool: &Pool, draft: &Value) -> String {
+    let def = kind.definition();
+    let read = |path: &str| {
+        draft
+            .pointer(path)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let paths: Vec<&str> = pool
+        .write
+        .iter()
+        .filter_map(|k| text_path(def, k))
+        .collect();
+    if let [path] = paths.as_slice() {
+        let second = second_line(draft, path)
+            .map(|p| read(&p))
+            .unwrap_or_default();
+        return format!("{}{second}", read(path)).trim().to_string();
+    }
+    let mut lines: Vec<String> = paths.iter().map(|p| read(p).trim().to_string()).collect();
+    while lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    lines.join(" ")
+}
+
+/// Each pool's address, by its first line (what the page shows).
+pub(super) fn pool_texts(kind: AgentFormKind, draft: &Value) -> Value {
+    Value::Object(
+        pools(kind.form_code())
+            .into_iter()
+            .map(|(head, pool)| (head, json!(pool_text(kind, &pool, draft))))
+            .collect(),
+    )
+}
+
+/// Lay `text` over lines of `slots` characters: each line but the last ends
+/// at the last space that fits it (or, for a word longer than the line, at
+/// the first space after it), consuming that one space; the last takes the
+/// rest. Joining the lines with one space gives `text` back.
+pub(super) fn split_lines(text: &str, slots: &[usize]) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut rest = text.trim().to_string();
+    for (i, &n) in slots.iter().enumerate() {
+        if i + 1 == slots.len() || rest.chars().count() <= n {
+            lines.push(std::mem::take(&mut rest));
+            continue;
+        }
+        let byte_at = |chars: usize| {
+            rest.char_indices()
+                .nth(chars)
+                .map_or(rest.len(), |(b, _)| b)
+        };
+        let fits = &rest[..byte_at(n + 1)];
+        let cut = fits
+            .rfind(' ')
+            .filter(|&b| b > 0)
+            .or_else(|| rest[byte_at(n)..].find(' ').map(|b| b + byte_at(n)));
+        match cut {
+            Some(cut) => {
+                lines.push(rest[..cut].to_string());
+                rest = rest[cut + 1..].to_string();
+            }
+            None => lines.push(std::mem::take(&mut rest)),
+        }
+    }
+    lines
+}
+
+/// Write the pool's address from the page into the draft (see the module
+/// docs). `lift`: which lock the page has opened for a line.
+pub(super) fn write_pool(
+    kind: AgentFormKind,
+    pool: &Pool,
+    draft: &mut Value,
+    text: &Value,
+    lift: impl Fn(&str) -> super::catalogs::Lift,
+) -> Result<(), String> {
+    let text = match text {
+        Value::String(text) => text.trim().to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    };
+    let def = kind.definition();
+    if let [head] = pool.write.as_slice() {
+        super::catalogs::fill(kind, draft, head, &json!(text), lift(head))?;
+        if let Some(second) = text_path(def, head).and_then(|path| second_line(draft, path)) {
+            super::set_draft_path(draft, &second, json!(""));
+        }
+        return Ok(());
+    }
+    let slots: Vec<usize> = pool
+        .write
+        .iter()
+        .map(|key| {
+            pool.keys
+                .iter()
+                .position(|k| k == key)
+                .and_then(|i| pool.slots.get(i).copied())
+                .unwrap_or(0)
+        })
+        .collect();
+    for (key, line) in pool.write.iter().zip(split_lines(&text, &slots)) {
+        super::catalogs::fill(kind, draft, key, &json!(line), lift(key))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -172,7 +397,7 @@ mod tests {
             .collect()
     }
 
-    /// What `app/forms/comb-slots.json` should hold, read from the sheets.
+    /// What `app/forms/print-cells.json` should hold, read from the sheets.
     fn derived() -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
         let mut out = Map::new();
@@ -197,9 +422,18 @@ mod tests {
                 };
                 if let Some(slots) = combs.get(id) {
                     keys.entry(key.to_string()).or_insert_with(|| {
-                        json!([slots, join["printed"].as_str().unwrap_or_default()])
+                        json!({"slots": slots, "printed": join["printed"].as_str().unwrap_or_default()})
                     });
                 }
+            }
+            for join in cells["date_joins"].as_array().into_iter().flatten() {
+                let Some(key) = join["writer_key"].as_str() else {
+                    continue;
+                };
+                let entry = keys.entry(key.to_string()).or_insert_with(
+                    || json!({"printed": join["printed"].as_str().unwrap_or_default()}),
+                );
+                entry["date"] = json!(true);
             }
             if !keys.is_empty() {
                 out.insert(code.to_string(), Value::Object(keys));
@@ -209,22 +443,22 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "writes app/forms/comb-slots.json from the print sheets"]
-    fn write_comb_slots() {
+    #[ignore = "writes app/forms/print-cells.json from the print sheets"]
+    fn write_print_cells() {
         let path = format!(
-            "{}/../../app/forms/comb-slots.json",
+            "{}/../../app/forms/print-cells.json",
             env!("CARGO_MANIFEST_DIR")
         );
         let text = serde_json::to_string(&derived()).expect("json") + "\n";
-        std::fs::write(path, text).expect("comb-slots.json");
+        std::fs::write(path, text).expect("print-cells.json");
     }
 
     #[test]
-    fn comb_slots_match_the_print_sheets() {
+    fn print_cells_match_the_print_sheets() {
         assert_eq!(
-            comb_slots(),
+            print_cells(),
             &derived(),
-            "app/forms/comb-slots.json is stale: run `cargo test -p bir-shell write_comb_slots -- --ignored`"
+            "app/forms/print-cells.json is stale: run `cargo test -p bir-shell write_print_cells -- --ignored`"
         );
     }
 
@@ -239,5 +473,40 @@ mod tests {
             assert_eq!(caption_stem(caption), "9 registered address", "{caption}");
         }
         assert_eq!(caption_stem("17 d description"), "17 d description");
+    }
+
+    /// Splitting never cuts a word and is undone by joining with a space.
+    #[test]
+    fn a_split_address_joins_back_to_what_was_typed() {
+        let cases = [
+            (
+                "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226",
+                vec![38, 38, 30],
+            ),
+            (
+                "SUPERCALIFRAGILISTICEXPIALIDOCIOUSLYLONGBUILDINGNAME TOWER 2 MAKATI",
+                vec![38, 38, 30],
+            ),
+            ("SHORT", vec![38, 38, 30]),
+            (
+                "ÑAÑO STREET, PARAÑAQUE CITY, METRO MANILA, PHILIPPINES 1700",
+                vec![20, 20, 20],
+            ),
+        ];
+        for (text, slots) in cases {
+            let lines = split_lines(text, &slots);
+            assert_eq!(lines.len(), slots.len(), "{text}");
+            let mut kept = lines.clone();
+            while kept.last().is_some_and(String::is_empty) {
+                kept.pop();
+            }
+            assert_eq!(kept.join(" "), text, "{lines:?}");
+            for (line, n) in lines.iter().zip(&slots).take(slots.len() - 1) {
+                assert!(
+                    line.chars().count() <= *n || !line.contains(' '),
+                    "{line:?} > {n}"
+                );
+            }
+        }
     }
 }

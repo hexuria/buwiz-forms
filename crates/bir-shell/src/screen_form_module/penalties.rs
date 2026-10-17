@@ -56,13 +56,20 @@ fn override_of(kind: AgentFormKind, key: &str) -> Option<(String, &'static str)>
 }
 
 /// The form's penalty groups on the page: a party whose three overrides
-/// all have a box.
+/// all have a box the filer types. A computed box bound to an override too
+/// (1700's spouse Total Penalties) is not one of them: it shows the total.
 pub(super) fn groups(kind: AgentFormKind) -> Vec<Group> {
+    let def = kind.definition();
     let mut groups: Vec<(Group, Vec<&str>)> = Vec::new();
     for key in super::schema_keys(kind.form_code()) {
         let Some((prefix, component)) = override_of(kind, key) else {
             continue;
         };
+        if def.box_def(key).is_some_and(|entry| entry.computed)
+            || super::schema_computed(kind.form_code(), key)
+        {
+            continue;
+        }
         match groups.iter_mut().find(|(group, _)| group.prefix == prefix) {
             Some((group, components)) => {
                 group.keys.push(key.clone());
@@ -77,18 +84,44 @@ pub(super) fn groups(kind: AgentFormKind) -> Vec<Group> {
             )),
         }
     }
-    groups
+    let mut groups: Vec<Group> = groups
         .into_iter()
         .filter(|(_, components)| COMPONENTS.iter().all(|c| components.contains(c)))
         .map(|(group, _)| group)
-        .collect()
+        .collect();
+    // The filer's own items first, as the forms declare them.
+    groups.sort_by_key(|group| group.prefix.contains("spouse"));
+    groups
 }
 
-/// The group `key` belongs to, if it is a penalty box.
-pub(super) fn group_of(kind: AgentFormKind, key: &str) -> Option<Group> {
-    groups(kind)
-        .into_iter()
-        .find(|group| group.keys.iter().any(|k| k == key))
+/// The boxes a model's penalty message names (`item_17a_surcharge`): the
+/// control the form declares for that item.
+pub(super) fn error_keys(kind: AgentFormKind, field: &str) -> Vec<String> {
+    use bir_core::forms::queueable::QueueableForm;
+    let items: Vec<([&'static str; 3], [&'static str; 3])> = match kind {
+        AgentFormKind::Queueable(kind) => bir_core::with_queueable_kind!(kind, F => {
+            <F as QueueableForm>::penalty_items()
+                .iter()
+                .map(|items| (items.fields, items.controls))
+                .collect()
+        }),
+        AgentFormKind::Form1601C => {
+            let items = bir_core::forms::form_1601c::Form1601CDraft::penalty_items();
+            vec![(items.fields, items.controls)]
+        }
+        AgentFormKind::Form2551Q => Vec::new(),
+    };
+    let named = |name: &str| {
+        field == name
+            || field.ends_with(&format!(".{name}"))
+            || field.ends_with(&format!("/{name}"))
+    };
+    items
+        .iter()
+        .flat_map(|(fields, controls)| fields.iter().zip(controls))
+        .filter(|(name, _)| named(name))
+        .map(|(_, control)| control.to_string())
+        .collect()
 }
 
 /// Whether the filer has entered any of the group's amounts.

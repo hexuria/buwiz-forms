@@ -28008,10 +28008,12 @@ declare module "bir" {
       confirmed_at: string | null;
       /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
       amends?: ScreenFormStatus;
-      /** Boxes another answer turns off right now, each with what turns it on (the page fades them). */
+      /** Boxes another answer turns off right now, each with its tag ("Needs item 13 = Yes"; the page fades them). */
       off: Record<string, string>;
       /** Each party's Surcharge, Interest and Compromise boxes: locked at the computed amounts until Edit penalties opens them (sent as `unlocked`). */
       penalties: ScreenFormPenalties[];
+      /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+      pools: Record<string, string>;
       errors: ScreenFormError[];
   }
   export interface ScreenFormPeriodPart {
@@ -28055,6 +28057,8 @@ declare module "bir" {
       options: Record<string, ScreenFormOption[]>;
       rejected: Record<string, string>;
       penalties: ScreenFormPenalties[];
+      /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+      pools: Record<string, string>;
       /** A sample's boxes still blank (null for a return). */
       blank?: string[] | null;
   }
@@ -28063,9 +28067,11 @@ declare module "bir" {
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       errors: ScreenFormError[];
-      /** Boxes another answer turns off right now, each with what turns it on. */
+      /** Boxes another answer turns off right now, each with its tag. */
       off: Record<string, string>;
       penalties: ScreenFormPenalties[];
+      /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+      pools: Record<string, string>;
       /** A sample's boxes still blank (null for a return). */
       blank?: string[] | null;
   }

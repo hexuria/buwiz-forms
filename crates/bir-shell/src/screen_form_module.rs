@@ -99,10 +99,12 @@ export interface ScreenFormOpened {
     confirmed_at: string | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
-    /** Boxes another answer turns off right now, each with what turns it on (the page fades them). */
+    /** Boxes another answer turns off right now, each with its tag ("Needs item 13 = Yes"; the page fades them). */
     off: Record<string, string>;
     /** Each party's Surcharge, Interest and Compromise boxes: locked at the computed amounts until Edit penalties opens them (sent as `unlocked`). */
     penalties: ScreenFormPenalties[];
+    /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+    pools: Record<string, string>;
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -146,6 +148,8 @@ export interface ScreenFormFilled {
     options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;
     penalties: ScreenFormPenalties[];
+    /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+    pools: Record<string, string>;
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
 }
@@ -154,9 +158,11 @@ export interface ScreenFormValidated {
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     errors: ScreenFormError[];
-    /** Boxes another answer turns off right now, each with what turns it on. */
+    /** Boxes another answer turns off right now, each with its tag. */
     off: Record<string, string>;
     penalties: ScreenFormPenalties[];
+    /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+    pools: Record<string, string>;
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
 }
@@ -258,42 +264,127 @@ fn schema() -> &'static [Value] {
     })
 }
 
-/// Amount bindings that hold a number of shares, not pesos (1707 Schedule 2
-/// rows 2-3: the draft keeps shares as a decimal number). They keep the
-/// schema's own type.
-const AMOUNT_BOUND_COUNTS: &[&str] = &[
-    "frm1707:txtPg2P4Sch2NoOfShares2",
-    "frm1707:txtPg2P4Sch2NoOfShares3",
-];
+/// What a number box holds, from the draft field it writes and its label:
+/// a count (`number_of_*`, "No. of …") or a tax rate (`tax_rate`,
+/// `…_rate_percent`), else an amount. Other rates (2200M and 2200P's
+/// specific excise rates, pesos per unit; 1602Q's BSP exchange rate) are
+/// pesos and stay amounts.
+#[derive(PartialEq)]
+enum Quantity {
+    Count,
+    TaxRate,
+    Amount,
+}
 
-/// How a bound box is typed on the page: money only where its binding is
-/// an amount (rule 7). A field the extractor typed `money` whose draft field
-/// is text (2550Q's contact number, 1701MS's taxpayer name) is a text box
-/// that takes what the filer types, never "₱ 281,234,567.00"; an amount it
-/// typed as text (1606's 17B Interest) is a peso box. A whole-number binding
-/// says nothing about pesos, so its schema type stands, and a money box over
-/// one shows whole pesos (`w`): its draft field holds no centavos.
-/// A text binding that keeps a whole date (rule 4) is a date box: the page
-/// shows it as "Dec 10, 2020" and gives it the calendar; the draft keeps its
-/// own format. A box showing one part of a date stays that part's box.
-/// Unbound and computed boxes keep the schema's type.
-fn page_type(binding: Option<&Binding>, key: &str, schema_type: &str) -> (String, bool) {
+fn quantity(path: &str, label: &str) -> Quantity {
+    let leaf = path
+        .rsplit('/')
+        .find(|segment| !segment.is_empty() && !segment.chars().all(|c| c.is_ascii_digit()))
+        .unwrap_or_default();
+    let words: Vec<&str> = leaf.split('_').collect();
+    let label = label.to_ascii_lowercase();
+    if leaf.starts_with("number_of")
+        || words.contains(&"count")
+        || ["no. of", "no of ", "number of"]
+            .iter()
+            .any(|w| label.contains(w))
+    {
+        Quantity::Count
+    } else if words.contains(&"rate") && (words.contains(&"tax") || words.contains(&"percent")) {
+        Quantity::TaxRate
+    } else {
+        Quantity::Amount
+    }
+}
+
+/// A plain text box that is one entry of a draft list another entry of
+/// which keeps a whole date (1702MX's effectivity dates, columns A and C).
+fn dated_list_entry(def: &AgentFormDef, key: &str) -> bool {
     use bir_core::forms::agent::DateFormat;
-    let kept = (schema_type.to_string(), false);
-    match binding {
-        Some(Binding::Text {
+    // `/a/b/2` -> `/a/b`: only an entry of a list (a numeric last segment).
+    let list = |path: &str| {
+        path.rsplit_once('/')
+            .filter(|(_, index)| !index.is_empty() && index.chars().all(|c| c.is_ascii_digit()))
+            .map(|(list, _)| list.to_string())
+    };
+    let Some(Binding::Text { path, .. }) = def.bindings.get(key).map(|b| &b.binding) else {
+        return false;
+    };
+    let Some(mine) = list(path) else {
+        return false;
+    };
+    def.bindings.values().any(|bound| {
+        matches!(&bound.binding, Binding::Text {
+            path,
             date: Some(DateFormat::Mdy | DateFormat::Iso),
             part: None,
             ..
-        }) if matches!(schema_type, "text" | "money" | "int") => ("date".into(), false),
-        Some(Binding::Text { .. }) if schema_type == "money" => ("text".into(), false),
-        Some(Binding::Amount { .. })
-            if matches!(schema_type, "text" | "int" | "date")
-                && !AMOUNT_BOUND_COUNTS.contains(&key) =>
+        } if list(path).as_deref() == Some(mine.as_str()))
+    })
+}
+
+/// How a box is typed on the page: money only where its binding is an
+/// amount (rule 7), a date where it holds a whole date (rule 4).
+///
+/// - A text binding is never money (2550Q's contact number, 1701MS's
+///   taxpayer name take what the filer types, never "₱ 281,234,567.00").
+/// - An amount binding is a peso box (1606's 17B Interest), a whole-number
+///   one keeps the schema's type and, as money, shows whole pesos (`w`):
+///   its draft field holds no centavos. Either one holding a count is a
+///   number box, and a tax rate a percent box ([`quantity`]).
+/// - A text binding that keeps a whole date is a date box, and so is a
+///   plain text or unbound box the print sheet prints as a whole date
+///   (2200T's payment dates, 2550Q's Return Period From) or a list entry
+///   whose sibling keeps one: the page shows it as "Dec 10, 2020" and sends
+///   MM/DD/YYYY. A box showing one part of a date stays that part's box.
+/// - Unbound and computed boxes otherwise keep the schema's type.
+fn page_type(
+    def: &AgentFormDef,
+    code: &str,
+    key: &str,
+    schema_type: &str,
+    label: &str,
+) -> (String, bool) {
+    use bir_core::forms::agent::DateFormat;
+    let binding = def.bindings.get(key).map(|bound| &bound.binding);
+    if matches!(schema_type, "text" | "money" | "int" | "date") {
+        let whole_date = matches!(
+            binding,
+            Some(Binding::Text {
+                date: Some(DateFormat::Mdy | DateFormat::Iso),
+                part: None,
+                ..
+            })
+        );
+        let plain = matches!(
+            binding,
+            None | Some(Binding::Text {
+                date: None,
+                part: None,
+                ..
+            })
+        );
+        if whole_date
+            || (plain && (combs::printed_as_date(code, key) || dated_list_entry(def, key)))
         {
-            ("money".into(), false)
+            return ("date".into(), false);
         }
-        Some(Binding::Whole { .. }) if schema_type == "money" => ("money".into(), true),
+    }
+    let kept = (schema_type.to_string(), false);
+    match binding {
+        Some(Binding::Text { .. }) if schema_type == "money" => ("text".into(), false),
+        Some(Binding::Amount { path, .. } | Binding::Whole { path, .. })
+            if matches!(schema_type, "text" | "int" | "date" | "money" | "pct") =>
+        {
+            let whole = matches!(binding, Some(Binding::Whole { .. }));
+            match quantity(path, label) {
+                Quantity::Count => ("int".into(), false),
+                Quantity::TaxRate => ("pct".into(), false),
+                Quantity::Amount if whole && schema_type == "money" => ("money".into(), true),
+                Quantity::Amount if !whole && schema_type != "pct" => ("money".into(), false),
+                Quantity::Amount => kept,
+            }
+        }
         _ => kept,
     }
 }
@@ -316,7 +407,8 @@ fn retype_by_binding(form: &mut Value, code: &str) {
             let (Some(key), Some(t)) = (field["k"].as_str(), field["t"].as_str()) else {
                 continue;
             };
-            let (t, whole) = page_type(binding(key), key, t);
+            let label = field["l"].as_str().unwrap_or_default().to_string();
+            let (t, whole) = page_type(def, code, key, t, &label);
             field["t"] = Value::from(t);
             if whole {
                 field["w"] = Value::Bool(true);
@@ -343,6 +435,7 @@ fn retype_by_binding(form: &mut Value, code: &str) {
             let Some(t) = col["t"].as_str().map(str::to_string) else {
                 continue;
             };
+            let label = col["l"].as_str().unwrap_or_default().to_string();
             let bound: Vec<&String> = rows
                 .iter()
                 .filter_map(|row| row.get(c))
@@ -350,7 +443,7 @@ fn retype_by_binding(form: &mut Value, code: &str) {
                 .collect();
             let mut typed: BTreeSet<(String, bool)> = bound
                 .iter()
-                .map(|key| page_type(binding(key), key, &t))
+                .map(|key| page_type(def, code, key, &t, &label))
                 .collect();
             // A date column some of whose rows the binding data left as plain
             // text (1604C Part II) is a date column: plain text keeps the
@@ -368,7 +461,7 @@ fn retype_by_binding(form: &mut Value, code: &str) {
             if typed.contains(&("date".to_string(), false))
                 && bound
                     .iter()
-                    .all(|key| plain_text(key) || page_type(binding(key), key, &t).0 == "date")
+                    .all(|key| plain_text(key) || page_type(def, code, key, &t, &label).0 == "date")
             {
                 typed = BTreeSet::from([("date".to_string(), false)]);
             }
@@ -911,6 +1004,36 @@ fn schema_entry(form_code: &str) -> Option<&'static Value> {
     schema()
         .iter()
         .find(|form| form["c"].as_str().map(normalize_code).as_deref() == Some(&wanted))
+}
+
+/// Whether the schema marks `key` computed (`c`), as a field or as its
+/// table column.
+fn schema_computed(form_code: &str, key: &str) -> bool {
+    // The schema writes the flag as `1`.
+    let flagged = |c: &Value| c.as_bool() == Some(true) || c.as_u64() == Some(1);
+    let Some(form) = schema_entry(form_code) else {
+        return false;
+    };
+    form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        .any(|item| {
+            let field = item["f"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|f| f["k"] == key && flagged(&f["c"]));
+            let cell = item["keys"].as_array().into_iter().flatten().any(|row| {
+                row.as_array()
+                    .into_iter()
+                    .flatten()
+                    .position(|k| k == key)
+                    .is_some_and(|c| flagged(&item["cols"][c]["c"]))
+            });
+            field || cell
+        })
 }
 
 /// Every control key `k` the schema shows for a form (fields and table cells).
@@ -1681,6 +1804,10 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 }
                 // A 2550M schedule row has no draft binding of its own.
                 keys.extend(rows_2550m::error_keys(kind, field));
+                // A penalty item's message names the model's field.
+                if keys.is_empty() {
+                    keys.extend(penalties::error_keys(kind, field));
+                }
                 // Keys the page cannot bind (not in the schema) are dropped;
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
@@ -2158,6 +2285,7 @@ fn opened_json(
         Map::new()
     };
     let penalty_groups = penalties::json(kind, &draft);
+    let pool_texts = combs::pool_texts(kind, &draft);
     let mark = sample.as_ref().map(|_| SampleMark {
         blank: blank.clone(),
     });
@@ -2191,6 +2319,7 @@ fn opened_json(
         "needs": needs,
         "off": off,
         "penalties": penalty_groups,
+        "pools": pool_texts,
         "period_parts": period_parts,
         "period_set": sample.as_ref().is_some_and(|build| build.other.is_none()),
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
@@ -2968,6 +3097,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         mark
     });
     let penalty_groups = penalties::json(kind, &draft);
+    let pool_texts = combs::pool_texts(kind, &draft);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -2976,6 +3106,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "options": options,
         "rejected": rejected,
         "penalties": penalty_groups,
+        "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
     })))
 }
@@ -3015,6 +3146,17 @@ fn apply_screen_edits(
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
     let shown = values_json(kind, draft).map_err(host_error)?;
+    let pools = combs::pools(kind.form_code());
+    // Whether each penalty group was edited before this batch: an amount in
+    // one box of a batch does not open the others, and blanking the group
+    // from a partly edited state clears all of it.
+    let penalty_groups: Vec<(penalties::Group, bool)> = penalties::groups(kind)
+        .into_iter()
+        .map(|group| {
+            let edited = penalties::edited(&group, draft);
+            (group, edited)
+        })
+        .collect();
     for (key, step) in plan_choice_edits(kind, draft, &shown, edits) {
         if !editable {
             rejected.insert(key.clone(), json!("this return is no longer a draft"));
@@ -3044,8 +3186,11 @@ fn apply_screen_edits(
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
         // override, so the computed amount files again (rule 8).
-        if let Some(group) = penalties::group_of(kind, &key) {
-            if !unlocked.contains(&key) && !penalties::edited(&group, draft) {
+        if let Some((_, edited)) = penalty_groups
+            .iter()
+            .find(|(group, _)| group.keys.contains(&key))
+        {
+            if !unlocked.contains(&key) && !edited {
                 rejected.insert(
                     key.clone(),
                     json!(format!("`{key}` is {}", penalties::LOCK)),
@@ -3061,6 +3206,12 @@ fn apply_screen_edits(
             }
         }
         let result = match step {
+            // A pooled address (rule 5) comes as one text on its first line.
+            ChoiceStep::Fill(value) if pools.contains_key(&key) => {
+                combs::write_pool(kind, &pools[&key], &mut next, &value, |line: &str| {
+                    lift(line)
+                })
+            }
             ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value, lift(&key)),
             ChoiceStep::Set(sets) => {
                 for (path, value) in sets {
@@ -3336,6 +3487,7 @@ fn screen_form_validate(
             };
             let blank = sample.as_ref().map(|mark| mark.blank.clone());
             let penalty_groups = penalties::json(kind, &draft);
+            let pool_texts = combs::pool_texts(kind, &draft);
             put_sample_mark(&mut draft, sample.as_ref());
             put_amendment_mark(&mut draft, amendment);
             Ok(json!({
@@ -3345,6 +3497,7 @@ fn screen_form_validate(
                 "errors": errors,
                 "off": off,
                 "penalties": penalty_groups,
+                "pools": pool_texts,
                 "blank": blank,
             }))
         })
@@ -8704,30 +8857,25 @@ mod tests {
         out
     }
 
-    /// Rule 7: only an amount looks like money. The oracle is the binding
-    /// data: an amount binding is a peso box (or a rate), a text binding
-    /// never is, and a peso box over a whole-number binding shows no
-    /// centavos.
+    /// Rule 7: only an amount looks like money. Every form: a text binding is
+    /// never money, an amount binding is a peso box unless it holds a count
+    /// (a number box) or a tax rate (a percent box), and a peso box over a
+    /// whole-number binding shows no centavos. The counts, rates and amounts
+    /// the review named are checked against a hand list, not the rule.
     #[test]
     fn only_an_amount_binding_looks_like_money_on_every_form() {
-        // Shares the draft keeps as an amount; the review wants them plain.
-        let shares = [
-            "frm1707:txtPg2P4Sch2NoOfShares2",
-            "frm1707:txtPg2P4Sch2NoOfShares3",
-        ];
         let (mut amounts, mut wholes) = (0, 0);
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
             for (key, t, whole) in bound_page_types(code) {
                 match &def.bindings[&key].binding {
-                    Binding::Amount { .. } if shares.contains(&key.as_str()) => {
-                        assert_eq!(t, "text", "{code}: {key}")
-                    }
                     Binding::Amount { .. } => {
-                        amounts += 1;
+                        if t == "money" {
+                            amounts += 1;
+                        }
                         assert!(
-                            t == "money" || t == "pct",
+                            matches!(t.as_str(), "money" | "pct" | "int"),
                             "{code}: {key} is an amount drawn as {t}"
                         );
                         assert!(!whole, "{code}: {key} takes centavos");
@@ -8743,14 +8891,16 @@ mod tests {
                 }
             }
         }
-        assert!(amounts > 2500, "{amounts} amount boxes");
+        assert!(amounts > 2400, "{amounts} amount boxes");
         assert!(wholes > 200, "{wholes} whole-peso boxes");
-        // The ones the review found, each way.
+        // The ones the review found, each way (fields and schedule cells).
         for (code, key, t) in [
+            // Peso amounts the schema drew as text.
             ("1606", "frm1606:txtInterest", "money"),
             ("1606", "frm1606:txtInstallment", "money"),
             ("1706", "frm1706:txtInterest", "money"),
             ("1706", "frm1706:txtInstallment", "money"),
+            // Text the schema drew as money.
             ("1701", "frm1701:txtPg1I14ForeignTaxNumber", "text"),
             ("1701A", "frm1701A:txtForeignTaxNumber", "text"),
             ("1701MS", "frm1701MS:txtTaxpayerNo14a", "text"),
@@ -8761,6 +8911,36 @@ mod tests {
             ("2200A", "frm2200Av2020:paymentOther", "text"),
             ("1702RT", "frm1702RT:txtPg1Pt3I23DebitMemoC2", "text"),
             ("1707", "frm1707:txtPg2P4Sch1I4NumInstallments", "text"),
+            // Counts: plain numbers.
+            ("0605", "frm0605:txtNumOfInstallment", "int"),
+            ("1702EX", "frm1702EX:txtPg1P2I23NumOfAttachments", "int"),
+            ("1606", "frm1606:txtTotalN", "int"),
+            ("1706", "frm1706:txtTotalN", "int"),
+            ("1707", "frm1707:txtPg2P4Sch2NoOfShares2", "int"),
+            ("1707", "frm1707:txtPg2Pt4S2_1Col2", "int"),
+            ("1707", "frm1707:txtPg2Pt4S2_10Col2", "int"),
+            ("2552", "frm2552:txtPg2Pt5Sch1NumShares1", "int"),
+            // Tax rates: percent.
+            ("1702RT", "frm1702RT:Pg2Pt4I40IncomeTaxRate", "pct"),
+            ("1702EX", "frm1702EX:txtPg2Pt4I40TaxRate", "pct"),
+            ("1600PT", "frm1600PT:Pg2Sc1TaxRate1", "pct"),
+            ("1600VT", "frm1600VT:Pg2Sc1TaxRate1", "pct"),
+            ("1601FQ", "txtRate0", "pct"),
+            ("1602Q", "frm1602Q:txtSched2TaxRate1", "pct"),
+            ("1602Q", "frm1602Q:txtSched3TaxRate1", "pct"),
+            ("2552", "frm2552:txtPg2Pt5Sch2TaxRate1", "pct"),
+            // Rates in pesos stay pesos: specific excise per unit, an
+            // exchange rate.
+            ("2200M", "frm2200M:txtSched1_ImportedTaxRate9", "money"),
+            (
+                "2200M",
+                "frm2200M:txtSched1_LocallyExtractedTaxRateE13",
+                "money",
+            ),
+            ("2200P", "frm2200P:txtSched1ApplicableRate1", "money"),
+            ("1602Q", "frm1602Q:txtSched1Rate13", "money"),
+            // Zero-rated sales are an amount.
+            ("2550Q", "frm2550qv2024:zeroRatedSales", "money"),
         ] {
             let found = bound_page_types(code)
                 .into_iter()
@@ -8779,6 +8959,27 @@ mod tests {
     fn every_open_date_box_takes_a_typed_date_on_every_form() {
         use bir_core::forms::agent::DateFormat;
         setup();
+        // Dates whose binding carries no date format, read off the printed
+        // sheets by hand: each is a date box.
+        for (code, key) in [
+            ("2200T", "frm2200Tv2020:cashDate"),
+            ("2200T", "frm2200Tv2020:checkDate"),
+            ("2200T", "frm2200Tv2020:taxDate"),
+            ("2200T", "frm2200Tv2020:othersDate"),
+            ("1702MX", "frm1702MX:txtPg2Pt4I35CA"),
+            ("1702MX", "frm1702MX:txtPg2Pt4I35CC"),
+            ("1702MX", "frm1702MX:txtPg2Pt4I36CA"),
+            ("1702MX", "frm1702MX:txtPg2Pt4I36CC"),
+            ("2550Q", "frm2550qv2024:RtnPeriodFromNo4"),
+            ("2550Q", "frm2550qv2024:RtnPeriodToNo4"),
+        ] {
+            let t = screen_types(code)
+                .into_iter()
+                .find(|(k, _)| k == key)
+                .unwrap_or_else(|| panic!("{code}: {key} on screen"))
+                .1;
+            assert_eq!(t, "date", "{code}: {key}");
+        }
         let mut locked = Vec::new();
         let (mut typed, mut refused) = (0, 0);
         for kind in AgentFormKind::all() {
@@ -8872,6 +9073,7 @@ mod tests {
         "2000 frm2000:txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
         "2000 frm2000:txtDate22: cannot be filled here: not written by this app's field map for any sample draft",
         "2000OT frm2000OT:txtTransactionDate: picks which return this is; reopen the form for another TIN or period",
+        "2550Q frm2550qv2024:RtnPeriodFromNo4: cannot be filled here: derived by the app: changes with /return_period_from/day, /return_period_from/month, /return_period_from/year but never shows one field's value",
         "2550Q frm2550qv2024:RtnPeriodToNo4: cannot be filled here: derived by the app: changes with /return_period_to/day, /return_period_to/month, /return_period_to/year but never shows one field's value",
         "2551Q txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "2551Q txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
@@ -8891,12 +9093,31 @@ mod tests {
             .collect()
     }
 
-    /// Rule 5: a printed address that runs over stacked lines is one pool on
-    /// the page. The oracle is the list of two-line addresses the form review
-    /// found (docs/form-findings, R5 "Two-line address"), plus 1702MX and
-    /// 1702RT's three-line ones; the review's 1601C, 1701A, 1702EX and 1707
-    /// print their address through the print map's own lines, so the sheet
-    /// gives their boxes no slots and they keep two boxes for their groups.
+    /// The printed text of a pool's lines, joined as the sheet stacks them.
+    fn printed_pool(kind: AgentFormKind, draft: &Value, keys: &[String]) -> String {
+        let printed = with_database(|db| print_map(db, kind, draft))
+            .unwrap_or_else(|e| panic!("{}: print: {e:?}", kind.form_code()))
+            .0;
+        keys.iter()
+            .map(|k| printed.get(k).cloned().unwrap_or_default())
+            .collect::<String>()
+    }
+
+    fn squeezed(text: &str) -> String {
+        text.chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .to_uppercase()
+    }
+
+    /// Rule 5: a printed address that runs over stacked lines is one box on
+    /// the page, read from and written to the draft, never from the field
+    /// map's cut lines. The oracle is the list of two-line addresses the form
+    /// review found (docs/form-findings, R5 "Two-line address") with 1702RT's
+    /// three-line one; 1702MX keeps three boxes (its first line is the whole
+    /// address but its print reads the list), and the review's 1601C, 1701A,
+    /// 1702EX and 1707 print their address through the print map's own lines,
+    /// so the sheet gives their boxes no slots.
     #[test]
     fn a_printed_address_over_stacked_lines_is_one_pool() {
         setup();
@@ -8940,17 +9161,6 @@ mod tests {
                 (
                     vec!["frm1701:txtPg1I9Address", "frm1701:txtPg1I9Address2"],
                     vec![40, 31],
-                ),
-            ),
-            (
-                "1702MX",
-                (
-                    vec![
-                        "frm1702MX:txtPg1Pt1I10RegisteredAddress",
-                        "frm1702MX:txtPg1Pt1I10RegisteredAddress2",
-                        "frm1702MX:txtPg1Pt1I10RegisteredAddress3",
-                    ],
-                    vec![38, 38, 30],
                 ),
             ),
             (
@@ -9005,6 +9215,10 @@ mod tests {
                 ),
             ),
         ]);
+        // 158 characters: a word runs across characters 40, 80, 100 and 127,
+        // where the field maps cut their lines.
+        let long = "UNIT 1203 TWELFTH FLOOR THE CURVE BUILDING THIRTYSECOND STREET CORNER THIRD AVENUE BONIFACIO GLOBALCITY TAGUIG CITY METRO MANILA PHILIPPINES 1634 ANNEX BLDG";
+        let short = "UNIT 5 BLDG A, 123 AYALA AVENUE, MAKATI CITY";
         let mut found = BTreeMap::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
@@ -9017,28 +9231,9 @@ mod tests {
                 ) {
                     assert!(field["slots"].is_null(), "{code}: {} has slots", field["k"]);
                 }
-                let pool = &field["pool"];
-                if pool.is_null() {
-                    continue;
-                }
-                let keys: Vec<String> = pool["keys"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|k| k.as_str().unwrap().to_string())
-                    .collect();
-                let slots: Vec<u64> = pool["slots"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|n| n.as_u64().unwrap())
-                    .collect();
-                let write: Vec<String> = pool["write"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|k| k.as_str().unwrap().to_string())
-                    .collect();
+            }
+            for (head, pool) in combs::pools(code) {
+                let keys = pool.keys.clone();
                 // The later lines are part of the pool, not boxes of their own.
                 for key in &keys[1..] {
                     let line = schema_fields(code)
@@ -9046,9 +9241,9 @@ mod tests {
                         .find(|f| f["k"] == key.as_str())
                         .unwrap();
                     assert_eq!(line["t"], "hidden", "{code}: {key}");
-                    assert_eq!(line["pooled"], keys[0].as_str(), "{code}: {key}");
+                    assert_eq!(line["pooled"], head.as_str(), "{code}: {key}");
                 }
-                // The page writes exactly the lines with a text field of their own.
+                // It writes the first line alone, or every line of one list.
                 let bound: Vec<String> = keys
                     .iter()
                     .filter(|k| {
@@ -9059,39 +9254,53 @@ mod tests {
                     })
                     .cloned()
                     .collect();
-                assert_eq!(write, bound, "{code}");
-                assert_eq!(write[0], keys[0], "{code}: the first line is written");
-                // What the page sends reaches each written line as sent, and the
-                // lines it does not write keep the form's own value.
+                assert!(
+                    pool.write == [head.clone()] || pool.write == keys,
+                    "{code}: {:?}",
+                    pool.write
+                );
+                assert!(pool.write.iter().all(|k| bound.contains(k)), "{code}");
                 let opened = open(code, page_period_of(code));
-                let address = "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY";
-                let parts: Vec<&str> = if write.len() == 1 {
-                    vec![address]
-                } else {
-                    vec![
-                        "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER",
-                        "PASEO DE ROXAS, MAKATI CITY",
-                        "",
-                    ]
-                };
-                let edits: Map<String, Value> = write
-                    .iter()
-                    .zip(&parts)
-                    .map(|(k, v)| (k.clone(), json!(v)))
-                    .collect();
-                let refs: Vec<&str> = write.iter().map(String::as_str).collect();
-                let filled = fill_unlocked(code, &opened["draft"], Value::Object(edits), &refs);
+                let unlocked = [head.as_str()];
+                // A long address comes back exactly as typed, and showing it
+                // again changes nothing (no space is ever inserted).
+                let filled =
+                    fill_unlocked(code, &opened["draft"], json!({ &head: long }), &unlocked);
                 assert_eq!(filled["rejected"], json!({}), "{code}");
-                for (key, part) in write.iter().zip(&parts) {
-                    assert_eq!(filled["values"][key], *part, "{code}: {key}");
-                }
-                for key in keys.iter().filter(|k| !write.contains(k)) {
-                    assert_eq!(
-                        filled["values"][key], opened["values"][key],
-                        "{code}: {key}"
-                    );
-                }
-                found.insert(code, (keys, slots));
+                assert_eq!(
+                    filled["pools"][&head], long,
+                    "{code}: the box shows what was typed"
+                );
+                let again = fill_unlocked(
+                    code,
+                    &filled["draft"],
+                    json!({ &head: filled["pools"][&head] }),
+                    &unlocked,
+                );
+                assert_eq!(
+                    again["pools"][&head], long,
+                    "{code}: unchanged on the next edit"
+                );
+                assert_eq!(
+                    again["draft"], filled["draft"],
+                    "{code}: the draft does not move"
+                );
+                // What the page shows is what prints.
+                let printed =
+                    fill_unlocked(code, &opened["draft"], json!({ &head: short }), &unlocked);
+                assert_eq!(printed["pools"][&head], short, "{code}");
+                assert_eq!(
+                    squeezed(&printed_pool(kind, &printed["draft"], &keys)),
+                    squeezed(short),
+                    "{code}: page value == print text"
+                );
+                found.insert(
+                    code,
+                    (
+                        keys,
+                        pool.slots.iter().map(|n| *n as u64).collect::<Vec<_>>(),
+                    ),
+                );
             }
         }
         let found: BTreeMap<&str, (Vec<&str>, Vec<u64>)> = found
@@ -9104,6 +9313,56 @@ mod tests {
             })
             .collect();
         assert_eq!(found, expected);
+    }
+
+    /// Rule 5 on 0619E and 0619F, whose draft keeps a second address line
+    /// (an imported return): the box shows both lines as the print joins
+    /// them, and an edit writes the whole address once instead of adding to
+    /// the second line.
+    #[test]
+    fn a_second_address_line_is_not_doubled_on_edit() {
+        setup();
+        for (code, head) in [
+            ("0619E", "frm0619E:txtAddress"),
+            ("0619F", "frm0619F:txtAddress"),
+        ] {
+            let kind = AgentFormKind::from_code(code).unwrap();
+            let opened = open(code, 1);
+            let mut draft = opened["draft"].clone();
+            draft["registered_address"] = json!("1 EXAMPLE STREET ");
+            draft["registered_address_2"] = json!("QUEZON CITY");
+            let checked = call_async(
+                "screen_form_validate",
+                vec![code.into(), json(draft.clone())],
+            )
+            .unwrap();
+            let shown = checked["pools"][head].as_str().unwrap().to_string();
+            assert_eq!(shown, "1 EXAMPLE STREET QUEZON CITY", "{code}");
+            let keys = combs::pools(code)[head].keys.clone();
+            let before = printed_pool(kind, &checked["draft"], &keys);
+            let mut current = checked["draft"].clone();
+            for _ in 0..3 {
+                let filled = fill_unlocked(code, &current, json!({ head: shown }), &[head]);
+                assert_eq!(filled["rejected"], json!({}), "{code}");
+                assert_eq!(
+                    filled["pools"][head],
+                    shown.as_str(),
+                    "{code}: the address is not doubled"
+                );
+                assert_eq!(
+                    filled["draft"]["registered_address"],
+                    shown.as_str(),
+                    "{code}"
+                );
+                assert_eq!(filled["draft"]["registered_address_2"], "", "{code}");
+                current = filled["draft"].clone();
+            }
+            assert_eq!(
+                squeezed(&printed_pool(kind, &current, &keys)),
+                squeezed(&before),
+                "{code}: prints the same"
+            );
+        }
     }
 
     /// Rule 5: fixed formats keep their printed boxes; the oracle is a few
@@ -9123,77 +9382,69 @@ mod tests {
                 .unwrap_or_else(|| panic!("{code}: {key}"));
             assert_eq!(field["slots"], slots, "{code}: {key}");
         }
-        let emails = AgentFormKind::all()
-            .into_iter()
-            .flat_map(|kind| schema_fields(kind.form_code()))
-            .filter(|f| f["t"] == "email")
-            .count();
-        assert!(emails > 20, "{emails} email boxes, none with slots");
-    }
-
-    /// A value an open box of page type `t` takes (rule 6 probes).
-    fn typed_probe(opened: &Value, key: &str, t: &str) -> Value {
-        match t {
-            "money" | "int" | "pct" => json!("1"),
-            "date" => json!("01/15/2020"),
-            "radio" | "chk" => json!("true"),
-            "sel" => {
-                let listed = opened["options"][key]
-                    .as_array()
-                    .cloned()
-                    .unwrap_or_default();
-                let value = listed
-                    .iter()
-                    .filter_map(|o| o["value"].as_str().map(str::to_string))
-                    .chain(
-                        schema_fields(opened["form_code"].as_str().unwrap())
-                            .into_iter()
-                            .filter(|f| f["k"] == key)
-                            .flat_map(|f| f["o"].as_array().cloned().unwrap_or_default())
-                            .filter_map(|o| {
-                                o.as_str()
-                                    .map(|o| o.split(" - ").next().unwrap_or(o).to_string())
-                            }),
-                    )
-                    .find(|v| !v.trim_matches('0').is_empty() && v != "-")
-                    .unwrap_or_default();
-                json!(value)
+        // An email is always a plain field, whatever the schema typed it:
+        // every box bound to an email field, or keyed as one.
+        let mut emails = 0;
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let def = kind.definition();
+            for f in schema_fields(code) {
+                let key = f["k"].as_str().unwrap_or_default();
+                let path = match def.bindings.get(key).map(|b| &b.binding) {
+                    Some(Binding::Text { path, .. }) => path.to_ascii_lowercase(),
+                    _ => String::new(),
+                };
+                if f["t"] == "email"
+                    || path.contains("email")
+                    || key.to_ascii_lowercase().contains("email")
+                {
+                    emails += 1;
+                    assert!(f["slots"].is_null(), "{code}: {key} is an email with boxes");
+                }
             }
-            _ => json!("A"),
+        }
+        assert!(emails > 40, "{emails} email boxes, none with slots");
+        // The ones the review found drawn with boxes.
+        for (code, key) in [
+            ("0619E", "txtEmail"),
+            ("2550Q", "frm2550qv2024:taxpayerEmailAddress"),
+            ("2200T", "frm2200Tv2020:txtEmail"),
+        ] {
+            let field = schema_fields(code).into_iter().find(|f| f["k"] == key);
+            assert!(field.is_some_and(|f| f["slots"].is_null()), "{code}: {key}");
         }
     }
 
     /// Rule 6: a box another answer turns off is faded with what turns it
-    /// on. The oracles: the corpus's own `enabled_when` text (read from
-    /// rules/forms), and the form's computation, which clears what the
-    /// filer types there through the page's own fill.
+    /// on. The oracles: the corpus's own `enabled_when` (read from
+    /// rules/forms) and its reviewed tag, and the form's computation, which
+    /// clears every probe value the page's own fill takes there (the probe
+    /// set is the host's).
     #[test]
     fn a_box_another_answer_turns_off_says_why_on_every_form() {
         setup();
         let corpus = conditions::tests::derived();
+        let tags: Value =
+            serde_json::from_str(include_str!("../../../app/forms/condition-labels.json")).unwrap();
         let mut found = BTreeMap::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let opened = open(code, page_period_of(code));
-            let types: BTreeMap<String, String> = screen_types(code).into_iter().collect();
             for (key, why) in opened["off"].as_object().unwrap() {
+                let condition = corpus[code][key]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{code}: {key}"));
                 assert_eq!(
-                    &corpus[code][key], why,
+                    &tags[code][condition], why,
                     "{code}: {key} says what turns it on"
                 );
                 assert!(
                     opened["locks"][key].is_null(),
                     "{code}: {key} is off, not locked"
                 );
-                // Whatever it takes, the form clears.
-                let t = types.get(key).map(String::as_str).unwrap_or("text");
+                let shown = opened["values"][key].as_str().unwrap_or_default();
                 let mut taken = 0;
-                for probe in [
-                    typed_probe(&opened, key, t),
-                    json!("01"),
-                    json!("2020"),
-                    json!("A"),
-                ] {
+                for probe in conditions::probes(kind, key, shown) {
                     let filled = fill(code, &opened["draft"], json!({ key: probe }));
                     if !filled["rejected"][key].is_null() {
                         continue;
@@ -9210,6 +9461,39 @@ mod tests {
                 assert!(taken > 0, "{code}: {key} takes nothing");
                 found.entry(code).or_insert_with(Vec::new).push(key.clone());
             }
+            // Trying the typed boxes together decides as trying each alone.
+            let mut draft = opened["draft"].clone();
+            let (values, _, _) = evaluate_here(kind, &mut draft).unwrap();
+            let one_by_one: Vec<String> = corpus[code]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(key, _)| key.clone())
+                .filter(|key| {
+                    let shown = values[key].as_str().unwrap_or_default();
+                    let blank = shown.is_empty()
+                        || shown == "false"
+                        || shown.trim_matches(['0', '.', ',', '-']).is_empty();
+                    blank
+                        && conditions::probes(kind, key, shown)
+                            .into_iter()
+                            .find_map(|probe| {
+                                let filled = fill(code, &draft, json!({ key: probe }));
+                                filled["rejected"][key].is_null().then(|| {
+                                    let shown = filled["values"][key]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .to_string();
+                                    shown.is_empty()
+                                        || shown == "false"
+                                        || shown.trim_matches(['0', '.', ',', '-']).is_empty()
+                                })
+                            })
+                            == Some(true)
+                })
+                .collect();
+            let batched: Vec<String> = opened["off"].as_object().unwrap().keys().cloned().collect();
+            assert_eq!(batched, one_by_one, "{code}");
         }
         let found: BTreeMap<&str, usize> = found
             .iter()
@@ -9426,30 +9710,25 @@ mod tests {
             }
             let on = turn_on(code, &opened["draft"]);
             let checked = validated(code, &on);
-            let types: BTreeMap<String, String> = screen_types(code).into_iter().collect();
+            let kind = AgentFormKind::from_code(code).unwrap();
             for key in &keys {
                 assert!(
                     checked["off"].get(*key).is_none(),
                     "{code}: {key} comes alive: {}",
                     checked["off"]
                 );
-                // And keeps what is typed there.
-                let t = types.get(*key).map(String::as_str).unwrap_or("text");
-                let kept = [
-                    typed_probe(&opened, key, t),
-                    json!("01"),
-                    json!("2020"),
-                    json!("A"),
-                ]
-                .into_iter()
-                .any(|probe| {
-                    let filled = fill(code, &on, json!({ *key: probe }));
-                    let shown = filled["values"][*key].as_str().unwrap_or_default();
-                    filled["rejected"][*key].is_null()
-                        && !(shown.is_empty()
-                            || shown == "false"
-                            || shown.trim_matches(['0', '.']).is_empty())
-                });
+                // And keeps what is typed there (the host's probe values).
+                let shown = checked["values"][*key].as_str().unwrap_or_default();
+                let kept = conditions::probes(kind, key, shown)
+                    .into_iter()
+                    .any(|probe| {
+                        let filled = fill(code, &on, json!({ *key: probe }));
+                        let shown = filled["values"][*key].as_str().unwrap_or_default();
+                        filled["rejected"][*key].is_null()
+                            && !(shown.is_empty()
+                                || shown == "false"
+                                || shown.trim_matches(['0', '.']).is_empty())
+                    });
                 assert!(kept, "{code}: {key} keeps a typed value once on");
             }
         }
@@ -9661,6 +9940,156 @@ mod tests {
                 "1701A frm1701A:txt25B",
                 "1701MS frm1701MS:txtCompromise28b",
             ]
+        );
+    }
+
+    /// Rule 8 on 0619E: one Edit opens the three, but only a box the filer
+    /// types becomes an override; the others stay computed and follow the
+    /// tax due. Blanking a partly edited group clears all of it, a box not
+    /// opened stays refused even in a batch with an opened one, and a
+    /// penalty message lands on its box.
+    #[test]
+    fn only_a_typed_penalty_overrides_and_the_others_keep_computing() {
+        setup();
+        let code = "0619E";
+        let [sur, int, comp] = [
+            "frm0619E:txtTax17A",
+            "frm0619E:txtTax17B",
+            "frm0619E:txtTax17C",
+        ];
+        let opened = open(code, 1);
+        let due = fill(
+            code,
+            &opened["draft"],
+            json!({"frm0619E:optWithheld:Y": "true", "frm0619E:txtTax14": "10000"}),
+        );
+        assert_eq!(due["rejected"], json!({}));
+        let computed =
+            |draft: &Value, tax: &str| fill(code, draft, json!({"frm0619E:txtTax14": tax}));
+        // Typed Compromise only.
+        let typed = fill_unlocked(
+            code,
+            &due["draft"],
+            json!({ comp: "500" }),
+            &[sur, int, comp],
+        );
+        assert_eq!(typed["rejected"], json!({}));
+        assert_eq!(
+            typed["penalties"][0]["edited"], true,
+            "an edited group stays open"
+        );
+        assert!(
+            typed["draft"]["penalty_overrides"]["surcharge"].is_null(),
+            "surcharge stays computed"
+        );
+        assert!(
+            typed["draft"]["penalty_overrides"]["interest"].is_null(),
+            "interest stays computed"
+        );
+        assert_eq!(amount(&typed["values"], comp), 500.0);
+        // The tax due moves: surcharge and interest follow it, compromise holds.
+        let moved = computed(&typed["draft"], "20000");
+        let reference = computed(&due["draft"], "20000");
+        assert_eq!(
+            moved["values"][sur], reference["values"][sur],
+            "surcharge recomputes"
+        );
+        assert_eq!(
+            moved["values"][int], reference["values"][int],
+            "interest keeps accruing"
+        );
+        assert_ne!(moved["values"][sur], typed["values"][sur]);
+        assert_eq!(
+            amount(&moved["values"], comp),
+            500.0,
+            "the typed compromise holds"
+        );
+        // Edited, a later box needs no Edit; blanks from that partly edited
+        // state clear every override, none refused.
+        let two = fill(code, &typed["draft"], json!({ sur: "100" }));
+        assert_eq!(two["rejected"], json!({}));
+        let back = fill(code, &two["draft"], json!({ sur: "", int: "", comp: "" }));
+        assert_eq!(
+            back["rejected"],
+            json!({}),
+            "use the computed amounts from a partial state"
+        );
+        assert_eq!(back["penalties"][0]["edited"], false);
+        assert_eq!(back["values"][comp], due["values"][comp]);
+        // A box not opened is refused even beside an opened one.
+        let batch = fill_unlocked(
+            code,
+            &due["draft"],
+            json!({ sur: "100", int: "200" }),
+            &[sur],
+        );
+        assert!(batch["rejected"][int].is_string(), "{}", batch["rejected"]);
+        assert!(batch["draft"]["penalty_overrides"]["interest"].is_null());
+        // A negative amount's message sits on its box.
+        let negative = fill_unlocked(code, &due["draft"], json!({ sur: "-5000" }), &[sur]);
+        let checked = validated(code, &negative["draft"]);
+        let message = checked["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["field"] == "item_17a_surcharge")
+            .expect("a message for the negative surcharge");
+        assert_eq!(message["keys"], json!([sur]));
+    }
+
+    /// Rule 8 on 1700's spouse column of a joint return: Total Penalties is a
+    /// computed box though bound to the compromise override, so it is not one
+    /// of the three, and an amount typed in 33B stays.
+    #[test]
+    fn a_spouse_penalty_typed_on_a_joint_return_stays() {
+        setup();
+        let code = "1700";
+        let opened = open(code, 0);
+        let joint = fill(
+            code,
+            &opened["draft"],
+            json!({
+                "frm1700:rdoPg1I15CivilStatusM": "true",
+                "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                "frm1700:rdoPg1I17FilingStatusJ": "true",
+            }),
+        );
+        assert_eq!(joint["rejected"], json!({}));
+        let group = joint["penalties"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| strings(&g["keys"]).contains("frm1700:txtPg1I33B"))
+            .expect("the spouse's penalties")
+            .clone();
+        let keys = strings(&group["keys"]);
+        assert!(
+            !keys.contains("frm1700:txtPg1I34B"),
+            "Total Penalties is not one of the three: {keys:?}"
+        );
+        assert_eq!(keys.len(), 3, "{keys:?}");
+        assert_eq!(
+            group["applies"], true,
+            "a joint return has the spouse's column"
+        );
+        let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let typed = fill_unlocked(
+            code,
+            &joint["draft"],
+            json!({"frm1700:txtPg1I33B": "500"}),
+            &refs,
+        );
+        assert_eq!(typed["rejected"], json!({}));
+        assert_eq!(
+            amount(&typed["values"], "frm1700:txtPg1I33B"),
+            500.0,
+            "the typed amount stays"
+        );
+        assert_eq!(
+            amount(&typed["values"], "frm1700:txtPg1I34B"),
+            500.0
+                + amount(&typed["values"], "frm1700:txtPg1I31B")
+                + amount(&typed["values"], "frm1700:txtPg1I32B")
         );
     }
 

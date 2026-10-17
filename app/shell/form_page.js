@@ -195,17 +195,12 @@ const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a ret
 const OFF_OPACITY = 0.45;
 
 /**
- * The tag on a box another answer turns off: the official condition, as
- * "Needs: Amended return Yes is selected" (rule 6). A long one is cut; the
- * whole condition is its tooltip.
+ * The tag on a box another answer turns off (rule 6): the host's reviewed
+ * tag ("Needs item 13 = Yes"), cut if it ever runs long.
  */
-export function needsText(condition) {
-  const text = String(condition || "")
-    .trim()
-    .replace(/^enabled only (?:when|for)\s*:?\s*/i, "")
-    .replace(/\.$/, "");
-  const shown = text.length > 140 ? `${text.slice(0, 139).trimEnd()}…` : text;
-  return `Needs: ${shown.charAt(0).toUpperCase()}${shown.slice(1)}`;
+export function needsText(tag) {
+  const text = String(tag || "").trim();
+  return text.length > 90 ? `${text.slice(0, 89).trimEnd()}…` : text;
 }
 
 /** One box holding a whole date: the host types it from its binding. */
@@ -220,10 +215,11 @@ function itemKeys(it) {
 }
 
 /**
- * Lay `text` over stacked lines of `slots` character boxes (rule 5): each
- * line but the last ends at the last space that fits (provisional: the
- * findings rules page, question 5), the last takes the rest. One string per
- * line; a line can come out longer than its boxes.
+ * Lay `text` over stacked lines of `slots` character boxes (rule 5), as the
+ * host splits a pooled address (combs::split_lines): each line but the last
+ * ends at the last space that fits, or for a word longer than the line at
+ * the first space after it, consuming that one space; the last takes the
+ * rest. One string per line; a line can come out longer than its boxes.
  */
 export function splitLines(text, slots) {
   const lines = [];
@@ -235,9 +231,14 @@ export function splitLines(text, slots) {
       return;
     }
     let cut = rest.lastIndexOf(" ", n);
-    if (cut <= 0) cut = n;
-    lines.push(rest.slice(0, cut).trimEnd());
-    rest = rest.slice(cut).trimStart();
+    if (cut <= 0) cut = rest.indexOf(" ", n);
+    if (cut <= 0) {
+      lines.push(rest);
+      rest = "";
+      return;
+    }
+    lines.push(rest.slice(0, cut));
+    rest = rest.slice(cut + 1);
   });
   return lines;
 }
@@ -415,6 +416,7 @@ export class FormPageActions {
     s.needs = r.needs || {};
     s.off = r.off || {};
     s.penalties = r.penalties || [];
+    s.poolTexts = r.pools || {};
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -512,13 +514,13 @@ export class FormPageActions {
   rowSnapshot({ state: s, it, pi, ii, width }) {
     const id = `${pi}:${ii}`;
     const keys = itemKeys(it);
-    const picker = s.picker?.id === id ? s.picker.cal : null;
+    const picker = s.picker?.row === id ? s.picker.cal : null;
     return JSON.stringify([
       width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
-      keys.map(k => [s.values[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
+      keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
   }
 
@@ -610,13 +612,9 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.editable) return;
     if (s.periodParts?.has(k)) return this.setPeriodPart({ [k]: value }, cx);
+    // Only what is typed is sent: in a penalty group opened with Edit the
+    // boxes left alone stay computed (rule 8).
     s.pending[k] = value;
-    // The first amount typed in an opened penalty group overrides all three
-    // together: the others file what they show now (rule 8).
-    const penalty = this.penaltyGroupOf(k);
-    if (penalty && !penalty.edited) {
-      for (const other of penalty.keys) if (!(other in s.pending)) s.pending[other] = s.values[other] ?? "";
-    }
     s.dirty = true;
     const token = this.token;
     s.editSeq = (s.editSeq || 0) + 1;
@@ -722,6 +720,7 @@ export class FormPageActions {
         s.values = this.shown(r.values);
         s.options = r.options || {};
         if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+        if (r.pools) s.poolTexts = r.pools;
         this.syncComputed();
         this.syncChanged(before, edits);
         // The preview prints the draft the host just applied, never the
@@ -1104,23 +1103,21 @@ export class FormPageActions {
     return s.pools.get(k) || null;
   }
 
-  /** A pooled address as one text: its lines as the draft holds them. */
-  poolText(f, values = this.state.values) {
-    return f.pool.keys.map((k) => String(values[k] ?? "").trim()).filter(Boolean).join(" ");
+  /**
+   * A pooled address as one text, as the host reads it from the draft
+   * (`pools`): never the field map's lines, which are cut at a fixed width.
+   */
+  poolText(f) {
+    return String(this.state.poolTexts?.[f.pool.keys[0]] ?? "");
   }
 
   /**
-   * Stage a pooled address: the whole text to its first line when that is
-   * the only line with a field of its own (its form's print splits it), else
-   * split over those lines at the last space that fits, the last taking the
-   * rest (provisional: rules page question 5). The saved fields keep their
-   * shape.
+   * Stage a pooled address: the whole text goes to its first line, and the
+   * host writes it into the draft's own fields (combs::write_pool), split
+   * over the lines only where each has a field of its own.
    */
   editPool(pool, text, cx) {
-    if (pool.write.length === 1) return this.edit(pool.write[0], text, cx);
-    const slots = pool.write.map((k) => pool.slots[pool.keys.indexOf(k)]);
-    const parts = splitLines(text, slots);
-    pool.write.forEach((k, i) => this.edit(k, parts[i] ?? "", cx));
+    this.edit(pool.keys[0], text, cx);
   }
 
   /**
@@ -1134,9 +1131,8 @@ export class FormPageActions {
       if (k in edits) continue;
       const pool = this.poolOf(k);
       if (pool) {
-        if (pool.keys.some((key) => key in edits)) continue;
-        const was = this.poolText({ pool }, before), now = this.poolText({ pool });
-        if (was !== now && input.value() !== now) input.set_value(now);
+        const now = this.poolText({ pool });
+        if (input.value() !== now) input.set_value(now);
         continue;
       }
       const was = before[k] ?? "";
@@ -1418,6 +1414,7 @@ export class FormPageActions {
         this.state.options = r.options || {};
         this.state.off = r.off || {};
         if (Array.isArray(r.penalties)) this.state.penalties = r.penalties;
+        if (r.pools) this.state.poolTexts = r.pools;
         this.syncComputed();
         this.setErrors(r.errors);
       } catch (e) {
@@ -1906,8 +1903,20 @@ function dateParts(fs) {
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-/** Step the calendar's grid to `year` and `month` (1-12) one month at a time. */
-export function moveCalendar(cal, year, month) {
+/**
+ * Move the calendar's grid to `year` and `month` (1-12) in one jump: select
+ * the same day there (the last one when the month is shorter), as the rules
+ * page's calendar does. The box is filled only when a day is picked;
+ * `picker.jumpedTo` lets the calendar's change event tell this jump from a
+ * pick. Steps the rest one month at a time if the grid did not follow.
+ */
+export function moveCalendar(cal, year, month, picker = null) {
+  const selected = typeof cal.value() === "string" ? cal.value() : "";
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const day = Math.min(Number(selected.slice(8, 10)) || 1, days);
+  const target = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  if (picker) picker.jumpedTo = target;
+  cal.set_value(target);
   let steps = (year - cal.year()) * 12 + (month - cal.month());
   for (; steps > 0; steps--) cal.next_month();
   for (; steps < 0; steps++) cal.prev_month();
@@ -1937,8 +1946,8 @@ function calendarSelect(cx, ui, id, cal, which) {
       cx.notify();
     },
     onChange: (v, cx) => {
-      if (month) moveCalendar(cal, cal.year(), Number(v));
-      else moveCalendar(cal, Number(v), cal.month());
+      if (month) moveCalendar(cal, cal.year(), Number(v), s.picker);
+      else moveCalendar(cal, Number(v), cal.month(), s.picker);
       if (s.picker) s.picker.select = null;
       ui.refreshRows();
       cx.notify();
@@ -1947,7 +1956,7 @@ function calendarSelect(cx, ui, id, cal, which) {
 }
 
 /** A calendar button beside an item's date boxes; picking a day fills them. Typing still works. */
-function datePicker(cx, ui, id, date) {
+function datePicker(cx, ui, id, date, row = id) {
   const s = ui.state;
   const t = tokens(cx);
   const open = s.picker && s.picker.id === id;
@@ -1969,9 +1978,10 @@ function datePicker(cx, ui, id, date) {
         cal.set_value(`${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`);
       }
       cal.on("change", (value, cx) => {
-        if (typeof value === "string") ui.pickDate(date, value, cx);
+        // A month or year jump selects a day too; only a pick fills the box.
+        if (typeof value === "string" && value !== s.picker?.jumpedTo) ui.pickDate(date, value, cx);
       });
-      s.picker = { id, cal };
+      s.picker = { id, row, cal };
       ui.refreshRows();
       cx.notify();
     },
@@ -1994,10 +2004,18 @@ function datePicker(cx, ui, id, date) {
     .bg(t.raised)
     .shadow_lg()
     .on_mouse_down_out((_e, cx) => {
-      // A month or year list open over the card is the card's own.
-      if (s.picker?.select) return;
-      s.picker = null;
-      cx.notify();
+      // A click away closes the calendar. While a month or year list is
+      // open over the card, wait for the list: a click in it is the card's
+      // own, and one outside it closes the list and the calendar.
+      const close = () => {
+        s.picker = null;
+        ui.refreshRows();
+        cx.notify();
+      };
+      if (!s.picker?.select) return close();
+      cx.timer.after(0, () => {
+        if (s.picker && !s.picker.select) close();
+      });
     })
     .child(
       div()
@@ -2204,10 +2222,18 @@ function itemRow(cx, ui, it, pi, ii, width) {
     controls = div().flex().flex_row().flex_wrap().gap_x(SPACE[4]).gap_y(SPACE[3]).items_end();
     const radios = fs.filter((f) => f.t === "radio");
     if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
-    for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
+    // Each whole date box has its own calendar beside it (2200A's four
+    // payment dates, 1702EX's Effectivity From and To).
     const single = fs.filter((f) => isDateField(f));
-    if (single.length === 1 && s.editable && !single[0].c && !ui.isLocked(single[0].k)) {
-      controls.child(datePicker(cx, ui, id, { single: single[0] }));
+    for (const f of fs) {
+      if (f.t === "radio") continue;
+      const box = control(cx, ui, f, it.l, fs.length > 1, inner);
+      if (!isDateField(f) || !s.editable || f.c || ui.isLocked(f.k)) {
+        controls.child(box);
+        continue;
+      }
+      const pickerId = single.length === 1 ? id : `${id}-${single.indexOf(f)}`;
+      controls.child(div().flex().flex_row().items_end().gap(SPACE[1]).child(box).child(datePicker(cx, ui, pickerId, { single: f }, id)));
     }
     const date = single.length ? null : dateParts(fs);
     if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || ui.isLocked(f.k))) {

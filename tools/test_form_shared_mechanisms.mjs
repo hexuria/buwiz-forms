@@ -14,8 +14,8 @@
 //  - rule 6: a box the host reports off is faded, takes no typing, says
 //    what turns it on, and comes alive when the next check says so.
 //  - rule 8: penalties show the computed amounts, locked; one Edit opens
-//    all three and the first amount sends all three; totals follow; "Use
-//    the computed amounts" clears them.
+//    all three, only a typed box is sent (the others stay computed);
+//    totals follow; "Use the computed amounts" clears them.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -44,6 +44,7 @@ const schema = {
           f: [{ k: K("line1"), t: "text", slots: 38, l: "Registered Address", pool: { keys: [K("line1"), K("line2"), K("line3")], slots: [38, 38, 30], write: [K("line1"), K("line2"), K("line3")] } }],
         },
         { no: "7", l: "Email Address", f: [{ k: K("email"), t: "email", l: "Email Address" }] },
+        { no: "25", l: "Payments", f: [{ k: K("cashDate"), t: "date", l: "Cash date" }, { k: K("checkDate"), t: "date", l: "Check date" }] },
       ],
     },
     {
@@ -74,7 +75,8 @@ const itemOf = (key) => schema.parts[partOf(key)].items.findIndex((it) => (it.f 
 const idOf = (key) => `${partOf(key)}:${itemOf(key)}`;
 
 const entities = [], tasks = [], texts = [], timers = [];
-const clicks = new Map(), opacity = new Map(), ids = new Set();
+const clicks = new Map(), downOut = new Map(), opacity = new Map(), ids = new Set();
+let calendarSteps = 0;
 const calls = [];
 let owner = null;
 class View {}
@@ -103,6 +105,7 @@ function element() {
     return (...args) => {
       if (k === "id") { o.id = args[0]; ids.add(o.id); }
       if (k === "on_click") clicks.set(o.id, { fn: args[0], entity: creationOwner });
+      if (k === "on_mouse_down_out") downOut.set(o.id, { fn: args[0], entity: creationOwner });
       if (k === "opacity") opacity.set(o.id, args[0]);
       if (k === "when" && args[0]) args[1](el);
       if (k === "when_some" && args[0] != null) args[1](el, args[0]);
@@ -122,8 +125,8 @@ const CalendarState = { new() {
   const cal = {
     set_value(v) { value = v; if (typeof v === "string") { y = Number(v.slice(0, 4)); m = Number(v.slice(5, 7)); } },
     value: () => value, year: () => y, month: () => m, today: () => "2026-10-17", month_days: () => [[]],
-    next_month() { m += 1; if (m > 12) { m = 1; y += 1; } },
-    prev_month() { m -= 1; if (m < 1) { m = 12; y -= 1; } },
+    next_month() { calendarSteps += 1; m += 1; if (m > 12) { m = 1; y += 1; } },
+    prev_month() { calendarSteps += 1; m -= 1; if (m < 1) { m = 12; y -= 1; } },
     on(_ev, fn) { onChange = fn; }, pick(day) { value = day; onChange?.(day, context()); }, release() { return true; },
   };
   calendars.push(cal);
@@ -172,7 +175,14 @@ let hostValues = {
   [K("amendY")]: "false",
   [K("amendN")]: "true",
   [K("prev")]: "0.00",
+  [K("cashDate")]: "",
+  [K("checkDate")]: "",
 };
+// The host reads a pooled address from the draft; its field map cuts the
+// first line at 40 characters, which the page must never show.
+const poolStore = { [K("addr1")]: "1 EXAMPLE STREET, QUEZON CITY", [K("line1")]: "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS" };
+function poolValues() { hostValues[K("addr1")] = poolStore[K("addr1")].slice(0, 40); hostValues[K("addr2")] = poolStore[K("addr1")].slice(40); }
+poolValues();
 // The host says a box is off while what turns it on does not hold.
 // The penalty model: computed amounts, the filer's overrides, the totals.
 const PENALTY = [K("sur"), K("int"), K("comp")];
@@ -187,11 +197,11 @@ function penaltyValues() {
 }
 const penaltyState = () => [{ keys: PENALTY, edited: Object.keys(overrides).length > 0, applies: true }];
 penaltyValues();
-const offNow = () => (hostValues[K("amendY")] === "true" ? {} : { [K("prev")]: "Amended return Yes is selected." });
+const offNow = () => (hostValues[K("amendY")] === "true" ? {} : { [K("prev")]: "Needs Amended Return = Yes" });
 let opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {},
   locks: { ...Object.fromEntries(PENALTY.map((k) => [k, "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to"])), [K("due")]: "computed by BIR's own formulas", [K("incorporated")]: "comes from the taxpayer profile; change it in the profile" },
-  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: offNow(), penalties: penaltyState(), errors: [],
+  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: offNow(), penalties: penaltyState(), pools: { ...poolStore }, errors: [],
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
@@ -213,11 +223,13 @@ const app = {
           else overrides[k] = Number(String(edits[k]).replace(/,/g, ""));
           delete edits[k];
         }
+        for (const k of Object.keys(poolStore)) if (k in edits) { poolStore[k] = String(edits[k]).trim(); delete edits[k]; }
         hostValues = { ...hostValues, ...edits };
         penaltyValues();
-        return { draft: args[1], values: { ...hostValues }, options: {}, rejected, penalties: penaltyState() };
+        poolValues();
+        return { draft: args[1], values: { ...hostValues }, options: {}, rejected, penalties: penaltyState(), pools: { ...poolStore } };
       }
-      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: offNow(), penalties: penaltyState() });
+      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: offNow(), penalties: penaltyState(), pools: { ...poolStore } });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
     },
@@ -299,14 +311,42 @@ assert.equal(ui.state.picker.select, "month", "the month list opens over the cal
 months.onChange("3", context());
 assert.deepEqual([cal.year(), cal.month()], [2020, 3], "a month changes the month");
 assert.equal(ui.state.picker.select, null, "and closes its list");
+calendarSteps = 0;
+years.onChange("1900", context());
+assert.deepEqual([cal.year(), cal.month()], [1900, 3], "a year changes the year");
+assert.equal(calendarSteps, 0, "in one jump, not a month at a time");
 years.onChange("1985", context());
-assert.deepEqual([cal.year(), cal.month()], [1985, 3], "a year changes the year");
+assert.deepEqual([cal.year(), cal.month()], [1985, 3]);
+const fillsBefore = calls.filter((c) => c[0] === "screen_form_fill").length;
+cal.pick(ui.state.picker.jumpedTo);
+assert.equal(calls.filter((c) => c[0] === "screen_form_fill").length, fillsBefore, "a jump selects a day but fills nothing");
 moveCalendar(cal, 2026, 1);
 assert.deepEqual([cal.year(), cal.month()], [2026, 1]);
 moveCalendar(cal, 1985, 3);
 cal.pick("1985-03-07");
 assert.equal(lastFill()[3][K("date")], "03/07/1985", "a picked day reaches the draft as MM/DD/YYYY");
 assert.equal(input(K("date")).value(), "Mar 7, 1985", "and shows as Mar 7, 1985");
+// A click away while a list is open closes the list and the calendar.
+frame();
+clicks.get(`fp-date-${pid}`).fn({}, context());
+frame();
+dropdowns.get(`fp-date-year-${pid}`).onOpenChange(true, context());
+downOut.get(`fp-date-card-${pid}`).fn({}, context());
+assert.ok(ui.state.picker, "a click in the open list is the calendar's own");
+runTimers();
+assert.ok(ui.state.picker, "and keeps it open");
+// The card hears the click first, then the list closes itself.
+downOut.get(`fp-date-card-${pid}`).fn({}, context());
+dropdowns.get(`fp-date-year-${pid}`).onOpenChange(false, context());
+runTimers();
+assert.equal(ui.state.picker, null, "a click outside the list closes it and the calendar");
+// Each date of an item has its own calendar.
+const payments = idOf(K("cashDate"));
+frame();
+assert.ok(clicks.has(`fp-date-${payments}-0`) && clicks.has(`fp-date-${payments}-1`), "two dates, two calendars");
+clicks.get(`fp-date-${payments}-1`).fn({}, context());
+ui.state.picker.cal.pick("2026-03-15");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("checkDate")]: "03/15/2026" }), "the second calendar fills the second date");
 console.log("PASS rule 4: dates show as Dec 10, 2020 and the calendar changes month and year.");
 
 // ---- Rule 5: character boxes only where the length is known.
@@ -314,8 +354,12 @@ const long = "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI"; //
 assert.equal(JSON.stringify(splitLines(long, [40, 31])), JSON.stringify(["UNIT 5 BLDG A, 123 AYALA AVENUE CORNER", "PASEO DE ROXAS, MAKATI"]), "line 1 ends at the last space before character 40");
 assert.ok(fitsBoxes(long, [40, 31]));
 assert.ok(!fitsBoxes(`${long} CITY 1226 METRO MANILA`, [40, 31]), "past 71 the boxes no longer fit");
-assert.equal(JSON.stringify(splitLines("A".repeat(45), [40, 31])), JSON.stringify(["A".repeat(40), "A".repeat(5)]), "a word longer than the line is cut at the boxes");
+assert.equal(JSON.stringify(splitLines(`${"A".repeat(45)} B`, [40, 31])), JSON.stringify(["A".repeat(45), "B"]), "a word longer than the line is never cut");
+assert.ok(!fitsBoxes(`${"A".repeat(45)} B`, [40, 31]), "so it does not fit the boxes");
 assert.ok(!fitsBoxes("A".repeat(41), [40]));
+for (const text of [long, `${long} CITY 1226 METRO MANILA`, `${"A".repeat(45)} B C`]) {
+  assert.equal(splitLines(text, [40, 31]).filter(Boolean).join(" "), text, "joined back with a space, the lines are the text");
+}
 frame();
 assert.ok(ids.has(`fp-boxes-${K("zip")}`), "a ZIP code keeps its four boxes");
 assert.ok(ids.has(`fp-boxes-${K("name")}`), "a name shows boxes while it fits");
@@ -326,43 +370,50 @@ input(K("name")).fire("blur");
 await settle(); frame();
 assert.equal(ui.state.values[K("name")], "EXAMPLE TRADING AND GENERAL MERCHANDISE CORP", "the name is kept whole");
 assert.ok(!ids.has(`fp-boxes-${K("name")}`), "past its 40 boxes the name is a plain field");
-// A two-line address is one box over 40 + 31 slots; its print splits it.
+// A two-line address is one box over 40 + 31 slots, read from the draft
+// (the host's pools), never from the field map's cut lines.
 assert.equal(ui.state.inputs.has(K("addr2")), false, "the second line has no box of its own");
 assert.equal(input(K("addr1")).value(), "1 EXAMPLE STREET, QUEZON CITY");
 input(K("addr1")).type(long);
 input(K("addr1")).fire("blur");
-assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("addr1")]: long }), "the whole address goes to the line with the field, as before");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("addr1")]: long }), "the whole address goes to the host as one text");
 await settle(); frame();
+assert.notEqual(ui.state.values[K("addr1")], long, "(the field map cuts it)");
+assert.equal(input(K("addr1")).value(), long, "the box shows the whole address");
 assert.ok(ids.has(`fp-boxes-${K("addr1")}`), "71 slots hold 61 characters");
 const longer = `${long} CITY 1226 METRO MANILA`;
 input(K("addr1")).type(longer);
 input(K("addr1")).fire("blur");
 await settle(); frame();
-assert.equal(ui.state.values[K("addr1")], longer, "never cut");
+assert.equal(ui.poolText({ pool: { keys: [K("addr1")] } }), longer, "never cut");
 assert.ok(!ids.has(`fp-boxes-${K("addr1")}`), "past 71 both lines are one plain field");
-// Three lines, each a field of its own: the text is split over them.
+// Another box's edit leaves the address as the host holds it.
+input(K("phone")).type("0287654321");
+input(K("phone")).fire("blur");
+await settle(); frame();
+assert.equal(input(K("addr1")).value(), longer, "no space is ever put into it");
+// Three lines, each a field of its own: the host splits the one text.
 assert.equal(input(K("line1")).value(), "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS", "the lines read as one address");
 input(K("line1")).type("UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226");
 input(K("line1")).fire("blur");
-assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("line1")]: "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER", [K("line2")]: "PASEO DE ROXAS, MAKATI CITY 1226", [K("line3")]: "" }), "split at the last space that fits each line");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("line1")]: "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226" }), "sent as one text");
 await settle(); frame();
 assert.equal(input(K("line1")).value(), "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226", "the box keeps what was typed");
 console.log("PASS rule 5: boxes until the text no longer fits; an address is one pool.");
 
 // ---- Rule 6: a box another answer turns off looks off and says why.
-assert.equal(needsText("Amended return Yes is selected."), "Needs: Amended return Yes is selected");
-assert.equal(needsText("Enabled only when Amended Return Yes is selected."), "Needs: Amended Return Yes is selected");
-assert.ok(needsText("x".repeat(300)).endsWith("…") && needsText("x".repeat(300)).length < 160, "a long condition is cut");
+assert.equal(needsText("Needs Amended Return = Yes"), "Needs Amended Return = Yes", "the host's tag shows as it is");
+assert.ok(needsText("x".repeat(300)).endsWith("…") && needsText("x".repeat(300)).length <= 90, "a long tag is cut");
 frame();
-assert.equal(ui.isOff(K("prev")), "Amended return Yes is selected.", "the host's condition");
+assert.equal(ui.isOff(K("prev")), "Needs Amended Return = Yes", "the host's tag");
 assert.equal(ui.isLocked(K("prev")), true, "an off box takes no typing");
-assert.ok(texts.includes("Needs: Amended return Yes is selected"), "it says what turns it on");
+assert.ok(texts.includes("Needs Amended Return = Yes"), "it says what turns it on");
 assert.ok(texts.includes("0.00"), "and still shows its value");
 ui.choose({ [K("amendY")]: "true", [K("amendN")]: "false" }, cx);
 await settle(); frame();
 assert.equal(ui.isOff(K("prev")), "", "Amended Yes turns it on");
 assert.equal(ui.isLocked(K("prev")), false, "it takes typing");
-assert.ok(!texts.some((t) => t.startsWith("Needs:")), "and the tag goes");
+assert.ok(!texts.some((t) => t.startsWith("Needs ")), "and the tag goes");
 input(K("prev")).type("1500");
 input(K("prev")).fire("blur");
 assert.equal(lastFill()[3][K("prev")], "1500", "the host gets what was typed");
@@ -371,7 +422,7 @@ await settle(); frame();
 assert.equal(ui.isLocked(K("prev")), true, "Amended No turns it off again");
 console.log("PASS rule 6: an off box is faded, says what turns it on, and comes alive when it holds.");
 
-// ---- Rule 8: penalties are computed, but one Edit overrides all three.
+// ---- Rule 8: penalties are computed; one Edit unlocks all three.
 const [SUR, INT, COMP] = PENALTY;
 frame();
 for (const k of PENALTY) assert.equal(ui.isLocked(k), true, `${k} shows the computed amount, locked`);
@@ -386,8 +437,9 @@ assert.ok(clicks.has(`fp-penalty-computed-${idOf(SUR)}`), "and offers the comput
 input(COMP).type("500");
 input(COMP).fire("blur");
 const sent = lastFill();
-assert.equal(JSON.stringify(sent[3]), JSON.stringify({ [COMP]: "500", [SUR]: "125.00", [INT]: "31.50" }), "the first amount sends all three together");
-assert.equal(JSON.stringify([...sent[4]].sort()), JSON.stringify([...PENALTY].sort()), "opened with Edit: sent as unlocked");
+assert.equal(JSON.stringify(sent[3]), JSON.stringify({ [COMP]: "500" }), "only the typed box is sent");
+assert.equal(JSON.stringify(sent[4]), JSON.stringify([COMP]), "opened with Edit: sent as unlocked");
+assert.equal(JSON.stringify(Object.keys(overrides)), JSON.stringify([COMP]), "the other two stay computed");
 await settle(); frame();
 assert.equal(ui.state.values[K("totpen")], "656.50", "Total Penalties recomputes from what was entered");
 assert.equal(ui.state.values[K("payable")], "5656.50", "and so does the amount payable");
@@ -407,4 +459,4 @@ assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [SUR]: "", [INT]: "
 assert.equal(ui.state.values[K("totpen")], "1156.50", "the computed amounts are back");
 for (const k of PENALTY) assert.equal(ui.isLocked(k), true, `${k} is locked again`);
 assert.equal(input(COMP).value(), "1,000.00", "its box shows the computed amount again");
-console.log("PASS rule 8: penalties computed by default; one Edit overrides all three; totals recompute.");
+console.log("PASS rule 8: penalties computed by default; one Edit unlocks all three; only typed boxes override; totals recompute.");
