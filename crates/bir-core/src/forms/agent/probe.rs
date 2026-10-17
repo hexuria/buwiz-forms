@@ -124,6 +124,17 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Boxes the taxpayer profile fills although the samples put another value
+/// there, so the probe cannot see the profile's string in them. Each entry
+/// carries its evidence.
+const PROFILE_FACT: &[(&str, &str)] = &[(
+    "frm0619E:txtAddress",
+    "Item 10, the registered address: Form0619EDraft::new_from_profile copies \
+     profile.registered_address, as 0619F's does (its txtAddress is a profile \
+     box); the 0619E sample (tests/sample_payloads/form_0619e.rs) replaces it \
+     with a longer address to reach the second official line",
+)];
+
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
 /// the other field closes a gate (no overpayment left) and `compute` empties
@@ -1577,7 +1588,13 @@ fn decide(
             ));
         }
         let lock = lock_for(&[path.as_str()])
-            .filter(|lock| *lock != Lock::Profile || !NOT_PROFILE.iter().any(|(k, _)| *k == key));
+            .filter(|lock| *lock != Lock::Profile || !NOT_PROFILE.iter().any(|(k, _)| *k == key))
+            .or_else(|| {
+                PROFILE_FACT
+                    .iter()
+                    .any(|(k, _)| *k == key)
+                    .then_some(Lock::Profile)
+            });
         let binding = match value_kind {
             ValueKind::Text(date) => Binding::Text {
                 path,
