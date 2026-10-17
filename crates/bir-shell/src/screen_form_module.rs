@@ -9703,33 +9703,50 @@ mod tests {
 
     /// The boxes off by the test's own probing of each conditional box
     /// alone: blank now, at least one probe taken, and every probe taken
-    /// cleared by the form through the page's own fill, or refused because
-    /// the answer it waits for does not hold (the host's gate refusal,
-    /// rows_monthly.rs: 1600WP item 4).
+    /// cleared by the form through the page's own fill. 1600WP Schedule
+    /// 1.1's filer boxes (a hand list) are off, whatever they show, while the
+    /// draft's item 4 is not Yes, which is their corpus condition ("Item 4
+    /// Yes."): the form's computation keeps what is typed there, so probing
+    /// cannot tell, and the host's own refusal is no oracle.
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
+        const WP_SCHEDULE: [&str; 4] = [
+            "frm1600WP:dtSched:txtTin",
+            "frm1600WP:dtSched:txtFullname",
+            "frm1600WP:dtSched:drpAtcCode",
+            "frm1600WP:dtSched:amount",
+        ];
         let corpus = conditions::tests::derived();
         corpus[code]
             .as_object()
             .into_iter()
             .flatten()
-            .map(|(key, _)| key.clone())
-            .filter(|key| {
-                if !shows_nothing(&checked["values"][key]) {
+            .filter(|(key, condition)| {
+                let item_4 = code == "1600WP"
+                    && condition.as_str() == Some("Item 4 Yes.")
+                    && WP_SCHEDULE.iter().any(|stem| {
+                        key.strip_prefix(stem)
+                            .and_then(|n| n.parse::<usize>().ok())
+                            .is_some_and(|n| (1..=10).contains(&n))
+                    });
+                if item_4 {
+                    return checked["draft"]["taxes_withheld"] != json!(true);
+                }
+                if !shows_nothing(&checked["values"][key.as_str()]) {
                     return false;
                 }
                 let taken: Vec<bool> = test_probes(checked, code, key)
                     .into_iter()
                     .filter_map(|probe| {
+                        let key = key.as_str();
                         let filled = fill(code, &checked["draft"], json!({ key: probe }));
-                        match filled["rejected"][key].as_str() {
-                            None => Some(shows_nothing(&filled["values"][key])),
-                            Some(why) if rows_monthly::is_gate_refusal(why) => Some(true),
-                            Some(_) => None,
-                        }
+                        filled["rejected"][key]
+                            .is_null()
+                            .then(|| shows_nothing(&filled["values"][key]))
                     })
                     .collect();
                 !taken.is_empty() && taken.iter().all(|cleared| *cleared)
             })
+            .map(|(key, _)| key.clone())
             .collect()
     }
 

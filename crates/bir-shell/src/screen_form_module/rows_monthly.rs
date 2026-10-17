@@ -183,12 +183,6 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
     }
 }
 
-/// Whether `reason` is this module's refusal of a box its answer closes.
-#[cfg(test)]
-pub(super) fn is_gate_refusal(reason: &str) -> bool {
-    reason == ANSWER_4_FIRST
-}
-
 /// `Some(closed)` for a 1600WP Schedule 1.1 box: closed while item 4 is not
 /// Yes. `None` for every other box.
 pub(super) fn gated(kind: AgentFormKind, draft: &Value, key: &str) -> Option<bool> {
