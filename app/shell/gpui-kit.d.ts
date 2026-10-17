@@ -28063,6 +28063,8 @@ declare module "bir" {
       pools: Record<string, string>;
       /** A sample's boxes still blank (null for a return). */
       blank?: string[] | null;
+      /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
+      removes?: { message: string; done: string; rows: number } | null;
   }
   export interface ScreenFormValidated {
       draft: object;

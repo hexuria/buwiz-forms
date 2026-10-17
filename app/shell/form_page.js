@@ -77,7 +77,7 @@ function selectBox(cx, ui, k, label, listedRaw, value, locked, width) {
   const shown = selected ? selected.value : known ? value : /^(0+|-)$/.test(value) ? "" : value;
   if (shown && !selected && !known) options.push({ value: shown, label: shown });
   if (locked) {
-    const hint = !shown && s.blank.has(k) ? s.needs?.[k] || "" : "";
+    const hint = !shown ? ui.reasonFor(k) : "";
     if (hint) return lockedBox(cx, hint, width, { hint: true });
     return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
   }
@@ -713,9 +713,86 @@ export class FormPageActions {
     }
     Object.assign(s.pending, edits);
     s.dirty = true;
+    // What the boxes showed, for an answer the filer then cancels.
+    s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k]]));
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
     // flush() syncs the preview from the host-applied draft.
     this.flush(cx);
+  }
+
+  /** Take what the host applied for `edits`. */
+  applyFill(r, edits) {
+    const s = this.state;
+    this.accepted(edits, r.rejected);
+    // The host says which of a sample's boxes are still blank.
+    if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
+    const before = s.values;
+    s.draft = r.draft;
+    s.values = this.shown(r.values);
+    s.options = r.options || {};
+    if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+    if (r.pools) s.poolTexts = r.pools;
+    this.syncComputed();
+    this.syncChanged(before, edits);
+    // The preview prints the draft the host just applied, never the
+    // page's optimistic values.
+    this.livePreview();
+    const rejected = Object.entries(r.rejected || {});
+    if (rejected.length) {
+      for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
+    }
+  }
+
+  /**
+   * An answer that removes rows the filer typed (the host's `removes`) is
+   * asked first: the page keeps its draft and shows the old answer until
+   * Continue (`confirmRemoval`); Cancel (`cancelRemoval`) leaves both.
+   */
+  holdRemoval(r, edits, cx) {
+    const s = this.state;
+    for (const k of Object.keys(edits)) if (s.chosenFrom && k in s.chosenFrom) s.values[k] = s.chosenFrom[k] ?? "";
+    s.removal = { r, edits, draft: s.draft };
+    this.app.overlay = "removal";
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** Continue: the answer and its removal apply; Undo brings both back. */
+  confirmRemoval(cx) {
+    const s = this.state;
+    const held = s.removal;
+    if (!held) return;
+    s.removal = null;
+    this.app.overlay = null;
+    this.applyFill(held.r, held.edits);
+    this.refreshRows();
+    this.validate(cx);
+    this.offerUndo(held.r.removes.done, (ucx) => this.undoRemoval(held.draft, ucx), cx);
+    cx.notify();
+  }
+
+  /** Cancel: the old answer and the rows stay. */
+  cancelRemoval(cx) {
+    const s = this.state;
+    s.removal = null;
+    this.app.overlay = null;
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** Undo a removal: the draft from before the answer comes back. */
+  undoRemoval(draft, cx) {
+    const s = this.state;
+    if (!s) return;
+    try {
+      const r = this.app.store.call("screen_form_fill", s.code, draft, {}, []);
+      this.applyFill(r, {});
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    this.refreshRows();
+    this.validate(cx);
+    cx.notify();
   }
 
   /** Apply staged edits to the typed draft (fast, no database), then validate off-thread. */
@@ -727,24 +804,8 @@ export class FormPageActions {
     if (Object.keys(edits).length) {
       try {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
-        this.accepted(edits, r.rejected);
-        // The host says which of a sample's boxes are still blank.
-        if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
-        const before = s.values;
-        s.draft = r.draft;
-        s.values = this.shown(r.values);
-        s.options = r.options || {};
-        if (Array.isArray(r.penalties)) s.penalties = r.penalties;
-        if (r.pools) s.poolTexts = r.pools;
-        this.syncComputed();
-        this.syncChanged(before, edits);
-        // The preview prints the draft the host just applied, never the
-        // page's optimistic values.
-        this.livePreview();
-        const rejected = Object.entries(r.rejected || {});
-        if (rejected.length) {
-          for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
-        }
+        if (r.removes) return this.holdRemoval(r, edits, cx);
+        this.applyFill(r, edits);
       } catch (e) {
         // The draft never took these edits: keep them staged (under anything
         // typed since) so the next flush or save sends them again.
@@ -1226,7 +1287,7 @@ export class FormPageActions {
    */
   reasonFor(k) {
     const s = this.state;
-    return s.blank.has(k) ? s.needs?.[k] || "" : s.waits?.[k] || "";
+    return (s.blank.has(k) && s.needs?.[k]) || s.waits?.[k] || "";
   }
 
   /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */
@@ -2475,6 +2536,24 @@ export function renderExistingOffer(cx, app) {
     );
   }
   return Overlay(cx, "existing-offer", card, (cx) => ui.takeExisting("keep", cx), { width: 420 });
+}
+
+/** The question an answer that removes typed rows asks first. */
+export function renderRemovalConfirm(cx, app) {
+  const ui = app.formUi;
+  const held = ui.state?.removal;
+  if (!held) return div();
+  const card = div()
+    .flex()
+    .flex_col()
+    .items_stretch()
+    .w_full()
+    .gap(SPACE[3])
+    .p(SPACE[5])
+    .child(Text(cx, "title", held.r.removes.message).whitespace_normal())
+    .child(AppButton(cx, "removal-continue", "Continue", { variant: "primary", block: true, onClick: (_e, cx) => ui.confirmRemoval(cx) }))
+    .child(AppButton(cx, "removal-cancel", "Cancel", { variant: "secondary", block: true, onClick: (_e, cx) => ui.cancelRemoval(cx) }));
+  return Overlay(cx, "removal-confirm", card, (cx) => ui.cancelRemoval(cx), { width: 420 });
 }
 
 // ---------------------------------------------------------------- page
