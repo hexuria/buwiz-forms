@@ -337,6 +337,12 @@ pub struct Form2551QDraft {
     /// profile box of a Draft follows the profile. Never filed or printed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub profile_edits: Vec<String>,
+    /// The tax-profile values the draft's profile boxes were built from
+    /// (draft path -> value), recorded when the page opens or saves it. A
+    /// profile box follows a later profile change only while it still
+    /// holds this value. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
 
     /// Set to true when this draft was pre-filled from a previous quarter.
     /// UI shows a "Pre-filled from Q{n} {year}" banner when true.
@@ -451,6 +457,7 @@ impl Form2551QDraft {
             next_retry_at: None,
             last_error: None,
             profile_edits: Vec::new(),
+            profile_baseline: std::collections::BTreeMap::new(),
             carried_forward_from: None,
             payment_receipt_path: None,
         };

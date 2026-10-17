@@ -295,6 +295,12 @@ pub struct Form1601CDraft {
     /// profile box of a Draft follows the profile. Never filed or printed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub profile_edits: Vec<String>,
+    /// The tax-profile values the draft's profile boxes were built from
+    /// (draft path -> value), recorded when the page opens or saves it. A
+    /// profile box follows a later profile change only while it still
+    /// holds this value. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 impl Form1601CDraft {
@@ -448,6 +454,7 @@ impl Form1601CDraft {
             submission_error: None,
             next_retry_at: None,
             profile_edits: Vec::new(),
+            profile_baseline: std::collections::BTreeMap::new(),
         }
     }
 
