@@ -124,6 +124,18 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Boxes the rules corpus lists as entries although the form computes them
+/// (the opposite of [`USER_CHOSEN`]): the projection marks them computed, so
+/// they are never bound to a draft field. The field map and the upload are
+/// unchanged.
+const COMPUTED_BY_FORM: &[(&str, &str)] = &[(
+    "frm2550qv2024:penalties",
+    "Item 25 Total Penalties (Sum of Items 22 to 24): form_2550q.rs recompute \
+     sets part_ii.item_25_total_penalties to the sum of Items 22-24; the \
+     samples leave Items 23 and 24 unset, so probing saw it move with the \
+     surcharge alone and bound it to /part_ii/item_22_surcharge",
+)];
+
 /// Boxes `fields.json` keys only as an occurrence of an official control
 /// (`X#occurrence-1`) that it lists under no key of its own, while the app's
 /// field map writes the control once, under `X`: `(form code, box key,
@@ -184,11 +196,13 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                 .find(|meaning| meaning["stored_value"] == "true");
             let key = text(field, "field_key");
             let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
+            let computed_by_form = COMPUTED_BY_FORM.iter().any(|(k, _)| *k == key);
             BoxDef {
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
-                computed: !chosen_by_user && field["computed"].as_bool().unwrap_or(false),
+                computed: computed_by_form
+                    || (!chosen_by_user && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()
                 } else {
