@@ -27989,11 +27989,48 @@ declare module "bir" {
       profile_edit: string[];
       /** Opened from the Form library: a blank sample that is never saved. */
       sample: boolean;
-      /** A sample's period and date boxes, shown blank until the filer types one; a sample's period boxes are open. */
+      /** A sample's boxes shown blank while its period is not set: its period parts and everything that follows the period. */
       blank: string[];
-      /** A sample's blank box that cannot be typed: what it waits for (shown in the box). */
+      /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
       needs: Record<string, string>;
+      /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
+      period_parts: ScreenFormPeriodPart[];
+      /** A sample rebuilt for a period its filer completed. */
+      period_set: boolean;
+      /** A sample's taxpayer's saved returns of the form, for a picker that marks them. */
+      saved_periods: ScreenFormSavedPeriod[];
       errors: ScreenFormError[];
+  }
+  export interface ScreenFormPeriodPart {
+      key: string;
+      part: "year" | "month" | "year_end_month" | "day" | "quarter" | "date";
+      /** For a quarter's tick box: which quarter. */
+      quarter: number | null;
+  }
+  export interface ScreenFormSavedPeriod {
+      year: number;
+      month: number | null;
+      quarter: number | null;
+      status: ScreenFormStatus;
+      updated_at: string;
+  }
+  export interface ScreenFormExisting {
+      form_code: string;
+      year: number;
+      period: number;
+      label: string;
+      status: ScreenFormStatus;
+      updated_at: string;
+      total_payable: number | null;
+  }
+  export interface ScreenFormSamplePeriod {
+      complete: boolean;
+      /** A stored return of the form already has this period. */
+      existing?: ScreenFormExisting;
+      /** No stored return: a fresh sample built for exactly this period. */
+      sample?: ScreenFormOpened;
+      /** The year and period `screen_form_open` takes for it. */
+      opens?: { year: number; period: number };
   }
   export interface ScreenFormFilled {
       draft: object;
@@ -28028,6 +28065,8 @@ declare module "bir" {
   export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
   /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
   export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
+  /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
+  export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
   /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
   export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
   export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;

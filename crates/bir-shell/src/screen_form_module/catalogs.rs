@@ -76,8 +76,6 @@ pub(super) enum Lift {
     /// The filer chose Edit on this profile box: the edit stays on this
     /// return and the profile itself is never written.
     Profile,
-    /// A period box of a Form library sample, which is never saved.
-    SamplePeriod,
 }
 
 /// Apply an ordinary user edit, then clear the location's descendants when
@@ -167,7 +165,6 @@ pub(super) fn fill(
     let before = loc.and_then(|(base, _)| draft.pointer(base).cloned());
     match lift {
         Lift::Profile => agent::fill_profile_box_as_user(kind, draft, key, value)?,
-        Lift::SamplePeriod => agent::fill_sample_period_box(kind, draft, key, value)?,
         Lift::Nothing => agent::fill_as_user(kind, draft, key, value)?,
     }
     // 1702RT Item 5: the official select is enabled only once "Other" is

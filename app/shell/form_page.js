@@ -268,19 +268,7 @@ export class FormPageActions {
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
-        s.draft = r.draft;
-        s.status = r.status;
-        s.editable = r.editable;
-        s.blank = new Set(r.blank || []);
-        s.values = this.shown(r.values);
-        s.options = r.options || {};
-        s.locks = r.locks;
-        s.profile = new Set(r.profile || []);
-        s.profileEdit = new Set(r.profile_edit || []);
-        // A sample's blank box that cannot be typed says what it waits for.
-        s.needs = r.needs || {};
-        s.saved = Boolean(r.draft && r.draft.id);
-        this.setErrors(r.errors);
+        this.takeOpened(r);
         // Every part already open (one picked while the return was still
         // opening, too) gets its inputs now that the draft is here.
         for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i, acx);
@@ -293,6 +281,29 @@ export class FormPageActions {
         acx.notify();
       }
     });
+  }
+
+  /** Take what the host opened (a return, a sample, or a sample rebuilt for its period). */
+  takeOpened(r) {
+    const s = this.state;
+    s.draft = r.draft;
+    s.status = r.status;
+    s.editable = r.editable;
+    s.blank = new Set(r.blank || []);
+    // A sample's period parts: page inputs the filer sets the period with,
+    // never written into the draft (screen_form_sample_period rebuilds it).
+    s.periodParts = new Map((r.period_parts || []).map((p) => [p.key, p]));
+    s.periodSet = Boolean(r.period_set);
+    s.savedPeriods = r.saved_periods || [];
+    s.values = this.shown(r.values);
+    s.options = r.options || {};
+    s.locks = r.locks;
+    s.profile = new Set(r.profile || []);
+    s.profileEdit = new Set(r.profile_edit || []);
+    // A sample's held box that cannot be typed says what it waits for.
+    s.needs = r.needs || {};
+    s.saved = Boolean(r.draft && r.draft.id);
+    this.setErrors(r.errors);
   }
 
   /** Create InputStates for one part's text-like controls (only once). */
@@ -481,6 +492,7 @@ export class FormPageActions {
   edit(k, value, cx) {
     const s = this.state;
     if (!s || !s.editable) return;
+    if (s.periodParts?.has(k)) return this.setPeriodPart({ [k]: value }, cx);
     s.pending[k] = value;
     s.dirty = true;
     const token = this.token;
@@ -557,6 +569,12 @@ export class FormPageActions {
   choose(edits, cx) {
     const s = this.state;
     if (!s || !s.editable) return;
+    const period = Object.fromEntries(Object.entries(edits).filter(([k]) => s.periodParts?.has(k)));
+    if (Object.keys(period).length) {
+      this.setPeriodPart(period, cx);
+      edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in period)));
+      if (!Object.keys(edits).length) return;
+    }
     Object.assign(s.pending, edits);
     s.dirty = true;
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
@@ -597,6 +615,84 @@ export class FormPageActions {
       }
     }
     this.validate(cx);
+  }
+
+  /**
+   * A sample's period part changed: the page keeps it (it is never a draft
+   * write) and asks the host about the period once it is complete. A new
+   * complete period rebuilds the sample for it, with what the filer typed
+   * elsewhere applied again; a period that already has a stored return is
+   * offered (offerExisting), never opened by itself.
+   */
+  setPeriodPart(parts, cx) {
+    const s = this.state;
+    s.periodValues = { ...(s.periodValues || {}), ...parts };
+    for (const [k, v] of Object.entries(parts)) s.values[k] = String(v);
+    const asked = JSON.stringify(s.periodValues);
+    if (asked === s.periodAsked) return;
+    s.periodAsked = asked;
+    const token = this.token;
+    cx.spawn(async (acx) => {
+      let r;
+      try {
+        r = await this.app.store.call("screen_form_sample_period", s.tin, s.code, s.periodValues);
+      } catch (e) {
+        if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
+        return;
+      }
+      if (token !== this.token || asked !== this.state.periodAsked) return;
+      this.takePeriod(r, acx);
+    });
+    this.notify(cx);
+  }
+
+  /** The host's answer for a sample's typed period. */
+  takePeriod(r, cx) {
+    const s = this.state;
+    s.opens = r.complete ? r.opens : null;
+    s.existing = r.existing || null;
+    if (r.existing) {
+      this.offerExisting(r.existing, cx);
+    } else if (r.sample) {
+      const before = s.values;
+      this.takeOpened(r.sample);
+      // What the filer typed outside the period goes onto the new draft.
+      const typed = s.typedEdits || {};
+      if (Object.keys(typed).length) {
+        try {
+          const f = this.app.store.call("screen_form_fill", s.code, s.draft, typed, this.unlockedFor(typed));
+          s.draft = f.draft;
+          s.values = this.shown(f.values);
+          s.options = f.options || {};
+        } catch (e) {
+          this.app.toast(message(e), cx, "triangle-alert");
+        }
+      }
+      this.syncComputed();
+      this.syncChanged(before, { ...typed, ...(s.periodValues || {}) });
+      this.validate(cx);
+    }
+    this.notify(cx);
+  }
+
+  /**
+   * A stored return already has the sample's period. How to offer it (a
+   * modal, an inline hint, a period picker marking saved periods) is the
+   * maintainer's open choice; until then the sample stays as it is and
+   * nothing opens by itself. `existing` carries the period, its label,
+   * status, last save and total payable.
+   */
+  offerExisting(existing, cx) {
+    this.state.existing = existing;
+    void cx;
+  }
+
+  /** Start a return from a sample: its period's return once the period is set, else New return. */
+  startReturn(cx) {
+    const s = this.state;
+    if (!s.opens) return this.app.startNewReturn(cx, s.code);
+    if (s.existing) return this.offerExisting(s.existing, cx);
+    this.app.openForm({ tin: s.tin, code: s.code, year: s.opens.year, period: s.opens.period }, cx);
   }
 
   /** Computed and locked boxes follow the draft; user boxes keep what was typed. */
@@ -665,7 +761,11 @@ export class FormPageActions {
     const s = this.state;
     if (!s.sample || !s.blank.size) return values;
     const out = { ...values };
-    for (const k of s.blank) if (k in out && !s.typed.has(k)) out[k] = "";
+    for (const k of s.blank) {
+      // A period part shows what the filer typed into it.
+      if (s.periodParts?.has(k)) out[k] = s.periodValues?.[k] ?? "";
+      else if (k in out && !s.typed.has(k)) out[k] = "";
+    }
     return out;
   }
 
@@ -682,7 +782,12 @@ export class FormPageActions {
   /** A sample shows a box it blanked once the host has taken an edit for it. */
   accepted(edits, rejected) {
     const s = this.state;
-    for (const k of Object.keys(edits)) if (!(rejected && k in rejected)) s.typed.add(k);
+    for (const [k, v] of Object.entries(edits)) {
+      if (rejected && k in rejected) continue;
+      s.typed.add(k);
+      // A sample keeps what the filer typed, for a rebuild for its period.
+      if (s.sample) (s.typedEdits ||= {})[k] = v;
+    }
   }
 
   /** Edit on a profile item: its profile boxes take typing; the edit stays on this return. */
@@ -1599,7 +1704,7 @@ function formContent(cx, app, width) {
   const actions = s.sample ? [] : [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
   if (s.sample) {
     if (s.editable) actions.push(s.checkButton.entity);
-    actions.push(AppButton(cx, "fp-start-return", "Start a return", { variant: "primary", size: "sm", icon: "plus", onClick: (_e, cx) => app.startNewReturn(cx, s.code) }));
+    actions.push(AppButton(cx, "fp-start-return", "Start a return", { variant: "primary", size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
   } else if (s.status === "Queued") {
     actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
   } else if (s.editable) {

@@ -282,3 +282,85 @@ ui.endProfileEdit([K("registeredAddress")]);
 ui.state.locks[K("txtSheets")] = "computed by BIR's own formulas";
 assert.equal(ui.unlockedFor({ [K("txtSheets")]: "1" }).length, 0);
 console.log("PASS: library sample blank and unsaved; profile boxes fold, show Edit on hover or focus, keep the edit on this return.");
+
+// ---- A sample's period (option B): page inputs, a host answer once complete.
+const quarterKeys = [1, 2, 3, 4].map((n) => K(`qtr_${n}`));
+const periodParts = [
+  { key: K("txtYear"), part: "year", quarter: null },
+  ...quarterKeys.map((key, i) => ({ key, part: "quarter", quarter: i + 1 })),
+];
+const baseCall = app.store.call;
+const asks = [];
+app.store.call = (name, ...args) => {
+  if (name === "screen_form_sample") {
+    calls.push([name, ...args]);
+    return Promise.resolve({ ...opened(true), period_parts: periodParts, saved_periods: [{ year: 2024, quarter: 1, month: null, status: "Draft", updated_at: "2026-10-01" }] });
+  }
+  if (name === "screen_form_sample_period") {
+    const parts = args[2];
+    asks.push(JSON.parse(JSON.stringify(parts)));
+    const quarter = quarterKeys.findIndex((k) => parts[k] === "true") + 1;
+    if (parts[K("txtYear")] !== "2024" || !quarter) return Promise.resolve({ complete: false });
+    if (quarter === 1) {
+      return Promise.resolve({
+        complete: true,
+        opens: { year: 2024, period: 1 },
+        existing: { form_code: "2551Q", year: 2024, period: 1, label: "Q1 2024", status: "Draft", updated_at: "2026-10-01", total_payable: 0 },
+      });
+    }
+    return Promise.resolve({
+      complete: true,
+      opens: { year: 2024, period: quarter },
+      sample: {
+        ...opened(true),
+        draft: { screen_form_sample: { blank: [] }, rebuilt: quarter },
+        values: { ...hostValues, [K("txtYear")]: "2024", [quarterKeys[quarter - 1]]: "true" },
+        locks: Object.fromEntries(filled.map((k) => [k, PROFILE_REASON])),
+        blank: [],
+        needs: {},
+        period_parts: periodParts,
+        period_set: true,
+      },
+    });
+  }
+  return baseCall.call(app.store, name, ...args);
+};
+const opens = [];
+app.openForm = (opts) => opens.push(opts);
+ui.open({ code: "2551Q", tin: "12345678800000", year: 2026, period: 0, sample: true }, cx);
+await settle();
+const fills = () => calls.filter((c) => c[0] === "screen_form_fill");
+const fillsBefore = fills().length;
+// The year alone: a page input, no draft write, not complete.
+ui.edit(K("txtYear"), "2024", cx);
+await settle();
+assert.equal(fills().length, fillsBefore, "a period part is never a draft write");
+assert.equal(ui.state.values[K("txtYear")], "2024", "the typed year shows");
+assert.equal(asks.at(-1)[K("txtYear")], "2024", "the host is asked with the parts");
+assert.equal(ui.state.opens, null, "not complete");
+// An amount typed meanwhile is kept for the rebuild.
+ui.choose({ [K("amendedRtn_2")]: "true" }, cx);
+await settle();
+assert.equal(ui.state.typedEdits[K("amendedRtn_2")], "true");
+// Q1 has a stored return: offered, never opened, the sample unchanged.
+const draftBefore = ui.state.draft;
+ui.choose(Object.fromEntries(quarterKeys.map((k, i) => [k, i === 0 ? "true" : "false"])), cx);
+await settle();
+assert.equal(ui.state.draft, draftBefore, "an existing return changes nothing by itself");
+assert.equal(ui.state.existing.label, "Q1 2024", "offerExisting holds what the chosen UI needs");
+assert.equal(opens.length, 0);
+ui.startReturn(cx);
+assert.equal(opens.length, 0, "Start a return offers the stored return, it does not open it");
+// Q2 has none: the sample is rebuilt for it and the typed answer goes on again.
+const before = fills().length;
+ui.choose(Object.fromEntries(quarterKeys.map((k, i) => [k, i === 1 ? "true" : "false"])), cx);
+await settle();
+assert.equal(ui.state.draft.rebuilt ?? fills().at(-1)[2].rebuilt, 2, "the rebuilt draft");
+assert.equal(ui.state.existing, null);
+const reapplied = fills().slice(before).find((c) => c[2] && c[2].rebuilt === 2);
+assert.ok(reapplied, "the typed values were filled onto the rebuilt draft");
+assert.equal(reapplied[3][K("amendedRtn_2")], "true");
+assert.equal(ui.state.periodSet, true);
+ui.startReturn(cx);
+assert.equal(JSON.stringify(opens.at(-1)), JSON.stringify({ tin: "12345678800000", code: "2551Q", year: 2024, period: 2 }), "Start a return opens that period's return");
+console.log("PASS: a sample's period parts are page inputs; complete, the host offers a stored return or rebuilds the sample.");

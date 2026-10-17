@@ -737,14 +737,14 @@ pub fn writes_only_the_period(binding: &Binding) -> bool {
         })
 }
 
-/// [`fill_as_user`] for a period box ([`Lock::Identity`] on a binding that
-/// writes only [`PERIOD_FIELDS`]: year, month, quarter, day) of a form shown
-/// as a sample that is never saved, so the filer can type the period to see
-/// the form work. The TIN, the other identity box, stays refused. The caller
-/// must hold such a sample; a stored return's period stays locked through
-/// every other writer. Profile, computed, hidden and unbound boxes are
-/// refused as in [`fill_as_user`].
-pub fn fill_sample_period_box(
+/// Build a new draft's period: write a box whose binding writes only
+/// [`PERIOD_FIELDS`] (year, month, day, a date), whatever its
+/// [`Lock::Identity`]. For a host constructing a draft for a period it chose
+/// (a library sample rebuilt for the period its filer completed); never for
+/// an edit a page sends, which keeps the period of a return locked through
+/// every other writer. The TIN, profile, computed, hidden and unbound boxes
+/// are refused as in [`fill_as_user`].
+pub fn write_period_box(
     kind: AgentFormKind,
     draft: &mut Value,
     key: &str,
@@ -1522,7 +1522,7 @@ mod tests {
     }
 
     #[test]
-    fn a_samples_period_writer_lifts_only_period_fields() {
+    fn the_period_writer_lifts_only_period_fields() {
         let text = |path: &str| Binding::Text {
             path: path.into(),
             nullable: false,

@@ -427,10 +427,10 @@ fn the_page_writes_profile_boxes_and_never_identity_boxes() {
                 Lock::Identity => {
                     let refused = result.expect_err(key);
                     assert!(refused.contains(lock.reason()), "{key}: {refused}");
-                    // Only a sample's period writer lifts it, and only on a
+                    // Only the host's period writer lifts it, and only on a
                     // period box: the TIN stays refused.
                     let mut draft = seed.clone();
-                    let sample = agent::fill_sample_period_box(kind, &mut draft, key, &value);
+                    let sample = agent::write_period_box(kind, &mut draft, key, &value);
                     let refused = sample.err().unwrap_or_default();
                     let period = agent::writes_only_the_period(&bound.binding);
                     assert_eq!(
@@ -445,10 +445,10 @@ fn the_page_writes_profile_boxes_and_never_identity_boxes() {
                         panic!("{} {key} = {value}: {error}", kind.form_code())
                     });
                     written += 1;
-                    // A sample's period writer never lifts a profile lock.
+                    // The host's period writer never lifts a profile lock.
                     let mut draft = seed.clone();
-                    let refused = agent::fill_sample_period_box(kind, &mut draft, key, &value)
-                        .expect_err(key);
+                    let refused =
+                        agent::write_period_box(kind, &mut draft, key, &value).expect_err(key);
                     assert!(refused.contains(lock.reason()), "{key}: {refused}");
                 }
             }
