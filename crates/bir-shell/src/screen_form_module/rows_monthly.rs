@@ -5,15 +5,20 @@
 //! clears what the answer closes.
 //!
 //! - 0619E item 12 and 0619F item 11, Category of Withholding Agent: the
-//!   filer's choice (`withholding_agent_category`; the profile's
-//!   government flag is only the new draft's default). The field map, the
-//!   XML and the print already write both boxes from it.
+//!   filer's choice. The form has no setter for it: the host writes
+//!   `withholding_agent_category` itself (the profile's government flag is
+//!   only the new draft's default), and the field map, the XML and the
+//!   print write both boxes from it.
 //! - 1600PT and 1600VT Part II (items 13-17, then the attachment's "Other
 //!   Selected ATC" rows): a row's ATC is chosen from the category's popup as
-//!   `catalog:<position>` (`toggle_atc`, which keeps popup order); a changed
-//!   row keeps its tax base, blank unticks it. The rate follows the ATC and
-//!   is never typed. Item 3 (`set_taxes_withheld`) and item 10
-//!   (`set_agent_category`) clear the rows as the official handlers do.
+//!   `catalog:<position>` and ticked with `toggle_atc` (which keeps popup
+//!   order); a changed row keeps its tax base; blank removes the row from
+//!   `atc_rows` (toggle_atc would refuse it under item 3 No). The rate
+//!   follows the ATC and is never typed. A tax base has no setter: the host
+//!   writes the row's `tax_base` and runs the form's `recompute`, which
+//!   sets the row's tax withheld and items 18-27. Item 3
+//!   (`set_taxes_withheld`) and item 10 (`set_agent_category`) go through
+//!   the form's setters, which clear the rows as the official handlers do.
 //! - 1600WP item 4 (`set_taxes_withheld`, `cancelAllCompute`) and item 7
 //!   (`set_agent_category`). Schedule 1.1 is closed while item 4 is not Yes
 //!   (fields.json `enabled_when` "Item 4 Yes."): a write there is refused

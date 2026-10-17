@@ -1203,7 +1203,7 @@
           "label": "2099"
         }
       ],
-      "evidence": "PR 3 (1600PT manual-5): display only. The sheet prints the year's last two digits ('1 For the month 20YY', html-frozen/1600-pt-2018/writer-cells.json) and the field map writes them (form_1600pt.rs: year % 100); each option keeps that two-digit value and shows the whole year, so '26' reads 2026. Nothing saved changes."
+      "evidence": "PR 3 (1600PT manual-5): display only. The sheet prints the year's last two digits ('1 For the month 20YY', html-frozen/1600-pt-2018/writer-cells.json) and the field map writes them (form_1600pt.rs: year % 100); each option keeps that two-digit value and shows the whole year, so '26' reads 2026. The draft stores the four-digit year (`year: u16`); the two-digit value is only the field map's format, and nothing saved changes."
     },
     "frm1600PT:txtPg1I4NoOfSheets": {
       "label": "No. of sheets attached",
@@ -2758,7 +2758,7 @@
           "label": "2099"
         }
       ],
-      "evidence": "PR 3 (1600VT manual-5): display only. The sheet prints the year's last two digits ('1 For the month 20YY', html-frozen/1600-vt-2018/writer-cells.json) and the field map writes them (form_1600vt.rs: year % 100); each option keeps that two-digit value and shows the whole year, so '26' reads 2026. Nothing saved changes."
+      "evidence": "PR 3 (1600VT manual-5): display only. The sheet prints the year's last two digits ('1 For the month 20YY', html-frozen/1600-vt-2018/writer-cells.json) and the field map writes them (form_1600vt.rs: year % 100); each option keeps that two-digit value and shows the whole year, so '26' reads 2026. The draft stores the four-digit year (`year: u16`); the two-digit value is only the field map's format, and nothing saved changes."
     },
     "frm1600VT:txtPg1I4NoOfSheets": {
       "label": "No. of sheets attached",

@@ -885,6 +885,33 @@ fn form_1600pt_and_1600vt_part_ii_rows_are_chosen_on_the_page() {
             "{code}: the print shows row 14's ATC"
         );
         assert_eq!(map[&base(2)], "1,000.00", "{code}");
+        // A tax base typed alone: the row's tax withheld and items 18-27
+        // follow (the form's recompute), with the other payments counted.
+        let rebased = fill(
+            code,
+            &filled["draft"],
+            json!({ base(2): "3000", format!("{p}txtPg1P2I20OthrPymntsMade"): "10" }),
+        );
+        assert_eq!(rebased["rejected"], json!({}), "{code}");
+        let v = &rebased["values"];
+        let withheld_3000 = (3000.0 * third.3 / 100.0 * 100.0).round() / 100.0;
+        assert_eq!(amount(v, &withheld(2)), withheld_3000, "{code}");
+        assert_eq!(
+            amount(v, &format!("{p}txtPg1P2I18TotTaxWithheld")),
+            withheld_3000
+        );
+        assert_eq!(amount(v, &format!("{p}txtPg1P2I21TotTaxPymntsMade")), 10.0);
+        let due = ((withheld_3000 - 10.0) * 100.0).round() / 100.0;
+        assert_eq!(
+            amount(v, &format!("{p}txtPg1P2I22TaxStillDueOverremit")),
+            due
+        );
+        let penalties = amount(v, &format!("{p}txtPg1P2I26TotPenalties"));
+        assert_eq!(
+            amount(v, &format!("{p}txtPg1P2I27TotAmtStillDueOverremit")),
+            ((due + penalties) * 100.0).round() / 100.0,
+            "{code}"
+        );
         // A typed rate is refused; the row keeps the ATC's.
         let typed = fill(code, &filled["draft"], json!({ rate(2): "99" }));
         assert!(typed["rejected"][rate(2)].as_str().is_some(), "{code}");
@@ -1317,7 +1344,9 @@ fn form_1600pt_and_1600vt_schedule_1_is_a_table() {
 }
 
 /// 1600PT/1600VT manual-5: item 1 shows the month's name and the whole
-/// year; display only, the draft and the field map keep MM and YY.
+/// year; display only. The draft stores `month: u8` and `year: u16` (four
+/// digits); MM and the two-digit YY are only the field map's format
+/// (`year % 100`), which the boxes' option values match.
 #[test]
 fn form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year() {
     setup();
@@ -1357,6 +1386,7 @@ fn form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year() {
         let map = print_of(code, &opened["draft"]);
         assert_eq!(map[&format!("{p}txtPg1I1Year")], "26");
         assert_eq!(opened["draft"]["year"], 2026);
+        assert_eq!(opened["draft"]["month"], 3);
     }
 }
 
@@ -1633,5 +1663,71 @@ fn monthly_due_date_day_is_the_filers_as_on_the_official_page() {
             );
             assert_eq!(drawn_key(code, &key).unwrap().no, "2");
         }
+    }
+}
+
+/// PR 3 review item 15: rows_monthly.rs reads the whole typed draft, but
+/// that adds no refusal: the host reads the typed draft for every edit
+/// (screen_form_fill's identity check, agent::identity), so a stored draft
+/// missing a field the form requires is refused the same way for an
+/// ordinary box as for the answers and an ATC, before any box is written.
+/// A draft with extra keys an older build wrote takes them all.
+#[test]
+fn monthly_answers_refuse_no_draft_the_ordinary_fill_takes() {
+    setup();
+    for (code, legacy_key) in [
+        ("1600PT", "contact_number"),
+        ("1600VT", "email"),
+        ("1600WP", "email"),
+    ] {
+        let p = format!("frm{code}:");
+        let opened = open(code, 3);
+        let mut legacy = opened["draft"].clone();
+        legacy.as_object_mut().unwrap().remove(legacy_key);
+        let edits: Vec<Value> = if code == "1600WP" {
+            vec![
+                json!({"frm1600WP:txtSheets": "2"}),
+                json!({"frm1600WP:AnyTaxHeld_1": "true"}),
+                json!({"frm1600WP:CategoryAgent_G": "true"}),
+            ]
+        } else {
+            vec![
+                json!({ format!("{p}txtPg1I4NoOfSheets"): "2" }),
+                json!({ format!("{p}rdoPg1I3TaxWithheldYes"): "true" }),
+                json!({ format!("{p}rdoPg1I10CategoryofWthholdAgentPriv"): "true" }),
+                json!({ format!("{p}txtAtcCd1"): "catalog:0" }),
+            ]
+        };
+        let errors: Vec<String> = edits
+            .iter()
+            .map(|edits| {
+                call(
+                    "screen_form_fill",
+                    vec![code.into(), json(legacy.clone()), json(edits.clone())],
+                )
+                .unwrap_err()
+                .to_string()
+            })
+            .collect();
+        assert!(
+            errors[0].contains(&format!("not a {code} draft")),
+            "{code}: {}",
+            errors[0]
+        );
+        assert!(errors.iter().all(|e| *e == errors[0]), "{code}: {errors:?}");
+        // Keys an older build kept that the form no longer reads.
+        let mut older = opened["draft"].clone();
+        older["legacy_note"] = json!("kept by an older build");
+        let answers = if code == "1600WP" {
+            json!({"frm1600WP:AnyTaxHeld_1": "true", "frm1600WP:CategoryAgent_P": "true"})
+        } else {
+            json!({
+                format!("{p}rdoPg1I3TaxWithheldYes"): "true",
+                format!("{p}rdoPg1I10CategoryofWthholdAgentPriv"): "true",
+            })
+        };
+        let answered = fill(code, &older, answers);
+        assert_eq!(answered["rejected"], json!({}), "{code}");
+        assert_eq!(answered["draft"]["taxes_withheld"], true, "{code}");
     }
 }
