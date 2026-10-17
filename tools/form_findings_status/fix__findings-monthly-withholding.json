@@ -1,8 +1,8 @@
 {
  "0619E": {
   "R3.1": {
-   "reason": "These 19 boxes (tax agent accreditation number and dates, Part III rows 19-22) are disabled on the official page: ebirforms-mirror/forms/BIR-Form0619E.hta gives each the `disabled` attribute (txtTaxAgentNo line 786, txtAgency19 line 853, and the lines the existing hidden-box entries in app/forms/schema-overrides.json cite), and crates/bir-core/src/forms/form_0619e_official.rs to_official_field_map leaves them out ('The tax-agent and Part III payment controls are disabled on the official page, so they keep their blank defaults'). The tracked runtime-control inventory records them as disabled false, which is the inventory not reading the bare attribute, so the evidence is the mirror .hta and the official field map. This app's agent form never writes them ('not written by this app's field map for any sample draft'), so a box would need a new draft field (Rule 0). The page shows each printed item with a note instead (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note).",
-   "reviewer": "",
+   "reason": "The official program disables these 19 inputs (tax agent accreditation number and dates, Part III rows 19-22), so they are not boxes the page is missing. The evidence is the untracked official mirror, ebirforms-mirror/forms/BIR-Form0619E.hta, which gives each a bare `disabled` (txtTaxAgentNo line 786, txtAgency19 line 853, and the lines the hidden-box entries in app/forms/schema-overrides.json cite), and the tracked crates/bir-core/src/forms/form_0619e_official.rs, whose to_official_field_map leaves them out ('The tax-agent and Part III payment controls are disabled on the official page, so they keep their blank defaults'). The tracked runtime inventory (rules/forms/0619e-v2018/fixtures/runtime-control-inventory-v796.json) records them disabled:false, which conflicts; its source lines run 4 above the mirror's (txtTaxAgentNo 790, txtAgency19 857), so it was read from another version of the .hta and is not evidence against the mirror.",
+   "reviewer": "Agree (PR 3 review, reason corrected): the official mirror (untracked, ebirforms-mirror/forms/BIR-Form0619E.hta, bare `disabled` at 786 and 853) disables these inputs; the tracked inventory's disabled:false is not evidence against it, since its source lines run +4 from the mirror (another version).",
    "status": "not_a_bug"
   },
   "manual-0": {
@@ -27,7 +27,7 @@
   },
   "manual-4": {
    "reason": "Item 2 is as the official page has it: rules/forms/0619e-v2018/fields.json makes frm0619E:txtDueDay an ordinary required box (computed false, default 10) and txtDueMonth and txtDueYear computed; the runtime inventory records txtDueDay enabled with default 10. The day is the filer's to change and the maintainer decided dates stay normal fields, so the page keeps the day open and the month and year locked with their values (screen_form_module::tests::monthly::monthly_due_date_day_is_the_filers_as_on_the_official_page).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 3 review): fields.json gives frm0619E:txtDueDay required, not computed, default 10, with txtDueMonth/txtDueYear computed; inventory txtDueDay disabled:false; maintainer decision keeps dates as normal fields.",
    "status": "not_a_bug"
   },
   "preview.0": {
@@ -48,8 +48,8 @@
    "status": "fixed"
   },
   "R3.2": {
-   "reason": "rules/forms/0619f-v2018/fields.json enabled_when for each of these boxes (tax agent number and dates, Part III items 20-23): 'Official runtime leaves this field disabled in the observed form workflow.' (the official .hta marks each `disabled`; the runtime inventory records the bare attribute as disabled false), and this app's field map never writes them ('not written by this app's field map for any sample draft'), so a box would need a new draft field (Rule 0). The page shows each printed item with a note (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note checks every printed payment box's enabled_when and that none is drawn, written or fillable).",
-   "reviewer": "",
+   "reason": "The official program disables these inputs (tax agent accreditation number and dates, Part III items 20-23), so they are not boxes the page is missing. rules/forms/0619f-v2018/fields.json gives each enabled_when 'Official runtime leaves this field disabled in the observed form workflow.', and the untracked official mirror, ebirforms-mirror/forms/BIR-Form0619F.hta, gives them a bare `disabled` (txtTaxAgentNo line 831, txtAgency20 898, txtDate20 900, txtDate21 907). The tracked runtime inventory (rules/forms/0619f-v2018/fixtures/runtime-control-inventory-v796.json) records them disabled:false, which conflicts; its source lines run 4 above the mirror's (txtAgency20 902, txtDate20 904, txtDate21 911), so it was read from another version of the .hta and is not evidence against the mirror.",
+   "reviewer": "Agree (PR 3 review, reason corrected): the official mirror (untracked, ebirforms-mirror/forms/BIR-Form0619F.hta, bare `disabled` at 831, 898, 900 and 907) disables these inputs; the tracked inventory's disabled:false is not evidence against it, since its source lines run +4 from the mirror (another version).",
    "status": "not_a_bug"
   },
   "manual-0": {
@@ -69,7 +69,7 @@
   },
   "manual-3": {
    "reason": "Item 2 is as the official page has it: rules/forms/0619f-v2018/fields.json makes frm0619F:txtDueDay an ordinary required box (computed false, default 10) and txtDueMonth and txtDueYear computed. The day is the filer's to change and the maintainer decided dates stay normal fields, so the page keeps the day open and the month and year locked with their values (screen_form_module::tests::monthly::monthly_due_date_day_is_the_filers_as_on_the_official_page).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 3 review): same evidence as 0619E manual-4, for frm0619F in fields.json and the inventory.",
    "status": "not_a_bug"
   },
   "preview.0": {
@@ -101,7 +101,7 @@
   },
   "manual-2": {
    "pr": "PR 3",
-   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_part_ii_rows_are_chosen_on_the_page (rows 13-17 are one table at the top of Part II with ATC, Tax Base, Tax Rate and Tax Withheld; the ATC is chosen from the category's popup through toggle_atc, the rate follows, item 18 follows; items 3 and 10 go through the form's setters); screen_form_module::tests::monthly::monthly_removing_typed_rows_is_reported; screen_form_module::tests::monthly::a_legacy_typed_1600pt_row_opens_and_files_as_it_saved; screen_form_module::tests::monthly::monthly_rates_wait_for_their_atc; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt); tools/test_form_monthly_withholding.mjs (just shell-ui-test)",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_part_ii_rows_are_chosen_on_the_page (rows 13-17 are one table at the top of Part II with ATC, Tax Base, Tax Rate and Tax Withheld; the ATC is ticked in the category's popup through toggle_atc and the rate follows; a tax base has no setter: the host writes the row's tax_base and runs the form's recompute, so the row's tax withheld and items 18-27 follow; items 3 and 10 go through the form's setters set_taxes_withheld and set_agent_category); screen_form_module::tests::monthly::monthly_removing_typed_rows_is_reported; screen_form_module::tests::monthly::a_legacy_typed_1600pt_row_opens_and_files_as_it_saved; screen_form_module::tests::monthly::monthly_rates_wait_for_their_atc; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt); tools/test_form_monthly_withholding.mjs (just shell-ui-test); screen_form_module::tests::monthly::monthly_answers_refuse_no_draft_the_ordinary_fill_takes",
    "status": "fixed"
   },
   "manual-3": {
@@ -116,7 +116,7 @@
   },
   "manual-5": {
    "pr": "PR 3",
-   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year (display only: the month shows '03 - March' and the two-digit year 26 shows as 2026; the draft and the field map keep MM and YY); screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form (blank on a library opening); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (26 shows as 2026)",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year (display only: the month shows '03 - March' and the year 2026; the draft stores month: u8 and year: u16, and MM and the two-digit YY 26 are only the field map's format); screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form (blank on a library opening); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (26 shows as 2026); tools/test_form_monthly_withholding.mjs (a picked date writes 26 into the two-digit year list)",
    "status": "fixed"
   }
  },
@@ -148,7 +148,7 @@
   },
   "manual-2": {
    "pr": "PR 3",
-   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_part_ii_rows_are_chosen_on_the_page (rows 13-17 are one table at the top of Part II with ATC, Tax Base, Tax Rate and Tax Withheld; the ATC is chosen from the category's popup through toggle_atc, the rate follows, item 18 follows; items 3 and 10 go through the form's setters); screen_form_module::tests::monthly::monthly_removing_typed_rows_is_reported; screen_form_module::tests::monthly::a_legacy_typed_1600pt_row_opens_and_files_as_it_saved; screen_form_module::tests::monthly::monthly_rates_wait_for_their_atc; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt); tools/test_form_monthly_withholding.mjs (just shell-ui-test)",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_part_ii_rows_are_chosen_on_the_page (rows 13-17 are one table at the top of Part II with ATC, Tax Base, Tax Rate and Tax Withheld; the ATC is ticked in the category's popup through toggle_atc and the rate follows; a tax base has no setter: the host writes the row's tax_base and runs the form's recompute, so the row's tax withheld and items 18-27 follow; items 3 and 10 go through the form's setters set_taxes_withheld and set_agent_category); screen_form_module::tests::monthly::monthly_removing_typed_rows_is_reported; screen_form_module::tests::monthly::a_legacy_typed_1600pt_row_opens_and_files_as_it_saved; screen_form_module::tests::monthly::monthly_rates_wait_for_their_atc; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's PR 3 lines removed from locked_and_blank.txt); tools/test_form_monthly_withholding.mjs (just shell-ui-test); screen_form_module::tests::monthly::monthly_answers_refuse_no_draft_the_ordinary_fill_takes",
    "status": "fixed"
   },
   "manual-3": {
@@ -163,7 +163,7 @@
   },
   "manual-5": {
    "pr": "PR 3",
-   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year (display only: the month shows '03 - March' and the two-digit year 26 shows as 2026; the draft and the field map keep MM and YY); screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form (blank on a library opening); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (26 shows as 2026)",
+   "proof": "screen_form_module::tests::monthly::form_1600pt_and_1600vt_month_reads_as_a_month_and_a_year (display only: the month shows '03 - March' and the year 2026; the draft stores month: u8 and year: u16, and MM and the two-digit YY 26 are only the field map's format); screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form (blank on a library opening); tools/test_form_monthly_withholding.mjs (just shell-ui-test) (26 shows as 2026); tools/test_form_monthly_withholding.mjs (a picked date writes 26 into the two-digit year list)",
    "status": "fixed"
   }
  },
@@ -179,8 +179,8 @@
    "status": "fixed"
   },
   "R3.3": {
-   "reason": "Item 11 has no box the filer fills in the official program: rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json records frm1600WP:SpecialLaw_1 (line 819), SpecialLaw_2 (823) and SpecialLawSelect (833) disabled at load, and this app's draft has no field for them ('not written by this app's field map for any sample draft'), so a box would need a new draft field (Rule 0). The page shows item 11 with its printed caption and a note (screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet).",
-   "reviewer": "",
+   "reason": "Item 11 has no box the filer fills in the official program: rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json records frm1600WP:SpecialLaw_1 (line 819), SpecialLaw_2 (823) and SpecialLawSelect (833) disabled:true at load. The page draws item 11 with its printed caption and a note.",
+   "reviewer": "Agree (PR 3 review): 1600wp-v2010 inventory records frm1600WP:SpecialLaw_1 (line 819), SpecialLaw_2 (823) and SpecialLawSelect (833) disabled:true at load; the page draws item 11 with its caption and a note.",
    "status": "not_a_bug"
   },
   "R5.0": {
@@ -204,7 +204,7 @@
    "status": "fixed"
   },
   "manual-2": {
-   "reason": "Item 11 is on the page now, between items 10 and 12, with its printed caption and a note (screen_form_module::tests::monthly::form_1600wp_item_11_and_the_period_follow_the_sheet), but it cannot be bound to the Special law boxes: the official program keeps SpecialLaw_1, SpecialLaw_2 and SpecialLawSelect disabled at load (rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json, disabled true), and this app's draft has no field for them ('not written by this app's field map for any sample draft'), so Yes/No boxes would need a new draft field (Rule 0).",
+   "reason": "Item 11 cannot be bound to Yes/No boxes the filer answers, because the official program gives the filer none: rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json records frm1600WP:SpecialLaw_1 (line 819), SpecialLaw_2 (823) and SpecialLawSelect (833) disabled:true at load, and rules/forms/1600wp-v2010/fields.json gives SpecialLaw_1 and SpecialLaw_2 enabled_when null (no answer turns them on). The page now draws item 11, between items 10 and 12, with its printed caption and a note.",
    "reviewer": "",
    "status": "not_a_bug"
   },
@@ -226,13 +226,13 @@
    "status": "fixed"
   },
   "R4.0": {
-   "reason": "None of the six is a date the filer types. rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json records each disabled at load (txtDateIssue line 1055, txtDateExpiry 1068, frm1601c:txtDate37 1112, txtDate38 1119, txtDate39 1125, txtDate40 1135: disabled true), and this app's field map writes them blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'). The page no longer draws them (manual-4): the tax agent line and items 37-40 show their printed captions with a note, so no date box is left to show (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note).",
-   "reviewer": "",
+   "reason": "None of the six is a date the filer types: rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json records txtDateIssue (line 1055), txtDateExpiry (1068) and frm1601c:txtDate37-40 (1112, 1119, 1125, 1135) disabled:true at load, and this app's field map writes them blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'). No date box for them is drawn.",
+   "reviewer": "Agree (PR 3 review): 1601c-v2018 inventory records txtDateIssue (1055), txtDateExpiry (1068) and frm1601c:txtDate37-40 (1112-1135) disabled:true; the field map writes them blank; no date box is drawn.",
    "status": "not_a_bug"
   },
   "R5.2": {
    "pr": "PR 3",
-   "proof": "screen_form_module::tests::monthly::form_1601c_address_lines_are_one_pool (item 9's two lines are one box over 40 + 31 slots; a stored draft's two lines show joined and are not changed by opening; a typed address splits at line 1's 40 boxes into registered_address and registered_address_2, both still filed as their own official controls; the print carries the whole address); screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (1601C added); screen_form_module::combs::tests::print_cells_match_the_print_sheets (PRINTED_THROUGH gives the boxes writer-cells' derived:address_line1 and derived:line:address_line2 slots)",
+   "proof": "screen_form_module::tests::monthly::form_1601c_address_lines_are_one_pool (item 9's two lines are one box over 40 + 31 slots; a stored draft's two lines show joined and are not changed by opening; a typed address splits at the last space among line 1's first 40 letters only when both parts fit, line 2 within its official 50; otherwise it stays whole in line 1 up to its official 100, and past that splits at line 1's last space within 100; what the two fields cannot file is refused on the address box; 91-100 characters with and without spaces, a stored 96-character line 1 after an edit, and the round trip are checked against validation; lines are stored trimmed); screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (1601C added; its 158 characters are refused); screen_form_module::combs::tests::print_cells_match_the_print_sheets (PRINTED_THROUGH gives the boxes writer-cells' derived:address_line1 and derived:line:address_line2 slots); screen_form_module::combs::tests::a_split_address_joins_back_to_what_was_typed (a space after a line's last box does not end it)",
    "status": "fixed"
   },
   "manual-0": {
@@ -261,8 +261,8 @@
    "status": "fixed"
   },
   "preview.0": {
-   "reason": "What the print writes is right: the tax agent accreditation number and dates and Part III items 37-40 are disabled at load in the official runtime with an empty value (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: disabled true, value \"\" for each), and this app's field map writes them blank whatever the draft holds. The page now agrees with that print: it shows each printed item with a note and no box (screen_form_module::tests::monthly::monthly_payment_rows_show_their_printed_items_with_a_note checks the print map and the upload's field map hold nothing there and a typed value is refused).",
-   "reviewer": "",
+   "reason": "What the print writes is right: rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json records txtTaxAgentNo (line 1042), the dates of issue and expiry, and Part III items 37-40 disabled:true at load with value \"\", and this app's field map writes them blank whatever the draft holds, so the print leaves them blank. The page shows the printed items with a note and no box.",
+   "reviewer": "Agree (PR 3 review): 1601c-v2018 inventory records txtTaxAgentNo (line 1042) and Part III items 37-40 disabled:true with value \"\"; the print writes them blank; the page shows the printed items with a note and no box.",
    "status": "not_a_bug"
   }
  }
