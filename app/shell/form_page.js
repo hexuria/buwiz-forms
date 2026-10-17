@@ -114,7 +114,8 @@ function withoutHidden(schema) {
       ...p,
       items: p.items
         .map((it) => (it.f ? { ...it, f: it.f.filter((f) => f.t !== "hidden") } : it))
-        .filter((it) => it.rows || (it.f && it.f.length)),
+        // A printed item with no box in the official program keeps its note.
+        .filter((it) => it.rows || (it.f && it.f.length) || it.note),
     }))
     .filter((p) => p.items.length);
   return { ...schema, parts };
@@ -425,6 +426,7 @@ export class FormPageActions {
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
     s.needs = r.needs || {};
+    s.waits = r.waits || {};
     s.off = r.off || {};
     s.penalties = r.penalties || [];
     s.poolTexts = r.pools || {};
@@ -1217,10 +1219,14 @@ export class FormPageActions {
     return notes;
   }
 
-  /** A sample's locked blank box: what it waits for, shown in its place. */
+  /**
+   * A locked blank box: what it waits for, shown in its place. A sample's
+   * held box says so (`needs`); a box the form fills from another box of
+   * its row says which (the host's `waits`: a rate waits for its ATC).
+   */
   reasonFor(k) {
     const s = this.state;
-    return s.blank.has(k) ? s.needs?.[k] || "" : "";
+    return s.blank.has(k) ? s.needs?.[k] || "" : s.waits?.[k] || "";
   }
 
   /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */
@@ -1858,15 +1864,20 @@ function scheduleTable(cx, ui, it, width) {
   const numW = 36;
   // A column an override hides (a row template another table now holds).
   const shown = it.cols.map((c, i) => (c.t === "hidden" ? -1 : i)).filter((i) => i >= 0);
-  const tableW = numW + shown.length * colW;
+  // The sheet's preprinted row captions (1603Q Schedule I's recipients).
+  const labels = it.row_labels || null;
+  const labelW = labels ? 220 : 0;
+  const tableW = numW + labelW + shown.length * colW;
   const head = div().flex().flex_row().items_end().bg(t.bg).border_b(1).border_color(t.border);
   head.child(div().w(numW).flex_none().py(SPACE[2]).flex().justify_center().child(Text(cx, "meta", "#", "fg3")));
+  if (labels) head.child(div().w(labelW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", labels.caption, "fg3").whitespace_normal()));
   for (const i of shown) head.child(div().w(colW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", it.cols[i].l, "fg3").whitespace_normal()));
   const body = div().flex().flex_col();
   it.keys.forEach((row, r) => {
     const no = (it.start ?? 1) + r;
     const tr = div().flex().flex_row().items_center().when(r > 0, (el) => el.border_t(1).border_color(t.border));
     tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(no), "fg3")));
+    if (labels) tr.child(div().w(labelW).flex_none().py(6).px(SPACE[2]).child(Text(cx, "body", labels.rows[r] || "", "fg2").whitespace_normal()));
     row.forEach((k, c) => {
       const col = it.cols[c];
       if (col.t === "hidden") return;
@@ -2209,7 +2220,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
   );
 
   let controls;
-  if (it.rows) {
+  if (it.note) {
+    controls = Text(cx, "meta", it.note, "fg3").whitespace_normal();
+  } else if (it.rows) {
     controls = scheduleTable(cx, ui, it, inner);
   } else if (it.l === "Additional details") {
     const open = s.moreOpen.has(id);
