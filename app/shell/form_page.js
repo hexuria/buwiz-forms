@@ -191,6 +191,23 @@ const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 1201202
  */
 const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, choose Start a return, or New return (the + button or Cmd/Ctrl+N).";
 
+/** How faded a box another answer turns off is (rule 6). */
+const OFF_OPACITY = 0.45;
+
+/**
+ * The tag on a box another answer turns off: the official condition, as
+ * "Needs: Amended return Yes is selected" (rule 6). A long one is cut; the
+ * whole condition is its tooltip.
+ */
+export function needsText(condition) {
+  const text = String(condition || "")
+    .trim()
+    .replace(/^enabled only (?:when|for)\s*:?\s*/i, "")
+    .replace(/\.$/, "");
+  const shown = text.length > 140 ? `${text.slice(0, 139).trimEnd()}…` : text;
+  return `Needs: ${shown.charAt(0).toUpperCase()}${shown.slice(1)}`;
+}
+
 /** One box holding a whole date: the host types it from its binding. */
 function isDateField(f) {
   return f.t === "date";
@@ -313,6 +330,8 @@ export class FormPageActions {
       sample: Boolean(opts.sample),
       blank: new Set(),
       needs: {},
+      // Boxes another answer turns off, each with what turns it on (rule 6).
+      off: {},
       typed: new Set(),
       errors: [],
       messages: {},
@@ -391,6 +410,7 @@ export class FormPageActions {
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
     s.needs = r.needs || {};
+    s.off = r.off || {};
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -494,7 +514,7 @@ export class FormPageActions {
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
-      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
+      keys.map(k => [s.values[k] ?? "", s.locks[k], s.off?.[k] || "", s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
   }
 
@@ -1200,10 +1220,19 @@ export class FormPageActions {
     return s.wholeKeys.has(k);
   }
 
-  /** Locked on the page: a host lock, unless it is a profile box opened with Edit. */
+  /**
+   * Locked on the page: a host lock, unless it is a profile box opened with
+   * Edit; or a box another answer turns off (rule 6), until it holds.
+   */
   isLocked(k) {
     const s = this.state;
+    if (this.isOff(k)) return true;
     return s.locks[k] !== undefined && !(s.profileEdit.has(k) && s.editing.has(k));
+  }
+
+  /** What turns `k` on, while another answer has it off (the host's `off`). */
+  isOff(k) {
+    return this.state.off?.[k] || "";
   }
 
   /**
@@ -1343,6 +1372,7 @@ export class FormPageActions {
         if (this.state.sample && Array.isArray(r.blank)) this.state.blank = new Set(r.blank);
         this.state.values = this.shown({ ...this.state.values, ...r.values });
         this.state.options = r.options || {};
+        this.state.off = r.off || {};
         this.syncComputed();
         this.setErrors(r.errors);
       } catch (e) {
@@ -1599,6 +1629,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .flex_row()
       .items_center()
       .gap(SPACE[2])
+      .when(Boolean(ui.isOff(f.k)), (el) => el.opacity(OFF_OPACITY))
       .child(Checkbox(cx, `fp-${f.k}`, on, (v, cx) => (locked ? null : ui.choose({ [f.k]: v ? "true" : "false" }, cx)), f.l || itemLabel))
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
@@ -1635,7 +1666,8 @@ function control(cx, ui, f, itemLabel, multi, available) {
       } else el = box;
     }
   }
-  const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0);
+  // Rule 6: a box another answer turns off looks off.
+  const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0).when(Boolean(ui.isOff(f.k)), (el) => el.opacity(OFF_OPACITY));
   if (showSub) wrap.child(Text(cx, "meta", f.l, "fg2").max_w(width).whitespace_normal());
   void t;
   wrap.child(el);
@@ -1737,7 +1769,7 @@ function radioGroup(cx, ui, it, radios) {
       .child(box)
       .child(Text(cx, "body", label, locked ? "fg2" : "fg").whitespace_normal());
     if (!locked) item.cursor_pointer().on_click((_e, cx) => pick(cx));
-    else item.opacity(0.7);
+    else item.opacity(ui.isOff(f.k) ? OFF_OPACITY : 0.7);
     row.child(item);
   }
   if (hint) row.child(Text(cx, "meta", hint, "fg3"));
@@ -1796,7 +1828,7 @@ function scheduleTable(cx, ui, it, width) {
       } else {
         cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 16 }).h(30);
       }
-      tr.child(div().w(colW).flex_none().py(6).px(SPACE[2]).child(cell));
+      tr.child(div().w(colW).flex_none().py(6).px(SPACE[2]).when(Boolean(ui.isOff(k)), (el) => el.opacity(OFF_OPACITY)).child(cell));
     });
     body.child(tr);
   });
@@ -2076,6 +2108,11 @@ function itemRow(cx, ui, it, pi, ii, width) {
     label.child(edit);
   }
 
+  // Rule 6: what turns the item's faded boxes on.
+  const needs = [...new Set(itemKeys(it).map((k) => ui.isOff(k)).filter(Boolean))].map((why, n) =>
+    div().id(`fp-needs-${id}-${n}`).mb(6).tooltip(why).child(Text(cx, "meta", needsText(why), "fg3").whitespace_normal()),
+  );
+
   let controls;
   if (it.rows) {
     controls = scheduleTable(cx, ui, it, inner);
@@ -2170,6 +2207,7 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .flex_1()
         .min_w(0)
         .child(label)
+        .children(needs)
         .child(controls)
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))

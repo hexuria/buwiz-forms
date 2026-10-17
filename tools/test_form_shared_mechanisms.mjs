@@ -45,6 +45,8 @@ const schema = {
         { no: "14", l: "Sales", f: [{ k: K("sales"), t: "money", l: "Sales" }] },
         { no: "15", l: "Gross receipts (whole pesos)", f: [{ k: K("whole"), t: "money", w: true, l: "Gross receipts" }] },
         { no: "16", l: "Tax due", f: [{ k: K("due"), t: "money", c: true, l: "Tax due" }] },
+        { no: "17", l: "Amended Return?", f: [{ k: K("amendY"), t: "radio", l: "Yes" }, { k: K("amendN"), t: "radio", l: "No" }] },
+        { no: "18", l: "Tax remitted in previously filed return", f: [{ k: K("prev"), t: "money", l: "Tax remitted in previously filed return" }] },
       ],
     },
     {
@@ -133,7 +135,7 @@ const periods = mock("./periods.js", { periodLabel: () => "October 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
 await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
 await mod.evaluate();
-const { FormPageActions, renderFormPage, formatMoney, formatLongDate, shownDate, moveCalendar, splitLines, fitsBoxes } = mod.namespace;
+const { FormPageActions, renderFormPage, formatMoney, formatLongDate, shownDate, moveCalendar, splitLines, fitsBoxes, needsText } = mod.namespace;
 
 // The host: values as the field map writes them; a fill takes edits as given.
 let hostValues = {
@@ -155,11 +157,16 @@ let hostValues = {
   [K("line2")]: "PASEO DE ROXAS",
   [K("line3")]: "",
   [K("email")]: "books@example.com",
+  [K("amendY")]: "false",
+  [K("amendN")]: "true",
+  [K("prev")]: "0.00",
 };
+// The host says a box is off while what turns it on does not hold.
+const offNow = () => (hostValues[K("amendY")] === "true" ? {} : { [K("prev")]: "Amended return Yes is selected." });
 let opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {},
   locks: { [K("due")]: "computed by BIR's own formulas", [K("incorporated")]: "comes from the taxpayer profile; change it in the profile" },
-  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, errors: [],
+  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: offNow(), errors: [],
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
@@ -175,7 +182,7 @@ const app = {
         hostValues = { ...hostValues, ...args[2] };
         return { draft: args[1], values: { ...hostValues }, options: {}, rejected: {} };
       }
-      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [] });
+      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: offNow() });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
     },
@@ -306,3 +313,25 @@ assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("line1")]: "UNIT
 await settle(); frame();
 assert.equal(input(K("line1")).value(), "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226", "the box keeps what was typed");
 console.log("PASS rule 5: boxes until the text no longer fits; an address is one pool.");
+
+// ---- Rule 6: a box another answer turns off looks off and says why.
+assert.equal(needsText("Amended return Yes is selected."), "Needs: Amended return Yes is selected");
+assert.equal(needsText("Enabled only when Amended Return Yes is selected."), "Needs: Amended Return Yes is selected");
+assert.ok(needsText("x".repeat(300)).endsWith("…") && needsText("x".repeat(300)).length < 160, "a long condition is cut");
+frame();
+assert.equal(ui.isOff(K("prev")), "Amended return Yes is selected.", "the host's condition");
+assert.equal(ui.isLocked(K("prev")), true, "an off box takes no typing");
+assert.ok(texts.includes("Needs: Amended return Yes is selected"), "it says what turns it on");
+assert.ok(texts.includes("0.00"), "and still shows its value");
+ui.choose({ [K("amendY")]: "true", [K("amendN")]: "false" }, cx);
+await settle(); frame();
+assert.equal(ui.isOff(K("prev")), "", "Amended Yes turns it on");
+assert.equal(ui.isLocked(K("prev")), false, "it takes typing");
+assert.ok(!texts.some((t) => t.startsWith("Needs:")), "and the tag goes");
+input(K("prev")).type("1500");
+input(K("prev")).fire("blur");
+assert.equal(lastFill()[3][K("prev")], "1500", "the host gets what was typed");
+ui.choose({ [K("amendY")]: "false", [K("amendN")]: "true" }, cx);
+await settle(); frame();
+assert.equal(ui.isLocked(K("prev")), true, "Amended No turns it off again");
+console.log("PASS rule 6: an off box is faded, says what turns it on, and comes alive when it holds.");

@@ -39,6 +39,7 @@ use crate::bir_module::{json, to_json, with_database};
 
 mod catalogs;
 mod combs;
+mod conditions;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
@@ -97,6 +98,8 @@ export interface ScreenFormOpened {
     confirmed_at: string | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
+    /** Boxes another answer turns off right now, each with what turns it on (the page fades them). */
+    off: Record<string, string>;
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -140,6 +143,8 @@ export interface ScreenFormValidated {
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     errors: ScreenFormError[];
+    /** Boxes another answer turns off right now, each with what turns it on. */
+    off: Record<string, string>;
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
 }
@@ -2122,6 +2127,11 @@ fn opened_json(
         stored_period(kind, &draft)
     };
     let options = catalogs::options(kind, &draft);
+    let off = if status == FilingStatus::Draft {
+        conditions::off_boxes(kind, &draft, &values)
+    } else {
+        Map::new()
+    };
     let mark = sample.as_ref().map(|_| SampleMark {
         blank: blank.clone(),
     });
@@ -2153,6 +2163,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "off": off,
         "period_parts": period_parts,
         "period_set": sample.as_ref().is_some_and(|build| build.other.is_none()),
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
@@ -3265,11 +3276,16 @@ fn screen_form_validate(
     Ok(async move {
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
-            let (mut values, mut errors, _) = evaluate_here(kind, &mut draft)?;
+            let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
             if let Some(mark) = &sample {
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
             let options = catalogs::options(kind, &draft);
+            let off = if status == FilingStatus::Draft {
+                conditions::off_boxes(kind, &draft, &values)
+            } else {
+                Map::new()
+            };
             let blank = sample.as_ref().map(|mark| mark.blank.clone());
             put_sample_mark(&mut draft, sample.as_ref());
             put_amendment_mark(&mut draft, amendment);
@@ -3278,6 +3294,7 @@ fn screen_form_validate(
                 "values": values,
                 "options": options,
                 "errors": errors,
+                "off": off,
                 "blank": blank,
             }))
         })
@@ -9062,6 +9079,330 @@ mod tests {
             .filter(|f| f["t"] == "email")
             .count();
         assert!(emails > 20, "{emails} email boxes, none with slots");
+    }
+
+    /// A value an open box of page type `t` takes (rule 6 probes).
+    fn typed_probe(opened: &Value, key: &str, t: &str) -> Value {
+        match t {
+            "money" | "int" | "pct" => json!("1"),
+            "date" => json!("01/15/2020"),
+            "radio" | "chk" => json!("true"),
+            "sel" => {
+                let listed = opened["options"][key]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
+                let value = listed
+                    .iter()
+                    .filter_map(|o| o["value"].as_str().map(str::to_string))
+                    .chain(
+                        schema_fields(opened["form_code"].as_str().unwrap())
+                            .into_iter()
+                            .filter(|f| f["k"] == key)
+                            .flat_map(|f| f["o"].as_array().cloned().unwrap_or_default())
+                            .filter_map(|o| {
+                                o.as_str()
+                                    .map(|o| o.split(" - ").next().unwrap_or(o).to_string())
+                            }),
+                    )
+                    .find(|v| !v.trim_matches('0').is_empty() && v != "-")
+                    .unwrap_or_default();
+                json!(value)
+            }
+            _ => json!("A"),
+        }
+    }
+
+    /// Rule 6: a box another answer turns off is faded with what turns it
+    /// on. The oracles: the corpus's own `enabled_when` text (read from
+    /// rules/forms), and the form's computation, which clears what the
+    /// filer types there through the page's own fill.
+    #[test]
+    fn a_box_another_answer_turns_off_says_why_on_every_form() {
+        setup();
+        let corpus = conditions::tests::derived();
+        let mut found = BTreeMap::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let opened = open(code, page_period_of(code));
+            let types: BTreeMap<String, String> = screen_types(code).into_iter().collect();
+            for (key, why) in opened["off"].as_object().unwrap() {
+                assert_eq!(
+                    &corpus[code][key], why,
+                    "{code}: {key} says what turns it on"
+                );
+                assert!(
+                    opened["locks"][key].is_null(),
+                    "{code}: {key} is off, not locked"
+                );
+                // Whatever it takes, the form clears.
+                let t = types.get(key).map(String::as_str).unwrap_or("text");
+                let mut taken = 0;
+                for probe in [
+                    typed_probe(&opened, key, t),
+                    json!("01"),
+                    json!("2020"),
+                    json!("A"),
+                ] {
+                    let filled = fill(code, &opened["draft"], json!({ key: probe }));
+                    if !filled["rejected"][key].is_null() {
+                        continue;
+                    }
+                    taken += 1;
+                    let shown = filled["values"][key].as_str().unwrap_or_default();
+                    assert!(
+                        shown.is_empty()
+                            || shown == "false"
+                            || shown.trim_matches(['0', '.']).is_empty(),
+                        "{code}: {key} keeps {shown:?}, so it is not off"
+                    );
+                }
+                assert!(taken > 0, "{code}: {key} takes nothing");
+                found.entry(code).or_insert_with(Vec::new).push(key.clone());
+            }
+        }
+        let found: BTreeMap<&str, usize> = found
+            .iter()
+            .map(|(code, keys)| (*code, keys.len()))
+            .collect();
+        assert_eq!(
+            found,
+            BTreeMap::from([
+                ("0605", 3),
+                ("0619F", 2),
+                ("1601C", 2),
+                ("1601EQ", 4),
+                ("1602Q", 3),
+                ("1604C", 5),
+                ("1604F", 1),
+                ("1606", 2),
+                ("1701Q", 39),
+                ("1800", 1),
+                ("1801", 1),
+                ("2000OT", 2),
+                ("2200A", 2),
+                ("2200AN", 1),
+                ("2200C", 1),
+                ("2200M", 1),
+                ("2200P", 1),
+                ("2200T", 1),
+                ("2553", 1),
+            ])
+        );
+    }
+
+    /// The return amended, the way its own editor marks it (1601C by its
+    /// Item 2 Yes box).
+    fn amended(code: &str, draft: &Value) -> Value {
+        match AgentFormKind::from_code(code).unwrap() {
+            AgentFormKind::Queueable(kind) => bir_core::with_queueable_kind!(kind, F => {
+                let mut form: F = serde_json::from_value(draft.clone()).unwrap();
+                assert!(form.mark_amended(), "{code} has an Amended Return item");
+                serde_json::to_value(form).unwrap()
+            }),
+            _ => fill(code, draft, json!({"frm1601c:AmendedRtn_1": "true"}))["draft"].clone(),
+        }
+    }
+
+    fn validated(code: &str, draft: &Value) -> Value {
+        call_async(
+            "screen_form_validate",
+            vec![code.into(), json(draft.clone())],
+        )
+        .unwrap_or_else(|error| panic!("{code} validates: {error}"))
+    }
+
+    /// Rule 6: each box comes alive when what turns it on holds. Amended
+    /// Return Yes is set the way the form's own editor sets it; the other
+    /// answers are the corpus's own conditions, typed on the page.
+    #[test]
+    fn a_box_comes_alive_when_its_answer_holds() {
+        setup();
+        type Turn = fn(&str, &Value) -> Value;
+        type TurnOn = Box<dyn Fn(&str, &Value) -> Value>;
+        let by = |edits: Value| {
+            move |code: &str, draft: &Value| fill(code, draft, edits.clone())["draft"].clone()
+        };
+        let cases: Vec<(&str, Vec<&str>, TurnOn)> = vec![
+            (
+                "1601C",
+                vec!["frm1601c:txtTax28"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "1601EQ",
+                vec!["frm1601EQ:txtTax22"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "1800",
+                vec!["frm1800v2018:TaxCredit17C"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "1801",
+                vec!["frm1801v2018:txtCredits_TaxPrev"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "2000OT",
+                vec!["frm2000OT:txtTax18"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "2200A",
+                vec!["frm2200Av2020:txtPrevReturn"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "2200AN",
+                vec!["frm2200ANv2018:txt19"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "2200C",
+                vec!["frm2200C:txtPg1P3I19PmntOnRtrnPrevFiled"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "2200M",
+                vec!["frm2200M:txtPg1P3I19PmntOnRtrnPrevFiled"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "2200P",
+                vec!["frm2200P:txtPg1P3I19PmntOnRtrnPrevFiled"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "2200T",
+                vec!["frm2200Tv2020:txtPrevReturn"],
+                Box::new(amended as Turn),
+            ),
+            ("2553", vec!["frm2553:txt20A"], Box::new(amended as Turn)),
+            (
+                "1601C",
+                vec!["frm1601c:selTreaty"],
+                Box::new(by(json!({"frm1601c:SpecialTax_1": "true"}))),
+            ),
+            (
+                "0605",
+                vec!["frm0605:txtNumOfInstallment"],
+                Box::new(by(json!({"frm0605:itemModeOfPayment:_1": "true"}))),
+            ),
+            (
+                "0605",
+                vec!["frm0605:itemApprovedYN:_1", "frm0605:itemApprovedYN:_2"],
+                Box::new(by(json!({"frm0605:itemMannerOfPaymentB:_1": "true"}))),
+            ),
+            (
+                "0619F",
+                vec!["frm0619F:txtTax13"],
+                Box::new(by(
+                    json!({"frm0619F:optWithheld:Y": "true", "frm0619F:txtTaxTypeCode": "WB"}),
+                )),
+            ),
+            (
+                "0619F",
+                vec!["frm0619F:txtTax14"],
+                Box::new(by(
+                    json!({"frm0619F:optWithheld:Y": "true", "frm0619F:txtTaxTypeCode": "WF"}),
+                )),
+            ),
+            (
+                "1601EQ",
+                vec![
+                    "frm1601EQ:ifRefund",
+                    "frm1601EQ:ifIssueCert",
+                    "frm1601EQ:ifCarriedOver",
+                ],
+                Box::new(by(json!({"frm1601EQ:txtTax20": "1000"}))),
+            ),
+            (
+                "1602Q",
+                vec![
+                    "frm1602Q:OverRemittance1",
+                    "frm1602Q:OverRemittance2",
+                    "frm1602Q:OverRemittance3",
+                ],
+                Box::new(by(json!({"frm1602Q:txt18": "1000"}))),
+            ),
+            (
+                "1604C",
+                vec![
+                    "frm1604c:txtRefMonth",
+                    "frm1604c:txtRefDate",
+                    "frm1604c:txtRefYear",
+                    "frm1604c:txt12",
+                    "frm1604c:select13",
+                ],
+                Box::new(by(json!({"frm1604c:releasedOfFunds_1": "true"}))),
+            ),
+            (
+                "1604F",
+                vec!["frm1604f:availedTaxRelief"],
+                Box::new(by(json!({"frm1604f:taxRelief_1": "true"}))),
+            ),
+            (
+                "1606",
+                vec!["frm1606:opt37:_1", "frm1606:opt37:_2"],
+                Box::new(|code: &str, draft: &Value| {
+                    fill(
+                        code,
+                        &amended(code, draft),
+                        json!({"frm1606:txtLess": "1000"}),
+                    )["draft"]
+                        .clone()
+                }),
+            ),
+            (
+                "2000OT",
+                vec!["frm2000OT:txtRealLocation"],
+                Box::new(by(json!({"frm2000OT:rbTransNature_2": "true"}))),
+            ),
+            (
+                "2200A",
+                vec!["frm2200Av2020:treatyY"],
+                Box::new(by(json!({"frm2200Av2020:optTreaty_1": "true"}))),
+            ),
+        ];
+        for (code, keys, turn_on) in cases {
+            let opened = open(code, page_period_of(code));
+            for key in &keys {
+                assert!(
+                    opened["off"].get(*key).is_some(),
+                    "{code}: {key} starts off"
+                );
+            }
+            let on = turn_on(code, &opened["draft"]);
+            let checked = validated(code, &on);
+            let types: BTreeMap<String, String> = screen_types(code).into_iter().collect();
+            for key in &keys {
+                assert!(
+                    checked["off"].get(*key).is_none(),
+                    "{code}: {key} comes alive: {}",
+                    checked["off"]
+                );
+                // And keeps what is typed there.
+                let t = types.get(*key).map(String::as_str).unwrap_or("text");
+                let kept = [
+                    typed_probe(&opened, key, t),
+                    json!("01"),
+                    json!("2020"),
+                    json!("A"),
+                ]
+                .into_iter()
+                .any(|probe| {
+                    let filled = fill(code, &on, json!({ *key: probe }));
+                    let shown = filled["values"][*key].as_str().unwrap_or_default();
+                    filled["rejected"][*key].is_null()
+                        && !(shown.is_empty()
+                            || shown == "false"
+                            || shown.trim_matches(['0', '.']).is_empty())
+                });
+                assert!(kept, "{code}: {key} keeps a typed value once on");
+            }
+        }
     }
 
     #[test]
