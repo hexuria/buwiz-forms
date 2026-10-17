@@ -254,10 +254,19 @@ const AMOUNT_BOUND_COUNTS: &[&str] = &[
 /// typed as text (1606's 17B Interest) is a peso box. A whole-number binding
 /// says nothing about pesos, so its schema type stands, and a money box over
 /// one shows whole pesos (`w`): its draft field holds no centavos.
+/// A text binding that keeps a whole date (rule 4) is a date box: the page
+/// shows it as "Dec 10, 2020" and gives it the calendar; the draft keeps its
+/// own format. A box showing one part of a date stays that part's box.
 /// Unbound and computed boxes keep the schema's type.
 fn page_type(binding: Option<&Binding>, key: &str, schema_type: &str) -> (String, bool) {
+    use bir_core::forms::agent::DateFormat;
     let kept = (schema_type.to_string(), false);
     match binding {
+        Some(Binding::Text {
+            date: Some(DateFormat::Mdy | DateFormat::Iso),
+            part: None,
+            ..
+        }) if matches!(schema_type, "text" | "money" | "int") => ("date".into(), false),
         Some(Binding::Text { .. }) if schema_type == "money" => ("text".into(), false),
         Some(Binding::Amount { .. })
             if matches!(schema_type, "text" | "int" | "date")
@@ -315,12 +324,35 @@ fn retype_by_binding(form: &mut Value, code: &str) {
             let Some(t) = col["t"].as_str().map(str::to_string) else {
                 continue;
             };
-            let typed: BTreeSet<(String, bool)> = rows
+            let bound: Vec<&String> = rows
                 .iter()
                 .filter_map(|row| row.get(c))
                 .filter(|key| binding(key).is_some())
+                .collect();
+            let mut typed: BTreeSet<(String, bool)> = bound
+                .iter()
                 .map(|key| page_type(binding(key), key, &t))
                 .collect();
+            // A date column some of whose rows the binding data left as plain
+            // text (1604C Part II) is a date column: plain text keeps the
+            // MM/DD/YYYY the page sends.
+            let plain_text = |key: &&String| {
+                matches!(
+                    binding(key),
+                    Some(Binding::Text {
+                        date: None,
+                        part: None,
+                        ..
+                    })
+                )
+            };
+            if typed.contains(&("date".to_string(), false))
+                && bound
+                    .iter()
+                    .all(|key| plain_text(key) || page_type(binding(key), key, &t).0 == "date")
+            {
+                typed = BTreeSet::from([("date".to_string(), false)]);
+            }
             if let [(t, whole)] = typed.into_iter().collect::<Vec<_>>().as_slice() {
                 col["t"] = Value::from(t.as_str());
                 if *whole {
@@ -8668,6 +8700,116 @@ mod tests {
             assert_eq!(found.1, t, "{code}: {key}");
         }
     }
+
+    /// Rule 4, host side: a text binding that keeps a whole date is a date
+    /// box on the page (the binding data is the oracle), and every date box
+    /// a return leaves open takes the MM/DD/YYYY the page sends for
+    /// "12102020", "12-10-2020" or "12/10/2020" and keeps it in the form's own
+    /// format. Date boxes locked for another reason are pinned with it.
+    #[test]
+    fn every_open_date_box_takes_a_typed_date_on_every_form() {
+        use bir_core::forms::agent::DateFormat;
+        setup();
+        let mut locked = Vec::new();
+        let (mut typed, mut refused) = (0, 0);
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let def = kind.definition();
+            for (key, t, _) in bound_page_types(code) {
+                if let Binding::Text {
+                    date: Some(DateFormat::Mdy | DateFormat::Iso),
+                    part: None,
+                    ..
+                } = &def.bindings[&key].binding
+                {
+                    assert_eq!(t, "date", "{code}: {key} keeps a whole date");
+                }
+            }
+            let opened = open(code, page_period_of(code));
+            for (key, t) in screen_types(code) {
+                if t != "date" {
+                    continue;
+                }
+                if let Some(reason) = opened["locks"][&key].as_str() {
+                    locked.push(format!("{code} {key}: {reason}"));
+                    continue;
+                }
+                let filled = fill(code, &opened["draft"], json!({ &key: "12/10/2020" }));
+                if let Some(reason) = filled["rejected"][&key].as_str() {
+                    // Refused by its form's own rule (a later schedule row
+                    // before the first, a schedule another answer turns
+                    // off), never for the date.
+                    assert!(!reason.contains("date"), "{code}: {key}: {reason}");
+                    refused += 1;
+                    continue;
+                }
+                let shown = filled["values"][&key].as_str().unwrap_or("");
+                if shown != "12/10/2020" {
+                    // Taken, then cleared by the form's own computation.
+                    locked.push(format!("{code} {key}: cleared to {shown:?}"));
+                    continue;
+                }
+                typed += 1;
+            }
+        }
+        assert!(typed > 90, "{typed} date boxes typed");
+        assert!(
+            refused < 150,
+            "{refused} date boxes refused for another rule"
+        );
+        let mut expected: Vec<&str> = DATE_BOXES_LOCKED_FOR_OTHER_REASONS.to_vec();
+        expected.sort_unstable();
+        locked.sort();
+        assert_eq!(locked, expected, "{locked:#?}");
+    }
+
+    /// Date boxes a return opens locked (unbound, derived, or the return's
+    /// own identity) or whose typed date its form clears (a schedule another
+    /// answer turns off): each for its form's group, not for rule 4.
+    const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
+        "0619F txtDate20: cannot be filled here: not written by this app's field map for any sample draft",
+        "0619F txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
+        "0619F txtDate22: cannot be filled here: not written by this app's field map for any sample draft",
+        "1601C frm1601c:txtDate37: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1601C frm1601c:txtDate38: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1601C frm1601c:txtDate39: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1601C frm1601c:txtDate40: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1601C txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1601C txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
+        "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
+        "1701MS frm1701MS:txtTaxpayerNo16b1: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1701MS frm1701MS:txtTaxpayerNo16b: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1702RT frm1702RT:txtPg1Pt1I10: cannot be filled here: derived by the app: changes with /incorporation_date/day, /incorporation_date/month, /incorporation_date/year but never shows one field's value",
+        "1702RT frm1702RT:txtPg1Pt3I23DebitMemoC3Date: cannot be filled here: derived by the app: changes with /payment_details/0/date/day, /payment_details/0/date/month, /payment_details/0/date/year but never shows one field's value",
+        "1702RT frm1702RT:txtPg1Pt3I24CheckC3Date: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1702RT frm1702RT:txtPg1Pt3I25TaxDebitDate: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1702RT frm1702RT:txtPg1Pt3I26OthersC3Date: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1707 frm1707:txtPg2P4Sch1I8DateCollection: cleared to \"\"",
+        "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1707A frm1707Av2021:txtS1C1DateOfTransaction_1: cleared to \"\"",
+        "1707A frm1707Av2021:txtS2C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1707A frm1707Av2021:txtS2C1DateOfTransaction_1: cleared to \"\"",
+        "2000 frm2000:sched2:txtPaymentDate0: cleared to \"\"",
+        "2000 frm2000:sched2:txtPaymentDate1: cleared to \"\"",
+        "2000 frm2000:sched2:txtPaymentDate2: cleared to \"\"",
+        "2000 frm2000:sched3:txtPaymentDate0: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "2000 frm2000:sched3:txtPaymentDate1: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "2000 frm2000:sched3:txtPaymentDate2: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "2000 frm2000:sched4:txtRemittanceDate0: cleared to \"\"",
+        "2000 frm2000:sched4:txtRemittanceDate1: cleared to \"\"",
+        "2000 frm2000:sched4:txtRemittanceDate2: cleared to \"\"",
+        "2000 frm2000:txtDate20: cannot be filled here: not written by this app's field map for any sample draft",
+        "2000 frm2000:txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
+        "2000 frm2000:txtDate22: cannot be filled here: not written by this app's field map for any sample draft",
+        "2000OT frm2000OT:txtTransactionDate: picks which return this is; reopen the form for another TIN or period",
+        "2550Q frm2550qv2024:RtnPeriodToNo4: cannot be filled here: derived by the app: changes with /return_period_to/day, /return_period_to/month, /return_period_to/year but never shows one field's value",
+        "2551Q txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "2551Q txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "2552 frm2552:txtPg2Pt5Sch1Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
+        "2552 frm2552:txtPg2Pt5Sch2Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
+        "2552 frm2552:txtPg2Pt5Sch3Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
+    ];
 
     #[test]
     fn an_escaped_official_value_shows_as_typed() {

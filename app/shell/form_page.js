@@ -166,6 +166,23 @@ export function formatMDY({ y, m, d }) {
   return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
 }
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** How a date box shows a parsed date: "Dec 10, 2020" (rule 4). */
+export function formatLongDate({ y, m, d }) {
+  return `${MONTH_SHORT[m - 1]} ${d}, ${y}`;
+}
+
+/**
+ * What a date box shows for the draft's text: the date as "Dec 10, 2020"
+ * when it reads as one, else the text as it is (a blank, a part-typed date).
+ * Display only: the draft keeps the form's own format.
+ */
+export function shownDate(text) {
+  const date = parseTypedDate(text);
+  return date ? formatLongDate(date) : String(text ?? "");
+}
+
 const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
 
 /**
@@ -174,9 +191,9 @@ const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 1201202
  */
 const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, choose Start a return, or New return (the + button or Cmd/Ctrl+N).";
 
-/** One box holding a whole MM/DD/YYYY date. */
-function isDateField(f, it) {
-  return f.t === "date" || (f.t === "text" && /MM\/DD\/YYYY/i.test(`${it?.l || ""} ${f.l || ""}`));
+/** One box holding a whole date: the host types it from its binding. */
+function isDateField(f) {
+  return f.t === "date";
 }
 
 function itemKeys(it) {
@@ -359,10 +376,12 @@ export class FormPageActions {
       if (s.inputs.has(k)) return;
       let value = s.values[k] ?? "";
       if (t === "money" && value !== "") value = formatMoney(value, this.isWhole(k));
+      if (t === "date") value = shownDate(value);
       const input = InputState.new({ value: String(value) });
       if (t === "date") {
         // Typing stays as typed; the draft gets MM/DD/YYYY as soon as it
-        // reads as a date, and the box is normalized on blur.
+        // reads as a date (12102020, 12-10-2020 and 12/10/2020 alike), and
+        // on blur the box shows it as "Dec 10, 2020".
         input.on("change", (_e, cx) => {
           const raw = input.value();
           const date = parseTypedDate(raw);
@@ -373,7 +392,7 @@ export class FormPageActions {
           const raw = input.value();
           const date = parseTypedDate(raw);
           if (date) {
-            const text = formatMDY(date);
+            const text = formatLongDate(date);
             if (text !== raw) input.set_value(text);
             this.setDateError(k, "");
           } else this.setDateError(k, raw.trim() ? DATE_ERROR : "");
@@ -401,7 +420,7 @@ export class FormPageActions {
       if (it.rows) {
         it.keys.forEach((row) => row.forEach((k, c) => make(k, it.cols[c].t)));
       } else {
-        for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, isDateField(f, it) ? "date" : f.t);
+        for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, f.t);
       }
     }
     if (cx) {
@@ -442,7 +461,7 @@ export class FormPageActions {
     return JSON.stringify([
       width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
-      picker ? [picker.year(), picker.month(), picker.value()] : null,
+      picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
       keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
@@ -583,7 +602,7 @@ export class FormPageActions {
       const f = date.single;
       if (f.c || this.isLocked(f.k)) return;
       const text = formatMDY({ y: Number(y), m: Number(m), d: Number(d) });
-      s.inputs.get(f.k)?.set_value(text);
+      s.inputs.get(f.k)?.set_value(shownDate(text));
       this.setDateError(f.k, "");
       s.picker = null;
       this.choose({ [f.k]: text }, cx);
@@ -1005,8 +1024,8 @@ export class FormPageActions {
     const s = this.state;
     for (const [k, input] of s.inputs) {
       if (!(this.isLocked(k) || this.isComputed(k))) continue;
-      const v = s.values[k] ?? "";
-      if (input.value() !== v) input.set_value(String(v));
+      const v = s.inputKinds?.get(k) === "date" ? shownDate(s.values[k]) : String(s.values[k] ?? "");
+      if (input.value() !== v) input.set_value(v);
     }
   }
 
@@ -1022,7 +1041,8 @@ export class FormPageActions {
       const was = before[k] ?? "";
       const now = s.values[k] ?? "";
       if (was === now) continue;
-      const shown = s.inputKinds?.get(k) === "money" && now !== "" ? formatMoney(now, this.isWhole(k)) : String(now);
+      const kind = s.inputKinds?.get(k);
+      const shown = kind === "money" && now !== "" ? formatMoney(now, this.isWhole(k)) : kind === "date" ? shownDate(now) : String(now);
       if (input.value() !== shown) input.set_value(shown);
     }
   }
@@ -1516,7 +1536,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
     // A computed amount shows 0.00 for zero, never an empty box.
-    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : ""), f.w) : value;
+    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : ""), f.w) : f.t === "date" ? shownDate(value) : value;
     // Locked and blank only with a reason: what it waits for.
     const hint = !shown ? ui.reasonFor(f.k) : "";
     el = lockedBox(cx, shown || hint, width, { right: !hint && (f.t === "money" || f.t === "pct"), hint: Boolean(hint) });
@@ -1671,7 +1691,7 @@ function scheduleTable(cx, ui, it, width) {
       } else if (col.t === "sel") {
         cell = selectBox(cx, ui, k, `${col.l}, row ${no}`, col.o, value, locked, colW - 16);
       } else if (locked || !s.inputs.get(k)) {
-        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : ""), col.w) : value;
+        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : ""), col.w) : col.t === "date" ? shownDate(value) : value;
         const hint = !shown ? ui.reasonFor(k) : "";
         cell = lockedBox(cx, shown || hint, colW - 16, { right: !hint && col.t === "money", hint: Boolean(hint) });
       } else {
@@ -1709,6 +1729,46 @@ function dateParts(fs) {
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** Step the calendar's grid to `year` and `month` (1-12) one month at a time. */
+export function moveCalendar(cal, year, month) {
+  let steps = (year - cal.year()) * 12 + (month - cal.month());
+  for (; steps > 0; steps--) cal.next_month();
+  for (; steps < 0; steps++) cal.prev_month();
+}
+
+/**
+ * The calendar's month or year list (rule 4: the picker changes the month
+ * and the year, not just the day). Years run from 1900, for dates of birth,
+ * to ten years ahead.
+ */
+function calendarSelect(cx, ui, id, cal, which) {
+  const s = ui.state;
+  const month = which === "month";
+  const last = Number(String(cal.today()).slice(0, 4)) + 10;
+  const options = month
+    ? MONTH_NAMES.map((name, i) => ({ value: String(i + 1), label: name }))
+    : Array.from({ length: last - 1899 }, (_x, i) => String(last - i)).map((y) => ({ value: y, label: y }));
+  return Dropdown(cx, `fp-date-${which}-${id}`, {
+    label: month ? "Month" : "Year",
+    width: month ? 128 : 88,
+    options,
+    value: String(month ? cal.month() : cal.year()),
+    open: s.picker?.select === which,
+    onOpenChange: (open, cx) => {
+      if (s.picker) s.picker.select = open ? which : null;
+      ui.refreshRows();
+      cx.notify();
+    },
+    onChange: (v, cx) => {
+      if (month) moveCalendar(cal, cal.year(), Number(v));
+      else moveCalendar(cal, Number(v), cal.month());
+      if (s.picker) s.picker.select = null;
+      ui.refreshRows();
+      cx.notify();
+    },
+  });
+}
 
 /** A calendar button beside an item's date boxes; picking a day fills them. Typing still works. */
 function datePicker(cx, ui, id, date) {
@@ -1758,6 +1818,8 @@ function datePicker(cx, ui, id, date) {
     .bg(t.raised)
     .shadow_lg()
     .on_mouse_down_out((_e, cx) => {
+      // A month or year list open over the card is the card's own.
+      if (s.picker?.select) return;
       s.picker = null;
       cx.notify();
     })
@@ -1768,9 +1830,10 @@ function datePicker(cx, ui, id, date) {
         .items_center()
         .gap(SPACE[1])
         .mb(SPACE[1])
-        .child(IconButton(cx, `fp-date-prev-${id}`, "chevron-left", { tooltip: "Previous month", onClick: (_e, cx) => { cal.prev_month(); cx.notify(); } }))
-        .child(Text(cx, "control", `${MONTH_NAMES[cal.month() - 1]} ${cal.year()}`).font_weight(600).flex_1().text_center())
-        .child(IconButton(cx, `fp-date-next-${id}`, "chevron-right", { tooltip: "Next month", onClick: (_e, cx) => { cal.next_month(); cx.notify(); } })),
+        .child(IconButton(cx, `fp-date-prev-${id}`, "chevron-left", { tooltip: "Previous month", onClick: (_e, cx) => { cal.prev_month(); ui.refreshRows(); cx.notify(); } }))
+        .child(calendarSelect(cx, ui, id, cal, "month"))
+        .child(calendarSelect(cx, ui, id, cal, "year"))
+        .child(IconButton(cx, `fp-date-next-${id}`, "chevron-right", { tooltip: "Next month", onClick: (_e, cx) => { cal.next_month(); ui.refreshRows(); cx.notify(); } })),
     )
     .child(div().flex().flex_row().children(WEEKDAYS.map((w) => div().w(32).flex().justify_center().child(Text(cx, "cap", w, "fg3")))));
   for (const week of grid) {
@@ -1951,7 +2014,7 @@ function itemRow(cx, ui, it, pi, ii, width) {
     const radios = fs.filter((f) => f.t === "radio");
     if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
     for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
-    const single = fs.filter((f) => isDateField(f, it));
+    const single = fs.filter((f) => isDateField(f));
     if (single.length === 1 && s.editable && !single[0].c && !ui.isLocked(single[0].k)) {
       controls.child(datePicker(cx, ui, id, { single: single[0] }));
     }
