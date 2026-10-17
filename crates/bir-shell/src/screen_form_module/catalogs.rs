@@ -10,7 +10,7 @@ use bir_core::forms::{
 use bir_core::reference;
 use serde_json::{Map, Value, json};
 
-use super::{rows_1700, rows_2550m, rows_2550q, schema_entry};
+use super::{rows_1700, rows_2550m, rows_2550q, rows_withholding, schema_entry};
 
 fn option(value: &str, label: &str) -> Value {
     json!({"value": value, "label": label})
@@ -66,22 +66,41 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
     if let Some(order) = rows_1700::edit_order(kind, key) {
         return order;
     }
+    if let Some(order) = rows_withholding::edit_order(kind, key) {
+        return order;
+    }
     location(kind, key).map_or(0, |(_, level)| level + 1)
+}
+
+/// A lock the page has opened for one box.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Lift {
+    Nothing,
+    /// The filer chose Edit on this profile box: the edit stays on this
+    /// return and the profile itself is never written.
+    Profile,
 }
 
 /// Apply an ordinary user edit, then clear the location's descendants when
 /// a parent actually changes. The caller commits this copy only on success.
+/// `lift`: which lock the page has opened for this box.
 pub(super) fn fill(
     kind: AgentFormKind,
     draft: &mut Value,
     key: &str,
     value: &Value,
+    lift: Lift,
 ) -> Result<(), String> {
     if inactive_schedule(kind, key, draft) {
         return Err(
             "Item 11 (Kind of Transaction) uses another Part V schedule; choose it there first."
                 .to_string(),
         );
+    }
+    if let Some(done) = rows_withholding::fill(kind, draft, key, value, |draft| {
+        agent::fill_as_user(kind, draft, key, value)
+    }) {
+        return done;
     }
     if let Some(row) = atc_2550m_row(kind, key) {
         return fill_2550m_atc(draft, row, value);
@@ -152,7 +171,10 @@ pub(super) fn fill(
     }
     let loc = location(kind, key);
     let before = loc.and_then(|(base, _)| draft.pointer(base).cloned());
-    agent::fill_as_user(kind, draft, key, value)?;
+    match lift {
+        Lift::Profile => agent::fill_profile_box_as_user(kind, draft, key, value)?,
+        Lift::Nothing => agent::fill_as_user(kind, draft, key, value)?,
+    }
     // 1702RT Item 5: the official select is enabled only once "Other" is
     // chosen, so picking a code chooses "Other".
     if key == "frm1702RT:drpPg1I5AtcOther"
@@ -245,6 +267,7 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || spouse_1701a_more_row(kind, key).is_some()
         || rows_2550q::cell(kind, key).is_some()
         || rows_1700::cell(kind, key).is_some()
+        || rows_withholding::host_writes(kind, key)
 }
 
 /// 1701A "(add more...)" spouse cell `frm1701A:txtmodalPartIV<A|B>_<n>C3`:
@@ -566,6 +589,9 @@ fn fill_2550m_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), St
 }
 
 fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Value>> {
+    if let Some(rows) = rows_withholding::options(kind, key, draft) {
+        return Some(rows);
+    }
     let code = kind.form_code();
     if let Some((base, level)) = location(kind, key) {
         let place = &draft[base.trim_start_matches('/')];

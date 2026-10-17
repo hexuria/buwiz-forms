@@ -63,7 +63,8 @@ export function dueRow(cx, app, d, width) {
     onClick: (_e, cx) => {
       app.selRoot = d.tin_root;
       app.selCode = d.branch_code;
-      app.openForm({ tin: d.tin, code: d.form_code, year: d.taxable_year, period: d.period }, cx);
+      // A saved return opens exactly (two in one month stay two).
+      app.openForm({ tin: d.tin, code: d.form_code, year: d.taxable_year, period: d.period, ...(d.return_key != null ? { returnKey: d.return_key } : {}) }, cx);
     },
   })
     .child(
@@ -125,7 +126,7 @@ export function returnRow(cx, app, r, width) {
       onClick: (_e, cx) => {
         app.selRoot = r.tin_root;
         app.selCode = r.branch_code;
-        app.openForm({ tin: r.tin, code: r.form_code, year: r.taxable_year, period: r.period }, cx);
+        app.openForm({ tin: r.tin, code: r.form_code, year: r.taxable_year, period: r.period, ...(r.return_key != null ? { returnKey: r.return_key } : {}) }, cx);
       },
     }),
   );

@@ -219,6 +219,16 @@ fn main() {
         for j in cells["xbox_joins"].as_array().into_iter().flatten() {
             f.insert(s(j, "writer_key"), "true".into());
         }
+        // TIN and branch combs are stamped with their official key (name=)
+        // and take no join; the app's print map fills them by that name, so
+        // the worst case fills them too.
+        for (name, n) in &slots {
+            let class = classify(name, "");
+            if *n > 0 && name.contains(':') && matches!(class, "tin" | "branch") {
+                f.entry(name.clone())
+                    .or_insert_with(|| value_for(class, *n));
+            }
+        }
         match bir_print::frozen_html::filled_document(&slug, &f) {
             Ok(html) => {
                 let html = bir_shell::static_html::staticize(

@@ -559,6 +559,12 @@ impl Form1601CDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// Set "Amended Return?" to Yes the way the editor does, and recompute.
+    pub fn mark_amended(&mut self) {
+        self.is_amended = true;
+        self.compute();
+    }
+
     pub fn revert_to_draft(&mut self) {
         assert!(
             !matches!(self.status, FilingStatus::Paid),
