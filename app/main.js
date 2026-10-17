@@ -570,7 +570,8 @@ class BirApp extends View {
     }
     this.overlay = null;
     this.formUi.open(opts, cx);
-    this.pushRecent(opts);
+    // A library sample is no return, so it is not a recent one.
+    if (!opts.sample) this.pushRecent(opts);
     this.go("form", cx);
   }
 

@@ -663,7 +663,7 @@ pub fn fill(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, false)
+    fill_box(kind, draft, key, value, &[])
 }
 
 /// [`fill`] for the user's own form page. The one difference: an income-tax
@@ -676,7 +676,21 @@ pub fn fill_as_user(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, true)
+    fill_box(kind, draft, key, value, &[Lock::Election])
+}
+
+/// [`fill_as_user`] for a box the user chose to edit on their own form page
+/// after it was filled from the profile ([`Lock::Profile`]): the edit stays
+/// on this return's draft and the profile is never written. The assistant is
+/// still refused profile boxes through [`fill`]; identity, computed, hidden
+/// and unbound boxes are refused exactly as in [`fill`].
+pub fn fill_profile_box_as_user(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    fill_box(kind, draft, key, value, &[Lock::Election, Lock::Profile])
 }
 
 fn fill_box(
@@ -684,18 +698,23 @@ fn fill_box(
     draft: &mut Value,
     key: &str,
     value: &Value,
-    user: bool,
+    allowed: &[Lock],
 ) -> Result<(), String> {
     let def = kind.definition();
-    let election = matches!(
-        def.bindings.get(key),
-        Some(BoundBox {
-            lock: Some(Lock::Election),
-            ..
-        })
-    );
+    let lock = def.bindings.get(key).and_then(|bound| bound.lock);
+    let let_through = match lock {
+        Some(Lock::Election) => allowed.contains(&Lock::Election),
+        // Only the lock itself is lifted: a computed or hidden box stays refused.
+        Some(Lock::Profile) => {
+            allowed.contains(&Lock::Profile)
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.is_user_box() && entry.required != "computed")
+        }
+        _ => false,
+    };
     if let Some(reason) = def.refusal(key)
-        && !(user && election)
+        && !let_through
     {
         return Err(reason);
     }
@@ -1385,6 +1404,43 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn only_the_users_page_edit_lifts_a_profile_lock() {
+        let mut lifted = 0;
+        for kind in AgentFormKind::all() {
+            let def = kind.definition();
+            for (key, bound) in &def.bindings {
+                let Some(lock @ (Lock::Profile | Lock::Identity)) = bound.lock else {
+                    continue;
+                };
+                let mut draft = Value::Null;
+                // The assistant and the plain user fill keep both locks.
+                assert!(
+                    fill(kind, &mut draft, key, &Value::from("x")).is_err(),
+                    "{key}"
+                );
+                assert!(
+                    fill_as_user(kind, &mut draft, key, &Value::from("x")).is_err(),
+                    "{key}"
+                );
+                let refused = fill_profile_box_as_user(kind, &mut draft, key, &Value::from("x"))
+                    .err()
+                    .unwrap_or_default();
+                let open = def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.is_user_box() && entry.required != "computed");
+                if lock == Lock::Profile && open {
+                    assert!(!refused.contains(lock.reason()), "{key}: {refused}");
+                    lifted += 1;
+                } else {
+                    // Identity (TIN, year, period) and computed boxes stay refused.
+                    assert!(!refused.is_empty(), "{key}");
+                }
+            }
+        }
+        assert!(lifted > 100, "{lifted} profile boxes");
     }
 
     #[test]

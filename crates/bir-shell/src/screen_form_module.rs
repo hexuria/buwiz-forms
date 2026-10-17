@@ -10,7 +10,13 @@
 //!
 //! Drafts open the way each painted page opens them (stored draft for the
 //! taxpayer and period, else a new one built from the profile), reproduced
-//! here because bir-shell cannot depend on bir-desktop.
+//! here because bir-shell cannot depend on bir-desktop. A Form library
+//! opening (`screen_form_sample`) always builds the new one and shows its
+//! period and date boxes blank; the page never saves it.
+//!
+//! A box the profile filled is locked until the filer chooses Edit on it;
+//! the edit then stays on this return's draft and never reaches the profile.
+//! A box the profile left blank is an ordinary box.
 //!
 //! `screen_form_open` and `screen_form_validate` are asynchronous: the main
 //! thread reads the database and parses arguments, and the returned future
@@ -65,8 +71,14 @@ export interface ScreenFormOpened {
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     locks: Record<string, string>;
-    /** Boxes the taxpayer profile fills (the page marks their items). */
+    /** Boxes the taxpayer profile filled (the page tucks and marks them); a box it left blank is not here and not locked. */
     profile: string[];
+    /** Filled profile boxes the filer may open with Edit; pass the opened ones to `screen_form_fill` as `unlocked`. */
+    profile_edit: string[];
+    /** Opened from the Form library: a blank sample that is never saved. */
+    sample: boolean;
+    /** A sample's period and date boxes, shown blank until the filer types one. */
+    blank: string[];
     errors: ScreenFormError[];
 }
 export interface ScreenFormFilled {
@@ -96,13 +108,16 @@ export interface ScreenFormSaved {
 export function screen_form_schema(form_code: string): object;
 export function screen_forms_index(): ScreenFormIndexEntry[];
 export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
-export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
+/** The Form library's blank sample of a form for this taxpayer: reads no stored return, and is never saved. */
+export function screen_form_sample(tin: string, form_code: string, year: number): Promise<ScreenFormOpened>;
+/** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
+export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
 /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
 export function screen_form_print(form_code: string, draft: object): { path: string };
 /** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
-export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): boolean;
+export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
 /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
@@ -114,6 +129,7 @@ pub fn register(module: HostModule) -> HostModule {
         .function("screen_form_schema", screen_form_schema)
         .function("screen_forms_index", |_| screen_forms_index())
         .async_function("screen_form_open", screen_form_open)
+        .async_function("screen_form_sample", screen_form_sample)
         .function("screen_form_fill", screen_form_fill)
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
@@ -756,20 +772,24 @@ fn read_error(code: &str, error: impl std::fmt::Display) -> String {
     format!("the stored {code} draft could not be read: {error}")
 }
 
-/// The stored generic-queue draft in `period`'s column.
+/// The stored generic-queue draft in `period`'s column; none without a
+/// store (a Form library sample never reads the taxpayer's returns).
 fn stored<F: QueueableForm>(
-    db: &Database,
+    db: Option<&Database>,
     tin: &str,
     year: u16,
     period: i64,
 ) -> Result<Option<F>, String> {
+    let Some(db) = db else {
+        return Ok(None);
+    };
     db.get_queueable_draft::<F>(tin, year, period)
         .map_err(|error| read_error(F::FORM_CODE, error))
 }
 
 /// The most recently updated stored draft among `periods` that `keep` accepts.
 fn latest<F: QueueableForm>(
-    db: &Database,
+    db: Option<&Database>,
     tin: &str,
     year: u16,
     periods: impl IntoIterator<Item = i64>,
@@ -792,15 +812,16 @@ fn latest<F: QueueableForm>(
 /// An annual return stored before the generic queue (NULL period column,
 /// period key `A`): the first save adopts the row.
 fn stored_annual<F: QueueableForm>(
-    db: &Database,
+    db: Option<&Database>,
     tin: &str,
     year: u16,
 ) -> Result<Option<F>, String> {
-    match stored::<F>(db, tin, year, 0)? {
-        Some(draft) => Ok(Some(draft)),
-        None => db
+    match (stored::<F>(db, tin, year, 0)?, db) {
+        (Some(draft), _) => Ok(Some(draft)),
+        (None, Some(db)) => db
             .get_form_draft_v2::<F>(tin, F::FORM_CODE, year, &FilingPeriod::Annual)
             .map_err(|error| read_error(F::FORM_CODE, error)),
+        (None, None) => Ok(None),
     }
 }
 
@@ -829,23 +850,28 @@ fn month_or(period: u8, fallback: u8) -> u8 {
 }
 
 /// The draft each painted page opens for `(profile, year, period)`: the
-/// stored one, else a new one from the profile.
+/// stored one, else a new one from the profile. `fresh` (a Form library
+/// sample) always builds the new one and reads no stored return.
 fn load_draft(
     db: &Database,
     kind: AgentFormKind,
     profile: &TaxpayerProfile,
     year: u16,
     period: u8,
+    fresh: bool,
 ) -> Result<Value, String> {
     use bir_core::forms::*;
     let tin = profile.tin.full();
     let tin = tin.as_str();
+    let store = (!fresh).then_some(db);
     let queueable = match kind {
         AgentFormKind::Form1601C => {
             let month = period.clamp(1, 12);
-            let draft = match db
-                .get_1601c_draft(tin, year, month)
+            let draft = match store
+                .map(|db| db.get_1601c_draft(tin, year, month))
+                .transpose()
                 .map_err(|error| read_error("1601C", error))?
+                .flatten()
             {
                 Some(draft) => draft,
                 None => {
@@ -856,9 +882,11 @@ fn load_draft(
         }
         AgentFormKind::Form2551Q => {
             let quarter = period.clamp(1, 4);
-            let draft = match db
-                .get_2551q_draft(tin, year, quarter)
+            let draft = match store
+                .map(|db| db.get_2551q_draft(tin, year, quarter))
+                .transpose()
                 .map_err(|error| read_error("2551Q", error))?
+                .flatten()
             {
                 Some(draft) => draft,
                 None => form_2551q::Form2551QDraft::new_from_profile(profile, year, quarter),
@@ -870,16 +898,25 @@ fn load_draft(
     let column = i64::from(period);
     macro_rules! simple {
         ($ty:ty, $new:expr) => {{
-            let draft: $ty = stored::<$ty>(db, tin, year, column)?.unwrap_or_else(|| $new);
+            let draft: $ty = stored::<$ty>(store, tin, year, column)?.unwrap_or_else(|| $new);
             finish(db, profile, draft)
         }};
     }
     match queueable {
         QueueableKind::Form2550Q => {
             let quarter = period.clamp(1, 4);
-            let mut draft = db
-                .get_form_draft::<form_2550q::Form2550QDraft>(tin, "2550Q", year, Some(quarter))
+            let mut draft = store
+                .map(|db| {
+                    db.get_form_draft::<form_2550q::Form2550QDraft>(
+                        tin,
+                        "2550Q",
+                        year,
+                        Some(quarter),
+                    )
+                })
+                .transpose()
                 .map_err(|error| read_error("2550Q", error))?
+                .flatten()
                 .unwrap_or_else(|| {
                     form_2550q::Form2550QDraft::new_from_profile(profile, year, quarter)
                 });
@@ -890,9 +927,9 @@ fn load_draft(
         QueueableKind::Form0605 => {
             type F = form_0605::Form0605Draft;
             let slot = period.max(1);
-            let draft = match stored::<F>(db, tin, year, i64::from(slot))? {
-                Some(draft) => Some(draft),
-                None => db
+            let draft = match (stored::<F>(store, tin, year, i64::from(slot))?, store) {
+                (Some(draft), _) => Some(draft),
+                (None, Some(db)) => db
                     .get_form_draft_v2::<F>(
                         tin,
                         "0605",
@@ -900,6 +937,7 @@ fn load_draft(
                         &FilingPeriod::OpenEnded(u32::from(slot)),
                     )
                     .map_err(|error| read_error("0605", error))?,
+                (None, None) => None,
             }
             .unwrap_or_else(|| F::new_from_profile(profile, year, slot));
             finish(db, profile, draft)
@@ -962,7 +1000,7 @@ fn load_draft(
         ),
         QueueableKind::Form1701 => {
             type F = form_1701::Form1701Draft;
-            let draft = stored_annual::<F>(db, tin, year)?.unwrap_or_else(|| {
+            let draft = stored_annual::<F>(store, tin, year)?.unwrap_or_else(|| {
                 let mut draft = F::new_from_profile(profile, year, 12);
                 draft.recompute();
                 draft
@@ -989,7 +1027,7 @@ fn load_draft(
         ),
         QueueableKind::Form1702MX => {
             type F = form_1702mx::Form1702MXDraft;
-            let draft = stored_annual::<F>(db, tin, year)?.unwrap_or_else(|| {
+            let draft = stored_annual::<F>(store, tin, year)?.unwrap_or_else(|| {
                 let mut draft = F::new_from_profile(profile, year);
                 draft.recompute();
                 draft
@@ -1002,7 +1040,7 @@ fn load_draft(
         }),
         QueueableKind::Form1702RT => {
             type F = form_1702rt::Form1702RTDraft;
-            let draft = stored_annual::<F>(db, tin, year)?.unwrap_or_else(|| {
+            let draft = stored_annual::<F>(store, tin, year)?.unwrap_or_else(|| {
                 let mut draft = F::new_from_profile(profile, year, 12);
                 draft.part_iv.item_40_income_tax_rate_percent = 30;
                 draft.deduction_method = form_1702rt::Form1702RTDeductionMethod::Itemized;
@@ -1025,7 +1063,7 @@ fn load_draft(
         ),
         QueueableKind::Form1800 => {
             type F = form_1800::Form1800Draft;
-            let mut draft = stored::<F>(db, tin, year, column)?
+            let mut draft = stored::<F>(store, tin, year, column)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, u32::from(period.max(1))));
             // A TIN fixed in the profile reaches a still-editable draft.
             if draft.lifecycle().is_editable() {
@@ -1035,7 +1073,7 @@ fn load_draft(
         }
         QueueableKind::Form1801 => {
             type F = form_1801::Form1801Draft;
-            let mut draft = stored::<F>(db, tin, year, column)?
+            let mut draft = stored::<F>(store, tin, year, column)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, u32::from(period.max(1))));
             if draft.lifecycle().is_editable() {
                 draft.tin = tin.to_string();
@@ -1050,7 +1088,7 @@ fn load_draft(
             // One return per transaction date (`MMDD`): this year's latest
             // editable draft, else a new transaction.
             type F = form_2000ot::Form2000OTDraft;
-            let draft = latest::<F>(db, tin, year, mmdd_keys(0..=12, 0..=31), |draft| {
+            let draft = latest::<F>(store, tin, year, mmdd_keys(0..=12, 0..=31), |draft| {
                 draft.lifecycle().is_editable()
             })?
             .unwrap_or_else(|| F::new_from_profile(profile, year));
@@ -1063,7 +1101,7 @@ fn load_draft(
         QueueableKind::Form2200AN => {
             type F = form_2200an::Form2200ANDraft;
             let month = i64::from(period.clamp(1, 12));
-            let draft = latest::<F>(db, tin, year, mmdd_keys(month..=month, 1..=31), |_| true)?
+            let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 1..=31), |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, period));
             finish(db, profile, draft)
         }
@@ -1074,7 +1112,7 @@ fn load_draft(
             } else {
                 1..=12
             };
-            let draft = latest::<F>(db, tin, year, mmdd_keys(months, 1..=31), |_| true)?
+            let draft = latest::<F>(store, tin, year, mmdd_keys(months, 1..=31), |_| true)?
                 .unwrap_or_else(|| F::new_for_month(profile, year, period));
             finish(db, profile, draft)
         }
@@ -1089,7 +1127,7 @@ fn load_draft(
         QueueableKind::Form2200S => {
             type F = form_2200s::Form2200SDraft;
             let month = i64::from(period.clamp(1, 12));
-            let draft = latest::<F>(db, tin, year, mmdd_keys(month..=month, 1..=31), |_| true)?
+            let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 1..=31), |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, period));
             finish(db, profile, draft)
         }
@@ -1105,7 +1143,7 @@ fn load_draft(
             // Keyed by its Item 1 date: this year's latest return still in
             // progress (month/day 0 is a blank component), else a new one.
             type F = form_2552::Form2552Draft;
-            let draft = latest::<F>(db, tin, year, mmdd_keys(0..=12, 0..=31), |draft| {
+            let draft = latest::<F>(store, tin, year, mmdd_keys(0..=12, 0..=31), |draft| {
                 !matches!(
                     draft.lifecycle().status,
                     FilingStatus::Confirmed | FilingStatus::Paid
@@ -1118,7 +1156,7 @@ fn load_draft(
             // The return names its own quarter (Item 3): this year's latest.
             type F = form_2553::Form2553Draft;
             let quarter = if (1..=4).contains(&period) { period } else { 0 };
-            let draft = latest::<F>(db, tin, year, 1..=4, |_| true)?
+            let draft = latest::<F>(store, tin, year, 1..=4, |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, quarter));
             finish(db, profile, draft)
         }
@@ -1187,11 +1225,15 @@ fn is_profile_name(key: &str) -> bool {
     })
 }
 
-fn locks(kind: AgentFormKind) -> Map<String, Value> {
+/// Why each box is locked on the page. A profile box is locked only while
+/// the profile gave it a value (the page's Edit then opens it for this
+/// return); a profile box left blank is an ordinary box.
+fn locks(kind: AgentFormKind, values: &Value) -> Map<String, Value> {
     let def = kind.definition();
     let mut locks: Map<String, Value> = def
         .boxes
         .iter()
+        .filter(|entry| !(is_profile_box(def, entry) && profile_blank(def, &entry.key, values)))
         .filter_map(|entry| {
             lock_reason(def, entry)
                 .filter(|_| !catalogs::host_writes(kind, &entry.key))
@@ -1203,6 +1245,12 @@ fn locks(kind: AgentFormKind) -> Map<String, Value> {
     // of "not written by this app's field map".
     for (key, official) in occurrence_aliases(kind) {
         let reason = match def.bindings.get(official) {
+            Some(BoundBox {
+                lock: Some(bir_core::forms::agent::Lock::Profile),
+                ..
+            }) if profile_blank(def, official, values) => {
+                format!("repeats `{official}`; fill it there")
+            }
             Some(BoundBox {
                 lock: Some(lock), ..
             }) => lock.reason().to_string(),
@@ -1216,39 +1264,81 @@ fn locks(kind: AgentFormKind) -> Map<String, Value> {
     locks
 }
 
-/// Boxes the taxpayer profile fills: bound (themselves or through their
-/// item's group box) with a profile lock, plus repeated occurrences of one.
-/// The extracted schema's auto flag is a guess; this is what the app does.
-fn profile_keys(kind: AgentFormKind) -> Vec<String> {
-    let def = kind.definition();
-    let profile = |key: &str| {
-        matches!(
-            def.bindings.get(key),
-            Some(BoundBox {
-                lock: Some(bir_core::forms::agent::Lock::Profile),
-                ..
-            })
-        )
+fn has_profile_lock(def: &AgentFormDef, key: &str) -> bool {
+    matches!(
+        def.bindings.get(key),
+        Some(BoundBox {
+            lock: Some(bir_core::forms::agent::Lock::Profile),
+            ..
+        })
+    )
+}
+
+/// A box the taxpayer profile fills: bound (itself or through its item's
+/// group box) with a profile lock, or the filer's own name.
+fn is_profile_box(def: &AgentFormDef, entry: &BoxDef) -> bool {
+    !entry.computed
+        && entry.is_user_box()
+        && def.bindings.contains_key(&entry.key)
+        && (has_profile_lock(def, &entry.key)
+            || is_profile_name(&entry.key)
+            || entry
+                .group
+                .as_deref()
+                .is_some_and(|group| has_profile_lock(def, group)))
+}
+
+/// Whether the profile left `key` blank on this draft: no text, an all-zero
+/// code (the official runtime's empty RDO, `000`), or no radio of its item
+/// ticked.
+fn profile_blank(def: &AgentFormDef, key: &str, values: &Value) -> bool {
+    let shown = |key: &str| values[key].as_str().unwrap_or("").trim().to_string();
+    let entry = def.box_def(key);
+    let group = match entry {
+        Some(entry) if entry.radio_group => Some(entry),
+        Some(entry) => entry.group.as_deref().and_then(|group| def.box_def(group)),
+        None => None,
     };
+    match (group, entry) {
+        (Some(group), _) => !group.members.iter().any(|member| shown(member) == "true"),
+        (None, Some(entry)) if entry.is_radio() => shown(key) != "true",
+        _ => shown(key).chars().all(|c| c == '0'),
+    }
+}
+
+/// Boxes the taxpayer profile filled on this draft, plus repeated
+/// occurrences of one; a box the profile left blank is not listed. The
+/// extracted schema's auto flag is a guess; this is what the app does.
+fn profile_keys(kind: AgentFormKind, values: &Value) -> Vec<String> {
+    let def = kind.definition();
     let mut keys: Vec<String> = def
         .boxes
         .iter()
-        .filter(|entry| {
-            !entry.computed
-                && entry.is_user_box()
-                && def.bindings.contains_key(&entry.key)
-                && (profile(&entry.key)
-                    || is_profile_name(&entry.key)
-                    || entry.group.as_deref().is_some_and(profile))
-        })
+        .filter(|entry| is_profile_box(def, entry) && !profile_blank(def, &entry.key, values))
         .map(|entry| entry.key.clone())
         .collect();
     for (key, official) in occurrence_aliases(kind) {
-        if profile(official) {
+        if has_profile_lock(def, official) && !profile_blank(def, official, values) {
             keys.push(key.clone());
         }
     }
     keys
+}
+
+/// The filled profile boxes the page may open with Edit: the edit stays on
+/// this return (`screen_form_fill`'s `unlocked`) and never reaches the
+/// profile. Repeated occurrences are not here; they follow their box.
+fn profile_edit_keys(kind: AgentFormKind, values: &Value) -> Vec<String> {
+    let def = kind.definition();
+    profile_keys(kind, values)
+        .into_iter()
+        .filter(|key| {
+            def.bindings.contains_key(key)
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.required != "computed")
+        })
+        .collect()
 }
 
 /// On-screen keys that repeat an official control id (`txtEmail#occurrence-2`,
@@ -1409,8 +1499,35 @@ fn draft_argument(arguments: &HostArguments, index: usize) -> Result<Value, Host
     Ok(draft)
 }
 
+/// The optional list of profile boxes the page has open (see `apply_screen_edits`).
+fn unlocked_argument(arguments: &HostArguments, index: usize) -> BTreeSet<String> {
+    match arguments.get(index).map(to_json) {
+        Some(Value::Array(keys)) => keys
+            .iter()
+            .filter_map(|key| key.as_str().map(str::to_string))
+            .collect(),
+        _ => BTreeSet::new(),
+    }
+}
+
 fn screen_form_open(
     arguments: &HostArguments,
+) -> Result<impl Future<Output = HostResult> + Send + use<>, HostError> {
+    open_screen_form(arguments, false)
+}
+
+/// A Form library opening: the form as a blank sample for the taxpayer. It
+/// never reads or replaces a stored return, and its period and date boxes
+/// show blank (`blank`) until the filer types one.
+fn screen_form_sample(
+    arguments: &HostArguments,
+) -> Result<impl Future<Output = HostResult> + Send + use<>, HostError> {
+    open_screen_form(arguments, true)
+}
+
+fn open_screen_form(
+    arguments: &HostArguments,
+    sample: bool,
 ) -> Result<impl Future<Output = HostResult> + Send + use<>, HostError> {
     let tin: String = arguments
         .string(0)?
@@ -1421,30 +1538,47 @@ fn screen_form_open(
     let year =
         u16::try_from(arguments.integer(2)?).map_err(|_| host_error("year is out of range"))?;
     let code = kind.form_code();
-    let period = page_period(code, arguments.integer(3)?).map_err(host_error)?;
+    let period = if sample {
+        page_period(code, 1)
+    } else {
+        page_period(code, arguments.integer(3)?)
+    }
+    .map_err(host_error)?;
     let draft = with_database(|db| {
         let profile = db
             .get_profile_by_tin(&tin)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
-        load_draft(db, kind, &profile, year, period).map_err(host_error)
+        load_draft(db, kind, &profile, year, period, sample).map_err(host_error)
     })?;
     Ok(async move {
         let opened = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
-            let (values, errors, status) = evaluate_here(kind, &mut draft)?;
+            let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
+            let locks = locks(kind, &values);
+            let profile = profile_keys(kind, &values);
+            let profile_edit = profile_edit_keys(kind, &values);
+            let blank = if sample {
+                sample_blank_keys(kind)
+            } else {
+                Vec::new()
+            };
+            blank_sample(&blank, &mut values, &mut errors);
             Ok(json!({
                 "form_code": code,
                 "year": year,
                 "period": period,
                 "status": status_name(&status),
                 "editable": status == FilingStatus::Draft,
-                "stored_period": stored_period(kind, &draft),
+                "stored_period": if sample { None } else { stored_period(kind, &draft) },
                 "draft": draft,
                 "values": values,
                 "options": catalogs::options(kind, &draft),
-                "locks": locks(kind),
-                "profile": profile_keys(kind),
+                "locks": locks,
+                "profile": profile,
+                "profile_edit": profile_edit,
+                "sample": sample,
+                "blank": blank,
                 "errors": errors,
             }))
         })
@@ -1452,6 +1586,95 @@ fn screen_form_open(
         .map_err(host_error)?;
         Ok(json(opened))
     })
+}
+
+/// The period and date boxes a Form library sample shows blank: the
+/// return's year, month, quarter, day and short-period answer and every
+/// date box. Amounts and boxes the profile fills keep their values.
+fn sample_blank_keys(kind: AgentFormKind) -> Vec<String> {
+    const PERIOD: [&str; 7] = ["year", "month", "quarter", "qtr", "date", "day", "period"];
+    const NOT_PERIOD: [&str; 3] = ["birth", "incorporat", "start"];
+    let def = kind.definition();
+    let Some(form) = schema_entry(kind.form_code()) else {
+        return Vec::new();
+    };
+    let profile: BTreeSet<String> = def
+        .boxes
+        .iter()
+        .filter(|entry| is_profile_box(def, entry))
+        .map(|entry| entry.key.clone())
+        .chain(
+            occurrence_aliases(kind)
+                .into_iter()
+                .filter(|(_, official)| has_profile_lock(def, official))
+                .map(|(key, _)| key.clone()),
+        )
+        .collect();
+    let blank = |key: &str, kind: &str| {
+        let name = key.rsplit(':').next().unwrap_or(key).to_ascii_lowercase();
+        let named = PERIOD.iter().any(|word| name.contains(word))
+            && !NOT_PERIOD.iter().any(|word| name.contains(word));
+        let amount = matches!(
+            def.bindings.get(key).map(|bound| &bound.binding),
+            Some(Binding::Amount { .. })
+        );
+        (kind == "date" || (named && ["sel", "int", "radio", "text"].contains(&kind)))
+            && !amount
+            && !profile.contains(key)
+    };
+    let mut keys = Vec::new();
+    let items = form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten());
+    for item in items {
+        for field in item["f"].as_array().into_iter().flatten() {
+            if let (Some(key), Some(t)) = (field["k"].as_str(), field["t"].as_str())
+                && blank(key, t)
+            {
+                keys.push(key.to_string());
+            }
+        }
+        let cols = item["cols"].as_array();
+        for row in item["keys"].as_array().into_iter().flatten() {
+            for (c, key) in row.as_array().into_iter().flatten().enumerate() {
+                let t = cols
+                    .and_then(|cols| cols.get(c))
+                    .and_then(|col| col["t"].as_str());
+                if let (Some(key), Some(t)) = (key.as_str(), t)
+                    && blank(key, t)
+                {
+                    keys.push(key.to_string());
+                }
+            }
+        }
+    }
+    keys
+}
+
+/// Show a sample's period and date boxes blank, and drop the messages that
+/// only judge the period the sample was built for (a year it was never
+/// given cannot be "in the future").
+fn blank_sample(blank: &[String], values: &mut Value, errors: &mut Value) {
+    if blank.is_empty() {
+        return;
+    }
+    if let Value::Object(map) = values {
+        for key in blank {
+            if let Some(value) = map.get_mut(key) {
+                *value = Value::String(String::new());
+            }
+        }
+    }
+    if let Value::Array(list) = errors {
+        list.retain(|error| {
+            !error["keys"].as_array().into_iter().flatten().any(|key| {
+                key.as_str()
+                    .is_some_and(|key| blank.iter().any(|b| b == key))
+            })
+        });
+    }
 }
 
 fn screen_form_fill(arguments: &HostArguments) -> HostResult {
@@ -1463,7 +1686,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         .ok_or_else(|| host_error("edits must be an object of key -> value"))?;
     let editable = agent::identity(kind, &draft).map_err(host_error)?.status == FilingStatus::Draft;
     let edits: Map<String, Value> = edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
-    let rejected = apply_screen_edits(kind, &mut draft, &edits, editable)?;
+    let unlocked = unlocked_argument(arguments, 3);
+    let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
         // same step opening a draft runs.
@@ -1489,12 +1713,23 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
 /// Apply the page's edits to `draft` the one way both the draft fill and the
 /// live print preview use, so the preview never prints a different answer
 /// than the page shows. Returns the rejected keys with their reasons.
+/// `unlocked`: profile boxes the page has open, opened with Edit or left
+/// blank by the profile (a radio by its own key or its item's group box);
+/// their edits stay on this return.
 fn apply_screen_edits(
     kind: AgentFormKind,
     draft: &mut Value,
     edits: &Map<String, Value>,
     editable: bool,
+    unlocked: &BTreeSet<String>,
 ) -> Result<Map<String, Value>, HostError> {
+    let def = kind.definition();
+    let group = |key: &str| def.box_def(key).and_then(|entry| entry.group.clone());
+    let profile_edit = |key: &str| {
+        unlocked.contains(key)
+            || group(key).is_some_and(|g| unlocked.contains(&g))
+            || unlocked.iter().any(|k| group(k).as_deref() == Some(key))
+    };
     let mut rejected = Map::new();
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
@@ -1506,7 +1741,9 @@ fn apply_screen_edits(
         }
         let mut next = draft.clone();
         let result = match step {
-            ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value),
+            ChoiceStep::Fill(value) => {
+                catalogs::fill(kind, &mut next, &key, &value, profile_edit(&key))
+            }
             ChoiceStep::Set(sets) => {
                 for (path, value) in sets {
                     set_draft_path(&mut next, &path, value);
@@ -1854,7 +2091,8 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
         let edits: Map<String, Value> =
             edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
         if !edits.is_empty() {
-            let _ = apply_screen_edits(kind, &mut draft, &edits, true);
+            let unlocked = unlocked_argument(arguments, 3);
+            let _ = apply_screen_edits(kind, &mut draft, &edits, true, &unlocked);
             let _ = agent::compute(kind, &mut draft);
         }
     }
@@ -4006,7 +4244,14 @@ mod tests {
             let edit = json!({ k(code): value });
             // Preview with the edit staged, as the live sync sends it.
             let mut staged = draft.clone();
-            apply_screen_edits(kind, &mut staged, edit.as_object().unwrap(), true).unwrap();
+            apply_screen_edits(
+                kind,
+                &mut staged,
+                edit.as_object().unwrap(),
+                true,
+                &BTreeSet::new(),
+            )
+            .unwrap();
             agent::compute(kind, &mut staged).unwrap();
             let filled = fill("1701", &draft, edit);
             let page: Vec<&str> = codes
@@ -4252,6 +4497,578 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    fn page_period_of(code: &str) -> i64 {
+        match bir_core::forms::find_form(code).map(|form| &form.frequency) {
+            Some(FilingFrequency::Annual) => 0,
+            _ => 1,
+        }
+    }
+
+    fn sample(code: &str) -> Value {
+        call_async(
+            "screen_form_sample",
+            vec![TIN.into(), code.into(), YEAR.into()],
+        )
+        .unwrap_or_else(|error| panic!("{code} opens as a sample: {error}"))
+    }
+
+    fn fill_unlocked(code: &str, draft: &Value, edits: Value, unlocked: &[&str]) -> Value {
+        call(
+            "screen_form_fill",
+            vec![
+                code.into(),
+                json(draft.clone()),
+                json(edits),
+                json(json!(unlocked)),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("{code} fills: {error}"))
+    }
+
+    fn strings(value: &Value) -> BTreeSet<String> {
+        value
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect()
+    }
+
+    /// Rule 1: the period and date boxes the form findings saw filled on a
+    /// Form library opening (`docs/form-findings/<CODE>/findings.json`, R1).
+    /// 1702EX's prior-year excess credits and 1707's total collection matched
+    /// that check by name but are amounts, which keep their 0.00.
+    const LIBRARY_PERIOD_BOXES: &[(&str, &[&str])] = &[
+        (
+            "0605",
+            &["frm0605:itemYearEndMonth", "frm0605:txtYearEnded"],
+        ),
+        (
+            "0619E",
+            &[
+                "frm0619E:txtMonth",
+                "frm0619E:txtYear",
+                "frm0619E:txtDueMonth",
+                "frm0619E:txtDueDay",
+                "frm0619E:txtDueYear",
+            ],
+        ),
+        (
+            "0619F",
+            &[
+                "frm0619F:txtMonth",
+                "frm0619F:txtYear",
+                "frm0619F:txtDueMonth",
+                "frm0619F:txtDueDay",
+                "frm0619F:txtDueYear",
+            ],
+        ),
+        (
+            "1600PT",
+            &["frm1600PT:txtPg1I1Month", "frm1600PT:txtPg1I1Year"],
+        ),
+        (
+            "1600VT",
+            &["frm1600VT:txtPg1I1Month", "frm1600VT:txtPg1I1Year"],
+        ),
+        (
+            "1600WP",
+            &[
+                "frm1600WP:DateWithholdingMonth",
+                "frm1600WP:DateWithholdingDay",
+                "frm1600WP:DateWithholdingYear",
+                "frm1600WP:DateWithholdingToMonth",
+                "frm1600WP:DateWithholdingToDay",
+                "frm1600WP:DateWithholdingToYear",
+            ],
+        ),
+        ("1601C", &["frm1601c:txtMonth", "frm1601c:txtYear"]),
+        ("1601EQ", &["frm1601EQ:txtYear"]),
+        ("1601FQ", &["frm1601FQ:txtYear", "frm1601FQ:OptQuarter1"]),
+        ("1602Q", &["frm1602Q:txtYear", "frm1602Q:qtr_1"]),
+        ("1603Q", &["frm1603Q:txtYear", "frm1603Q:optQuarter1"]),
+        ("1604C", &["frm1604c:txtYear"]),
+        ("1604E", &["frm1604e:txtYear"]),
+        ("1604F", &["frm1604f:txtYear"]),
+        (
+            "1606",
+            &[
+                "frm1606:txtDateMonth",
+                "frm1606:txtDateDay",
+                "frm1606:txtDateYear",
+            ],
+        ),
+        ("1700", &["frm1700:txtPg1I1Year"]),
+        (
+            "1701",
+            &[
+                "frm1701:txtPg1I1Month",
+                "frm1701:txtPg1I1Year",
+                "frm1701:rdoPg1I3ShortPeriodNo",
+            ],
+        ),
+        (
+            "1701A",
+            &[
+                "frm1701A:txtMonth",
+                "frm1701A:txtYear",
+                "frm1701A:optShortPeriod_2",
+            ],
+        ),
+        (
+            "1701MS",
+            &[
+                "frm1701MS:txtMonthNo1",
+                "frm1701MS:txtYearNo1",
+                "frm1701MS:txtReturnPeriodNoNo3",
+            ],
+        ),
+        ("1701Q", &["frm1701q:txtYear", "frm1701q:DateQuarter_1"]),
+        (
+            "1702EX",
+            &[
+                "frm1702EX:ddlPg1I2Date",
+                "frm1702EX:txtPg1I2YearEnd",
+                "frm1702EX:rdoPg1I4ShortPeriodNo",
+            ],
+        ),
+        (
+            "1702MX",
+            &[
+                "frm1702MX:ddlPg1I2Date",
+                "frm1702MX:txtPg1I2YearEnd",
+                "frm1702MX:rdoPg1I4ShortPeriodNo",
+            ],
+        ),
+        (
+            "1702Q",
+            &[
+                "frm1702q:rbYrEndMonth",
+                "frm1702q:txtYrEndYear",
+                "frm1702q:rbQuarter_1",
+            ],
+        ),
+        (
+            "1702RT",
+            &[
+                "frm1702RT:ddlPg1I2Month",
+                "frm1702RT:txtPg1I2Year",
+                "frm1702RT:rdoPg1I4ShortPeriodNo",
+                "frm1702RT:txtPg1Pt1I10",
+            ],
+        ),
+        (
+            "1706",
+            &[
+                "frm1706:txtDateMonth",
+                "frm1706:txtDateDay",
+                "frm1706:txtDateYear",
+            ],
+        ),
+        ("1707", &["frm1707:txtPg1I1Year"]),
+        (
+            "1707A",
+            &[
+                "frm1707Av2021:txtI1YearEndMonth",
+                "frm1707Av2021:txtI1YearEndDay",
+                "frm1707Av2021:txtI1YearEndYear",
+            ],
+        ),
+        ("2000", &["frm2000:txtMonth", "frm2000:txtYear"]),
+        (
+            "2200A",
+            &[
+                "frm2200Av2020:txtDateMonth",
+                "frm2200Av2020:txtDateDay",
+                "frm2200Av2020:txtDateYear",
+            ],
+        ),
+        (
+            "2200AN",
+            &[
+                "frm2200ANv2018:txtMonth",
+                "frm2200ANv2018:txtDate",
+                "frm2200ANv2018:txtYear",
+            ],
+        ),
+        (
+            "2200C",
+            &[
+                "frm2200C:txtPg1I1Month",
+                "frm2200C:txtPg1I1Day",
+                "frm2200C:txtPg1I1Year",
+            ],
+        ),
+        (
+            "2200M",
+            &[
+                "frm2200M:txtPg1I1Month",
+                "frm2200M:txtPg1I1Day",
+                "frm2200M:txtPg1I1Year",
+            ],
+        ),
+        (
+            "2200P",
+            &[
+                "frm2200P:txtPg1I1Month",
+                "frm2200P:txtPg1I1Day",
+                "frm2200P:txtPg1I1Year",
+            ],
+        ),
+        ("2200S", &["frm2200S:txtMonth1", "frm2200S:txtDate"]),
+        (
+            "2200T",
+            &[
+                "frm2200Tv2020:txtDateMonth",
+                "frm2200Tv2020:txtDateDay",
+                "frm2200Tv2020:txtDateYear",
+            ],
+        ),
+        ("2550M", &["frm2550m:RtnYear", "frm2550m:txtYear"]),
+        (
+            "2550Q",
+            &[
+                "frm2550qv2024:selectedMonthNo2",
+                "frm2550qv2024:txtYearNo2",
+                "frm2550qv2024:OptQuarter1",
+                "frm2550qv2024:RtnPeriodFromNo4",
+                "frm2550qv2024:RtnPeriodToNo4",
+            ],
+        ),
+        (
+            "2551Q",
+            &[
+                "frm2551Qv2018:rtnMonth",
+                "frm2551Qv2018:txtYear",
+                "frm2551Qv2018:qtr_1",
+            ],
+        ),
+        ("2552", &["frm2552:txtPg1I1Year"]),
+        (
+            "2553",
+            &["frm2553:itemYearEndMonth", "frm2553:txtYearEnded"],
+        ),
+    ];
+
+    #[test]
+    fn library_sample_shows_blank_period_and_date_boxes_on_every_form() {
+        setup();
+        let mut failures = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let opened = sample(code);
+            assert_eq!(opened["sample"], true, "{code}");
+            assert_eq!(opened["editable"], true, "{code}");
+            assert!(opened["stored_period"].is_null(), "{code}");
+            assert!(
+                opened["draft"]["id"].is_null(),
+                "{code}: a sample is no stored row"
+            );
+            assert_error_keys_on_screen(code, &opened["errors"]);
+            let blank = strings(&opened["blank"]);
+            for key in &blank {
+                let shown = opened["values"][key].as_str().unwrap_or("");
+                if !shown.is_empty() {
+                    failures.push(format!("{code}: {key} = {shown}"));
+                }
+            }
+            // A year the sample was never given is not judged.
+            for error in opened["errors"].as_array().unwrap() {
+                for key in strings(&error["keys"]) {
+                    assert!(!blank.contains(&key), "{code}: {error}");
+                }
+            }
+            // Profile boxes still show the profile.
+            for key in strings(&opened["profile"]) {
+                assert!(!blank.contains(&key), "{code}: {key}");
+            }
+        }
+        for (code, keys) in LIBRARY_PERIOD_BOXES {
+            let opened = sample(code);
+            let blank = strings(&opened["blank"]);
+            for key in *keys {
+                if !blank.contains(*key) || opened["values"][*key].as_str() != Some("") {
+                    failures.push(format!("{code}: {key} = {}", opened["values"][*key]));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+        // The returns the findings saw a future-year message on.
+        for (code, said) in [
+            ("1701MS", "Future filing"),
+            ("1702EX", "cannot be greater"),
+            ("1707A", "future date"),
+        ] {
+            let opened = sample(code);
+            for error in opened["errors"].as_array().unwrap() {
+                let message = error["message"].as_str().unwrap_or("");
+                assert!(!message.contains(said), "{code}: {message}");
+            }
+        }
+        // A form opened for a taxpayer's return keeps its period.
+        let opened = open("2551Q", 3);
+        assert_eq!(opened["sample"], false);
+        assert_eq!(opened["values"]["frm2551Qv2018:txtYear"], "2026");
+        assert!(strings(&opened["blank"]).is_empty());
+    }
+
+    #[test]
+    fn library_sample_never_reads_or_replaces_a_stored_return() {
+        setup();
+        let first_amount = |code: &str| {
+            let schema = schema_keys(code);
+            let def = kind_of(code).unwrap().definition();
+            def.fillable()
+                .find(|entry| {
+                    schema.contains(&entry.key)
+                        && matches!(
+                            def.bindings.get(&entry.key).map(|bound| &bound.binding),
+                            Some(agent::Binding::Amount { .. })
+                        )
+                })
+                .expect("an amount box")
+                .key
+                .clone()
+        };
+        for (code, key, answers) in [
+            ("1601C", "frm1601c:txtTax14".to_string(), json!({})),
+            (
+                "0619E",
+                "frm0619E:txtTax14".to_string(),
+                json!({"frm0619E:optWithheld:Y": "true"}),
+            ),
+            ("2551Q", first_amount("2551Q"), json!({})),
+        ] {
+            let key = key.as_str();
+            let period = page_period_of(code).max(1);
+            let opened = open(code, period);
+            let mut edits = answers.as_object().unwrap().clone();
+            edits.insert(key.to_string(), json!("1234.00"));
+            let filled = fill(code, &opened["draft"], Value::Object(edits));
+            assert!(
+                filled["rejected"].get(key).is_none(),
+                "{code}: {}",
+                filled["rejected"]
+            );
+            save(code, &filled["draft"]);
+            let stored = open(code, period);
+            assert_eq!(amount(&stored["values"], key), 1234.0, "{code}");
+
+            let shown = sample(code);
+            assert!(shown["draft"]["id"].is_null(), "{code}");
+            assert_ne!(
+                shown["values"][key].as_str().and_then(agent::parse_amount),
+                Some(1234.0),
+                "{code}: the sample shows no stored return"
+            );
+            // Reopened for the return, the stored draft is untouched.
+            let again = open(code, period);
+            assert_eq!(again["draft"]["id"], stored["draft"]["id"], "{code}");
+            assert_eq!(amount(&again["values"], key), 1234.0, "{code}");
+        }
+    }
+
+    /// The profile with the facts a filer may leave out left blank.
+    fn install_sparse_profile() -> &'static str {
+        const SPARSE_TIN: &str = "23456789000000";
+        let profile: TaxpayerProfile = serde_json::from_value(json!({
+            "id": null,
+            "full_name": "Sparse Example Corp",
+            "tin": {"segment1": "234", "segment2": "567", "segment3": "890", "branch": "00000"},
+            "rdo_code": "",
+            "line_of_business": "",
+            "registered_address": "",
+            "zip_code": "",
+            "phone": "",
+            "email": "",
+            "default_form_type": "1601C",
+            "taxpayer_type": "Corporation",
+        }))
+        .expect("sparse profile parses");
+        with_database(|db| {
+            db.save_profile(profile)
+                .map(|_| ())
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .expect("sparse profile saves");
+        SPARSE_TIN
+    }
+
+    #[test]
+    fn profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form() {
+        setup();
+        let sparse = install_sparse_profile();
+        let mut failures = Vec::new();
+        let mut blank_seen = 0;
+        let mut filled_seen = 0;
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let def = kind.definition();
+            let period = page_period_of(code);
+            for tin in [TIN, sparse] {
+                let opened = call_async(
+                    "screen_form_open",
+                    vec![tin.into(), code.into(), YEAR.into(), period.into()],
+                )
+                .unwrap_or_else(|error| panic!("{code} opens: {error}"));
+                let locks = opened["locks"].as_object().unwrap();
+                let profile = strings(&opened["profile"]);
+                let editable = strings(&opened["profile_edit"]);
+                for entry in def.boxes.iter().filter(|e| is_profile_box(def, e)) {
+                    let key = entry.key.as_str();
+                    if profile_blank(def, key, &opened["values"]) {
+                        // A blank profile box is an ordinary box, in paper order.
+                        blank_seen += 1;
+                        if locks.contains_key(key) && entry.required != "computed" {
+                            failures.push(format!("{code} {tin}: blank {key} is locked"));
+                        }
+                        if profile.contains(key) || editable.contains(key) {
+                            failures.push(format!("{code} {tin}: blank {key} is tucked"));
+                        }
+                    } else if entry.required != "computed" {
+                        // A filled one is tucked, locked until Edit, and Edit opens it.
+                        filled_seen += 1;
+                        if !profile.contains(key) || !editable.contains(key) {
+                            failures.push(format!("{code} {tin}: {key} has no Edit"));
+                        }
+                        if !locks.contains_key(key) {
+                            failures.push(format!("{code} {tin}: {key} is open before Edit"));
+                        }
+                    }
+                }
+                // No filled profile box stays locked with no way to edit it.
+                for key in &profile {
+                    if def.bindings.contains_key(key)
+                        && !editable.contains(key)
+                        && def.box_def(key).is_some_and(|e| e.required != "computed")
+                    {
+                        failures.push(format!("{code} {tin}: {key} cannot be edited"));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+        assert!(
+            blank_seen > 0 && filled_seen > 0,
+            "{blank_seen} {filled_seen}"
+        );
+
+        // The filer types a box the profile left blank, as the page sends it.
+        let opened = call_async(
+            "screen_form_open",
+            vec![sparse.into(), "2551Q".into(), YEAR.into(), 3.into()],
+        )
+        .unwrap();
+        let (phone, zip) = ("frm2551Qv2018:telNo", "frm2551Qv2018:zipCode");
+        assert_eq!(opened["values"][phone], "");
+        assert!(opened["locks"].get(phone).is_none() && opened["locks"].get(zip).is_none());
+        let filled = fill_unlocked(
+            "2551Q",
+            &opened["draft"],
+            json!({ phone: "0281234567", zip: "1100" }),
+            &[phone, zip],
+        );
+        assert!(
+            filled["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            filled["rejected"]
+        );
+        assert_eq!(filled["values"][phone], "0281234567");
+        assert_eq!(filled["values"][zip], "1100");
+    }
+
+    /// A text value of the same shape as `current`, but different.
+    fn other_text(current: &str) -> String {
+        if !current.is_empty() && current.chars().all(|c| c.is_ascii_digit()) {
+            current
+                .chars()
+                .map(|c| char::from(b'0' + (c as u8 - b'0' + 1) % 10))
+                .collect()
+        } else {
+            "EDITED ON THIS RETURN".to_string()
+        }
+    }
+
+    #[test]
+    fn an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile() {
+        setup();
+        let before = with_database(|db| {
+            db.get_profile_by_tin(TIN)
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap()
+        .expect("profile");
+        let before = serde_json::to_value(&before).unwrap();
+        let mut failures = Vec::new();
+        let mut edited = 0;
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let def = kind.definition();
+            let period = page_period_of(code);
+            let opened = open(code, period);
+            let mut edits = Map::new();
+            for key in strings(&opened["profile_edit"]) {
+                let text_box = matches!(
+                    def.bindings.get(&key).map(|bound| &bound.binding),
+                    Some(Binding::Text { date: None, .. })
+                ) && def.box_def(&key).is_some_and(|e| e.kind == "text");
+                if text_box {
+                    let current = opened["values"][&key].as_str().unwrap_or("");
+                    // A catalog box (an RDO) takes another of its own codes.
+                    let listed = opened["options"][&key]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|option| option["value"].as_str())
+                        .find(|value| !value.is_empty() && *value != current)
+                        .map(str::to_string);
+                    let value = listed.unwrap_or_else(|| other_text(current));
+                    edits.insert(key.clone(), Value::String(value));
+                }
+            }
+            if edits.is_empty() {
+                continue;
+            }
+            let keys: Vec<&str> = edits.keys().map(String::as_str).collect();
+            // Without Edit the page's fill keeps refusing a profile-locked box.
+            let refused = fill(code, &opened["draft"], Value::Object(edits.clone()));
+            for key in &keys {
+                if has_profile_lock(def, key) && refused["rejected"].get(*key).is_none() {
+                    failures.push(format!("{code}: {key} was written without Edit"));
+                }
+            }
+            let filled = fill_unlocked(code, &opened["draft"], Value::Object(edits.clone()), &keys);
+            for (key, reason) in filled["rejected"].as_object().unwrap() {
+                failures.push(format!("{code}: {key} refused after Edit: {reason}"));
+            }
+            save(code, &filled["draft"]);
+            let reopened = open(code, period);
+            for (key, value) in &edits {
+                let want = value.as_str().unwrap();
+                // 1601EQ's field map writes its line of business URL-encoded.
+                let shown = reopened["values"][key]
+                    .as_str()
+                    .unwrap_or("")
+                    .replace("%20", " ");
+                if shown.trim().eq_ignore_ascii_case(want) {
+                    edited += 1;
+                } else {
+                    failures.push(format!("{code}: {key} reopened as `{shown}`, not `{want}`"));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+        assert!(edited > 43, "{edited} edited profile boxes");
+        // Rule 0: the return's edits never reach the profile.
+        let after = with_database(|db| {
+            db.get_profile_by_tin(TIN)
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap()
+        .expect("profile");
+        assert_eq!(serde_json::to_value(&after).unwrap(), before);
     }
 
     /// open -> fill user boxes by key -> save -> reopen: the values stay.

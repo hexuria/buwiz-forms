@@ -71,11 +71,14 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
 
 /// Apply an ordinary user edit, then clear the location's descendants when
 /// a parent actually changes. The caller commits this copy only on success.
+/// `profile_edit`: the filer chose Edit on this profile box, so its profile
+/// lock is lifted for this return (the profile itself is never written).
 pub(super) fn fill(
     kind: AgentFormKind,
     draft: &mut Value,
     key: &str,
     value: &Value,
+    profile_edit: bool,
 ) -> Result<(), String> {
     if inactive_schedule(kind, key, draft) {
         return Err(
@@ -152,7 +155,11 @@ pub(super) fn fill(
     }
     let loc = location(kind, key);
     let before = loc.and_then(|(base, _)| draft.pointer(base).cloned());
-    agent::fill_as_user(kind, draft, key, value)?;
+    if profile_edit {
+        agent::fill_profile_box_as_user(kind, draft, key, value)?;
+    } else {
+        agent::fill_as_user(kind, draft, key, value)?;
+    }
     // 1702RT Item 5: the official select is enabled only once "Other" is
     // chosen, so picking a code chooses "Other".
     if key == "frm1702RT:drpPg1I5AtcOther"

@@ -75,6 +75,7 @@ run-upstream *args="":
 
 shell-ui-test:
     node --experimental-vm-modules tools/test_form_row_invalidation.mjs
+    node --experimental-vm-modules tools/test_form_profile_and_sample.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml

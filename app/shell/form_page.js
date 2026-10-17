@@ -160,6 +160,12 @@ export function formatMDY({ y, m, d }) {
 
 const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
 
+/**
+ * A Form library sample is a preview and is never saved (provisional: the
+ * findings rules page, question 1). A return starts from the taxpayer.
+ */
+const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, open this form from the taxpayer's Forms tab or a tax year.";
+
 /** One box holding a whole MM/DD/YYYY date. */
 function isDateField(f, it) {
   return f.t === "date" || (f.t === "text" && /MM\/DD\/YYYY/i.test(`${it?.l || ""} ${f.l || ""}`));
@@ -192,6 +198,7 @@ export class FormPageActions {
     // The last form's retained views and text states go with it.
     for (const row of this.state?.rowViews?.values() || []) row.entity.release();
     for (const input of this.state?.inputs?.values() || []) input.release();
+    for (const handle of this.state?.editFocus?.values() || []) handle.release();
     this.state?.checkButton?.entity.release();
     const token = ++this.token;
     let schema = null;
@@ -214,6 +221,16 @@ export class FormPageActions {
       options: {},
       locks: {},
       profile: new Set(),
+      // Filled profile boxes the filer may open with Edit, and the ones open.
+      profileEdit: new Set(),
+      editing: new Set(),
+      editFocus: new Map(),
+      // Parts whose "From tax profile" group is unfolded.
+      profileOpen: new Set(),
+      // A Form library sample: its period and date boxes stay blank until typed.
+      sample: Boolean(opts.sample),
+      blank: new Set(),
+      typed: new Set(),
       errors: [],
       messages: {},
       formErrors: [],
@@ -235,17 +252,21 @@ export class FormPageActions {
     };
     cx.spawn(async (acx) => {
       try {
-        const r = await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
+        const r = opts.sample
+          ? await app.store.call("screen_form_sample", opts.tin, opts.code, opts.year)
+          : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
         s.draft = r.draft;
         s.status = r.status;
         s.editable = r.editable;
-        s.values = r.values;
+        s.blank = new Set(r.blank || []);
+        s.values = this.shown(r.values);
         s.options = r.options || {};
         s.locks = r.locks;
         s.profile = new Set(r.profile || []);
+        s.profileEdit = new Set(r.profile_edit || []);
         s.saved = Boolean(r.draft && r.draft.id);
         this.setErrors(r.errors);
         // Every part already open (one picked while the return was still
@@ -290,6 +311,7 @@ export class FormPageActions {
             if (text !== raw) input.set_value(text);
             this.setDateError(k, "");
           } else this.setDateError(k, raw.trim() ? DATE_ERROR : "");
+          this.endProfileEdit([k]);
           this.flush(cx);
         });
         s.inputs.set(k, input);
@@ -299,6 +321,9 @@ export class FormPageActions {
       input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
       input.on("blur", (_e, cx) => {
         if (t === "money") input.set_value(formatMoney(input.value()));
+        // Clicking away from an edited profile box keeps the value on this
+        // return and gives the box its profile look (and Edit) back.
+        this.endProfileEdit([k]);
         this.flush(cx);
       });
       s.inputs.set(k, input);
@@ -314,6 +339,10 @@ export class FormPageActions {
     if (cx) {
       part.items.forEach((it, ii) => {
         const id = `${partIndex}:${ii}`;
+        // The Edit button of a profile item is a tab stop (Tab, then Enter).
+        if (cx.focus_handle && !s.editFocus.has(id) && (it.f || []).some((f) => s.profileEdit.has(f.k))) {
+          s.editFocus.set(id, cx.focus_handle());
+        }
         if (!s.rowViews.has(id)) {
           const props = { ui: this, state: s, it, pi: partIndex, ii, width: this.rowWidth() };
           s.rowViews.set(id, {
@@ -341,7 +370,7 @@ export class FormPageActions {
       width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value()] : null,
-      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), this.optionsSignature(k)]),
+      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
   }
 
@@ -433,6 +462,7 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.editable) return;
     s.pending[k] = value;
+    s.typed.add(k);
     s.dirty = true;
     const token = this.token;
     s.editSeq = (s.editSeq || 0) + 1;
@@ -453,7 +483,8 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.previewOpen) return;
     try {
-      this.app.store.call("screen_form_preview_sync", s.code, s.draft, s.pending || {});
+      const pending = s.pending || {};
+      this.app.store.call("screen_form_preview_sync", s.code, s.draft, pending, this.unlockedFor(pending));
     } catch (_e) {
       /* preview sync is best effort */
     }
@@ -476,7 +507,7 @@ export class FormPageActions {
     const [y, m, d] = iso.split("-");
     if (date.single) {
       const f = date.single;
-      if (f.c || s.locks[f.k] !== undefined) return;
+      if (f.c || this.isLocked(f.k)) return;
       const text = formatMDY({ y: Number(y), m: Number(m), d: Number(d) });
       s.inputs.get(f.k)?.set_value(text);
       this.setDateError(f.k, "");
@@ -486,7 +517,7 @@ export class FormPageActions {
     }
     const edits = {};
     const put = (f, v) => {
-      if (!f || f.c || s.locks[f.k] !== undefined) return;
+      if (!f || f.c || this.isLocked(f.k)) return;
       let value = v;
       if (f.t === "sel" && f.o) {
         const hit = f.o.map(optionOf).find((o) => o && (o.value === v || o.value === String(Number(v))));
@@ -509,7 +540,10 @@ export class FormPageActions {
     if (!s || !s.editable) return;
     Object.assign(s.pending, edits);
     s.dirty = true;
-    for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
+    for (const [k, v] of Object.entries(edits)) {
+      s.values[k] = String(v);
+      s.typed.add(k);
+    }
     // flush() syncs the preview from the host-applied draft.
     this.flush(cx);
   }
@@ -522,10 +556,10 @@ export class FormPageActions {
     s.pending = {};
     if (Object.keys(edits).length) {
       try {
-        const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
+        const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
         const before = s.values;
         s.draft = r.draft;
-        s.values = r.values;
+        s.values = this.shown(r.values);
         s.options = r.options || {};
         this.syncComputed();
         this.syncChanged(before, edits);
@@ -550,7 +584,7 @@ export class FormPageActions {
   syncComputed() {
     const s = this.state;
     for (const [k, input] of s.inputs) {
-      if (!(s.locks[k] !== undefined || this.isComputed(k))) continue;
+      if (!(this.isLocked(k) || this.isComputed(k))) continue;
       const v = s.values[k] ?? "";
       if (input.value() !== v) input.set_value(String(v));
     }
@@ -587,6 +621,66 @@ export class FormPageActions {
     return s.computedKeys.has(k);
   }
 
+  /** Locked on the page: a host lock, unless it is a profile box opened with Edit. */
+  isLocked(k) {
+    const s = this.state;
+    return s.locks[k] !== undefined && !(s.profileEdit.has(k) && s.editing.has(k));
+  }
+
+  /**
+   * The values a page shows: on a Form library sample its period and date
+   * boxes stay blank until the filer types one (rule 1).
+   */
+  shown(values) {
+    const s = this.state;
+    if (!s.sample || !s.blank.size) return values;
+    const out = { ...values };
+    for (const k of s.blank) if (k in out && !s.typed.has(k)) out[k] = "";
+    return out;
+  }
+
+  /** The boxes of an edit batch the page has open, profile boxes included (screen_form_fill's `unlocked`). */
+  unlockedFor(edits) {
+    const s = this.state;
+    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.profileEdit.has(k));
+  }
+
+  /** Edit on a profile item: its profile boxes take typing; the edit stays on this return. */
+  startProfileEdit(keys, cx) {
+    const s = this.state;
+    if (!s.editable) return;
+    for (const k of keys) if (s.profileEdit.has(k)) s.editing.add(k);
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** Back to the profile look; the value stays (the draft has it, unsaved). */
+  endProfileEdit(keys) {
+    const s = this.state;
+    let changed = false;
+    for (const k of keys) changed = s.editing.delete(k) || changed;
+    if (changed) this.refreshRows();
+    return changed;
+  }
+
+  /**
+   * A part's items the profile filled whole (every box it fills has a value
+   * and the item has nothing else to type): they fold into one "From tax
+   * profile" group. A box the profile left blank stays in paper order.
+   */
+  tuckedItems(pi) {
+    const s = this.state;
+    const part = s.schema.parts[pi];
+    if (!part || !s.profile.size) return [];
+    const out = [];
+    part.items.forEach((it, ii) => {
+      if (it.rows || it.l === "Additional details") return;
+      const typed = (it.f || []).filter((f) => !f.c);
+      if (typed.length && typed.every((f) => s.profile.has(f.k))) out.push(ii);
+    });
+    return out;
+  }
+
   validate(cx) {
     const s = this.state;
     if (!s || !s.draft) return;
@@ -601,7 +695,7 @@ export class FormPageActions {
         if (token !== this.token || seq !== this.state.validateSeq) return;
         // Keep a newer local draft if the user typed meanwhile; take values/errors.
         if (this.state.draft === draft) this.state.draft = r.draft;
-        this.state.values = { ...this.state.values, ...r.values };
+        this.state.values = this.shown({ ...this.state.values, ...r.values });
         this.state.options = r.options || {};
         this.syncComputed();
         this.setErrors(r.errors);
@@ -634,7 +728,9 @@ export class FormPageActions {
    */
   setErrors(errors) {
     const s = this.state;
-    s.errors = errors || [];
+    // A sample's blank period is not judged until the filer types one.
+    const untyped = (k) => s.blank.has(k) && !s.typed.has(k);
+    s.errors = (errors || []).filter((e) => !s.sample || !(e.keys || []).some(untyped));
     s.messages = {};
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
@@ -691,14 +787,15 @@ export class FormPageActions {
   save(cx) {
     const s = this.state;
     if (!s || !s.draft) return;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
     // Take whatever is staged before saving, without waiting for the debounce.
     let edits = s.pending;
     s.pending = {};
     try {
       if (Object.keys(edits).length) {
-        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
         s.draft = f.draft;
-        s.values = f.values;
+        s.values = this.shown(f.values);
         edits = {};
       }
       const r = this.app.store.write("screen_form_save", s.code, s.draft);
@@ -723,6 +820,10 @@ export class FormPageActions {
   /** Save if anything changed; false when the save failed (its toast says why). */
   ensureSaved(cx) {
     const s = this.state;
+    if (s.sample) {
+      this.app.toast(SAMPLE_NOTE, cx);
+      return false;
+    }
     if (!s.dirty && s.saved) return true;
     this.save(cx);
     return s.saved && !s.dirty;
@@ -731,7 +832,7 @@ export class FormPageActions {
   /** Reopen the return as stored (after queueing or cancelling). */
   reload(cx) {
     const s = this.state;
-    this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period }, cx);
+    this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period, sample: s.sample }, cx);
   }
 
   queue(cx) {
@@ -808,7 +909,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const t = tokens(cx);
   const width = controlWidth(f, available);
   const showSub = multi && f.l && f.l !== itemLabel && !/^\d+[A-Z]?$/.test(f.l);
-  const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+  const locked = !s.editable || f.c || ui.isLocked(f.k);
   const value = s.values[f.k] ?? "";
   let el;
   if (f.t === "sel") {
@@ -888,7 +989,7 @@ function radioGroup(cx, ui, it, radios) {
   const row = div().flex().gap_x(SPACE[4]).gap_y(SPACE[2]).when(wide, (el) => el.flex_col()).when(!wide, (el) => el.flex_row().flex_wrap());
   for (const f of radios) {
     const on = s.values[f.k] === "true";
-    const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+    const locked = !s.editable || f.c || ui.isLocked(f.k);
     const pick = (cx) => {
       if (locked) return;
       if (on) {
@@ -935,7 +1036,7 @@ function tinBoxes(cx, ui, it) {
     if (j) row.child(Text(cx, "body", "-", "fg3"));
     const width = j === 3 ? 76 : 58;
     // A TIN the filer types (1700's spouse) is editable; the profile's is locked.
-    const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+    const locked = !s.editable || f.c || ui.isLocked(f.k);
     const input = s.inputs.get(f.k);
     if (locked || !input) row.child(lockedBox(cx, s.values[f.k] ?? "", width, { center: true }));
     else row.child(TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }));
@@ -962,7 +1063,7 @@ function scheduleTable(cx, ui, it, width) {
     row.forEach((k, c) => {
       const col = it.cols[c];
       if (col.t === "hidden") return;
-      const locked = !s.editable || col.c || s.locks[k] !== undefined;
+      const locked = !s.editable || col.c || ui.isLocked(k);
       const value = s.values[k] ?? "";
       let cell;
       if (col.t === "radio" || col.t === "chk") {
@@ -1138,12 +1239,20 @@ function itemRow(cx, ui, it, pi, ii, width) {
   // The host says which boxes the profile fills (the schema's auto flag is
   // only the extractor's guess).
   const fromProfile = tin || fs.some((x) => s.profile.has(x.k));
+  // Profile boxes keep the profile mark and an Edit button: the edit stays
+  // on this return, never in the profile (rule 2). Edit shows at rest too,
+  // so a screen without hover and the keyboard (Tab, then Enter) reach it.
+  const editKeys = fs.filter((x) => s.profileEdit.has(x.k)).map((x) => x.k);
+  const editingHere = editKeys.some((k) => s.editing.has(k));
+  const canEdit = editKeys.length > 0 && s.editable && !editingHere;
   // Markers are 16 px icons that explain themselves on hover, so a long
   // printed label is never covered; the label gets a pixel width.
   const markers = [];
-  if (fromProfile) markers.push(["user", "From tax profile. Change it in the tax profile."]);
+  if (fromProfile) {
+    markers.push(["user", editKeys.length ? "From tax profile. Edit changes this return only; the profile stays as it is." : "From tax profile. Change it in the tax profile."]);
+  }
   if (allCalc) markers.push(["lock", "Computed from other items"]);
-  const markerW = markers.length * 20 + (it.rows ? 64 : 0);
+  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (canEdit ? 56 : 0);
   const label = div()
     .flex()
     .flex_row()
@@ -1159,6 +1268,34 @@ function itemRow(cx, ui, it, pi, ii, width) {
   if (it.rows) label.child(Text(cx, "meta", `${it.rows} rows`, "fg3").flex_none().pt(2));
   for (const [icon, tip] of markers) {
     label.child(div().id(`fp-mark-${icon}-${id}`).flex_none().pt(3).tooltip(tip).accessibility_label(tip).child(Icon(cx, icon, { size: 14, color: "fg3" })));
+  }
+  if (canEdit) {
+    const edit = div()
+      .id(`fp-edit-${id}`)
+      .flex()
+      .flex_none()
+      .flex_row()
+      .items_center()
+      .gap(4)
+      .h(22)
+      .px(SPACE[2])
+      .rounded(RADIUS.ctl)
+      .cursor_pointer()
+      .hover((st) => st.bg(t.hover))
+      .tooltip("Change it on this return only")
+      .accessibility_label(`Edit ${it.l} on this return`)
+      .on_click((_e, cx) => ui.startProfileEdit(editKeys, cx))
+      .child(Icon(cx, "pencil", { size: 12, color: "fg2" }))
+      .child(Text(cx, "meta", "Edit", "fg2"));
+    const focus = s.editFocus.get(id);
+    if (focus) {
+      edit.track_focus(focus).tab_index(0).on_key_down((e, cx) => {
+        if (e.key !== "enter" && e.key !== "space") return;
+        ui.startProfileEdit(editKeys, cx);
+        cx.stop_propagation();
+      });
+    }
+    label.child(edit);
   }
 
   let controls;
@@ -1199,11 +1336,11 @@ function itemRow(cx, ui, it, pi, ii, width) {
     if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
     for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
     const single = fs.filter((f) => isDateField(f, it));
-    if (single.length === 1 && s.editable && !single[0].c && s.locks[single[0].k] === undefined) {
+    if (single.length === 1 && s.editable && !single[0].c && !ui.isLocked(single[0].k)) {
       controls.child(datePicker(cx, ui, id, { single: single[0] }));
     }
     const date = single.length ? null : dateParts(fs);
-    if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || s.locks[f.k] !== undefined)) {
+    if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || ui.isLocked(f.k))) {
       controls.child(datePicker(cx, ui, id, date));
     }
   }
@@ -1219,6 +1356,15 @@ function itemRow(cx, ui, it, pi, ii, width) {
     .pb(SPACE[2])
     .pl(SPACE[3])
     .when(allCalc, (el) => el.bg(t.bg))
+    // Clicking away from an item opened with Edit gives it the profile look
+    // back; what was typed stays on this return. A list still open is the
+    // item's own and does not count as away.
+    .when(editingHere, (el) =>
+      el.on_mouse_down_out((_e, cx) => {
+        if (editKeys.includes(s.openSelect)) return;
+        if (ui.endProfileEdit(editKeys)) ui.flush(cx);
+      }),
+    )
     .child(
       div()
         .w(44)
@@ -1240,6 +1386,49 @@ function itemRow(cx, ui, it, pi, ii, width) {
         // Reserved 18 px validation line, present with or without a message.
         .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " "))),
     );
+}
+
+/**
+ * The fold for a part's profile-filled items: "From tax profile · N filled
+ * boxes", collapsed so the filer sees what is left to type. A message on a
+ * folded item is counted on the fold.
+ */
+function profileGroup(cx, ui, pi, tucked, border) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const open = s.profileOpen.has(pi);
+  const items = tucked.map((ii) => s.schema.parts[pi].items[ii]);
+  // A ticked radio item is one box, however many radios it has.
+  const boxes = (it) => {
+    const fs = (it.f || []).filter((f) => s.profile.has(f.k));
+    return fs.filter((f) => f.t !== "radio").length + (fs.some((f) => f.t === "radio") ? 1 : 0);
+  };
+  const filled = items.reduce((n, it) => n + boxes(it), 0);
+  const flagged = tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors?.[`${pi}:${ii}`]).length;
+  const label = `From tax profile · ${filled} filled box${filled === 1 ? "" : "es"}`;
+  return div()
+    .id(`fp-profile-${pi}`)
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(SPACE[2])
+    .min_h(40)
+    .pl(SPACE[3])
+    .pr(SPACE[5])
+    .cursor_pointer()
+    .when(border, (el) => el.border_t(1).border_color(t.border))
+    .bg(t.bg)
+    .accessibility_label(open ? `${label}, shown` : `${label}, folded`)
+    .on_click((_e, cx) => {
+      if (open) s.profileOpen.delete(pi);
+      else s.profileOpen.add(pi);
+      ui.refreshRows();
+      cx.notify();
+    })
+    .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
+    .child(Icon(cx, "user", { size: 14, color: "fg3" }))
+    .child(Text(cx, "metaStrong", label, "fg2"))
+    .when(flagged > 0, (el) => el.child(Text(cx, "meta", `· ${flagged} need${flagged === 1 ? "s" : ""} attention`, "danger")));
 }
 
 // ---------------------------------------------------------------- page
@@ -1266,8 +1455,11 @@ function formContent(cx, app, width) {
   const branchCode = String(s.tin).slice(9) || "00000";
   const draftLayout = f.q < 0.8;
 
-  const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
-  if (s.status === "Queued") {
+  // A library sample has only Check: Print, Queue and Save need a return.
+  const actions = s.sample ? [] : [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
+  if (s.sample) {
+    if (s.editable) actions.push(s.checkButton.entity);
+  } else if (s.status === "Queued") {
     actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
   } else if (s.editable) {
     actions.push(s.checkButton.entity);
@@ -1329,7 +1521,7 @@ function formContent(cx, app, width) {
     bar.child(Code(cx, formatTin(String(s.tin).slice(0, 9), branchCode), "fg2").font_weight(400));
   }
   bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
-  bar.child(Text(cx, "meta", `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
+  bar.child(Text(cx, "meta", s.sample ? "Sample from the Form library" : `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
   if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
   bar.child(div().flex_1());
   // Guided mode walks the fields a template marks, so it shows only when this
@@ -1353,6 +1545,7 @@ function formContent(cx, app, width) {
   }
 
   const page = div().flex().flex_col().child(head).child(bar);
+  if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
   if (s.error) {
     return { page: page.child(div().p(SPACE[4]).rounded(RADIUS.card).bg(t.dangerSoft).child(Text(cx, "body", s.error, "danger").whitespace_normal())) };
   }
@@ -1484,13 +1677,24 @@ function formContent(cx, app, width) {
       );
     if (open) {
       const body = div().flex().flex_col().border_t(1).border_color(t.border);
+      const rowOf = (ii) => {
+        const retained = s.rowViews.get(`${pi}:${ii}`);
+        const row = retained ? retained.entity : itemRow(cx, ui, p.items[ii], pi, ii, partsW);
+        if (!retained && ii > 0) row.border_t(1).border_color(t.border);
+        return row;
+      };
+      // Items the profile filled fold into one group where the first sits.
+      const tucked = ui.tuckedItems(pi);
       p.items.forEach((it, ii) => {
         // Dev start route only (BIR_SHELL_START items=a-b): show a slice.
         if (ui.devItems && (ii < ui.devItems.from || ii > ui.devItems.to)) return;
-        const retained = s.rowViews.get(`${pi}:${ii}`);
-        const row = retained ? retained.entity : itemRow(cx, ui, it, pi, ii, partsW);
-        if (!retained && ii > 0) row.border_t(1).border_color(t.border);
-        body.child(row);
+        if (tucked.includes(ii)) {
+          if (ii !== tucked[0]) return;
+          body.child(profileGroup(cx, ui, pi, tucked, ii > 0));
+          if (s.profileOpen.has(pi)) for (const tj of tucked) body.child(rowOf(tj));
+          return;
+        }
+        body.child(rowOf(ii));
       });
       card.child(body);
     }

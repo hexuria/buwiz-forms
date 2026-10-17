@@ -27983,8 +27983,14 @@ declare module "bir" {
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       locks: Record<string, string>;
-      /** Boxes the taxpayer profile fills (the page marks their items). */
+      /** Boxes the taxpayer profile filled (the page tucks and marks them); a box it left blank is not here and not locked. */
       profile: string[];
+      /** Filled profile boxes the filer may open with Edit; pass the opened ones to `screen_form_fill` as `unlocked`. */
+      profile_edit: string[];
+      /** Opened from the Form library: a blank sample that is never saved. */
+      sample: boolean;
+      /** A sample's period and date boxes, shown blank until the filer types one. */
+      blank: string[];
       errors: ScreenFormError[];
   }
   export interface ScreenFormFilled {
@@ -28014,13 +28020,16 @@ declare module "bir" {
   export function screen_form_schema(form_code: string): object;
   export function screen_forms_index(): ScreenFormIndexEntry[];
   export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
-  export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
+  /** The Form library's blank sample of a form for this taxpayer: reads no stored return, and is never saved. */
+  export function screen_form_sample(tin: string, form_code: string, year: number): Promise<ScreenFormOpened>;
+  /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
+  export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
   export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
   export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
   /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
   export function screen_form_print(form_code: string, draft: object): { path: string };
   /** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
-  export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): boolean;
+  export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
   /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
   export function screen_form_queue(form_code: string, draft: object): number;
   /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
