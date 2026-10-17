@@ -654,7 +654,7 @@ export function renderPalette(cx, app) {
         .child(Kbd(cx, "Esc")),
     )
     .child(list);
-  return Overlay(cx, "palette", card, (cx) => app.closeOverlay(cx));
+  return Overlay(cx, "palette", card, (cx) => app.closeOverlay(cx), { top: true });
 }
 
 // ---------------------------------------------------------------- new return

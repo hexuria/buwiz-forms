@@ -57,8 +57,10 @@ function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel"]) uiExports[n] = element;
 uiExports.Text = (_cx, _v, text) => { texts.push(String(text)); return element(); };
-uiExports.AppButton = (_cx, id, label, opts = {}) => { buttons.set(id, { label, variant: opts.variant, onClick: opts.onClick }); return element(); };
-uiExports.Overlay = (_cx, id, card, onDismiss) => { dismissers.set(id, onDismiss); return element().child(card); };
+// A choice's hint is drawn inside its button, under the label.
+uiExports.AppButton = (_cx, id, label, opts = {}) => { buttons.set(id, { label, variant: opts.variant, onClick: opts.onClick, block: opts.block, hint: opts.hint }); if (opts.hint) texts.push(opts.hint); return element(); };
+const overlays = new Map();
+uiExports.Overlay = (_cx, id, card, onDismiss, opts = {}) => { dismissers.set(id, onDismiss); overlays.set(id, opts); return element().child(card); };
 uiExports.CheckboxLabel = (_cx, id, checked, onChange, label) => { checkboxes.set(id, { checked, onChange, label }); return element(); };
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
 await mod.link((s) => ({
@@ -129,7 +131,7 @@ const app = {
         const year = parts[K("txtYear")];
         // The host counts a year only with all four digits.
         if (!/^\d{4}$/.test(year || "") || !quarter) return Promise.resolve({ complete: false });
-        const key = `Q${quarter}`;
+        const key = 100 + quarter; // the stored key the host answers (a number)
         if (year !== "2024") return Promise.resolve({ complete: true, opens: { year: Number(year), period: quarter, key: null }, sample: freshSample(Number(year), quarter) });
         const s = stored[quarter];
         return Promise.resolve({
@@ -187,6 +189,13 @@ assert.equal(o.title, "You already have a Q1 2024 draft");
 assert.ok(o.texts.includes("edited Oct 1, 2026."));
 assert.equal(json(o.buttons), json(["existing-load", "existing-keep"]));
 assert.equal(buttons.get("existing-load").variant, "primary");
+// The modal: centred (the shared Overlay's default), 420 wide, full-width
+// choices whose explanation sits inside the button.
+assert.equal(overlays.get("existing-offer").width, 420);
+assert.ok(!overlays.get("existing-offer").top, "centred on both axes, not anchored to the top");
+assert.equal(buttons.get("existing-load").block, true);
+assert.equal(buttons.get("existing-load").hint, "Continue where you left off.");
+assert.equal(buttons.get("existing-keep").hint, "Stay in the sample; the period clears.");
 assert.ok(o.texts.includes("Continue where you left off.") && o.texts.includes("Stay in the sample; the period clears."));
 assert.ok(checkboxes.has("existing-fast-lane"), "drafts offer the fast lane");
 
@@ -229,8 +238,8 @@ await tick(1);
 offer();
 await press("existing-load");
 assert.notEqual(ui.state, sample, "the saved draft is open");
-assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, key: "Q1" }));
-assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 1, "Q1"]), "opened by its stored key");
+assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, key: 101 }));
+assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 1, 101]), "opened by its stored key");
 assert.match(app.undos.at(-1), /Loaded your saved Q1 2024 draft/);
 await undo();
 assert.equal(ui.state, sample, "Undo restores the very same sample");
@@ -248,7 +257,7 @@ assert.equal(json(o.buttons), json(["existing-view", "existing-keep"]));
 assert.ok(!checkboxes.has("existing-fast-lane"), "only drafts offer the fast lane");
 await press("existing-view");
 assert.notEqual(ui.state, sample);
-assert.equal(lastOpen()[5], "Q2");
+assert.equal(lastOpen()[5], 102);
 await undo();
 assert.equal(ui.state, sample);
 
@@ -265,7 +274,7 @@ assert.ok(o.texts.includes("New amended return. The filed version is kept in thi
 assert.ok(!o.texts.some((t) => /stays as filed/.test(t)), "no wording says the original stays as filed");
 await press("existing-amend");
 const amendCall = calls.filter((c) => c[0] === "screen_form_amend").at(-1);
-assert.equal(json(amendCall.slice(1)), json(["12345678800000", "2551Q", 2024, 3, "Q3"]), "a new amended return of that very return");
+assert.equal(json(amendCall.slice(1)), json(["12345678800000", "2551Q", 2024, 3, 103]), "a new amended return of that very return");
 assert.equal(ui.state.amends, "Submitted");
 // D3: print preview of an amendment not saved yet prints from the page and
 // saves nothing.
@@ -443,7 +452,7 @@ assert.equal(yearInput.value(), "2031", "the year box shows the year set");
 
 // D4: an amended return names its filed original; View the filed original
 // opens it read-only from the history, with a strip saying what it is.
-ui.open({ code: "2551Q", tin: "12345678800000", year: 2024, period: 3, key: "Q3" }, cx);
+ui.open({ code: "2551Q", tin: "12345678800000", year: 2024, period: 3, key: 103 }, cx);
 await settle();
 assert.equal(ui.state.filedOriginal.id, 5);
 ui.openFiledOriginal(cx);
@@ -457,6 +466,22 @@ assert.equal(
 );
 ui.backToAmendment(cx);
 await settle();
-assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 3, "Q3"]), "back to the amendment");
+assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 3, 103]), "back to the amendment");
 assert.equal(mod.namespace.FILED_KEPT, "The filed version is kept in this return's history.");
+
+// No grey box without a visible reason: a shut box that shows blank draws
+// its lock note (filer words) under its item; one with a value does not.
+const NOT_YET = "Can't be filled on this page yet. It will be added for this form.";
+const emailItem = schema.parts.flatMap((p) => p.items).find((it) => (it.f || []).some((f) => f.k === "txtEmail#occurrence-1"));
+ui.state.status = "Draft";
+ui.state.editable = true;
+ui.state.locks = { "txtEmail#occurrence-1": "repeats the official field `txtEmail`, which this page cannot write", "txtEmail#occurrence-2": "same" };
+ui.state.lockNotes = { "txtEmail#occurrence-1": NOT_YET, "txtEmail#occurrence-2": NOT_YET };
+ui.state.values = { "txtEmail#occurrence-1": "", "txtEmail#occurrence-2": "" };
+assert.equal(json(ui.lockNotesFor(emailItem)), json([NOT_YET]), "the shut, blank email says why, once");
+ui.state.values = { "txtEmail#occurrence-1": "a@b.ph", "txtEmail#occurrence-2": "a@b.ph" };
+assert.equal(json(ui.lockNotesFor(emailItem)), json([]), "a box showing its value needs no note");
+ui.state.locks = {};
+ui.state.values = {};
+assert.equal(json(ui.lockNotesFor(emailItem)), json([]), "an open box needs no note");
 console.log("PASS: a stored return is offered per its status and opened exactly; Keep, Esc, Load, View and Amend undo exactly; stale offers close; the fast lane skips only drafts and never loads mid-typing.");

@@ -81,6 +81,8 @@ export interface ScreenFormOpened {
     blank: string[];
     /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
     needs: Record<string, string>;
+    /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
+    lock_notes: Record<string, string>;
     /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
     period_parts: ScreenFormPeriodPart[];
     /** A sample rebuilt for a period its filer completed. */
@@ -1881,6 +1883,32 @@ struct SampleBuild {
 }
 
 /// What `screen_form_open`, `screen_form_sample` and a rebuilt sample answer.
+/// Under a locked box the page shows blank (`lock_notes`), why it is shut,
+/// in the filer's words: never a key name or the app's internal reason.
+const NOTE_COMPUTED: &str = "Computed by the form.";
+const NOTE_PROFILE: &str = "Comes from the tax profile.";
+const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
+const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
+const NOTE_NOT_YET: &str = "Can't be filled on this page yet. It will be added for this form.";
+
+/// A lock's reason as a filer reads it (see the NOTE_* texts).
+fn lock_note(reason: &str) -> &'static str {
+    use bir_core::forms::agent::Lock;
+    if reason.starts_with("computed") {
+        NOTE_COMPUTED
+    } else if reason == Lock::Profile.reason() || reason.contains("from the tax profile") {
+        NOTE_PROFILE
+    } else if reason == Lock::Identity.reason() {
+        NOTE_IDENTITY
+    } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
+        NOTE_REPEAT
+    } else {
+        // Unmapped, derived, written by the app, or a field this page
+        // cannot write: shut until the form's own work opens it.
+        NOTE_NOT_YET
+    }
+}
+
 fn opened_json(
     kind: AgentFormKind,
     year: u16,
@@ -1938,6 +1966,10 @@ fn opened_json(
         }
     }
     blank_sample(&blank, &mut values, &mut errors);
+    let lock_notes: Map<String, Value> = locks
+        .iter()
+        .map(|(key, reason)| (key.clone(), json!(lock_note(reason.as_str().unwrap_or("")))))
+        .collect();
     let stored_period = if sample.is_some() {
         None
     } else {
@@ -1969,6 +2001,7 @@ fn opened_json(
         "values": values,
         "options": options,
         "locks": locks,
+        "lock_notes": lock_notes,
         "profile": profile,
         "profile_edit": profile_edit,
         "sample": sample.is_some(),
@@ -8034,6 +8067,9 @@ mod tests {
     /// Boxes that are locked AND blank with no visible reason. A locked box
     /// must show its value (computed, profile, a real return's period) or
     /// say what turns it on (`needs`). Grouped by the boxes' own form group.
+    /// None may be silent: each one's lock note (`lock_notes`, drawn under
+    /// its item by form_page.js `lockNotesFor`) must be filer words; one
+    /// that is not is marked SILENT, which no pinned line can match.
     fn locked_and_blank(opened: &Value, code: &str, ticks: bool) -> Vec<String> {
         let mut out = Vec::new();
         let locked = |key: &str| opened["locks"][key].as_str();
@@ -8041,6 +8077,23 @@ mod tests {
         // A reason counts where the page draws it: in the box, beside a tick
         // box, under a radio group (form_page.js `reasonFor`).
         let reason = |key: &str| opened["needs"].get(key).is_some();
+        let drawn = |key: &str| {
+            opened["lock_notes"][key].as_str().is_some_and(|note| {
+                !note.is_empty()
+                    && !note.contains('`')
+                    && !note.contains('/')
+                    && !note.contains("frm")
+                    && !note.contains("field map")
+                    && Some(note) != locked(key)
+            })
+        };
+        let mut out_push = |key: &str, entry: String| {
+            out.push(if drawn(key) {
+                entry
+            } else {
+                format!("{entry} SILENT: no lock note drawn")
+            });
+        };
         let form = schema_entry(code).expect("schema entry");
         let items = form["parts"]
             .as_array()
@@ -8073,11 +8126,14 @@ mod tests {
                 && !radios.iter().any(|k| ticked(k))
                 && !radios.iter().any(|k| reason(k))
             {
-                out.push(format!(
-                    "{code} {} (radio group): {}",
+                out_push(
                     radios[0],
-                    locked(radios[0]).unwrap_or("")
-                ));
+                    format!(
+                        "{code} {} (radio group): {}",
+                        radios[0],
+                        locked(radios[0]).unwrap_or("")
+                    ),
+                );
             }
             boxes.extend(fields.into_iter().filter(|(_, t)| t != "radio"));
             let cols = item["cols"].as_array();
@@ -8101,7 +8157,7 @@ mod tests {
             }
             if t == "chk" {
                 if ticks && !ticked(&key) {
-                    out.push(format!("{code} {key} (tick box): {why}"));
+                    out_push(&key, format!("{code} {key} (tick box): {why}"));
                 }
                 continue;
             }
@@ -8109,10 +8165,34 @@ mod tests {
             let computed = why.starts_with("computed");
             let shown = opened["values"][&key].as_str().unwrap_or("").trim();
             if shown.is_empty() && !(computed && t == "money") {
-                out.push(format!("{code} {key}: {why}"));
+                out_push(&key, format!("{code} {key}: {why}"));
             }
         }
         out
+    }
+
+    #[test]
+    fn a_lock_note_is_filer_words() {
+        use bir_core::forms::agent::Lock;
+        assert_eq!(lock_note("computed by BIR's own formulas"), NOTE_COMPUTED);
+        assert_eq!(lock_note("computed from the year-end month"), NOTE_COMPUTED);
+        assert_eq!(lock_note(Lock::Profile.reason()), NOTE_PROFILE);
+        assert_eq!(lock_note(Lock::Identity.reason()), NOTE_IDENTITY);
+        assert_eq!(lock_note("repeats `frm1:txtA`; fill it there"), NOTE_REPEAT);
+        assert_eq!(
+            lock_note("repeats the official field `txtEmail`, which this page cannot write"),
+            NOTE_NOT_YET
+        );
+        assert_eq!(
+            lock_note(
+                "cannot be filled here: not written by this app's field map for any sample draft"
+            ),
+            NOTE_NOT_YET
+        );
+        // 2551Q's repeated email: shut, blank, and now saying why.
+        setup();
+        let opened = open_for(TIN, "2551Q", YEAR, page_period_of("2551Q"));
+        assert_eq!(opened["lock_notes"]["txtEmail#occurrence-1"], NOTE_NOT_YET);
     }
 
     #[test]

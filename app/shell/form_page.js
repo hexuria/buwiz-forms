@@ -334,7 +334,8 @@ export class FormPageActions {
     s.values = this.shown(r.values);
     s.options = r.options || {};
     s.locks = r.locks;
-    s.profile = new Set(r.profile || []);
+    s.lockNotes = r.lock_notes || {};
+    s.profile =new Set(r.profile || []);
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
     s.needs = r.needs || {};
@@ -888,6 +889,7 @@ export class FormPageActions {
         values: { ...s.values },
         options: s.options,
         locks: s.locks,
+        lockNotes: s.lockNotes,
         blank: s.blank,
         needs: s.needs,
         errors: s.errors,
@@ -1007,6 +1009,51 @@ export class FormPageActions {
       }
     }
     return s.computedKeys.has(k);
+  }
+
+  /**
+   * Why an item's shut boxes show blank, in the filer's words (the host's
+   * `lock_notes`; a box the form computes: "Computed by the form."), once
+   * each. A box saying what it waits for (`needs`) says it in its place
+   * instead; a computed amount shows 0.00, never blank.
+   */
+  lockNotesFor(it) {
+    const s = this.state;
+    if (!s.editable || !s.draft) return [];
+    const notes = [];
+    const note = (k) => {
+      const text = s.lockNotes?.[k] || (this.isComputed(k) ? "Computed by the form." : "");
+      if (text && !notes.includes(text)) notes.push(text);
+    };
+    const shut = (k, c) => c || this.isLocked(k);
+    const waits = (k) => Boolean(this.reasonFor(k));
+    const ticked = (k) => ["true", "1", "Y"].includes(String(s.values[k] ?? ""));
+    const blankText = (k, t) => {
+      const v = String(s.values[k] ?? "").trim();
+      if (t === "money" && this.isComputedBox(k)) return false;
+      if (t === "sel") return v === "" || /^(0+|-)$/.test(v);
+      return v === "";
+    };
+    if (it.rows) {
+      it.keys.forEach((row) =>
+        row.forEach((k, c) => {
+          const col = it.cols[c];
+          if (col.t === "hidden" || !shut(k, col.c) || waits(k)) return;
+          if (col.t === "radio" || col.t === "chk" ? !ticked(k) : blankText(k, col.t)) note(k);
+        }),
+      );
+      return notes;
+    }
+    const fs = it.f || [];
+    const radios = fs.filter((f) => f.t === "radio");
+    if (radios.length && radios.every((f) => shut(f.k, f.c)) && !radios.some((f) => ticked(f.k)) && !radios.some((f) => waits(f.k))) {
+      note(radios[0].k);
+    }
+    for (const f of fs) {
+      if (f.t === "radio" || f.t === "hidden" || !shut(f.k, f.c) || waits(f.k)) continue;
+      if (f.t === "chk" ? !ticked(f.k) : blankText(f.k, f.t)) note(f.k);
+    }
+    return notes;
   }
 
   /** A sample's locked blank box: what it waits for, shown in its place. */
@@ -1917,6 +1964,8 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .min_w(0)
         .child(label)
         .child(controls)
+        // A shut box that shows blank says why, in the filer's words.
+        .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
         // Reserved 18 px validation line, present with or without a message.
         .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " "))),
     );
@@ -2030,22 +2079,24 @@ export function existingOfferFor(existing) {
 
 /** The app's modal for a stored return of a sample's period (Esc or outside: Keep this form). */
 export function renderExistingOffer(cx, app) {
-  const t = tokens(cx);
   const ui = app.formUi;
   const existing = app.existingOffer;
   if (!existing) return div();
   const offer = existingOfferFor(existing);
-  const card = div().flex().flex_col().gap(SPACE[3]).p(SPACE[5]).w(440);
-  card.child(Text(cx, "title", offer.title).whitespace_normal());
-  if (offer.subtitle) card.child(Text(cx, "meta", offer.subtitle, "fg2"));
+  // One left edge and equal padding on every side: the title, the
+  // full-width choices (each with what it does inside it) and the checkbox.
+  const card = div().flex().flex_col().items_stretch().w_full().gap(SPACE[3]).p(SPACE[5]);
+  const head = div().flex().flex_col().gap(2).child(Text(cx, "title", offer.title).whitespace_normal());
+  if (offer.subtitle) head.child(Text(cx, "meta", offer.subtitle, "fg2"));
+  card.child(head);
   for (const choice of offer.choices) {
     card.child(
-      div()
-        .flex()
-        .flex_col()
-        .gap(2)
-        .child(AppButton(cx, `existing-${choice.id}`, choice.label, { variant: choice.variant || "secondary", onClick: (_e, cx) => ui.takeExisting(choice.id, cx) }))
-        .child(Text(cx, "meta", choice.hint, "fg3")),
+      AppButton(cx, `existing-${choice.id}`, choice.label, {
+        variant: choice.variant || "secondary",
+        block: true,
+        hint: choice.hint,
+        onClick: (_e, cx) => ui.takeExisting(choice.id, cx),
+      }),
     );
   }
   if (offer.fastLane) {
@@ -2062,8 +2113,7 @@ export function renderExistingOffer(cx, app) {
       ),
     );
   }
-  void t;
-  return Overlay(cx, "existing-offer", card, (cx) => ui.takeExisting("keep", cx));
+  return Overlay(cx, "existing-offer", card, (cx) => ui.takeExisting("keep", cx), { width: 420 });
 }
 
 // ---------------------------------------------------------------- page
