@@ -1806,11 +1806,12 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // 2551Q's six Schedule 1 ATC lists (PR 1), 1601FQ Schedule 1's ten
     // Treaty Code and ATC lists (PR 2) and 2000's three Schedule 1 ATC lists
     // (PR 4), table cells now; less 1600PT's and 1600VT's mirrored item 6
-    // RDO list, hidden (PR 3); plus 2000's Item 5 RDO list (PR 4):
-    // 82 - 6 - 10 - 2 - 3 + 1. Table cells are counted apart (the 36 2550M
+    // RDO list, hidden (PR 3); plus 2000's Item 5 RDO list (PR 4) and plus
+    // 3 for 1604C, 1604E and 1604F (PR 6, item 5 RDO):
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3. Table cells are counted apart (the 36 2550M
     // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
     // checks every one).
-    assert_eq!(supplied, 62, "catalog lists, dependent ones included");
+    assert_eq!(supplied, 65, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and
@@ -2084,7 +2085,9 @@ fn symptom_p4_1800_branch_code_sits_with_the_donor_tin() {
 
 /// P2a found 1603Q's tax-relief controls under "12 Email Address" and
 /// 1604C's refund date in an unlabelled group; they sit with their printed
-/// items (1603Q 13/13A, 1604C 11).
+/// items (1603Q 13/13A, 1604C 11A: PR 6 moved the refund date from item 11
+/// to its own printed item 11A, html-frozen/1604c-2018/writer-cells.json
+/// "11A Date of refund MM/DD/YYYY").
 #[test]
 fn symptom_p4_relief_and_refund_controls_sit_with_their_printed_items() {
     let item_of = |code: &str, key: &str| {
@@ -2109,7 +2112,11 @@ fn symptom_p4_relief_and_refund_controls_sit_with_their_printed_items() {
         "frm1604c:txtRefDate",
         "frm1604c:txtRefYear",
     ] {
-        assert_eq!(item_of("1604C", key), refund, "{key}");
+        assert_eq!(
+            item_of("1604C", key),
+            "11A If Yes, specify the date of refund (MM/DD/YYYY)",
+            "{key}"
+        );
     }
 }
 

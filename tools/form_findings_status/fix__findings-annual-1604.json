@@ -1,0 +1,93 @@
+{
+ "1604C": {
+  "R2.2": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_form_1604c_item_5_rdo_comes_from_the_profile_and_prints; screen_form_module::tests::annual_1604::pr6_item_5_rdo_is_one_catalog_select_on_all_three; screen_form_module::tests::annual_1604::pr6_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  },
+  "R3.0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_form_1604c_item_5_rdo_comes_from_the_profile_and_prints; screen_form_module::tests::annual_1604::pr6_item_5_rdo_is_one_catalog_select_on_all_three; screen_form_module::tests::annual_1604::pr6_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; screen_form_module::tests::annual_1604::pr6_a_layout_claiming_part_of_a_table_is_an_error; tools/test_form_annual_1604.mjs (just shell-ui-test); screen_form_module::tests::annual_1604::pr6_part_ii_dates_clear_and_legacy_text_stays; screen_form_module::tests::annual_1604::pr6_page_fixture_is_the_hosts",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_labels_read_as_printed; screen_form_module::tests::annual_1604::pr6_boxes_sit_under_their_printed_item_numbers; screen_form_module::audit::symptom_p4_relief_and_refund_controls_sit_with_their_printed_items",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_form_1604c_item_5_rdo_comes_from_the_profile_and_prints; screen_form_module::tests::annual_1604::pr6_item_5_rdo_is_one_catalog_select_on_all_three",
+   "status": "fixed"
+  }
+ },
+ "1604E": {
+  "R2.0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_profile_boxes_are_in_their_items_and_open_with_edit; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (PROFILE_BOXES_NOT_YET_PLACED less the four 1604E/1604F lines); screen_form_module::tests::annual_1604::pr6_only_named_boxes_are_drawn_off_the_printed_sheet; screen_form_module::tests::annual_1604::pr6_item_5_rdo_is_one_catalog_select_on_all_three",
+   "status": "fixed"
+  },
+  "R3.0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_boxes_sit_under_their_printed_item_numbers; screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_only_named_boxes_are_drawn_off_the_printed_sheet",
+   "status": "fixed"
+  },
+  "R5.2": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_only_named_boxes_are_drawn_off_the_printed_sheet; screen_form_module::tests::annual_1604::pr6_profile_boxes_are_in_their_items_and_open_with_edit",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_form_1604e_totals_are_computed_by_the_form; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; tools/test_form_annual_1604.mjs (just shell-ui-test); screen_form_module::tests::annual_1604::pr6_part_ii_dates_clear_and_legacy_text_stays; screen_form_module::tests::annual_1604::pr6_page_fixture_is_the_hosts; note: nothing migrates, so a legacy 1604E draft whose penalties were typed through a Total cell before probe.rs COMPUTED_BY_FORM still files those penalties (raised with the maintainer)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; tools/test_form_annual_1604.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_labels_read_as_printed",
+   "status": "fixed"
+  }
+ },
+ "1604F": {
+  "R2.0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_profile_boxes_are_in_their_items_and_open_with_edit; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (PROFILE_BOXES_NOT_YET_PLACED less the four 1604E/1604F lines); screen_form_module::tests::annual_1604::pr6_only_named_boxes_are_drawn_off_the_printed_sheet; screen_form_module::tests::annual_1604::pr6_item_5_rdo_is_one_catalog_select_on_all_three",
+   "status": "fixed"
+  },
+  "R3.0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_boxes_sit_under_their_printed_item_numbers; screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_only_named_boxes_are_drawn_off_the_printed_sheet",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; tools/test_form_annual_1604.mjs (just shell-ui-test); screen_form_module::tests::annual_1604::pr6_part_ii_dates_clear_and_legacy_text_stays; screen_form_module::tests::annual_1604::pr6_page_fixture_is_the_hosts",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_form_1604f_item_10_shows_one_email; screen_form_module::tests::annual_1604::pr6_profile_boxes_are_in_their_items_and_open_with_edit",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 6",
+   "proof": "screen_form_module::tests::annual_1604::pr6_labels_read_as_printed; screen_form_module::tests::annual_1604::pr6_boxes_sit_under_their_printed_item_numbers",
+   "status": "fixed"
+  }
+ }
+}

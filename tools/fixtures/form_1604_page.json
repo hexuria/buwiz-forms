@@ -1,0 +1,2455 @@
+{
+  "1604C": {
+    "schema": {
+      "c": "1604C",
+      "id": "1604c-v2018",
+      "s": "1604c-2018",
+      "g": 0,
+      "t": "Annual Information Return of Income Taxes Withheld on Compensation",
+      "rev": "2018",
+      "freq": "Annual",
+      "pages": 1,
+      "n": 112,
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Year (20YY)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Taxable year",
+                  "t": "int",
+                  "k": "frm1604c:txtYear",
+                  "r": 1,
+                  "m": 4,
+                  "slots": 4
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Yes",
+                  "t": "radio",
+                  "k": "frm1604c:amendedRtn_1"
+                },
+                {
+                  "l": "No",
+                  "t": "radio",
+                  "k": "frm1604c:amendedRtn_2"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "3",
+              "l": "Number of Sheet/s Attached",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Number of attached sheets",
+                  "t": "int",
+                  "k": "frm1604c:txtSheets",
+                  "m": 2,
+                  "slots": 2
+                }
+              ],
+              "cols": null
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "TIN a",
+                  "t": "text",
+                  "k": "frm1604c:tinA",
+                  "r": 1,
+                  "m": 3,
+                  "a": 1,
+                  "slots": 3
+                },
+                {
+                  "l": "TIN b",
+                  "t": "text",
+                  "k": "frm1604c:tinB",
+                  "r": 1,
+                  "m": 3,
+                  "a": 1,
+                  "slots": 3
+                },
+                {
+                  "l": "TIN c",
+                  "t": "text",
+                  "k": "frm1604c:tinC",
+                  "r": 1,
+                  "m": 3,
+                  "a": 1,
+                  "slots": 3
+                },
+                {
+                  "l": "TIN branch",
+                  "t": "text",
+                  "k": "frm1604c:branchCode",
+                  "r": 1,
+                  "m": 5,
+                  "a": 1,
+                  "slots": 5
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "p": 1,
+              "f": [
+                {
+                  "k": "frm1604c:rdoCode",
+                  "l": "RDO Code",
+                  "t": "sel"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "6",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Withholding agent name",
+                  "t": "text",
+                  "k": "frm1604c:registeredName",
+                  "r": 1,
+                  "m": 70,
+                  "a": 1,
+                  "slots": 40
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "7",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Registered address",
+                  "t": "text",
+                  "k": "frm1604c:registeredAddress",
+                  "r": 1,
+                  "m": 150,
+                  "a": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "p": 1,
+              "f": [
+                {
+                  "l": "ZIP code",
+                  "t": "text",
+                  "k": "frm1604c:zipCode",
+                  "r": 1,
+                  "m": 12,
+                  "a": 1,
+                  "slots": 4
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "8",
+              "l": "Category of Withholding Agent",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Private",
+                  "t": "radio",
+                  "k": "frm1604c:categoryAgent_1",
+                  "r": 1
+                },
+                {
+                  "l": "Government",
+                  "t": "radio",
+                  "k": "frm1604c:categoryAgent_2",
+                  "r": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "8A",
+              "l": "If private, top withholding agent?",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Yes",
+                  "t": "radio",
+                  "k": "frm1604c:topAgent_1"
+                },
+                {
+                  "l": "No",
+                  "t": "radio",
+                  "k": "frm1604c:topAgent_2"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Contact number",
+                  "t": "phone",
+                  "k": "frm1604c:telephoneNumber",
+                  "r": 1,
+                  "m": 20,
+                  "a": 1,
+                  "slots": 11
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "10",
+              "l": "Email Address",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Email address",
+                  "t": "email",
+                  "k": "txtEmail",
+                  "a": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "11",
+              "l": "In case of overwithholding/overremittance after the year-end adjustments on compensation, have you released the refund/s to your employee/s?",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Yes",
+                  "t": "radio",
+                  "k": "frm1604c:releasedOfFunds_1"
+                },
+                {
+                  "l": "No",
+                  "t": "radio",
+                  "k": "frm1604c:releasedOfFunds_2"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "11A",
+              "l": "If Yes, specify the date of refund (MM/DD/YYYY)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Refund date, month",
+                  "t": "sel",
+                  "k": "frm1604c:txtRefMonth",
+                  "o": [
+                    {
+                      "value": "01",
+                      "label": "01 - January"
+                    },
+                    {
+                      "value": "02",
+                      "label": "02 - February"
+                    },
+                    {
+                      "value": "03",
+                      "label": "03 - March"
+                    },
+                    {
+                      "value": "04",
+                      "label": "04 - April"
+                    },
+                    {
+                      "value": "05",
+                      "label": "05 - May"
+                    },
+                    {
+                      "value": "06",
+                      "label": "06 - June"
+                    },
+                    {
+                      "value": "07",
+                      "label": "07 - July"
+                    },
+                    {
+                      "value": "08",
+                      "label": "08 - August"
+                    },
+                    {
+                      "value": "09",
+                      "label": "09 - September"
+                    },
+                    {
+                      "value": "10",
+                      "label": "10 - October"
+                    },
+                    {
+                      "value": "11",
+                      "label": "11 - November"
+                    },
+                    {
+                      "value": "12",
+                      "label": "12 - December"
+                    }
+                  ]
+                },
+                {
+                  "l": "Refund date, day",
+                  "t": "int",
+                  "k": "frm1604c:txtRefDate",
+                  "m": 2
+                },
+                {
+                  "l": "Refund date, year",
+                  "t": "int",
+                  "k": "frm1604c:txtRefYear",
+                  "m": 4
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "12",
+              "l": "Total amount of overremittance on Tax withheld under compensation",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Total amount of overremittance",
+                  "t": "money",
+                  "k": "frm1604c:txt12",
+                  "m": 17
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "13",
+              "l": "Month of First Crediting of Overremittance (MM)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Month of first crediting of overremittance",
+                  "t": "sel",
+                  "k": "frm1604c:select13",
+                  "o": [
+                    "01 - January",
+                    "02 - February",
+                    "03 - March",
+                    "04 - April",
+                    "05 - May",
+                    "06 - June",
+                    "07 - July",
+                    "08 - August",
+                    "09 - September",
+                    "10 - October",
+                    "11 - November",
+                    "12 - December"
+                  ]
+                }
+              ],
+              "cols": null
+            }
+          ]
+        },
+        {
+          "n": "Part II · Summary of Remittances per BIR Form No. 1601-C",
+          "items": [
+            {
+              "no": "",
+              "l": "January to December (Part II and its Continuation)",
+              "p": 2,
+              "cols": [
+                {
+                  "l": "Date of Remittance (MM/DD/YYYY)",
+                  "t": "date"
+                },
+                {
+                  "l": "Drawee Bank/Bank Code/Agency",
+                  "t": "text"
+                },
+                {
+                  "l": "TRA/eROR/eAR Number",
+                  "t": "text"
+                },
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money"
+                },
+                {
+                  "l": "Adjustment",
+                  "t": "money"
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money"
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "c": 1
+                }
+              ],
+              "rows": 12,
+              "keys": [
+                [
+                  "frm1604c:txtSched1Date1",
+                  "frm1604c:txtSched1BankVal1",
+                  "frm1604c:txtTra1",
+                  "frm1604c:txtSched1TaxWheld1",
+                  "frm1604c:txtSched1Adj1",
+                  "frm1604c:txtSched1Pen1",
+                  "frm1604c:txtSched1TotalAmt1"
+                ],
+                [
+                  "frm1604c:txtSched1Date2",
+                  "frm1604c:txtSched1BankVal2",
+                  "frm1604c:txtTra2",
+                  "frm1604c:txtSched1TaxWheld2",
+                  "frm1604c:txtSched1Adj2",
+                  "frm1604c:txtSched1Pen2",
+                  "frm1604c:txtSched1TotalAmt2"
+                ],
+                [
+                  "frm1604c:txtSched1Date3",
+                  "frm1604c:txtSched1BankVal3",
+                  "frm1604c:txtTra3",
+                  "frm1604c:txtSched1TaxWheld3",
+                  "frm1604c:txtSched1Adj3",
+                  "frm1604c:txtSched1Pen3",
+                  "frm1604c:txtSched1TotalAmt3"
+                ],
+                [
+                  "frm1604c:txtSched1Date4",
+                  "frm1604c:txtSched1BankVal4",
+                  "frm1604c:txtTra4",
+                  "frm1604c:txtSched1TaxWheld4",
+                  "frm1604c:txtSched1Adj4",
+                  "frm1604c:txtSched1Pen4",
+                  "frm1604c:txtSched1TotalAmt4"
+                ],
+                [
+                  "frm1604c:txtSched1Date5",
+                  "frm1604c:txtSched1BankVal5",
+                  "frm1604c:txtTra5",
+                  "frm1604c:txtSched1TaxWheld5",
+                  "frm1604c:txtSched1Adj5",
+                  "frm1604c:txtSched1Pen5",
+                  "frm1604c:txtSched1TotalAmt5"
+                ],
+                [
+                  "frm1604c:txtSched1Date6",
+                  "frm1604c:txtSched1BankVal6",
+                  "frm1604c:txtTra6",
+                  "frm1604c:txtSched1TaxWheld6",
+                  "frm1604c:txtSched1Adj6",
+                  "frm1604c:txtSched1Pen6",
+                  "frm1604c:txtSched1TotalAmt6"
+                ],
+                [
+                  "frm1604c:txtSched1Date7",
+                  "frm1604c:txtSched1BankVal7",
+                  "frm1604c:txtTra7",
+                  "frm1604c:txtSched1TaxWheld7",
+                  "frm1604c:txtSched1Adj7",
+                  "frm1604c:txtSched1Pen7",
+                  "frm1604c:txtSched1TotalAmt7"
+                ],
+                [
+                  "frm1604c:txtSched1Date8",
+                  "frm1604c:txtSched1BankVal8",
+                  "frm1604c:txtTra8",
+                  "frm1604c:txtSched1TaxWheld8",
+                  "frm1604c:txtSched1Adj8",
+                  "frm1604c:txtSched1Pen8",
+                  "frm1604c:txtSched1TotalAmt8"
+                ],
+                [
+                  "frm1604c:txtSched1Date9",
+                  "frm1604c:txtSched1BankVal9",
+                  "frm1604c:txtTra9",
+                  "frm1604c:txtSched1TaxWheld9",
+                  "frm1604c:txtSched1Adj9",
+                  "frm1604c:txtSched1Pen9",
+                  "frm1604c:txtSched1TotalAmt9"
+                ],
+                [
+                  "frm1604c:txtSched1Date10",
+                  "frm1604c:txtSched1BankVal10",
+                  "frm1604c:txtTra10",
+                  "frm1604c:txtSched1TaxWheld10",
+                  "frm1604c:txtSched1Adj10",
+                  "frm1604c:txtSched1Pen10",
+                  "frm1604c:txtSched1TotalAmt10"
+                ],
+                [
+                  "frm1604c:txtSched1Date11",
+                  "frm1604c:txtSched1BankVal11",
+                  "frm1604c:txtTra11",
+                  "frm1604c:txtSched1TaxWheld11",
+                  "frm1604c:txtSched1Adj11",
+                  "frm1604c:txtSched1Pen11",
+                  "frm1604c:txtSched1TotalAmt11"
+                ],
+                [
+                  "frm1604c:txtSched1Date12",
+                  "frm1604c:txtSched1BankVal12",
+                  "frm1604c:txtTra12",
+                  "frm1604c:txtSched1TaxWheld12",
+                  "frm1604c:txtSched1Adj12",
+                  "frm1604c:txtSched1Pen12",
+                  "frm1604c:txtSched1TotalAmt12"
+                ]
+              ],
+              "row_labels": {
+                "caption": "Month",
+                "rows": [
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December"
+                ]
+              },
+              "numbered": false,
+              "f": null
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "p": 2,
+              "f": [
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money",
+                  "k": "frm1604c:txtSched1TaxWheldTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Adjustment",
+                  "t": "money",
+                  "k": "frm1604c:txtSched1AdjTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money",
+                  "k": "frm1604c:txtSched1PenTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "k": "frm1604c:txtSched1Total",
+                  "c": 1,
+                  "m": 25
+                }
+              ],
+              "cols": null
+            }
+          ]
+        }
+      ],
+      "stats": {
+        "items": 40,
+        "paper_labels": 14
+      },
+      "q": 0.94
+    },
+    "locks": {
+      "frm1604c:txtYear": "picks which return this is; reopen the form for another TIN or period",
+      "frm1604c:tinA": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604c:tinB": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604c:tinC": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604c:branchCode": "cannot be filled here: written by the app without a draft field (a constant or the period)",
+      "frm1604c:rdoCode": "comes from the taxpayer profile; change it in the profile",
+      "frm1604c:registeredName": "comes from the taxpayer profile; change it in the profile",
+      "frm1604c:registeredAddress": "comes from the taxpayer profile; change it in the profile",
+      "frm1604c:zipCode": "comes from the taxpayer profile; change it in the profile",
+      "frm1604c:telephoneNumber": "comes from the taxpayer profile; change it in the profile",
+      "txtEmail": "comes from the taxpayer profile; change it in the profile",
+      "frm1604c:txtSched1TaxWheldTotal": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt1": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt2": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt3": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt4": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt5": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt6": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt7": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt8": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt9": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt10": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt11": "computed by BIR's own formulas",
+      "frm1604c:txtSched1TotalAmt12": "computed by BIR's own formulas",
+      "frm1604c:txtSched1AdjTotal": "computed by BIR's own formulas",
+      "frm1604c:txtSched1PenTotal": "computed by BIR's own formulas",
+      "frm1604c:txtSched1Total": "computed by BIR's own formulas"
+    },
+    "lock_notes": {
+      "frm1604c:txtYear": "Set by the return you opened (its taxpayer and period).",
+      "frm1604c:tinA": "Can't be filled on this page yet.",
+      "frm1604c:tinB": "Can't be filled on this page yet.",
+      "frm1604c:tinC": "Can't be filled on this page yet.",
+      "frm1604c:branchCode": "Can't be filled on this page yet.",
+      "frm1604c:rdoCode": "Comes from the tax profile.",
+      "frm1604c:registeredName": "Comes from the tax profile.",
+      "frm1604c:registeredAddress": "Comes from the tax profile.",
+      "frm1604c:zipCode": "Comes from the tax profile.",
+      "frm1604c:telephoneNumber": "Comes from the tax profile.",
+      "txtEmail": "Comes from the tax profile.",
+      "frm1604c:txtSched1TaxWheldTotal": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt1": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt2": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt3": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt4": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt5": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt6": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt7": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt8": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt9": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt10": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt11": "Computed by the form.",
+      "frm1604c:txtSched1TotalAmt12": "Computed by the form.",
+      "frm1604c:txtSched1AdjTotal": "Computed by the form.",
+      "frm1604c:txtSched1PenTotal": "Computed by the form.",
+      "frm1604c:txtSched1Total": "Computed by the form."
+    },
+    "typed": {
+      "draft": {
+        "id": null,
+        "taxable_year": 2026,
+        "is_amended": false,
+        "number_of_attached_sheets": 0,
+        "tin": "12345678800000",
+        "rdo_code": "039",
+        "taxpayer_name": "Example Trading Corp",
+        "registered_address": "1 Example Street, Quezon City",
+        "zip_code": "1100",
+        "agent_category": "unspecified",
+        "top_withholding_agent": false,
+        "contact_number": "0281234567",
+        "email": "books@example.com",
+        "refunds_released": true,
+        "refund_date": "03/15/2026",
+        "overremittance": 1234.5,
+        "first_crediting_month": 4,
+        "months": [
+          {
+            "date": "02/10/2026",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 1000,
+            "adjustment": 50,
+            "penalties": 25,
+            "total_remitted": 1075
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          }
+        ],
+        "total_taxes_withheld": 1000,
+        "total_adjustment": 50,
+        "total_penalties": 25,
+        "total_remitted": 1075,
+        "status": "Draft",
+        "created_at": "(stamp)",
+        "updated_at": "(stamp)",
+        "submission_attempts": 0,
+        "profile_baseline": {
+          "/contact_number": "0281234567",
+          "/email": "books@example.com",
+          "/rdo_code": "039",
+          "/registered_address": "1 Example Street, Quezon City",
+          "/taxpayer_name": "Example Trading Corp",
+          "/zip_code": "1100"
+        }
+      },
+      "values": {
+        "frm1604c:amendedRtn_1": "false",
+        "frm1604c:amendedRtn_2": "true",
+        "frm1604c:branchCode": "00000",
+        "frm1604c:categoryAgent_1": "false",
+        "frm1604c:categoryAgent_2": "false",
+        "frm1604c:rdoCode": "039",
+        "frm1604c:registeredAddress": "1 EXAMPLE STREET, QUEZON CITY",
+        "frm1604c:registeredName": "EXAMPLE TRADING CORP",
+        "frm1604c:releasedOfFunds_1": "true",
+        "frm1604c:releasedOfFunds_2": "false",
+        "frm1604c:select13": "04",
+        "frm1604c:telephoneNumber": "0281234567",
+        "frm1604c:tinA": "123",
+        "frm1604c:tinB": "456",
+        "frm1604c:tinC": "788",
+        "frm1604c:topAgent_1": "false",
+        "frm1604c:topAgent_2": "true",
+        "frm1604c:txt12": "1,234.50",
+        "frm1604c:txtRefDate": "15",
+        "frm1604c:txtRefMonth": "03",
+        "frm1604c:txtRefYear": "2026",
+        "frm1604c:txtSched1Adj1": "50.00",
+        "frm1604c:txtSched1Adj10": "0.00",
+        "frm1604c:txtSched1Adj11": "0.00",
+        "frm1604c:txtSched1Adj12": "0.00",
+        "frm1604c:txtSched1Adj2": "0.00",
+        "frm1604c:txtSched1Adj3": "0.00",
+        "frm1604c:txtSched1Adj4": "0.00",
+        "frm1604c:txtSched1Adj5": "0.00",
+        "frm1604c:txtSched1Adj6": "0.00",
+        "frm1604c:txtSched1Adj7": "0.00",
+        "frm1604c:txtSched1Adj8": "0.00",
+        "frm1604c:txtSched1Adj9": "0.00",
+        "frm1604c:txtSched1AdjTotal": "50.00",
+        "frm1604c:txtSched1BankVal1": "",
+        "frm1604c:txtSched1BankVal10": "",
+        "frm1604c:txtSched1BankVal11": "",
+        "frm1604c:txtSched1BankVal12": "",
+        "frm1604c:txtSched1BankVal2": "",
+        "frm1604c:txtSched1BankVal3": "",
+        "frm1604c:txtSched1BankVal4": "",
+        "frm1604c:txtSched1BankVal5": "",
+        "frm1604c:txtSched1BankVal6": "",
+        "frm1604c:txtSched1BankVal7": "",
+        "frm1604c:txtSched1BankVal8": "",
+        "frm1604c:txtSched1BankVal9": "",
+        "frm1604c:txtSched1Date1": "02/10/2026",
+        "frm1604c:txtSched1Date10": "",
+        "frm1604c:txtSched1Date11": "",
+        "frm1604c:txtSched1Date12": "",
+        "frm1604c:txtSched1Date2": "",
+        "frm1604c:txtSched1Date3": "",
+        "frm1604c:txtSched1Date4": "",
+        "frm1604c:txtSched1Date5": "",
+        "frm1604c:txtSched1Date6": "",
+        "frm1604c:txtSched1Date7": "",
+        "frm1604c:txtSched1Date8": "",
+        "frm1604c:txtSched1Date9": "",
+        "frm1604c:txtSched1Pen1": "25.00",
+        "frm1604c:txtSched1Pen10": "0.00",
+        "frm1604c:txtSched1Pen11": "0.00",
+        "frm1604c:txtSched1Pen12": "0.00",
+        "frm1604c:txtSched1Pen2": "0.00",
+        "frm1604c:txtSched1Pen3": "0.00",
+        "frm1604c:txtSched1Pen4": "0.00",
+        "frm1604c:txtSched1Pen5": "0.00",
+        "frm1604c:txtSched1Pen6": "0.00",
+        "frm1604c:txtSched1Pen7": "0.00",
+        "frm1604c:txtSched1Pen8": "0.00",
+        "frm1604c:txtSched1Pen9": "0.00",
+        "frm1604c:txtSched1PenTotal": "25.00",
+        "frm1604c:txtSched1TaxWheld1": "1,000.00",
+        "frm1604c:txtSched1TaxWheld10": "0.00",
+        "frm1604c:txtSched1TaxWheld11": "0.00",
+        "frm1604c:txtSched1TaxWheld12": "0.00",
+        "frm1604c:txtSched1TaxWheld2": "0.00",
+        "frm1604c:txtSched1TaxWheld3": "0.00",
+        "frm1604c:txtSched1TaxWheld4": "0.00",
+        "frm1604c:txtSched1TaxWheld5": "0.00",
+        "frm1604c:txtSched1TaxWheld6": "0.00",
+        "frm1604c:txtSched1TaxWheld7": "0.00",
+        "frm1604c:txtSched1TaxWheld8": "0.00",
+        "frm1604c:txtSched1TaxWheld9": "0.00",
+        "frm1604c:txtSched1TaxWheldTotal": "1,000.00",
+        "frm1604c:txtSched1Total": "1,075.00",
+        "frm1604c:txtSched1TotalAmt1": "1,075.00",
+        "frm1604c:txtSched1TotalAmt10": "0.00",
+        "frm1604c:txtSched1TotalAmt11": "0.00",
+        "frm1604c:txtSched1TotalAmt12": "0.00",
+        "frm1604c:txtSched1TotalAmt2": "0.00",
+        "frm1604c:txtSched1TotalAmt3": "0.00",
+        "frm1604c:txtSched1TotalAmt4": "0.00",
+        "frm1604c:txtSched1TotalAmt5": "0.00",
+        "frm1604c:txtSched1TotalAmt6": "0.00",
+        "frm1604c:txtSched1TotalAmt7": "0.00",
+        "frm1604c:txtSched1TotalAmt8": "0.00",
+        "frm1604c:txtSched1TotalAmt9": "0.00",
+        "frm1604c:txtSheets": "0",
+        "frm1604c:txtTra1": "",
+        "frm1604c:txtTra10": "",
+        "frm1604c:txtTra11": "",
+        "frm1604c:txtTra12": "",
+        "frm1604c:txtTra2": "",
+        "frm1604c:txtTra3": "",
+        "frm1604c:txtTra4": "",
+        "frm1604c:txtTra5": "",
+        "frm1604c:txtTra6": "",
+        "frm1604c:txtTra7": "",
+        "frm1604c:txtTra8": "",
+        "frm1604c:txtTra9": "",
+        "frm1604c:txtYear": "2026",
+        "frm1604c:zipCode": "1100",
+        "txtEmail": "books@example.com"
+      }
+    },
+    "no": {
+      "frm1604c:releasedOfFunds_1": "false",
+      "frm1604c:releasedOfFunds_2": "true"
+    },
+    "cleared": {
+      "draft": {
+        "id": null,
+        "taxable_year": 2026,
+        "is_amended": false,
+        "number_of_attached_sheets": 0,
+        "tin": "12345678800000",
+        "rdo_code": "039",
+        "taxpayer_name": "Example Trading Corp",
+        "registered_address": "1 Example Street, Quezon City",
+        "zip_code": "1100",
+        "agent_category": "unspecified",
+        "top_withholding_agent": false,
+        "contact_number": "0281234567",
+        "email": "books@example.com",
+        "refunds_released": false,
+        "refund_date": "",
+        "overremittance": 0,
+        "first_crediting_month": 0,
+        "months": [
+          {
+            "date": "02/10/2026",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 1000,
+            "adjustment": 50,
+            "penalties": 25,
+            "total_remitted": 1075
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "date": "",
+            "bank": "",
+            "reference": "",
+            "taxes_withheld": 0,
+            "adjustment": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          }
+        ],
+        "total_taxes_withheld": 1000,
+        "total_adjustment": 50,
+        "total_penalties": 25,
+        "total_remitted": 1075,
+        "status": "Draft",
+        "created_at": "(stamp)",
+        "updated_at": "(stamp)",
+        "submission_attempts": 0,
+        "profile_baseline": {
+          "/contact_number": "0281234567",
+          "/email": "books@example.com",
+          "/rdo_code": "039",
+          "/registered_address": "1 Example Street, Quezon City",
+          "/taxpayer_name": "Example Trading Corp",
+          "/zip_code": "1100"
+        }
+      },
+      "values": {
+        "frm1604c:amendedRtn_1": "false",
+        "frm1604c:amendedRtn_2": "true",
+        "frm1604c:branchCode": "00000",
+        "frm1604c:categoryAgent_1": "false",
+        "frm1604c:categoryAgent_2": "false",
+        "frm1604c:rdoCode": "039",
+        "frm1604c:registeredAddress": "1 EXAMPLE STREET, QUEZON CITY",
+        "frm1604c:registeredName": "EXAMPLE TRADING CORP",
+        "frm1604c:releasedOfFunds_1": "false",
+        "frm1604c:releasedOfFunds_2": "true",
+        "frm1604c:select13": "00",
+        "frm1604c:telephoneNumber": "0281234567",
+        "frm1604c:tinA": "123",
+        "frm1604c:tinB": "456",
+        "frm1604c:tinC": "788",
+        "frm1604c:topAgent_1": "false",
+        "frm1604c:topAgent_2": "true",
+        "frm1604c:txt12": "0.00",
+        "frm1604c:txtRefDate": "",
+        "frm1604c:txtRefMonth": "00",
+        "frm1604c:txtRefYear": "",
+        "frm1604c:txtSched1Adj1": "50.00",
+        "frm1604c:txtSched1Adj10": "0.00",
+        "frm1604c:txtSched1Adj11": "0.00",
+        "frm1604c:txtSched1Adj12": "0.00",
+        "frm1604c:txtSched1Adj2": "0.00",
+        "frm1604c:txtSched1Adj3": "0.00",
+        "frm1604c:txtSched1Adj4": "0.00",
+        "frm1604c:txtSched1Adj5": "0.00",
+        "frm1604c:txtSched1Adj6": "0.00",
+        "frm1604c:txtSched1Adj7": "0.00",
+        "frm1604c:txtSched1Adj8": "0.00",
+        "frm1604c:txtSched1Adj9": "0.00",
+        "frm1604c:txtSched1AdjTotal": "50.00",
+        "frm1604c:txtSched1BankVal1": "",
+        "frm1604c:txtSched1BankVal10": "",
+        "frm1604c:txtSched1BankVal11": "",
+        "frm1604c:txtSched1BankVal12": "",
+        "frm1604c:txtSched1BankVal2": "",
+        "frm1604c:txtSched1BankVal3": "",
+        "frm1604c:txtSched1BankVal4": "",
+        "frm1604c:txtSched1BankVal5": "",
+        "frm1604c:txtSched1BankVal6": "",
+        "frm1604c:txtSched1BankVal7": "",
+        "frm1604c:txtSched1BankVal8": "",
+        "frm1604c:txtSched1BankVal9": "",
+        "frm1604c:txtSched1Date1": "02/10/2026",
+        "frm1604c:txtSched1Date10": "",
+        "frm1604c:txtSched1Date11": "",
+        "frm1604c:txtSched1Date12": "",
+        "frm1604c:txtSched1Date2": "",
+        "frm1604c:txtSched1Date3": "",
+        "frm1604c:txtSched1Date4": "",
+        "frm1604c:txtSched1Date5": "",
+        "frm1604c:txtSched1Date6": "",
+        "frm1604c:txtSched1Date7": "",
+        "frm1604c:txtSched1Date8": "",
+        "frm1604c:txtSched1Date9": "",
+        "frm1604c:txtSched1Pen1": "25.00",
+        "frm1604c:txtSched1Pen10": "0.00",
+        "frm1604c:txtSched1Pen11": "0.00",
+        "frm1604c:txtSched1Pen12": "0.00",
+        "frm1604c:txtSched1Pen2": "0.00",
+        "frm1604c:txtSched1Pen3": "0.00",
+        "frm1604c:txtSched1Pen4": "0.00",
+        "frm1604c:txtSched1Pen5": "0.00",
+        "frm1604c:txtSched1Pen6": "0.00",
+        "frm1604c:txtSched1Pen7": "0.00",
+        "frm1604c:txtSched1Pen8": "0.00",
+        "frm1604c:txtSched1Pen9": "0.00",
+        "frm1604c:txtSched1PenTotal": "25.00",
+        "frm1604c:txtSched1TaxWheld1": "1,000.00",
+        "frm1604c:txtSched1TaxWheld10": "0.00",
+        "frm1604c:txtSched1TaxWheld11": "0.00",
+        "frm1604c:txtSched1TaxWheld12": "0.00",
+        "frm1604c:txtSched1TaxWheld2": "0.00",
+        "frm1604c:txtSched1TaxWheld3": "0.00",
+        "frm1604c:txtSched1TaxWheld4": "0.00",
+        "frm1604c:txtSched1TaxWheld5": "0.00",
+        "frm1604c:txtSched1TaxWheld6": "0.00",
+        "frm1604c:txtSched1TaxWheld7": "0.00",
+        "frm1604c:txtSched1TaxWheld8": "0.00",
+        "frm1604c:txtSched1TaxWheld9": "0.00",
+        "frm1604c:txtSched1TaxWheldTotal": "1,000.00",
+        "frm1604c:txtSched1Total": "1,075.00",
+        "frm1604c:txtSched1TotalAmt1": "1,075.00",
+        "frm1604c:txtSched1TotalAmt10": "0.00",
+        "frm1604c:txtSched1TotalAmt11": "0.00",
+        "frm1604c:txtSched1TotalAmt12": "0.00",
+        "frm1604c:txtSched1TotalAmt2": "0.00",
+        "frm1604c:txtSched1TotalAmt3": "0.00",
+        "frm1604c:txtSched1TotalAmt4": "0.00",
+        "frm1604c:txtSched1TotalAmt5": "0.00",
+        "frm1604c:txtSched1TotalAmt6": "0.00",
+        "frm1604c:txtSched1TotalAmt7": "0.00",
+        "frm1604c:txtSched1TotalAmt8": "0.00",
+        "frm1604c:txtSched1TotalAmt9": "0.00",
+        "frm1604c:txtSheets": "0",
+        "frm1604c:txtTra1": "",
+        "frm1604c:txtTra10": "",
+        "frm1604c:txtTra11": "",
+        "frm1604c:txtTra12": "",
+        "frm1604c:txtTra2": "",
+        "frm1604c:txtTra3": "",
+        "frm1604c:txtTra4": "",
+        "frm1604c:txtTra5": "",
+        "frm1604c:txtTra6": "",
+        "frm1604c:txtTra7": "",
+        "frm1604c:txtTra8": "",
+        "frm1604c:txtTra9": "",
+        "frm1604c:txtYear": "2026",
+        "frm1604c:zipCode": "1100",
+        "txtEmail": "books@example.com"
+      },
+      "removes": {
+        "message": "Changing item 11 to No clears item 11A (date of refund 03/15/2026), item 12 (₱1,234.50) and item 13 (April). Continue?",
+        "done": "Cleared items 11A, 12 and 13",
+        "rows": 0
+      }
+    }
+  },
+  "1604F": {
+    "schema": {
+      "c": "1604F",
+      "id": "1604f-v2018",
+      "s": "1604f-2018",
+      "g": 1,
+      "t": "Annual Information Return of Income Payments Subjected to Final Withholding Taxes",
+      "rev": "2018",
+      "freq": "Annual",
+      "pages": 2,
+      "n": 99,
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Year (YYYY)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Taxable year",
+                  "t": "int",
+                  "k": "frm1604f:txtYear",
+                  "r": 1,
+                  "m": 4,
+                  "slots": 4
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Yes",
+                  "t": "radio",
+                  "k": "frm1604f:amendedRtn_1"
+                },
+                {
+                  "l": "No",
+                  "t": "radio",
+                  "k": "frm1604f:amendedRtn_2"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "3",
+              "l": "No. of Sheet/s Attached",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Number of sheets attached",
+                  "t": "int",
+                  "k": "frm1604f:txtSheets",
+                  "m": 2,
+                  "slots": 2
+                }
+              ],
+              "cols": null
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "TIN a",
+                  "t": "text",
+                  "k": "frm1604f:tinA",
+                  "r": 1,
+                  "m": 3,
+                  "a": 1,
+                  "slots": 3
+                },
+                {
+                  "l": "TIN b",
+                  "t": "text",
+                  "k": "frm1604f:tinB",
+                  "r": 1,
+                  "m": 3,
+                  "a": 1,
+                  "slots": 3
+                },
+                {
+                  "l": "TIN c",
+                  "t": "text",
+                  "k": "frm1604f:tinC",
+                  "r": 1,
+                  "m": 3,
+                  "a": 1,
+                  "slots": 3
+                },
+                {
+                  "l": "TIN branch",
+                  "t": "text",
+                  "k": "frm1604f:branchCode",
+                  "r": 1,
+                  "m": 3,
+                  "slots": 5
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "p": 1,
+              "f": [
+                {
+                  "l": "RDO Code",
+                  "t": "sel",
+                  "k": "frm1604f:rdoCode",
+                  "r": 1,
+                  "m": 3,
+                  "a": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "6",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Withholding agent name",
+                  "t": "text",
+                  "k": "frm1604f:registeredName",
+                  "r": 1,
+                  "m": 70,
+                  "a": 1,
+                  "slots": 40
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "7",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Registered address",
+                  "t": "text",
+                  "k": "frm1604f:RegisteredAddress",
+                  "r": 1,
+                  "m": 25,
+                  "a": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "p": 1,
+              "f": [
+                {
+                  "l": "ZIP code",
+                  "t": "text",
+                  "k": "frm1604f:zipCode",
+                  "r": 1,
+                  "m": 6,
+                  "a": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "8",
+              "l": "Category of Withholding Agent",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Private",
+                  "t": "radio",
+                  "k": "frm1604f:categoryAgent_1",
+                  "r": 1
+                },
+                {
+                  "l": "Government",
+                  "t": "radio",
+                  "k": "frm1604f:categoryAgent_2",
+                  "r": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "8A",
+              "l": "If private, top withholding agent?",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Yes",
+                  "t": "radio",
+                  "k": "frm1604f:privateAgent_1"
+                },
+                {
+                  "l": "No",
+                  "t": "radio",
+                  "k": "frm1604f:privateAgent_2"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Contact number",
+                  "t": "phone",
+                  "k": "frm1604f:telephoneNumber",
+                  "r": 1,
+                  "m": 20,
+                  "a": 1,
+                  "slots": 11
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "10",
+              "l": "Email Address",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Taxpayer email address",
+                  "t": "email",
+                  "k": "frm1604f:email",
+                  "m": 25,
+                  "a": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "11",
+              "l": "Are there payees availing of tax relief under Special Law or International Tax Treaty?",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Yes",
+                  "t": "radio",
+                  "k": "frm1604f:taxRelief_1"
+                },
+                {
+                  "l": "No",
+                  "t": "radio",
+                  "k": "frm1604f:taxRelief_2"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "11A",
+              "l": "If yes, specify",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Special Law or International Tax Treaty relief availed",
+                  "t": "text",
+                  "k": "frm1604f:availedTaxRelief",
+                  "m": 25,
+                  "slots": 16
+                }
+              ],
+              "cols": null
+            }
+          ]
+        },
+        {
+          "n": "Part II · Summary of Remittances",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1 – Remittance per BIR Form No. 1601-FQ on Final Taxes Withheld",
+              "p": 1,
+              "cols": [
+                {
+                  "l": "Date of Remittance (MM/DD/YYYY)",
+                  "t": "date"
+                },
+                {
+                  "l": "TRA/eROR/eAR Number",
+                  "t": "text"
+                },
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money"
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money"
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "c": 1
+                }
+              ],
+              "rows": 4,
+              "keys": [
+                [
+                  "frm1604f:txtSched1Date1",
+                  "frm1604f:txtSched1TRA1",
+                  "frm1604f:txtSched1TaxWheld1",
+                  "frm1604f:txtSched1Pen1",
+                  "frm1604f:txtSched1TotalAmt1"
+                ],
+                [
+                  "frm1604f:txtSched1Date2",
+                  "frm1604f:txtSched1TRA2",
+                  "frm1604f:txtSched1TaxWheld2",
+                  "frm1604f:txtSched1Pen2",
+                  "frm1604f:txtSched1TotalAmt2"
+                ],
+                [
+                  "frm1604f:txtSched1Date3",
+                  "frm1604f:txtSched1TRA3",
+                  "frm1604f:txtSched1TaxWheld3",
+                  "frm1604f:txtSched1Pen3",
+                  "frm1604f:txtSched1TotalAmt3"
+                ],
+                [
+                  "frm1604f:txtSched1Date4",
+                  "frm1604f:txtSched1TRA4",
+                  "frm1604f:txtSched1TaxWheld4",
+                  "frm1604f:txtSched1Pen4",
+                  "frm1604f:txtSched1TotalAmt4"
+                ]
+              ],
+              "row_labels": {
+                "caption": "Quarter",
+                "rows": [
+                  "1st Quarter",
+                  "2nd Quarter",
+                  "3rd Quarter",
+                  "4th Quarter"
+                ]
+              },
+              "numbered": false,
+              "f": null
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money",
+                  "k": "frm1604f:txtSched1TaxWheldTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money",
+                  "k": "frm1604f:txtSched1PenTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "k": "frm1604f:txtSched1Total",
+                  "c": 1,
+                  "m": 25
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 – Remittance per BIR Form No. 1602Q on Interest Payments",
+              "p": 1,
+              "cols": [
+                {
+                  "l": "Date of Remittance (MM/DD/YYYY)",
+                  "t": "date"
+                },
+                {
+                  "l": "TRA/eROR/eAR Number",
+                  "t": "text"
+                },
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money"
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money"
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "c": 1
+                }
+              ],
+              "rows": 4,
+              "keys": [
+                [
+                  "frm1604f:txtSched2Date1",
+                  "frm1604f:txtSched2TRA1",
+                  "frm1604f:txtSched2TaxWheld1",
+                  "frm1604f:txtSched2Pen1",
+                  "frm1604f:txtSched2TotalAmt1"
+                ],
+                [
+                  "frm1604f:txtSched2Date2",
+                  "frm1604f:txtSched2TRA2",
+                  "frm1604f:txtSched2TaxWheld2",
+                  "frm1604f:txtSched2Pen2",
+                  "frm1604f:txtSched2TotalAmt2"
+                ],
+                [
+                  "frm1604f:txtSched2Date3",
+                  "frm1604f:txtSched2TRA3",
+                  "frm1604f:txtSched2TaxWheld3",
+                  "frm1604f:txtSched2Pen3",
+                  "frm1604f:txtSched2TotalAmt3"
+                ],
+                [
+                  "frm1604f:txtSched2Date4",
+                  "frm1604f:txtSched2TRA4",
+                  "frm1604f:txtSched2TaxWheld4",
+                  "frm1604f:txtSched2Pen4",
+                  "frm1604f:txtSched2TotalAmt4"
+                ]
+              ],
+              "row_labels": {
+                "caption": "Quarter",
+                "rows": [
+                  "1st Quarter",
+                  "2nd Quarter",
+                  "3rd Quarter",
+                  "4th Quarter"
+                ]
+              },
+              "numbered": false,
+              "f": null
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money",
+                  "k": "frm1604f:txtSched2TaxWheldTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money",
+                  "k": "frm1604f:txtSched2PenTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "k": "frm1604f:txtSched2Total",
+                  "c": 1,
+                  "m": 25
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 – Remittance per BIR Form No. 1603Q on Fringe Benefits",
+              "p": 1,
+              "cols": [
+                {
+                  "l": "Date of Remittance (MM/DD/YYYY)",
+                  "t": "date"
+                },
+                {
+                  "l": "TRA/eROR/eAR Number",
+                  "t": "text"
+                },
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money"
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money"
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "c": 1
+                }
+              ],
+              "rows": 4,
+              "keys": [
+                [
+                  "frm1604f:txtSched3Date1",
+                  "frm1604f:txtSched3TRA1",
+                  "frm1604f:txtSched3TaxWheld1",
+                  "frm1604f:txtSched3Pen1",
+                  "frm1604f:txtSched3TotalAmt1"
+                ],
+                [
+                  "frm1604f:txtSched3Date2",
+                  "frm1604f:txtSched3TRA2",
+                  "frm1604f:txtSched3TaxWheld2",
+                  "frm1604f:txtSched3Pen2",
+                  "frm1604f:txtSched3TotalAmt2"
+                ],
+                [
+                  "frm1604f:txtSched3Date3",
+                  "frm1604f:txtSched3TRA3",
+                  "frm1604f:txtSched3TaxWheld3",
+                  "frm1604f:txtSched3Pen3",
+                  "frm1604f:txtSched3TotalAmt3"
+                ],
+                [
+                  "frm1604f:txtSched3Date4",
+                  "frm1604f:txtSched3TRA4",
+                  "frm1604f:txtSched3TaxWheld4",
+                  "frm1604f:txtSched3Pen4",
+                  "frm1604f:txtSched3TotalAmt4"
+                ]
+              ],
+              "row_labels": {
+                "caption": "Quarter",
+                "rows": [
+                  "1st Quarter",
+                  "2nd Quarter",
+                  "3rd Quarter",
+                  "4th Quarter"
+                ]
+              },
+              "numbered": false,
+              "f": null
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Taxes Withheld",
+                  "t": "money",
+                  "k": "frm1604f:txtSched3TaxWheldTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Penalties",
+                  "t": "money",
+                  "k": "frm1604f:txtSched3PenTotal",
+                  "c": 1,
+                  "m": 25
+                },
+                {
+                  "l": "Total Amount Remitted",
+                  "t": "money",
+                  "k": "frm1604f:txtSched3Total",
+                  "c": 1,
+                  "m": 25
+                }
+              ],
+              "cols": null
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Line of Business",
+                  "t": "text",
+                  "k": "frm1604f:txtLineBus",
+                  "m": 30
+                }
+              ],
+              "cols": null
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Email Address",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Profile/online email address",
+                  "t": "hidden",
+                  "k": "txtEmail",
+                  "m": 60,
+                  "a": 1
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "",
+              "l": "Additional details",
+              "p": 1,
+              "f": [
+                {
+                  "l": "Current page",
+                  "t": "hidden",
+                  "k": "frm1604f:txtCurrentPage"
+                },
+                {
+                  "l": "Max page",
+                  "t": "hidden",
+                  "k": "frm1604f:txtMaxPage"
+                }
+              ],
+              "cols": null
+            },
+            {
+              "no": "",
+              "l": "Additional details",
+              "p": 2,
+              "f": [
+                {
+                  "l": "TIN1",
+                  "t": "hidden",
+                  "k": "frm1604f:txtPg2TIN1",
+                  "m": 3
+                },
+                {
+                  "l": "TIN2",
+                  "t": "hidden",
+                  "k": "frm1604f:txtPg2TIN2",
+                  "m": 3
+                },
+                {
+                  "l": "TIN3",
+                  "t": "hidden",
+                  "k": "frm1604f:txtPg2TIN3",
+                  "m": 3
+                },
+                {
+                  "l": "Branch code",
+                  "t": "hidden",
+                  "k": "frm1604f:txtPg2BranchCode",
+                  "m": 5
+                },
+                {
+                  "l": "Taxpayer name",
+                  "t": "hidden",
+                  "k": "frm1604f:txtPg2TaxpayerName",
+                  "m": 50
+                }
+              ],
+              "cols": null
+            }
+          ]
+        }
+      ],
+      "stats": {
+        "items": 31,
+        "paper_labels": 14
+      },
+      "q": 0.83
+    },
+    "locks": {
+      "frm1604f:txtYear": "picks which return this is; reopen the form for another TIN or period",
+      "frm1604f:tinA": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604f:tinB": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604f:tinC": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604f:branchCode": "cannot be filled here: written by the app without a draft field (a constant or the period)",
+      "frm1604f:rdoCode": "comes from the taxpayer profile; change it in the profile",
+      "frm1604f:registeredName": "comes from the taxpayer profile; change it in the profile",
+      "frm1604f:RegisteredAddress": "comes from the taxpayer profile; change it in the profile",
+      "frm1604f:zipCode": "comes from the taxpayer profile; change it in the profile",
+      "frm1604f:telephoneNumber": "comes from the taxpayer profile; change it in the profile",
+      "frm1604f:email": "comes from the taxpayer profile; change it in the profile",
+      "frm1604f:txtSched1TotalAmt1": "computed by BIR's own formulas",
+      "frm1604f:txtSched1TotalAmt2": "computed by BIR's own formulas",
+      "frm1604f:txtSched1TotalAmt3": "computed by BIR's own formulas",
+      "frm1604f:txtSched1TotalAmt4": "computed by BIR's own formulas",
+      "frm1604f:txtSched1TaxWheldTotal": "computed by BIR's own formulas",
+      "frm1604f:txtSched1PenTotal": "computed by BIR's own formulas",
+      "frm1604f:txtSched1Total": "computed by BIR's own formulas",
+      "frm1604f:txtSched2TotalAmt1": "computed by BIR's own formulas",
+      "frm1604f:txtSched2TotalAmt2": "computed by BIR's own formulas",
+      "frm1604f:txtSched2TotalAmt3": "computed by BIR's own formulas",
+      "frm1604f:txtSched2TotalAmt4": "computed by BIR's own formulas",
+      "frm1604f:txtSched2TaxWheldTotal": "computed by BIR's own formulas",
+      "frm1604f:txtSched2PenTotal": "computed by BIR's own formulas",
+      "frm1604f:txtSched2Total": "computed by BIR's own formulas",
+      "frm1604f:txtSched3TotalAmt1": "computed by BIR's own formulas",
+      "frm1604f:txtSched3TotalAmt2": "computed by BIR's own formulas",
+      "frm1604f:txtSched3TotalAmt3": "computed by BIR's own formulas",
+      "frm1604f:txtSched3TotalAmt4": "computed by BIR's own formulas",
+      "frm1604f:txtSched3TaxWheldTotal": "computed by BIR's own formulas",
+      "frm1604f:txtSched3PenTotal": "computed by BIR's own formulas",
+      "frm1604f:txtSched3Total": "computed by BIR's own formulas",
+      "frm1604f:txtPg2TIN1": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604f:txtPg2TIN2": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604f:txtPg2TIN3": "cannot be filled here: derived by the app: changes with /tin but never shows one field's value",
+      "frm1604f:txtPg2BranchCode": "cannot be filled here: written by the app without a draft field (a constant or the period)",
+      "frm1604f:txtPg2TaxpayerName": "comes from the taxpayer profile; change it in the profile",
+      "frm1604f:txtCurrentPage": "cannot be filled here: written by the app without a draft field (a constant or the period)",
+      "frm1604f:txtMaxPage": "cannot be filled here: not written by this app's field map for any sample draft",
+      "frm1604f:txtLineBus": "comes from the taxpayer profile; change it in the profile",
+      "txtEmail": "comes from the taxpayer profile; change it in the profile"
+    },
+    "lock_notes": {
+      "frm1604f:txtYear": "Set by the return you opened (its taxpayer and period).",
+      "frm1604f:tinA": "Can't be filled on this page yet.",
+      "frm1604f:tinB": "Can't be filled on this page yet.",
+      "frm1604f:tinC": "Can't be filled on this page yet.",
+      "frm1604f:branchCode": "Can't be filled on this page yet.",
+      "frm1604f:rdoCode": "Comes from the tax profile.",
+      "frm1604f:registeredName": "Comes from the tax profile.",
+      "frm1604f:RegisteredAddress": "Comes from the tax profile.",
+      "frm1604f:zipCode": "Comes from the tax profile.",
+      "frm1604f:telephoneNumber": "Comes from the tax profile.",
+      "frm1604f:email": "Comes from the tax profile.",
+      "frm1604f:txtSched1TotalAmt1": "Computed by the form.",
+      "frm1604f:txtSched1TotalAmt2": "Computed by the form.",
+      "frm1604f:txtSched1TotalAmt3": "Computed by the form.",
+      "frm1604f:txtSched1TotalAmt4": "Computed by the form.",
+      "frm1604f:txtSched1TaxWheldTotal": "Computed by the form.",
+      "frm1604f:txtSched1PenTotal": "Computed by the form.",
+      "frm1604f:txtSched1Total": "Computed by the form.",
+      "frm1604f:txtSched2TotalAmt1": "Computed by the form.",
+      "frm1604f:txtSched2TotalAmt2": "Computed by the form.",
+      "frm1604f:txtSched2TotalAmt3": "Computed by the form.",
+      "frm1604f:txtSched2TotalAmt4": "Computed by the form.",
+      "frm1604f:txtSched2TaxWheldTotal": "Computed by the form.",
+      "frm1604f:txtSched2PenTotal": "Computed by the form.",
+      "frm1604f:txtSched2Total": "Computed by the form.",
+      "frm1604f:txtSched3TotalAmt1": "Computed by the form.",
+      "frm1604f:txtSched3TotalAmt2": "Computed by the form.",
+      "frm1604f:txtSched3TotalAmt3": "Computed by the form.",
+      "frm1604f:txtSched3TotalAmt4": "Computed by the form.",
+      "frm1604f:txtSched3TaxWheldTotal": "Computed by the form.",
+      "frm1604f:txtSched3PenTotal": "Computed by the form.",
+      "frm1604f:txtSched3Total": "Computed by the form.",
+      "frm1604f:txtPg2TIN1": "Can't be filled on this page yet.",
+      "frm1604f:txtPg2TIN2": "Can't be filled on this page yet.",
+      "frm1604f:txtPg2TIN3": "Can't be filled on this page yet.",
+      "frm1604f:txtPg2BranchCode": "Can't be filled on this page yet.",
+      "frm1604f:txtPg2TaxpayerName": "Comes from the tax profile.",
+      "frm1604f:txtCurrentPage": "Can't be filled on this page yet.",
+      "frm1604f:txtMaxPage": "Can't be filled on this page yet.",
+      "frm1604f:txtLineBus": "Comes from the tax profile.",
+      "txtEmail": "Comes from the tax profile."
+    },
+    "typed": {
+      "draft": {
+        "id": null,
+        "taxable_year": 2026,
+        "is_amended": false,
+        "number_of_attached_sheets": 0,
+        "tin": "12345678800000",
+        "rdo_code": "039",
+        "taxpayer_name": "Example Trading Corp",
+        "registered_address": "1 Example Street, Quezon City",
+        "zip_code": "1100",
+        "agent_category": "unspecified",
+        "top_withholding_agent": false,
+        "contact_number": "0281234567",
+        "email": "books@example.com",
+        "line_of_business": "Wholesale trading",
+        "tax_relief": true,
+        "tax_relief_details": "PEZA",
+        "schedules": [
+          [
+            {
+              "date": "04/25/2026",
+              "reference": "",
+              "taxes_withheld": 2000,
+              "penalties": 100,
+              "total_remitted": 2100
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            }
+          ],
+          [
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            }
+          ],
+          [
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            }
+          ]
+        ],
+        "totals": [
+          {
+            "taxes_withheld": 2000,
+            "penalties": 100,
+            "total_remitted": 2100
+          },
+          {
+            "taxes_withheld": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "taxes_withheld": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          }
+        ],
+        "status": "Draft",
+        "created_at": "(stamp)",
+        "updated_at": "(stamp)",
+        "submission_attempts": 0,
+        "profile_baseline": {
+          "/contact_number": "0281234567",
+          "/email": "books@example.com",
+          "/line_of_business": "Wholesale trading",
+          "/rdo_code": "039",
+          "/registered_address": "1 Example Street, Quezon City",
+          "/taxpayer_name": "Example Trading Corp",
+          "/zip_code": "1100"
+        }
+      },
+      "values": {
+        "frm1604f:RegisteredAddress": "1 EXAMPLE STREET, QUEZON CITY",
+        "frm1604f:amendedRtn_1": "false",
+        "frm1604f:amendedRtn_2": "true",
+        "frm1604f:availedTaxRelief": "PEZA",
+        "frm1604f:branchCode": "00000",
+        "frm1604f:categoryAgent_1": "false",
+        "frm1604f:categoryAgent_2": "false",
+        "frm1604f:email": "BOOKS@EXAMPLE.COM",
+        "frm1604f:privateAgent_1": "false",
+        "frm1604f:privateAgent_2": "true",
+        "frm1604f:rdoCode": "039",
+        "frm1604f:registeredName": "EXAMPLE TRADING CORP",
+        "frm1604f:taxRelief_1": "true",
+        "frm1604f:taxRelief_2": "false",
+        "frm1604f:telephoneNumber": "0281234567",
+        "frm1604f:tinA": "123",
+        "frm1604f:tinB": "456",
+        "frm1604f:tinC": "788",
+        "frm1604f:txtCurrentPage": "1",
+        "frm1604f:txtLineBus": "WHOLESALE TRADING",
+        "frm1604f:txtPg2BranchCode": "00000",
+        "frm1604f:txtPg2TIN1": "123",
+        "frm1604f:txtPg2TIN2": "456",
+        "frm1604f:txtPg2TIN3": "788",
+        "frm1604f:txtPg2TaxpayerName": "EXAMPLE TRADING CORP",
+        "frm1604f:txtSched1Date1": "04/25/2026",
+        "frm1604f:txtSched1Date2": "",
+        "frm1604f:txtSched1Date3": "",
+        "frm1604f:txtSched1Date4": "",
+        "frm1604f:txtSched1Pen1": "100.00",
+        "frm1604f:txtSched1Pen2": "0.00",
+        "frm1604f:txtSched1Pen3": "0.00",
+        "frm1604f:txtSched1Pen4": "0.00",
+        "frm1604f:txtSched1PenTotal": "100.00",
+        "frm1604f:txtSched1TRA1": "",
+        "frm1604f:txtSched1TRA2": "",
+        "frm1604f:txtSched1TRA3": "",
+        "frm1604f:txtSched1TRA4": "",
+        "frm1604f:txtSched1TaxWheld1": "2,000.00",
+        "frm1604f:txtSched1TaxWheld2": "0.00",
+        "frm1604f:txtSched1TaxWheld3": "0.00",
+        "frm1604f:txtSched1TaxWheld4": "0.00",
+        "frm1604f:txtSched1TaxWheldTotal": "2,000.00",
+        "frm1604f:txtSched1Total": "2,100.00",
+        "frm1604f:txtSched1TotalAmt1": "2,100.00",
+        "frm1604f:txtSched1TotalAmt2": "0.00",
+        "frm1604f:txtSched1TotalAmt3": "0.00",
+        "frm1604f:txtSched1TotalAmt4": "0.00",
+        "frm1604f:txtSched2Date1": "",
+        "frm1604f:txtSched2Date2": "",
+        "frm1604f:txtSched2Date3": "",
+        "frm1604f:txtSched2Date4": "",
+        "frm1604f:txtSched2Pen1": "0.00",
+        "frm1604f:txtSched2Pen2": "0.00",
+        "frm1604f:txtSched2Pen3": "0.00",
+        "frm1604f:txtSched2Pen4": "0.00",
+        "frm1604f:txtSched2PenTotal": "0.00",
+        "frm1604f:txtSched2TRA1": "",
+        "frm1604f:txtSched2TRA2": "",
+        "frm1604f:txtSched2TRA3": "",
+        "frm1604f:txtSched2TRA4": "",
+        "frm1604f:txtSched2TaxWheld1": "0.00",
+        "frm1604f:txtSched2TaxWheld2": "0.00",
+        "frm1604f:txtSched2TaxWheld3": "0.00",
+        "frm1604f:txtSched2TaxWheld4": "0.00",
+        "frm1604f:txtSched2TaxWheldTotal": "0.00",
+        "frm1604f:txtSched2Total": "0.00",
+        "frm1604f:txtSched2TotalAmt1": "0.00",
+        "frm1604f:txtSched2TotalAmt2": "0.00",
+        "frm1604f:txtSched2TotalAmt3": "0.00",
+        "frm1604f:txtSched2TotalAmt4": "0.00",
+        "frm1604f:txtSched3Date1": "",
+        "frm1604f:txtSched3Date2": "",
+        "frm1604f:txtSched3Date3": "",
+        "frm1604f:txtSched3Date4": "",
+        "frm1604f:txtSched3Pen1": "0.00",
+        "frm1604f:txtSched3Pen2": "0.00",
+        "frm1604f:txtSched3Pen3": "0.00",
+        "frm1604f:txtSched3Pen4": "0.00",
+        "frm1604f:txtSched3PenTotal": "0.00",
+        "frm1604f:txtSched3TRA1": "",
+        "frm1604f:txtSched3TRA2": "",
+        "frm1604f:txtSched3TRA3": "",
+        "frm1604f:txtSched3TRA4": "",
+        "frm1604f:txtSched3TaxWheld1": "0.00",
+        "frm1604f:txtSched3TaxWheld2": "0.00",
+        "frm1604f:txtSched3TaxWheld3": "0.00",
+        "frm1604f:txtSched3TaxWheld4": "0.00",
+        "frm1604f:txtSched3TaxWheldTotal": "0.00",
+        "frm1604f:txtSched3Total": "0.00",
+        "frm1604f:txtSched3TotalAmt1": "0.00",
+        "frm1604f:txtSched3TotalAmt2": "0.00",
+        "frm1604f:txtSched3TotalAmt3": "0.00",
+        "frm1604f:txtSched3TotalAmt4": "0.00",
+        "frm1604f:txtSheets": "0",
+        "frm1604f:txtYear": "2026",
+        "frm1604f:zipCode": "1100",
+        "txtEmail": "books@example.com"
+      }
+    },
+    "no": {
+      "frm1604f:taxRelief_1": "false",
+      "frm1604f:taxRelief_2": "true"
+    },
+    "cleared": {
+      "draft": {
+        "id": null,
+        "taxable_year": 2026,
+        "is_amended": false,
+        "number_of_attached_sheets": 0,
+        "tin": "12345678800000",
+        "rdo_code": "039",
+        "taxpayer_name": "Example Trading Corp",
+        "registered_address": "1 Example Street, Quezon City",
+        "zip_code": "1100",
+        "agent_category": "unspecified",
+        "top_withholding_agent": false,
+        "contact_number": "0281234567",
+        "email": "books@example.com",
+        "line_of_business": "Wholesale trading",
+        "tax_relief": false,
+        "tax_relief_details": "",
+        "schedules": [
+          [
+            {
+              "date": "04/25/2026",
+              "reference": "",
+              "taxes_withheld": 2000,
+              "penalties": 100,
+              "total_remitted": 2100
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            }
+          ],
+          [
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            }
+          ],
+          [
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            },
+            {
+              "date": "",
+              "reference": "",
+              "taxes_withheld": 0,
+              "penalties": 0,
+              "total_remitted": 0
+            }
+          ]
+        ],
+        "totals": [
+          {
+            "taxes_withheld": 2000,
+            "penalties": 100,
+            "total_remitted": 2100
+          },
+          {
+            "taxes_withheld": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          },
+          {
+            "taxes_withheld": 0,
+            "penalties": 0,
+            "total_remitted": 0
+          }
+        ],
+        "status": "Draft",
+        "created_at": "(stamp)",
+        "updated_at": "(stamp)",
+        "submission_attempts": 0,
+        "profile_baseline": {
+          "/contact_number": "0281234567",
+          "/email": "books@example.com",
+          "/line_of_business": "Wholesale trading",
+          "/rdo_code": "039",
+          "/registered_address": "1 Example Street, Quezon City",
+          "/taxpayer_name": "Example Trading Corp",
+          "/zip_code": "1100"
+        }
+      },
+      "values": {
+        "frm1604f:RegisteredAddress": "1 EXAMPLE STREET, QUEZON CITY",
+        "frm1604f:amendedRtn_1": "false",
+        "frm1604f:amendedRtn_2": "true",
+        "frm1604f:availedTaxRelief": "",
+        "frm1604f:branchCode": "00000",
+        "frm1604f:categoryAgent_1": "false",
+        "frm1604f:categoryAgent_2": "false",
+        "frm1604f:email": "BOOKS@EXAMPLE.COM",
+        "frm1604f:privateAgent_1": "false",
+        "frm1604f:privateAgent_2": "true",
+        "frm1604f:rdoCode": "039",
+        "frm1604f:registeredName": "EXAMPLE TRADING CORP",
+        "frm1604f:taxRelief_1": "false",
+        "frm1604f:taxRelief_2": "true",
+        "frm1604f:telephoneNumber": "0281234567",
+        "frm1604f:tinA": "123",
+        "frm1604f:tinB": "456",
+        "frm1604f:tinC": "788",
+        "frm1604f:txtCurrentPage": "1",
+        "frm1604f:txtLineBus": "WHOLESALE TRADING",
+        "frm1604f:txtPg2BranchCode": "00000",
+        "frm1604f:txtPg2TIN1": "123",
+        "frm1604f:txtPg2TIN2": "456",
+        "frm1604f:txtPg2TIN3": "788",
+        "frm1604f:txtPg2TaxpayerName": "EXAMPLE TRADING CORP",
+        "frm1604f:txtSched1Date1": "04/25/2026",
+        "frm1604f:txtSched1Date2": "",
+        "frm1604f:txtSched1Date3": "",
+        "frm1604f:txtSched1Date4": "",
+        "frm1604f:txtSched1Pen1": "100.00",
+        "frm1604f:txtSched1Pen2": "0.00",
+        "frm1604f:txtSched1Pen3": "0.00",
+        "frm1604f:txtSched1Pen4": "0.00",
+        "frm1604f:txtSched1PenTotal": "100.00",
+        "frm1604f:txtSched1TRA1": "",
+        "frm1604f:txtSched1TRA2": "",
+        "frm1604f:txtSched1TRA3": "",
+        "frm1604f:txtSched1TRA4": "",
+        "frm1604f:txtSched1TaxWheld1": "2,000.00",
+        "frm1604f:txtSched1TaxWheld2": "0.00",
+        "frm1604f:txtSched1TaxWheld3": "0.00",
+        "frm1604f:txtSched1TaxWheld4": "0.00",
+        "frm1604f:txtSched1TaxWheldTotal": "2,000.00",
+        "frm1604f:txtSched1Total": "2,100.00",
+        "frm1604f:txtSched1TotalAmt1": "2,100.00",
+        "frm1604f:txtSched1TotalAmt2": "0.00",
+        "frm1604f:txtSched1TotalAmt3": "0.00",
+        "frm1604f:txtSched1TotalAmt4": "0.00",
+        "frm1604f:txtSched2Date1": "",
+        "frm1604f:txtSched2Date2": "",
+        "frm1604f:txtSched2Date3": "",
+        "frm1604f:txtSched2Date4": "",
+        "frm1604f:txtSched2Pen1": "0.00",
+        "frm1604f:txtSched2Pen2": "0.00",
+        "frm1604f:txtSched2Pen3": "0.00",
+        "frm1604f:txtSched2Pen4": "0.00",
+        "frm1604f:txtSched2PenTotal": "0.00",
+        "frm1604f:txtSched2TRA1": "",
+        "frm1604f:txtSched2TRA2": "",
+        "frm1604f:txtSched2TRA3": "",
+        "frm1604f:txtSched2TRA4": "",
+        "frm1604f:txtSched2TaxWheld1": "0.00",
+        "frm1604f:txtSched2TaxWheld2": "0.00",
+        "frm1604f:txtSched2TaxWheld3": "0.00",
+        "frm1604f:txtSched2TaxWheld4": "0.00",
+        "frm1604f:txtSched2TaxWheldTotal": "0.00",
+        "frm1604f:txtSched2Total": "0.00",
+        "frm1604f:txtSched2TotalAmt1": "0.00",
+        "frm1604f:txtSched2TotalAmt2": "0.00",
+        "frm1604f:txtSched2TotalAmt3": "0.00",
+        "frm1604f:txtSched2TotalAmt4": "0.00",
+        "frm1604f:txtSched3Date1": "",
+        "frm1604f:txtSched3Date2": "",
+        "frm1604f:txtSched3Date3": "",
+        "frm1604f:txtSched3Date4": "",
+        "frm1604f:txtSched3Pen1": "0.00",
+        "frm1604f:txtSched3Pen2": "0.00",
+        "frm1604f:txtSched3Pen3": "0.00",
+        "frm1604f:txtSched3Pen4": "0.00",
+        "frm1604f:txtSched3PenTotal": "0.00",
+        "frm1604f:txtSched3TRA1": "",
+        "frm1604f:txtSched3TRA2": "",
+        "frm1604f:txtSched3TRA3": "",
+        "frm1604f:txtSched3TRA4": "",
+        "frm1604f:txtSched3TaxWheld1": "0.00",
+        "frm1604f:txtSched3TaxWheld2": "0.00",
+        "frm1604f:txtSched3TaxWheld3": "0.00",
+        "frm1604f:txtSched3TaxWheld4": "0.00",
+        "frm1604f:txtSched3TaxWheldTotal": "0.00",
+        "frm1604f:txtSched3Total": "0.00",
+        "frm1604f:txtSched3TotalAmt1": "0.00",
+        "frm1604f:txtSched3TotalAmt2": "0.00",
+        "frm1604f:txtSched3TotalAmt3": "0.00",
+        "frm1604f:txtSched3TotalAmt4": "0.00",
+        "frm1604f:txtSheets": "0",
+        "frm1604f:txtYear": "2026",
+        "frm1604f:zipCode": "1100",
+        "txtEmail": "books@example.com"
+      },
+      "removes": {
+        "message": "Changing item 11 to No clears item 11A (PEZA). Continue?",
+        "done": "Cleared item 11A",
+        "rows": 0
+      }
+    }
+  }
+}

@@ -41,6 +41,7 @@ mod catalogs;
 mod combs;
 mod conditions;
 mod penalties;
+mod rows_1604;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
@@ -475,9 +476,9 @@ fn retype_by_binding(form: &mut Value, code: &str) {
                 .iter()
                 .map(|key| page_type(def, code, key, &t, &label))
                 .collect();
-            // A date column some of whose rows the binding data left as plain
-            // text (1604C Part II) is a date column: plain text keeps the
-            // MM/DD/YYYY the page sends.
+            // A date column some of whose rows the binding data leaves as
+            // plain text is a date column: plain text keeps the MM/DD/YYYY
+            // the page sends.
             let plain_text = |key: &&String| {
                 matches!(
                     binding(key),
@@ -771,6 +772,28 @@ fn apply_layout(form: &mut Value, layout: &Value) {
             }
         }
     }
+    // What a `grid` may name: the loose fields, and (PR 6, 1604C/E/F Part
+    // II) the cells of an extracted table, each as a field of its column on
+    // the table's page. A grid naming no table cell builds what it built.
+    let mut grid_fields = fields.clone();
+    for table in &tables {
+        for row in table["keys"].as_array().into_iter().flatten() {
+            for (c, key) in row.as_array().into_iter().flatten().enumerate() {
+                let (Some(key), Some(col)) = (key.as_str(), table["cols"].get(c)) else {
+                    continue;
+                };
+                let mut field = json!({ "k": key, "l": col["l"].clone(), "t": col["t"].clone() });
+                for flag in ["c", "o", "w"] {
+                    if let Some(value) = col.get(flag) {
+                        field[flag] = value.clone();
+                    }
+                }
+                grid_fields
+                    .entry(key.to_string())
+                    .or_insert((field, table["p"].clone()));
+            }
+        }
+    }
     let wanted_tables: Vec<&str> = named_items()
         .filter_map(|it| it["table"].as_str())
         .collect();
@@ -778,6 +801,21 @@ fn apply_layout(form: &mut Value, layout: &Value) {
         let keys = table_keys(table);
         if keys.iter().any(|k| wanted_tables.contains(&k.as_str())) {
             claimed.extend(keys);
+        }
+    }
+    // An extracted table goes whole: a layout that names only some of its
+    // cells would drop the rest from the page, so it is a broken override.
+    for table in &tables {
+        let keys = table_keys(table);
+        let taken = keys.iter().filter(|k| claimed.contains(*k)).count();
+        if taken > 0 && taken < keys.len() {
+            panic!(
+                "{}: schema-overrides.json layout names {taken} of the {} cells of table {:?} (first cell {}); name every cell or none",
+                form["c"].as_str().unwrap_or("?"),
+                keys.len(),
+                table["l"].as_str().unwrap_or(""),
+                keys[0]
+            );
         }
     }
     let mut kept = BTreeSet::new();
@@ -843,7 +881,7 @@ fn apply_layout(form: &mut Value, layout: &Value) {
             if entry.get("grid").is_some() {
                 // A grid that cannot be built is a broken override, never a
                 // silently missing table (its keys are claimed already).
-                let table = grid_table(entry, &fields).unwrap_or_else(|error| {
+                let table = grid_table(entry, &grid_fields).unwrap_or_else(|error| {
                     panic!(
                         "{}: schema-overrides.json layout grid {}: {error}",
                         form["c"].as_str().unwrap_or("?"),
@@ -985,6 +1023,11 @@ fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Resul
     }
     if grid.get("row_labels").is_some() {
         table["row_labels"] = grid["row_labels"].clone();
+    }
+    // `numbered: false`: the row captions stand in for the row numbers
+    // (PR 6: the 1604 Part II sheets print no row numbers).
+    if grid["numbered"] == false {
+        table["numbered"] = Value::Bool(false);
     }
     Ok(table)
 }
@@ -3774,10 +3817,11 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's and PR 5's forms; the integration merge chains PR 2's and PR 3's
-    // below).
+    // 4's, PR 5's and PR 6's forms; the integration merge chains PR 2's and
+    // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
-        .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits));
+        .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
+        .or_else(|| rows_1604::removes(kind, &before, &draft, &edits));
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3938,6 +3982,15 @@ fn apply_screen_edits(
                 *draft = next;
                 continue;
             }
+        }
+        // A Part II date cleared on the page clears the draft's date (PR 6;
+        // the whole-date binding takes only MM/DD/YYYY text).
+        if let ChoiceStep::Fill(value) = &step
+            && let Some(path) = rows_1604::cleared_date(kind, &key, value)
+        {
+            set_draft_path(&mut next, &path, Value::String(String::new()));
+            *draft = next;
+            continue;
         }
         let result = match step {
             // A pooled address (rule 5) comes as one text on its first line.
@@ -4951,6 +5004,8 @@ mod tests {
     mod dst_pt_vat;
     // PR 5: 1701Q and 1702Q against their printed sheets.
     mod income_q;
+    // PR 6: 1604C, 1604F and 1604E against their printed sheets.
+    mod annual_1604;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -8118,12 +8173,12 @@ mod tests {
         // ten Treaty Code and ATC lists (PR 2), table cells now, and less
         // 1600PT's and 1600VT's mirrored item 6 RDO list (rdoPg1Pt1I6RDO),
         // hidden since PR 3, less 2000's three Schedule 1 ATC lists, table
-        // cells now, and plus 2000's Item 5 RDO list (PR 4):
-        // 82 - 6 - 10 - 2 - 3 + 1.
+        // cells now, and plus 2000's Item 5 RDO list (PR 4), and plus 3 for
+        // 1604C, 1604E and 1604F (PR 6, item 5 RDO): 82 - 6 - 10 - 2 - 3 + 1 + 3.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 62);
+        assert_eq!(supplied, 65);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
@@ -11261,10 +11316,6 @@ mod tests {
     /// so those forms' R2.0 stays open. A new one fails this test.
     const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
         "0605 txtEmail",
-        "1604E frm1604e:txtLineBus",
-        "1604E frm1604e:txtPg2TaxpayerName",
-        "1604F frm1604f:txtLineBus",
-        "1604F frm1604f:txtPg2TaxpayerName",
         "1701 frm1701:txtLineBus",
         "1701 frm1701:txtPg1mTaxpayerName",
         "1701 frm1701:txtPg2mTaxpayerName",

@@ -169,13 +169,61 @@ const NOT_PROFILE: &[(&str, &str)] = &[
 /// (the opposite of [`USER_CHOSEN`]): the projection marks them computed, so
 /// they are never bound to a draft field. The field map and the upload are
 /// unchanged.
-const COMPUTED_BY_FORM: &[(&str, &str)] = &[(
-    "frm2550qv2024:penalties",
-    "Item 25 Total Penalties (Sum of Items 22 to 24): form_2550q.rs recompute \
-     sets part_ii.item_25_total_penalties to the sum of Items 22-24; the \
-     samples leave Items 23 and 24 unset, so probing saw it move with the \
-     surcharge alone and bound it to /part_ii/item_22_surcharge",
-)];
+const COMPUTED_BY_FORM: &[(&str, &str)] = &[
+    (
+        "frm2550qv2024:penalties",
+        "Item 25 Total Penalties (Sum of Items 22 to 24): form_2550q.rs recompute \
+         sets part_ii.item_25_total_penalties to the sum of Items 22-24; the \
+         samples leave Items 23 and 24 unset, so probing saw it move with the \
+         surcharge alone and bound it to /part_ii/item_22_surcharge",
+    ),
+    ("frm1604e:txtSched1TotRemAmt1", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmt2", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmt3", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmt4", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmtTtl", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt1", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt2", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt3", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt4", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt5", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt6", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt7", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt8", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt9", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt10", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt11", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt12", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmtTtl", TOTAL_REMITTED_1604E),
+];
+
+const TOTAL_REMITTED_1604E: &str = "1604E Part II Total Amount Remitted: form_1604e.rs \
+     compute_schedule (computeSched1/computeSched2) sets each row's \
+     total_remitted to taxes_withheld + penalties and the TOTAL row's to the \
+     sum of the rows; the sample leaves most rows' taxes at zero, so probing \
+     saw a row's total move with its penalties alone and bound it to \
+     /scheduleN/k/penalties";
+
+/// Part II date boxes the samples date only in part (PR 6, 1604C/E/F): a
+/// row path a second sample echoes as a whole MM/DD/YYYY date is that date,
+/// though the first sample, which leaves the row blank, echoed plain text.
+/// Each entry is a box key stem; the rest of the key is the row number.
+const DATED_ROWS_KEEP_THE_DATE: &[&str] = &[
+    "frm1604c:txtSched1Date",
+    "frm1604e:txtSched1RemDate",
+    "frm1604e:txtSched2RemDate",
+    "frm1604f:txtSched1Date",
+    "frm1604f:txtSched2Date",
+    "frm1604f:txtSched3Date",
+];
+
+fn keeps_the_date(key: &str) -> bool {
+    DATED_ROWS_KEEP_THE_DATE.iter().any(|stem| {
+        key.strip_prefix(stem)
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    })
+}
+
 
 /// Boxes `fields.json` keys only as an occurrence of an official control
 /// (`X#occurrence-1`) that it lists under no key of its own, while the app's
@@ -1706,13 +1754,18 @@ fn decide(
     if let Some(echoes) = echoes.filter(|echoes| !echoes.is_empty()) {
         let (path, value_kind, nullable) = echoes
             .into_iter()
-            .min_by_key(|(path, _, _)| {
+            .min_by_key(|(path, value_kind, _)| {
                 (
                     !evidence
                         .real_echoes
                         .contains(&(key.to_string(), path.clone())),
                     evidence.echo_count.get(path).copied(),
                     path.clone(),
+                    // One path echoed as a whole date by one sample and as
+                    // plain text by another (a row a sample leaves blank):
+                    // a box of DATED_ROWS_KEEP_THE_DATE keeps the date.
+                    // Elsewhere the first echo stays, as before.
+                    keeps_the_date(key) && matches!(value_kind, ValueKind::Text(None)),
                 )
             })
             .cloned()
