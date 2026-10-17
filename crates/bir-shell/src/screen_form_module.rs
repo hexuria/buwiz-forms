@@ -10975,11 +10975,12 @@ mod tests {
                         .map(|cell| bir_print::frozen_html::printed_cell(&document, cell))
                         .collect();
                     let text: String = printed.iter().map(|(t, _)| t.as_str()).collect();
-                    // What the return holds: as typed, or, where the form's
-                    // own field map cuts the address (1600PT/VT, 2200C/M/P
-                    // and 2552 keep 160 characters, as the official form
-                    // does), what it files.
-                    let expected = if !kept.is_empty() && kept.len() < squeezed(&typed).len() {
+                    // The return files the address (never silently drops
+                    // it): as typed, or, where the form's own field map
+                    // cuts it (1600PT/VT, 2200C/M/P and 2552 keep 160
+                    // characters, as the official form does), that much.
+                    assert!(!kept.is_empty(), "{code} {len}: the XML files the address");
+                    let expected = if kept.len() < squeezed(&typed).len() {
                         kept.clone()
                     } else {
                         squeezed(&typed)

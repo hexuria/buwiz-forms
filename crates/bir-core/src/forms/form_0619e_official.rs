@@ -44,7 +44,9 @@ fn digits_only(value: &str) -> bool {
 }
 
 /// `txtAddress` / `txtAddress2` as `loadBGData` fills them, or `None` when
-/// the address cannot be represented the way the official page splits it.
+/// the address has a character outside Latin-1. A cut that would land
+/// inside a `%XX` escape moves back to before it, so the escape stays
+/// whole on the second line.
 pub(super) fn official_address_lines(address: &str) -> Option<(String, String)> {
     if address.chars().any(|c| u32::from(c) > 0xFF) {
         return None;
@@ -53,12 +55,17 @@ pub(super) fn official_address_lines(address: &str) -> Option<(String, String)> 
     if escaped.len() <= ADDRESS_SPLIT {
         return Some((js_unescape(&escaped)?, String::new()));
     }
-    // A cut inside a %XX sequence would leave literal fragments.
-    let cut = &escaped[..ADDRESS_SPLIT];
-    if cut.ends_with('%') || cut.as_bytes()[ADDRESS_SPLIT - 2] == b'%' {
-        return None;
-    }
-    Some((js_unescape(cut)?, js_unescape(&escaped[ADDRESS_SPLIT..])?))
+    // A cut inside a %XX sequence would leave literal fragments: cut before
+    // the escape instead.
+    let bytes = escaped.as_bytes();
+    let at = if bytes[ADDRESS_SPLIT - 1] == b'%' {
+        ADDRESS_SPLIT - 1
+    } else if bytes[ADDRESS_SPLIT - 2] == b'%' {
+        ADDRESS_SPLIT - 2
+    } else {
+        ADDRESS_SPLIT
+    };
+    Some((js_unescape(&escaped[..at])?, js_unescape(&escaped[at..])?))
 }
 
 fn split_tin(tin: &str) -> (String, String, String, String) {
@@ -220,7 +227,7 @@ impl Form0619EDraft {
         } else if official_address_lines(&self.full_address()).is_none() {
             err(
                 "registered_address",
-                "Item 10 cannot be split into the two official address lines; shorten it or remove characters outside Latin-1.",
+                "Item 10 has a character outside Latin-1, which the official address lines cannot carry; remove it.",
             );
         }
         let zip = self.zip_code.trim();
@@ -531,9 +538,19 @@ mod tests {
         let (one, two) = official_address_lines(&address).unwrap();
         assert_eq!(one.len(), 127);
         assert_eq!(two, "AAA");
-        // 126 plain characters then a space: the cut would split "%20".
+        // 126 plain characters then a space: the cut would split "%20", so
+        // it moves back before the escape and the space opens line 2.
         let tricky = format!("{} x", "a".repeat(126));
-        assert!(official_address_lines(&tricky).is_none());
+        let (one, two) = official_address_lines(&tricky).unwrap();
+        assert_eq!(one, "A".repeat(126));
+        assert_eq!(two, " X");
+        assert_eq!(format!("{one}{two}"), tricky.to_ascii_uppercase());
+        // The cut at the escape's last two characters moves back too.
+        let tricky = format!("{} x", "a".repeat(125));
+        let (one, two) = official_address_lines(&tricky).unwrap();
+        assert_eq!((one.len(), two.as_str()), (125, " X"));
+        // Only a character outside Latin-1 is refused.
+        assert!(official_address_lines("UNIT \u{4E00} CITY").is_none());
     }
 
     #[test]
