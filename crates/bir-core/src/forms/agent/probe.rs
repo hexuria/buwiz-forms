@@ -52,7 +52,46 @@ const USER_CHOSEN: &[(&str, &str)] = &[
          checkCarriedOver), enabled on an over-remittance; form_1601eq.rs \
          `over_remittance`",
     ),
+    (
+        "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt",
+        "Item 49 Other Tax Credits/Payments amount: the second of the two \
+         other-credit lines (items 48 and 49) the filer types; \
+         form_1702ex.rs keeps it as other_credits[1].amount, which the \
+         field map writes and total_credits sums into item 50, and \
+         html-frozen/1702ex-2018/writer-cells.json joins it at \"49 Other \
+         Tax Credits/Payments amount\", as it joins item 48's",
+    ),
+    ("frm1702EX:txtPg3Pt6I17OthersEAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6I17OthersFAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6I17OthersGAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6I17OthersHAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6S2I2Amount", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6S2I3Amount", SCHEDULE_ROW_1702EX),
 ];
+
+const SCHEDULE_ROW_1702EX: &str = "1702EX Schedule 1 items 17e-17h and Schedule 2 rows 2-3: \
+     the amount of a row whose description (and legal basis) the filer types \
+     and the probe binds; form_1702ex.rs keeps it as that row's amount \
+     (other_deductions / special_rows), which the field map writes and the \
+     schedule total sums. rules/forms/1702ex-v2018c/fields.json marks it \
+     computed with no calculation in calculations.json; the official page \
+     keeps the row shut at load (runtime-control-inventory-v796.json) with \
+     its description";
+
+/// Profile boxes the rules corpus marks computed: the official page fills
+/// them from the taxpayer's profile and shuts them at load, exactly as it
+/// does the profile boxes beside them that the corpus leaves uncomputed, so
+/// the projection treats them as those (still `required` as the corpus
+/// says). Their bindings, and their profile lock, are derived by probing.
+const PROFILE_NOT_COMPUTED: &[(&str, &str)] = &[(
+    "frm1702EX:txtPg1Pt1I11ContactNumber",
+    "Item 11 Contact Number: rules/forms/1702ex-v2018c/fields.json marks it \
+     computed, but rules/forms/1702ex-v2018c/fixtures/\
+     runtime-control-inventory-v796.json records it disabled at load (source \
+     line 697) like the item 8, 9, 9A and 12 profile boxes (source lines \
+     592-711), and form_1702ex.rs writes it from the draft's contact_number, \
+     which new_from_profile fills from the profile's phone",
+)];
 
 /// Boxes whose value only coincides with the sample profile's: the recorded
 /// samples put the property and the spouse in the filer's own RDO (039), so
@@ -148,7 +187,51 @@ const GATED_ENTRY: &[(&str, &str)] = &[
         "Item 31 \"To be carried over\" amount: typed by the filer; cleared \
          by `compute` with its box when the overpayment ends",
     ),
+    (
+        "frm1702RT:txtPg4Sc4I1C1",
+        "Schedule IV item 1 Year: typed by the filer like items 2 and 3; \
+         form_1702rt_official.rs recompute clears every Schedule IV row \
+         while the return is not subject to MCIT (enableMCITFields(false)), \
+         which the taxable year decides",
+    ),
+    (
+        "frm1702RT:txtPg4Sc4I1C2",
+        "Schedule IV item 1 A) Normal Income Tax as Adjusted: typed by the \
+         filer; cleared with its row while the return is not subject to MCIT",
+    ),
+    (
+        "frm1702RT:txtPg4Sc4I1C3",
+        "Schedule IV item 1 B) MCIT: typed by the filer; cleared with its \
+         row while the return is not subject to MCIT",
+    ),
+    ("frm1702MX:txtPg7Sc9I1", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg7Sc9I1CA", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg7Sc9I1CB", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg7Sc9I1CF", MX_SCHEDULE_9_ROW_1),
+    ("frm1702RT:txtPg2Pt4I54C2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg3Sc1I17iC2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg3Sc2I4C3", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg4Sc5I3C2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg4Sc5I6C2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg4Sc5I8C2", RT_ADD_MORE_LINE),
+    (
+        "frm1702RT:txtPg4Sc4I1C7",
+        "Schedule IV item 1 F) Excess MCIT Applied this Current Taxable \
+         Year: typed by the filer; cleared with its row while the return is \
+         not subject to MCIT",
+    ),
 ];
+
+const MX_SCHEDULE_9_ROW_1: &str = "1702MX Schedule 9 item 1 (Year, A, B and F): typed by \
+     the filer like items 2 and 3; form_1702mx_official.rs recompute clears \
+     every Schedule 9 row while the return is not subject to MCIT \
+     (enableMCITFields), which the incorporation date decides";
+
+const RT_ADD_MORE_LINE: &str = "1702RT: the amount of an item with an \"(Add more...)\" \
+     table (Part IV item 54, Schedule I item 17i, Schedule II item 4, Schedule V \
+     items 3, 6 and 8), typed by the filer like its description; once the table \
+     holds two or more rows, form_1702rt_official.rs recompute writes OTHERS and \
+     the table's subtotal there (FORM_1702RT_MODALS, saveModalTable)";
 
 /// Project `fields.json` onto the boxes the assistant needs.
 pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
@@ -169,11 +252,14 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                 .find(|meaning| meaning["stored_value"] == "true");
             let key = text(field, "field_key");
             let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
+            let from_profile = PROFILE_NOT_COMPUTED.iter().any(|(k, _)| *k == key);
             BoxDef {
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
-                computed: !chosen_by_user && field["computed"].as_bool().unwrap_or(false),
+                computed: !chosen_by_user
+                    && !from_profile
+                    && field["computed"].as_bool().unwrap_or(false),
                 required: if chosen_by_user {
                     "conditional".to_string()
                 } else {

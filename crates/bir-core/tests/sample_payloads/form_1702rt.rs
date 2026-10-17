@@ -236,8 +236,25 @@ fn form_1702rt_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    // Overpaid (Item 16 below zero): the only state in which the Item 21
+    // overpayment choice is kept (form_1702rt_official.rs recompute clears
+    // it otherwise), so the probe can bind its three boxes.
+    let mut overpaid = sample_1702rt();
+    overpaid
+        .part_iv
+        .tax_credits
+        .item_48_previous_quarter_withholding = WholePeso(5_000_000);
+    overpaid.recompute();
+    assert!(
+        overpaid.part_ii.item_16_net_tax_payable_or_overpayment.0 < 0,
+        "the overpaid seed is overpaid"
+    );
+    overpaid.part_ii.overpayment_disposition =
+        Some(bir_core::forms::form_1702rt::Form1702RTOverpaymentDisposition::Refund);
+    overpaid.recompute();
     vec![
         serde_json::to_value(sample_1702rt()).expect("sample serializes"),
         serde_json::to_value(sample_1702rt_more_rows()).expect("sample serializes"),
+        serde_json::to_value(overpaid).expect("overpaid sample serializes"),
     ]
 }
