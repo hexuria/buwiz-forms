@@ -851,20 +851,110 @@ fn writer_cells(slug: &str) -> Result<WriterCells, String> {
         Some(json) => parse_writer_cells(json)?,
         None => WriterCells::empty(),
     };
-    for (sheet, joins) in SHEET_JOINS {
-        if *sheet != slug {
+    merge_sheet_joins(&mut cells, sheet_joins(slug));
+    Ok(cells)
+}
+
+/// `slug`'s [`SHEET_JOINS`].
+fn sheet_joins(slug: &str) -> &'static [SheetJoin] {
+    SHEET_JOINS
+        .iter()
+        .find(|(sheet, _)| *sheet == slug)
+        .map_or(&[], |(_, joins)| *joins)
+}
+
+/// Add `joins` to `cells`, each key leaving `not_joined`. A join whose key
+/// writer-cells.json already joins, or whose cell it already fills, is
+/// skipped: a later re-sync that adds the same join never fills a cell
+/// twice (two replacements of one input would overlap).
+fn merge_sheet_joins(cells: &mut WriterCells, joins: &[SheetJoin]) {
+    for (key, cell, _) in joins {
+        let filled: BTreeSet<String> = cells
+            .targets()
+            .into_iter()
+            .map(|(_, cell)| cell.to_string())
+            .collect();
+        if cells.joins.contains_key(*key) || filled.contains(*cell) {
             continue;
         }
-        for (key, cell) in *joins {
-            cells.not_joined.remove(*key);
-            cells
-                .joins
-                .entry((*key).to_string())
-                .or_default()
-                .push((*cell).to_string());
+        cells.not_joined.remove(*key);
+        cells
+            .joins
+            .entry((*key).to_string())
+            .or_default()
+            .push((*cell).to_string());
+    }
+}
+
+/// `slug`'s writer-cells.json as JSON with [`SHEET_JOINS`] merged in the
+/// way the print merges them (the same skip rules): each join added to
+/// `joins` with its printed caption, its key taken off `not_joined`. The one
+/// source the screen (comb capacity, the audit's not-joined reasons) and
+/// the print share. `None` for a sheet with no writer-cells.json.
+pub fn merged_writer_cells_json(slug: &str) -> Option<serde_json::Value> {
+    let mut cells: serde_json::Value = serde_json::from_str(writer_cells_json(slug)?).ok()?;
+    let mut joins: Vec<serde_json::Value> = cells["joins"].as_array().cloned().unwrap_or_default();
+    for (key, cell, printed) in sheet_joins(slug) {
+        let taken = joins
+            .iter()
+            .any(|join| join["writer_key"] == *key || join["html_id"] == *cell);
+        if taken {
+            continue;
+        }
+        joins.push(serde_json::json!({
+            "writer_key": key,
+            "html_id": cell,
+            "printed": printed,
+            "reason": "frozen_html.rs SHEET_JOINS (the frozen writer-cells.json leaves it out)",
+        }));
+        if let Some(rows) = cells["not_joined"].as_array_mut() {
+            for row in rows.iter_mut() {
+                if let Some(list) = row["writer_keys"].as_array_mut() {
+                    list.retain(|k| k != *key);
+                }
+            }
+            rows.retain(|row| {
+                row["writer_key"] != *key
+                    && row["writer_keys"]
+                        .as_array()
+                        .is_none_or(|list| !list.is_empty())
+            });
         }
     }
-    Ok(cells)
+    cells["joins"] = serde_json::Value::Array(joins);
+    Some(cells)
+}
+
+/// `slug`'s [`SHEET_JOINS`] that print in a comb: `(writer key, comb
+/// slots, printed caption)`, read from the bundled sheet, for the screen's
+/// character boxes.
+pub fn sheet_join_combs(slug: &str) -> Vec<(String, usize, String)> {
+    let Some(loaded) = bundle(slug) else {
+        return Vec::new();
+    };
+    let merged = merged_writer_cells_json(slug).unwrap_or(serde_json::Value::Null);
+    sheet_joins(slug)
+        .iter()
+        .filter(|(key, cell, _)| {
+            merged["joins"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|join| {
+                    join["writer_key"] == *key
+                        && join["html_id"] == *cell
+                        && join["reason"]
+                            .as_str()
+                            .is_some_and(|r| r.starts_with("frozen_html.rs SHEET_JOINS"))
+                })
+        })
+        .filter_map(|(key, cell, printed)| {
+            let open = loaded.html.find(&format!("<div id=\"{cell}\""))?;
+            let tag = &loaded.html[open..open + loaded.html[open..].find('>')?];
+            let slots = attr(tag, "data-comb-slots")?.parse().ok()?;
+            Some((key.to_string(), slots, printed.to_string()))
+        })
+        .collect()
 }
 
 fn grouped_input_indices<'a>(tags: &[InputTag<'a>]) -> BTreeMap<&'a str, Vec<usize>> {
@@ -1383,20 +1473,29 @@ fn fill_bundle(
     ))
 }
 
+/// One Rust-side join: `(writer key, cell, printed caption)`.
+type SheetJoin = (&'static str, &'static str, &'static str);
+
 /// Text joins a frozen sheet's writer-cells.json leaves out although the
 /// sheet has the cell (html-frozen is synced from upstream and never edited
-/// here), per sheet: `(writer key, cell)`. 2550M (2007) item 4: the TIN's
-/// three 3-slot combs and the 5-slot branch comb of the item 4 row
-/// (data-row 7: p1c127, p1c9, p1c11, p1c13), which writer-cells lists as
-/// not joined. The branch comb's inputs carry the sheet's 00000 as values;
-/// the join writes the draft's branch over them.
-const SHEET_JOINS: &[(&str, &[(&str, &str)])] = &[(
+/// here), per sheet. 2550M (2007) item 4: the TIN's three 3-slot combs and
+/// the 5-slot branch comb of the item 4 row (data-row 7: p1c127, p1c9,
+/// p1c11, p1c13). The branch comb's inputs carry the sheet's 00000 as
+/// values; the join writes the draft's branch over them.
+///
+/// For these keys this table supersedes 2550m-2007/writer-cells.json's
+/// rule text ("The TIN boxes ... are not fillable cells on this sheet") and
+/// its not_joined reason for the TIN row ("the 2007 sheet's TIN row has no
+/// fillable cells in the frozen page ... reported on #113"): the frozen page
+/// has those cells. writer_cells() and merged_writer_cells_json() merge it,
+/// skipping any join writer-cells.json itself gains on a later re-sync.
+const SHEET_JOINS: &[(&str, &[SheetJoin])] = &[(
     "2550m-2007",
     &[
-        ("frm2550m:txtTIN1", "p1c127"),
-        ("frm2550m:txtTIN2", "p1c9"),
-        ("frm2550m:txtTIN3", "p1c11"),
-        ("frm2550m:txtBranchCode", "p1c13"),
+        ("frm2550m:txtTIN1", "p1c127", "4 TIN (1-3)"),
+        ("frm2550m:txtTIN2", "p1c9", "4 TIN (4-6)"),
+        ("frm2550m:txtTIN3", "p1c11", "4 TIN (7-9)"),
+        ("frm2550m:txtBranchCode", "p1c13", "4 TIN branch"),
     ],
 )];
 
@@ -3349,6 +3448,65 @@ mod tests {
         assert!(html.contains("AGENT CORP"));
         assert_eq!(named_values(&html, "p1c5"), vec!["X".to_string()]);
         assert_eq!(named_values(&html, "p1c25"), vec!["X".to_string()]);
+    }
+
+    /// A Rust-side join that writer-cells.json already has (a later
+    /// re-sync), by key or by cell, is skipped: the cell is filled once.
+    #[test]
+    fn a_sheet_join_the_writer_cells_already_have_is_not_added_twice() {
+        let mut cells = WriterCells::empty();
+        cells
+            .joins
+            .insert("frm2550m:txtTIN1".into(), vec!["p1c127".into()]);
+        cells
+            .joins
+            .insert("frm2550m:txtOther".into(), vec!["p1c9".into()]);
+        cells
+            .not_joined
+            .insert("frm2550m:txtTIN3".into(), "old reason".into());
+        merge_sheet_joins(&mut cells, sheet_joins("2550m-2007"));
+        assert_eq!(cells.joins["frm2550m:txtTIN1"], vec!["p1c127".to_string()]);
+        assert!(
+            !cells.joins.contains_key("frm2550m:txtTIN2"),
+            "p1c9 is taken"
+        );
+        assert_eq!(cells.joins["frm2550m:txtTIN3"], vec!["p1c11".to_string()]);
+        assert!(!cells.not_joined.contains_key("frm2550m:txtTIN3"));
+        let targets: Vec<&str> = cells.targets().into_iter().map(|(_, c)| c).collect();
+        let unique: BTreeSet<&str> = targets.iter().copied().collect();
+        assert_eq!(targets.len(), unique.len(), "{targets:?}");
+        // The fill of a sheet whose joins name a cell twice would overlap
+        // its replacements; the merged print fills each once.
+        let real = writer_cells("2550m-2007").unwrap();
+        let targets: Vec<&str> = real.targets().into_iter().map(|(_, c)| c).collect();
+        let unique: BTreeSet<&str> = targets.iter().copied().collect();
+        assert_eq!(targets.len(), unique.len());
+        let merged = merged_writer_cells_json("2550m-2007").unwrap();
+        let joined: Vec<&str> = merged["joins"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|j| {
+                j["writer_key"].as_str().unwrap().contains("txtTIN")
+                    || j["writer_key"] == "frm2550m:txtBranchCode"
+            })
+            .map(|j| j["html_id"].as_str().unwrap())
+            .collect();
+        assert_eq!(joined, ["p1c127", "p1c9", "p1c11", "p1c13"]);
+        assert!(!merged["not_joined"].to_string().contains("txtTIN1"));
+        assert_eq!(
+            sheet_join_combs("2550m-2007"),
+            vec![
+                ("frm2550m:txtTIN1".to_string(), 3, "4 TIN (1-3)".to_string()),
+                ("frm2550m:txtTIN2".to_string(), 3, "4 TIN (4-6)".to_string()),
+                ("frm2550m:txtTIN3".to_string(), 3, "4 TIN (7-9)".to_string()),
+                (
+                    "frm2550m:txtBranchCode".to_string(),
+                    5,
+                    "4 TIN branch".to_string()
+                ),
+            ]
+        );
     }
 
     /// PR 4 (2550M manual-3): item 4 prints the TIN's three parts and the
