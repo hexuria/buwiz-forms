@@ -41,6 +41,7 @@ mod catalogs;
 mod combs;
 mod conditions;
 mod penalties;
+mod rows_1604;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
@@ -3198,6 +3199,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3224,6 +3226,9 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 6's forms; the integration merge chains the other form groups').
+    let removes = rows_1604::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3234,6 +3239,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        "removes": removes,
     })))
 }
 

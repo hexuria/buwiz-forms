@@ -805,6 +805,89 @@ fn pr6_only_named_boxes_are_drawn_off_the_printed_sheet() {
     }
 }
 
+/// Lesson 8: Item 11 No clears what the filer typed under it (1604C Items
+/// 11A-13, `changeRefund`; 1604F Item 11A, `TaxReliefEnable`), so the host
+/// reports it and the page asks first. Nothing typed, nothing asked.
+#[test]
+fn pr6_item_11_no_asks_before_clearing_what_was_typed() {
+    setup();
+    let opened = open("1604C", 0);
+    let yes = fill(
+        "1604C",
+        &opened["draft"],
+        json!({"frm1604c:releasedOfFunds_1": "true", "frm1604c:releasedOfFunds_2": "false"}),
+    );
+    assert_eq!(yes["removes"], Value::Null, "Yes removes nothing");
+    let no = json!({"frm1604c:releasedOfFunds_1": "false", "frm1604c:releasedOfFunds_2": "true"});
+    assert_eq!(
+        fill("1604C", &yes["draft"], no.clone())["removes"],
+        Value::Null,
+        "nothing typed under 11, nothing asked"
+    );
+    let typed = fill(
+        "1604C",
+        &yes["draft"],
+        json!({
+            "frm1604c:txtRefMonth": "03",
+            "frm1604c:txtRefDate": "15",
+            "frm1604c:txtRefYear": "2026",
+            "frm1604c:txt12": "1234.5",
+            "frm1604c:select13": "4",
+        }),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    assert_eq!(typed["draft"]["refund_date"], "03/15/2026");
+    assert_eq!(typed["draft"]["first_crediting_month"], 4);
+    let cleared = fill("1604C", &typed["draft"], no);
+    assert_eq!(cleared["draft"]["refunds_released"], false);
+    assert_eq!(cleared["draft"]["refund_date"], "");
+    assert_eq!(cleared["draft"]["overremittance"], 0.0);
+    assert_eq!(cleared["draft"]["first_crediting_month"], 0);
+    assert_eq!(
+        cleared["removes"],
+        json!({
+            "message": "Changing item 11 to No clears item 11A (date of refund 03/15/2026), item 12 (₱1,234.50) and item 13 (April). Continue?",
+            "done": "Cleared items 11A to 13",
+            "rows": 0,
+        })
+    );
+    // 1604F Item 11A.
+    let opened = open("1604F", 0);
+    let yes = fill(
+        "1604F",
+        &opened["draft"],
+        json!({"frm1604f:taxRelief_1": "true", "frm1604f:taxRelief_2": "false"}),
+    );
+    let typed = fill(
+        "1604F",
+        &yes["draft"],
+        json!({"frm1604f:availedTaxRelief": "PEZA"}),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    let cleared = fill(
+        "1604F",
+        &typed["draft"],
+        json!({"frm1604f:taxRelief_1": "false", "frm1604f:taxRelief_2": "true"}),
+    );
+    assert_eq!(cleared["draft"]["tax_relief_details"], "");
+    assert_eq!(
+        cleared["removes"],
+        json!({
+            "message": "Changing item 11 to No clears item 11A (PEZA). Continue?",
+            "done": "Cleared item 11A",
+            "rows": 0,
+        })
+    );
+    // Another form's same-named answer is not this one's.
+    let opened = open("1604E", 0);
+    let filled = fill(
+        "1604E",
+        &opened["draft"],
+        json!({"frm1604e:AmendedRtn_1": "true", "frm1604e:AmendedRtn_2": "false"}),
+    );
+    assert_eq!(filled["removes"], Value::Null);
+}
+
 /// The shared `grid` change: a grid that names only loose fields builds the
 /// table it built before (the extracted tables' cells are a fallback only),
 /// and on this branch no form but the three 1604s names a grid.
