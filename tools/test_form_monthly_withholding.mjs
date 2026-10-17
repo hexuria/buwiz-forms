@@ -195,6 +195,23 @@ assert.ok(ids.has(`fp-date-0:${from}`), "From has its own calendar");
 assert.ok(!ids.has(`fp-date-0:${to}`), "To, which the form computes, has none");
 console.log("PASS 1600WP item 1 is two dates, From with its calendar.");
 
+// ---- A picked date on a two-digit year list (1600PT/1600VT item 1).
+{
+  const months = ["01 - January", "02 - February", "03 - March"];
+  const years = [{ value: "25", label: "2025" }, { value: "26", label: "2026" }];
+  const date = { month: { k: K("pm"), t: "sel", o: months }, day: null, year: { k: K("py"), t: "sel", o: years } };
+  const sent = () => calls.filter((c) => c[0] === "screen_form_fill").at(-1)[3];
+  ui.pickDate(date, "2026-03-16", cx);
+  ui.flush(cx);
+  assert.equal(sent()[K("py")], "26", "the year list takes 2026 as its 26");
+  assert.equal(sent()[K("pm")], "03", "the month list its 03");
+  ui.pickDate(date, "2027-02-01", cx);
+  ui.flush(cx);
+  assert.ok(!(K("py") in sent()), "a year the list does not offer is not written");
+  assert.equal(sent()[K("pm")], "02");
+}
+console.log("PASS a picked date writes a two-digit year list's own value and skips what it does not offer.");
+
 
 // ---- A rate that waits for its ATC.
 assert.ok(texts.includes(" 25.0"), "a chosen row's rate shows its value");

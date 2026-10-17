@@ -687,8 +687,15 @@ export class FormPageActions {
       if (!f || f.c || this.isLocked(f.k)) return;
       let value = v;
       if (f.t === "sel" && f.o) {
-        const hit = f.o.map(optionOf).find((o) => o && (o.value === v || o.value === String(Number(v))));
-        value = hit ? hit.value : v;
+        const listed = f.o.map(optionOf).filter(Boolean);
+        const wanted = [v, String(Number(v))];
+        // A year list of two-digit values (1600PT/1600VT item 1, 20YY)
+        // takes the picked year's last two digits.
+        if (f === date.year && listed.length && listed.every((o) => /^\d{2}$/.test(o.value))) wanted.push(v.slice(-2));
+        const hit = listed.find((o) => wanted.includes(o.value));
+        // A pick the list does not offer is no choice: the box keeps its value.
+        if (!hit) return;
+        value = hit.value;
       }
       edits[f.k] = value;
       const input = s.inputs.get(f.k);
