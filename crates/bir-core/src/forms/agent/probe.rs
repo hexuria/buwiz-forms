@@ -205,6 +205,8 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                     || (!chosen_by_user && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()
+                } else if computed_by_form {
+                    "computed".to_string()
                 } else {
                     text(field, "required")
                 },

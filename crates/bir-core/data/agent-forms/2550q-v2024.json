@@ -368,7 +368,7 @@
 {"key":"frm2550qv2024:otherSpecify56","kind":"text","label":"56B Others (Specify)","required":"optional"},
 {"key":"frm2550qv2024:outputTaxDue","kind":"text","label":"34B Total Sales & Output Tax Due","required":"optional"},
 {"computed":true,"key":"frm2550qv2024:outputVatSales","kind":"text","label":"31B Output Tax (VATable Sales)","required":"computed"},
-{"computed":true,"key":"frm2550qv2024:penalties","kind":"text","label":"25 Total Penalties","required":"optional"},
+{"computed":true,"key":"frm2550qv2024:penalties","kind":"text","label":"25 Total Penalties","required":"computed"},
 {"key":"frm2550qv2024:Pg2TaxPayer","kind":"text","label":"Taxpayer's Last Name / Registered Name","required":"optional"},
 {"key":"frm2550qv2024:presumptiveInputTax","kind":"text","label":"41B Presumptive Input Tax","required":"optional"},
 {"key":"frm2550qv2024:RtnPeriodFromNo4","kind":"text","label":"Rtn Period From No 4","required":"optional"},
