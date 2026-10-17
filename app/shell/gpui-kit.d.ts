@@ -27997,8 +27997,10 @@ declare module "bir" {
       period_parts: ScreenFormPeriodPart[];
       /** A sample rebuilt for a period its filer completed. */
       period_set: boolean;
-      /** A sample's taxpayer's saved returns of the form, for a picker that marks them. */
-      saved_periods: ScreenFormSavedPeriod[];
+      /** An amended return's filed version, kept in its history (null when never amended): open it with `screen_form_filed_original`. */
+      filed_original?: { id: number; status: string; filed_on: string | null } | null;
+      /** Set on the read-only view of a filed original. */
+      filed_original_view?: { status: string; filed_on: string | null };
       /** When a return was sent to BIR and confirmed (a read-only view says so). */
       submitted_at: string | null;
       confirmed_at: string | null;
@@ -28011,13 +28013,6 @@ declare module "bir" {
       part: "year" | "month" | "year_end_month" | "day" | "quarter" | "date";
       /** For a quarter's tick box: which quarter. */
       quarter: number | null;
-  }
-  export interface ScreenFormSavedPeriod {
-      year: number;
-      month: number | null;
-      quarter: number | null;
-      status: ScreenFormStatus;
-      updated_at: string;
   }
   export interface ScreenFormExisting {
       form_code: string;
@@ -28039,7 +28034,8 @@ declare module "bir" {
       /** No stored return: a fresh sample built for exactly this period. */
       sample?: ScreenFormOpened;
       /** The year and period `screen_form_open` takes for it. */
-      opens?: { year: number; period: number };
+      /** What `screen_form_open` takes for it: year, period and the exact stored key (null: start it with New return). */
+      opens?: { year: number; period: number; key: number | null } | null;
   }
   export interface ScreenFormFilled {
       draft: object;
@@ -28071,12 +28067,15 @@ declare module "bir" {
   }
   export function screen_form_schema(form_code: string): object;
   export function screen_forms_index(): ScreenFormIndexEntry[];
-  export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
+  /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter), else the latest of the period. */
+  export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null): Promise<ScreenFormOpened>;
   /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
   export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
   /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
-  /** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved, and the filed return is kept as its amendment snapshot. */
-  export function screen_form_amend(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
+  /** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved. The filed version is kept in this return's history. */
+  export function screen_form_amend(tin: string, form_code: string, year: number, period: number, key?: number | null): Promise<ScreenFormOpened>;
+  /** An amended return's filed version from its history, read-only. */
+  export function screen_form_filed_original(form_code: string, snapshot_id: number): Promise<ScreenFormOpened>;
   export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
   /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
   export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;

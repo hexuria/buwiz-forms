@@ -17,7 +17,7 @@ use serde::de::DeserializeOwned;
 
 use super::amendment_snapshots::{NewAmendmentSnapshot, insert_amendment_snapshot};
 use super::drafts::filing_status_to_db;
-use super::{Database, DbError, RevertedForAmendment, SnapshotPayloadSource};
+use super::{AmendmentBase, Database, DbError, RevertedForAmendment, SnapshotPayloadSource};
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_1601c_xml::FORM_1601C_FORM_ID;
 use crate::forms::form_2551q::Form2551QDraft;
@@ -29,6 +29,7 @@ trait LegacyAmendable: Clone + Serialize + DeserializeOwned {
     const FORM_CODE: &'static str;
     const LAYOUT_ID: &'static str;
     fn status(&self) -> &FilingStatus;
+    fn updated_at(&self) -> &str;
     fn is_unclaimed(&self) -> bool;
     fn tin(&self) -> &str;
     fn taxable_year(&self) -> u16;
@@ -50,6 +51,9 @@ impl LegacyAmendable for Form1601CDraft {
     const LAYOUT_ID: &'static str = FORM_1601C_FORM_ID;
     fn status(&self) -> &FilingStatus {
         &self.status
+    }
+    fn updated_at(&self) -> &str {
+        &self.updated_at
     }
     fn is_unclaimed(&self) -> bool {
         self.submission_claim_token.is_none() && self.submission_claimed_at.is_none()
@@ -97,6 +101,9 @@ impl LegacyAmendable for Form2551QDraft {
     const LAYOUT_ID: &'static str = FORM_2551Q_FORM_ID;
     fn status(&self) -> &FilingStatus {
         &self.status
+    }
+    fn updated_at(&self) -> &str {
+        &self.updated_at
     }
     fn is_unclaimed(&self) -> bool {
         self.submission_claim_token.is_none() && self.submission_claimed_at.is_none()
@@ -162,7 +169,46 @@ impl Database {
         taxable_year: u16,
         month: u8,
     ) -> Result<RevertedForAmendment<Form1601CDraft>, DbError> {
-        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(month))
+        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(month), None, None)
+    }
+
+    /// An amendment's first save for 1601C in one transaction (see
+    /// [`Database::save_queueable_amendment`]).
+    pub fn save_1601c_amendment(
+        &self,
+        amended: &Form1601CDraft,
+        base: &AmendmentBase,
+    ) -> Result<i64, DbError> {
+        let period = i64::from(amended.month);
+        self.revert_legacy_for_amendment(
+            amended.tin(),
+            amended.taxable_year,
+            period,
+            Some(base),
+            Some(amended),
+        )?
+        .draft
+        .id
+        .ok_or_else(|| DbError::Other("1601C amendment has no row".into()))
+    }
+
+    /// An amendment's first save for 2551Q in one transaction.
+    pub fn save_2551q_amendment(
+        &self,
+        amended: &Form2551QDraft,
+        base: &AmendmentBase,
+    ) -> Result<i64, DbError> {
+        let period = i64::from(amended.quarter);
+        self.revert_legacy_for_amendment(
+            amended.tin(),
+            amended.taxable_year,
+            period,
+            Some(base),
+            Some(amended),
+        )?
+        .draft
+        .id
+        .ok_or_else(|| DbError::Other("2551Q amendment has no row".into()))
     }
 
     /// The user's "Revert to Draft" for 2551Q (D7A + D8A).
@@ -172,7 +218,7 @@ impl Database {
         taxable_year: u16,
         quarter: u8,
     ) -> Result<RevertedForAmendment<Form2551QDraft>, DbError> {
-        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(quarter))
+        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(quarter), None, None)
     }
 
     fn revert_legacy_for_amendment<F: LegacyAmendable>(
@@ -180,6 +226,8 @@ impl Database {
         tin: &str,
         taxable_year: u16,
         period: i64,
+        base: Option<&AmendmentBase>,
+        replacement: Option<&F>,
     ) -> Result<RevertedForAmendment<F>, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let Some((id, raw_json, db_status)) = tx
@@ -204,6 +252,14 @@ impl Database {
         };
         let current: F = serde_json::from_str(&raw_json)?;
         let previous_status = current.status().clone();
+        if let Some(base) = base
+            && (base.status != previous_status || base.updated_at != current.updated_at())
+        {
+            return Err(DbError::Other(format!(
+                "The filed {} return changed since this amendment began; open it again and amend that",
+                F::FORM_CODE
+            )));
+        }
         if db_status != filing_status_to_db(&previous_status) {
             return Err(DbError::Other(format!(
                 "{} return status is inconsistent ({db_status} row, {previous_status:?} data); refusing to revert",
@@ -270,6 +326,23 @@ impl Database {
                 "{} return changed before the revert completed",
                 F::FORM_CODE
             )));
+        }
+        // An amendment's first save, in the same transaction.
+        if let Some(amended) = replacement {
+            if !matches!(amended.status(), FilingStatus::Draft) {
+                return Err(DbError::Other(format!(
+                    "Only a Draft {} amendment may be saved",
+                    F::FORM_CODE
+                )));
+            }
+            let mut amended = amended.clone();
+            amended.set_id(Some(id));
+            tx.execute(
+                "UPDATE form_drafts SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+                 WHERE id = ?2",
+                params![serde_json::to_string(&amended)?, id],
+            )?;
+            draft = amended;
         }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();

@@ -85,8 +85,10 @@ export interface ScreenFormOpened {
     period_parts: ScreenFormPeriodPart[];
     /** A sample rebuilt for a period its filer completed. */
     period_set: boolean;
-    /** A sample's taxpayer's saved returns of the form, for a picker that marks them. */
-    saved_periods: ScreenFormSavedPeriod[];
+    /** An amended return's filed version, kept in its history (null when never amended): open it with `screen_form_filed_original`. */
+    filed_original?: { id: number; status: string; filed_on: string | null } | null;
+    /** Set on the read-only view of a filed original. */
+    filed_original_view?: { status: string; filed_on: string | null };
     /** When a return was sent to BIR and confirmed (a read-only view says so). */
     submitted_at: string | null;
     confirmed_at: string | null;
@@ -99,13 +101,6 @@ export interface ScreenFormPeriodPart {
     part: "year" | "month" | "year_end_month" | "day" | "quarter" | "date";
     /** For a quarter's tick box: which quarter. */
     quarter: number | null;
-}
-export interface ScreenFormSavedPeriod {
-    year: number;
-    month: number | null;
-    quarter: number | null;
-    status: ScreenFormStatus;
-    updated_at: string;
 }
 export interface ScreenFormExisting {
     form_code: string;
@@ -127,7 +122,8 @@ export interface ScreenFormSamplePeriod {
     /** No stored return: a fresh sample built for exactly this period. */
     sample?: ScreenFormOpened;
     /** The year and period `screen_form_open` takes for it. */
-    opens?: { year: number; period: number };
+    /** What `screen_form_open` takes for it: year, period and the exact stored key (null: start it with New return). */
+    opens?: { year: number; period: number; key: number | null } | null;
 }
 export interface ScreenFormFilled {
     draft: object;
@@ -159,12 +155,15 @@ export interface ScreenFormSaved {
 }
 export function screen_form_schema(form_code: string): object;
 export function screen_forms_index(): ScreenFormIndexEntry[];
-export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
+/** `key`: the exact stored return (a transaction's MMDD, 2553's quarter), else the latest of the period. */
+export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null): Promise<ScreenFormOpened>;
 /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
 export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
 /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
-/** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved, and the filed return is kept as its amendment snapshot. */
-export function screen_form_amend(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
+/** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved. The filed version is kept in this return's history. */
+export function screen_form_amend(tin: string, form_code: string, year: number, period: number, key?: number | null): Promise<ScreenFormOpened>;
+/** An amended return's filed version from its history, read-only. */
+export function screen_form_filed_original(form_code: string, snapshot_id: number): Promise<ScreenFormOpened>;
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
@@ -188,6 +187,7 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("screen_form_sample", screen_form_sample)
         .async_function("screen_form_sample_period", screen_form_sample_period)
         .async_function("screen_form_amend", screen_form_amend)
+        .async_function("screen_form_filed_original", screen_form_filed_original)
         .function("screen_form_fill", screen_form_fill)
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
@@ -978,6 +978,7 @@ fn load_draft(
     year: u16,
     period: u8,
     fresh: bool,
+    exact: Option<i64>,
 ) -> Result<Value, String> {
     use bir_core::forms::*;
     let tin = profile.tin.full();
@@ -1014,6 +1015,21 @@ fn load_draft(
         }
         AgentFormKind::Queueable(kind) => kind,
     };
+    // The one stored return under `exact` (a transaction's `MMDD`, 2553's
+    // quarter) rather than the latest of the year; none stored, a new one.
+    if let (Some(key), Some(store)) = (exact, store)
+        && queueable != QueueableKind::Form2550Q
+    {
+        let found = bir_core::with_queueable_kind!(queueable, F => {
+            match stored::<F>(Some(store), tin, year, key)? {
+                Some(found) => Some(finish(db, profile, found)?),
+                None => None,
+            }
+        });
+        if let Some(found) = found {
+            return Ok(found);
+        }
+    }
     let column = i64::from(period);
     macro_rules! simple {
         ($ty:ty, $new:expr) => {{
@@ -1220,7 +1236,7 @@ fn load_draft(
         QueueableKind::Form2200AN => {
             type F = form_2200an::Form2200ANDraft;
             let month = i64::from(period.clamp(1, 12));
-            let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 1..=31), |_| true)?
+            let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 0..=31), |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, period));
             finish(db, profile, draft)
         }
@@ -1231,7 +1247,7 @@ fn load_draft(
             } else {
                 1..=12
             };
-            let draft = latest::<F>(store, tin, year, mmdd_keys(months, 1..=31), |_| true)?
+            let draft = latest::<F>(store, tin, year, mmdd_keys(months, 0..=31), |_| true)?
                 .unwrap_or_else(|| F::new_for_month(profile, year, period));
             finish(db, profile, draft)
         }
@@ -1246,7 +1262,7 @@ fn load_draft(
         QueueableKind::Form2200S => {
             type F = form_2200s::Form2200SDraft;
             let month = i64::from(period.clamp(1, 12));
-            let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 1..=31), |_| true)?
+            let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 0..=31), |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, period));
             finish(db, profile, draft)
         }
@@ -1798,48 +1814,70 @@ fn open_screen_form(
             page_period(code, arguments.integer(3)?).map_err(host_error)?,
         )
     };
+    // The exact stored return to open (an offer's `opens.key`): a
+    // transaction's `MMDD`, 2553's quarter.
+    let exact = if sample {
+        None
+    } else {
+        arguments.get(4).and_then(|key| to_json(key).as_i64())
+    };
     // The draft to show; the one the profile alone makes for this period
     // (what decides whether the profile filled a box); and for a sample, one
     // for another year and period (what tells which boxes follow the period).
-    let (draft, from_profile, build) = with_database(|db| {
+    let (draft, from_profile, build, filed_original) = with_database(|db| {
         let profile = db
             .get_profile_by_tin(&tin)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
-        let draft = load_draft(db, kind, &profile, year, period, sample).map_err(host_error)?;
-        let from_profile = if sample {
+        let mut draft =
+            load_draft(db, kind, &profile, year, period, sample, exact).map_err(host_error)?;
+        let mut from_profile = if sample {
             draft.clone()
         } else {
-            load_draft(db, kind, &profile, year, period, true).map_err(host_error)?
+            load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?
         };
+        // Nothing stored under that key: a new return for the date it names.
+        if let Some(key) = exact
+            && draft["id"].is_null()
+        {
+            let parts = sample_period_parts(kind);
+            let typed = typed_from_key(year, key);
+            write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
+            write_typed_period(kind, &parts, &typed, &mut from_profile).map_err(host_error)?;
+        }
         let build = if sample {
             let period = page_period(code, 2).map_err(host_error)?;
             Some(SampleBuild {
                 other: Some(
-                    load_draft(db, kind, &profile, year + 1, period, true).map_err(host_error)?,
+                    load_draft(db, kind, &profile, year + 1, period, true, None)
+                        .map_err(host_error)?,
                 ),
-                saved: saved_periods(db, &tin, code),
             })
         } else {
             None
         };
-        Ok((draft, from_profile, build))
+        let filed_original = if sample {
+            Value::Null
+        } else {
+            filed_original(db, kind, &draft).map_err(host_error)?
+        };
+        Ok((draft, from_profile, build, filed_original))
     })?;
     Ok(async move {
-        let opened =
+        let mut opened =
             on_large_stack(move || opened_json(kind, year, period, draft, from_profile, build))
                 .and_then(|result| result)
                 .map_err(host_error)?;
+        opened["filed_original"] = filed_original;
         Ok(json(opened))
     })
 }
 
 /// How a sample is built: `other`, a draft for another year and period
 /// while the filer has not set one (`None` once the sample is rebuilt for a
-/// complete period); `saved`, the taxpayer's saved periods of the form.
+/// complete period).
 struct SampleBuild {
     other: Option<Value>,
-    saved: Vec<Value>,
 }
 
 /// What `screen_form_open`, `screen_form_sample` and a rebuilt sample answer.
@@ -1883,9 +1921,15 @@ fn opened_json(
                 }
             }
         }
-        // Period parts are page inputs in a sample, however a return locks them.
+        // Period parts are page inputs in a sample, however a return locks
+        // them; a period box the form computes stays shut.
         for (key, _) in &parts {
             locks.remove(key);
+        }
+        for key in DERIVED_PERIOD_BOXES {
+            if schema_keys(code).contains(key) {
+                locks.insert(key.to_string(), json!("computed from the year-end month"));
+            }
         }
         for key in &blank {
             if locks.contains_key(key) {
@@ -1932,7 +1976,6 @@ fn opened_json(
         "needs": needs,
         "period_parts": period_parts,
         "period_set": sample.as_ref().is_some_and(|build| build.other.is_none()),
-        "saved_periods": sample.map(|build| build.saved).unwrap_or_default(),
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
         "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
         "errors": errors,
@@ -1961,11 +2004,12 @@ fn screen_form_sample_period(
         _ => return Err(host_error("parts must be an object of key -> value")),
     };
     let parts = sample_period_parts(kind);
-    let typed = read_typed_period(&parts, &typed);
+    let raw_parts = typed.clone();
+    let typed = read_typed_period(code, &parts, &typed);
     enum Answer {
         Incomplete,
-        Existing(Value, u16, u8),
-        Fresh(Value, u16, u8, Vec<Value>),
+        Existing(Value, Value),
+        Fresh(Value, u16, u8, Value),
     }
     let answer = match complete_period(kind, &parts, &typed) {
         None => Answer::Incomplete,
@@ -1975,50 +2019,66 @@ fn screen_form_sample_period(
                 .map_err(|error| host_error(error.to_string()))?
                 .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
             let mut draft =
-                load_draft(db, kind, &profile, year, period, true).map_err(host_error)?;
-            write_typed_period(kind, &parts, &typed, &mut draft);
+                load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
+            write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
             agent::compute(kind, &mut draft).map_err(host_error)?;
-            // A per-transaction form keyed by an entry number, not a date,
-            // cannot match a typed date to a stored return.
-            let numbered = matches!(
-                agent::identity(kind, &draft).map_err(host_error)?.period,
-                FilingPeriod::OpenEnded(key) if key < 101
-            );
+            // A per-transaction form numbered by entry, not by date, cannot
+            // match a typed date to a stored return.
+            let numbered = NUMBERED_FORMS.contains(&code);
             let stored = if numbered {
                 None
             } else {
                 stored_for_period(db, kind, &draft).map_err(host_error)?
             };
             Ok(match stored {
+                // Opened by its own stored key: exactly the return matched.
                 Some(stored) => Answer::Existing(
                     existing_return(db, kind, &stored).map_err(host_error)?,
-                    year,
-                    period,
+                    json!({ "year": year, "period": period, "key": stored_period(kind, &stored) }),
                 ),
-                None => Answer::Fresh(draft, year, period, saved_periods(db, &tin, code)),
+                // Start a return opens a new return for that period; for an
+                // entry-numbered form, New return.
+                None => {
+                    let opens = if numbered {
+                        Value::Null
+                    } else {
+                        json!({ "year": year, "period": period, "key": stored_period(kind, &draft) })
+                    };
+                    Answer::Fresh(draft, year, period, opens)
+                }
             })
         })?,
     };
     Ok(async move {
         let answer = match answer {
             Answer::Incomplete => json!({ "complete": false }),
-            Answer::Existing(existing, year, period) => json!({
+            Answer::Existing(existing, opens) => json!({
                 "complete": true,
                 "existing": existing,
-                "opens": { "year": year, "period": period },
+                "opens": opens,
             }),
-            Answer::Fresh(draft, year, period, saved) => {
-                let build = SampleBuild { other: None, saved };
+            Answer::Fresh(draft, year, period, opens) => {
+                let build = SampleBuild { other: None };
                 let from_profile = draft.clone();
-                let sample = on_large_stack(move || {
+                let mut sample = on_large_stack(move || {
                     opened_json(kind, year, period, draft, from_profile, Some(build))
                 })
                 .and_then(|result| result)
                 .map_err(host_error)?;
+                // A period part with no box in the field map (0605's quarter
+                // ticks) still shows what the filer set.
+                let def = kind.definition();
+                for (key, _) in sample_period_parts(kind) {
+                    let empty = sample["values"][&key].as_str().is_none_or(str::is_empty);
+                    let unbound = !def.bindings.contains_key(&key);
+                    if let (true, Some(value)) = (empty || unbound, raw_parts.get(&key)) {
+                        sample["values"][&key] = value.clone();
+                    }
+                }
                 json!({
                     "complete": true,
                     "sample": sample,
-                    "opens": { "year": year, "period": period },
+                    "opens": opens,
                 })
             }
         };
@@ -2171,6 +2231,16 @@ fn blank_sample(blank: &[String], values: &mut Value, errors: &mut Value) {
 /// the period is not set.
 const SAMPLE_NEEDS: &str = "Shows once the period is set";
 
+/// Per-transaction forms whose returns are numbered by entry (1, 2, ...)
+/// rather than keyed by their date: a typed date cannot match a stored one,
+/// and Start a return opens New return.
+const NUMBERED_FORMS: [&str; 7] = ["0605", "1606", "1706", "1707", "1707A", "1800", "1801"];
+
+/// Period boxes the form computes although nothing marks them computed:
+/// 1707A's year-end day is the last day of its year-end month. Never a part
+/// a sample's filer sets; shut in a sample with its reason.
+const DERIVED_PERIOD_BOXES: [&str; 1] = ["frm1707Av2021:txtI1YearEndDay"];
+
 /// One part of a return's period, as a sample's filer types it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PeriodPart {
@@ -2240,15 +2310,24 @@ fn sample_period_parts(kind: AgentFormKind) -> Vec<(String, PeriodPart)> {
         {
             return None;
         }
-        // One part of a date field the form keeps whole (1800's date of
-        // donation, 1801's date of death): that date is the return's period.
+        // A computed box (1707A's year-end day) shows its value; it is not
+        // something the filer sets.
+        if DERIVED_PERIOD_BOXES.contains(&key)
+            || def
+                .box_def(key)
+                .is_some_and(|entry| entry.computed || entry.required == "computed")
+        {
+            return None;
+        }
+        // One part of the transaction's own date, kept whole in the draft.
+        // Any other date (1604C's refund date) is an answer, not the period.
         if let Some(Binding::Text {
             path,
             part: Some(part),
             ..
         }) = def.bindings.get(key).map(|bound| &bound.binding)
         {
-            if path.matches('/').count() > 1 {
+            if path != "/transaction_date" {
                 return None;
             }
             return Some(match part {
@@ -2346,7 +2425,7 @@ fn sample_period_parts(kind: AgentFormKind) -> Vec<(String, PeriodPart)> {
         .filter_map(|(first_part, field)| {
             let key = field["k"].as_str()?;
             let t = field["t"].as_str().unwrap_or("");
-            if t == "hidden" {
+            if t == "hidden" || field["c"].as_bool() == Some(true) {
                 return None;
             }
             classify(key, t, first_part).map(|part| (key.to_string(), part))
@@ -2364,7 +2443,22 @@ struct TypedPeriod {
     quarter: Option<u8>,
 }
 
-fn read_typed_period(parts: &[(String, PeriodPart)], typed: &Map<String, Value>) -> TypedPeriod {
+/// A schema field's `m` (its length), when it has one.
+fn field_length(code: &str, key: &str) -> Option<u64> {
+    schema_entry(code)?["parts"]
+        .as_array()?
+        .iter()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        .flat_map(|item| item["f"].as_array().into_iter().flatten())
+        .find(|field| field["k"] == key)
+        .and_then(|field| field["m"].as_u64())
+}
+
+fn read_typed_period(
+    code: &str,
+    parts: &[(String, PeriodPart)],
+    typed: &Map<String, Value>,
+) -> TypedPeriod {
     let text = |key: &str| match typed.get(key) {
         Some(Value::String(text)) => text.trim().to_string(),
         Some(Value::Number(number)) => number.to_string(),
@@ -2384,7 +2478,13 @@ fn read_typed_period(parts: &[(String, PeriodPart)], typed: &Map<String, Value>)
         }
         match part {
             PeriodPart::Year => {
+                // All four digits, or both of a two-digit box: "2", "20" and
+                // "202" are a year still being typed, never 2002 or 2020.
+                let digits = value.chars().filter(char::is_ascii_digit).count();
+                let short = field_length(code, key) == Some(2);
+                let whole = digits == 4 || (short && digits == 2);
                 period.year = number(&value)
+                    .filter(|_| whole && value.chars().all(|c| c.is_ascii_digit()))
                     .map(|year| if year < 100 { year + 2000 } else { year })
                     .filter(|year| (1900..=2100).contains(year))
                     .and_then(|year| u16::try_from(year).ok());
@@ -2463,7 +2563,11 @@ fn complete_period(
             if has(|p| matches!(p, PeriodPart::Quarter(_))) && typed.quarter.is_none() {
                 return None;
             }
-            typed.month.or(typed.quarter).unwrap_or(1)
+            if NUMBERED_FORMS.contains(&code) {
+                1
+            } else {
+                typed.month.or(typed.quarter).unwrap_or(1)
+            }
         }
     };
     page_period(code, i64::from(period))
@@ -2471,36 +2575,19 @@ fn complete_period(
         .map(|period| (year, period))
 }
 
-/// Write the typed parts a constructor does not set (a day, a whole date,
-/// a date of donation, a fiscal year-end month) into a sample's new draft,
-/// through [`agent::write_period_box`]: the host building its own draft,
-/// never a page's edit. The year, month and quarter fields the constructor
-/// takes are left as it set them.
+/// Write every typed period part into a draft the host builds for that
+/// period (a library sample's rebuild, a new return for a date), through
+/// [`agent::write_period_box`]: the host building its own draft, never a
+/// page's edit. A quarter with no box of its own goes into the draft's
+/// `/quarter` (0605). A refusal is an error, never skipped.
 fn write_typed_period(
     kind: AgentFormKind,
     parts: &[(String, PeriodPart)],
     typed: &TypedPeriod,
     draft: &mut Value,
-) {
-    const BUILT: [&str; 6] = [
-        "year",
-        "taxable_year",
-        "transaction_year",
-        "month",
-        "transaction_month",
-        "quarter",
-    ];
+) -> Result<(), String> {
     let def = kind.definition();
     for (key, part) in parts {
-        let Some(bound) = def.bindings.get(key) else {
-            continue;
-        };
-        let built = agent::binding_paths(&bound.binding)
-            .iter()
-            .all(|path| BUILT.contains(&path.rsplit('/').next().unwrap_or("")));
-        if built {
-            continue;
-        }
         let value = match part {
             PeriodPart::Year => typed.year.map(|year| year.to_string()),
             PeriodPart::Month => typed.month.map(|month| format!("{month:02}")),
@@ -2510,16 +2597,42 @@ fn write_typed_period(
                 (Some(month), Some(day), Some(year)) => Some(format!("{month:02}/{day:02}/{year}")),
                 _ => None,
             },
-            PeriodPart::Quarter(_) => None,
+            PeriodPart::Quarter(quarter) => match typed.quarter {
+                Some(ticked) if ticked == *quarter => Some("true".to_string()),
+                _ => None,
+            },
         };
         let Some(value) = value else {
             continue;
         };
-        let mut next = draft.clone();
-        if agent::write_period_box(kind, &mut next, key, &Value::from(value)).is_ok() {
-            *draft = next;
+        if !def.bindings.contains_key(key) {
+            if let (PeriodPart::Quarter(quarter), Some(Value::Number(_))) =
+                (part, draft.pointer("/quarter"))
+            {
+                draft["quarter"] = Value::from(*quarter);
+            }
+            continue;
         }
+        agent::write_period_box(kind, draft, key, &Value::from(value.clone()))
+            .map_err(|error| format!("{key} = {value}: {error}"))?;
     }
+    Ok(())
+}
+
+/// The period a stored return's key names: a transaction's `MMDD`, else a
+/// quarter (2553), for a new return opened under that key.
+fn typed_from_key(year: u16, key: i64) -> TypedPeriod {
+    let mut typed = TypedPeriod {
+        year: Some(year),
+        ..TypedPeriod::default()
+    };
+    if key >= 101 {
+        typed.month = u8::try_from(key / 100).ok();
+        typed.day = u8::try_from(key % 100).ok();
+    } else {
+        typed.quarter = u8::try_from(key).ok();
+    }
+    typed
 }
 
 /// A period's words for the page: `March 2025`, `Q1 2025`, `2025`, or a
@@ -2551,32 +2664,6 @@ fn period_label(period: &FilingPeriod, year: u16) -> String {
         }
         FilingPeriod::OpenEnded(key) => format!("No. {key}, {year}"),
     }
-}
-
-/// A form's saved returns for this taxpayer, for a picker that marks them:
-/// year, month or quarter, status and when each was last saved.
-fn saved_periods(db: &Database, tin: &str, code: &str) -> Vec<Value> {
-    use chrono::Datelike;
-    let now = chrono::Local::now().year();
-    let mut out = Vec::new();
-    for year in (now - 10)..=(now + 1) {
-        let Ok(year) = u16::try_from(year) else {
-            continue;
-        };
-        let Ok(rows) = db.list_draft_summaries(tin, year) else {
-            continue;
-        };
-        for row in rows.into_iter().filter(|row| row.form_code == code) {
-            out.push(json!({
-                "year": row.taxable_year,
-                "month": row.month,
-                "quarter": row.quarter,
-                "status": status_name(&row.status),
-                "updated_at": row.updated_at,
-            }));
-        }
-    }
-    out
 }
 
 /// What a page needs to offer a stored return: its period and label, status,
@@ -2723,6 +2810,14 @@ fn apply_screen_edits(
             rejected.insert(key.clone(), Value::String(format!("`{key}` {reason}")));
             continue;
         }
+        // A radio written by direct draft steps keeps the locks a fill keeps:
+        // the return's period and computed boxes stay as they are.
+        if matches!(step, ChoiceStep::Set(_))
+            && let Some(reason) = set_refusal(def, &key)
+        {
+            rejected.insert(key.clone(), Value::String(reason));
+            continue;
+        }
         let mut next = draft.clone();
         let result = match step {
             ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value, lift(&key)),
@@ -2741,6 +2836,27 @@ fn apply_screen_edits(
         }
     }
     Ok(rejected)
+}
+
+/// Why a box's direct draft steps (`ChoiceStep::Set`) are refused: it is
+/// computed, or it (or its item's group box) picks the return's identity.
+fn set_refusal(def: &AgentFormDef, key: &str) -> Option<String> {
+    let entry = def.box_def(key)?;
+    if entry.computed || entry.required == "computed" {
+        return Some(format!("`{key}` is computed by BIR's own formulas"));
+    }
+    let lock = def
+        .bindings
+        .get(key)
+        .or_else(|| {
+            entry
+                .group
+                .as_deref()
+                .and_then(|group| def.bindings.get(group))
+        })
+        .and_then(|bound| bound.lock);
+    (lock == Some(agent::Lock::Identity))
+        .then(|| format!("`{key}` {}", agent::Lock::Identity.reason()))
 }
 
 /// One planned write of `screen_form_fill`.
@@ -2994,16 +3110,12 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
     let mut draft = draft_argument(arguments, 1)?;
     refuse_sample(&mut draft, "saved")?;
     let amendment = take_amendment_mark(&mut draft);
-    let id = with_database(|db| {
-        if amendment.is_some() {
-            // An amendment's first save: the filed return goes through the
-            // user's "Revert to Draft" (kept as an amendment snapshot), and
-            // this draft takes its row.
-            let row = revert_for_amendment(db, kind, &draft).map_err(host_error)?;
-            draft["id"] = Value::from(row);
+    let id = with_database(|db| match &amendment {
+        Some(mark) => save_amendment(db, kind, &mut draft, mark).map_err(host_error),
+        None => {
+            refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
+            agent::save_draft(kind, db, &mut draft).map_err(host_error)
         }
-        refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
-        agent::save_draft(kind, db, &mut draft).map_err(host_error)
     })?;
     let status = agent::identity(kind, &draft).map_err(host_error)?.status;
     Ok(json(json!({
@@ -3098,30 +3210,105 @@ fn stored_for_period(
     }
 }
 
-/// A draft no stored row gave an id may not replace the stored return of
-/// its TIN, form, year and period: only that return, reopened (its id, or
-/// for a form whose rows keep no id, its own `created_at`), may.
+/// What a save may write. A draft saves over the stored return of its TIN,
+/// form, year and period only when that row is still a Draft and is this
+/// very draft: the same row id; for 2550Q, whose rows keep no id, the same
+/// `created_at`. A draft with an id saves only to that row. A filed or
+/// queued return never changes here (an amendment does, through its own
+/// save).
 fn refuse_replacing_a_stored_return(
     db: &Database,
     kind: AgentFormKind,
     draft: &Value,
 ) -> Result<(), String> {
-    if !draft["id"].is_null() {
-        return Ok(());
+    let code = kind.form_code();
+    let id = draft["id"].as_i64();
+    let Some(stored) = stored_return(db, kind, draft)? else {
+        return match id {
+            Some(id) => Err(format!(
+                "this {code} draft names row {id}, which is not stored for its period; open the return again"
+            )),
+            None => Ok(()),
+        };
+    };
+    let status = agent::identity(kind, &stored)?.status;
+    if status != FilingStatus::Draft {
+        return Err(format!(
+            "the {code} return for this period is {}; it can no longer change here (amend it instead)",
+            status_name(&status)
+        ));
     }
-    match stored_return(db, kind, draft)? {
-        Some(stored) if created_at(&stored) != created_at(draft) || created_at(draft).is_none() => {
-            Err(format!(
-                "a {} return for this period is already stored; open it from the taxpayer's returns to change it",
-                kind.form_code()
-            ))
-        }
-        _ => Ok(()),
+    let same_2550q = kind == AgentFormKind::Queueable(QueueableKind::Form2550Q)
+        && created_at(&stored).is_some()
+        && created_at(&stored) == created_at(draft);
+    match (id, stored["id"].as_i64()) {
+        (Some(id), Some(row)) if id == row => Ok(()),
+        (Some(id), Some(row)) => Err(format!(
+            "this {code} draft names row {id}, but its period is stored as row {row}; open the return again"
+        )),
+        (_, None) if same_2550q => Ok(()),
+        _ => Err(format!(
+            "a {code} return for this period is already stored; open it from the taxpayer's returns to change it"
+        )),
     }
 }
 
+fn filing_status_named(name: &str) -> Option<FilingStatus> {
+    Some(match name {
+        "Draft" => FilingStatus::Draft,
+        "Queued" => FilingStatus::Queued,
+        "Submitted" => FilingStatus::Submitted,
+        "Confirmed" => FilingStatus::Confirmed,
+        "Paid" => FilingStatus::Paid,
+        _ => return None,
+    })
+}
+
+/// An amendment's first save: in one transaction, the user's revert of the
+/// filed return (kept byte for byte as its amendment snapshot) and this
+/// draft written in its row. Refused, with nothing changed, if the filed row
+/// is no longer the one the amendment was copied from (the mark's status and
+/// `updated_at`).
+fn save_amendment(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &mut Value,
+    mark: &Value,
+) -> Result<i64, String> {
+    use bir_core::db::AmendmentBase;
+    let base = AmendmentBase {
+        status: mark["status"]
+            .as_str()
+            .and_then(filing_status_named)
+            .ok_or("this amendment does not say which filed return it amends; amend it again")?,
+        updated_at: mark["updated_at"].as_str().unwrap_or("").to_string(),
+    };
+    agent::compute(kind, draft)?;
+    let error = |error: bir_core::db::DbError| error.to_string();
+    let id = match kind {
+        AgentFormKind::Form1601C => db
+            .save_1601c_amendment(
+                &serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?,
+                &base,
+            )
+            .map_err(error)?,
+        AgentFormKind::Form2551Q => db
+            .save_2551q_amendment(
+                &serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?,
+                &base,
+            )
+            .map_err(error)?,
+        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
+            let typed: F = serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+            db.save_queueable_amendment(&typed, &base).map_err(error)?
+        }),
+    };
+    draft["id"] = Value::from(id);
+    Ok(id)
+}
+
 /// Marks a new amended return (`screen_form_amend`) until its first save:
-/// the status of the filed return it amends.
+/// the filed return it amends, as it was (`status`, `updated_at`).
 const AMENDMENT_MARK: &str = "screen_form_amendment";
 
 fn take_amendment_mark(draft: &mut Value) -> Option<Value> {
@@ -3135,36 +3322,6 @@ fn put_amendment_mark(draft: &mut Value, mark: Option<Value>) {
     if let (Some(mark), Value::Object(object)) = (mark, draft) {
         object.insert(AMENDMENT_MARK.into(), mark);
     }
-}
-
-/// The user's "Revert to Draft" for the filed return an amendment replaces:
-/// its row id.
-fn revert_for_amendment(db: &Database, kind: AgentFormKind, draft: &Value) -> Result<i64, String> {
-    let identity = agent::identity(kind, draft)?;
-    let (tin, year) = (identity.tin.as_str(), identity.taxable_year);
-    let column = bir_core::forms::queueable::period_column(&identity.period);
-    let slot = u8::try_from(column).unwrap_or(0);
-    let id = match kind {
-        AgentFormKind::Form1601C => {
-            db.revert_1601c_for_amendment(tin, year, slot)
-                .map_err(|error| error.to_string())?
-                .draft
-                .id
-        }
-        AgentFormKind::Form2551Q => {
-            db.revert_2551q_for_amendment(tin, year, slot)
-                .map_err(|error| error.to_string())?
-                .draft
-                .id
-        }
-        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
-            db.revert_queueable_for_amendment::<F>(tin, year, column)
-                .map_err(|error| error.to_string())?
-                .draft
-                .draft_id()
-        }),
-    };
-    id.ok_or_else(|| format!("the filed {} return has no row", kind.form_code()))
 }
 
 /// Open a NEW amended return for a stored return that reached BIR, copied
@@ -3183,17 +3340,24 @@ fn screen_form_amend(
     let year =
         u16::try_from(arguments.integer(2)?).map_err(|_| host_error("year is out of range"))?;
     let period = page_period(code, arguments.integer(3)?).map_err(host_error)?;
-    let (amended, from_profile, status) = with_database(|db| {
+    let exact = arguments.get(4).and_then(|key| to_json(key).as_i64());
+    let (amended, from_profile, status, updated_at) = with_database(|db| {
         let profile = db
             .get_profile_by_tin(&tin)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
-        let filed = load_draft(db, kind, &profile, year, period, false).map_err(host_error)?;
+        let filed =
+            load_draft(db, kind, &profile, year, period, false, exact).map_err(host_error)?;
         let status = agent::identity(kind, &filed).map_err(host_error)?.status;
+        let updated_at = filed["updated_at"]
+            .as_str()
+            .or_else(|| filed["lifecycle"]["updated_at"].as_str())
+            .unwrap_or("")
+            .to_string();
         let amended = agent::amended_copy(kind, &filed).map_err(host_error)?;
         let from_profile =
-            load_draft(db, kind, &profile, year, period, true).map_err(host_error)?;
-        Ok((amended, from_profile, status))
+            load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
+        Ok((amended, from_profile, status, updated_at))
     })?;
     Ok(async move {
         let mut opened =
@@ -3202,9 +3366,69 @@ fn screen_form_amend(
                 .map_err(host_error)?;
         put_amendment_mark(
             &mut opened["draft"],
-            Some(json!({ "amends": status_name(&status) })),
+            Some(json!({ "status": status_name(&status), "updated_at": updated_at })),
         );
         opened["amends"] = json!(status_name(&status));
+        Ok(json(opened))
+    })
+}
+
+/// The filed version an amended return keeps in its history (its newest
+/// amendment snapshot): its id, status and when it was filed. Null for a
+/// return that was never amended.
+fn filed_original(db: &Database, kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
+    let identity = agent::identity(kind, draft)?;
+    let snapshots = db
+        .list_amendment_snapshots(
+            kind.form_code(),
+            &identity.tin,
+            identity.taxable_year,
+            &identity.period.to_period_key(),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(match snapshots.last() {
+        Some(snapshot) => json!({
+            "id": snapshot.id,
+            "status": snapshot.status_at_revert,
+            "filed_on": snapshot.confirmed_at.clone().or_else(|| snapshot.submitted_at.clone()),
+        }),
+        None => Value::Null,
+    })
+}
+
+/// "View the filed original": an amended return's filed version, read-only,
+/// from its history (the amendment snapshot, exactly as it was stored).
+fn screen_form_filed_original(
+    arguments: &HostArguments,
+) -> Result<impl Future<Output = HostResult> + Send + use<>, HostError> {
+    let kind = kind_of(arguments.string(0)?)?;
+    let id = arguments.integer(1)?;
+    let (draft, snapshot) = with_database(|db| {
+        let snapshot = db
+            .get_amendment_snapshot(id)
+            .map_err(|error| host_error(error.to_string()))?
+            .filter(|snapshot| snapshot.form_code == kind.form_code())
+            .ok_or_else(|| host_error(format!("no filed {} original #{id}", kind.form_code())))?;
+        let draft: Value = serde_json::from_str(&snapshot.draft_json)
+            .map_err(|error| host_error(error.to_string()))?;
+        Ok((draft, snapshot))
+    })?;
+    let identity = agent::identity(kind, &draft).map_err(host_error)?;
+    let year = identity.taxable_year;
+    let period =
+        u8::try_from(bir_core::forms::queueable::period_column(&identity.period)).unwrap_or(0);
+    Ok(async move {
+        let from_profile = draft.clone();
+        let mut opened =
+            on_large_stack(move || opened_json(kind, year, period, draft, from_profile, None))
+                .and_then(|result| result)
+                .map_err(host_error)?;
+        // Never a draft: what was filed, kept as it was.
+        opened["editable"] = Value::Bool(false);
+        opened["filed_original_view"] = json!({
+            "status": snapshot.status_at_revert,
+            "filed_on": snapshot.confirmed_at.or(snapshot.submitted_at),
+        });
         Ok(json(opened))
     })
 }
@@ -3918,9 +4142,12 @@ mod tests {
         assert_eq!(choices.len(), 2);
         assert_ne!(choices[0]["value"], choices[1]["value"]);
         for (choice, due) in choices.iter().zip([5.0, 2.0]) {
+            // The return as it now stands (saved after the first choice):
+            // only that very return saves over its row.
+            let current = open("2000", 1);
             let filled = fill(
                 "2000",
-                &opened["draft"],
+                &current["draft"],
                 json!({
                     "drpATCCode0": choice["value"], "frm2000:sched1:txtTaxBase0": "1000",
                 }),
@@ -6386,12 +6613,11 @@ mod tests {
                 .iter()
                 .any(|(_, part)| matches!(part, PeriodPart::Day | PeriodPart::Date));
             if !wrote_more {
-                let opens = &answer["opens"];
                 let regular = open_for(
                     TIN,
                     code,
-                    opens["year"].as_i64().unwrap(),
-                    opens["period"].as_i64().unwrap(),
+                    rebuilt["year"].as_i64().unwrap(),
+                    rebuilt["period"].as_i64().unwrap(),
                 );
                 let part_keys: BTreeSet<&String> = parts.iter().map(|(key, _)| key).collect();
                 for (key, value) in regular["values"].as_object().unwrap() {
@@ -6487,16 +6713,6 @@ mod tests {
         let found = existing("2000OT", typed_parts("2000OT", 2024, 3, 15, 1));
         assert_eq!(found["label"], "03/15/2024", "{found}");
         assert!(existing("2000OT", typed_parts("2000OT", 2024, 3, 16, 1)).is_null());
-        // The sample lists the saved periods for a picker.
-        let saved = sample("1601C")["saved_periods"].clone();
-        assert!(
-            saved
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|p| p["year"] == 2024 && p["month"] == 3 && p["status"] == "Draft"),
-            "{saved}"
-        );
     }
 
     #[test]
@@ -6630,6 +6846,558 @@ mod tests {
             refused.to_string().contains("submitted or confirmed"),
             "{refused}"
         );
+    }
+
+    /// A stored row's status column and data, read raw.
+    fn raw_row(id: i64) -> (String, String) {
+        with_database(|db| {
+            db.conn_for_tests()
+                .query_row(
+                    "SELECT status, data_json FROM form_drafts WHERE id = ?1",
+                    [id],
+                    |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+                )
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap()
+    }
+
+    fn raw_count(sql: &str) -> i64 {
+        with_database(|db| {
+            db.conn_for_tests()
+                .query_row(sql, [], |r| r.get::<_, i64>(0))
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap()
+    }
+
+    fn raw_exec(sql: &str, args: &[&str]) {
+        with_database(|db| {
+            let mut sql = sql.to_string();
+            for (i, arg) in args.iter().enumerate() {
+                sql = sql.replace(
+                    &format!("?{}", i + 1),
+                    &format!("'{}'", arg.replace('\'', "''")),
+                );
+            }
+            db.conn_for_tests()
+                .execute_batch(&sql)
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap()
+    }
+
+    /// Save `draft` (no marks) and turn its row into a return that reached BIR.
+    fn store_filed(code: &str, draft: &Value, status: &str) -> i64 {
+        let mut draft = draft.clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let id = save(code, &draft)["id"].as_i64().unwrap();
+        let (_, raw) = raw_row(id);
+        let mut filed = with_status(&serde_json::from_str(&raw).unwrap(), status);
+        if filed["lifecycle"].is_object() {
+            filed["lifecycle"]["submitted_at"] = json!("2024-04-10T01:02:03+00:00");
+        } else {
+            filed["submitted_at"] = json!("2024-04-10T01:02:03+00:00");
+        }
+        raw_exec(
+            &format!("UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = {id}"),
+            &[status, &serde_json::to_string(&filed).unwrap()],
+        );
+        id
+    }
+
+    fn opens_of(code: &str, opens: &Value) -> Value {
+        call_async(
+            "screen_form_open",
+            vec![
+                TIN.into(),
+                code.into(),
+                json(opens["year"].clone()),
+                json(opens["period"].clone()),
+                json(opens["key"].clone()),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("{code} opens {opens}: {error}"))
+    }
+
+    #[test]
+    fn a_rebuilt_sample_is_exactly_the_typed_period_on_every_form() {
+        setup();
+        let mut failures = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let parts = sample_period_parts(kind);
+            let typed = typed_parts(code, 2024, 3, 15, 1);
+            let answer = sample_period(TIN, code, typed.clone());
+            let rebuilt = &answer["sample"];
+            // Every period part shows what was typed.
+            for (key, part) in &parts {
+                let want = typed[key].as_str().unwrap();
+                let shown = rebuilt["values"][key].as_str().unwrap_or("");
+                let ok = match part {
+                    PeriodPart::Quarter(_) => (shown == "true") == (want == "true"),
+                    PeriodPart::Year => {
+                        shown == want || (shown.len() == 2 && want.ends_with(shown))
+                    }
+                    _ => shown.trim_start_matches('0') == want.trim_start_matches('0'),
+                };
+                if !ok {
+                    failures.push(format!(
+                        "{code}: {key} ({}) = `{shown}`, typed `{want}`",
+                        part.name()
+                    ));
+                }
+            }
+            // And the draft is the return for that period (an independent
+            // check: its identity, not the field map).
+            let mut draft = rebuilt["draft"].clone();
+            draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+            let identity = agent::identity(kind, &draft).unwrap();
+            if identity.taxable_year != 2024 {
+                failures.push(format!("{code}: year {}", identity.taxable_year));
+            }
+            let period_ok = match identity.period {
+                FilingPeriod::Monthly(month) => month == 3,
+                FilingPeriod::Quarterly(quarter) => quarter == 1,
+                FilingPeriod::Annual => true,
+                FilingPeriod::OpenEnded(key) => {
+                    key == 315 || NUMBERED_FORMS.contains(&code) || (code == "2553" && key == 1)
+                }
+            };
+            if !period_ok {
+                failures.push(format!("{code}: period {:?}", identity.period));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn a_year_counts_only_with_all_its_digits() {
+        setup();
+        for year in ["2", "20", "202", "20x4"] {
+            let answer = sample_period(
+                TIN,
+                "2551Q",
+                json!({"frm2551Qv2018:txtYear": year, "frm2551Qv2018:qtr_4": "true"}),
+            );
+            assert_eq!(answer, json!({"complete": false}), "{year}");
+        }
+        let answer = sample_period(
+            TIN,
+            "2551Q",
+            json!({"frm2551Qv2018:txtYear": "2024", "frm2551Qv2018:qtr_4": "true"}),
+        );
+        assert_eq!(answer["complete"], true);
+    }
+
+    #[test]
+    fn every_existing_answer_opens_the_matched_return() {
+        setup();
+        let mut failures = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            if NUMBERED_FORMS.contains(&code) {
+                continue;
+            }
+            let typed = typed_parts(code, 2024, 3, 15, 1);
+            let built = sample_period(TIN, code, typed.clone());
+            let mut draft = built["sample"]["draft"].clone();
+            draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+            let saved = match call("screen_form_save", vec![code.into(), json(draft)]) {
+                Ok(saved) => saved,
+                Err(error) => {
+                    failures.push(format!("{code}: the rebuilt sample does not save: {error}"));
+                    continue;
+                }
+            };
+            let answer = sample_period(TIN, code, typed);
+            if !answer["existing"].is_object() {
+                failures.push(format!("{code}: no existing answer: {answer}"));
+                continue;
+            }
+            let opened = opens_of(code, &answer["opens"]);
+            let id = opened["draft"]["id"].clone();
+            if !id.is_null() && id != saved["id"] {
+                failures.push(format!("{code}: opened row {id}, stored {}", saved["id"]));
+            }
+            let mut d = opened["draft"].clone();
+            d.as_object_mut().unwrap().remove(SAMPLE_MARK);
+            let identity = agent::identity(kind, &d).unwrap();
+            if identity.taxable_year != 2024 {
+                failures.push(format!("{code}: opened {:?}", identity));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn two_returns_in_one_year_each_open_as_themselves() {
+        setup();
+        for (code, first, second) in [
+            (
+                "2553",
+                typed_parts("2553", 2024, 3, 15, 1),
+                typed_parts("2553", 2024, 9, 15, 3),
+            ),
+            (
+                "2552",
+                typed_parts("2552", 2024, 3, 15, 1),
+                typed_parts("2552", 2024, 9, 20, 3),
+            ),
+            (
+                "2000OT",
+                typed_parts("2000OT", 2024, 3, 15, 1),
+                typed_parts("2000OT", 2024, 9, 20, 3),
+            ),
+        ] {
+            let mut ids = Vec::new();
+            for typed in [&first, &second] {
+                let built = sample_period(TIN, code, typed.clone());
+                let mut draft = built["sample"]["draft"].clone();
+                draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+                ids.push(save(code, &draft)["id"].clone());
+            }
+            assert_ne!(ids[0], ids[1], "{code}: two returns");
+            for (typed, id) in [(&first, &ids[0]), (&second, &ids[1])] {
+                let answer = sample_period(TIN, code, typed.clone());
+                assert!(answer["existing"].is_object(), "{code}: {answer}");
+                assert_eq!(
+                    opens_of(code, &answer["opens"])["draft"]["id"],
+                    *id,
+                    "{code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_entry_numbered_form_starts_with_new_return() {
+        setup();
+        for code in NUMBERED_FORMS {
+            save(code, &open_for(TIN, code, 2024, 3)["draft"]);
+            let answer = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
+            assert_eq!(answer["complete"], true, "{code}: {answer}");
+            assert!(
+                answer["existing"].is_null(),
+                "{code}: an entry number never matches a date"
+            );
+            assert!(
+                answer["opens"].is_null(),
+                "{code}: Start a return opens New return"
+            );
+        }
+    }
+
+    #[test]
+    fn a_0605_quarter_is_its_quarter() {
+        setup();
+        let answer = sample_period(TIN, "0605", typed_parts("0605", 2024, 3, 15, 3));
+        let rebuilt = &answer["sample"];
+        assert_eq!(
+            rebuilt["draft"]["quarter"], 3,
+            "the typed quarter, not an entry number"
+        );
+        assert_eq!(rebuilt["values"]["itemQuarter_3"], "true");
+        let mut draft = rebuilt["draft"].clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let identity = agent::identity(kind_of("0605").unwrap(), &draft).unwrap();
+        assert_eq!(identity.period, FilingPeriod::OpenEnded(1), "entry 1");
+    }
+
+    #[test]
+    fn a_refund_date_and_a_computed_day_are_not_period_parts() {
+        setup();
+        let parts: Vec<String> = sample_period_parts(kind_of("1604C").unwrap())
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
+        assert_eq!(
+            parts,
+            ["frm1604c:txtYear"],
+            "1604C's refund date is an answer"
+        );
+        let parts: Vec<String> = sample_period_parts(kind_of("1707A").unwrap())
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
+        assert!(
+            !parts.iter().any(|key| key.ends_with("txtI1YearEndDay")),
+            "1707A's year-end day is computed: {parts:?}"
+        );
+    }
+
+    #[test]
+    fn a_future_typed_year_is_judged_and_a_placeholder_holds_its_messages() {
+        setup();
+        // 2099 typed into a sample is the period the filer chose: judged.
+        let answer = sample_period(TIN, "2200M", typed_parts("2200M", 2099, 3, 15, 1));
+        let errors = answer["sample"]["errors"].to_string().to_ascii_lowercase();
+        assert!(errors.contains("future"), "{errors}");
+        // The placeholder's own year is held: the same validation names held
+        // boxes, and the sample shows none of those messages.
+        let opened = sample("1701MS");
+        let blank = strings(&opened["blank"]);
+        let mut draft = opened["draft"].clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let validated =
+            call_async("screen_form_validate", vec!["1701MS".into(), json(draft)]).unwrap();
+        let held: Vec<&Value> = validated["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| strings(&e["keys"]).iter().any(|k| blank.contains(k)))
+            .collect();
+        assert!(!held.is_empty(), "the placeholder's own messages exist");
+        for error in held {
+            assert!(
+                !opened["errors"].as_array().unwrap().contains(error),
+                "held: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn direct_radio_steps_keep_a_returns_period() {
+        setup();
+        let opened = open("2550Q", 1);
+        let key = "frm2550qv2024:OptQuarter1";
+        let refused = fill("2550Q", &opened["draft"], json!({ key: "false" }));
+        assert!(
+            refused["rejected"].get(key).is_some(),
+            "{}",
+            refused["rejected"]
+        );
+        let mut draft = refused["draft"].clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let identity = agent::identity(AgentFormKind::from_code("2550Q").unwrap(), &draft).unwrap();
+        assert_eq!(identity.period, FilingPeriod::Quarterly(1));
+    }
+
+    #[test]
+    fn a_draft_saves_only_to_its_own_row() {
+        setup();
+        let march = save("1601C", &open_for(TIN, "1601C", 2024, 3)["draft"]);
+        let april = save("1601C", &open_for(TIN, "1601C", 2024, 4)["draft"]);
+        let mut wrong = open_for(TIN, "1601C", 2024, 4)["draft"].clone();
+        wrong["id"] = march["id"].clone();
+        let refused = call("screen_form_save", vec!["1601C".into(), json(wrong)])
+            .expect_err("an id from another row");
+        assert!(refused.to_string().contains("row"), "{refused}");
+        let mut ghost = open_for(TIN, "1601C", 2024, 5)["draft"].clone();
+        ghost["id"] = json!(99999);
+        let refused = call("screen_form_save", vec!["1601C".into(), json(ghost)])
+            .expect_err("an id with no row");
+        assert!(refused.to_string().contains("not stored"), "{refused}");
+        let _ = april;
+    }
+
+    /// `value` with every number as f64: the host's JSON bridge writes 0 for
+    /// a stored 0.0.
+    fn numbers_as_f64(value: &Value) -> Value {
+        match value {
+            Value::Number(number) => json!(number.as_f64()),
+            Value::Array(list) => Value::Array(list.iter().map(numbers_as_f64).collect()),
+            Value::Object(object) => Value::Object(
+                object
+                    .iter()
+                    .map(|(k, v)| (k.clone(), numbers_as_f64(v)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+
+    /// The first fillable amount box on screen, for tagging an amendment.
+    fn first_amount_box(code: &str) -> String {
+        let def = kind_of(code).unwrap().definition();
+        def.fillable()
+            .find(|entry| {
+                schema_keys(code).contains(&entry.key)
+                    && matches!(
+                        def.bindings.get(&entry.key).map(|bound| &bound.binding),
+                        Some(Binding::Amount { .. })
+                    )
+            })
+            .map(|entry| entry.key.clone())
+            .expect("an amount box")
+    }
+
+    #[test]
+    fn an_amendments_first_save_is_one_transaction_and_keeps_the_filed_original() {
+        setup();
+        for (code, period) in [
+            ("0619E", 6i64),
+            ("1601C", 6),
+            ("2551Q", 2),
+            ("2550Q", 2),
+            ("1701Q", 2),
+            ("2200AN", 6),
+        ] {
+            let opened = open_for(TIN, code, 2024, period);
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            let original = raw_row(id);
+            let filed = open_for(TIN, code, 2024, period);
+            let key = stored_period(kind_of(code).unwrap(), &{
+                let mut d = filed["draft"].clone();
+                d.as_object_mut().unwrap().remove(SAMPLE_MARK);
+                d
+            });
+            let amend = |key: Option<i64>| {
+                call_async(
+                    "screen_form_amend",
+                    vec![
+                        TIN.into(),
+                        code.into(),
+                        2024i64.into(),
+                        period.into(),
+                        json(json!(key)),
+                    ],
+                )
+                .unwrap_or_else(|error| panic!("{code} amends: {error}"))
+            };
+            let amended = amend(key);
+            assert_eq!(
+                amended["draft"][AMENDMENT_MARK]["status"], "Submitted",
+                "{code}"
+            );
+            assert_eq!(raw_row(id), original, "{code}: nothing stored by amending");
+            let tag = first_amount_box(code);
+            let mut edits = Map::new();
+            if code == "0619E" {
+                edits.insert("frm0619E:optWithheld:Y".into(), json!("true"));
+            }
+            edits.insert(tag.clone(), json!("4242.42"));
+            let typed = fill(code, &amended["draft"], Value::Object(edits));
+            let snapshots = || raw_count("SELECT COUNT(*) FROM amendment_snapshots");
+            let before = snapshots();
+
+            // D1: the amendment's own write (a Draft row written as a Draft,
+            // after the revert in the same transaction) fails: nothing changes.
+            raw_exec(
+                "CREATE TRIGGER block_amendment BEFORE UPDATE ON form_drafts WHEN OLD.status = 'Draft' AND NEW.status = 'Draft' BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+                &[],
+            );
+            let failed = call(
+                "screen_form_save",
+                vec![code.into(), json(typed["draft"].clone())],
+            );
+            raw_exec("DROP TRIGGER block_amendment;", &[]);
+            assert!(failed.is_err(), "{code}: the blocked save went through");
+            assert_eq!(raw_row(id), original, "{code}: the filed row is as it was");
+            assert_eq!(
+                snapshots(),
+                before,
+                "{code}: no snapshot from a failed save"
+            );
+
+            // D5: the filed row changed since the amendment began: refused.
+            let mut moved: Value = serde_json::from_str(&original.1).unwrap();
+            if moved["lifecycle"].is_object() {
+                moved["lifecycle"]["updated_at"] = json!("2030-01-01T00:00:00Z");
+            } else {
+                moved["updated_at"] = json!("2030-01-01T00:00:00Z");
+            }
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&serde_json::to_string(&moved).unwrap()],
+            );
+            let refused = call(
+                "screen_form_save",
+                vec![code.into(), json(typed["draft"].clone())],
+            )
+            .expect_err("the filed return moved");
+            assert!(
+                refused.to_string().contains("changed since"),
+                "{code}: {refused}"
+            );
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&original.1],
+            );
+
+            // The retry: one save, the snapshot is the original byte for byte
+            // and the row holds the amendment.
+            let saved = save(code, &typed["draft"]);
+            assert_eq!(saved["id"], id, "{code}: the amendment takes the row");
+            assert!(saved["draft"].get(AMENDMENT_MARK).is_none(), "{code}");
+            let after = raw_row(id);
+            assert_eq!(after.0, "Draft", "{code}");
+            // The row holds the amendment: a Draft with the amended answer,
+            // and the typed amount where the form keeps it.
+            let stored: Value = serde_json::from_str(&after.1).unwrap();
+            assert_eq!(
+                agent::identity(kind_of(code).unwrap(), &stored)
+                    .unwrap()
+                    .status,
+                FilingStatus::Draft,
+                "{code}: the row holds the amendment"
+            );
+            assert_ne!(after.1, original.1, "{code}");
+            let kept = typed["values"][tag.as_str()]
+                .as_str()
+                .and_then(agent::parse_amount)
+                == Some(4242.42);
+            assert_eq!(
+                after.1.contains("4242.42"),
+                kept,
+                "{code}: the typed amount"
+            );
+            assert_eq!(snapshots(), before + 1, "{code}");
+            assert_eq!(
+                raw_count(&format!(
+                    "SELECT COUNT(*) FROM amendment_snapshots WHERE draft_json = '{}'",
+                    original.1.replace('\'', "''")
+                )),
+                1,
+                "{code}: the filed original, byte for byte"
+            );
+            // A second save is an ordinary save of that row.
+            save(code, &saved["draft"]);
+
+            // History view: the filed original opens read-only, as filed.
+            let reopened = open_for(TIN, code, 2024, period);
+            let snapshot = reopened["filed_original"]["id"]
+                .as_i64()
+                .expect("in its history");
+            let view = call_async(
+                "screen_form_filed_original",
+                vec![code.into(), snapshot.into()],
+            )
+            .unwrap();
+            assert_eq!(view["editable"], false, "{code}");
+            assert_eq!(view["filed_original_view"]["status"], "Submitted", "{code}");
+            let original_value: Value = serde_json::from_str(&original.1).unwrap();
+            let mut shown = view["draft"].clone();
+            shown.as_object_mut().unwrap().remove(SAMPLE_MARK);
+            assert_eq!(
+                numbers_as_f64(&shown),
+                numbers_as_f64(&original_value),
+                "{code}: the filed version as filed"
+            );
+        }
+    }
+
+    #[test]
+    fn a_filed_2550q_is_never_saved_over() {
+        setup();
+        // A sample built for Q1 2025, its mark stripped, after Q1 was filed.
+        let built = sample_period(TIN, "2550Q", typed_parts("2550Q", 2025, 3, 15, 1));
+        let mut stripped = built["sample"]["draft"].clone();
+        stripped.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let opened = open_for(TIN, "2550Q", 2025, 1);
+        let id = store_filed("2550Q", &opened["draft"], "Submitted");
+        let original = raw_row(id);
+        let refused = call("screen_form_save", vec!["2550Q".into(), json(stripped)])
+            .expect_err("a stripped sample over a filed 2550Q");
+        assert!(refused.to_string().contains("Submitted"), "{refused}");
+        // A viewed filed 2550Q with its status and id stripped.
+        let viewed = open_for(TIN, "2550Q", 2025, 1);
+        let mut forged = with_status(&viewed["draft"], "Draft");
+        forged.as_object_mut().unwrap().remove("id");
+        let refused = call("screen_form_save", vec!["2550Q".into(), json(forged)])
+            .expect_err("a viewed filed 2550Q re-saved");
+        assert!(refused.to_string().contains("Submitted"), "{refused}");
+        assert_eq!(raw_row(id), original, "the filed 2550Q is untouched");
     }
 
     #[test]
@@ -7175,7 +7943,8 @@ mod tests {
             let alone = with_database(|db| {
                 let profile = db.get_profile_by_tin(TIN).unwrap().expect("profile");
                 let period = page_period(code, period).map_err(HostError::new)?;
-                load_draft(db, kind, &profile, YEAR as u16, period, true).map_err(HostError::new)
+                load_draft(db, kind, &profile, YEAR as u16, period, true, None)
+                    .map_err(HostError::new)
             })
             .unwrap();
             let opened = open(code, period);

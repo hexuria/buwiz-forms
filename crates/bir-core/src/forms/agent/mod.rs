@@ -391,6 +391,22 @@ pub fn save_draft(
         AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
             let typed: super::form_2550q::Form2550QDraft = parse(kind, draft)?;
             let quarter = typed.quarter_number().unwrap_or(0);
+            // Its row path upserts by period: never over a return that left Draft.
+            if let Some(stored) = db
+                .get_form_draft_v2::<super::form_2550q::Form2550QDraft>(
+                    &typed.tin,
+                    "2550Q",
+                    typed.taxable_year,
+                    &FilingPeriod::Quarterly(quarter),
+                )
+                .map_err(|error| error.to_string())?
+                && stored.lifecycle.status != FilingStatus::Draft
+            {
+                return Err(format!(
+                    "the 2550Q return for this quarter is {:?}; it can no longer change",
+                    stored.lifecycle.status
+                ));
+            }
             db.save_form_draft_v2(
                 &typed.tin,
                 "2550Q",
