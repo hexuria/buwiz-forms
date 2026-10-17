@@ -37,6 +37,7 @@ import { renderFormPage, renderFormSplit, FormPageActions } from "./shell/form_p
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { SecurityActions } from "./shell/security.js";
+import { SetupChange } from "./shell/setup_change.js";
 import { renderCronTasksPage } from "./shell/cron_tasks.js";
 
 /** Views that need a taxpayer; with none they fall back to Home. */
@@ -240,7 +241,9 @@ class BirApp extends View {
    * "keydone", "newtp=<root>:<name>", "lock", "tin=<root>", "forgot",
    * "signin=<root>:<pin>", "override=<admin pin>", "recover=<key>",
    * "mypin=<pin>", "arm" (arms Delete on the Tax profile, never deletes),
-   * "pick" (Enter in search).
+   * "pick" (Enter in search). Settings › Computer setup: "chg" (Change),
+   * "chg=owner|helpdesk", "chgpick=<root>", "chgnewpin=<pin>",
+   * "chgconfirm=<admin pin>" (logs the new recovery key), "chgdone".
    */
   runAccessStep(key, value, cx) {
     const [a, b = ""] = value.split(":");
@@ -280,6 +283,24 @@ class BirApp extends View {
     }
     if (key === "arm") return this.taxpayerUi.deleteTaxpayer(cx);
     if (key === "pick") return this.runPaletteItem(this.palette.index, cx);
+    const sc = this.setupChange;
+    if (key === "chg") return sc.go(a === "owner" ? "owner" : a === "helpdesk" ? "helpdesk" : "choose", cx);
+    if (key === "chgpick") {
+      const t = sc.candidates().find((c) => c.tin_root === a);
+      if (t) sc.pickOwner(t, cx);
+      return;
+    }
+    if (key === "chgnewpin") {
+      sc.newPinOtp.set_value(a);
+      return sc.pickHelpdeskPin(cx);
+    }
+    if (key === "chgconfirm") {
+      sc.confirmPinOtp.set_value(a);
+      sc.confirm(cx);
+      if (sc.recoveryKey) console.log(`dev route: new recovery key ${sc.recoveryKey}`);
+      return;
+    }
+    if (key === "chgdone") return sc.done(cx);
   }
 
   /**
@@ -414,7 +435,7 @@ class BirApp extends View {
     if (view !== this.view) {
       this.history.push(this.view);
       this.forward = [];
-      this.enterView(view);
+      this.enterView(view, cx);
     }
     this.closeTransient();
     cx.notify();
@@ -423,7 +444,7 @@ class BirApp extends View {
   goBack(cx) {
     if (!this.history.length) return;
     this.forward.push(this.view);
-    this.enterView(this.history.pop());
+    this.enterView(this.history.pop(), cx);
     this.closeTransient();
     cx.notify();
   }
@@ -431,15 +452,19 @@ class BirApp extends View {
   goForward(cx) {
     if (!this.forward.length) return;
     this.history.push(this.view);
-    this.enterView(this.forward.pop());
+    this.enterView(this.forward.pop(), cx);
     this.closeTransient();
     cx.notify();
   }
 
   /** Switch views with the cleanup every way of leaving one needs. */
-  enterView(view) {
-    // A recovery key on screen is shown once: leaving Settings hides it for good.
-    if (this.view === "settings") this.security.leave();
+  enterView(view, cx) {
+    // A recovery key on screen is shown once: leaving Settings hides it for
+    // good. A finished Computer setup change also signs the old admin out.
+    if (this.view === "settings") {
+      this.security.leave();
+      this.setupChange.leave(cx);
+    }
     this.view = view;
     this.taxpayerUi.leaveView();
   }
@@ -820,6 +845,7 @@ class BirApp extends View {
     this.setup = { step: "choose", pinOtp: OtpState.new(4, { masked: true }), key: null };
     this.setupPending = null;
     this.security = new SecurityActions(this);
+    this.setupChange = new SetupChange(this);
     this.applyScope();
   }
 
@@ -1053,6 +1079,7 @@ class BirApp extends View {
     this.authError = null;
     this.clearCodes();
     this.security.leave();
+    this.setupChange.reset();
     this.store.bump();
     this.applyScope();
     this.appLocked = true;
@@ -1062,6 +1089,12 @@ class BirApp extends View {
 
   lockApp(cx) {
     this.endSession(cx);
+  }
+
+  /** Computer setup changed: the admin moved, so the old session ends. */
+  signOutAfterSetupChange(cx) {
+    this.endSession(cx, "Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN.");
+    this.lockedFrom = null;
   }
 
   logOut(cx) {

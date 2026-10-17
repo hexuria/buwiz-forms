@@ -27794,6 +27794,10 @@ declare module "bir" {
   export function setup_solo(tin_root: string): null;
   /** First launch for a help desk: admin PIN plus a new recovery key. Refused once set up. */
   export function setup_helpdesk(pin: string): RecoveryKey;
+  /** Admin only: make this taxpayer the owner (solo), from solo or help desk. Needs the current admin PIN or code; the taxpayer needs a PIN or authenticator and an active branch. Help desk's admin PIN and authenticator are removed. Answers a new recovery key. */
+  export function change_owner(tin_root: string, pin: string | null, code: string | null): RecoveryKey;
+  /** Admin only: switch from solo to help desk with a new admin PIN. Needs the current admin PIN or code. Answers a new recovery key. */
+  export function change_to_helpdesk(pin: string | null, code: string | null, new_pin: string): RecoveryKey;
   /** Replace the admin recovery key. Needs the app set up. */
   export function create_recovery_key(): RecoveryKey;
   /** Single use: true (and the key is forgotten) on a match; case, dashes and spaces ignored. */
