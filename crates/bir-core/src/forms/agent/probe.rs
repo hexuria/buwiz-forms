@@ -58,9 +58,11 @@ const USER_CHOSEN: &[(&str, &str)] = &[
 /// leaves them open for the filer to type (the corpus is read only, see
 /// [`USER_CHOSEN`]). Unlike a choice they keep the corpus's `optional`.
 /// 1601-FQ's corpus marks every Part II line 20-32 computed; the official
-/// runtime enables 23, 24 and 28-30 at load and 25 on an amended return
+/// runtime enables 23, 24 and 28-30 at load
 /// (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json:
-/// `disabled: false` for txtTax23, txtTax24, txtTax28-30), and
+/// `disabled: false` for txtTax23, txtTax24, txtTax28-30; the inventory
+/// records 25 disabled at load, and this port's recompute keeps it only on an
+/// amended return), and
 /// form_1601fq.rs keeps them in `remittance_first_month`,
 /// `remittance_second_month`, `tax_remitted_previous` and the penalty
 /// overrides (`penalty_declaration`).
@@ -75,8 +77,9 @@ const FILER_TYPED: &[(&str, &str)] = &[
     ),
     (
         "frm1601FQ:txtTax25",
-        "Item 25 Tax Remitted in Return Previously Filed: disabled at load, \
-         enabled on an amended return; form_1601fq.rs `recompute` clears it otherwise",
+        "Item 25 Tax Remitted in Return Previously Filed: the tracked inventory \
+         records it disabled at load (source line 814); form_1601fq.rs `recompute` \
+         zeroes it unless the return is amended",
     ),
     (
         "frm1601FQ:txtTax28",
