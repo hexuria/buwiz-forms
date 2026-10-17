@@ -95,13 +95,18 @@ pub(super) fn probes(kind: AgentFormKind, key: &str, shown: &str) -> Vec<Value> 
     }
 }
 
-/// The tag for a box another answer turns off.
-fn label(code: &str, condition: &Value) -> Value {
+/// The tag for a box another answer turns off: the box's own where a
+/// condition covers columns that need different answers (1701Q's taxpayer
+/// and spouse columns), else its condition's.
+fn label(code: &str, key: &str, condition: &Value) -> Value {
     let text = condition.as_str().unwrap_or_default();
-    labels()[code][text].as_str().map_or_else(
-        || json!("Needs another answer on this form"),
-        |label| json!(label),
-    )
+    labels()["keys"][code][key]
+        .as_str()
+        .or_else(|| labels()["conditions"][code][text].as_str())
+        .map_or_else(
+            || json!("Needs another answer on this form"),
+            |label| json!(label),
+        )
 }
 
 /// Fill `edits` on a copy of `draft` the way the page does, recompute, and
@@ -152,6 +157,15 @@ fn off_alone(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> bool
 /// first: a box the form keeps there is on. Only the ones it clears, and
 /// the choices (a choice may be the answer another box waits for), are
 /// tried one at a time, which decides.
+///
+/// Where this could differ from trying each box alone (the tests check
+/// that it does not, across many answers on every form):
+/// - a typed box in the trial that is itself what another typed box waits
+///   for (an amount that turns an item negative, say) would show the other
+///   one on although alone it is off; today such boxes are choices, which
+///   are never in the trial;
+/// - a typed box that one of the trial's boxes turns off would be tried
+///   again alone, which only costs time.
 pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> Map<String, Value> {
     let mut off = Map::new();
     let code = kind.form_code();
@@ -179,7 +193,7 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             .get(key)
             .is_some_and(|after| after.as_deref().is_some_and(|after| !is_blank(after)));
         if !kept_together && off_alone(kind, draft, key, shown) {
-            off.insert(key.clone(), label(code, condition));
+            off.insert(key.clone(), label(code, key, condition));
         }
     }
     off
@@ -298,41 +312,96 @@ pub(super) mod tests {
         );
     }
 
-    /// Every condition has a reviewed tag that names an answer, and no tag
-    /// carries the corpus's developer notes.
+    /// The items a form's print sheet prints ("31", "15B"), read from its
+    /// writer-cells captions.
+    fn printed_items(code: &str) -> std::collections::BTreeSet<String> {
+        let slug = super::super::schema_entry(code).unwrap()["s"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let path = format!(
+            "{}/../../html-frozen/{slug}/writer-cells.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cells: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        ["joins", "money_joins", "xbox_joins", "date_joins"]
+            .iter()
+            .flat_map(|list| cells[*list].as_array().cloned().unwrap_or_default())
+            .filter_map(|join| {
+                let caption = join["printed"].as_str()?.trim().to_string();
+                let caption = caption
+                    .strip_prefix("Item ")
+                    .unwrap_or(&caption)
+                    .to_string();
+                let token: String = caption
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric())
+                    .collect();
+                token
+                    .starts_with(|c: char| c.is_ascii_digit())
+                    .then(|| token.to_ascii_uppercase())
+            })
+            .collect()
+    }
+
+    /// Every condition has a reviewed tag that names an answer, no tag
+    /// carries the corpus's developer notes, every item a tag names is an
+    /// item the form prints, and a per-box tag is only for a box with a
+    /// condition.
     #[test]
     fn every_condition_has_a_short_tag_for_filers() {
-        let mut tags = 0;
-        for (code, list) in conditions().as_object().unwrap() {
-            for condition in list.as_object().unwrap().values() {
-                let text = condition.as_str().unwrap();
-                let tag = labels()[code.as_str()][text]
-                    .as_str()
-                    .unwrap_or_else(|| panic!("{code}: no tag for {text:?}"));
-                tags += 1;
-                assert!(tag.starts_with("Needs "), "{code}: {tag:?}");
-                assert!(tag.len() <= 90, "{code}: {tag:?} is long");
-                for word in [
-                    "incorrect",
-                    "mistaken",
-                    "contrary",
-                    "official",
-                    "edit ",
-                    "runtime",
-                    "enabled",
-                    "disabled",
-                    "frm",
-                ] {
+        const SPOUSE: &str = "Spouse details can't be entered on this page yet";
+        let check = |code: &str, tag: &str| {
+            assert!(
+                tag.starts_with("Needs ") || tag == SPOUSE,
+                "{code}: {tag:?}"
+            );
+            assert!(tag.len() <= 90, "{code}: {tag:?} is long");
+            for word in [
+                "incorrect",
+                "mistaken",
+                "contrary",
+                "official",
+                "edit ",
+                "runtime",
+                "enabled",
+                "disabled",
+                "frm",
+            ] {
+                assert!(
+                    !tag.to_ascii_lowercase().contains(word),
+                    "{code}: {tag:?} says {word:?}"
+                );
+            }
+            let items = printed_items(code);
+            let words: Vec<&str> = tag.split_whitespace().collect();
+            for pair in words.windows(2) {
+                if pair[0] == "item" {
+                    let item = pair[1]
+                        .trim_end_matches(|c: char| !c.is_ascii_alphanumeric())
+                        .to_ascii_uppercase();
                     assert!(
-                        !tag.to_ascii_lowercase().contains(word),
-                        "{code}: {tag:?} says {word:?}"
+                        items.contains(&item),
+                        "{code}: {tag:?} names item {item}, which the form does not print"
                     );
                 }
             }
+        };
+        let mut tags = 0;
+        for (code, list) in conditions().as_object().unwrap() {
+            for (key, condition) in list.as_object().unwrap() {
+                let text = condition.as_str().unwrap();
+                let tag = labels()["keys"][code.as_str()][key.as_str()]
+                    .as_str()
+                    .or_else(|| labels()["conditions"][code.as_str()][text].as_str())
+                    .unwrap_or_else(|| panic!("{code}: no tag for {text:?}"));
+                tags += 1;
+                check(code, tag);
+            }
         }
         assert!(tags > 100, "{tags}");
-        // No tag for a condition the corpus no longer has.
-        for (code, list) in labels().as_object().unwrap() {
+        // No tag for a condition or box the corpus no longer has.
+        for (code, list) in labels()["conditions"].as_object().unwrap() {
             let current: Vec<&Value> = conditions()[code.as_str()]
                 .as_object()
                 .map(|o| o.values().collect())
@@ -344,5 +413,38 @@ pub(super) mod tests {
                 );
             }
         }
+        for (code, list) in labels()["keys"].as_object().unwrap() {
+            for key in list.as_object().unwrap().keys() {
+                assert!(
+                    conditions()[code.as_str()].get(key).is_some(),
+                    "{code}: stale tag for {key}"
+                );
+            }
+        }
+        // The review's corrections, by hand.
+        for (code, text, tag) in [
+            (
+                "1601EQ",
+                "Enabled only when Item 30 is negative; choices are mutually exclusive.",
+                "Needs item 31 below zero (an over-remittance)",
+            ),
+            (
+                "1606",
+                "Item 36 is negative.",
+                "Needs item 18 below zero (an over-remittance)",
+            ),
+            (
+                "1706",
+                "Item 20 indicates tax-treaty relief.",
+                "Needs item 11 = Yes",
+            ),
+        ] {
+            assert_eq!(labels()["conditions"][code][text], tag, "{code}");
+        }
+        assert_eq!(
+            labels()["keys"]["1701Q"]["frm1701q:txt37A"],
+            "Needs the graduated income tax rate and itemized deductions"
+        );
+        assert_eq!(labels()["keys"]["1701Q"]["frm1701q:txt36B"], SPOUSE);
     }
 }

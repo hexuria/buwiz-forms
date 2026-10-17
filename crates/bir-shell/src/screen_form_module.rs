@@ -265,7 +265,8 @@ fn schema() -> &'static [Value] {
 }
 
 /// What a number box holds, from the draft field it writes and its label:
-/// a count (`number_of_*`, "No. of …") or a tax rate (`tax_rate`,
+/// a count or quantity (`number_of_*`, "No. of …", 2200M and 2200S's
+/// volumes) or a tax rate (`tax_rate`,
 /// `…_rate_percent`), else an amount. Other rates (2200M and 2200P's
 /// specific excise rates, pesos per unit; 1602Q's BSP exchange rate) are
 /// pesos and stay amounts.
@@ -284,8 +285,10 @@ fn quantity(path: &str, label: &str) -> Quantity {
     let words: Vec<&str> = leaf.split('_').collect();
     let label = label.to_ascii_lowercase();
     if leaf.starts_with("number_of")
-        || words.contains(&"count")
-        || ["no. of", "no of ", "number of"]
+        || ["count", "volume", "quantity"]
+            .iter()
+            .any(|w| words.contains(w))
+        || ["no. of", "no of ", "number of", "volume", "quantity"]
             .iter()
             .any(|w| label.contains(w))
     {
@@ -8871,9 +8874,7 @@ mod tests {
             for (key, t, whole) in bound_page_types(code) {
                 match &def.bindings[&key].binding {
                     Binding::Amount { .. } => {
-                        if t == "money" {
-                            amounts += 1;
-                        }
+                        amounts += 1;
                         assert!(
                             matches!(t.as_str(), "money" | "pct" | "int"),
                             "{code}: {key} is an amount drawn as {t}"
@@ -8891,7 +8892,7 @@ mod tests {
                 }
             }
         }
-        assert!(amounts > 2400, "{amounts} amount boxes");
+        assert!(amounts > 2500, "{amounts} amount boxes");
         assert!(wholes > 200, "{wholes} whole-peso boxes");
         // The ones the review found, each way (fields and schedule cells).
         for (code, key, t) in [
@@ -8920,6 +8921,9 @@ mod tests {
             ("1707", "frm1707:txtPg2Pt4S2_1Col2", "int"),
             ("1707", "frm1707:txtPg2Pt4S2_10Col2", "int"),
             ("2552", "frm2552:txtPg2Pt5Sch1NumShares1", "int"),
+            ("2200M", "frm2200M:txtSched1_VOMRITaxableA1", "int"),
+            ("2200M", "frm2200M:txtSched1_VOMRIExemptB1", "int"),
+            ("2200S", "frm2200S:txtVolumeRemovals0", "int"),
             // Tax rates: percent.
             ("1702RT", "frm1702RT:Pg2Pt4I40IncomeTaxRate", "pct"),
             ("1702EX", "frm1702EX:txtPg2Pt4I40TaxRate", "pct"),
@@ -9093,14 +9097,32 @@ mod tests {
             .collect()
     }
 
-    /// The printed text of a pool's lines, joined as the sheet stacks them.
-    fn printed_pool(kind: AgentFormKind, draft: &Value, keys: &[String]) -> String {
-        let printed = with_database(|db| print_map(db, kind, draft))
-            .unwrap_or_else(|e| panic!("{}: print: {e:?}", kind.form_code()))
-            .0;
+    /// What the XML carries for a pool's lines (the field map), end to end.
+    fn xml_pool(kind: AgentFormKind, draft: &Value, keys: &[String]) -> String {
+        let map = agent::field_map(kind, draft).unwrap();
         keys.iter()
-            .map(|k| printed.get(k).cloned().unwrap_or_default())
+            .map(|k| map.get(k).cloned().unwrap_or_default())
             .collect::<String>()
+    }
+
+    /// The whole address the draft holds, read by hand per form: 0619E and
+    /// 0619F join two fields, 1702RT keeps a list of lines, the rest one field.
+    fn draft_address(code: &str, draft: &Value) -> String {
+        let s = |v: &Value| v.as_str().unwrap_or_default().to_string();
+        match code {
+            "0619E" | "0619F" => format!(
+                "{}{}",
+                s(&draft["registered_address"]),
+                s(&draft["registered_address_2"])
+            ),
+            "1702RT" => draft["registered_address_lines"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(s)
+                .collect(),
+            _ => s(&draft["registered_address"]),
+        }
     }
 
     fn squeezed(text: &str) -> String {
@@ -9117,7 +9139,8 @@ mod tests {
     /// three-line one; 1702MX keeps three boxes (its first line is the whole
     /// address but its print reads the list), and the review's 1601C, 1701A,
     /// 1702EX and 1707 print their address through the print map's own lines,
-    /// so the sheet gives their boxes no slots.
+    /// so the sheet gives their boxes no slots. The print side is not
+    /// compared: how it shows an address past its boxes is open.
     #[test]
     fn a_printed_address_over_stacked_lines_is_one_pool() {
         setup();
@@ -9218,7 +9241,6 @@ mod tests {
         // 158 characters: a word runs across characters 40, 80, 100 and 127,
         // where the field maps cut their lines.
         let long = "UNIT 1203 TWELFTH FLOOR THE CURVE BUILDING THIRTYSECOND STREET CORNER THIRD AVENUE BONIFACIO GLOBALCITY TAGUIG CITY METRO MANILA PHILIPPINES 1634 ANNEX BLDG";
-        let short = "UNIT 5 BLDG A, 123 AYALA AVENUE, MAKATI CITY";
         let mut found = BTreeMap::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
@@ -9285,14 +9307,19 @@ mod tests {
                     again["draft"], filled["draft"],
                     "{code}: the draft does not move"
                 );
-                // What the page shows is what prints.
-                let printed =
-                    fill_unlocked(code, &opened["draft"], json!({ &head: short }), &unlocked);
-                assert_eq!(printed["pools"][&head], short, "{code}");
+                // The page value is the draft's whole address, and the XML
+                // carries it (its lines cut where the field map cuts them).
+                // How the print shows an address past its boxes is open
+                // (rules page question 4), so the print is not compared.
                 assert_eq!(
-                    squeezed(&printed_pool(kind, &printed["draft"], &keys)),
-                    squeezed(short),
-                    "{code}: page value == print text"
+                    draft_address(code, &filled["draft"]),
+                    long,
+                    "{code}: the draft holds what was typed"
+                );
+                assert_eq!(
+                    squeezed(&xml_pool(kind, &filled["draft"], &keys)),
+                    squeezed(long),
+                    "{code}: the XML carries it"
                 );
                 found.insert(
                     code,
@@ -9316,9 +9343,10 @@ mod tests {
     }
 
     /// Rule 5 on 0619E and 0619F, whose draft keeps a second address line
-    /// (an imported return): the box shows both lines as the print joins
-    /// them, and an edit writes the whole address once instead of adding to
-    /// the second line.
+    /// the form joins to the first: the box shows both lines as the form
+    /// joins them, and an edit splits the text at the first line's 40 boxes
+    /// (the space kept at the end of line 1), so both lines still fill, the
+    /// joined address is what was typed, and nothing grows on later edits.
     #[test]
     fn a_second_address_line_is_not_doubled_on_edit() {
         setup();
@@ -9328,40 +9356,56 @@ mod tests {
         ] {
             let kind = AgentFormKind::from_code(code).unwrap();
             let opened = open(code, 1);
-            let mut draft = opened["draft"].clone();
-            draft["registered_address"] = json!("1 EXAMPLE STREET ");
-            draft["registered_address_2"] = json!("QUEZON CITY");
-            let checked = call_async(
-                "screen_form_validate",
-                vec![code.into(), json(draft.clone())],
-            )
-            .unwrap();
-            let shown = checked["pools"][head].as_str().unwrap().to_string();
-            assert_eq!(shown, "1 EXAMPLE STREET QUEZON CITY", "{code}");
             let keys = combs::pools(code)[head].keys.clone();
-            let before = printed_pool(kind, &checked["draft"], &keys);
-            let mut current = checked["draft"].clone();
-            for _ in 0..3 {
-                let filled = fill_unlocked(code, &current, json!({ head: shown }), &[head]);
-                assert_eq!(filled["rejected"], json!({}), "{code}");
+            for (first, second) in [
+                // The review's two-line example: the form joins them as they are.
+                ("1 EXAMPLE STREET", "QUEZON CITY"),
+                (
+                    "UNIT 1203 TWELFTH FLOOR THE CURVE BLDG ",
+                    "32ND STREET BONIFACIO GLOBAL CITY TAGUIG",
+                ),
+            ] {
+                let mut draft = opened["draft"].clone();
+                draft["registered_address"] = json!(first);
+                draft["registered_address_2"] = json!(second);
+                let checked = validated(code, &draft);
+                let shown = checked["pools"][head].as_str().unwrap().to_string();
                 assert_eq!(
-                    filled["pools"][head],
-                    shown.as_str(),
-                    "{code}: the address is not doubled"
+                    shown,
+                    format!("{first}{second}"),
+                    "{code}: shown as the form joins it"
                 );
+                let xml = xml_pool(kind, &checked["draft"], &keys);
+                let mut current = checked["draft"].clone();
+                for _ in 0..3 {
+                    let filled = fill_unlocked(code, &current, json!({ head: shown }), &[head]);
+                    assert_eq!(filled["rejected"], json!({}), "{code}");
+                    assert_eq!(
+                        filled["pools"][head],
+                        shown.as_str(),
+                        "{code}: the address is not doubled"
+                    );
+                    assert_eq!(
+                        draft_address(code, &filled["draft"]),
+                        shown,
+                        "{code}: the joined draft is what was typed"
+                    );
+                    let line1 = filled["draft"]["registered_address"].as_str().unwrap();
+                    assert!(line1.trim_end().chars().count() <= 40, "{code}: {line1:?}");
+                    if shown.chars().count() > 40 {
+                        assert_ne!(
+                            filled["draft"]["registered_address_2"], "",
+                            "{code}: both lines fill"
+                        );
+                    }
+                    current = filled["draft"].clone();
+                }
                 assert_eq!(
-                    filled["draft"]["registered_address"],
-                    shown.as_str(),
-                    "{code}"
+                    xml_pool(kind, &current, &keys),
+                    xml,
+                    "{code}: the XML carries the same address"
                 );
-                assert_eq!(filled["draft"]["registered_address_2"], "", "{code}");
-                current = filled["draft"].clone();
             }
-            assert_eq!(
-                squeezed(&printed_pool(kind, &current, &keys)),
-                squeezed(&before),
-                "{code}: prints the same"
-            );
         }
     }
 
@@ -9415,11 +9459,98 @@ mod tests {
         }
     }
 
+    /// A value shown as nothing: blank, all zeros or unticked.
+    fn shows_nothing(value: &Value) -> bool {
+        let shown = value.as_str().unwrap_or_default().trim();
+        shown == "false" || shown.trim_matches(['0', '.', ',', '-']).is_empty()
+    }
+
+    /// The test's own probe values for a box (not the host's list): a few
+    /// numbers, words, a date and its parts, a tick, and the box's listed
+    /// choices.
+    fn test_probes(opened: &Value, code: &str, key: &str) -> Vec<Value> {
+        let mut probes: Vec<Value> = [
+            "1",
+            "1000",
+            "A",
+            "ABC CORP",
+            "01",
+            "15",
+            "2020",
+            "01/15/2020",
+            "true",
+        ]
+        .into_iter()
+        .map(|v| json!(v))
+        .collect();
+        let listed = opened["options"][key]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        probes.extend(
+            listed
+                .iter()
+                .filter_map(|o| o["value"].as_str())
+                .map(|v| json!(v)),
+        );
+        probes.extend(
+            schema_fields(code)
+                .into_iter()
+                .filter(|f| f["k"] == key)
+                .flat_map(|f| f["o"].as_array().cloned().unwrap_or_default())
+                .filter_map(|o| {
+                    o.as_str()
+                        .map(|o| json!(o.split(" - ").next().unwrap_or(o)))
+                }),
+        );
+        probes.retain(|v| !shows_nothing(v) && v != "-");
+        probes
+    }
+
+    /// The boxes the host reports off.
+    fn off_keys(checked: &Value) -> Vec<String> {
+        checked["off"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    /// The boxes off by the test's own probing of each conditional box
+    /// alone: blank now, at least one probe taken, and every probe taken
+    /// cleared by the form through the page's own fill.
+    fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
+        let corpus = conditions::tests::derived();
+        corpus[code]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(key, _)| key.clone())
+            .filter(|key| {
+                if !shows_nothing(&checked["values"][key]) {
+                    return false;
+                }
+                let taken: Vec<bool> = test_probes(checked, code, key)
+                    .into_iter()
+                    .filter_map(|probe| {
+                        let filled = fill(code, &checked["draft"], json!({ key: probe }));
+                        filled["rejected"][key]
+                            .is_null()
+                            .then(|| shows_nothing(&filled["values"][key]))
+                    })
+                    .collect();
+                !taken.is_empty() && taken.iter().all(|cleared| *cleared)
+            })
+            .collect()
+    }
+
     /// Rule 6: a box another answer turns off is faded with what turns it
     /// on. The oracles: the corpus's own `enabled_when` (read from
     /// rules/forms) and its reviewed tag, and the form's computation, which
-    /// clears every probe value the page's own fill takes there (the probe
-    /// set is the host's).
+    /// clears every value of the test's own probe list that the page's fill
+    /// takes there. On every form the host's batched check finds exactly the
+    /// boxes that probing each alone finds.
     #[test]
     fn a_box_another_answer_turns_off_says_why_on_every_form() {
         setup();
@@ -9434,66 +9565,17 @@ mod tests {
                 let condition = corpus[code][key]
                     .as_str()
                     .unwrap_or_else(|| panic!("{code}: {key}"));
-                assert_eq!(
-                    &tags[code][condition], why,
-                    "{code}: {key} says what turns it on"
-                );
+                let tag = tags["keys"][code][key]
+                    .as_str()
+                    .or_else(|| tags["conditions"][code][condition].as_str());
+                assert_eq!(why.as_str(), tag, "{code}: {key} says what turns it on");
                 assert!(
                     opened["locks"][key].is_null(),
                     "{code}: {key} is off, not locked"
                 );
-                let shown = opened["values"][key].as_str().unwrap_or_default();
-                let mut taken = 0;
-                for probe in conditions::probes(kind, key, shown) {
-                    let filled = fill(code, &opened["draft"], json!({ key: probe }));
-                    if !filled["rejected"][key].is_null() {
-                        continue;
-                    }
-                    taken += 1;
-                    let shown = filled["values"][key].as_str().unwrap_or_default();
-                    assert!(
-                        shown.is_empty()
-                            || shown == "false"
-                            || shown.trim_matches(['0', '.']).is_empty(),
-                        "{code}: {key} keeps {shown:?}, so it is not off"
-                    );
-                }
-                assert!(taken > 0, "{code}: {key} takes nothing");
                 found.entry(code).or_insert_with(Vec::new).push(key.clone());
             }
-            // Trying the typed boxes together decides as trying each alone.
-            let mut draft = opened["draft"].clone();
-            let (values, _, _) = evaluate_here(kind, &mut draft).unwrap();
-            let one_by_one: Vec<String> = corpus[code]
-                .as_object()
-                .into_iter()
-                .flatten()
-                .map(|(key, _)| key.clone())
-                .filter(|key| {
-                    let shown = values[key].as_str().unwrap_or_default();
-                    let blank = shown.is_empty()
-                        || shown == "false"
-                        || shown.trim_matches(['0', '.', ',', '-']).is_empty();
-                    blank
-                        && conditions::probes(kind, key, shown)
-                            .into_iter()
-                            .find_map(|probe| {
-                                let filled = fill(code, &draft, json!({ key: probe }));
-                                filled["rejected"][key].is_null().then(|| {
-                                    let shown = filled["values"][key]
-                                        .as_str()
-                                        .unwrap_or_default()
-                                        .to_string();
-                                    shown.is_empty()
-                                        || shown == "false"
-                                        || shown.trim_matches(['0', '.', ',', '-']).is_empty()
-                                })
-                            })
-                            == Some(true)
-                })
-                .collect();
-            let batched: Vec<String> = opened["off"].as_object().unwrap().keys().cloned().collect();
-            assert_eq!(batched, one_by_one, "{code}");
+            assert_eq!(off_keys(&opened), oracle_off(code, &opened), "{code}");
         }
         let found: BTreeMap<&str, usize> = found
             .iter()
@@ -9710,27 +9792,68 @@ mod tests {
             }
             let on = turn_on(code, &opened["draft"]);
             let checked = validated(code, &on);
-            let kind = AgentFormKind::from_code(code).unwrap();
             for key in &keys {
                 assert!(
                     checked["off"].get(*key).is_none(),
                     "{code}: {key} comes alive: {}",
                     checked["off"]
                 );
-                // And keeps what is typed there (the host's probe values).
-                let shown = checked["values"][*key].as_str().unwrap_or_default();
-                let kept = conditions::probes(kind, key, shown)
-                    .into_iter()
-                    .any(|probe| {
-                        let filled = fill(code, &on, json!({ *key: probe }));
-                        let shown = filled["values"][*key].as_str().unwrap_or_default();
-                        filled["rejected"][*key].is_null()
-                            && !(shown.is_empty()
-                                || shown == "false"
-                                || shown.trim_matches(['0', '.']).is_empty())
-                    });
+                // And keeps what is typed there.
+                let kept = test_probes(&checked, code, key).into_iter().any(|probe| {
+                    let filled = fill(code, &on, json!({ *key: probe }));
+                    filled["rejected"][*key].is_null() && !shows_nothing(&filled["values"][*key])
+                });
                 assert!(kept, "{code}: {key} keeps a typed value once on");
             }
+            // In this state too, the host's batched check finds exactly the
+            // boxes the test's own probes find off.
+            assert_eq!(
+                off_keys(&checked),
+                oracle_off(code, &checked),
+                "{code} after turning on {keys:?}"
+            );
+        }
+    }
+
+    /// Rule 6: the batched off check agrees with probing each box alone,
+    /// across single answers that toggle the forms' conditions (amended,
+    /// item answers, spouse, taxes withheld, tax type, nature, amounts).
+    #[test]
+    fn the_off_check_agrees_with_each_box_alone_across_answers() {
+        setup();
+        let states: Vec<(&str, Value)> = vec![
+            ("0605", json!({"frm0605:itemModeOfPayment:_1": "true"})),
+            ("0605", json!({"frm0605:itemMannerOfPayment:_5": "true"})),
+            ("0619F", json!({"frm0619F:optWithheld:Y": "true"})),
+            (
+                "0619F",
+                json!({"frm0619F:optWithheld:Y": "true", "frm0619F:txtTaxTypeCode": "WF"}),
+            ),
+            ("1600WP", json!({"frm1600WP:AnyTaxHeld_1": "true"})),
+            ("1601C", json!({"frm1601c:SpecialTax_1": "true"})),
+            ("1601C", json!({"frm1601c:AmendedRtn_1": "true"})),
+            ("1601EQ", json!({"frm1601EQ:txtTax20": "1000"})),
+            ("1602Q", json!({"frm1602Q:txt18": "1000"})),
+            ("1604C", json!({"frm1604c:releasedOfFunds_1": "true"})),
+            ("1604F", json!({"frm1604f:taxRelief_1": "true"})),
+            ("1701Q", json!({"frm1701q:optType_1": "true"})),
+            (
+                "1701Q",
+                json!({"frm1701q:optType_1": "true", "frm1701q:txtSpouseName": "JUAN DELA CRUZ"}),
+            ),
+            ("2000OT", json!({"frm2000OT:rbTransNature_2": "true"})),
+            ("2200A", json!({"frm2200Av2020:optTreaty_1": "true"})),
+            ("2553", json!({"frm2553:txt13_1": "true"})),
+        ];
+        for (code, edits) in states {
+            let opened = open(code, page_period_of(code));
+            let on = fill(code, &opened["draft"], edits.clone());
+            let checked = validated(code, &on["draft"]);
+            assert_eq!(
+                off_keys(&checked),
+                oracle_off(code, &checked),
+                "{code} after {edits}"
+            );
         }
     }
 

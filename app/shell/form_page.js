@@ -217,35 +217,46 @@ function itemKeys(it) {
 /**
  * Lay `text` over stacked lines of `slots` character boxes (rule 5), as the
  * host splits a pooled address (combs::split_lines): each line but the last
- * ends at the last space that fits, or for a word longer than the line at
- * the first space after it, consuming that one space; the last takes the
- * rest. One string per line; a line can come out longer than its boxes.
+ * ends at the last space run that starts within its boxes, the run kept at
+ * the end of that line, and the last takes the rest, so the lines put end
+ * to end are the text. A word longer than its line is cut at the line's
+ * last box when `cutWords` (the host splits these lines into saved fields),
+ * else it stays whole on the line (the boxes are only shown).
  */
-export function splitLines(text, slots) {
+export function splitLines(text, slots, cutWords = false) {
   const lines = [];
-  let rest = String(text ?? "").trim();
+  let rest = [...String(text ?? "").trim()];
+  const space = (c) => /\s/.test(c);
   slots.forEach((n, i) => {
     if (i === slots.length - 1 || rest.length <= n) {
-      lines.push(rest);
-      rest = "";
+      lines.push(rest.join(""));
+      rest = [];
       return;
     }
-    let cut = rest.lastIndexOf(" ", n);
-    if (cut <= 0) cut = rest.indexOf(" ", n);
-    if (cut <= 0) {
-      lines.push(rest);
-      rest = "";
-      return;
+    let cut = -1;
+    for (let p = n; p >= 1; p--) {
+      if (space(rest[p]) && !space(rest[p - 1])) {
+        cut = p;
+        break;
+      }
     }
-    lines.push(rest.slice(0, cut));
-    rest = rest.slice(cut + 1);
+    if (cut < 0 && cutWords) cut = n;
+    else {
+      if (cut < 0) {
+        cut = n;
+        while (cut < rest.length && !space(rest[cut])) cut++;
+      }
+      while (cut < rest.length && space(rest[cut])) cut++;
+    }
+    lines.push(rest.slice(0, cut).join(""));
+    rest = rest.slice(cut);
   });
   return lines;
 }
 
 /** Whether `text` fits the boxes of `slots`: boxes until it no longer fits. */
-export function fitsBoxes(text, slots) {
-  return splitLines(text, slots).every((line, i) => line.length <= slots[i]);
+export function fitsBoxes(text, slots, cutWords = false) {
+  return splitLines(text, slots, cutWords).every((line, i) => line.trimEnd().length <= slots[i]);
 }
 
 /**
@@ -613,7 +624,9 @@ export class FormPageActions {
     if (!s || !s.editable) return;
     if (s.periodParts?.has(k)) return this.setPeriodPart({ [k]: value }, cx);
     // Only what is typed is sent: in a penalty group opened with Edit the
-    // boxes left alone stay computed (rule 8).
+    // boxes left alone stay computed (rule 8). The page refilling a box
+    // (InputState.set_value) emits no "change" (gpui turns events off for
+    // it), so focusing or reformatting a box never sends it.
     s.pending[k] = value;
     s.dirty = true;
     const token = this.token;
@@ -1514,6 +1527,8 @@ export class FormPageActions {
         this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);
+        if (f.pools) s.poolTexts = f.pools;
+        if (Array.isArray(f.penalties)) s.penalties = f.penalties;
         edits = {};
       }
       const r = this.app.store.write("screen_form_save", s.code, s.draft);
@@ -1716,7 +1731,8 @@ function control(cx, ui, f, itemLabel, multi, available) {
   // Rule 5: the printed boxes, while the text fits them.
   const slots = f.pool ? f.pool.slots : f.slots ? [f.slots] : null;
   const text = f.pool ? ui.poolText(f) : value;
-  if (slots && fitsBoxes(text, slots)) wrap.child(charBoxes(cx, f.k, splitLines(text, slots), slots));
+  const cutWords = Boolean(f.pool && f.pool.write.length > 1);
+  if (slots && fitsBoxes(text, slots, cutWords)) wrap.child(charBoxes(cx, f.k, splitLines(text, slots, cutWords).map((line) => line.trimEnd()), slots));
   return wrap;
 }
 
@@ -1979,7 +1995,7 @@ function datePicker(cx, ui, id, date, row = id) {
       }
       cal.on("change", (value, cx) => {
         // A month or year jump selects a day too; only a pick fills the box.
-        if (typeof value === "string" && value !== s.picker?.jumpedTo) ui.pickDate(date, value, cx);
+        if (typeof value === "string" && s.picker && value !== s.picker.jumpedTo) ui.pickDate(date, value, cx);
       });
       s.picker = { id, row, cal };
       ui.refreshRows();
@@ -2007,14 +2023,16 @@ function datePicker(cx, ui, id, date, row = id) {
       // A click away closes the calendar. While a month or year list is
       // open over the card, wait for the list: a click in it is the card's
       // own, and one outside it closes the list and the calendar.
-      const close = () => {
+      // The deferred check uses the timer's own context: this handler's
+      // is gone by then.
+      const close = (c) => {
         s.picker = null;
         ui.refreshRows();
-        cx.notify();
+        c.notify();
       };
-      if (!s.picker?.select) return close();
-      cx.timer.after(0, () => {
-        if (s.picker && !s.picker.select) close();
+      if (!s.picker?.select) return close(cx);
+      cx.timer.after(0, (acx) => {
+        if (s.picker && !s.picker.select) close(acx);
       });
     })
     .child(
@@ -2047,6 +2065,9 @@ function datePicker(cx, ui, id, date, row = id) {
           .when(on, (el) => el.bg(t.primary))
           .when(!on, (el) => el.hover((st) => st.bg(t.hover)))
           .on_click((_e, cx) => {
+            // gpui's set_value emits no "change" (CalendarState::set_date only
+            // notifies); marked anyway so a pick can never run twice.
+            if (s.picker) s.picker.jumpedTo = day;
             cal.set_value(day);
             ui.pickDate(date, day, cx);
           })

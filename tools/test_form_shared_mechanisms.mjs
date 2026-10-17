@@ -82,7 +82,11 @@ let owner = null;
 class View {}
 function context(entity = null) {
   return {
-    notify() { if (entity) entity.dirty = true; },
+    stale: false,
+    notify() {
+      if (this.stale) throw new Error("stale context: cx used after its handler returned");
+      if (entity) entity.dirty = true;
+    },
     new(Class, props) {
       const e = { dirty: true, released: false, set_props(p) { e.props = p; e.view.update?.(p); e.dirty = true; }, release() { e.released = true; return true; } };
       e.view = new Class(props); e.props = props; entities.push(e);
@@ -96,7 +100,10 @@ function context(entity = null) {
     theme() { return { appearance: "light", is_dark: false, colors: {} }; },
   };
 }
-function runTimers() { while (timers.length) timers.shift()(context()); }
+function runTimers() { while (timers.length) act(timers.shift()); }
+// A host call's context lives only while the handler runs: one used after
+// it returns (from a timer, say) throws, as the shell does.
+function act(fn, ...args) { const c = context(); try { return fn(...args, c); } finally { c.stale = true; } }
 function element() {
   const creationOwner = owner;
   const target = {};
@@ -117,7 +124,7 @@ function element() {
   return el;
 }
 function mount(e) { if (e?.view && e.dirty && !e.released) { e.dirty = false; const old = owner; owner = e; e.view.render(context(e)); owner = old; } }
-const InputState = { new({ value = "" } = {}) { let text = value; const on = {}; return { value: () => text, set_value: (v) => { text = v; }, on(ev, fn) { on[ev] = fn; }, fire(ev) { on[ev]?.({}, context()); }, type(v) { text = v; on.change?.({}, context()); }, release() { return true; } }; } };
+const InputState = { new({ value = "" } = {}) { let text = value; const on = {}; return { value: () => text, set_value: (v) => { text = v; }, on(ev, fn) { on[ev] = fn; }, fire(ev) { if (on[ev]) act(on[ev], {}); }, type(v) { text = v; if (on.change) act(on.change, {}); }, release() { return true; } }; } };
 // The calendar's grid: a month that the arrows (and the lists) step.
 const calendars = [];
 const CalendarState = { new() {
@@ -127,7 +134,7 @@ const CalendarState = { new() {
     value: () => value, year: () => y, month: () => m, today: () => "2026-10-17", month_days: () => [[]],
     next_month() { calendarSteps += 1; m += 1; if (m > 12) { m = 1; y += 1; } },
     prev_month() { calendarSteps += 1; m -= 1; if (m < 1) { m = 12; y -= 1; } },
-    on(_ev, fn) { onChange = fn; }, pick(day) { value = day; onChange?.(day, context()); }, release() { return true; },
+    on(_ev, fn) { onChange = fn; }, pick(day) { value = day; if (onChange) act(onChange, day); }, release() { return true; },
   };
   calendars.push(cal);
   return cal;
@@ -298,7 +305,7 @@ await settle();
 // The calendar: its month and year lists move the grid; a day fills the box.
 const pid = idOf(K("date"));
 frame();
-clicks.get(`fp-date-${pid}`).fn({}, context());
+act(clicks.get(`fp-date-${pid}`).fn, {});
 const cal = ui.state.picker.cal;
 assert.deepEqual([cal.year(), cal.month()], [2020, 12], "the calendar opens on the box's date");
 frame();
@@ -306,16 +313,16 @@ const months = dropdowns.get(`fp-date-month-${pid}`), years = dropdowns.get(`fp-
 assert.ok(months && years, "the calendar has a month list and a year list");
 assert.equal(months.options.length, 12);
 assert.ok(years.options.some((o) => o.value === "1900") && years.options.some((o) => o.value === "2036"), "years run from 1900 to ten years ahead");
-months.onOpenChange(true, context());
+act(months.onOpenChange, true);
 assert.equal(ui.state.picker.select, "month", "the month list opens over the calendar");
-months.onChange("3", context());
+act(months.onChange, "3");
 assert.deepEqual([cal.year(), cal.month()], [2020, 3], "a month changes the month");
 assert.equal(ui.state.picker.select, null, "and closes its list");
 calendarSteps = 0;
-years.onChange("1900", context());
+act(years.onChange, "1900");
 assert.deepEqual([cal.year(), cal.month()], [1900, 3], "a year changes the year");
 assert.equal(calendarSteps, 0, "in one jump, not a month at a time");
-years.onChange("1985", context());
+act(years.onChange, "1985");
 assert.deepEqual([cal.year(), cal.month()], [1985, 3]);
 const fillsBefore = calls.filter((c) => c[0] === "screen_form_fill").length;
 cal.pick(ui.state.picker.jumpedTo);
@@ -328,37 +335,38 @@ assert.equal(lastFill()[3][K("date")], "03/07/1985", "a picked day reaches the d
 assert.equal(input(K("date")).value(), "Mar 7, 1985", "and shows as Mar 7, 1985");
 // A click away while a list is open closes the list and the calendar.
 frame();
-clicks.get(`fp-date-${pid}`).fn({}, context());
+act(clicks.get(`fp-date-${pid}`).fn, {});
 frame();
-dropdowns.get(`fp-date-year-${pid}`).onOpenChange(true, context());
-downOut.get(`fp-date-card-${pid}`).fn({}, context());
+act(dropdowns.get(`fp-date-year-${pid}`).onOpenChange, true);
+act(downOut.get(`fp-date-card-${pid}`).fn, {});
 assert.ok(ui.state.picker, "a click in the open list is the calendar's own");
 runTimers();
 assert.ok(ui.state.picker, "and keeps it open");
 // The card hears the click first, then the list closes itself.
-downOut.get(`fp-date-card-${pid}`).fn({}, context());
-dropdowns.get(`fp-date-year-${pid}`).onOpenChange(false, context());
+act(downOut.get(`fp-date-card-${pid}`).fn, {});
+act(dropdowns.get(`fp-date-year-${pid}`).onOpenChange, false);
 runTimers();
 assert.equal(ui.state.picker, null, "a click outside the list closes it and the calendar");
 // Each date of an item has its own calendar.
 const payments = idOf(K("cashDate"));
 frame();
 assert.ok(clicks.has(`fp-date-${payments}-0`) && clicks.has(`fp-date-${payments}-1`), "two dates, two calendars");
-clicks.get(`fp-date-${payments}-1`).fn({}, context());
+act(clicks.get(`fp-date-${payments}-1`).fn, {});
 ui.state.picker.cal.pick("2026-03-15");
 assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("checkDate")]: "03/15/2026" }), "the second calendar fills the second date");
 console.log("PASS rule 4: dates show as Dec 10, 2020 and the calendar changes month and year.");
 
 // ---- Rule 5: character boxes only where the length is known.
 const long = "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI"; // 61
-assert.equal(JSON.stringify(splitLines(long, [40, 31])), JSON.stringify(["UNIT 5 BLDG A, 123 AYALA AVENUE CORNER", "PASEO DE ROXAS, MAKATI"]), "line 1 ends at the last space before character 40");
+assert.equal(JSON.stringify(splitLines(long, [40, 31])), JSON.stringify(["UNIT 5 BLDG A, 123 AYALA AVENUE CORNER ", "PASEO DE ROXAS, MAKATI"]), "line 1 ends at the last space before character 40, the space kept at its end");
 assert.ok(fitsBoxes(long, [40, 31]));
 assert.ok(!fitsBoxes(`${long} CITY 1226 METRO MANILA`, [40, 31]), "past 71 the boxes no longer fit");
-assert.equal(JSON.stringify(splitLines(`${"A".repeat(45)} B`, [40, 31])), JSON.stringify(["A".repeat(45), "B"]), "a word longer than the line is never cut");
+assert.equal(JSON.stringify(splitLines(`${"A".repeat(45)} B`, [40, 31])), JSON.stringify([`${"A".repeat(45)} `, "B"]), "shown only, a word longer than the line stays whole");
+assert.equal(JSON.stringify(splitLines(`${"A".repeat(45)} B`, [40, 31], true)), JSON.stringify(["A".repeat(40), "AAAAA B"]), "split into saved lines, it is cut at the last box");
 assert.ok(!fitsBoxes(`${"A".repeat(45)} B`, [40, 31]), "so it does not fit the boxes");
 assert.ok(!fitsBoxes("A".repeat(41), [40]));
-for (const text of [long, `${long} CITY 1226 METRO MANILA`, `${"A".repeat(45)} B C`]) {
-  assert.equal(splitLines(text, [40, 31]).filter(Boolean).join(" "), text, "joined back with a space, the lines are the text");
+for (const text of [long, `${long} CITY 1226 METRO MANILA`, `${"A".repeat(45)} B C`, "UNIT 5  BLDG A,   123 AYALA AVENUE  CORNER PASEO DE ROXAS"]) {
+  for (const cut of [false, true]) assert.equal(splitLines(text, [40, 31], cut).join(""), text, "put end to end, the lines are the text");
 }
 frame();
 assert.ok(ids.has(`fp-boxes-${K("zip")}`), "a ZIP code keeps its four boxes");
@@ -392,6 +400,11 @@ input(K("phone")).type("0287654321");
 input(K("phone")).fire("blur");
 await settle(); frame();
 assert.equal(input(K("addr1")).value(), longer, "no space is ever put into it");
+// Saved straight after typing, the box shows the host's address.
+input(K("addr1")).type(long);
+ui.save(cx);
+assert.equal(ui.state.poolTexts[K("addr1")], long, "save takes the host's pool text");
+await settle(); frame();
 // Three lines, each a field of its own: the host splits the one text.
 assert.equal(input(K("line1")).value(), "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS", "the lines read as one address");
 input(K("line1")).type("UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226");
@@ -430,9 +443,13 @@ assert.ok(texts.includes("125.00") && texts.includes("31.50") && texts.includes(
 assert.equal(ui.isLocked(K("totpen")), false, "the total is a computed box, not a lock of its own");
 const editId = (k) => `fp-penalty-edit-${idOf(k)}`;
 assert.ok(clicks.has(editId(SUR)) && clicks.has(editId(COMP)), "each penalty item offers Edit penalties");
-clicks.get(editId(COMP)).fn({}, context());
+act(clicks.get(editId(COMP)).fn, {});
 frame();
 for (const k of PENALTY) assert.equal(ui.isLocked(k), false, `one Edit opens ${k}`);
+// Focusing a box and leaving it untouched sends nothing.
+{ const fills = calls.filter((c) => c[0] === "screen_form_fill").length;
+  input(SUR).fire("focus"); input(SUR).fire("blur");
+  assert.equal(calls.filter((c) => c[0] === "screen_form_fill").length, fills, "a merely focused penalty is no override"); }
 assert.ok(clicks.has(`fp-penalty-computed-${idOf(SUR)}`), "and offers the computed amounts back");
 input(COMP).type("500");
 input(COMP).fire("blur");
@@ -453,7 +470,7 @@ input(INT).fire("blur");
 assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [INT]: "0" }), "later edits send just that box");
 await settle(); frame();
 assert.equal(ui.state.values[K("totpen")], "625.00");
-clicks.get(`fp-penalty-computed-${idOf(SUR)}`).fn({}, context());
+act(clicks.get(`fp-penalty-computed-${idOf(SUR)}`).fn, {});
 await settle(); frame();
 assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [SUR]: "", [INT]: "", [COMP]: "" }), "Use the computed amounts blanks all three");
 assert.equal(ui.state.values[K("totpen")], "1156.50", "the computed amounts are back");

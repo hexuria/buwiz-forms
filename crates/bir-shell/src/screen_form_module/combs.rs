@@ -19,12 +19,17 @@
 //!   the pool from the draft (`pool_texts`, `write_pool`), never from the
 //!   field map, whose lines are cut at a fixed width:
 //!   - `write` is the first line alone where only it has a draft field: the
-//!     whole text goes there, and a second draft line the print joins to it
-//!     (0619E and 0619F's `registered_address_2`) is emptied.
+//!     whole text goes there; where the draft keeps a second line the form
+//!     joins to it (0619E and 0619F's `registered_address_2`), the text is
+//!     split at the first line's boxes so both lines fill.
 //!   - `write` is every line where each has its own entry of one draft list
-//!     (1702RT's `registered_address_lines`): the text is split at the last
-//!     space that fits each line, the last taking the rest (provisional:
-//!     rules page question 5). Lines joined by one space give the text back.
+//!     (1702RT's `registered_address_lines`): the text is split over them
+//!     (provisional: rules page question 5).
+//!   - A split ([`split_lines`]) ends a line at the last space run that
+//!     starts within its boxes, the run kept at its end, or cuts a word
+//!     longer than the line at its last box; the lines put end to end are
+//!     what was typed. How the print shows an address past its boxes is
+//!     open (rules page question 4); the print maps are not changed.
 //!   - Any other mix (1702MX: its first line is the whole address, the
 //!     others list entries, and its print reads the list) is not pooled.
 
@@ -252,23 +257,40 @@ pub(super) fn pools(code: &str) -> BTreeMap<String, Pool> {
         .unwrap_or_default()
 }
 
-/// A second draft line the print joins to the first (`<path>_2`), when the
-/// draft has one.
+/// A second draft line the form joins to the first (`<path>_2`: 0619E and
+/// 0619F's `registered_address_2`), when the draft has one.
 fn second_line(draft: &Value, path: &str) -> Option<String> {
     let path = format!("{path}_2");
     draft.pointer(&path).filter(|v| v.is_string()).map(|_| path)
 }
 
-/// The pool's address as the draft holds it.
+fn read(draft: &Value, path: &str) -> String {
+    draft
+        .pointer(path)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// The slots of the lines a pool writes, in order.
+fn write_slots(pool: &Pool) -> Vec<usize> {
+    pool.write
+        .iter()
+        .map(|key| {
+            pool.keys
+                .iter()
+                .position(|k| k == key)
+                .and_then(|i| pool.slots.get(i).copied())
+                .unwrap_or(0)
+        })
+        .collect()
+}
+
+/// The pool's address as the draft holds it: the first line and its second
+/// draft line joined as the form joins them (0619E's `full_address`), or
+/// the list's lines joined by [`join_lines`].
 pub(super) fn pool_text(kind: AgentFormKind, pool: &Pool, draft: &Value) -> String {
     let def = kind.definition();
-    let read = |path: &str| {
-        draft
-            .pointer(path)
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string()
-    };
     let paths: Vec<&str> = pool
         .write
         .iter()
@@ -276,15 +298,12 @@ pub(super) fn pool_text(kind: AgentFormKind, pool: &Pool, draft: &Value) -> Stri
         .collect();
     if let [path] = paths.as_slice() {
         let second = second_line(draft, path)
-            .map(|p| read(&p))
+            .map(|p| read(draft, &p))
             .unwrap_or_default();
-        return format!("{}{second}", read(path)).trim().to_string();
+        return format!("{}{second}", read(draft, path)).trim().to_string();
     }
-    let mut lines: Vec<String> = paths.iter().map(|p| read(p).trim().to_string()).collect();
-    while lines.last().is_some_and(String::is_empty) {
-        lines.pop();
-    }
-    lines.join(" ")
+    let lines: Vec<String> = paths.iter().map(|p| read(draft, p)).collect();
+    join_lines(&lines, &write_slots(pool)).trim().to_string()
 }
 
 /// Each pool's address, by its first line (what the page shows).
@@ -297,41 +316,64 @@ pub(super) fn pool_texts(kind: AgentFormKind, draft: &Value) -> Value {
     )
 }
 
-/// Lay `text` over lines of `slots` characters: each line but the last ends
-/// at the last space that fits it (or, for a word longer than the line, at
-/// the first space after it), consuming that one space; the last takes the
-/// rest. Joining the lines with one space gives `text` back.
+/// Lay `text` over lines of `slots` characters, each line but the last
+/// ending at the last space run that starts within its slots (the run stays
+/// at the end of that line, so nothing is lost), or, for a word longer than
+/// the line, at the line's last box. The last line takes the rest. The lines
+/// put end to end are `text`.
 pub(super) fn split_lines(text: &str, slots: &[usize]) -> Vec<String> {
     let mut lines = Vec::new();
-    let mut rest = text.trim().to_string();
+    let mut rest: Vec<char> = text.trim().chars().collect();
     for (i, &n) in slots.iter().enumerate() {
-        if i + 1 == slots.len() || rest.chars().count() <= n {
-            lines.push(std::mem::take(&mut rest));
+        if i + 1 == slots.len() || rest.len() <= n {
+            lines.push(rest.drain(..).collect());
             continue;
         }
-        let byte_at = |chars: usize| {
-            rest.char_indices()
-                .nth(chars)
-                .map_or(rest.len(), |(b, _)| b)
-        };
-        let fits = &rest[..byte_at(n + 1)];
-        let cut = fits
-            .rfind(' ')
-            .filter(|&b| b > 0)
-            .or_else(|| rest[byte_at(n)..].find(' ').map(|b| b + byte_at(n)));
-        match cut {
-            Some(cut) => {
-                lines.push(rest[..cut].to_string());
-                rest = rest[cut + 1..].to_string();
+        let space = (1..=n)
+            .rev()
+            .find(|&p| rest[p].is_whitespace() && !rest[p - 1].is_whitespace());
+        let cut = match space {
+            Some(p) => {
+                let mut end = p;
+                while end < rest.len() && rest[end].is_whitespace() {
+                    end += 1;
+                }
+                end
             }
-            None => lines.push(std::mem::take(&mut rest)),
-        }
+            None => n,
+        };
+        lines.push(rest.drain(..cut).collect());
     }
     lines
 }
 
+/// Put lines back together: end to end where a line ends in a space or
+/// fills its boxes (a word cut at the last box), else with one space (lines
+/// saved before the split kept its space).
+pub(super) fn join_lines(lines: &[String], slots: &[usize]) -> String {
+    let mut text = String::new();
+    for (i, line) in lines.iter().enumerate() {
+        if line.is_empty() {
+            continue;
+        }
+        let glued = text.is_empty()
+            || text.ends_with(char::is_whitespace)
+            || lines[..i]
+                .iter()
+                .rposition(|l| !l.is_empty())
+                .is_some_and(|j| lines[j].chars().count() >= slots.get(j).copied().unwrap_or(0));
+        if !glued {
+            text.push(' ');
+        }
+        text.push_str(line);
+    }
+    text
+}
+
 /// Write the pool's address from the page into the draft (see the module
-/// docs). `lift`: which lock the page has opened for a line.
+/// docs). `lift`: which lock the page has opened for a line. Each line goes
+/// through the form's own fill first (its checks), then keeps its exact
+/// text, so the lines put end to end are what was typed.
 pub(super) fn write_pool(
     kind: AgentFormKind,
     pool: &Pool,
@@ -345,26 +387,33 @@ pub(super) fn write_pool(
         other => other.to_string(),
     };
     let def = kind.definition();
-    if let [head] = pool.write.as_slice() {
-        super::catalogs::fill(kind, draft, head, &json!(text), lift(head))?;
-        if let Some(second) = text_path(def, head).and_then(|path| second_line(draft, path)) {
-            super::set_draft_path(draft, &second, json!(""));
+    let write = |draft: &mut Value, key: &str, line: &str| -> Result<(), String> {
+        super::catalogs::fill(kind, draft, key, &json!(line.trim()), lift(key))?;
+        if let Some(path) = text_path(def, key) {
+            super::set_draft_path(draft, path, json!(line));
         }
-        return Ok(());
+        Ok(())
+    };
+    if let [head] = pool.write.as_slice() {
+        let path = text_path(def, head).unwrap_or_default();
+        return match second_line(draft, path) {
+            // The form keeps two lines: split at the first line's boxes.
+            Some(second) => {
+                let first = pool.slots.first().copied().unwrap_or(0);
+                let lines = split_lines(&text, &[first, 0]);
+                write(draft, head, &lines[0])?;
+                super::set_draft_path(draft, &second, json!(lines[1]));
+                Ok(())
+            }
+            None => write(draft, head, &text),
+        };
     }
-    let slots: Vec<usize> = pool
+    for (key, line) in pool
         .write
         .iter()
-        .map(|key| {
-            pool.keys
-                .iter()
-                .position(|k| k == key)
-                .and_then(|i| pool.slots.get(i).copied())
-                .unwrap_or(0)
-        })
-        .collect();
-    for (key, line) in pool.write.iter().zip(split_lines(&text, &slots)) {
-        super::catalogs::fill(kind, draft, key, &json!(line), lift(key))?;
+        .zip(split_lines(&text, &write_slots(pool)))
+    {
+        write(draft, key, &line)?;
     }
     Ok(())
 }
@@ -475,7 +524,9 @@ mod tests {
         assert_eq!(caption_stem("17 d description"), "17 d description");
     }
 
-    /// Splitting never cuts a word and is undone by joining with a space.
+    /// The lines put end to end are what was typed (a space run kept at the
+    /// end of its line), joining them gives it back, a line's letters fit its
+    /// boxes, and only a word longer than its line is cut, at the last box.
     #[test]
     fn a_split_address_joins_back_to_what_was_typed() {
         let cases = [
@@ -489,6 +540,10 @@ mod tests {
             ),
             ("SHORT", vec![38, 38, 30]),
             (
+                "UNIT 5  BLDG A,   123 AYALA AVENUE  CORNER PASEO",
+                vec![10, 10, 40],
+            ),
+            (
                 "ÑAÑO STREET, PARAÑAQUE CITY, METRO MANILA, PHILIPPINES 1700",
                 vec![20, 20, 20],
             ),
@@ -496,17 +551,23 @@ mod tests {
         for (text, slots) in cases {
             let lines = split_lines(text, &slots);
             assert_eq!(lines.len(), slots.len(), "{text}");
-            let mut kept = lines.clone();
-            while kept.last().is_some_and(String::is_empty) {
-                kept.pop();
-            }
-            assert_eq!(kept.join(" "), text, "{lines:?}");
+            assert_eq!(lines.concat(), text, "{lines:?}");
+            assert_eq!(join_lines(&lines, &slots), text, "{lines:?}");
             for (line, n) in lines.iter().zip(&slots).take(slots.len() - 1) {
-                assert!(
-                    line.chars().count() <= *n || !line.contains(' '),
-                    "{line:?} > {n}"
-                );
+                assert!(line.trim_end().chars().count() <= *n, "{line:?} > {n}");
             }
         }
+        // A word longer than its line is cut at the last box and rejoined
+        // without a space inside it.
+        let lines = split_lines("SUPERCALIFRAGILISTIC TOWER", &[10, 30]);
+        assert_eq!(lines, ["SUPERCALIF", "RAGILISTIC TOWER"]);
+        assert_eq!(join_lines(&lines, &[10, 30]), "SUPERCALIFRAGILISTIC TOWER");
+        // Lines saved before (trimmed, short of their boxes) keep their space.
+        let saved = [
+            "UNIT 5 BLDG A".to_string(),
+            "MAKATI".to_string(),
+            String::new(),
+        ];
+        assert_eq!(join_lines(&saved, &[38, 38, 30]), "UNIT 5 BLDG A MAKATI");
     }
 }
