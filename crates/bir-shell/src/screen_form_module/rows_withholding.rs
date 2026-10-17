@@ -16,8 +16,14 @@
 //! - 1603Q Item 13: Yes opens Item 13A blank, No closes it (`tax_relief`).
 //! - 1602Q Item 13: Yes and No go through `set_availing_tax_relief`, which
 //!   clears Schedule 2 on No (`DrpListTreaty`). While Item 13 is not Yes,
-//!   13A and Schedule 2 stay closed: what is written there is dropped, as
-//!   the official page keeps them disabled and empty (rule 6 reads that).
+//!   13A and Schedule 2 are closed: a write there is refused, as the
+//!   official page keeps them disabled ([`gated`] tells rule 6). 1601FQ
+//!   item 25 is closed the same way until the return is amended.
+//! - 1601FQ Schedule 1: a row's ATC goes through `set_schedule1_atc`, so its
+//!   rate follows the ATC (`getATCdrpTaxRate`).
+//! - An answer or a cleared ATC that removes rows the filer typed is
+//!   reported ([`removes`]) so the page can ask first and offer Undo, as
+//!   the official `confirmDisableTreaty` confirms.
 //!
 //! Field keys, the official XML and the print map are the forms' own and
 //! unchanged.
@@ -62,6 +68,40 @@ pub(super) enum Cell {
     QItem13(bool),
     Q2Item13(bool),
     Q2Gated,
+    /// 1601FQ Schedule 1 row's ATC (`drpATCCode<i>`): its rate follows.
+    FqSched1Atc(usize),
+    /// 1601FQ item 25: open on an amended return only.
+    FqTax25,
+}
+
+/// What a box Item 13 has closed says when it is written to.
+pub(super) const ANSWER_13_FIRST: &str = "Answer Yes to item 13 first.";
+/// What 1601FQ item 25 says on a return that is not amended.
+pub(super) const AMENDED_FIRST: &str = "Answer Yes to item 3 (Amended Return) first.";
+
+/// Whether `reason` is this module's refusal of a box its answer closes.
+#[cfg(test)]
+pub(super) fn is_gate_refusal(reason: &str) -> bool {
+    reason == ANSWER_13_FIRST || reason == AMENDED_FIRST
+}
+
+/// `Some(closed)` for a box the host closes while its answer does not
+/// hold: 1602Q's 13A and Schedule 2 until item 13 is Yes, 1601FQ item 25
+/// until the return is amended. `None` for every other box.
+pub(super) fn gated(kind: AgentFormKind, draft: &Value, key: &str) -> Option<bool> {
+    gate(kind, key).map(|cell| refusal(cell, draft).is_some())
+}
+
+fn gate(kind: AgentFormKind, key: &str) -> Option<Cell> {
+    cell(kind, key).filter(|cell| matches!(cell, Cell::Q2Gated | Cell::FqTax25))
+}
+
+fn refusal(cell: Cell, draft: &Value) -> Option<&'static str> {
+    match cell {
+        Cell::Q2Gated => (draft["availing_tax_relief"] != json!(true)).then_some(ANSWER_13_FIRST),
+        Cell::FqTax25 => (draft["is_amended"] != json!(true)).then_some(AMENDED_FIRST),
+        _ => None,
+    }
 }
 
 fn row_of(key: &str, stem: &str, rows: usize) -> Option<usize> {
@@ -78,7 +118,15 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
             if let Some(row) = row_of(key, "frm1601FQ:txtTaxBase", FQ_ROWS) {
                 return Some(Cell::FqBase(row));
             }
+            if let Some(row) = key
+                .strip_prefix("drpATCCode")
+                .and_then(|i| i.parse::<usize>().ok())
+                .filter(|i| *i < bir_core::forms::form_1601fq::FORM_1601FQ_SCHEDULE1_ROWS)
+            {
+                return Some(Cell::FqSched1Atc(row));
+            }
             match key {
+                "frm1601FQ:txtTax25" => Some(Cell::FqTax25),
                 "frm1601FQ:CatAgent_P" => Some(Cell::FqCategory(Form1601FqCategory::Private)),
                 "frm1601FQ:CatAgent_G" => Some(Cell::FqCategory(Form1601FqCategory::Government)),
                 "frm1601FQ:TaxWithheld_1" => Some(Cell::FqWithheld(true)),
@@ -108,7 +156,7 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
 /// does not apply on the page). A 1602Q box Item 13 opens is written by the
 /// ordinary fill once it is open.
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
-    cell(kind, key).is_some_and(|cell| cell != Cell::Q2Gated)
+    cell(kind, key).is_some_and(|cell| !matches!(cell, Cell::Q2Gated | Cell::FqTax25))
 }
 
 /// An ATC is chosen before its row's tax base.
@@ -150,10 +198,16 @@ pub(super) fn fill(
 ) -> Option<Result<(), String>> {
     let cell = cell(kind, key)?;
     Some(match cell {
-        Cell::Q2Gated => {
-            let open = draft["availing_tax_relief"] == json!(true);
-            if open { ordinary(draft) } else { Ok(()) }
-        }
+        Cell::Q2Gated | Cell::FqTax25 => match refusal(cell, draft) {
+            Some(why) => Err(why.to_string()),
+            // 13A's Choose... leaves Item 13 Yes with no relief named yet
+            // (`Unspecified`, which validation asks for), as 1601FQ's does.
+            None if key == "frm1602Q:lstSpecialTax" && text(value).is_empty() => {
+                draft["tax_relief"] = json!("unspecified");
+                Ok(())
+            }
+            None => ordinary(draft),
+        },
         _ => write(cell, draft, value),
     })
 }
@@ -232,7 +286,27 @@ fn write(cell: Cell, draft: &mut Value, value: &Value) -> Result<(), String> {
             form.set_availing_tax_relief(yes);
             store(draft, &form)
         }
-        Cell::Q2Gated => Ok(()),
+        Cell::FqSched1Atc(row) => {
+            let code = text(value);
+            let code = if code.is_empty() {
+                "NA".to_string()
+            } else {
+                code.to_uppercase()
+            };
+            if !bir_core::forms::form_1601fq::form_1601fq_schedule_atc_is_option(&code) {
+                return Err(format!(
+                    "`{code}` is not an ATC on the official 1601-FQ list."
+                ));
+            }
+            let mut form: Form1601FqDraft = typed(draft)?;
+            if form.schedule1.get(row).is_none() {
+                return Err(ANSWER_13_FIRST.to_string());
+            }
+            // `getATCdrpTaxRate`: the rate follows the ATC.
+            form.set_schedule1_atc(row, &code);
+            store(draft, &form)
+        }
+        Cell::Q2Gated | Cell::FqTax25 => Ok(()),
     }
 }
 
@@ -346,4 +420,160 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
         .filter(|key| shown.contains(key))
         .map(|key| (key, json!(RATE_WAITS)))
         .collect()
+}
+
+/// 1603Q Schedule I cells the sheet preprints (ATC, divisor, rate).
+pub(super) fn preprinted(code: &str, key: &str) -> bool {
+    code == "1603Q"
+        && ["txtATC", "txtDivisor", "txtTaxRate"].iter().any(|stem| {
+            [1, 2]
+                .iter()
+                .any(|n| key == format!("frm1603Q:Sched1:{stem}{n}"))
+        })
+}
+
+/// What a preprinted box says under it.
+pub(super) const PREPRINTED: &str = "Printed on the form.";
+
+fn amount_of(row: &Value, field: &str) -> f64 {
+    row[field].as_f64().unwrap_or(0.0)
+}
+
+fn rows<'a>(draft: &'a Value, list: &str) -> Vec<&'a Value> {
+    draft[list]
+        .as_array()
+        .map(|rows| rows.iter().collect())
+        .unwrap_or_default()
+}
+
+/// 1601FQ Schedule 1 rows the filer typed something into (not the "NA" rows
+/// Item 13 opens with).
+fn typed_schedule_1(draft: &Value) -> usize {
+    rows(draft, "schedule1")
+        .into_iter()
+        .filter(|row| {
+            row["treaty_code"] != "NA"
+                || row["atc_code"] != "NA"
+                || amount_of(row, "income_payment") != 0.0
+                || amount_of(row, "tax_rate") != 0.0
+        })
+        .count()
+}
+
+/// 1602Q Schedule 2 rows the filer typed something into.
+fn typed_schedule_2(draft: &Value) -> usize {
+    rows(draft, "schedule2")
+        .into_iter()
+        .filter(|row| {
+            ["treaty_code", "atc_code"]
+                .iter()
+                .any(|f| row[*f].as_str().is_some_and(|s| !s.trim().is_empty()))
+                || amount_of(row, "interest") != 0.0
+                || amount_of(row, "tax_rate") != 0.0
+        })
+        .count()
+}
+
+fn count(n: usize, what: &str) -> String {
+    format!("{n} {what} row{}", if n == 1 { "" } else { "s" })
+}
+
+/// When `edits` turned `before` into `after` by removing rows the filer
+/// typed, what the page asks first (`message`), what the Undo toast says
+/// (`done`) and how many rows went; `None` when nothing typed went. The
+/// host applies the edit either way; the page keeps its old draft until
+/// the filer chooses Continue.
+pub(super) fn removes(
+    kind: AgentFormKind,
+    before: &Value,
+    after: &Value,
+    edits: &Map<String, Value>,
+) -> Option<Value> {
+    let code = kind.form_code();
+    let clears_atc = edits.iter().any(|(key, value)| {
+        text(value).is_empty()
+            && (matches!(cell(kind, key), Some(Cell::FqAtc(_)))
+                || (code == "1601EQ" && key.starts_with("frm1601EQ:txtAtcCd")))
+    });
+    if clears_atc {
+        // The row goes with its tax base: ask only when it had one.
+        let kept = |row: &Value| {
+            rows(after, "schedule").iter().any(|other| {
+                other["atc_code"] == row["atc_code"] && other["popup_index"] == row["popup_index"]
+            })
+        };
+        let base: f64 = rows(before, "schedule")
+            .into_iter()
+            .filter(|row| !kept(row))
+            .map(|row| amount_of(row, "tax_base"))
+            .sum();
+        if base == 0.0 {
+            return None;
+        }
+        return Some(json!({
+            "message": format!(
+                "Clearing this ATC removes its row and its tax base of ₱{}. Continue?",
+                pesos(base)
+            ),
+            "done": "Removed the row",
+            "rows": 1,
+        }));
+    }
+    let trigger = edits
+        .iter()
+        .find_map(|(key, value)| match cell(kind, key)? {
+            Cell::FqItem13(false) | Cell::Q2Item13(false) if ticked(value) => {
+                Some("Changing item 13 to No")
+            }
+            Cell::FqWithheld(false) if ticked(value) => Some("Changing item 4 to No"),
+            Cell::FqCategory(_) if ticked(value) => Some("Changing item 11"),
+            _ => None,
+        })?;
+    let lost = |b: usize, a: usize| b.saturating_sub(a);
+    let sections = [
+        (
+            lost(
+                rows(before, "schedule").len(),
+                rows(after, "schedule").len(),
+            ),
+            "Part II ATC",
+        ),
+        (
+            lost(typed_schedule_1(before), typed_schedule_1(after)),
+            "Schedule 1",
+        ),
+        (
+            lost(typed_schedule_2(before), typed_schedule_2(after)),
+            "Schedule 2",
+        ),
+    ];
+    let parts: Vec<String> = sections
+        .iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(n, what)| count(*n, what))
+        .collect();
+    let total: usize = sections.iter().map(|(n, _)| n).sum();
+    if total == 0 {
+        return None;
+    }
+    Some(json!({
+        "message": format!("{trigger} removes the {} you typed. Continue?", parts.join(" and ")),
+        "done": format!("Removed {total} row{}", if total == 1 { "" } else { "s" }),
+        "rows": total,
+    }))
+}
+
+/// `1234.5` -> `1,234.50`.
+fn pesos(amount: f64) -> String {
+    let cents = (amount * 100.0).round() as i64;
+    let (whole, cents) = (cents / 100, (cents % 100).abs());
+    let digits = whole.abs().to_string();
+    let mut grouped = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(c);
+    }
+    format!("{}{grouped}.{cents:02}", if whole < 0 { "-" } else { "" })
 }

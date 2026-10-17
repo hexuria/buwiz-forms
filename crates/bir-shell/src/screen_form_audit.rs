@@ -2417,7 +2417,15 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             .flat_map(|it| it["f"].as_array().into_iter().flatten());
         for field in fields {
             let key = field["k"].as_str().unwrap_or_default();
-            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) {
+            // A box another answer turns off is locked on the page too
+            // (form_page.js `isLocked`): 1602Q's 13A until item 13 is Yes,
+            // whose choices q3_withholding_item_13_is_answered_on_the_page_and_prints
+            // takes once it is.
+            if field["t"] != "sel"
+                || field["c"] == 1
+                || locks.contains_key(key)
+                || opened["off"].get(key).is_some()
+            {
                 continue;
             }
             for option in field["o"].as_array().into_iter().flatten() {

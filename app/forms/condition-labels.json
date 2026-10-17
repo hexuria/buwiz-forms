@@ -21,6 +21,9 @@
    "Enabled only when Amended Return Yes is selected.": "Needs Amended Return = Yes",
    "Enabled only when Item 30 is negative; choices are mutually exclusive.": "Needs item 31 below zero (an over-remittance)"
   },
+  "1601FQ": {
+   "Enabled only when Amended Return Yes is selected.": "Needs Amended Return = Yes"
+  },
   "1602Q": {
    "Item 13 Yes.": "Needs item 13 = Yes",
    "Item 28 is negative.": "Needs item 28 below zero (an over-remittance)"

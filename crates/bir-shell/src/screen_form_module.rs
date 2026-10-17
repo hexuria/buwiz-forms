@@ -155,6 +155,8 @@ export interface ScreenFormFilled {
     pools: Record<string, string>;
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
+    /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
+    removes?: { message: string; done: string; rows: number } | null;
 }
 export interface ScreenFormValidated {
     draft: object;
@@ -761,9 +763,16 @@ fn apply_layout(form: &mut Value, layout: &Value) {
                 continue;
             }
             if entry.get("grid").is_some() {
-                if let Some(table) = grid_table(entry, &fields) {
-                    items.push(table);
-                }
+                // A grid that cannot be built is a broken override, never a
+                // silently missing table (its keys are claimed already).
+                let table = grid_table(entry, &fields).unwrap_or_else(|error| {
+                    panic!(
+                        "{}: schema-overrides.json layout grid {}: {error}",
+                        form["c"].as_str().unwrap_or("?"),
+                        entry["l"]
+                    )
+                });
+                items.push(table);
                 continue;
             }
             // A printed item with no box in the official program (1601EQ's
@@ -839,11 +848,13 @@ fn grid_keys(entry: &Value) -> impl Iterator<Item = &Value> {
 /// table of those boxes, wherever the extractor put them. Each column
 /// takes its first row's type and computed flag (the overrides already
 /// applied); `row_labels` are the sheet's preprinted row captions (1603Q
-/// Schedule I's recipients). None when a key is not on the form.
-fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Option<Value> {
+/// Schedule I's recipients). An error when it has no rows, an empty or
+/// ragged row, or a key that is not a field of the form.
+fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Result<Value, String> {
     let grid = &entry["grid"];
     let keys: Vec<Vec<String>> = grid["keys"]
-        .as_array()?
+        .as_array()
+        .ok_or("has no `keys` rows")?
         .iter()
         .map(|row| {
             row.as_array()
@@ -853,9 +864,12 @@ fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Optio
                 .collect()
         })
         .collect();
-    let first = keys.first()?;
-    if keys.iter().flatten().any(|key| !fields.contains_key(key)) {
-        return None;
+    let first = keys.first().ok_or("has no rows")?;
+    if first.is_empty() || keys.iter().any(|row| row.len() != first.len()) {
+        return Err("has an empty row or rows of different lengths".to_string());
+    }
+    if let Some(key) = keys.iter().flatten().find(|key| !fields.contains_key(*key)) {
+        return Err(format!("names `{key}`, which is not a field of the form"));
     }
     let captions = grid["cols"].as_array().cloned().unwrap_or_default();
     let cols: Vec<Value> = first
@@ -889,7 +903,7 @@ fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Optio
     if grid.get("row_labels").is_some() {
         table["row_labels"] = grid["row_labels"].clone();
     }
-    Some(table)
+    Ok(table)
 }
 
 /// Take the field `key` out of its item and append it to the item `fix.to`
@@ -2260,6 +2274,9 @@ fn assigned_to_open(code: &str, key: &str) -> bool {
 /// A lock's reason as a filer reads it (see the NOTE_* texts), for
 /// `code`'s box `key`.
 fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
+    if rows_withholding::preprinted(code, key) {
+        return rows_withholding::PREPRINTED;
+    }
     match lock_note(reason) {
         NOTE_NOT_YET if assigned_to_open(code, key) => NOTE_ASSIGNED,
         note => note,
@@ -3164,6 +3181,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3200,6 +3218,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        // Rows the filer typed that this edit removed: the page asks first.
+        "removes": rows_withholding::removes(kind, &before, &draft, &edits),
     })))
 }
 
@@ -5871,7 +5891,10 @@ mod tests {
             let cells = q3_writer_cells(slug);
             for join in cells["joins"].as_array().unwrap() {
                 let key = join["writer_key"].as_str().unwrap();
-                if join["printed"].as_str().unwrap().starts_with("Page 2")
+                let printed = join["printed"].as_str().unwrap();
+                if printed.starts_with("Page 2")
+                    || printed.ends_with("(page 2)")
+                    || printed.ends_with("(page 3)")
                     || key == "derived:tin_digits"
                 {
                     assert!(
@@ -6323,13 +6346,34 @@ mod tests {
         ] {
             assert_eq!(map[key], both["values"][key].as_str().unwrap(), "{key}");
         }
-        let no = fill(
+        // No with a typed Schedule 1 row: the row goes, and the host says
+        // so (the page asks first and offers Undo).
+        let typed = fill(
             "1601FQ",
             &both["draft"],
+            json!({"drpATCCode0": "WI330", "txtAmtIncomePay0": "1000"}),
+        );
+        assert_eq!(typed["rejected"], json!({}));
+        assert_eq!(typed["removes"], Value::Null);
+        let no = fill(
+            "1601FQ",
+            &typed["draft"],
             json!({"frm1601FQ:SpecialTax_2": "true", "frm1601FQ:SpecialTax_1": "false"}),
         );
         assert_eq!(no["values"]["frm1601FQ:SpecialTax_2"], "true");
         assert_eq!(no["draft"]["schedule1"], json!([]));
+        assert_eq!(
+            no["removes"]["message"],
+            "Changing item 13 to No removes the 1 Schedule 1 row you typed. Continue?"
+        );
+        assert_eq!(no["removes"]["done"], "Removed 1 row");
+        // With nothing typed, No asks nothing.
+        let untyped = fill(
+            "1601FQ",
+            &both["draft"],
+            json!({"frm1601FQ:SpecialTax_2": "true", "frm1601FQ:SpecialTax_1": "false"}),
+        );
+        assert_eq!(untyped["removes"], Value::Null);
         let from_13a = fill(
             "1601FQ",
             &opened["draft"],
@@ -6378,13 +6422,30 @@ mod tests {
         assert_eq!(no["values"]["frm1602Q:txtSched2Interest1"], "0.00");
         assert_eq!(no["values"]["frm1602Q:txtSched2ATC1"], "");
         assert_eq!(no["values"]["frm1602Q:lstSpecialTax"], "0");
-        // Closed, a Schedule 2 box keeps nothing written to it.
-        let dropped = fill(
+        assert_eq!(
+            no["removes"]["message"],
+            "Changing item 13 to No removes the 1 Schedule 2 row you typed. Continue?"
+        );
+        // Closed, a Schedule 2 box refuses what is written to it.
+        let refused = fill(
             "1602Q",
             &no["draft"],
             json!({"frm1602Q:txtSched2Interest1": "500"}),
         );
-        assert_eq!(dropped["values"]["frm1602Q:txtSched2Interest1"], "0.00");
+        assert_eq!(
+            refused["rejected"]["frm1602Q:txtSched2Interest1"],
+            rows_withholding::ANSWER_13_FIRST
+        );
+        assert_eq!(refused["values"]["frm1602Q:txtSched2Interest1"], "0.00");
+        // Open, 13A's Choose... is Item 13 Yes with no relief named yet.
+        let blank = fill(
+            "1602Q",
+            &typed["draft"],
+            json!({"frm1602Q:lstSpecialTax": ""}),
+        );
+        assert_eq!(blank["rejected"], json!({}));
+        assert_eq!(blank["draft"]["tax_relief"], "unspecified");
+        assert_eq!(blank["draft"]["availing_tax_relief"], true);
     }
 
     /// preview: the boxes the findings saw printed as a constant follow the
@@ -6524,6 +6585,240 @@ mod tests {
             assert_eq!(table["rows"], rows, "{cell}");
             assert_eq!(table["cols"].as_array().unwrap().len(), cols, "{cell}");
         }
+    }
+
+    /// PR 2 review (HIGH): a 1601FQ Schedule 1 ATC chosen on the page sets
+    /// the row's rate from the popup entry (`set_schedule1_atc`, the
+    /// official getATCdrpTaxRate), so the row's tax withheld, item 21 and
+    /// item 32 count it, on the page and in the field map.
+    #[test]
+    fn form_1601fq_schedule_1_rate_follows_its_atc() {
+        use bir_core::forms::form_1601fq::FORM_1601FQ_PRIVATE_ATCS as PRIVATE;
+        setup();
+        let rate = PRIVATE.iter().find(|a| a.code == "WI330").unwrap().rate();
+        let opened = open("1601FQ", 3);
+        let yes = fill(
+            "1601FQ",
+            &opened["draft"],
+            json!({"frm1601FQ:SpecialTax_1": "true", "frm1601FQ:SpecialTax_2": "false"}),
+        );
+        let filled = fill(
+            "1601FQ",
+            &yes["draft"],
+            json!({"drpATCCode0": "WI330", "txtAmtIncomePay0": "1000"}),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let withheld = 1000.0 * rate / 100.0;
+        assert_eq!(amount(&filled["values"], "txtRate0"), rate);
+        assert_eq!(amount(&filled["values"], "txtReqWithheld0"), withheld);
+        assert_eq!(amount(&filled["values"], "frm1601FQ:txtTax21"), withheld);
+        let penalties = amount(&filled["values"], "frm1601FQ:txtTax31");
+        assert_eq!(
+            amount(&filled["values"], "frm1601FQ:txtTax32"),
+            withheld + penalties
+        );
+        let map = agent::field_map(kind_of("1601FQ").unwrap(), &filled["draft"]).unwrap();
+        assert_eq!(agent::parse_amount(&map["txtRate0"]), Some(rate));
+        assert_eq!(
+            agent::parse_amount(&map["frm1601FQ:txtTax21"]),
+            Some(withheld)
+        );
+        // An ATC before Item 13 is Yes, or off the list, is refused.
+        let early = fill("1601FQ", &opened["draft"], json!({"drpATCCode0": "WI330"}));
+        assert_eq!(
+            early["rejected"]["drpATCCode0"],
+            rows_withholding::ANSWER_13_FIRST
+        );
+        let wrong = fill("1601FQ", &yes["draft"], json!({"drpATCCode0": "ZZ999"}));
+        assert!(wrong["rejected"].get("drpATCCode0").is_some());
+    }
+
+    /// PR 2 review: 1601FQ item 25 waits for Amended Return Yes (the
+    /// official runtime enables it only then): off with its tag and
+    /// refusing a typed amount on a return that is not amended, open once
+    /// it is.
+    #[test]
+    fn form_1601fq_item_25_waits_for_an_amended_return() {
+        setup();
+        let key = "frm1601FQ:txtTax25";
+        let opened = open("1601FQ", 3);
+        assert_eq!(opened["off"][key], "Needs Amended Return = Yes");
+        assert!(opened["locks"].get(key).is_none());
+        let refused = fill("1601FQ", &opened["draft"], json!({ key: "100" }));
+        assert_eq!(refused["rejected"][key], rows_withholding::AMENDED_FIRST);
+        assert_eq!(refused["values"][key], "0.00");
+        let amended = amended("1601FQ", &opened["draft"]);
+        let checked = validated("1601FQ", &amended);
+        assert!(checked["off"].get(key).is_none());
+        let typed = fill("1601FQ", &amended, json!({ key: "100" }));
+        assert_eq!(typed["rejected"], json!({}));
+        assert_eq!(typed["values"][key], "100.00");
+    }
+
+    /// PR 2 review: a 1602Q draft saved with Schedule 2 values while Item
+    /// 13 is No (a legacy one) keeps filing what it holds, its Schedule 2
+    /// boxes are faded with their tag although they hold values, and a
+    /// write there is refused in the filer's words.
+    #[test]
+    fn form_1602q_a_legacy_schedule_2_under_item_13_no_is_off_and_refuses_writes() {
+        setup();
+        let opened = open("1602Q", 3);
+        let mut legacy = opened["draft"].clone();
+        legacy["availing_tax_relief"] = json!(false);
+        legacy["schedule2"][0]["treaty_code"] = json!("US");
+        legacy["schedule2"][0]["atc_code"] = json!("WI330");
+        legacy["schedule2"][0]["interest"] = json!(1000.0);
+        legacy["schedule2"][0]["tax_rate"] = json!(10.0);
+        let checked = validated("1602Q", &legacy);
+        assert_eq!(checked["values"]["frm1602Q:txtSched2Interest1"], "1,000.00");
+        for key in [
+            "frm1602Q:txtSched2Interest1",
+            "frm1602Q:txtSched2ATC1",
+            "frm1602Q:txtSched2TreatyCode2",
+            "frm1602Q:lstSpecialTax",
+        ] {
+            assert_eq!(checked["off"][key], "Needs item 13 = Yes", "{key}");
+        }
+        let refused = fill(
+            "1602Q",
+            &legacy,
+            json!({"frm1602Q:txtSched2Interest1": "500"}),
+        );
+        assert_eq!(
+            refused["rejected"]["frm1602Q:txtSched2Interest1"],
+            rows_withholding::ANSWER_13_FIRST
+        );
+        assert_eq!(refused["draft"]["schedule2"], checked["draft"]["schedule2"]);
+    }
+
+    /// PR 2 review: an answer that closes a section, or a cleared ATC whose
+    /// row holds a tax base, reports the rows the filer typed that it
+    /// removes (the page asks first, then offers Undo); with nothing typed
+    /// it reports nothing. 1601FQ items 4, 11 and 13 and a cleared Part II
+    /// ATC, 1601EQ's cleared ATC, 1602Q item 13 (in its own test).
+    #[test]
+    fn q3_withholding_removing_typed_rows_is_reported() {
+        setup();
+        let opened = open("1601FQ", 3);
+        let answered = fill(
+            "1601FQ",
+            &opened["draft"],
+            json!({"frm1601FQ:TaxWithheld_1": "true", "frm1601FQ:CatAgent_P": "true"}),
+        );
+        assert_eq!(answered["removes"], Value::Null);
+        let chosen = fill(
+            "1601FQ",
+            &answered["draft"],
+            json!({"frm1601FQ:txtAtcCode1": "catalog:0"}),
+        );
+        let based = fill(
+            "1601FQ",
+            &chosen["draft"],
+            json!({"frm1601FQ:txtTaxBase1": "1000"}),
+        );
+        let message = |edits: Value, draft: &Value| {
+            fill("1601FQ", draft, edits)["removes"]["message"].clone()
+        };
+        assert_eq!(
+            message(
+                json!({"frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false"}),
+                &based["draft"]
+            ),
+            "Changing item 4 to No removes the 1 Part II ATC row you typed. Continue?"
+        );
+        assert_eq!(
+            message(
+                json!({"frm1601FQ:CatAgent_G": "true", "frm1601FQ:CatAgent_P": "false"}),
+                &based["draft"]
+            ),
+            "Changing item 11 removes the 1 Part II ATC row you typed. Continue?"
+        );
+        assert_eq!(
+            message(json!({"frm1601FQ:txtAtcCode1": ""}), &based["draft"]),
+            "Clearing this ATC removes its row and its tax base of ₱1,000.00. Continue?"
+        );
+        // A row with only its ATC goes without asking.
+        assert_eq!(
+            message(json!({"frm1601FQ:txtAtcCode1": ""}), &chosen["draft"]),
+            Value::Null
+        );
+        // The same answer with no rows asks nothing.
+        assert_eq!(
+            message(
+                json!({"frm1601FQ:CatAgent_G": "true", "frm1601FQ:CatAgent_P": "false"}),
+                &answered["draft"]
+            ),
+            Value::Null
+        );
+        let eq = open("1601EQ", 3);
+        let eq = fill(
+            "1601EQ",
+            &eq["draft"],
+            json!({"frm1601EQ:optWithheld:Y": "true", "frm1601EQ:optCategory:P": "true", "frm1601EQ:txtAtcCd1": "WI010", "frm1601EQ:txtTaxBase1": "250.5"}),
+        );
+        assert_eq!(
+            fill("1601EQ", &eq["draft"], json!({"frm1601EQ:txtAtcCd1": ""}))["removes"]["message"],
+            "Clearing this ATC removes its row and its tax base of ₱250.50. Continue?"
+        );
+    }
+
+    fn grid_form() -> Value {
+        json!({"c": "TEST", "parts": [{"n": "Part I", "items": [
+            {"no": "1", "l": "One", "p": 1, "f": [{"k": "a", "t": "text", "l": "A"}]}
+        ]}]})
+    }
+
+    /// PR 2 review: a layout grid naming a box the form does not have is a
+    /// hard error naming the form and the entry, never a silently missing
+    /// table.
+    #[test]
+    #[should_panic(expected = "TEST: schema-overrides.json layout grid \"Rows\": names `missing`")]
+    fn a_layout_grid_naming_a_missing_box_fails_loudly() {
+        let layout = json!({"parts": [{"n": "P", "items": [
+            {"no": "", "l": "Rows", "grid": {"cols": ["A"], "keys": [["a"], ["missing"]]}}
+        ]}]});
+        apply_layout(&mut grid_form(), &layout);
+    }
+
+    /// PR 2 review: a layout grid with an empty first row fails loudly too.
+    #[test]
+    #[should_panic(expected = "TEST: schema-overrides.json layout grid \"Rows\": has an empty row")]
+    fn a_layout_grid_with_an_empty_row_fails_loudly() {
+        let layout = json!({"parts": [{"n": "P", "items": [
+            {"no": "", "l": "Rows", "grid": {"cols": [], "keys": [[]]}}
+        ]}]});
+        apply_layout(&mut grid_form(), &layout);
+    }
+
+    /// PR 2 review: 1603Q Schedule I's ATC, divisor and rate are the
+    /// sheet's preprinted values (writer-cells not_joined): shown as they
+    /// print, and their note says so, never "can't be filled yet".
+    #[test]
+    fn form_1603q_preprinted_schedule_cells_say_so() {
+        setup();
+        let opened = open("1603Q", 3);
+        for (key, value) in [
+            ("frm1603Q:Sched1:txtATC1", "WF360"),
+            ("frm1603Q:Sched1:txtDivisor2", "75%"),
+            ("frm1603Q:Sched1:txtTaxRate1", "35%"),
+            ("frm1603Q:Sched1:txtTaxRate2", "25%"),
+        ] {
+            assert_eq!(opened["values"][key], value, "{key}");
+            assert_eq!(
+                opened["lock_notes"][key],
+                rows_withholding::PREPRINTED,
+                "{key}"
+            );
+        }
+        let cells = q3_writer_cells("1603q-2018");
+        let preprinted = cells["not_joined"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|j| j["reason"].as_str().unwrap().contains("preprinted"))
+            .flat_map(|j| j["writer_keys"].as_array().unwrap().clone())
+            .count();
+        assert_eq!(preprinted, 6);
     }
 
     /// Item 3: boxes the official page leaves open but the models never
@@ -9509,9 +9804,12 @@ mod tests {
         let ticked = |key: &str| opened["values"][key].as_str() == Some("true");
         // A reason counts where the page draws it: in the box, beside a tick
         // box, under a radio group (form_page.js `reasonFor`): a sample's
-        // held box, or a box waiting for another box of its row.
-        let reason =
-            |key: &str| opened["needs"].get(key).is_some() || opened["waits"].get(key).is_some();
+        // held box, or a box waiting for another box of its row. The TIN
+        // boxes (form_page.js `isTinItem`, drawn by `tinBoxes`) draw no
+        // reason, so a `waits` there would not show.
+        let reason = |key: &str, draws: bool| {
+            opened["needs"].get(key).is_some() || (draws && opened["waits"].get(key).is_some())
+        };
         let drawn = |key: &str| {
             opened["lock_notes"][key].as_str().is_some_and(|note| {
                 !note.is_empty()
@@ -9535,7 +9833,7 @@ mod tests {
             .into_iter()
             .flatten()
             .flat_map(|part| part["items"].as_array().into_iter().flatten());
-        let mut boxes: Vec<(String, String)> = Vec::new();
+        let mut boxes: Vec<(String, String, bool)> = Vec::new();
         for item in items {
             let fields: Vec<(String, String)> = item["f"]
                 .as_array()
@@ -9548,6 +9846,18 @@ mod tests {
                     )
                 })
                 .collect();
+            // form_page.js `isTinItem`: three to five text boxes of a TIN.
+            let tin_item = {
+                let label = item["l"].as_str().unwrap_or("");
+                let named = label
+                    .split(|c: char| !c.is_ascii_alphanumeric())
+                    .any(|w| w == "TIN")
+                    || label.contains("Identification")
+                    || fields.iter().any(|(k, _)| k.contains("txtTIN"));
+                named
+                    && (3..=5).contains(&fields.len())
+                    && fields.iter().all(|(_, t)| t == "text" || t == "int")
+            };
             // A radio group is one box: shut and blank when every radio is
             // locked and none is ticked.
             let radios: Vec<&String> = fields
@@ -9559,7 +9869,7 @@ mod tests {
                 && !radios.is_empty()
                 && radios.iter().all(|k| locked(k).is_some())
                 && !radios.iter().any(|k| ticked(k))
-                && !radios.iter().any(|k| reason(k))
+                && !radios.iter().any(|k| reason(k, true))
             {
                 out_push(
                     radios[0],
@@ -9570,7 +9880,12 @@ mod tests {
                     ),
                 );
             }
-            boxes.extend(fields.into_iter().filter(|(_, t)| t != "radio"));
+            boxes.extend(
+                fields
+                    .into_iter()
+                    .filter(|(_, t)| t != "radio")
+                    .map(|(k, t)| (k, t, !tin_item)),
+            );
             let cols = item["cols"].as_array();
             for row in item["keys"].as_array().into_iter().flatten() {
                 for (c, key) in row.as_array().into_iter().flatten().enumerate() {
@@ -9579,15 +9894,15 @@ mod tests {
                         .and_then(|col| col["t"].as_str())
                         .unwrap_or("");
                     let t = if t == "radio" { "chk" } else { t };
-                    boxes.push((key.as_str().unwrap_or("").to_string(), t.to_string()));
+                    boxes.push((key.as_str().unwrap_or("").to_string(), t.to_string(), true));
                 }
             }
         }
-        for (key, t) in boxes {
+        for (key, t, draws) in boxes {
             let Some(why) = locked(&key) else {
                 continue;
             };
-            if t == "hidden" || reason(&key) {
+            if t == "hidden" || reason(&key, draws) {
                 continue;
             }
             if t == "chk" {
@@ -10502,7 +10817,9 @@ mod tests {
 
     /// The boxes off by the test's own probing of each conditional box
     /// alone: blank now, at least one probe taken, and every probe taken
-    /// cleared by the form through the page's own fill.
+    /// cleared by the form through the page's own fill, or refused because
+    /// the answer it waits for does not hold (the host's gate refusal,
+    /// rows_withholding.rs: 1602Q item 13, 1601FQ item 25).
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         let corpus = conditions::tests::derived();
         corpus[code]
@@ -10518,9 +10835,11 @@ mod tests {
                     .into_iter()
                     .filter_map(|probe| {
                         let filled = fill(code, &checked["draft"], json!({ key: probe }));
-                        filled["rejected"][key]
-                            .is_null()
-                            .then(|| shows_nothing(&filled["values"][key]))
+                        match filled["rejected"][key].as_str() {
+                            None => Some(shows_nothing(&filled["values"][key])),
+                            Some(why) if rows_withholding::is_gate_refusal(why) => Some(true),
+                            Some(_) => None,
+                        }
                     })
                     .collect();
                 !taken.is_empty() && taken.iter().all(|cleared| *cleared)
@@ -10571,6 +10890,8 @@ mod tests {
                 ("0619F", 2),
                 ("1601C", 2),
                 ("1601EQ", 4),
+                // PR 2 review: 1601FQ item 25 waits for Amended Return Yes.
+                ("1601FQ", 1),
                 // PR 2: 1602Q Item 13A and the eight Schedule 2 boxes wait for Item 13 Yes.
                 ("1602Q", 12),
                 ("1604C", 5),
@@ -10632,6 +10953,11 @@ mod tests {
             (
                 "1601EQ",
                 vec!["frm1601EQ:txtTax22"],
+                Box::new(amended as Turn),
+            ),
+            (
+                "1601FQ",
+                vec!["frm1601FQ:txtTax25"],
                 Box::new(amended as Turn),
             ),
             (
