@@ -417,6 +417,18 @@ impl Form1702MXDraft {
             "frm1702MX:txtPg1Pt1I10RegisteredAddress".to_string(),
             self.registered_address.trim().to_string(),
         );
+        // A later line the address already holds (lines kept from when the
+        // address was split over them) is not printed a second time.
+        let whole = self.registered_address.trim().to_uppercase();
+        for (index, key) in [
+            (1, "frm1702MX:txtPg1Pt1I10RegisteredAddress2"),
+            (2, "frm1702MX:txtPg1Pt1I10RegisteredAddress3"),
+        ] {
+            let line = self.registered_address_lines[index].trim().to_uppercase();
+            if !line.is_empty() && whole.contains(&line) {
+                fields.insert(key.to_string(), String::new());
+            }
+        }
         for (key, name) in [
             ("frm1702MX:ddlPg1I2Date", "mm"),
             ("frm1702MX:txtPg1I2YearEnd", "yy"),
