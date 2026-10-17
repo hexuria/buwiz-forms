@@ -10519,7 +10519,7 @@ mod tests {
                     "{len}: over the lines' boxes"
                 );
                 assert!(parts.iter().all(|(_, size)| size.is_none()), "{len}");
-                assert!(parts[1].0.trim().len() > 0, "{len}: the second line used");
+                assert!(!parts[1].0.trim().is_empty(), "{len}: the second line used");
                 continue;
             }
             let whole: Vec<&str> = parts.iter().map(|(t, _)| t.as_str()).collect();
