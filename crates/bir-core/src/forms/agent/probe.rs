@@ -224,7 +224,6 @@ fn keeps_the_date(key: &str) -> bool {
     })
 }
 
-
 /// Boxes `fields.json` keys only as an occurrence of an official control
 /// (`X#occurrence-1`) that it lists under no key of its own, while the app's
 /// field map writes the control once, under `X`: `(form code, box key,
