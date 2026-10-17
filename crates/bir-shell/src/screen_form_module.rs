@@ -40,6 +40,7 @@ use crate::bir_module::{json, to_json, with_database};
 mod catalogs;
 mod combs;
 mod conditions;
+mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
@@ -100,6 +101,8 @@ export interface ScreenFormOpened {
     amends?: ScreenFormStatus;
     /** Boxes another answer turns off right now, each with what turns it on (the page fades them). */
     off: Record<string, string>;
+    /** Each party's Surcharge, Interest and Compromise boxes: locked at the computed amounts until Edit penalties opens them (sent as `unlocked`). */
+    penalties: ScreenFormPenalties[];
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -130,11 +133,17 @@ export interface ScreenFormSamplePeriod {
     /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`); null: start it with New return. */
     opens?: { year: number; period: number; key: number | null; new_key?: number | null } | null;
 }
+export interface ScreenFormPenalties {
+    keys: string[];
+    /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
+    edited: boolean;
+}
 export interface ScreenFormFilled {
     draft: object;
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;
+    penalties: ScreenFormPenalties[];
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
 }
@@ -145,6 +154,7 @@ export interface ScreenFormValidated {
     errors: ScreenFormError[];
     /** Boxes another answer turns off right now, each with what turns it on. */
     off: Record<string, string>;
+    penalties: ScreenFormPenalties[];
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
 }
@@ -2072,6 +2082,19 @@ fn opened_json(
         draft: from_profile_draft,
     };
     let mut locks = locks(kind, &from_profile);
+    // A computed penalty is locked until Edit penalties opens its group.
+    for group in penalties::groups(kind) {
+        if !penalties::edited(&group, &draft) {
+            let reason = if penalties::applies(kind, &group, &draft) {
+                penalties::LOCK
+            } else {
+                penalties::NOT_ON_RETURN
+            };
+            for key in &group.keys {
+                locks.insert(key.clone(), json!(reason));
+            }
+        }
+    }
     let profile = profile_keys(kind, &from_profile);
     let profile_edit = profile_edit_keys(kind, &from_profile);
     let parts = if sample.is_some() {
@@ -2132,6 +2155,7 @@ fn opened_json(
     } else {
         Map::new()
     };
+    let penalty_groups = penalties::json(kind, &draft);
     let mark = sample.as_ref().map(|_| SampleMark {
         blank: blank.clone(),
     });
@@ -2164,6 +2188,7 @@ fn opened_json(
         "blank": blank,
         "needs": needs,
         "off": off,
+        "penalties": penalty_groups,
         "period_parts": period_parts,
         "period_set": sample.as_ref().is_some_and(|build| build.other.is_none()),
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
@@ -2940,6 +2965,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         blank_sample(&mark.blank, &mut values, &mut Value::Null);
         mark
     });
+    let penalty_groups = penalties::json(kind, &draft);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -2947,6 +2973,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "values": values,
         "options": options,
         "rejected": rejected,
+        "penalties": penalty_groups,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
     })))
 }
@@ -3012,6 +3039,25 @@ fn apply_screen_edits(
             continue;
         }
         let mut next = draft.clone();
+        // A computed penalty takes an amount only once its group is opened
+        // with Edit (sent as unlocked) or already edited; a blank clears the
+        // override, so the computed amount files again (rule 8).
+        if let Some(group) = penalties::group_of(kind, &key) {
+            if !unlocked.contains(&key) && !penalties::edited(&group, draft) {
+                rejected.insert(
+                    key.clone(),
+                    json!(format!("`{key}` is {}", penalties::LOCK)),
+                );
+                continue;
+            }
+            if let (ChoiceStep::Fill(value), Some(path)) = (&step, penalties::path_of(kind, &key))
+                && (value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty()))
+            {
+                set_draft_path(&mut next, &path, Value::Null);
+                *draft = next;
+                continue;
+            }
+        }
         let result = match step {
             ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value, lift(&key)),
             ChoiceStep::Set(sets) => {
@@ -3287,6 +3333,7 @@ fn screen_form_validate(
                 Map::new()
             };
             let blank = sample.as_ref().map(|mark| mark.blank.clone());
+            let penalty_groups = penalties::json(kind, &draft);
             put_sample_mark(&mut draft, sample.as_ref());
             put_amendment_mark(&mut draft, amendment);
             Ok(json!({
@@ -3295,6 +3342,7 @@ fn screen_form_validate(
                 "options": options,
                 "errors": errors,
                 "off": off,
+                "penalties": penalty_groups,
                 "blank": blank,
             }))
         })
@@ -9403,6 +9451,215 @@ mod tests {
                 assert!(kept, "{code}: {key} keeps a typed value once on");
             }
         }
+    }
+
+    /// Rule 8 on every form whose binding data puts Surcharge, Interest and
+    /// Compromise on the shared penalty model: computed and locked by
+    /// default, one Edit (sent as `unlocked`) opens the three, the total and
+    /// the amount payable recompute from what was entered, the field map
+    /// (the XML) carries it, and blanks bring the computed amounts back.
+    #[test]
+    fn penalties_are_computed_and_one_edit_overrides_all_three_on_every_form() {
+        setup();
+        // Parties with all three overrides on the page, read off
+        // crates/bir-core/data/agent-forms (`.../penalty_overrides/...`).
+        let expected: BTreeMap<&str, usize> = BTreeMap::from([
+            ("0605", 1),
+            ("0619E", 1),
+            ("0619F", 1),
+            ("1600PT", 1),
+            ("1600VT", 1),
+            ("1600WP", 1),
+            ("1601C", 1),
+            ("1601EQ", 1),
+            ("1602Q", 1),
+            ("1603Q", 1),
+            ("1606", 1),
+            ("1700", 2),
+            ("1701A", 2),
+            ("1701MS", 2),
+            ("1702MX", 1),
+            ("1702Q", 1),
+            ("1702RT", 1),
+            ("1706", 1),
+            ("1707", 1),
+            ("1707A", 1),
+            ("1800", 1),
+            ("1801", 1),
+            ("2000", 1),
+            ("2000OT", 1),
+            ("2200A", 1),
+            ("2200AN", 1),
+            ("2200C", 1),
+            ("2200M", 1),
+            ("2200P", 1),
+            ("2200T", 1),
+            ("2550M", 1),
+            ("2552", 1),
+            ("2553", 1),
+        ]);
+        let mut found = BTreeMap::new();
+        let mut not_on_return = Vec::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let def = kind.definition();
+            let opened = open(code, page_period_of(code));
+            for group in opened["penalties"].as_array().unwrap() {
+                *found.entry(code).or_insert(0) += 1;
+                assert_eq!(
+                    group["edited"], false,
+                    "{code}: a new return files the computed amounts"
+                );
+                let keys: Vec<String> = strings(&group["keys"]).into_iter().collect();
+                // The component each box overrides, from its binding.
+                let component = |key: &str| match &def.bindings[key].binding {
+                    Binding::Amount { path, .. } => path.rsplit('/').next().unwrap().to_string(),
+                    other => panic!("{code}: {key} is {other:?}"),
+                };
+                let typed = |key: &str| match component(key).as_str() {
+                    "surcharge" => 100.0,
+                    "interest" => 200.0,
+                    _ => 300.0,
+                };
+                for key in &keys {
+                    assert!(
+                        !opened["values"][key].as_str().unwrap_or("").is_empty(),
+                        "{code}: {key} shows its amount"
+                    );
+                }
+                let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+                if group["applies"] == false {
+                    // A party not on this return: no Edit, and what is typed
+                    // there would not file.
+                    for key in &keys {
+                        assert_eq!(
+                            opened["locks"][key],
+                            penalties::NOT_ON_RETURN,
+                            "{code}: {key}"
+                        );
+                    }
+                    let edits: Map<String, Value> =
+                        keys.iter().map(|k| (k.clone(), json!("1"))).collect();
+                    let filled = fill_unlocked(code, &opened["draft"], Value::Object(edits), &refs);
+                    let state = filled["penalties"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|g| g["keys"] == group["keys"])
+                        .unwrap();
+                    assert_eq!(
+                        state["edited"], false,
+                        "{code}: {keys:?} is cleared by its form"
+                    );
+                    not_on_return.push(format!("{code} {}", keys[0]));
+                    continue;
+                }
+                for key in &keys {
+                    assert_eq!(
+                        opened["locks"][key],
+                        penalties::LOCK,
+                        "{code}: {key} is locked"
+                    );
+                }
+                let refused = fill(code, &opened["draft"], json!({ &keys[0]: "1" }));
+                assert!(
+                    refused["rejected"][&keys[0]].is_string(),
+                    "{code}: a computed penalty needs Edit"
+                );
+                // One Edit: all three, typed.
+                let edits: Map<String, Value> = keys
+                    .iter()
+                    .map(|k| (k.clone(), json!(typed(k).to_string())))
+                    .collect();
+                let edited = fill_unlocked(code, &opened["draft"], Value::Object(edits), &refs);
+                assert_eq!(edited["rejected"], json!({}), "{code}");
+                let state = edited["penalties"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|g| g["keys"] == group["keys"])
+                    .unwrap();
+                assert_eq!(state["edited"], true, "{code}: {keys:?}");
+                let map = agent::field_map(kind, &edited["draft"]).unwrap();
+                for key in &keys {
+                    assert_eq!(
+                        amount(&edited["values"], key),
+                        typed(key),
+                        "{code}: {key} shows the entry"
+                    );
+                    assert_eq!(
+                        agent::parse_amount(&map[key]),
+                        Some(typed(key)),
+                        "{code}: {key} files the entry"
+                    );
+                }
+                // The total is the sum, and the amount payable moves with it.
+                let before: f64 = keys.iter().map(|k| amount(&opened["values"], k)).sum();
+                // Every other box the page shows.
+                let others: Vec<&String> = edited["values"]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .filter(|k| !keys.contains(k))
+                    .collect();
+                let total = others.iter().any(|k| {
+                    agent::parse_amount(edited["values"][k.as_str()].as_str().unwrap_or(""))
+                        == Some(600.0)
+                });
+                assert!(total, "{code}: a total shows 600.00");
+                // Total Penalties and the amount payable both move by the change.
+                let moved = others
+                    .iter()
+                    .filter(|k| {
+                        let was = agent::parse_amount(opened["values"][k.as_str()].as_str().unwrap_or(""));
+                        let now = agent::parse_amount(edited["values"][k.as_str()].as_str().unwrap_or(""));
+                        matches!((was, now), (Some(was), Some(now)) if (now - was - (600.0 - before)).abs() < 0.005)
+                    })
+                    .count();
+                assert!(
+                    moved >= 2,
+                    "{code}: the total and the amount payable recompute ({moved})"
+                );
+                // Edited, the group stays open; blanks give the computed amounts back.
+                let again = fill(code, &edited["draft"], json!({ &keys[0]: "50" }));
+                assert_eq!(
+                    again["rejected"],
+                    json!({}),
+                    "{code}: an edited group stays open"
+                );
+                let blanks: Map<String, Value> =
+                    keys.iter().map(|k| (k.clone(), json!(""))).collect();
+                let back = fill_unlocked(code, &again["draft"], Value::Object(blanks), &refs);
+                assert_eq!(back["rejected"], json!({}), "{code}");
+                let state = back["penalties"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|g| g["keys"] == group["keys"])
+                    .unwrap();
+                assert_eq!(state["edited"], false, "{code}: blanks clear the overrides");
+                for key in &keys {
+                    assert_eq!(
+                        back["values"][key], opened["values"][key],
+                        "{code}: {key} is computed again"
+                    );
+                }
+                // The assistant's fill is as it was.
+                agent::fill(kind, &mut opened["draft"].clone(), &keys[0], &json!("1"))
+                    .unwrap_or_else(|e| panic!("{code}: {e}"));
+            }
+        }
+        assert_eq!(found, expected);
+        // The spouse's column on these returns with no spouse.
+        not_on_return.sort();
+        assert_eq!(
+            not_on_return,
+            [
+                "1700 frm1700:txtPg1I31B",
+                "1701A frm1701A:txt25B",
+                "1701MS frm1701MS:txtCompromise28b",
+            ]
+        );
     }
 
     #[test]

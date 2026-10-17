@@ -9,6 +9,13 @@
 //  - rule 4: 12102020, 12-10-2020 and 12/10/2020 reach the draft as
 //    12/10/2020 and the box shows "Dec 10, 2020" (locked and table boxes
 //    too); the calendar's month and year lists move its grid.
+//  - rule 5: boxes until the text no longer fits, then a plain field; an
+//    email never has boxes; a stacked address is one box over its lines.
+//  - rule 6: a box the host reports off is faded, takes no typing, says
+//    what turns it on, and comes alive when the next check says so.
+//  - rule 8: penalties show the computed amounts, locked; one Edit opens
+//    all three and the first amount sends all three; totals follow; "Use
+//    the computed amounts" clears them.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -47,6 +54,11 @@ const schema = {
         { no: "16", l: "Tax due", f: [{ k: K("due"), t: "money", c: true, l: "Tax due" }] },
         { no: "17", l: "Amended Return?", f: [{ k: K("amendY"), t: "radio", l: "Yes" }, { k: K("amendN"), t: "radio", l: "No" }] },
         { no: "18", l: "Tax remitted in previously filed return", f: [{ k: K("prev"), t: "money", l: "Tax remitted in previously filed return" }] },
+        { no: "20", l: "Surcharge", f: [{ k: K("sur"), t: "money", l: "Surcharge" }] },
+        { no: "21", l: "Interest", f: [{ k: K("int"), t: "money", l: "Interest" }] },
+        { no: "22", l: "Compromise", f: [{ k: K("comp"), t: "money", l: "Compromise" }] },
+        { no: "23", l: "Total Penalties", f: [{ k: K("totpen"), t: "money", c: true, l: "Total Penalties" }] },
+        { no: "24", l: "Total Amount Payable", f: [{ k: K("payable"), t: "money", c: true, l: "Total Amount Payable" }] },
       ],
     },
     {
@@ -162,11 +174,24 @@ let hostValues = {
   [K("prev")]: "0.00",
 };
 // The host says a box is off while what turns it on does not hold.
+// The penalty model: computed amounts, the filer's overrides, the totals.
+const PENALTY = [K("sur"), K("int"), K("comp")];
+const computedPenalty = { [K("sur")]: 125, [K("int")]: 31.5, [K("comp")]: 1000 };
+let overrides = {};
+function penaltyValues() {
+  const used = Object.fromEntries(PENALTY.map((k) => [k, overrides[k] ?? computedPenalty[k]]));
+  const total = PENALTY.reduce((n, k) => n + used[k], 0);
+  for (const k of PENALTY) hostValues[k] = used[k].toFixed(2);
+  hostValues[K("totpen")] = total.toFixed(2);
+  hostValues[K("payable")] = (5000 + total).toFixed(2);
+}
+const penaltyState = () => [{ keys: PENALTY, edited: Object.keys(overrides).length > 0, applies: true }];
+penaltyValues();
 const offNow = () => (hostValues[K("amendY")] === "true" ? {} : { [K("prev")]: "Amended return Yes is selected." });
 let opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {},
-  locks: { [K("due")]: "computed by BIR's own formulas", [K("incorporated")]: "comes from the taxpayer profile; change it in the profile" },
-  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: offNow(), errors: [],
+  locks: { ...Object.fromEntries(PENALTY.map((k) => [k, "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to"])), [K("due")]: "computed by BIR's own formulas", [K("incorporated")]: "comes from the taxpayer profile; change it in the profile" },
+  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: offNow(), penalties: penaltyState(), errors: [],
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
@@ -179,10 +204,20 @@ const app = {
       if (name === "screen_form_schema") return schema;
       if (name === "screen_form_open") return Promise.resolve(opened());
       if (name === "screen_form_fill") {
-        hostValues = { ...hostValues, ...args[2] };
-        return { draft: args[1], values: { ...hostValues }, options: {}, rejected: {} };
+        const edits = { ...args[2] }, rejected = {};
+        const edited = Object.keys(overrides).length > 0;
+        for (const k of PENALTY) {
+          if (!(k in edits)) continue;
+          if (!edited && !(args[3] || []).includes(k)) rejected[k] = "computed; choose Edit penalties";
+          else if (String(edits[k]).trim() === "") delete overrides[k];
+          else overrides[k] = Number(String(edits[k]).replace(/,/g, ""));
+          delete edits[k];
+        }
+        hostValues = { ...hostValues, ...edits };
+        penaltyValues();
+        return { draft: args[1], values: { ...hostValues }, options: {}, rejected, penalties: penaltyState() };
       }
-      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: offNow() });
+      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: offNow(), penalties: penaltyState() });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
     },
@@ -335,3 +370,41 @@ ui.choose({ [K("amendY")]: "false", [K("amendN")]: "true" }, cx);
 await settle(); frame();
 assert.equal(ui.isLocked(K("prev")), true, "Amended No turns it off again");
 console.log("PASS rule 6: an off box is faded, says what turns it on, and comes alive when it holds.");
+
+// ---- Rule 8: penalties are computed, but one Edit overrides all three.
+const [SUR, INT, COMP] = PENALTY;
+frame();
+for (const k of PENALTY) assert.equal(ui.isLocked(k), true, `${k} shows the computed amount, locked`);
+assert.ok(texts.includes("125.00") && texts.includes("31.50") && texts.includes("1,000.00"), "the computed amounts show");
+assert.equal(ui.isLocked(K("totpen")), false, "the total is a computed box, not a lock of its own");
+const editId = (k) => `fp-penalty-edit-${idOf(k)}`;
+assert.ok(clicks.has(editId(SUR)) && clicks.has(editId(COMP)), "each penalty item offers Edit penalties");
+clicks.get(editId(COMP)).fn({}, context());
+frame();
+for (const k of PENALTY) assert.equal(ui.isLocked(k), false, `one Edit opens ${k}`);
+assert.ok(clicks.has(`fp-penalty-computed-${idOf(SUR)}`), "and offers the computed amounts back");
+input(COMP).type("500");
+input(COMP).fire("blur");
+const sent = lastFill();
+assert.equal(JSON.stringify(sent[3]), JSON.stringify({ [COMP]: "500", [SUR]: "125.00", [INT]: "31.50" }), "the first amount sends all three together");
+assert.equal(JSON.stringify([...sent[4]].sort()), JSON.stringify([...PENALTY].sort()), "opened with Edit: sent as unlocked");
+await settle(); frame();
+assert.equal(ui.state.values[K("totpen")], "656.50", "Total Penalties recomputes from what was entered");
+assert.equal(ui.state.values[K("payable")], "5656.50", "and so does the amount payable");
+assert.equal(ui.penaltyGroupOf(SUR).edited, true);
+assert.equal(ui.isLocked(SUR), false, "an edited group stays open");
+// Reopened (no Edit pressed on this visit), an edited return keeps them open.
+ui.state.penaltyOpen.clear();
+assert.equal(ui.isLocked(INT), false, "entered amounts stay open on a later visit");
+input(INT).type("0");
+input(INT).fire("blur");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [INT]: "0" }), "later edits send just that box");
+await settle(); frame();
+assert.equal(ui.state.values[K("totpen")], "625.00");
+clicks.get(`fp-penalty-computed-${idOf(SUR)}`).fn({}, context());
+await settle(); frame();
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [SUR]: "", [INT]: "", [COMP]: "" }), "Use the computed amounts blanks all three");
+assert.equal(ui.state.values[K("totpen")], "1156.50", "the computed amounts are back");
+for (const k of PENALTY) assert.equal(ui.isLocked(k), true, `${k} is locked again`);
+assert.equal(input(COMP).value(), "1,000.00", "its box shows the computed amount again");
+console.log("PASS rule 8: penalties computed by default; one Edit overrides all three; totals recompute.");

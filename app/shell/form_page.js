@@ -332,6 +332,9 @@ export class FormPageActions {
       needs: {},
       // Boxes another answer turns off, each with what turns it on (rule 6).
       off: {},
+      // Each party's penalty boxes (rule 8), and the ones Edit penalties opened.
+      penalties: [],
+      penaltyOpen: new Set(),
       typed: new Set(),
       errors: [],
       messages: {},
@@ -411,6 +414,7 @@ export class FormPageActions {
     // A sample's held box that cannot be typed says what it waits for.
     s.needs = r.needs || {};
     s.off = r.off || {};
+    s.penalties = r.penalties || [];
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -514,7 +518,7 @@ export class FormPageActions {
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
-      keys.map(k => [s.values[k] ?? "", s.locks[k], s.off?.[k] || "", s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
+      keys.map(k => [s.values[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
   }
 
@@ -607,6 +611,12 @@ export class FormPageActions {
     if (!s || !s.editable) return;
     if (s.periodParts?.has(k)) return this.setPeriodPart({ [k]: value }, cx);
     s.pending[k] = value;
+    // The first amount typed in an opened penalty group overrides all three
+    // together: the others file what they show now (rule 8).
+    const penalty = this.penaltyGroupOf(k);
+    if (penalty && !penalty.edited) {
+      for (const other of penalty.keys) if (!(other in s.pending)) s.pending[other] = s.values[other] ?? "";
+    }
     s.dirty = true;
     const token = this.token;
     s.editSeq = (s.editSeq || 0) + 1;
@@ -711,6 +721,7 @@ export class FormPageActions {
         s.draft = r.draft;
         s.values = this.shown(r.values);
         s.options = r.options || {};
+        if (Array.isArray(r.penalties)) s.penalties = r.penalties;
         this.syncComputed();
         this.syncChanged(before, edits);
         // The preview prints the draft the host just applied, never the
@@ -1076,7 +1087,9 @@ export class FormPageActions {
     for (const [k, input] of s.inputs) {
       if (!(this.isLocked(k) || this.isComputed(k))) continue;
       const pool = this.poolOf(k);
-      const v = pool ? this.poolText({ pool }) : s.inputKinds?.get(k) === "date" ? shownDate(s.values[k]) : String(s.values[k] ?? "");
+      const kind = s.inputKinds?.get(k);
+      const raw = String(s.values[k] ?? "");
+      const v = pool ? this.poolText({ pool }) : kind === "date" ? shownDate(raw) : kind === "money" && raw !== "" ? formatMoney(raw, this.isWhole(k)) : raw;
       if (input.value() !== v) input.set_value(v);
     }
   }
@@ -1227,7 +1240,38 @@ export class FormPageActions {
   isLocked(k) {
     const s = this.state;
     if (this.isOff(k)) return true;
+    const penalty = this.penaltyGroupOf(k);
+    if (penalty) return !penalty.applies || !(penalty.edited || s.penaltyOpen.has(k));
     return s.locks[k] !== undefined && !(s.profileEdit.has(k) && s.editing.has(k));
+  }
+
+  /** A penalty box's state for row snapshots: edited, part of the return, opened. */
+  penaltySignature(k) {
+    const g = this.penaltyGroupOf(k);
+    return g ? `${g.edited}:${g.applies}:${this.state.penaltyOpen.has(k)}` : "";
+  }
+
+  /** The penalty group (rule 8) `k` belongs to, if any. */
+  penaltyGroupOf(k) {
+    return (this.state.penalties || []).find((g) => g.keys.includes(k)) || null;
+  }
+
+  /** Edit penalties: the group's three boxes open together. */
+  openPenalties(group, cx) {
+    const s = this.state;
+    if (!s.editable || !group.applies) return;
+    for (const k of group.keys) s.penaltyOpen.add(k);
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** Use the computed amounts: the group's overrides are cleared. */
+  usePenaltyComputed(group, cx) {
+    const s = this.state;
+    for (const k of group.keys) s.penaltyOpen.delete(k);
+    if (group.edited) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
+    this.refreshRows();
+    cx.notify();
   }
 
   /** What turns `k` on, while another answer has it off (the host's `off`). */
@@ -1258,7 +1302,7 @@ export class FormPageActions {
    */
   unlockedFor(edits) {
     const s = this.state;
-    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.opened.has(k));
+    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.opened.has(k) || s.penaltyOpen.has(k));
   }
 
   /** A sample shows a box it blanked once the host has taken an edit for it. */
@@ -1373,6 +1417,7 @@ export class FormPageActions {
         this.state.values = this.shown({ ...this.state.values, ...r.values });
         this.state.options = r.options || {};
         this.state.off = r.off || {};
+        if (Array.isArray(r.penalties)) this.state.penalties = r.penalties;
         this.syncComputed();
         this.setErrors(r.errors);
       } catch (e) {
@@ -1634,8 +1679,8 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
-    // A computed amount shows 0.00 for zero, never an empty box.
-    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : ""), f.w) : f.t === "date" ? shownDate(value) : value;
+    // A computed amount (a penalty too, until Edit penalties) shows 0.00 for zero, never an empty box.
+    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) || ui.penaltyGroupOf(f.k) ? "0" : ""), f.w) : f.t === "date" ? shownDate(value) : value;
     // Locked and blank only with a reason: what it waits for.
     const hint = !shown ? ui.reasonFor(f.k) : "";
     el = lockedBox(cx, shown || hint, width, { right: !hint && (f.t === "money" || f.t === "pct"), hint: Boolean(hint) });
@@ -2052,7 +2097,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
     markers.push(["user", tip]);
   }
   if (allCalc) markers.push(["lock", "Computed from other items"]);
-  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0);
+  // Rule 8: the penalties show what is computed; one Edit opens all three.
+  const penalty = s.editable ? fs.map((f) => ui.penaltyGroupOf(f.k)).find((g) => g && g.applies) : null;
+  const penaltyOpen = Boolean(penalty) && (penalty.edited || penalty.keys.some((k) => s.penaltyOpen.has(k)));
+  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0) + (penalty ? (penaltyOpen ? 210 : 130) : 0);
   const label = div()
     .flex()
     .flex_row()
@@ -2068,6 +2116,13 @@ function itemRow(cx, ui, it, pi, ii, width) {
   if (it.rows) label.child(Text(cx, "meta", `${it.rows} rows`, "fg3").flex_none().pt(2));
   for (const [icon, tip] of markers) {
     label.child(div().id(`fp-mark-${icon}-${id}`).flex_none().pt(3).tooltip(tip).accessibility_label(tip).child(Icon(cx, icon, { size: 14, color: "fg3" })));
+  }
+  if (penalty) {
+    label.child(
+      penaltyOpen
+        ? AppButton(cx, `fp-penalty-computed-${id}`, "Use the computed amounts", { size: "sm", variant: "ghost", icon: "history", onClick: (_e, cx) => ui.usePenaltyComputed(penalty, cx) })
+        : AppButton(cx, `fp-penalty-edit-${id}`, "Edit penalties", { size: "sm", variant: "ghost", icon: "pencil", onClick: (_e, cx) => ui.openPenalties(penalty, cx) }),
+    );
   }
   if (hasEdit) {
     // The button stays in place (and keeps the keyboard) while the boxes

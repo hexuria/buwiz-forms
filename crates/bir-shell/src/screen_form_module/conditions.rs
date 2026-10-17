@@ -89,7 +89,6 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             &edits,
             true,
             &BTreeSet::new(),
-            &BTreeSet::new(),
         );
         if !matches!(rejected, Ok(ref rejected) if rejected.is_empty()) {
             continue;
