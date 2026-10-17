@@ -78,7 +78,7 @@ export interface ScreenFormOpened {
     profile: string[];
     /** Filled profile boxes the filer may open with Edit; pass the opened ones to `screen_form_fill` as `unlocked`. */
     profile_edit: string[];
-    /** Opened from the Form library: a blank sample that is never saved. */
+    /** Opened from the Form library: a blank sample; saved once its period is set, it becomes that period's return. */
     sample: boolean;
     /** A sample's boxes shown blank while its period is not set: its period parts and everything that follows the period. */
     blank: string[];
@@ -175,16 +175,21 @@ export interface ScreenFormOption {
     selected?: boolean;
 }
 export interface ScreenFormSaved {
-    id: number;
-    status: ScreenFormStatus;
-    stored_period: number | null;
-    draft: object;
+    /** A Form library sample: false when its period already has a stored return (nothing saved; `existing` and `opens` are the offer). */
+    saved?: boolean;
+    existing?: ScreenFormExisting;
+    /** A saved sample: open the return it became with these (`screen_form_open`'s year, period and key). */
+    opens?: { year: number; period: number; key: number | null };
+    id?: number;
+    status?: ScreenFormStatus;
+    stored_period?: number | null;
+    draft?: object;
 }
 export function screen_form_schema(form_code: string): object;
 export function screen_forms_index(): ScreenFormIndexEntry[];
 /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter; gone, the open fails), else the latest of the period. `new_key`: no stored return, a new one started under that key (the typed date). */
 export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null, new_key?: number | null): Promise<ScreenFormOpened>;
-/** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
+/** The Form library's blank sample of a form for this taxpayer: reads no stored return and computes no penalty (its draft is marked). Saved once its period is set, it becomes that period's return; queue and print take the saved return. */
 export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
 /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
 /** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved. The filed version is kept in this return's history. */
@@ -195,6 +200,7 @@ export function screen_form_sample_period(tin: string, form_code: string, parts:
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
+/** Save a draft. A Form library sample saves only once its period is set, never over a stored return of that period (answering the offer instead); an entry-numbered form takes its next free entry. */
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
 /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
 export function screen_form_print(form_code: string, draft: object): { path: string };
@@ -2149,7 +2155,8 @@ fn screen_form_open(
 /// never reads or replaces a stored return, shows its period and date boxes
 /// blank (`blank`) until the filer types one, and is built for next year so
 /// no deadline has passed and no penalty is computed. Its draft carries
-/// [`SAMPLE_MARK`], which save, queue and print refuse.
+/// [`SAMPLE_MARK`]: save makes it a return once its period is set
+/// ([`save_sample`]); queue and print refuse it until then.
 fn screen_form_sample(
     arguments: &HostArguments,
 ) -> Result<impl Future<Output = HostResult> + Send + use<>, HostError> {
@@ -2157,15 +2164,18 @@ fn screen_form_sample(
 }
 
 /// Marks a Form library sample's draft, with the boxes it holds blank while
-/// its period is not set (`{"blank": [...]}`; empty once the sample is
-/// rebuilt for a complete period). The typed draft has no such field, so
-/// the host takes it off before any agent call and puts it back on what it
-/// returns (`take_sample_mark`, `put_sample_mark`). A sample's period parts
-/// are page inputs, never draft writes: no fill lifts a period lock.
+/// its period is not set (`{"blank": [...], "set": false}`; `blank` empty
+/// and `set` true once the sample is rebuilt for a complete period). The
+/// typed draft has no such field, so the host takes it off before any agent
+/// call and puts it back on what it returns (`take_sample_mark`,
+/// `put_sample_mark`). A sample's period parts are page inputs, never draft
+/// writes: no fill lifts a period lock.
 const SAMPLE_MARK: &str = "screen_form_sample";
 
 struct SampleMark {
     blank: Vec<String>,
+    /// Rebuilt for a complete period: Save makes it that period's return.
+    set: bool,
 }
 
 /// The sample's mark, or `None` for a return.
@@ -2182,21 +2192,26 @@ fn take_sample_mark(draft: &mut Value) -> Option<SampleMark> {
                 .flatten()
                 .filter_map(|key| key.as_str().map(str::to_string))
                 .collect(),
+            set: mark["set"] == true,
         }),
     }
 }
 
 fn put_sample_mark(draft: &mut Value, mark: Option<&SampleMark>) {
     if let (Some(mark), Value::Object(object)) = (mark, draft) {
-        object.insert(SAMPLE_MARK.into(), json!({ "blank": mark.blank }));
+        object.insert(
+            SAMPLE_MARK.into(),
+            json!({ "blank": mark.blank, "set": mark.set }),
+        );
     }
 }
 
-/// Save, queue and print take a return, never a Form library sample.
+/// Queue and print take a return, never a Form library sample: the page
+/// saves a sample first (`screen_form_save`), which makes it a return.
 fn refuse_sample(draft: &mut Value, doing: &str) -> Result<(), HostError> {
     if take_sample_mark(draft).is_some() {
         return Err(host_error(format!(
-            "a sample from the Form library cannot be {doing}; start a return for the taxpayer instead"
+            "a sample from the Form library cannot be {doing}; save it first, which makes it a return"
         )));
     }
     Ok(())
@@ -2465,8 +2480,9 @@ fn opened_json(
     };
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
-    let mark = sample.as_ref().map(|_| SampleMark {
+    let mark = sample.as_ref().map(|build| SampleMark {
         blank: blank.clone(),
+        set: build.other.is_none(),
     });
     put_sample_mark(&mut draft, mark.as_ref());
     let period_parts: Vec<Value> = parts
@@ -3701,7 +3717,9 @@ fn screen_form_validate(
 fn screen_form_save(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
-    refuse_sample(&mut draft, "saved")?;
+    if let Some(mark) = take_sample_mark(&mut draft) {
+        return save_sample(kind, draft, &mark);
+    }
     let amendment = take_amendment_mark(&mut draft);
     let id = with_database(|db| match &amendment {
         Some(mark) => save_amendment(db, kind, &mut draft, mark).map_err(host_error),
@@ -3717,6 +3735,88 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
         "stored_period": stored_period(kind, &draft),
         "draft": draft,
     })))
+}
+
+/// Save a Form library sample (decided 2026-10-17): once its period is set
+/// it becomes that period's return, with everything typed into it. The
+/// matching rules come first: when the period already has a stored return
+/// nothing is saved and the answer is `{saved: false, existing, opens}`, the
+/// offer the page shows; a sample never replaces a stored return (the save
+/// guard stays). An entry-numbered form, which never matches, takes the
+/// year's next free entry. Saved: `{saved: true, id, status,
+/// stored_period, draft}`, the draft no longer a sample.
+fn save_sample(kind: AgentFormKind, mut draft: Value, mark: &SampleMark) -> HostResult {
+    let code = kind.form_code();
+    if !mark.set {
+        return Err(host_error(format!(
+            "set this {code} sample's period first: Save makes it the return for that period"
+        )));
+    }
+    with_database(|db| {
+        if NUMBERED_FORMS.contains(&code) {
+            next_free_entry(db, kind, &mut draft).map_err(host_error)?;
+        } else if let Some(stored) = stored_for_period(db, kind, &draft).map_err(host_error)? {
+            return Ok(json(json!({
+                "saved": false,
+                "existing": existing_return(db, kind, &stored).map_err(host_error)?,
+                "opens": opens_for(kind, &stored).map_err(host_error)?,
+            })));
+        }
+        refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
+        let id = agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
+        let status = agent::identity(kind, &draft).map_err(host_error)?.status;
+        Ok(json(json!({
+            "saved": true,
+            "id": id,
+            "status": status_name(&status),
+            "stored_period": stored_period(kind, &draft),
+            "opens": opens_for(kind, &draft).map_err(host_error)?,
+            "draft": draft,
+        })))
+    })
+}
+
+/// What `screen_form_open` takes to open exactly this stored return: its
+/// year, the page period, and its stored key.
+fn opens_for(kind: AgentFormKind, stored: &Value) -> Result<Value, String> {
+    let identity = agent::identity(kind, stored)?;
+    let period = match identity.period {
+        FilingPeriod::Monthly(month) => u32::from(month),
+        FilingPeriod::Quarterly(quarter) => u32::from(quarter),
+        FilingPeriod::Annual => 0,
+        FilingPeriod::OpenEnded(key) if key >= 101 => key / 100,
+        FilingPeriod::OpenEnded(key) => key,
+    };
+    Ok(json!({
+        "year": identity.taxable_year,
+        "period": period,
+        "key": stored_period(kind, stored),
+    }))
+}
+
+/// An entry-numbered form's sample (0605, 1606, 1706, 1707, 1707A, 1800,
+/// 1801) takes the first entry of its year with no stored return.
+fn next_free_entry(db: &Database, kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
+    let code = kind.form_code();
+    let pointer = if draft.pointer("/open_ended_key").is_some() {
+        "/open_ended_key"
+    } else {
+        // 0605 keeps its entry number in `month`.
+        "/month"
+    };
+    for entry in 1..=999u32 {
+        let mut candidate = draft.clone();
+        set_draft_path(&mut candidate, pointer, json!(entry));
+        let identity = agent::identity(kind, &candidate)?;
+        if identity.period != FilingPeriod::OpenEnded(entry) {
+            return Err(format!("{code}: no entry number to save the sample under"));
+        }
+        if stored_return(db, kind, &candidate)?.is_none() {
+            *draft = candidate;
+            return Ok(());
+        }
+    }
+    Err(format!("{code}: every entry number of the year is taken"))
 }
 
 /// When the draft was first made (`created_at`, top level or in its
@@ -7373,6 +7473,113 @@ mod tests {
         }
     }
 
+    /// Decided 2026-10-17: a sample can be saved as a real return. On every
+    /// form: the placeholder sample (period not set) is refused with what to
+    /// do; one rebuilt for a complete period saves as that period's return,
+    /// with what was typed into it; saving it again finds that stored return
+    /// (the matching rules) and saves nothing; an entry-numbered form takes
+    /// its next free entry instead, so nothing is replaced either way.
+    #[test]
+    fn a_library_sample_saves_as_its_periods_return_on_every_form() {
+        setup();
+        let mut carried = 0;
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let placeholder = sample(code);
+            let refused = call(
+                "screen_form_save",
+                vec![code.into(), json(placeholder["draft"].clone())],
+            )
+            .expect_err("the period is not set")
+            .to_string();
+            assert!(refused.contains("period first"), "{code}: {refused}");
+
+            let answer = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
+            assert!(answer["sample"].is_object(), "{code}: {answer}");
+            let mut built = answer["sample"]["draft"].clone();
+            // The first amount box that takes a typed amount and keeps it
+            // through the form's own computation (an off or recomputed box
+            // does not).
+            let def = kind.definition();
+            let open_amount = def
+                .fillable()
+                .filter(|entry| {
+                    schema_keys(code).contains(&entry.key)
+                        && matches!(
+                            def.bindings.get(&entry.key).map(|bound| &bound.binding),
+                            Some(Binding::Amount { .. })
+                        )
+                })
+                .take(12)
+                .find_map(|entry| {
+                    let typed = fill(code, &built, json!({ &entry.key: "1234.00" }));
+                    (typed["rejected"].get(&entry.key).is_none()
+                        && amount_of(&typed["values"], &entry.key) == 1234.0)
+                        .then(|| (entry.key.clone(), typed["draft"].clone()))
+                });
+            let took = open_amount.is_some();
+            let amount = open_amount
+                .map(|(key, draft)| {
+                    built = draft;
+                    key
+                })
+                .unwrap_or_default();
+            assert!(
+                built[SAMPLE_MARK]["set"] == true,
+                "{code}: rebuilt for its period"
+            );
+            let saved = call("screen_form_save", vec![code.into(), json(built.clone())])
+                .unwrap_or_else(|error| panic!("{code}: {error}"));
+            assert_eq!(saved["saved"], true, "{code}: {saved}");
+            assert_eq!(saved["status"], "Draft", "{code}");
+            assert!(
+                saved["draft"].get(SAMPLE_MARK).is_none(),
+                "{code}: no longer a sample"
+            );
+            // Which stored return (2550Q's rows keep no id: its created_at).
+            let which = |draft: &Value| {
+                if code == "2550Q" {
+                    json!(created_at(draft))
+                } else {
+                    draft["id"].clone()
+                }
+            };
+            let id = which(&saved["draft"]);
+            // The page opens it from `opens`, as it opens an offer.
+            let stored = opens_of(code, &saved["opens"]);
+            assert_eq!(which(&stored["draft"]), id, "{code}: the stored return");
+            if took {
+                assert_eq!(
+                    amount_of(&stored["values"], &amount),
+                    1234.0,
+                    "{code}: carried"
+                );
+                carried += 1;
+            }
+            // Saved again, the same sample never replaces it.
+            let again = call("screen_form_save", vec![code.into(), json(built.clone())])
+                .unwrap_or_else(|error| panic!("{code}: {error}"));
+            if NUMBERED_FORMS.contains(&code) {
+                assert_eq!(again["saved"], true, "{code}: the next entry");
+                assert_ne!(which(&again["draft"]), id, "{code}: a return of its own");
+                assert_ne!(again["stored_period"], saved["stored_period"], "{code}");
+            } else {
+                assert_eq!(again["saved"], false, "{code}: {again}");
+                assert!(again["existing"].is_object(), "{code}: the offer");
+                assert_eq!(
+                    which(&opens_of(code, &again["opens"])["draft"]),
+                    id,
+                    "{code}: the offer opens the stored return"
+                );
+            }
+        }
+        assert!(carried >= 35, "{carried} forms carried a typed amount");
+    }
+
+    fn amount_of(values: &Value, key: &str) -> f64 {
+        agent::parse_amount(values[key].as_str().unwrap_or_default()).unwrap_or(f64::NAN)
+    }
+
     #[test]
     fn a_sample_cannot_be_saved_over_a_stored_return_nor_a_mark_forged() {
         setup();
@@ -8268,6 +8475,10 @@ mod tests {
         );
     }
 
+    /// The placeholder sample (its period not set) is never saved, queued
+    /// or printed, and never replaces the stored return of the period it
+    /// was built for. A sample rebuilt for a complete period saves as a
+    /// return: a_library_sample_saves_as_its_periods_return_on_every_form.
     #[test]
     fn a_library_sample_is_never_saved_queued_or_printed() {
         setup();

@@ -186,10 +186,22 @@ export function shownDate(text) {
 const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
 
 /**
- * A Form library sample is a preview and is never saved (provisional: the
- * findings rules page, question 1). A return starts with New return.
+ * A Form library sample saves as a real return (decided 2026-10-17): Save
+ * makes it the return for its period, asking for the period first when it
+ * is not set, and offers the stored return instead when that period
+ * already has one. Queue and Print save it the same way first.
  */
-const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, choose Start a return, or New return (the + button or Cmd/Ctrl+N).";
+const SAMPLE_NOTE = "A sample from the Form library. Save makes it your return for its period, with what you typed; if the period is not set yet, Save asks for it, and if that period already has a return, you choose what to do with it. New return (the + button or Cmd/Ctrl+N) starts a blank one.";
+
+/** A sample's period parts in the period modal, labelled. */
+const PERIOD_PART_LABELS = {
+  year: "Year (YYYY)",
+  month: "Month (MM)",
+  year_end_month: "Year-end month (MM)",
+  day: "Day (DD)",
+  date: "Date (MM/DD/YYYY)",
+  quarter: "Quarter",
+};
 
 /**
  * The note at the top of a stored draft whose boxes followed a later
@@ -825,6 +837,12 @@ export class FormPageActions {
         s.startAfterAnswer = false;
         if (this.state === s && !s.existing) this.startReturn(acx);
       }
+      // Save (or Queue or Print) waiting for this answer goes on with it.
+      if (s.saveAfterAnswer) {
+        const { then } = s.saveAfterAnswer;
+        s.saveAfterAnswer = null;
+        if (this.state === s) this.afterPeriodForSave(acx, then);
+      }
     });
   }
 
@@ -837,6 +855,7 @@ export class FormPageActions {
    */
   takePeriod(r, cx) {
     const s = this.state;
+    s.periodComplete = Boolean(r.complete);
     s.opens = r.complete ? r.opens || null : null;
     s.existing = r.existing || null;
     const period = (s.periodToken = (s.periodToken || 0) + 1);
@@ -1533,7 +1552,7 @@ export class FormPageActions {
   save(cx) {
     const s = this.state;
     if (!s || !s.draft) return;
-    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
+    if (s.sample) return this.saveSample(cx);
     // Take whatever is staged before saving, without waiting for the debounce.
     let edits = s.pending;
     s.pending = {};
@@ -1561,6 +1580,113 @@ export class FormPageActions {
     }
   }
 
+  /**
+   * Save on a Form library sample (decided 2026-10-17): it becomes the
+   * return for its period, with everything typed into it. A period still
+   * waiting for the host's answer is asked about first; a period that
+   * already has a stored return is offered (offerExisting), never saved
+   * over; a period not set yet is asked for in the app's period modal.
+   * Saved, the return it became opens, and `then(cx)` runs on it (Queue
+   * and Print go on that way).
+   */
+  saveSample(cx, then = null) {
+    const s = this.state;
+    if (s.periodAsked && s.periodAnswered !== s.periodAsked && Object.keys(s.periodValues || {}).length) {
+      s.saveAfterAnswer = { then };
+      if (s.periodInFlight !== s.periodAsked) {
+        s.periodSeq = (s.periodSeq || 0) + 1;
+        this.askPeriod(s.periodAsked, cx);
+      }
+      return;
+    }
+    if (s.existing) return this.offerExisting(s.existing, cx);
+    if (!s.periodSet) return this.askSamplePeriod(cx, then);
+    let edits = s.pending;
+    s.pending = {};
+    let r;
+    try {
+      if (Object.keys(edits).length) {
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        this.accepted(edits, f.rejected);
+        s.draft = f.draft;
+        s.values = this.shown(f.values);
+        if (f.pools) s.poolTexts = f.pools;
+        edits = {};
+      }
+      r = this.app.store.write("screen_form_save", s.code, s.draft);
+    } catch (e) {
+      s.pending = { ...edits, ...s.pending };
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    if (!r.saved) {
+      // Stored meanwhile: the offer, never a save over it.
+      s.opens = r.opens || null;
+      return this.offerExisting(r.existing, cx);
+    }
+    s.dirty = false;
+    this.app.toast("Saved. The sample is now your return for this period.", cx, "save");
+    const { year, period, key } = r.opens;
+    this.app.openForm({ tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : {}) }, cx, false, then ? (error, acx) => {
+      if (!error) then(acx);
+    } : null);
+  }
+
+  /**
+   * The host answered the period Save waited for: a stored return was
+   * offered by the answer itself; an incomplete period asks again in the
+   * period modal; a complete one saves.
+   */
+  afterPeriodForSave(cx, then) {
+    const s = this.state;
+    if (s.existing) return;
+    if (!s.periodComplete) return this.askSamplePeriod(cx, then, "Enter the whole period to save this sample.");
+    this.saveSample(cx, then);
+  }
+
+  /** The app's period modal for a sample's Save: one box per period part, a choice for a quarter. */
+  askSamplePeriod(cx, then = null, error = "") {
+    const s = this.state;
+    const inputs = new Map();
+    let quarter = null;
+    for (const [k, p] of s.periodParts || []) {
+      const shown = String(s.periodValues?.[k] ?? s.values[k] ?? "");
+      if (p.part === "quarter") {
+        if (shown === "true") quarter = k;
+      } else inputs.set(k, InputState.new({ value: shown }));
+    }
+    this.app.samplePeriod = { state: s, then, inputs, quarter, error };
+    this.app.overlay = "sample-period";
+    cx.notify();
+  }
+
+  closeSamplePeriod(cx) {
+    const app = this.app;
+    if (app.overlay === "sample-period") app.overlay = null;
+    app.samplePeriod = null;
+    cx.notify();
+  }
+
+  /**
+   * The period modal's Save: its parts go into the sample's period boxes,
+   * the host is asked at once, and Save goes on with the answer.
+   */
+  takeSamplePeriod(cx) {
+    const asked = this.app.samplePeriod;
+    const s = this.state;
+    if (!asked || asked.state !== s) return this.closeSamplePeriod(cx);
+    const parts = {};
+    for (const [k, p] of s.periodParts) {
+      parts[k] = p.part === "quarter" ? String(asked.quarter === k) : (asked.inputs.get(k)?.value() ?? "").trim();
+    }
+    this.closeSamplePeriod(cx);
+    this.setPeriodPart(parts, cx);
+    if (s.periodAnswered === s.periodAsked) return this.afterPeriodForSave(cx, asked.then);
+    s.saveAfterAnswer = { then: asked.then };
+    // Asked now, not after the typing pause.
+    s.periodSeq = (s.periodSeq || 0) + 1;
+    this.askPeriod(s.periodAsked, cx);
+  }
+
   /** 1601C and 2551Q keep their own queue path, keyed by month or quarter. */
   usesPeriodPath() {
     return this.state.code === "1601C" || this.state.code === "2551Q";
@@ -1570,7 +1696,7 @@ export class FormPageActions {
   ensureSaved(cx) {
     const s = this.state;
     if (s.sample) {
-      this.app.toast(SAMPLE_NOTE, cx);
+      this.saveSample(cx);
       return false;
     }
     if (!s.dirty && s.saved) return true;
@@ -1608,7 +1734,8 @@ export class FormPageActions {
 
   queue(cx) {
     const s = this.state;
-    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
+    // A sample is saved first (as Save does), then its return is queued.
+    if (s.sample) return this.saveSample(cx, (acx) => this.queue(acx));
     if (!this.ensureSaved(cx)) return;
     try {
       if (this.usesPeriodPath()) this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
@@ -1640,7 +1767,8 @@ export class FormPageActions {
    */
   print(cx) {
     const s = this.state;
-    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
+    // A sample is saved first (as Save does), then its return is printed.
+    if (s.sample) return this.saveSample(cx, (acx) => this.print(acx));
     if (s.amends && !s.saved) this.flush(cx);
     else if (s.editable && !this.ensureSaved(cx)) return;
     try {
@@ -2440,6 +2568,68 @@ export function existingOfferFor(existing) {
   return { title: `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
 }
 
+/**
+ * The app's period modal for a sample's Save (Esc or outside: Cancel): the
+ * form's period parts, then Save, which goes on with the host's answer.
+ */
+export function renderSamplePeriod(cx, app) {
+  const ui = app.formUi;
+  const asked = app.samplePeriod;
+  const s = ui.state;
+  if (!asked || !s || asked.state !== s) return div();
+  const card = div().flex().flex_col().items_stretch().w_full().gap(SPACE[3]).p(SPACE[5]);
+  card.child(
+    div()
+      .flex()
+      .flex_col()
+      .gap(2)
+      .child(Text(cx, "title", "Which period is this return for?").whitespace_normal())
+      .child(Text(cx, "meta", "Save makes this sample your return for that period.", "fg2").whitespace_normal()),
+  );
+  const quarters = [];
+  for (const [k, p] of s.periodParts || []) {
+    if (p.part === "quarter") {
+      quarters.push([k, p]);
+      continue;
+    }
+    card.child(
+      div()
+        .flex()
+        .flex_col()
+        .gap(SPACE[1])
+        .child(Text(cx, "meta", PERIOD_PART_LABELS[p.part] || p.part, "fg2"))
+        .child(TextField(cx, asked.inputs.get(k), { id: `sample-period-${p.part}` })),
+    );
+  }
+  if (quarters.length) {
+    const row = div().flex().flex_row().flex_wrap().gap(SPACE[2]);
+    for (const [k, p] of quarters) {
+      row.child(
+        AppButton(cx, `sample-period-q${p.quarter}`, `Q${p.quarter}`, {
+          size: "sm",
+          variant: asked.quarter === k ? "primary" : "secondary",
+          onClick: (_e, cx) => {
+            asked.quarter = k;
+            cx.notify();
+          },
+        }),
+      );
+    }
+    card.child(div().flex().flex_col().gap(SPACE[1]).child(Text(cx, "meta", PERIOD_PART_LABELS.quarter, "fg2")).child(row));
+  }
+  if (asked.error) card.child(Text(cx, "meta", asked.error, "danger").whitespace_normal());
+  card.child(
+    div()
+      .flex()
+      .flex_row()
+      .justify_end()
+      .gap(SPACE[2])
+      .child(AppButton(cx, "sample-period-cancel", "Cancel", { variant: "ghost", onClick: (_e, cx) => ui.closeSamplePeriod(cx) }))
+      .child(AppButton(cx, "sample-period-save", "Save", { variant: "primary", onClick: (_e, cx) => ui.takeSamplePeriod(cx) })),
+  );
+  return Overlay(cx, "sample-period", card, (cx) => ui.closeSamplePeriod(cx), { width: 420 });
+}
+
 /** The app's modal for a stored return of a sample's period (Esc or outside: Keep this form). */
 export function renderExistingOffer(cx, app) {
   const ui = app.formUi;
@@ -2503,8 +2693,8 @@ function formContent(cx, app, width) {
   const branchCode = String(s.tin).slice(9) || "00000";
   const draftLayout = f.q < 0.8;
 
-  // A library sample has only Check: Print, Queue and Save need a return.
-  const actions = s.sample ? [] : [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
+  // A library sample saves as its period's return; Queue and Print save it first.
+  const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
   if (s.filedOriginal && !s.filedOriginalView) {
     actions.push(AppButton(cx, "fp-filed-original", "View the filed original", { size: "sm", icon: "history", onClick: (_e, cx) => ui.openFiledOriginal(cx) }));
   }
@@ -2512,7 +2702,9 @@ function formContent(cx, app, width) {
     actions.push(AppButton(cx, "fp-back-to-amendment", "Back to the amendment", { size: "sm", onClick: (_e, cx) => ui.backToAmendment(cx) }));
   } else if (s.sample) {
     if (s.editable) actions.push(s.checkButton.entity);
-    actions.push(AppButton(cx, "fp-start-return", "Start a return", { variant: "primary", size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
+    actions.push(AppButton(cx, "fp-start-return", "Start a return", { size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
+    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
+    actions.push(AppButton(cx, "fp-save", "Save", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
   } else if (s.status === "Queued") {
     actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
   } else if (s.editable) {

@@ -160,8 +160,10 @@ assert.equal(json(calls.find((c) => c[0] === "screen_form_sample")), json(["scre
 frame();
 assert.equal(ui.state.values[K("txtYear")], "", "year blank");
 assert.equal(ui.state.values[K("qtr_1")], "", "quarter blank");
-assert.ok(!buttons.includes("fp-save") && !buttons.includes("fp-queue") && !buttons.includes("fp-print"), `no Save/Queue/Print on a sample: ${buttons}`);
-assert.ok(texts.some((t) => /not saved.*Start a return.*New return/.test(t)), "the sample says how to start a return");
+// Decided 2026-10-17: a sample saves as its period's return, so it has
+// Save, and Queue and Print (they save it first).
+assert.ok(buttons.includes("fp-save") && buttons.includes("fp-queue") && buttons.includes("fp-print"), `Save, Queue and Print on a sample: ${buttons}`);
+assert.ok(texts.some((t) => /Save makes it your return for its period.*Save asks for it.*New return/.test(t)), "the sample says what Save does");
 assert.ok(texts.includes("Sample from the Form library"), "no period in the taxpayer bar");
 assert.ok(texts.includes("Shows once the period is typed"), "a locked blank box says what it waits for");
 assert.ok(texts.includes("Set when you start a return"), "a shut radio group says what it waits for");
@@ -187,11 +189,19 @@ ui.choose({ [K("rtnMonth")]: "06" }, cx);
 await settle(); frame();
 assert.equal(ui.state.values[K("rtnMonth")], "06", "an accepted edit shows");
 
-// Save, Queue and Print never write a stored return from a sample.
+// Its period not set, Save, Queue and Print ask for the period in the
+// app's own modal and write nothing yet (tools/test_form_sample_save.mjs
+// drives the rest); Cancel queue has nothing to cancel.
 const writes = () => calls.filter((c) => ["screen_form_save", "screen_form_queue", "queue_form_draft", "screen_form_print", "cancel_queued", "screen_form_cancel_queue"].includes(c[0])).length;
-ui.save(cx); ui.queue(cx); ui.print(cx); ui.cancelQueue(cx);
-assert.equal(writes(), 0, "a sample is never saved, queued or printed");
-assert.ok(toasts.at(-1).includes("New return"), "the refusal says how to start a return");
+for (const action of ["save", "queue", "print"]) {
+  app.overlay = null;
+  ui[action](cx);
+  assert.equal(app.overlay, "sample-period", `${action} asks for the period`);
+  ui.closeSamplePeriod(cx);
+}
+ui.cancelQueue(cx);
+assert.equal(writes(), 0, "nothing is saved, queued or printed before the period is set");
+assert.ok(toasts.at(-1).includes("New return"), "Cancel queue says what a sample is");
 
 // ---- Rule 2: a return opened for the taxpayer.
 validateErrors = [];
