@@ -51,7 +51,7 @@ uiExports.AppButton=(_cx,id,label,opts={})=>{
 };
 uiExports.Chip=(_cx,label)=>{chips.push(label);return element();};
 const uiModule=mock("./ui.js",uiExports);
-const store=mock("./store.js",{formatTin:x=>x});
+const store=mock("./store.js",{formatTin:x=>x,errorText:e=>String(e&&e.message?e.message:e)});
 const periods=mock("./periods.js",{periodLabel:()=>"March 2026"});
 const mod=new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js",root),"utf8"),{context:contextVM});
 await mod.link(s=>({"gpui-kit":kit,"gpui-base":base,"gpui-component":components,"./ui.js":uiModule,"./store.js":store,"./periods.js":periods}[s]));
