@@ -2,12 +2,12 @@
  "0605": {
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R7.0": {
@@ -19,7 +19,7 @@
  "0619E": {
   "R5.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -31,17 +31,17 @@
  "0619F": {
   "R5.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -53,7 +53,7 @@
  "1600PT": {
   "R5.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -65,7 +65,7 @@
  "1600VT": {
   "R5.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -89,12 +89,12 @@
  "1601C": {
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -106,7 +106,7 @@
  "1601EQ": {
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -123,7 +123,7 @@
   },
   "R6.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -140,7 +140,7 @@
   },
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -159,7 +159,7 @@
  "1604F": {
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -176,7 +176,7 @@
   },
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -205,7 +205,7 @@
   },
   "R5.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "manual-1": {
@@ -328,7 +328,7 @@
  "1800": {
   "R6.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -350,7 +350,7 @@
   },
   "R6.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R7.0": {
@@ -379,12 +379,12 @@
  "2000OT": {
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -401,12 +401,12 @@
   },
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R7.0": {
@@ -423,7 +423,7 @@
  "2200AN": {
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -435,12 +435,12 @@
  "2200C": {
   "R5.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R7.0": {
@@ -457,12 +457,12 @@
  "2200M": {
   "R5.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -474,12 +474,12 @@
  "2200P": {
   "R5.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -491,7 +491,7 @@
  "2200T": {
   "R6.0": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R7.0": {
@@ -520,7 +520,7 @@
   },
   "R5.2": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips, page value == print text); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
@@ -537,7 +537,7 @@
   },
   "R6.1": {
    "pr": "PR 0b",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
    "status": "fixed"
   },
   "R8.0": {
