@@ -149,10 +149,12 @@ const GATED_ENTRY: &[(&str, &str)] = &[
          by `compute` with its box when the overpayment ends",
     ),
     // PR 5: 1702Q's schedule entries. form_1702q.rs `recompute` clears
-    // Schedules 1, 2 and 4 with no ATC at Item 5 (the gate the tracked
-    // rules/forms/1702q-v2018c/validations.json 1702q-change-007 records)
-    // and Schedule 3 while `mcit_open` does not hold (port behaviour),
-    // which the probe sees as a combination with /atc.
+    // Schedules 1, 2 and 4 with no ATC at Item 5 (tracked rule record
+    // rules/forms/1702q-v2018c/validations.json 1702q-change-007 of the
+    // untracked official HTA runtime) and Schedule 3 while `mcit_open` does
+    // not hold (port behaviour), which the probe sees as a combination with
+    // /atc. Schedule 2 item 6 is typed under itemized deductions and
+    // overwritten under OSD (port behaviour).
     ("frm1702q:Sched1:txtTax1B", GATED_1702Q_SCHEDULE),
     ("frm1702q:Sched1:txtTax2B", GATED_1702Q_SCHEDULE),
     ("frm1702q:Sched1:txtTax4B", GATED_1702Q_SCHEDULE),
@@ -179,10 +181,13 @@ const GATED_ENTRY: &[(&str, &str)] = &[
 ];
 
 /// Why each 1702Q schedule entry is in [`GATED_ENTRY`].
-const GATED_1702Q_SCHEDULE: &str = "1702Q schedule entry typed by the filer (rules/forms/1702q-v2018c/fields.json: \
-     not computed); form_1702q.rs recompute clears Schedules 1, 2 and 4 while \
-     Item 5 has no ATC (rules/forms/1702q-v2018c/validations.json 1702q-change-007) \
-     and Schedule 3 while `mcit_open` does not hold (port behaviour)";
+const GATED_1702Q_SCHEDULE: &str = "1702Q schedule entry the filer types once its schedule is open \
+     (rules/forms/1702q-v2018c/fields.json enabled_when: 'Enabled only by the official \
+     dependency/state transition recorded in validations.json or workflow.json.'); \
+     form_1702q.rs recompute clears Schedules 1, 2 and 4 while Item 5 has no ATC \
+     (tracked rule record rules/forms/1702q-v2018c/validations.json 1702q-change-007 of \
+     the untracked official HTA runtime) and Schedule 3 while `mcit_open` does not \
+     hold, and overwrites Schedule 2 item 6 under OSD (port behaviour)";
 
 /// Boxes `fields.json` keys only as an occurrence of an official control
 /// (`X#occurrence-1`) that it lists under no key of its own, while the app's
