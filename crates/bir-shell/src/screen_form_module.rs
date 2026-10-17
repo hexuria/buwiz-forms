@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_annual_corporate;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -262,6 +263,7 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            rows_annual_corporate::mark_whole_pesos(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -1989,6 +1991,9 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
             map.insert(key.clone(), text.to_string());
         }
     }
+    // What the page shows where the field map's value is not what the box
+    // holds (PR 8: 1702EX's whole name and address, an untyped count).
+    rows_annual_corporate::shown(kind, draft, &mut map);
     // 1702RT Item 5: the official select keeps IC010 even while "Other" is
     // not selected (the upload keeps that raw default); the page shows the
     // election, as the print does.
@@ -2315,6 +2320,7 @@ fn opened_json(
         draft: from_profile_draft,
     };
     let mut locks = locks(kind, &from_profile);
+    rows_annual_corporate::relock(kind, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group.
     for group in penalties::groups(kind) {
         if !penalties::edited(&group, &draft) {
@@ -2368,6 +2374,9 @@ fn opened_json(
         }
     }
     blank_sample(&blank, &mut values, &mut errors);
+    // What a blank box waits for (PR 8's forms; the integration merge adds
+    // the other form groups' maps to this one).
+    let waits = rows_annual_corporate::waits(kind);
     let lock_notes: Map<String, Value> = locks
         .iter()
         .map(|(key, reason)| {
@@ -2421,6 +2430,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "waits": waits,
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -3176,6 +3186,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3202,6 +3213,9 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 8's forms; the integration merge chains the other form groups').
+    let removes = rows_annual_corporate::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3212,6 +3226,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        "removes": removes,
     })))
 }
 
@@ -4131,6 +4146,9 @@ mod tests {
 
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
+
+    // PR 8: 1702RT, 1702MX, 1702EX and 1707A against their printed sheets.
+    mod annual_corporate;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -5731,11 +5749,13 @@ mod tests {
     fn rows_1707a_continuation_tables_save() {
         setup();
         let form = schema_entry("1707A").unwrap();
+        // The schedules sit in Part IV since PR 8's printed layout.
         let table = |first: &str| -> Value {
-            form["parts"][3]["items"]
+            form["parts"]
                 .as_array()
                 .unwrap()
                 .iter()
+                .flat_map(|part| part["items"].as_array().unwrap())
                 .find(|it| it["keys"][0][0] == first)
                 .unwrap_or_else(|| panic!("table starting {first}"))
                 .clone()
@@ -5982,7 +6002,9 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // Plus 4 for 1702RT, 1702MX, 1702EX and 1707A (PR 8): each one's
+        // item 7 RDO list, now drawn.
+        assert_eq!(supplied, 86);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8454,9 +8476,6 @@ mod tests {
         "1701MS frm1701MS:Pg2TaxPayer",
         "1701MS frm1701MS:txtRDOCodea",
         "1701MS frm1701MS:txtTelNum10a",
-        "1702EX frm1702EX:txtLOB",
-        "1702EX frm1702EX:txtPg2RegisteredName",
-        "1702EX frm1702EX:txtPg3RegisteredName",
         "1707 frm1707:ProfileAddress1",
         "1707 frm1707:ProfileContactNum",
         "1707 frm1707:ProfileEmailAddr",
@@ -9177,15 +9196,12 @@ mod tests {
         "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16b1: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1701MS frm1701MS:txtTaxpayerNo16b: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1702RT frm1702RT:txtPg1Pt1I10: cannot be filled here: derived by the app: changes with /incorporation_date/day, /incorporation_date/month, /incorporation_date/year but never shows one field's value",
-        "1702RT frm1702RT:txtPg1Pt3I23DebitMemoC3Date: cannot be filled here: derived by the app: changes with /payment_details/0/date/day, /payment_details/0/date/month, /payment_details/0/date/year but never shows one field's value",
-        "1702RT frm1702RT:txtPg1Pt3I24CheckC3Date: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1702RT frm1702RT:txtPg1Pt3I25TaxDebitDate: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1702RT frm1702RT:txtPg1Pt3I26OthersC3Date: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1707 frm1707:txtPg2P4Sch1I8DateCollection: cleared to \"\"",
-        "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        // PR 8: 1707A's printed row 4 says the form computes it (from the
+        // continuation rows), with what it waits for.
+        "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: computed by BIR's own formulas",
         "1707A frm1707Av2021:txtS1C1DateOfTransaction_1: cleared to \"\"",
-        "1707A frm1707Av2021:txtS2C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1707A frm1707Av2021:txtS2C1DateOfTransactionI4: computed by BIR's own formulas",
         "1707A frm1707Av2021:txtS2C1DateOfTransaction_1: cleared to \"\"",
         "2000 frm2000:sched2:txtPaymentDate0: cleared to \"\"",
         "2000 frm2000:sched2:txtPaymentDate1: cleared to \"\"",

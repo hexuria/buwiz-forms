@@ -10,7 +10,7 @@ use bir_core::forms::{
 use bir_core::reference;
 use serde_json::{Map, Value, json};
 
-use super::{rows_1700, rows_2550m, rows_2550q, schema_entry};
+use super::{rows_1700, rows_2550m, rows_2550q, rows_annual_corporate, schema_entry};
 
 fn option(value: &str, label: &str) -> Value {
     json!({"value": value, "label": label})
@@ -126,6 +126,9 @@ pub(super) fn fill(
     }
     if let Some(cell) = rows_1700::cell(kind, key) {
         return rows_1700::fill(draft, cell, value);
+    }
+    if let Some(done) = rows_annual_corporate::fill(kind, draft, key, value) {
+        return done;
     }
     if let Some(row) = atc_2000_row(kind, key)
         && let Some(choice) = value
@@ -249,6 +252,7 @@ fn atc_2550m_row(kind: AgentFormKind, key: &str) -> Option<usize> {
 /// here" verdict for it does not apply on the page.
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     atc_2550m_row(kind, key).is_some()
+        || rows_annual_corporate::host_writes(kind, key)
         || sales_2550m_row(kind, key).is_some()
         || rows_2550m::cell(kind, key).is_some()
         || month_year_1601c_row(kind, key).is_some()
