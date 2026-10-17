@@ -124,6 +124,21 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Boxes `fields.json` keys only as an occurrence of an official control
+/// (`X#occurrence-1`) that it lists under no key of its own, while the app's
+/// field map writes the control once, under `X`: `(form code, box key,
+/// evidence)`. The probe reads such a box as `X`, so it binds to the draft
+/// field `X` shows; the field map, the upload and the print are unchanged.
+pub(crate) const FIRST_OCCURRENCE: &[(&str, &str, &str)] = &[(
+    "2551Q",
+    "txtEmail#occurrence-1",
+    "Item 11 Email Address: the HTA has two txtEmail inputs (item 11 and a \
+     hidden page-2 copy), which fields.json lists as occurrence-1 and \
+     occurrence-2; the upload writes the one value as txtEmail \
+     (tests/sample-payloads/2551Q-122025Q1.official.xml) and the sheet \
+     prints it once (html-frozen/2551q-2018/writer-cells.json join txtEmail)",
+)];
+
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
 /// the other field closes a gate (no overpayment left) and `compute` empties
