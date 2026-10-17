@@ -379,6 +379,51 @@ fn form_1701q_item_52a_round_trips_through_the_editable_save() {
     assert_eq!(imported.to_bir_xml_payload().unwrap(), payload);
 }
 
+/// A third-quarter Draft opened before the calendar fix stored October 15
+/// as its deadline. Queued after the fix (before 16 November 2026, when
+/// the 15 November deadline falls due on a Sunday), it is not late: the
+/// stale date is dropped while the return is a Draft, and revalidation
+/// computes no surcharge or interest either.
+#[test]
+fn form_1701q_a_draft_stored_with_the_old_q3_deadline_is_not_late_when_queued() {
+    use bir_core::filing_queue::QueueAuthSource;
+    use bir_core::forms::penalty_items::with_clock;
+    use penalty_items::day;
+
+    let mut draft =
+        Form1701QDraft::new_from_profile(&dummy_profile("1701Qv2018", "Individual"), 2026, 3);
+    draft.filer_type = Some(Form1701QFilerType::Professional);
+    draft.atc = Some(Form1701QAtc::Ii014);
+    draft.deduction_method = Some(Form1701QDeductionMethod::Osd);
+    draft.date_of_birth = "05/17/1985".into();
+    draft.citizenship = "Filipino".into();
+    draft.claims_foreign_tax_credits = Some(false);
+    draft.set_amount(36, Form1701QParty::Taxpayer, Some(2_000_000.0));
+    // As the app stored it before the fix (the Draft's cached deadline).
+    draft.penalty.penalty_due_date = Some(day(2026, 10, 15));
+    let stored = serde_json::to_string(&draft).unwrap();
+    let mut draft: Form1701QDraft = serde_json::from_str(&stored).unwrap();
+    assert_eq!(draft.penalty.penalty_due_date, Some(day(2026, 10, 15)));
+
+    with_clock(day(2026, 11, 10), || draft.queue(QueueAuthSource::Gui))
+        .unwrap_or_else(|errors| panic!("queues: {errors:?}"));
+    assert_eq!(
+        draft.penalty.penalty_due_date, None,
+        "the stale date is dropped"
+    );
+    let computed = draft.penalty.computed_penalties.clone().unwrap();
+    assert_eq!(computed.inputs.due_date, day(2026, 11, 16));
+    assert_eq!(computed.inputs.days_late, 0);
+    assert_eq!([computed.surcharge, computed.interest], [0.0, 0.0]);
+    let fields = draft.field_map();
+    assert_eq!(fields["frm1701q:txt64A"], "0.00");
+    with_clock(day(2026, 11, 12), || {
+        draft.revalidate_queued_before_submission()
+    })
+    .unwrap_or_else(|errors| panic!("not late on revalidation: {errors:?}"));
+    assert_eq!(draft.field_map()["frm1701q:txt65A"], "0.00");
+}
+
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![

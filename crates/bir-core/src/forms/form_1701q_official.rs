@@ -231,6 +231,22 @@ impl Form1701QDraft {
         // Items 64-66 file their override, else the computed value (the
         // shared penalty model, from Item 63's tax still due), and Items
         // 67-68 and Part III add up what is filed.
+        // Until PR 5's calendar fix the app resolved the third quarter's
+        // deadline as October 15; the January 2018 guidelines give November
+        // 15 (calendar_rules.rs). A Draft keeps the deadline it was opened
+        // with only as a cache, so an October one stored for the third
+        // quarter is dropped and the calendar resolves it again; a return
+        // that left Draft keeps what it was reviewed with.
+        if self.quarter == 3 && self.lifecycle.is_editable() {
+            use chrono::Datelike;
+            for state in [&mut self.penalty.state, &mut self.spouse_penalty.state] {
+                if state.penalty_due_date.is_some_and(|due| {
+                    due.year() == i32::from(self.taxable_year) && due.month() == 10
+                }) {
+                    state.penalty_due_date = None;
+                }
+            }
+        }
         for items in Self::penalty_declarations() {
             // A column not on the return (the spouse's, while there is no
             // spouse or a compensation earner only) keeps no entry, as its
@@ -894,8 +910,8 @@ impl Form1701QDraft {
             },
             basic_tax_due: |d| d.input(63, Form1701QParty::Taxpayer),
             gross_sales: None,
-            state: |d| &d.penalty,
-            state_mut: |d| &mut d.penalty,
+            state: |d| &d.penalty.state,
+            state_mut: |d| &mut d.penalty.state,
             status: |d| d.lifecycle.status.clone(),
             deadline_period: super::penalty_items::calendar_period::<Self>,
             period_code: |d| QueueableForm::period_code(d),
@@ -913,8 +929,8 @@ impl Form1701QDraft {
                 d.set_amount(item(component), Form1701QParty::Spouse, Some(value));
             },
             basic_tax_due: |d| d.input(63, Form1701QParty::Spouse),
-            state: |d| &d.spouse_penalty,
-            state_mut: |d| &mut d.spouse_penalty,
+            state: |d| &d.spouse_penalty.state,
+            state_mut: |d| &mut d.spouse_penalty.state,
             ..common
         };
         vec![common, spouse]

@@ -557,14 +557,16 @@ pub struct Form1701QDraft {
     /// Each party's Surcharge, Interest and Compromise (Items 64-66, columns
     /// A and B) on the shared penalty model ([`super::penalty_items`]):
     /// computed values, overrides and engine inputs, one state per column
-    /// (the draft is flat, so they are not flattened into it). A draft
-    /// stored while the items were typed boxes has neither (the default,
-    /// `penalty_model_version` 0) and is written back without them, so its
-    /// stored shape never changes until the filer edits a penalty.
-    #[serde(default, skip_serializing_if = "penalty_state_is_default")]
-    pub penalty: PenaltyState,
-    #[serde(default, skip_serializing_if = "penalty_state_is_default")]
-    pub spouse_penalty: PenaltyState,
+    /// (the draft is flat, so they are not flattened into it). A column at
+    /// `penalty_model_version` 0 still holds the filer's own typed amounts.
+    /// The stored shape is kept: a draft stored with no `penalty` key is
+    /// written back without it while it is the default, and one stored with
+    /// the key (even at its default) is written back with it
+    /// ([`PenaltySlot`]).
+    #[serde(default, skip_serializing_if = "PenaltySlot::is_absent")]
+    pub penalty: PenaltySlot,
+    #[serde(default, skip_serializing_if = "PenaltySlot::is_absent")]
+    pub spouse_penalty: PenaltySlot,
 
     // Part IV.
     #[serde(default)]
@@ -588,8 +590,55 @@ pub struct Form1701QDraft {
     pub lifecycle: SubmissionLifecycle,
 }
 
-fn penalty_state_is_default(state: &PenaltyState) -> bool {
-    *state == PenaltyState::default()
+/// One column's [`PenaltyState`], remembering whether the stored draft had
+/// the key, so a save writes back the shape it read: present stays present
+/// (even at the default), absent stays absent until the state is used.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PenaltySlot {
+    pub state: PenaltyState,
+    /// The stored draft carried this key.
+    present: bool,
+}
+
+impl PenaltySlot {
+    pub fn new(state: PenaltyState) -> Self {
+        Self {
+            state,
+            present: false,
+        }
+    }
+
+    fn is_absent(&self) -> bool {
+        !self.present && self.state == PenaltyState::default()
+    }
+}
+
+impl std::ops::Deref for PenaltySlot {
+    type Target = PenaltyState;
+    fn deref(&self) -> &PenaltyState {
+        &self.state
+    }
+}
+
+impl std::ops::DerefMut for PenaltySlot {
+    fn deref_mut(&mut self) -> &mut PenaltyState {
+        &mut self.state
+    }
+}
+
+impl Serialize for PenaltySlot {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.state.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PenaltySlot {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self {
+            state: PenaltyState::deserialize(deserializer)?,
+            present: true,
+        })
+    }
 }
 
 impl Form1701QDraft {
@@ -709,9 +758,9 @@ impl Form1701QDraft {
             item_43_non_operating_income_description: String::new(),
             item_48_non_operating_income_description: String::new(),
             item_61_other_tax_credit_description: String::new(),
-            penalty: PenaltyState::for_profile(profile),
+            penalty: PenaltySlot::new(PenaltyState::for_profile(profile)),
             // The profile's EOPT class is the filer's, not the spouse's.
-            spouse_penalty: PenaltyState::new(None),
+            spouse_penalty: PenaltySlot::new(PenaltyState::new(None)),
             payment_details: Form1701QPaymentDetails::default(),
             total_tax_due: 0.0,
             total_amount_payable: 0.0,
@@ -784,7 +833,7 @@ impl Form1701QDraft {
                 && self.spouse_penalty.penalty_model_version
                     < super::penalty_items::PENALTY_MODEL_VERSION
             {
-                self.spouse_penalty = PenaltyState::new(None);
+                self.spouse_penalty.state = PenaltyState::new(None);
             }
             self.has_spouse = true;
         } else {
@@ -946,8 +995,8 @@ mod tests {
             filer_type: Some(Form1701QFilerType::Professional),
             atc: Some(Form1701QAtc::Ii014),
             deduction_method: Some(Form1701QDeductionMethod::Osd),
-            penalty: PenaltyState::new(None),
-            spouse_penalty: PenaltyState::new(None),
+            penalty: PenaltySlot::new(PenaltyState::new(None)),
+            spouse_penalty: PenaltySlot::new(PenaltyState::new(None)),
             ..Default::default()
         };
         draft.set_civil_status(Some(Form1701QCivilStatus::Married));
