@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_annual_individual;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -141,6 +142,8 @@ export interface ScreenFormPenalties {
     keys: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
+    /** The amounts are kept as entered before penalties were computed (1701): "Use the computed amounts" works once Edit opens them. */
+    kept?: boolean;
     /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
     applies: boolean;
 }
@@ -263,6 +266,8 @@ fn schema() -> &'static [Value] {
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
             combs::apply_combs(form, &code);
+            // 1701A's item 9, printed from `derived:` lines (PR 7).
+            rows_annual_individual::mark_pools(form, &code);
         }
         forms
     })
@@ -1916,6 +1921,9 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                // The annual individual returns draw a message under the
+                // item it cites (PR 7, rows_annual_individual.rs).
+                rows_annual_individual::cited_keys(kind, message, &mut keys);
                 json!({"field": field, "message": message, "keys": keys})
             })
             .collect(),
@@ -2009,6 +2017,9 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
             map.insert(key.clone(), value);
         }
     }
+    // 1700, 1701, 1701A and 1701MS: the spouse's TIN boxes and 1700's
+    // display fixes (PR 7, rows_annual_individual.rs).
+    rows_annual_individual::values(kind, draft, &mut map);
     Ok(Value::Object(
         map.into_iter()
             .map(|(key, value)| (key, Value::String(value)))
@@ -2250,6 +2261,8 @@ const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
 const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
+/// 1701's penalties kept as the filer entered them (PR 7).
+const NOTE_KEPT: &str = "Kept as entered before penalties were computed.";
 /// Only for a box a form group is assigned to open (the pinned list).
 const NOTE_ASSIGNED: &str = "Can't be filled on this page yet. It will be added for this form.";
 
@@ -2290,6 +2303,8 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_IDENTITY
     } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
         NOTE_REPEAT
+    } else if reason == rows_annual_individual::KEPT_AS_ENTERED {
+        NOTE_KEPT
     } else {
         // Unmapped, derived, written by the app, or a field this page
         // cannot write: shut until the form's own work opens it.
@@ -2324,6 +2339,10 @@ fn opened_json(
                 penalties::NOT_ON_RETURN
             };
             for key in &group.keys {
+                // A 1701 column still on the filer's typed amounts (PR 7).
+                let reason = rows_annual_individual::penalty_lock(kind, &draft, key)
+                    .filter(|_| reason == penalties::LOCK)
+                    .unwrap_or(reason);
                 locks.insert(key.clone(), json!(reason));
             }
         }
@@ -2390,6 +2409,9 @@ fn opened_json(
     };
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // A box waiting for another of its row (PR 7's forms; the integration
+    // merge chains the other form groups').
+    let waits = rows_annual_individual::waits(kind);
     let mark = sample.as_ref().map(|_| SampleMark {
         blank: blank.clone(),
     });
@@ -2421,6 +2443,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "waits": waits,
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -3176,6 +3199,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3202,6 +3226,9 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 7's forms; the integration merge chains the other form groups').
+    let removes = rows_annual_individual::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3212,6 +3239,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        "removes": removes,
     })))
 }
 
@@ -3249,6 +3277,8 @@ fn apply_screen_edits(
     let mut rejected = Map::new();
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
+    // What each box was sent, for a gate that reads the write itself.
+    let sent: BTreeMap<String, Value> = edits.iter().cloned().collect();
     let shown = values_json(kind, draft).map_err(host_error)?;
     let pools = combs::pools(kind.form_code());
     // Whether each penalty group was edited before this batch: an amount in
@@ -3286,6 +3316,16 @@ fn apply_screen_edits(
             rejected.insert(key.clone(), Value::String(reason));
             continue;
         }
+        // The annual individual returns' spouse part while it is closed says
+        // what opens it, for a radio or its group box alike, read on the
+        // draft as this batch has left it (PR 7, rows_annual_individual.rs).
+        if let Some(why) = sent
+            .get(&key)
+            .and_then(|value| rows_annual_individual::closed_refusal(kind, draft, &key, value))
+        {
+            rejected.insert(key.clone(), json!(why));
+            continue;
+        }
         let mut next = draft.clone();
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
@@ -3295,16 +3335,18 @@ fn apply_screen_edits(
             .find(|(group, _)| group.keys.contains(&key))
         {
             if !unlocked.contains(&key) && !edited {
-                rejected.insert(
-                    key.clone(),
-                    json!(format!("`{key}` is {}", penalties::LOCK)),
-                );
+                let lock = rows_annual_individual::penalty_lock(kind, draft, &key)
+                    .unwrap_or(penalties::LOCK);
+                rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
                 continue;
             }
             if let (ChoiceStep::Fill(value), Some(path)) = (&step, penalties::path_of(kind, &key))
                 && (value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty()))
             {
                 set_draft_path(&mut next, &path, Value::Null);
+                // "Use the computed amounts" on a 1701 column still on its
+                // typed amounts joins the model (PR 7).
+                rows_annual_individual::join_model(kind, &mut next, &key);
                 *draft = next;
                 continue;
             }
@@ -5982,7 +6024,9 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // Plus 4 for 1701 and 1701A (PR 7): their RDO lists, item 5 and the
+        // spouse's (1701 Part IV item 2, 1701A item 67), drawn now.
+        assert_eq!(supplied, 86);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8434,26 +8478,16 @@ mod tests {
 
     /// Profile boxes the page still leaves in an "Additional details" group,
     /// out of paper order: placing them is each form's own fix (rule 3),
-    /// so those forms' R2.0 stays open. A new one fails this test.
+    /// so those forms' R2.0 stays open. A new one fails this test. Less 13
+    /// for 1701, 1701A and 1701MS (PR 7): their layouts place items 5, 7 and
+    /// 10 where the sheet prints them, hide the later pages' header copies
+    /// and put Line of Business in Not on the printed sheet.
     const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
         "0605 txtEmail",
         "1604E frm1604e:txtLineBus",
         "1604E frm1604e:txtPg2TaxpayerName",
         "1604F frm1604f:txtLineBus",
         "1604F frm1604f:txtPg2TaxpayerName",
-        "1701 frm1701:txtLineBus",
-        "1701 frm1701:txtPg1mTaxpayerName",
-        "1701 frm1701:txtPg2mTaxpayerName",
-        "1701 frm1701:txtPg2TaxpayerName",
-        "1701 frm1701:txtPg3mTaxpayerName",
-        "1701 frm1701:txtPg3TaxpayerName",
-        "1701 frm1701:txtPg4mTaxpayerName",
-        "1701 frm1701:txtPg4TaxpayerName",
-        "1701A frm1701A:txtLineBus",
-        "1701A frm1701A:txtPg2TaxpayerName",
-        "1701MS frm1701MS:Pg2TaxPayer",
-        "1701MS frm1701MS:txtRDOCodea",
-        "1701MS frm1701MS:txtTelNum10a",
         "1702EX frm1702EX:txtLOB",
         "1702EX frm1702EX:txtPg2RegisteredName",
         "1702EX frm1702EX:txtPg3RegisteredName",
@@ -8841,9 +8875,11 @@ mod tests {
     /// Email boxes a profile without an email still leaves shut, and why:
     /// none of them is a profile lock (those open when the profile is
     /// blank); each is a lock of its own form's, for its group to fix.
+    ///
+    /// Less 2 for 1701MS (PR 7): items 9A and 9B are bound to the email
+    /// fields now (agent::probe CASE_FOLLOWS_ANOTHER_FIELD), so a blank
+    /// profile email leaves 9A open.
     const EMAIL_BOXES_SHUT_FOR_OTHER_REASONS: &[&str] = &[
-        "1701MS frm1701MS:txtEmaila: cannot be filled here: derived by the app: shows /email combined with /foreign_tax_credits_description",
-        "1701MS frm1701MS:txtEmailb: cannot be filled here: derived by the app: shows /spouse_info/email combined with /foreign_tax_credits_description",
         "2551Q txtEmail#occurrence-1: repeats the official field `txtEmail`, which this page cannot write",
     ];
 
@@ -9109,6 +9145,9 @@ mod tests {
         }
         let mut locked = Vec::new();
         let (mut typed, mut refused) = (0, 0);
+        // PR 7: date boxes the annual individual returns' spouse gate
+        // refuses on a fresh return (no joint return yet), each by hand.
+        let mut gated = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -9132,6 +9171,13 @@ mod tests {
                     continue;
                 }
                 let filled = fill(code, &opened["draft"], json!({ &key: "12/10/2020" }));
+                if let Some(reason) = filled["rejected"][&key]
+                    .as_str()
+                    .filter(|reason| rows_annual_individual::is_gate_refusal(code, reason))
+                {
+                    gated.push(format!("{code} {key}: {reason}"));
+                    continue;
+                }
                 if let Some(reason) = filled["rejected"][&key].as_str() {
                     // Refused by its form's own rule (a later schedule row
                     // before the first, a schedule another answer turns
@@ -9158,11 +9204,25 @@ mod tests {
         expected.sort_unstable();
         locked.sort();
         assert_eq!(locked, expected, "{locked:#?}");
+        // 1701MS item 16B, the spouse's effectivity dates: bound now (PR 7,
+        // the probe's joint special-rate sample), and closed until the
+        // return is joint (Items 4 and 5).
+        gated.sort();
+        let joint_first = "Column B of Part I is for a joint return: choose Married at item 4 and Jointly at item 5 first.";
+        assert_eq!(
+            gated,
+            vec![
+                format!("1701MS frm1701MS:txtTaxpayerNo16b1: {joint_first}"),
+                format!("1701MS frm1701MS:txtTaxpayerNo16b: {joint_first}"),
+            ]
+        );
     }
 
     /// Date boxes a return opens locked (unbound, derived, or the return's
     /// own identity) or whose typed date its form clears (a schedule another
-    /// answer turns off): each for its form's group, not for rule 4.
+    /// answer turns off): each for its form's group, not for rule 4. Less 2
+    /// for 1701MS (PR 7): item 16B's From and To are bound now and refused
+    /// with the spouse gate's words until the return is joint.
     const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
         "0619F txtDate20: cannot be filled here: not written by this app's field map for any sample draft",
         "0619F txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
@@ -9175,8 +9235,6 @@ mod tests {
         "1601C txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
-        "1701MS frm1701MS:txtTaxpayerNo16b1: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1701MS frm1701MS:txtTaxpayerNo16b: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1702RT frm1702RT:txtPg1Pt1I10: cannot be filled here: derived by the app: changes with /incorporation_date/day, /incorporation_date/month, /incorporation_date/year but never shows one field's value",
         "1702RT frm1702RT:txtPg1Pt3I23DebitMemoC3Date: cannot be filled here: derived by the app: changes with /payment_details/0/date/day, /payment_details/0/date/month, /payment_details/0/date/year but never shows one field's value",
         "1702RT frm1702RT:txtPg1Pt3I24CheckC3Date: cannot be filled here: written by the app without a draft field (a constant or the period)",
@@ -9306,6 +9364,16 @@ mod tests {
                 "1701",
                 (
                     vec!["frm1701:txtPg1I9Address", "frm1701:txtPg1I9Address2"],
+                    vec![40, 31],
+                ),
+            ),
+            // PR 7 (R5.2): 1701A's item 9, printed over the derived:
+            // address_line1/2 combs (rows_annual_individual.rs
+            // DERIVED_POOLS).
+            (
+                "1701A",
+                (
+                    vec!["frm1701A:txtAddress", "frm1701A:txtAddress2"],
                     vec![40, 31],
                 ),
             ),
@@ -9642,7 +9710,11 @@ mod tests {
 
     /// The boxes off by the test's own probing of each conditional box
     /// alone: blank now, at least one probe taken, and every probe taken
-    /// cleared by the form through the page's own fill.
+    /// cleared by the form through the page's own fill. A probe the host
+    /// refuses because the annual individual returns' spouse part is closed
+    /// (PR 7) is judged by the form itself: written past the page's gate
+    /// (the form's own `fill_as_user`, a TIN straight into its draft
+    /// field), recomputed, its official box shows nothing.
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         let corpus = conditions::tests::derived();
         corpus[code]
@@ -9658,9 +9730,23 @@ mod tests {
                     .into_iter()
                     .filter_map(|probe| {
                         let filled = fill(code, &checked["draft"], json!({ key: probe }));
-                        filled["rejected"][key]
-                            .is_null()
-                            .then(|| shows_nothing(&filled["values"][key]))
+                        match filled["rejected"][key].as_str() {
+                            None => Some(shows_nothing(&filled["values"][key])),
+                            Some(why) if rows_annual_individual::is_gate_refusal(code, why) => {
+                                let kind = kind_of(code).unwrap();
+                                let mut draft = checked["draft"].clone();
+                                rows_annual_individual::write_past_gate(
+                                    kind, &mut draft, key, &probe,
+                                )
+                                .ok()?;
+                                agent::compute(kind, &mut draft).ok()?;
+                                let map = agent::field_map(kind, &draft).ok()?;
+                                Some(shows_nothing(&json!(
+                                    map.get(key.as_str()).cloned().unwrap_or_default()
+                                )))
+                            }
+                            Some(_) => None,
+                        }
                     })
                     .collect();
                 !taken.is_empty() && taken.iter().all(|cleared| *cleared)
@@ -9715,6 +9801,16 @@ mod tests {
                 ("1604C", 5),
                 ("1604F", 1),
                 ("1606", 2),
+                // PR 7: the spouse part of the annual individual returns
+                // (rows_annual_individual.rs GATED), off on a fresh return
+                // with no civil status: 1700 items 16-25 (17), 1701 items
+                // 17-18, Part IV and Schedule 1's Spouse marks (35), 1701A
+                // items 17-18 and Part V (17), 1701MS item 5 and column B of
+                // Part I items 6-17 (26). At pr0b-push none had an entry.
+                ("1700", 17),
+                ("1701", 35),
+                ("1701A", 17),
+                ("1701MS", 26),
                 ("1701Q", 39),
                 ("1800", 1),
                 ("1801", 1),
@@ -10003,6 +10099,9 @@ mod tests {
             ("1603Q", 1),
             ("1606", 1),
             ("1700", 2),
+            // PR 7 (R8.0): 1701's items 27-29, columns A and B, joined the
+            // model.
+            ("1701", 2),
             ("1701A", 2),
             ("1701MS", 2),
             ("1702MX", 1),
@@ -10183,6 +10282,7 @@ mod tests {
             not_on_return,
             [
                 "1700 frm1700:txtPg1I31B",
+                "1701 frm1701:txtPg1I27B",
                 "1701A frm1701A:txt25B",
                 "1701MS frm1701MS:txtCompromise28b",
             ]

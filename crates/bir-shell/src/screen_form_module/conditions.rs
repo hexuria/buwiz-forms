@@ -172,8 +172,19 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
     let Some(list) = conditions()[code].as_object() else {
         return off;
     };
+    // The annual individual returns' spouse part while it is closed (PR 7,
+    // rows_annual_individual.rs): off whatever it shows, the host refusing
+    // a write there.
+    let mut gated = std::collections::BTreeSet::new();
+    for (key, condition) in list {
+        if super::rows_annual_individual::gated(kind, draft, key) {
+            gated.insert(key);
+            off.insert(key.clone(), label(code, key, condition));
+        }
+    }
     let blank: Vec<(&String, &Value, &str)> = list
         .iter()
+        .filter(|(key, _)| !gated.contains(key))
         .map(|(key, condition)| (key, condition, values[key].as_str().unwrap_or_default()))
         .filter(|(_, _, shown)| is_blank(shown))
         .collect();
@@ -196,7 +207,10 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             off.insert(key.clone(), label(code, key, condition));
         }
     }
-    off
+    // In the conditions' own order, gated boxes among the rest.
+    list.keys()
+        .filter_map(|key| off.remove(key).map(|tag| (key.clone(), tag)))
+        .collect()
 }
 
 #[cfg(test)]
@@ -282,6 +296,20 @@ pub(super) mod tests {
                 };
                 let computed = def.box_def(key).is_some_and(|entry| entry.computed);
                 if shown.contains(key) && !computed && is_an_answer(condition) {
+                    keys.insert(key.to_string(), json!(condition));
+                }
+            }
+            // PR 7: the annual individual returns' spouse part, which the
+            // corpus records no condition for (1700's 2018 keys are not in its
+            // 2013 corpus; 1701, 1701A and 1701MS's spouse boxes carry
+            // none). Each is the form's own rule: 1700, 1701A and 1701MS's
+            // `recompute` clears the spouse part unless the return is joint
+            // (`is_joint`), item 16/17 unless Married, the filing status
+            // unless the spouse has income; 1701's field map writes Part IV
+            // only while `spouse_column_active` and items 17-18 only for a
+            // married filer (form_1701_official.rs `to_official_field_map`).
+            for (form, key, condition) in super::super::rows_annual_individual::corpus_gaps() {
+                if form == code && shown.contains(key) {
                     keys.insert(key.to_string(), json!(condition));
                 }
             }

@@ -1383,7 +1383,9 @@ export class FormPageActions {
   usePenaltyComputed(group, cx) {
     const s = this.state;
     for (const k of group.keys) s.penaltyOpen.delete(k);
-    if (group.edited) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
+    // A column kept as entered before penalties were computed (1701) goes
+    // to the computed amounts the same way.
+    if (group.edited || group.kept) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
     this.refreshRows();
     cx.notify();
   }

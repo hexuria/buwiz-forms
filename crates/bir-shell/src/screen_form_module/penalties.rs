@@ -166,6 +166,7 @@ pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
                     "keys": group.keys,
                     "edited": edited(group, draft),
                     "applies": applies(kind, group, draft),
+                    "kept": super::rows_annual_individual::kept_as_entered(kind, &group.keys, draft),
                 })
             })
             .collect(),
