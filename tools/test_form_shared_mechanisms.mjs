@@ -422,6 +422,24 @@ assert.equal(ui.isOff(K("prev")), "Needs Amended Return = Yes", "the host's tag"
 assert.equal(ui.isLocked(K("prev")), true, "an off box takes no typing");
 assert.ok(texts.includes("Needs Amended Return = Yes"), "it says what turns it on");
 assert.ok(texts.includes("0.00"), "and still shows its value");
+// Under the item: an off box says what it needs in its place, never its
+// lock note too; an off box the form computes keeps its tag and also says
+// "Computed by the form." (PR 0b re-stack check, item a).
+{
+  const itemFor = (k) => schema.parts[partOf(k)].items[itemOf(k)];
+  const kept = { values: ui.state.values, lockNotes: ui.state.lockNotes, off: ui.state.off };
+  ui.state.values = { ...kept.values, [K("prev")]: "" };
+  ui.state.lockNotes = { [K("prev")]: "Can't be filled on this page yet.", [K("due")]: "Computed by the form." };
+  assert.equal(JSON.stringify(ui.lockNotesFor(itemFor(K("prev")))), "[]", "a blank off box shows its tag, not its lock note");
+  assert.equal(JSON.stringify(ui.lockNotesFor(itemFor(K("due")))), "[]", "a computed amount on: 0.00, no note");
+  ui.state.off = { ...kept.off, [K("due")]: "Needs Amended Return = Yes" };
+  assert.equal(JSON.stringify(ui.lockNotesFor(itemFor(K("due")))), JSON.stringify(["Computed by the form."]), "an off computed box says it is computed");
+  frame();
+  assert.equal(texts.filter((t) => t === "Needs Amended Return = Yes").length, 2, "and keeps its Needs tag");
+  assert.ok(texts.includes("Computed by the form."), "both show under the item");
+  Object.assign(ui.state, kept);
+  frame();
+}
 ui.choose({ [K("amendY")]: "true", [K("amendN")]: "false" }, cx);
 await settle(); frame();
 assert.equal(ui.isOff(K("prev")), "", "Amended Yes turns it on");

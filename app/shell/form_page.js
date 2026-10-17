@@ -1176,18 +1176,22 @@ export class FormPageActions {
    * `lock_notes`; a box the form computes: "Computed by the form."), once
    * each. A box saying what it waits for (`needs`, or the tag of a box
    * another answer turns off) says it there instead; a computed amount shows
-   * 0.00, never blank.
+   * 0.00, never blank. A box another answer turns off that the form also
+   * computes keeps its "Needs" tag and says "Computed by the form." too.
    */
   lockNotesFor(it) {
     const s = this.state;
     if (!s.editable || !s.draft) return [];
     const notes = [];
-    const note = (k) => {
-      const text = s.lockNotes?.[k] || (this.isComputed(k) ? "Computed by the form." : "");
+    const add = (text) => {
       if (text && !notes.includes(text)) notes.push(text);
     };
+    const note = (k) => add(s.lockNotes?.[k] || (this.isComputed(k) ? "Computed by the form." : ""));
     const shut = (k, c) => c || this.isLocked(k);
-    const waits = (k) => Boolean(this.reasonFor(k) || this.isOff(k));
+    const waits = (k) => {
+      if (this.isOff(k) && this.isComputedBox(k)) add("Computed by the form.");
+      return Boolean(this.reasonFor(k) || this.isOff(k));
+    };
     const ticked = (k) => ["true", "1", "Y"].includes(String(s.values[k] ?? ""));
     const blankText = (k, t) => {
       const v = String(s.values[k] ?? "").trim();
