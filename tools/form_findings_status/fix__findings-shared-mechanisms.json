@@ -1,0 +1,549 @@
+{
+ "0605": {
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::only_an_amount_binding_looks_like_money_on_every_form; tools/test_form_shared_mechanisms.mjs rule 7 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "0619E": {
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "0619F": {
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1600PT": {
+  "R5.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1600VT": {
+  "R5.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1600WP": {
+  "R4.0": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1601C": {
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1601EQ": {
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1602Q": {
+  "R4.0": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R6.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1604C": {
+  "R4.0": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "reason": "1604C has no Surcharge, Interest or Compromise of its own (rule 8's three items): the box totals the penalties column its remittance rows carry, entered row by row, and rule 8 keeps every other computed line locked.",
+   "reviewer": "Agree: 1604C/E/F have no Surcharge/Interest/Compromise items; the per-row Penalties column is open (Amount-bound) and TOTAL Penalties is a computed sum of it (c=1, unbound), so rule 8 does not apply and the total correctly stays locked.",
+   "status": "not_a_bug"
+  }
+ },
+ "1604E": {
+  "R8.0": {
+   "reason": "1604E has no Surcharge, Interest or Compromise of its own (rule 8's three items): the box totals the penalties column its remittance rows carry, entered row by row, and rule 8 keeps every other computed line locked.",
+   "reviewer": "Agree: 1604C/E/F have no Surcharge/Interest/Compromise items; the per-row Penalties column is open (Amount-bound) and TOTAL Penalties is a computed sum of it (c=1, unbound), so rule 8 does not apply and the total correctly stays locked.",
+   "status": "not_a_bug"
+  }
+ },
+ "1604F": {
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "reason": "1604F has no Surcharge, Interest or Compromise of its own (rule 8's three items): the box totals the penalties column its remittance rows carry, entered row by row, and rule 8 keeps every other computed line locked.",
+   "reviewer": "Agree: 1604C/E/F have no Surcharge/Interest/Compromise items; the per-row Penalties column is open (Amount-bound) and TOTAL Penalties is a computed sum of it (c=1, unbound), so rule 8 does not apply and the total correctly stays locked.",
+   "status": "not_a_bug"
+  }
+ },
+ "1606": {
+  "R4.0": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::only_an_amount_binding_looks_like_money_on_every_form; tools/test_form_shared_mechanisms.mjs rule 7 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1700": {
+  "R4.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form; tools/test_form_shared_mechanisms.mjs rule 4 (each date box has its own calendar) (just shell-ui-test); tools/test_date_field_rows.mjs",
+   "status": "fixed"
+  }
+ },
+ "1701": {
+  "R4.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form; tools/test_form_shared_mechanisms.mjs rule 4 (each date box has its own calendar) (just shell-ui-test); tools/test_date_field_rows.mjs",
+   "status": "fixed"
+  },
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  }
+ },
+ "1701A": {
+  "R4.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form; tools/test_form_shared_mechanisms.mjs rule 4 (each date box has its own calendar) (just shell-ui-test); tools/test_date_field_rows.mjs",
+   "status": "fixed"
+  },
+  "R4.1": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "manual-4": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  }
+ },
+ "1701MS": {
+  "R4.1": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  }
+ },
+ "1702EX": {
+  "R4.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form; tools/test_form_shared_mechanisms.mjs rule 4 (each date box has its own calendar) (just shell-ui-test); tools/test_date_field_rows.mjs",
+   "status": "fixed"
+  },
+  "R4.1": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  }
+ },
+ "1702MX": {
+  "R4.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form; tools/test_form_shared_mechanisms.mjs rule 4 (each date box has its own calendar) (just shell-ui-test); tools/test_date_field_rows.mjs",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1702RT": {
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (split at the last space that fits each line: provisional, rules page question 5); screen_form_module::combs::tests::a_split_address_joins_back_to_what_was_typed; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1706": {
+  "R4.0": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::only_an_amount_binding_looks_like_money_on_every_form; tools/test_form_shared_mechanisms.mjs rule 7 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1707": {
+  "R4.1": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R7.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1707A": {
+  "R4.0": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1800": {
+  "R6.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  }
+ },
+ "1801": {
+  "R4.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form; tools/test_form_shared_mechanisms.mjs rule 4 (each date box has its own calendar) (just shell-ui-test); tools/test_date_field_rows.mjs",
+   "status": "fixed"
+  },
+  "R6.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2000": {
+  "R4.1": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2000OT": {
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200A": {
+  "R4.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form; tools/test_form_shared_mechanisms.mjs rule 4 (each date box has its own calendar) (just shell-ui-test); tools/test_date_field_rows.mjs",
+   "status": "fixed"
+  },
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200AN": {
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200C": {
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200M": {
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200P": {
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200T": {
+  "R6.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2550Q": {
+  "R7.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  }
+ },
+ "2552": {
+  "R4.1": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R5.2": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool (a 158-character address round-trips; the box shows the draft's whole address, which the XML carries); screen_form_module::tests::a_second_address_line_is_not_doubled_on_edit; screen_form_module::combs::tests::print_cells_match_the_print_sheets; tools/test_form_shared_mechanisms.mjs rule 5 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2553": {
+  "R4.0": {
+   "reason": "the official form stores the date split; rule 4 keeps the split",
+   "reviewer": "Agree (PR 0b review): rule 4 keeps the split the official form stores; nothing to change.",
+   "status": "not_a_bug"
+  },
+  "R6.1": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::conditions::tests::every_condition_has_a_short_tag_for_filers; tools/test_form_shared_mechanisms.mjs rule 6 (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 0b",
+   "proof": "screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::only_a_typed_penalty_overrides_and_the_others_keep_computing; tools/test_form_shared_mechanisms.mjs rule 8 (just shell-ui-test)",
+   "status": "fixed"
+  }
+ }
+}

@@ -23,7 +23,9 @@
 "frm2551Qv2018:txt16": {"path":"/tax_paid_previous","type":"amount"},
 "frm2551Qv2018:txt17": {"path":"/other_tax_credit","type":"amount"},
 "frm2551Qv2018:txt17Specify": {"path":"/other_tax_credit_description","type":"text"},
-"frm2551Qv2018:txt22": {"path":"/compromise","type":"amount"},
+"frm2551Qv2018:txt20": {"path":"/penalty_overrides/surcharge","type":"amount"},
+"frm2551Qv2018:txt21": {"path":"/penalty_overrides/interest","type":"amount"},
+"frm2551Qv2018:txt22": {"path":"/penalty_overrides/compromise","type":"amount"},
 "frm2551Qv2018:txtRDOCode": {"lock":"profile","path":"/rdo_code","type":"text"},
 "frm2551Qv2018:txtSheets": {"path":"/number_of_attached_sheets","type":"whole"},
 "frm2551Qv2018:txtTaxReliefSpecify": {"path":"/tax_relief_specification","type":"text"},
@@ -34,7 +36,8 @@
 "txtATCAmt3": {"path":"/schedule_1/2/taxable_amount","type":"amount"},
 "txtATCAmt4": {"path":"/schedule_1/3/taxable_amount","type":"amount"},
 "txtATCAmt5": {"path":"/schedule_1/4/taxable_amount","type":"amount"},
-"txtATCAmt6": {"path":"/schedule_1/5/taxable_amount","type":"amount"}
+"txtATCAmt6": {"path":"/schedule_1/5/taxable_amount","type":"amount"},
+"txtEmail#occurrence-1": {"lock":"profile","path":"/email","type":"text"}
 },
 "boxes": [
 {"item":"1","key":"frm2551Qv2018:forThe","kind":"radio","label":"1 For the","members":["frm2551Qv2018:forThe_1","frm2551Qv2018:forThe_2"],"options":[{"label":"Calendar","value":"1"},{"label":"Fiscal","value":"2"}],"radio_group":true,"required":"required"},
@@ -162,8 +165,6 @@
 "frm2551Qv2018:qtr_2": "written by the app without a draft field (a constant or the period)",
 "frm2551Qv2018:qtr_3": "written by the app without a draft field (a constant or the period)",
 "frm2551Qv2018:qtr_4": "written by the app without a draft field (a constant or the period)",
-"frm2551Qv2018:txt20": "derived by the app: shows /surcharge combined with /creditable_tax_withheld",
-"frm2551Qv2018:txt21": "derived by the app: shows /interest combined with /creditable_tax_withheld",
 "frm2551Qv2018:txtAgency25": "not written by this app's field map for any sample draft",
 "frm2551Qv2018:txtAgency26": "not written by this app's field map for any sample draft",
 "frm2551Qv2018:txtAgency27": "not written by this app's field map for any sample draft",
@@ -189,7 +190,6 @@
 "frm2551Qv2018:txtTIN3": "derived by the app: changes with /tin but never shows one field's value",
 "txtDateExpiry": "written by the app without a draft field (a constant or the period)",
 "txtDateIssue": "written by the app without a draft field (a constant or the period)",
-"txtEmail#occurrence-1": "not written by this app's field map for any sample draft",
 "txtEmail#occurrence-2": "not written by this app's field map for any sample draft",
 "txtEnroll": "written by the app without a draft field (a constant or the period)",
 "txtFinalFlag": "written by the app without a draft field (a constant or the period)",

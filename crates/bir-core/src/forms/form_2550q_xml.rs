@@ -745,7 +745,12 @@ impl Form2550QDraft {
         insert(&mut fields, "ebirOnlineConfirmUsername", "");
         insert(&mut fields, "ebirOnlineUsername", "");
         insert(&mut fields, "ebirOnlineSecret", "");
-        insert(&mut fields, "txtEmail", self.xml_contact_email.clone());
+        // One email on 2550Q (maintainer decision 2026-10-17): Item 12's
+        // taxpayerEmailAddress. txtEmail is the HTA's hidden duplicate, which
+        // the official save leaves blank (tests/sample-payloads/
+        // 2550Q-122025Q1.official.xml: `txtEmail=txtEmail=`), so a value an
+        // import or an older draft kept in `xml_contact_email` is never filed.
+        insert(&mut fields, "txtEmail", "");
         insert(&mut fields, "driveSelectTPExport", "0");
         insert(
             &mut fields,
@@ -2341,6 +2346,34 @@ mod tests {
                 .iter()
                 .any(|(field, _)| field == "repeated_row_identity")
         );
+    }
+
+    /// One email (maintainer decision 2026-10-17): txtEmail files blank as
+    /// the official save does (`<div>txtEmail=txtEmail=</div>` in
+    /// tests/sample-payloads/2550Q-122025Q1.official.xml), even for an
+    /// imported or older draft that kept a value in `xml_contact_email`.
+    #[test]
+    fn txt_email_files_blank_like_the_official_save() {
+        let official = include_str!("../../tests/sample-payloads/2550Q-122025Q1.official.xml");
+        assert!(official.contains("<div>txtEmail=txtEmail=</div>"));
+        let mut fields = reviewed_sample_draft().to_bir_field_map();
+        fields.insert("txtEmail".to_string(), "stale@example.com".to_string());
+        let imported = Form2550QDraft::from_bir_field_map(&fields).expect("imports");
+        assert_eq!(imported.xml_contact_email, "stale@example.com");
+        let mut older = reviewed_sample_draft();
+        older.xml_contact_email = "stale@example.com".to_string();
+        for draft in [imported, older] {
+            let map = draft.to_bir_field_map();
+            assert_eq!(map["txtEmail"], "");
+            assert_eq!(
+                map["frm2550qv2024:taxpayerEmailAddress"],
+                draft.email.trim(),
+                "item 12 still files the email"
+            );
+            let xml = draft.to_bir_xml_payload();
+            assert!(xml.contains("<div>txtEmail=txtEmail=</div>"));
+            assert!(!xml.contains("stale@example.com"));
+        }
     }
 
     #[test]

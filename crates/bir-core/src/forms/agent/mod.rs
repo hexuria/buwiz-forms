@@ -293,6 +293,25 @@ pub fn compute(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
     })
 }
 
+/// Bring a stored draft to the current model before any box is written, so
+/// a write is never undone by a migration that runs later in the compute:
+/// a 2551Q draft saved before Items 20-22 took overrides adopts its manual
+/// amounts once ([`Form2551QDraft::adopt_legacy_manual_penalties`]). Every
+/// other form is unchanged.
+pub fn prepare_for_writes(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
+    if kind != AgentFormKind::Form2551Q {
+        return Ok(());
+    }
+    // A draft that does not parse yet is left to the write's own checks.
+    let Ok(mut typed) = parse::<Form2551QDraft>(kind, draft) else {
+        return Ok(());
+    };
+    if typed.adopt_legacy_manual_penalties() {
+        *draft = to_json(&typed)?;
+    }
+    Ok(())
+}
+
 /// The page's Validate: recompute `draft` in place, then run the form's
 /// checks. Errors are `(field, message)` exactly as the page shows them.
 pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, String)>, String> {
@@ -319,6 +338,49 @@ pub fn identity(kind: AgentFormKind, draft: &Value) -> Result<DraftIdentity, Str
         let typed: F = parse(kind, draft)?;
         Ok(typed.seam_identity())
     })
+}
+
+/// A new amended return copied from one that reached BIR (Submitted or
+/// Confirmed), the way the user's "Revert to Draft" amends it
+/// (`Database::revert_queueable_for_amendment` and its 1601C/2551Q twins),
+/// but in memory: back to Draft, its "Amended Return?" answer set to Yes the
+/// way its editor does, and no row id. Nothing is stored and the filed
+/// original is not touched; saving it goes through that revert, which keeps
+/// the original as an amendment snapshot. Refused for a return that never
+/// left the app, a Paid one, and a form with no amended-return answer.
+pub fn amended_copy(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
+    let status = identity(kind, draft)?.status;
+    if !matches!(status, FilingStatus::Submitted | FilingStatus::Confirmed) {
+        return Err(format!(
+            "only a submitted or confirmed {} return can be amended (this one is {status:?})",
+            kind.form_code()
+        ));
+    }
+    match kind {
+        AgentFormKind::Form1601C => {
+            let mut copy: Form1601CDraft = parse(kind, draft)?;
+            copy.revert_to_draft();
+            copy.mark_amended();
+            copy.id = None;
+            to_json(&copy)
+        }
+        AgentFormKind::Form2551Q => {
+            let mut copy: Form2551QDraft = parse(kind, draft)?;
+            copy.revert_to_draft();
+            copy.mark_amended();
+            copy.id = None;
+            to_json(&copy)
+        }
+        AgentFormKind::Queueable(queueable) => crate::with_queueable_kind!(queueable, F => {
+            let mut copy: F = parse(kind, draft)?;
+            copy.lifecycle_mut().revert_to_draft();
+            if !copy.mark_amended() {
+                return Err(format!("{} has no amended-return answer", kind.form_code()));
+            }
+            copy.set_draft_id(None);
+            to_json(&copy)
+        }),
+    }
 }
 
 /// Save an editable Draft the way its page's "Save draft" does, recomputed
@@ -348,6 +410,22 @@ pub fn save_draft(
         AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
             let typed: super::form_2550q::Form2550QDraft = parse(kind, draft)?;
             let quarter = typed.quarter_number().unwrap_or(0);
+            // Its row path upserts by period: never over a return that left Draft.
+            if let Some(stored) = db
+                .get_form_draft_v2::<super::form_2550q::Form2550QDraft>(
+                    &typed.tin,
+                    "2550Q",
+                    typed.taxable_year,
+                    &FilingPeriod::Quarterly(quarter),
+                )
+                .map_err(|error| error.to_string())?
+                && stored.lifecycle.status != FilingStatus::Draft
+            {
+                return Err(format!(
+                    "the 2550Q return for this quarter is {:?}; it can no longer change",
+                    stored.lifecycle.status
+                ));
+            }
             db.save_form_draft_v2(
                 &typed.tin,
                 "2550Q",
@@ -377,7 +455,17 @@ fn probe_eval(kind: AgentFormKind, draft: &Value) -> Option<(Value, BTreeMap<Str
         let mut typed: F = serde_json::from_value(draft.clone()).ok()?;
         catch_unwind(AssertUnwindSafe(|| {
             typed.seam_compute();
-            let map = typed.seam_field_map();
+            let mut map = typed.seam_field_map();
+            // A box keyed as the first occurrence of a control the field
+            // map writes once shows that control's value.
+            for (code, alias, _) in probe::FIRST_OCCURRENCE {
+                if *code == kind.form_code()
+                    && let Some((official, _)) = alias.split_once("#occurrence-")
+                    && let Some(value) = map.get(official).cloned()
+                {
+                    map.entry(alias.to_string()).or_insert(value);
+                }
+            }
             (serde_json::to_value(&typed).ok(), map)
         }))
         .ok()
@@ -663,7 +751,7 @@ pub fn fill(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, false)
+    fill_box(kind, draft, key, value, &[])
 }
 
 /// [`fill`] for the user's own form page. The one difference: an income-tax
@@ -676,7 +764,81 @@ pub fn fill_as_user(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, true)
+    fill_box(kind, draft, key, value, &[Lock::Election])
+}
+
+/// [`fill_as_user`] for a box the user chose to edit on their own form page
+/// after it was filled from the profile ([`Lock::Profile`]): the edit stays
+/// on this return's draft and the profile is never written. The assistant is
+/// still refused profile boxes through [`fill`]; identity, computed, hidden
+/// and unbound boxes are refused exactly as in [`fill`].
+pub fn fill_profile_box_as_user(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    fill_box(kind, draft, key, value, &[Lock::Election, Lock::Profile])
+}
+
+/// Draft fields that hold a return's own period. Exact names: a field that
+/// only mentions a period (`/estimated_life_months`, the Calendar answer of
+/// "For the") is an answer, not the period.
+pub const PERIOD_FIELDS: &[&str] = &[
+    "year",
+    "taxable_year",
+    "month",
+    "quarter",
+    "day",
+    "transaction_year",
+    "transaction_month",
+    "transaction_day",
+    "transaction_date",
+    "year_end_month",
+    "year_end_day",
+    "year_end_year",
+    "is_short_period",
+    "due_day",
+];
+
+/// The draft paths a binding writes.
+pub fn binding_paths(binding: &Binding) -> Vec<&str> {
+    match binding {
+        Binding::Text { path, .. } | Binding::Amount { path, .. } | Binding::Whole { path, .. } => {
+            vec![path.as_str()]
+        }
+        Binding::Choice { options } => options
+            .iter()
+            .flat_map(|option| option.set.keys().map(String::as_str))
+            .collect(),
+    }
+}
+
+/// Whether every path a binding writes is one of [`PERIOD_FIELDS`].
+pub fn writes_only_the_period(binding: &Binding) -> bool {
+    let paths = binding_paths(binding);
+    !paths.is_empty()
+        && paths.iter().all(|path| {
+            path.rsplit('/')
+                .next()
+                .is_some_and(|leaf| PERIOD_FIELDS.contains(&leaf))
+        })
+}
+
+/// Build a new draft's period: write a box whose binding writes only
+/// [`PERIOD_FIELDS`] (year, month, day, a date), whatever its
+/// [`Lock::Identity`]. For a host constructing a draft for a period it chose
+/// (a library sample rebuilt for the period its filer completed); never for
+/// an edit a page sends, which keeps the period of a return locked through
+/// every other writer. The TIN, profile, computed, hidden and unbound boxes
+/// are refused as in [`fill_as_user`].
+pub fn write_period_box(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    fill_box(kind, draft, key, value, &[Lock::Election, Lock::Identity])
 }
 
 fn fill_box(
@@ -684,18 +846,29 @@ fn fill_box(
     draft: &mut Value,
     key: &str,
     value: &Value,
-    user: bool,
+    allowed: &[Lock],
 ) -> Result<(), String> {
+    prepare_for_writes(kind, draft)?;
     let def = kind.definition();
-    let election = matches!(
-        def.bindings.get(key),
-        Some(BoundBox {
-            lock: Some(Lock::Election),
-            ..
-        })
-    );
+    let lock = def.bindings.get(key).and_then(|bound| bound.lock);
+    let let_through = match lock {
+        Some(Lock::Election) => allowed.contains(&Lock::Election),
+        // Only the lock itself is lifted: a computed or hidden box stays refused.
+        Some(lock @ (Lock::Profile | Lock::Identity)) => {
+            allowed.contains(&lock)
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.is_user_box() && entry.required != "computed")
+                && (lock != Lock::Identity
+                    || def
+                        .bindings
+                        .get(key)
+                        .is_some_and(|bound| writes_only_the_period(&bound.binding)))
+        }
+        _ => false,
+    };
     if let Some(reason) = def.refusal(key)
-        && !(user && election)
+        && !let_through
     {
         return Err(reason);
     }
@@ -1385,6 +1558,158 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn only_the_users_page_edit_lifts_a_profile_lock() {
+        let mut lifted = 0;
+        for kind in AgentFormKind::all() {
+            let def = kind.definition();
+            for (key, bound) in &def.bindings {
+                let Some(lock @ (Lock::Profile | Lock::Identity)) = bound.lock else {
+                    continue;
+                };
+                let entry = def.box_def(key).expect("a bound key is a box");
+                // The refusal each writer must give, checked before any value.
+                let computed = entry.computed || entry.required == "computed";
+                let expected = if computed {
+                    "is computed by BIR's own formulas"
+                } else if !entry.is_user_box() {
+                    "is a hidden control"
+                } else {
+                    lock.reason()
+                };
+                let mut draft = Value::Null;
+                let value = Value::from("x");
+                for (writer, result) in [
+                    ("fill", fill(kind, &mut draft, key, &value)),
+                    ("fill_as_user", fill_as_user(kind, &mut draft, key, &value)),
+                ] {
+                    let refused = result.expect_err(key);
+                    assert!(refused.contains(expected), "{writer} {key}: {refused}");
+                }
+                let page = fill_profile_box_as_user(kind, &mut draft, key, &value);
+                if lock == Lock::Profile && !computed && entry.is_user_box() {
+                    // Past every refusal: what fails now is the empty draft.
+                    let error = page.expect_err("a null draft takes no value");
+                    for reason in [
+                        Lock::Profile.reason(),
+                        Lock::Identity.reason(),
+                        "is computed by BIR's own formulas",
+                        "is a hidden control",
+                    ] {
+                        assert!(!error.contains(reason), "{key}: {error}");
+                    }
+                    lifted += 1;
+                } else {
+                    let refused = page.expect_err(key);
+                    assert!(refused.contains(expected), "page {key}: {refused}");
+                }
+            }
+        }
+        assert!(lifted > 100, "{lifted} profile boxes");
+    }
+
+    #[test]
+    fn the_period_writer_lifts_only_period_fields() {
+        let text = |path: &str| Binding::Text {
+            path: path.into(),
+            nullable: false,
+            date: None,
+            part: None,
+        };
+        let choice = |paths: &[&str]| Binding::Choice {
+            options: vec![ChoiceOption {
+                value: "true".into(),
+                set: paths
+                    .iter()
+                    .map(|p| (p.to_string(), Value::from(1)))
+                    .collect(),
+            }],
+        };
+        assert!(writes_only_the_period(&text("/taxable_year")));
+        assert!(writes_only_the_period(&choice(&["/quarter"])));
+        // The TIN is identity too, and never a sample's to type.
+        assert!(!writes_only_the_period(&text("/tin")));
+        assert!(!writes_only_the_period(&text("/estimated_life_months")));
+        assert!(!writes_only_the_period(&choice(&["/quarter", "/tin"])));
+        assert!(!writes_only_the_period(&choice(&[])));
+    }
+
+    #[test]
+    fn an_amended_copy_is_new_and_the_filed_return_stays_byte_for_byte() {
+        use crate::db::Database;
+        use crate::forms::form_0619e::Form0619EDraft;
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "store@example.test",
+            "default_form_type": "0619E"
+        }))
+        .unwrap();
+        let kind = AgentFormKind::from_code("0619E").unwrap();
+        let draft = Form0619EDraft::new_from_profile(&profile, 2025, 6);
+        let tin = draft.tin().to_string();
+        let id = db.save_queueable_draft(&draft).unwrap();
+        // A return that reached BIR, stored the way submission leaves it.
+        let mut filed: Form0619EDraft = db.get_queueable_draft(&tin, 2025, 6).unwrap().unwrap();
+        filed.lifecycle.status = FilingStatus::Submitted;
+        filed.lifecycle.submitted_at = Some("2025-07-10T01:02:03+00:00".into());
+        filed.lifecycle.submission_filename = Some(filed.submission_filename());
+        let filed_json = serde_json::to_string(&filed).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+                rusqlite::params![filed_json, id],
+            )
+            .unwrap();
+        let row = |db: &Database| -> (String, String) {
+            db.conn
+                .query_row(
+                    "SELECT status, data_json FROM form_drafts WHERE id = ?1",
+                    rusqlite::params![id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap()
+        };
+        let before = row(&db);
+
+        // The copy: a Draft, "Amended Return?" Yes, no row id.
+        let amended = amended_copy(kind, &serde_json::to_value(&filed).unwrap()).unwrap();
+        let copy: Form0619EDraft = serde_json::from_value(amended.clone()).unwrap();
+        assert_eq!(copy.lifecycle.status, FilingStatus::Draft);
+        assert_eq!(copy.amended_return_answer(), Some(true));
+        assert_eq!(copy.draft_id(), None);
+        assert_eq!(
+            row(&db),
+            before,
+            "nothing stored: the filed row is byte-for-byte"
+        );
+
+        // Its first save goes through the user's revert: the filed return is
+        // kept byte-for-byte as the amendment snapshot.
+        let reverted = db
+            .revert_queueable_for_amendment::<Form0619EDraft>(&tin, 2025, 6)
+            .unwrap();
+        let snapshots = db
+            .list_amendment_snapshots("0619E", &tin, 2025, &filed.filing_period().to_period_key())
+            .unwrap();
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(
+            snapshots[0].draft_json, before.1,
+            "the original, byte for byte"
+        );
+        assert_eq!(Some(id), reverted.draft.draft_id());
+
+        // Never for a return that did not reach BIR.
+        assert!(amended_copy(kind, &serde_json::to_value(&draft).unwrap()).is_err());
     }
 
     #[test]
