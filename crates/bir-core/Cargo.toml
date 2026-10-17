@@ -16,6 +16,10 @@ unexpected_cfgs = "allow"
 # App Review 2.5.2 and cannot run under the App Sandbox); such jobs are marked
 # unavailable instead of executed.
 mas_build = []
+# Test fixtures of other crates (bir-shell's host tests): raw SQL on the
+# connection, to stage a filed return or force a failing write. Never on in
+# a build that ships.
+test-support = []
 
 [dependencies]
 bir-rules = { path = "../bir-rules", version = "0.1.0" }

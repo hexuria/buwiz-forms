@@ -28,12 +28,13 @@ import {
   renderNewReturn,
 } from "./shell/chrome.js";
 import { renderHome } from "./shell/home.js";
+import { recentEntry } from "./shell/recent.js";
 import { renderLibrary } from "./shell/library.js";
 import { renderCalendar } from "./shell/calendar_page.js";
 import { renderFilings } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
-import { renderFormPage, renderFormSplit, FormPageActions } from "./shell/form_page.js";
+import { renderFormPage, renderFormSplit, renderExistingOffer, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { SecurityActions } from "./shell/security.js";
@@ -75,8 +76,15 @@ class BirApp extends View {
     this.panel = null;
     /** The panel the title-bar panel button reopens. */
     this.lastPanel = "profile";
-    /** null | "palette" | "new" */
+    /** null | "palette" | "new" | "existing" (a stored return of a sample's period) */
     this.overlay = null;
+    this.existingOffer = null;
+    /**
+     * "Don't ask again for drafts" (the stored-return offer's fast lane): a
+     * choice for this run only. It is lost on quit, and Lock app and Log out
+     * reset it (endSession), so the next person to sign in is asked again.
+     */
+    this.fastLane = { drafts: false };
     this.accountMenu = false;
     this.toastState = null;
 
@@ -84,7 +92,9 @@ class BirApp extends View {
     this.selRoot = stored.root || null;
     this.selCode = stored.code || null;
     this.selYear = null;
-    this.recent = this.readLocal(RECENT_KEY, []);
+    // An entry always has a text id (one written with a number by an earlier
+    // build is rebuilt).
+    this.recent = this.readLocal(RECENT_KEY, []).map((r) => (typeof r.key === "string" ? r : recentEntry(r)));
     // First run against this database: what already happened is not news.
     this.readIds = new Set();
     const storedRead = this.readLocal(READ_KEY, null);
@@ -173,6 +183,9 @@ class BirApp extends View {
         { keystroke: `ctrl-${key}`, action },
         { keystroke: `cmd-${key}`, action },
       ]),
+      // Undo of the last app action: Cmd-Z on macOS, Ctrl-Z elsewhere, and
+      // never while a text box has the keyboard (its own undo wins there).
+      { keystroke: this.isMac ? "cmd-z" : "ctrl-z", action: "undo-last", context: "!Input" },
       { keystroke: "escape", action: "dismiss" },
     ]);
   }
@@ -189,9 +202,11 @@ class BirApp extends View {
       // Compact form sections for this run only; Settings is what saves it.
       else if (key === "compact") this.prefs = { ...this.prefs, compactFormNav: value !== "0" };
       else if (key === "form") {
-        const [code, year, period] = value.split("/");
+        // form=CODE/YEAR/PERIOD[/KEY]: KEY opens exactly that stored return.
+        const [code, year, period, key] = value.split("/");
         const b = this.branch();
-        if (b) this.openForm({ tin: b.tin, code, year: Number(year), period: Number(period) }, cx);
+        const exact = key !== undefined && key !== "" ? { returnKey: Number(key) } : {};
+        if (b) this.openForm({ tin: b.tin, code, year: Number(year), period: Number(period), ...exact }, cx);
       } else if (key === "part") this.formUi.jumpTo(Number(value), cx);
       else if (key === "open") this.taxpayerUi.open[value] = true;
       else if (key === "edit") this.taxpayerUi.startEdit(value, cx);
@@ -500,6 +515,8 @@ class BirApp extends View {
   }
 
   openPalette(cx) {
+    // The palette replaces any stored-return offer on screen.
+    this.existingOffer = null;
     this.overlay = "palette";
     this.palette.index = 0;
     this.palette.input.set_value("");
@@ -507,6 +524,10 @@ class BirApp extends View {
   }
 
   closeOverlay(cx) {
+    // Esc or a click outside the stored-return offer is "Keep this form".
+    if (this.overlay === "existing" && this.existingOffer) return this.formUi.takeExisting("keep", cx);
+    this.existingOffer = null;
+    this.samplePeriod = null;
     this.overlay = null;
     this.newReturn.periodOpen = false;
     this.focusRoot.focus();
@@ -545,6 +566,8 @@ class BirApp extends View {
       return this.toast(`${this.taxpayer().name} does not file ${code} in ${this.year()}. Add it under Forms first.`, cx);
     }
     this.newReturn = { code: code || forms[0], period: null, periodOpen: false };
+    // New return replaces any stored-return offer on screen.
+    this.existingOffer = null;
     this.overlay = "new";
     cx.notify();
   }
@@ -563,29 +586,31 @@ class BirApp extends View {
     return "Add a taxpayer first, then open a form for them.";
   }
 
-  openForm(opts, cx) {
+  /**
+   * `keep`: the form on screen stays alive for an Undo; `then(error, cx)`
+   * runs once the host answered (see FormPageActions.open).
+   */
+  openForm(opts, cx, keep = false, then = null) {
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
     if (!this.branchFor(opts.tin)) {
       return this.toast("That return belongs to a taxpayer that is not in this database.", cx, "triangle-alert");
     }
     this.overlay = null;
-    this.formUi.open(opts, cx);
-    this.pushRecent(opts);
+    this.formUi.open(opts, cx, keep, then);
+    // A library sample is no return, so it is not a recent one.
+    if (!opts.sample) this.pushRecent(opts);
     this.go("form", cx);
   }
 
   /** Rewrite Recent after a TIN or branch-code move, so the entries still open. */
   remapRecent(map) {
-    this.recent = this.recent.map((r) => {
-      const tin = map(String(r.tin));
-      return { ...r, tin, key: `${tin}|${r.code}|${r.year}|${r.period}` };
-    });
+    this.recent = this.recent.map((r) => recentEntry({ ...r, tin: map(String(r.tin)) }));
     this.writeLocal(RECENT_KEY, this.recent);
   }
 
   pushRecent(opts) {
-    const key = `${opts.tin}|${opts.code}|${opts.year}|${opts.period}`;
-    this.recent = [{ key, ...opts }, ...this.recent.filter((r) => r.key !== key)].slice(0, 4);
+    const entry = recentEntry(opts);
+    this.recent = [entry, ...this.recent.filter((r) => r.key !== entry.key)].slice(0, 4);
     this.writeLocal(RECENT_KEY, this.recent);
   }
 
@@ -661,6 +686,51 @@ class BirApp extends View {
   }
 
   // ---------------------------------------------------------------- toast
+
+  /**
+   * "<what happened>. Undo" for six seconds with a countdown bar; Undo (or
+   * Cmd/Ctrl+Z while it shows) runs `undo` once. One level: a newer toast
+   * replaces it.
+   */
+  toastUndo(message, undo, cx) {
+    const id = (this.toastState ? this.toastState.id : 0) + 1;
+    const total = 6000;
+    const ends = Date.now() + total;
+    this.toastState = { id, message, icon: "undo-2", action: { label: "Undo", run: undo }, ends, total, progress: 1 };
+    const tick = (cx) => {
+      const st = this.toastState;
+      if (!st || st.id !== id) return;
+      const left = st.ends - Date.now();
+      if (left <= 0) {
+        this.toastState = null;
+        this.formUi.dropKept();
+      } else {
+        st.progress = left / st.total;
+        cx.timer.after(200, tick);
+      }
+      this.invalidate();
+    };
+    cx.timer.after(200, tick);
+    this.invalidate();
+  }
+
+  /**
+   * Undo the last action while its toast shows. Never while a text box has
+   * the keyboard: Cmd/Ctrl-Z there undoes typing, not a modal's choice.
+   */
+  undoLast(cx) {
+    const st = this.toastState;
+    if (!st || !st.action) return;
+    if (this.textHasFocus()) return;
+    this.toastState = null;
+    st.action.run(cx);
+    this.invalidate();
+  }
+
+  /** A text box has the keyboard (a form box, or the palette's search). */
+  textHasFocus() {
+    return Boolean(this.formUi.state?.focusKey) || Boolean(this.overlay === "palette" && this.palette.focused);
+  }
 
   toast(message, cx, icon) {
     const id = (this.toastState ? this.toastState.id : 0) + 1;
@@ -1071,8 +1141,10 @@ class BirApp extends View {
     }
     this.lockedFrom = { kind: this.session.kind, root: this.session.root };
     this.session = { kind: "open" };
+    this.fastLane = { drafts: false };
     this.panel = null;
     this.overlay = null;
+    this.existingOffer = null;
     this.signIn.method = "pin";
     this.signIn.forgot = false;
     this.signIn.tin.set("");
@@ -1372,6 +1444,7 @@ class BirApp extends View {
       .on_action("go-back", (_e, cx) => this.goBack(cx))
       .on_action("go-forward", (_e, cx) => this.goForward(cx))
       .on_action("dismiss", (_e, cx) => this.dismiss(cx))
+      .on_action("undo-last", (_e, cx) => this.undoLast(cx))
       .on_key_down((e, cx) => this.paletteKey(e, cx))
       .child(renderTitleBar(cx, this, L))
       .child(body);
@@ -1420,7 +1493,14 @@ class BirApp extends View {
     }
     if (this.overlay === "palette") root.child(renderPalette(cx, this));
     if (this.overlay === "new") root.child(renderNewReturn(cx, this));
-    if (this.toastState) root.child(Toast(cx, this.toastState.message, this.toastState.icon));
+    if (this.overlay === "existing") root.child(renderExistingOffer(cx, this));
+    if (this.overlay === "sample-period") root.child(renderSamplePeriod(cx, this));
+    if (this.toastState) {
+      const st = this.toastState;
+      root.child(
+        Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress } : {}),
+      );
+    }
     return root;
   }
 }

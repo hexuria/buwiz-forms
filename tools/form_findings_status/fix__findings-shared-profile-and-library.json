@@ -1,0 +1,656 @@
+{
+ "0605": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "0619E": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "0619F": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1600PT": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1600VT": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1600WP": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1601C": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1601EQ": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1601FQ": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1602Q": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1603Q": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1604C": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1604E": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1604F": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1606": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1700": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1701": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1701A": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1701MS": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1701Q": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1702EX": {
+  "R1.0": {
+   "note": "txtPg2Pt4I42PriorYearExcessCr (Item 42 Prior Year's Excess Credits, an amount bound to /prior_year_excess) is not a period box and rightly keeps 0.00 in a sample; every period box of the finding is blank.",
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1702MX": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1702Q": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1702RT": {
+  "R1.0": {
+   "note": "txtPg1Pt1I10 (Item 10 Date of Incorporation, the profile's business start date) is the taxpayer's own date, not the return's period, and rightly keeps its value in a sample; every period box of the finding is blank.",
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1706": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1707": {
+  "R1.0": {
+   "note": "txtPg2P4Sch1I9TotCollection (Schedule 1 Item 9 Total Collection, an amount bound to /installment/total_collection) is not a period box and rightly keeps 0.00 in a sample; the period box of the finding is blank.",
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1707A": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1800": {
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "1801": {
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2000": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2000OT": {
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200A": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200AN": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200C": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200M": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200P": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200S": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2200T": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2550M": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2550Q": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2551Q": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2552": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ },
+ "2553": {
+  "R1.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form; screen_form_module::tests::library_sample_never_reads_or_replaces_a_stored_return; screen_form_module::tests::a_placeholder_sample_is_refused_by_save_queue_and_print; screen_form_module::tests::library_sample_computes_no_penalty_on_any_form; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.0": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order; screen_form_module::tests::an_edited_profile_box_stays_on_this_return_and_never_reaches_the_profile; bir-core forms::agent::tests::only_the_users_page_edit_lifts_a_profile_lock; bir-core sample_payloads_test agent_forms::the_page_writes_profile_boxes_and_never_identity_boxes; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "R2.1": {
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form (sparse profile, every form); screen_form_module::tests::a_box_typed_where_the_profile_is_blank_stays_open_after_reopening; tools/test_form_profile_and_sample.mjs (just shell-ui-test)",
+   "status": "fixed"
+  }
+ }
+}
