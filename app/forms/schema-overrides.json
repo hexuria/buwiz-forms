@@ -1376,13 +1376,75 @@
       "evidence": "Decision (a) layout: printed item heading carries the number (html-frozen/1601eq-2019/writer-cells.json money_joins frm1601EQ:txtTax28, caption 'Compromise')"
     },
     "layout": {
-      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1601eq-2019/index.html (BIR Form 1601-EQ January 2019: items 1-5, Part I 6-12, Part II ATC rows 13-18 and 19-31, Part III 32-35) and html-frozen/1601eq-2019/writer-cells.json, whose rule records that the 2019 sheet adds 'Other Payments Made' at item 24 so the layout's txtTax24-30 print at items 25-31 and the payment rows 33-36 at items 32-35. Item 24 has no control in the official program and is not drawn. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1601eq-2019/index.html (BIR Form 1601-EQ January 2019: items 1-5, Part I 6-12, Part II ATC rows 13-18 and 19-31, Part III 32-35) and html-frozen/1601eq-2019/writer-cells.json, whose rule records that the 2019 sheet adds 'Other Payments Made' at item 24 so the layout's txtTax24-30 print at items 25-31 and the payment rows 33-36 at items 32-35. Item 24 has no control in the official program and is not drawn. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers. PR 2: Part I is listed item by item so Line of Business (not printed: writer-cells not_joined) goes to 'Not on the printed sheet'; item 24 is shown with its printed caption and a note (no box in the official program); the Other Selected ATC rows have their own part.",
       "parts": [
         {
           "keep": 0
         },
         {
-          "keep": 1
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1601EQ:txtTIN1",
+                "frm1601EQ:txtTIN2",
+                "frm1601EQ:txtTIN3",
+                "frm1601EQ:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm1601EQ:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Withholding Agent's Name",
+              "k": [
+                "frm1601EQ:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address",
+              "k": [
+                "frm1601EQ:txtAddress"
+              ]
+            },
+            {
+              "no": "9A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1601EQ:txtZipCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Contact Number",
+              "k": [
+                "frm1601EQ:txtTelNum"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1601EQ:optCategory:P",
+                "frm1601EQ:optCategory:G"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
         },
         {
           "n": "Part II · Computation of Tax",
@@ -1425,6 +1487,12 @@
               "k": [
                 "frm1601EQ:txtTax23"
               ]
+            },
+            {
+              "no": "24",
+              "l": "Other Payments Made (please attach proof of payments – BIR Form No. 0605)",
+              "p": 1,
+              "note": "The eBIRForms program has no box for this item, so nothing is filed here and it prints blank. Item 25 adds Items 20 to 23, as the program does."
             },
             {
               "no": "25",
@@ -1534,9 +1602,17 @@
               ]
             }
           ]
+        },
+        {
+          "n": "Additional ATC rows (attachment; the sheet prints six)",
+          "items": [
+            {
+              "table": "frm1601EQ:txtAtcCd7"
+            }
+          ]
         }
       ],
-      "rest": "Additional ATC rows (attachment; the sheet prints six)"
+      "rest": "Not on the printed sheet"
     },
     "item:0:5": {
       "label": "ATC (Items 13 to 18)",
@@ -2975,6 +3051,466 @@
     "frm1601EQ:txtTaxbeWithHeld111": {
       "kind": "hidden",
       "evidence": "Item 3: rows 31-111 of the 'Other Selected ATC' list; the screen offers rows 1-30 (the printed six and the table of rows 7-30), and a filer who ticks more ATCs than that is beyond this editor. Hidden rather than shown as loose boxes."
+    },
+    "frm1601EQ:optQuarter:1": {
+      "label": "1st",
+      "evidence": "PR 2: printed option '1st' of item 2 Quarter (html-frozen/1601eq-2019/writer-cells.json xbox_joins frm1601EQ:optQuarter:1: '2 Quarter: 1st')"
+    },
+    "frm1601EQ:optQuarter:2": {
+      "label": "2nd",
+      "evidence": "PR 2: printed option '2nd' of item 2 Quarter (html-frozen/1601eq-2019/writer-cells.json xbox_joins frm1601EQ:optQuarter:2: '2 Quarter: 2nd')"
+    },
+    "frm1601EQ:optQuarter:3": {
+      "label": "3rd",
+      "evidence": "PR 2: printed option '3rd' of item 2 Quarter (html-frozen/1601eq-2019/writer-cells.json xbox_joins frm1601EQ:optQuarter:3: '2 Quarter: 3rd')"
+    },
+    "frm1601EQ:optQuarter:4": {
+      "label": "4th",
+      "evidence": "PR 2: printed option '4th' of item 2 Quarter (html-frozen/1601eq-2019/writer-cells.json xbox_joins frm1601EQ:optQuarter:4: '2 Quarter: 4th')"
+    },
+    "AtcCode1": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode2": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode3": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode4": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode5": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode6": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode7": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode8": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode9": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode10": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode11": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode12": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode13": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode14": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode15": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode16": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode17": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode18": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode19": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode20": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode21": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode22": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode23": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode24": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode25": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode26": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode27": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode28": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode29": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode30": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode31": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode32": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode33": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode34": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode35": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode36": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode37": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode38": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode39": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode40": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode41": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode42": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode43": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode44": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode45": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode46": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode47": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode48": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode49": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode50": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode51": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode52": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode53": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode54": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode55": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode56": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode57": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode58": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode59": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode60": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode61": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode62": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode63": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode64": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode65": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode66": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode67": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode68": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode69": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode70": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode71": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode72": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode73": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode74": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode75": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode76": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode77": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode78": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode79": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode80": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode81": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode82": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode83": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode84": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode85": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode86": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode87": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode88": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode89": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode90": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode91": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode92": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode93": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode94": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode95": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode96": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode97": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode98": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode99": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode100": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode101": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode102": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode103": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode104": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode105": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode106": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode107": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode108": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode109": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode110": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
+    },
+    "AtcCode111": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-0): AtcCode1..111 are the official program's ATC popup tick boxes ('Runtime ATC selection slot'); form_1601eq.rs writes them from the Part II rows the page already shows (txtAtcCd<n>), and the sheet prints no such box (html-frozen/1601eq-2019/writer-cells.json has no join for them)."
     }
   },
   "1601FQ": {
@@ -2995,8 +3531,8 @@
       "evidence": "painted form_1601fq_view.rs (local:lob via binding /line_of_business): 'Line of business (kept with the return, not printed)'"
     },
     "frm1601FQ:txtPg2TaxpayerName": {
-      "label": "Withholding Agent's Name",
-      "evidence": "painted form_1601fq_view.rs (local:name via binding /taxpayer_name): \"Withholding Agent's Name\"; writer-cells printed caption: \"Page 2 Withholding Agent's Name\""
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 header copies items 6 and 8; form_1601fq.rs to_bir_field_map writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (writer-cells derived:tin_digits, frm1601FQ:txtPg2TaxpayerName)."
     },
     "txtNatIncPayment0": {
       "label": "Schedule 1 row 1, Nature of Income Payment",
@@ -3132,15 +3668,18 @@
     },
     "frm1601FQ:txtTax23": {
       "label": "23 Less: Remittances Made, 1st Month of the Quarter",
-      "evidence": "P4: printed caption '23 Less: Remittances Made, 1st Month of the Quarter' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax23)"
+      "evidence": "P4: printed caption '23 Less: Remittances Made, 1st Month of the Quarter' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax23) PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED).",
+      "computed": false
     },
     "frm1601FQ:txtTax24": {
       "label": "24 2nd Month of the Quarter",
-      "evidence": "P4: printed caption '24 2nd Month of the Quarter' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax24)"
+      "evidence": "P4: printed caption '24 2nd Month of the Quarter' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax24) PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED).",
+      "computed": false
     },
     "frm1601FQ:txtTax25": {
       "label": "25 Tax Remitted in Return Previously Filed",
-      "evidence": "P4: printed caption '25 Tax Remitted in Return Previously Filed' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax25)"
+      "evidence": "P4: printed caption '25 Tax Remitted in Return Previously Filed' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax25) PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED).",
+      "computed": false
     },
     "frm1601FQ:txtTax26": {
       "label": "26 Total Remittances Made",
@@ -3152,15 +3691,18 @@
     },
     "frm1601FQ:txtTax28": {
       "label": "28 Surcharge",
-      "evidence": "P4: printed caption '28 Surcharge' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax28)"
+      "evidence": "P4: printed caption '28 Surcharge' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax28) PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED).",
+      "computed": false
     },
     "frm1601FQ:txtTax29": {
       "label": "29 Interest",
-      "evidence": "P4: printed caption '29 Interest' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax29)"
+      "evidence": "P4: printed caption '29 Interest' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax29) PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED).",
+      "computed": false
     },
     "frm1601FQ:txtTax30": {
       "label": "30 Compromise",
-      "evidence": "P4: printed caption '30 Compromise' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax30)"
+      "evidence": "P4: printed caption '30 Compromise' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax30) PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED). PR 2: the filer types it; the official runtime enables it (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED).",
+      "computed": false
     },
     "frm1601FQ:txtTax31": {
       "label": "31 Total Penalties",
@@ -3251,120 +3793,1230 @@
       "evidence": "Item 3: the official control is disabled at load (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601FQ:txtAmount36, source line 1074) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm1601FQ:txtTaxRate13": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate14": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate15": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate16": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate17": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate18": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate19": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate20": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate21": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate22": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate23": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate24": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate25": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate26": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate27": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate28": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate29": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate30": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate31": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate32": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate33": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate34": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate35": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate36": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate37": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate38": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate39": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate40": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
     },
     "frm1601FQ:txtTaxRate41": {
+      "kind": "pct",
       "computed": true,
-      "evidence": "Item 3: the row's rate follows its ATC; form_1601fq.rs writes it from the chosen ATC (put txtTaxRate<n>), the filer does not type it. The probe saw no sample with this many rows, so it showed as unbound."
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:OptQuarter1": {
+      "label": "1st",
+      "evidence": "PR 2: printed option '1st' of item 2 Quarter (html-frozen/1601-fq-2020/writer-cells.json xbox_joins frm1601FQ:OptQuarter1: '2 Quarter: 1st')"
+    },
+    "frm1601FQ:OptQuarter2": {
+      "label": "2nd",
+      "evidence": "PR 2: printed option '2nd' of item 2 Quarter (html-frozen/1601-fq-2020/writer-cells.json xbox_joins frm1601FQ:OptQuarter2: '2 Quarter: 2nd')"
+    },
+    "frm1601FQ:OptQuarter3": {
+      "label": "3rd",
+      "evidence": "PR 2: printed option '3rd' of item 2 Quarter (html-frozen/1601-fq-2020/writer-cells.json xbox_joins frm1601FQ:OptQuarter3: '2 Quarter: 3rd')"
+    },
+    "frm1601FQ:OptQuarter4": {
+      "label": "4th",
+      "evidence": "PR 2: printed option '4th' of item 2 Quarter (html-frozen/1601-fq-2020/writer-cells.json xbox_joins frm1601FQ:OptQuarter4: '2 Quarter: 4th')"
+    },
+    "item:0:0": {
+      "label": "For the Year",
+      "evidence": "PR 2: printed caption '1 For the Year' (html-frozen/1601-fq-2020/writer-cells.json joins frm1601FQ:txtYear)"
+    },
+    "item:0:4": {
+      "label": "No. of Sheet/s Attached",
+      "evidence": "PR 2: printed caption '5 No. of Sheet/s Attached' (html-frozen/1601-fq-2020/index.html)"
+    },
+    "AtcCd1": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd2": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd3": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd4": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd5": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd6": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd7": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd8": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd9": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd10": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd11": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd12": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd13": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd14": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd15": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd16": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd17": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd18": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd19": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd20": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd21": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd22": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd23": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd24": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd25": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd26": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd27": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd28": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd29": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd30": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd31": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd32": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd33": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd34": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd35": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd36": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd37": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd38": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd39": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd40": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "AtcCd41": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): AtcCd1..41 are the official program's ATC popup tick boxes ('ATC catalog slot'); form_1601fq.rs writes them from the Part II rows (schedule popup_index), which the page chooses in the ATC column; the sheet prints no such box (writer-cells has no join for them)."
+    },
+    "frm1601FQ:txtPg2TIN1": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 header copies items 6 and 8; form_1601fq.rs to_bir_field_map writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (writer-cells derived:tin_digits, frm1601FQ:txtPg2TaxpayerName)."
+    },
+    "frm1601FQ:txtPg2TIN2": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 header copies items 6 and 8; form_1601fq.rs to_bir_field_map writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (writer-cells derived:tin_digits, frm1601FQ:txtPg2TaxpayerName)."
+    },
+    "frm1601FQ:txtPg2TIN3": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 header copies items 6 and 8; form_1601fq.rs to_bir_field_map writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (writer-cells derived:tin_digits, frm1601FQ:txtPg2TaxpayerName)."
+    },
+    "frm1601FQ:txtPg2BranchCode": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 header copies items 6 and 8; form_1601fq.rs to_bir_field_map writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (writer-cells derived:tin_digits, frm1601FQ:txtPg2TaxpayerName)."
+    },
+    "frm1601FQ:txtAtcCode1": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate1": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode2": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate2": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode3": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate3": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode4": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate4": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode5": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate5": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode6": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate6": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode7": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate7": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode8": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate8": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode9": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate9": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode10": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate10": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode11": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate11": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode12": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtTaxRate12": {
+      "kind": "pct",
+      "computed": true,
+      "evidence": "PR 2: the rate follows the row's ATC (form_1601fq.rs to_bir_field_map writes the popup entry's rate_text); the filer does not type it."
+    },
+    "frm1601FQ:txtAtcCode13": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode14": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode15": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode16": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode17": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode18": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode19": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode20": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode21": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode22": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode23": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode24": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode25": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode26": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode27": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode28": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode29": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode30": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode31": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode32": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode33": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode34": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode35": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode36": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode37": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode38": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode39": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode40": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:txtAtcCode41": {
+      "kind": "sel",
+      "computed": false,
+      "evidence": "PR 2: the row's ATC is chosen from the official popup list of the return's category (Form1601FqDraft::atc_options) through the host writer (rows_withholding.rs: tick, change keeping the tax base, untick)."
+    },
+    "frm1601FQ:drpSpecialTax": {
+      "kind": "sel",
+      "label": "If yes, specify",
+      "options": [
+        {
+          "value": "1",
+          "label": "Special Rate"
+        },
+        {
+          "value": "2",
+          "label": "International Tax Treaty"
+        },
+        {
+          "value": "3",
+          "label": "Both"
+        }
+      ],
+      "evidence": "PR 2: Item 13A, the official select (0 blank, 1 special rate, 2 treaty, 3 both: html-frozen/1601-fq-2020/writer-cells.json not_joined frm1601FQ:drpSpecialTax); the blank 0 shows as Choose... (form_page.js selectBox); written through set_tax_relief."
+    },
+    "layout": {
+      "evidence": "PR 2: the printed sheet's structure (html-frozen/1601-fq-2020/index.html, BIR Form 1601-FQ September 2020: items 1-5, Part I 6-13A, Part II ATC rows 14-19 and items 20-32, Part III 33-36, page 2 Part IV Schedule 1 rows 1-5 and its total) and html-frozen/1601-fq-2020/writer-cells.json joins (which box prints at which item). Part II rows past the sixth are the attachment's (writer-cells not_joined). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1601FQ:txtTIN1",
+                "frm1601FQ:txtTIN2",
+                "frm1601FQ:txtTIN3",
+                "frm1601FQ:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm1601FQ:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Withholding Agent's Name",
+              "k": [
+                "frm1601FQ:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address",
+              "k": [
+                "frm1601FQ:txtAddress"
+              ]
+            },
+            {
+              "no": "9A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1601FQ:txtZipCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Contact Number",
+              "k": [
+                "frm1601FQ:txtTelNum"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1601FQ:CatAgent_P",
+                "frm1601FQ:CatAgent_G"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Are there payees availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1601FQ:SpecialTax_1",
+                "frm1601FQ:SpecialTax_2"
+              ]
+            },
+            {
+              "no": "13A",
+              "l": "If yes, specify",
+              "k": [
+                "frm1601FQ:drpSpecialTax"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "14",
+              "l": "ATC (Items 14 to 19)",
+              "grid": {
+                "cols": [
+                  "ATC",
+                  "Tax Base (Consolidated for the Quarter)",
+                  "Tax Rate",
+                  "Tax Withheld (Consolidated for the Quarter)"
+                ],
+                "start": 14,
+                "keys": [
+                  [
+                    "frm1601FQ:txtAtcCode1",
+                    "frm1601FQ:txtTaxBase1",
+                    "frm1601FQ:txtTaxRate1",
+                    "frm1601FQ:txtTaxbeWithHeld1"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode2",
+                    "frm1601FQ:txtTaxBase2",
+                    "frm1601FQ:txtTaxRate2",
+                    "frm1601FQ:txtTaxbeWithHeld2"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode3",
+                    "frm1601FQ:txtTaxBase3",
+                    "frm1601FQ:txtTaxRate3",
+                    "frm1601FQ:txtTaxbeWithHeld3"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode4",
+                    "frm1601FQ:txtTaxBase4",
+                    "frm1601FQ:txtTaxRate4",
+                    "frm1601FQ:txtTaxbeWithHeld4"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode5",
+                    "frm1601FQ:txtTaxBase5",
+                    "frm1601FQ:txtTaxRate5",
+                    "frm1601FQ:txtTaxbeWithHeld5"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode6",
+                    "frm1601FQ:txtTaxBase6",
+                    "frm1601FQ:txtTaxRate6",
+                    "frm1601FQ:txtTaxbeWithHeld6"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "20",
+              "l": "Taxes Withheld for the Quarter Based on Regular Rates (Sum of Items 14 to 19)",
+              "k": [
+                "frm1601FQ:txtTax20",
+                "frm1601FQ:txtTotalOtherTax"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Taxes Withheld for the Quarter Based on Tax Treaty Rates (from Part IV-Schedule 1)",
+              "k": [
+                "frm1601FQ:txtTax21"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Total Taxes Withheld for the Quarter (Sum of Items 20 and 21)",
+              "k": [
+                "frm1601FQ:txtTax22"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Less: Remittances Made: 1st Month of the Quarter",
+              "k": [
+                "frm1601FQ:txtTax23"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "2nd Month of the Quarter",
+              "k": [
+                "frm1601FQ:txtTax24"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Tax Remitted in Return Previously Filed, if this is an amended return",
+              "k": [
+                "frm1601FQ:txtTax25"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Total Remittances Made (Sum of Items 23 to 25)",
+              "k": [
+                "frm1601FQ:txtTax26"
+              ]
+            },
+            {
+              "no": "27",
+              "l": "Tax Still Due/(Over-remittance) (Item 22 Less Item 26)",
+              "k": [
+                "frm1601FQ:txtTax27"
+              ]
+            },
+            {
+              "no": "28",
+              "l": "Surcharge",
+              "k": [
+                "frm1601FQ:txtTax28"
+              ]
+            },
+            {
+              "no": "29",
+              "l": "Interest",
+              "k": [
+                "frm1601FQ:txtTax29"
+              ]
+            },
+            {
+              "no": "30",
+              "l": "Compromise",
+              "k": [
+                "frm1601FQ:txtTax30"
+              ]
+            },
+            {
+              "no": "31",
+              "l": "Total Penalties (Sum of Items 28 to 30)",
+              "k": [
+                "frm1601FQ:txtTax31"
+              ]
+            },
+            {
+              "no": "32",
+              "l": "TOTAL AMOUNT STILL DUE/(Over-remittance) (Sum of Items 27 and 31)",
+              "k": [
+                "frm1601FQ:txtTax32"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable)",
+              "k": [
+                "txtTaxAgentNo",
+                "txtDateIssue",
+                "txtDateExpiry"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "33",
+              "l": "Cash/Bank Debit Memo",
+              "k": [
+                "frm1601FQ:txtAgency33",
+                "frm1601FQ:txtNumber33",
+                "frm1601FQ:txtDate33",
+                "frm1601FQ:txtAmount33"
+              ]
+            },
+            {
+              "no": "34",
+              "l": "Check",
+              "k": [
+                "frm1601FQ:txtAgency34",
+                "frm1601FQ:txtNumber34",
+                "frm1601FQ:txtDate34",
+                "frm1601FQ:txtAmount34"
+              ]
+            },
+            {
+              "no": "35",
+              "l": "Tax Debit Memo",
+              "k": [
+                "frm1601FQ:txtAgency35",
+                "frm1601FQ:txtNumber35",
+                "frm1601FQ:txtDate35",
+                "frm1601FQ:txtAmount35"
+              ]
+            },
+            {
+              "no": "36",
+              "l": "Others (specify below)",
+              "k": [
+                "frm1601FQ:txtParticular36",
+                "frm1601FQ:txtAgency36",
+                "frm1601FQ:txtNumber36",
+                "frm1601FQ:txtDate36",
+                "frm1601FQ:txtAmount36"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 1 – Details of Final Tax Based on Tax Treaty Rates",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1 (Items 1 to 5)",
+              "grid": {
+                "cols": [
+                  "Treaty Code/Country (B)",
+                  "ATC (C)",
+                  "Nature of Income Payment (D)",
+                  "Amount of Income Payment (E)",
+                  "Tax Rate (F)",
+                  "Amount of Tax Withheld (G) = (E x F)"
+                ],
+                "keys": [
+                  [
+                    "drpTreatyCode0",
+                    "drpATCCode0",
+                    "txtNatIncPayment0",
+                    "txtAmtIncomePay0",
+                    "txtRate0",
+                    "txtReqWithheld0"
+                  ],
+                  [
+                    "drpTreatyCode1",
+                    "drpATCCode1",
+                    "txtNatIncPayment1",
+                    "txtAmtIncomePay1",
+                    "txtRate1",
+                    "txtReqWithheld1"
+                  ],
+                  [
+                    "drpTreatyCode2",
+                    "drpATCCode2",
+                    "txtNatIncPayment2",
+                    "txtAmtIncomePay2",
+                    "txtRate2",
+                    "txtReqWithheld2"
+                  ],
+                  [
+                    "drpTreatyCode3",
+                    "drpATCCode3",
+                    "txtNatIncPayment3",
+                    "txtAmtIncomePay3",
+                    "txtRate3",
+                    "txtReqWithheld3"
+                  ],
+                  [
+                    "drpTreatyCode4",
+                    "drpATCCode4",
+                    "txtNatIncPayment4",
+                    "txtAmtIncomePay4",
+                    "txtRate4",
+                    "txtReqWithheld4"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "",
+              "l": "Total Taxes Withheld (Sum of Items 1 to 5) (To Part II Item 21)",
+              "k": [
+                "txtDvTotalSchedI"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Additional ATC rows (attachment; the sheet prints six)",
+          "items": [
+            {
+              "no": "",
+              "l": "Other Selected ATCs – rows 7 to 41 (attachment; the sheet prints six)",
+              "grid": {
+                "cols": [
+                  "ATC",
+                  "Tax Base",
+                  "Tax Rate",
+                  "Tax Withheld"
+                ],
+                "start": 7,
+                "keys": [
+                  [
+                    "frm1601FQ:txtAtcCode7",
+                    "frm1601FQ:txtTaxBase7",
+                    "frm1601FQ:txtTaxRate7",
+                    "frm1601FQ:txtTaxbeWithHeld7"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode8",
+                    "frm1601FQ:txtTaxBase8",
+                    "frm1601FQ:txtTaxRate8",
+                    "frm1601FQ:txtTaxbeWithHeld8"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode9",
+                    "frm1601FQ:txtTaxBase9",
+                    "frm1601FQ:txtTaxRate9",
+                    "frm1601FQ:txtTaxbeWithHeld9"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode10",
+                    "frm1601FQ:txtTaxBase10",
+                    "frm1601FQ:txtTaxRate10",
+                    "frm1601FQ:txtTaxbeWithHeld10"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode11",
+                    "frm1601FQ:txtTaxBase11",
+                    "frm1601FQ:txtTaxRate11",
+                    "frm1601FQ:txtTaxbeWithHeld11"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode12",
+                    "frm1601FQ:txtTaxBase12",
+                    "frm1601FQ:txtTaxRate12",
+                    "frm1601FQ:txtTaxbeWithHeld12"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode13",
+                    "frm1601FQ:txtTaxBase13",
+                    "frm1601FQ:txtTaxRate13",
+                    "frm1601FQ:txtTaxbeWithHeld13"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode14",
+                    "frm1601FQ:txtTaxBase14",
+                    "frm1601FQ:txtTaxRate14",
+                    "frm1601FQ:txtTaxbeWithHeld14"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode15",
+                    "frm1601FQ:txtTaxBase15",
+                    "frm1601FQ:txtTaxRate15",
+                    "frm1601FQ:txtTaxbeWithHeld15"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode16",
+                    "frm1601FQ:txtTaxBase16",
+                    "frm1601FQ:txtTaxRate16",
+                    "frm1601FQ:txtTaxbeWithHeld16"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode17",
+                    "frm1601FQ:txtTaxBase17",
+                    "frm1601FQ:txtTaxRate17",
+                    "frm1601FQ:txtTaxbeWithHeld17"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode18",
+                    "frm1601FQ:txtTaxBase18",
+                    "frm1601FQ:txtTaxRate18",
+                    "frm1601FQ:txtTaxbeWithHeld18"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode19",
+                    "frm1601FQ:txtTaxBase19",
+                    "frm1601FQ:txtTaxRate19",
+                    "frm1601FQ:txtTaxbeWithHeld19"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode20",
+                    "frm1601FQ:txtTaxBase20",
+                    "frm1601FQ:txtTaxRate20",
+                    "frm1601FQ:txtTaxbeWithHeld20"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode21",
+                    "frm1601FQ:txtTaxBase21",
+                    "frm1601FQ:txtTaxRate21",
+                    "frm1601FQ:txtTaxbeWithHeld21"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode22",
+                    "frm1601FQ:txtTaxBase22",
+                    "frm1601FQ:txtTaxRate22",
+                    "frm1601FQ:txtTaxbeWithHeld22"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode23",
+                    "frm1601FQ:txtTaxBase23",
+                    "frm1601FQ:txtTaxRate23",
+                    "frm1601FQ:txtTaxbeWithHeld23"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode24",
+                    "frm1601FQ:txtTaxBase24",
+                    "frm1601FQ:txtTaxRate24",
+                    "frm1601FQ:txtTaxbeWithHeld24"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode25",
+                    "frm1601FQ:txtTaxBase25",
+                    "frm1601FQ:txtTaxRate25",
+                    "frm1601FQ:txtTaxbeWithHeld25"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode26",
+                    "frm1601FQ:txtTaxBase26",
+                    "frm1601FQ:txtTaxRate26",
+                    "frm1601FQ:txtTaxbeWithHeld26"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode27",
+                    "frm1601FQ:txtTaxBase27",
+                    "frm1601FQ:txtTaxRate27",
+                    "frm1601FQ:txtTaxbeWithHeld27"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode28",
+                    "frm1601FQ:txtTaxBase28",
+                    "frm1601FQ:txtTaxRate28",
+                    "frm1601FQ:txtTaxbeWithHeld28"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode29",
+                    "frm1601FQ:txtTaxBase29",
+                    "frm1601FQ:txtTaxRate29",
+                    "frm1601FQ:txtTaxbeWithHeld29"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode30",
+                    "frm1601FQ:txtTaxBase30",
+                    "frm1601FQ:txtTaxRate30",
+                    "frm1601FQ:txtTaxbeWithHeld30"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode31",
+                    "frm1601FQ:txtTaxBase31",
+                    "frm1601FQ:txtTaxRate31",
+                    "frm1601FQ:txtTaxbeWithHeld31"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode32",
+                    "frm1601FQ:txtTaxBase32",
+                    "frm1601FQ:txtTaxRate32",
+                    "frm1601FQ:txtTaxbeWithHeld32"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode33",
+                    "frm1601FQ:txtTaxBase33",
+                    "frm1601FQ:txtTaxRate33",
+                    "frm1601FQ:txtTaxbeWithHeld33"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode34",
+                    "frm1601FQ:txtTaxBase34",
+                    "frm1601FQ:txtTaxRate34",
+                    "frm1601FQ:txtTaxbeWithHeld34"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode35",
+                    "frm1601FQ:txtTaxBase35",
+                    "frm1601FQ:txtTaxRate35",
+                    "frm1601FQ:txtTaxbeWithHeld35"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode36",
+                    "frm1601FQ:txtTaxBase36",
+                    "frm1601FQ:txtTaxRate36",
+                    "frm1601FQ:txtTaxbeWithHeld36"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode37",
+                    "frm1601FQ:txtTaxBase37",
+                    "frm1601FQ:txtTaxRate37",
+                    "frm1601FQ:txtTaxbeWithHeld37"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode38",
+                    "frm1601FQ:txtTaxBase38",
+                    "frm1601FQ:txtTaxRate38",
+                    "frm1601FQ:txtTaxbeWithHeld38"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode39",
+                    "frm1601FQ:txtTaxBase39",
+                    "frm1601FQ:txtTaxRate39",
+                    "frm1601FQ:txtTaxbeWithHeld39"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode40",
+                    "frm1601FQ:txtTaxBase40",
+                    "frm1601FQ:txtTaxRate40",
+                    "frm1601FQ:txtTaxbeWithHeld40"
+                  ],
+                  [
+                    "frm1601FQ:txtAtcCode41",
+                    "frm1601FQ:txtTaxBase41",
+                    "frm1601FQ:txtTaxRate41",
+                    "frm1601FQ:txtTaxbeWithHeld41"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "item:3:5": {
+      "label": "Line of Business",
+      "evidence": "PR 2: the only box of this extracted item the page shows is Line of Business, which the sheet does not print (html-frozen/1601-fq-2020/writer-cells.json not_joined frm1601FQ:txtLineBus)"
     }
   },
   "1602Q": {
@@ -3537,7 +5189,7 @@
       "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "layout": {
-      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1602q-2019/index.html (BIR Form 1602Q January 2019: items 1-5, Part I 6-13A, Part II 14-28, Part IV Schedules 1-3 on page 2) and html-frozen/1602q-2019/writer-cells.json joins (which box prints at which item). The sheet prints three Schedule 2 and 3 rows; the official program has two. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1602q-2019/index.html (BIR Form 1602Q January 2019: items 1-5, Part I 6-13A, Part II 14-28, Part IV Schedules 1-3 on page 2) and html-frozen/1602q-2019/writer-cells.json joins (which box prints at which item). The sheet prints three Schedule 2 and 3 rows; the official program has two. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers. PR 2: Schedules 2 and 3 are one table each (their printed columns); the page 2 and 3 header copies are hidden.",
       "parts": [
         {
           "keep": 0
@@ -3628,14 +5280,6 @@
         {
           "n": "Part IV · Schedule 1 – Interest Payments and Tax Withheld Based on Regular Rates",
           "items": [
-            {
-              "no": "",
-              "l": "Page 2 header (TIN, Withholding Agent's Name)",
-              "k": [
-                "frm1602Q:txtPage2TIN",
-                "frm1602Q:txtPage2Agent"
-              ]
-            },
             {
               "no": "1",
               "l": "Savings Deposit · WI161 · 20%",
@@ -3763,26 +5407,33 @@
           "n": "Part IV · Schedule 2 – Interest Payments and Tax Withheld Based on Tax Treaty Rates",
           "items": [
             {
-              "no": "1",
-              "l": "Row 1",
-              "k": [
-                "frm1602Q:txtSched2TreatyCode1",
-                "frm1602Q:txtSched2ATC1",
-                "frm1602Q:txtSched2TaxRate1",
-                "frm1602Q:txtSched2Interest1",
-                "frm1602Q:txtSched2TaxesWithheld1"
-              ]
-            },
-            {
-              "no": "2",
-              "l": "Row 2",
-              "k": [
-                "frm1602Q:txtSched2TreatyCode2",
-                "frm1602Q:txtSched2ATC2",
-                "frm1602Q:txtSched2TaxRate2",
-                "frm1602Q:txtSched2Interest2",
-                "frm1602Q:txtSched2TaxesWithheld2"
-              ]
+              "no": "",
+              "l": "Schedule 2 (Items 1 to 3)",
+              "grid": {
+                "cols": [
+                  "Treaty Code",
+                  "ATC",
+                  "Tax Rate",
+                  "Total Interest",
+                  "Taxes Withheld"
+                ],
+                "keys": [
+                  [
+                    "frm1602Q:txtSched2TreatyCode1",
+                    "frm1602Q:txtSched2ATC1",
+                    "frm1602Q:txtSched2TaxRate1",
+                    "frm1602Q:txtSched2Interest1",
+                    "frm1602Q:txtSched2TaxesWithheld1"
+                  ],
+                  [
+                    "frm1602Q:txtSched2TreatyCode2",
+                    "frm1602Q:txtSched2ATC2",
+                    "frm1602Q:txtSched2TaxRate2",
+                    "frm1602Q:txtSched2Interest2",
+                    "frm1602Q:txtSched2TaxesWithheld2"
+                  ]
+                ]
+              }
             },
             {
               "no": "4",
@@ -3797,38 +5448,36 @@
           "n": "Part IV · Schedule 3 – Interest Payments and Tax Withheld on Taxpayers Enjoying Preferential Rates",
           "items": [
             {
-              "no": "1",
-              "l": "Row 1",
-              "k": [
-                "frm1602Q:txtSched3IPA1",
-                "frm1602Q:txtSched3TaxRate1",
-                "frm1602Q:txtSched3TotInterest1",
-                "frm1602Q:txtSched3TaxWithheld1"
-              ]
-            },
-            {
-              "no": "2",
-              "l": "Row 2",
-              "k": [
-                "frm1602Q:txtSched3IPA2",
-                "frm1602Q:txtSched3TaxRate2",
-                "frm1602Q:txtSched3TotInterest2",
-                "frm1602Q:txtSched3TaxWithheld2"
-              ]
+              "no": "",
+              "l": "Schedule 3 (Items 1 to 3)",
+              "grid": {
+                "cols": [
+                  "Investment Promotion Agency (IPA) Code",
+                  "Tax Rate",
+                  "Total Interest",
+                  "Taxes Withheld"
+                ],
+                "keys": [
+                  [
+                    "frm1602Q:txtSched3IPA1",
+                    "frm1602Q:txtSched3TaxRate1",
+                    "frm1602Q:txtSched3TotInterest1",
+                    "frm1602Q:txtSched3TaxWithheld1"
+                  ],
+                  [
+                    "frm1602Q:txtSched3IPA2",
+                    "frm1602Q:txtSched3TaxRate2",
+                    "frm1602Q:txtSched3TotInterest2",
+                    "frm1602Q:txtSched3TaxWithheld2"
+                  ]
+                ]
+              }
             },
             {
               "no": "4",
               "l": "Total Taxes Withheld on TPs Enjoying Preferential Rates (Sum of Items 1 to 3) (To Part II, Item 16)",
               "k": [
                 "frm1602Q:txtSched3Total"
-              ]
-            },
-            {
-              "no": "",
-              "l": "Page 3 header (TIN, Withholding Agent's Name)",
-              "k": [
-                "frm1602Q:txtPage3TIN",
-                "frm1602Q:txtPage3Agent"
               ]
             }
           ]
@@ -3896,20 +5545,20 @@
       "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
     },
     "frm1602Q:txtPage2TIN": {
-      "label": "TIN",
-      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 and 3 headers copy items 6 and 8; form_1602q.rs writes them from the TIN and taxpayer_name and the sheet prints them from there (html-frozen/1602q-2019/writer-cells.json derived:tin_digits, txtPage2Agent, txtPage3Agent)."
     },
     "frm1602Q:txtPage2Agent": {
-      "label": "Withholding Agent's Name",
-      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 and 3 headers copy items 6 and 8; form_1602q.rs writes them from the TIN and taxpayer_name and the sheet prints them from there (html-frozen/1602q-2019/writer-cells.json derived:tin_digits, txtPage2Agent, txtPage3Agent)."
     },
     "frm1602Q:txtPage3TIN": {
-      "label": "TIN",
-      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 and 3 headers copy items 6 and 8; form_1602q.rs writes them from the TIN and taxpayer_name and the sheet prints them from there (html-frozen/1602q-2019/writer-cells.json derived:tin_digits, txtPage2Agent, txtPage3Agent)."
     },
     "frm1602Q:txtPage3Agent": {
-      "label": "Withholding Agent's Name",
-      "evidence": "Decision (a) layout: column heading printed on html-frozen/1602q-2019/index.html Part IV"
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-2): the page 2 and 3 headers copy items 6 and 8; form_1602q.rs writes them from the TIN and taxpayer_name and the sheet prints them from there (html-frozen/1602q-2019/writer-cells.json derived:tin_digits, txtPage2Agent, txtPage3Agent)."
     },
     "frm1602Q:txtSched2TaxRate1": {
       "label": "Tax Rate",
@@ -4002,6 +5651,49 @@
     "frm1602Q:OverRemittance3": {
       "label": "To be carried over to the next quarter within the same calendar year",
       "evidence": "Decision (a) layout: printed beside item 28 on html-frozen/1602q-2019/index.html (writer-cells xbox_joins frm1602Q:OverRemittance3)"
+    },
+    "frm1602Q:qtr_1": {
+      "label": "1st",
+      "evidence": "PR 2: printed option '1st' of item 2 Quarter (html-frozen/1602q-2019/writer-cells.json xbox_joins frm1602Q:qtr_1: '2 Quarter: 1st')"
+    },
+    "frm1602Q:qtr_2": {
+      "label": "2nd",
+      "evidence": "PR 2: printed option '2nd' of item 2 Quarter (html-frozen/1602q-2019/writer-cells.json xbox_joins frm1602Q:qtr_2: '2 Quarter: 2nd')"
+    },
+    "frm1602Q:qtr_3": {
+      "label": "3rd",
+      "evidence": "PR 2: printed option '3rd' of item 2 Quarter (html-frozen/1602q-2019/writer-cells.json xbox_joins frm1602Q:qtr_3: '2 Quarter: 3rd')"
+    },
+    "frm1602Q:qtr_4": {
+      "label": "4th",
+      "evidence": "PR 2: printed option '4th' of item 2 Quarter (html-frozen/1602q-2019/writer-cells.json xbox_joins frm1602Q:qtr_4: '2 Quarter: 4th')"
+    },
+    "frm1602Q:lstSpecialTax": {
+      "kind": "sel",
+      "label": "If yes, specify",
+      "options": [
+        {
+          "value": "1",
+          "label": "Special Rate"
+        },
+        {
+          "value": "2",
+          "label": "International Tax Treaty"
+        },
+        {
+          "value": "3",
+          "label": "Both"
+        }
+      ],
+      "evidence": "PR 2 (manual-1): Item 13A, the official select lstSpecialTax (0 none, 1 special rate, 2 treaty, 3 both: html-frozen/1602q-2019/writer-cells.json not_joined); its 0 is Item 13 not Yes and shows as Choose... (form_page.js selectBox), never a raw 0."
+    },
+    "item:2:4": {
+      "label": "Less: Remittances Made: 1st Month of the Quarter",
+      "evidence": "PR 2 (manual-0): printed caption '18 Less: Remittances Made: 1st Month of the Quarter' (html-frozen/1602q-2019/index.html)"
+    },
+    "item:2:5": {
+      "label": "2nd Month of the Quarter",
+      "evidence": "PR 2: printed caption '19 2nd Month of the Quarter' (html-frozen/1602q-2019/index.html)"
     }
   },
   "1603Q": {
@@ -4026,8 +5718,8 @@
       "evidence": "painted form_1603q_view.rs (local:lob via binding /line_of_business): 'Line of business (kept with the return, not printed)'"
     },
     "frm1603Q:txtPg2TaxpayerName": {
-      "label": "Withholding Agent's Name",
-      "evidence": "painted form_1603q_view.rs (local:name via binding /taxpayer_name): \"Withholding Agent's Name\"; writer-cells printed caption: \"Page 2 Withholding Agent's Name\""
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): the page 2 header copies items 6 and 8; form_1603q.rs writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (html-frozen/1603q-2018/writer-cells.json derived:tin_digits, frm1603Q:txtPg2TaxpayerName)."
     },
     "frm1603Q:Sched1:txtValue1": {
       "label": "Schedule 1 line 1 (WF360) — monetary value",
@@ -4089,8 +5781,9 @@
       "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1603Qv2018.hta 'Schedule I - Computation of Tax' column 'Percentage Divisor (D)'"
     },
     "frm1603Q:Sched1:txtTaxRate1": {
+      "kind": "text",
       "label": "Schedule I row 1, Tax Rate (F)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1603Qv2018.hta 'Schedule I - Computation of Tax' column 'Tax Rate (F)'"
+      "evidence": "PR 2: the preprinted rate (35%, 25%: html-frozen/1603q-2018/writer-cells.json not_joined) as the official program writes it, a percent text, not a peso amount."
     },
     "frm1603Q:Sched1:txtATC2": {
       "label": "Schedule I row 2, ATC (B)",
@@ -4101,48 +5794,49 @@
       "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1603Qv2018.hta 'Schedule I - Computation of Tax' column 'Percentage Divisor (D)'"
     },
     "frm1603Q:Sched1:txtTaxRate2": {
+      "kind": "text",
       "label": "Schedule I row 2, Tax Rate (F)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1603Qv2018.hta 'Schedule I - Computation of Tax' column 'Tax Rate (F)'"
+      "evidence": "PR 2: the preprinted rate (35%, 25%: html-frozen/1603q-2018/writer-cells.json not_joined) as the official program writes it, a percent text, not a peso amount."
     },
     "frm1603Q:txtTax14": {
-      "label": "14 (printed item 14)",
-      "evidence": "P4: printed caption '14 (printed item 14)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax14)"
+      "label": "Total Taxes Withheld",
+      "evidence": "PR 2: item 14's printed caption (html-frozen/1603q-2018/index.html '14 Total Taxes Withheld'); the key's own label was '14 (printed item 14)'."
     },
     "frm1603Q:txtTax15": {
-      "label": "15 (printed item 15)",
-      "evidence": "P4: printed caption '15 (printed item 15)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax15)"
+      "label": "Tax Remitted in Return Previously Filed",
+      "evidence": "PR 2: item 15's printed caption (html-frozen/1603q-2018/index.html '15 Tax Remitted in Return Previously Filed'); the key's own label was '15 (printed item 15)'."
     },
     "frm1603Q:txtTax16": {
-      "label": "16 (printed item 16)",
-      "evidence": "P4: printed caption '16 (printed item 16)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax16)"
+      "label": "Amount",
+      "evidence": "PR 2 (manual-2): item 16's amount (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax16)"
     },
     "frm1603Q:txtTax17": {
-      "label": "17 (printed item 17)",
-      "evidence": "P4: printed caption '17 (printed item 17)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax17)"
+      "label": "Total Remittances Made",
+      "evidence": "PR 2: item 17's printed caption (html-frozen/1603q-2018/index.html '17 Total Remittances Made'); the key's own label was '17 (printed item 17)'."
     },
     "frm1603Q:txtTax18": {
-      "label": "18 (printed item 18)",
-      "evidence": "P4: printed caption '18 (printed item 18)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax18)"
+      "label": "Tax Still Due/(Over-remittance)",
+      "evidence": "PR 2: item 18's printed caption (html-frozen/1603q-2018/index.html '18 Tax Still Due/(Over-remittance)'); the key's own label was '18 (printed item 18)'."
     },
     "frm1603Q:txtTax19": {
-      "label": "19 (printed item 19)",
-      "evidence": "P4: printed caption '19 (printed item 19)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax19)"
+      "label": "Surcharge",
+      "evidence": "PR 2: item 19's printed caption (html-frozen/1603q-2018/index.html '19 Surcharge'); the key's own label was '19 (printed item 19)'."
     },
     "frm1603Q:txtTax20": {
-      "label": "20 (printed item 20)",
-      "evidence": "P4: printed caption '20 (printed item 20)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax20)"
+      "label": "Interest",
+      "evidence": "PR 2: item 20's printed caption (html-frozen/1603q-2018/index.html '20 Interest'); the key's own label was '20 (printed item 20)'."
     },
     "frm1603Q:txtTax21": {
-      "label": "21 (printed item 21)",
-      "evidence": "P4: printed caption '21 (printed item 21)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax21)"
+      "label": "Compromise",
+      "evidence": "PR 2: item 21's printed caption (html-frozen/1603q-2018/index.html '21 Compromise'); the key's own label was '21 (printed item 21)'."
     },
     "frm1603Q:txtTax22": {
-      "label": "22 (printed item 22)",
-      "evidence": "P4: printed caption '22 (printed item 22)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax22)"
+      "label": "Total Penalties",
+      "evidence": "PR 2: item 22's printed caption (html-frozen/1603q-2018/index.html '22 Total Penalties'); the key's own label was '22 (printed item 22)'."
     },
     "frm1603Q:txtTax23": {
-      "label": "23 (printed item 23)",
-      "evidence": "P4: printed caption '23 (printed item 23)' (html-frozen/1603q-2018/writer-cells.json money_joins frm1603Q:txtTax23)"
+      "label": "TOTAL AMOUNT STILL DUE",
+      "evidence": "PR 2: item 23's printed caption (html-frozen/1603q-2018/index.html '23 TOTAL AMOUNT STILL DUE'); the key's own label was '23 (printed item 23)'."
     },
     "move:frm1603Q:SpecialTax_1": {
       "to": "1:new:13",
@@ -4251,6 +5945,237 @@
     "frm1603Q:txtAmount27": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled at load (rules/forms/1603q-v2018/fixtures/runtime-control-inventory-v796.json: id frm1603Q:txtAmount27, source line 968) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm1603Q:optQuarter1": {
+      "label": "1st",
+      "evidence": "PR 2: printed option '1st' of item 2 Quarter (html-frozen/1603q-2018/writer-cells.json xbox_joins frm1603Q:optQuarter1: '2 Quarter: 1st')"
+    },
+    "frm1603Q:optQuarter2": {
+      "label": "2nd",
+      "evidence": "PR 2: printed option '2nd' of item 2 Quarter (html-frozen/1603q-2018/writer-cells.json xbox_joins frm1603Q:optQuarter2: '2 Quarter: 2nd')"
+    },
+    "frm1603Q:optQuarter3": {
+      "label": "3rd",
+      "evidence": "PR 2: printed option '3rd' of item 2 Quarter (html-frozen/1603q-2018/writer-cells.json xbox_joins frm1603Q:optQuarter3: '2 Quarter: 3rd')"
+    },
+    "frm1603Q:optQuarter4": {
+      "label": "4th",
+      "evidence": "PR 2: printed option '4th' of item 2 Quarter (html-frozen/1603q-2018/writer-cells.json xbox_joins frm1603Q:optQuarter4: '2 Quarter: 4th')"
+    },
+    "item:0:0": {
+      "label": "For the Year",
+      "evidence": "PR 2: printed caption '1 For the Year' (html-frozen/1603q-2018/writer-cells.json joins frm1603Q:txtYear)"
+    },
+    "item:0:4": {
+      "label": "No. of Sheet/s Attached",
+      "evidence": "PR 2: printed caption '5 No. of Sheet/s Attached' (html-frozen/1603q-2018/index.html)"
+    },
+    "frm1603Q:txt16Other": {
+      "label": "Specify",
+      "evidence": "PR 2 (manual-2): item 16 'Other Remittances Made (specify)': the specify box (html-frozen/1603q-2018/writer-cells.json joins frm1603Q:txt16Other)"
+    },
+    "frm1603Q:txtPg2TIN1": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): the page 2 header copies items 6 and 8; form_1603q.rs writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (html-frozen/1603q-2018/writer-cells.json derived:tin_digits, frm1603Q:txtPg2TaxpayerName)."
+    },
+    "frm1603Q:txtPg2TIN2": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): the page 2 header copies items 6 and 8; form_1603q.rs writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (html-frozen/1603q-2018/writer-cells.json derived:tin_digits, frm1603Q:txtPg2TaxpayerName)."
+    },
+    "frm1603Q:txtPg2TIN3": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): the page 2 header copies items 6 and 8; form_1603q.rs writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (html-frozen/1603q-2018/writer-cells.json derived:tin_digits, frm1603Q:txtPg2TaxpayerName)."
+    },
+    "frm1603Q:txtPg2BranchCode": {
+      "kind": "hidden",
+      "evidence": "PR 2 (manual-1): the page 2 header copies items 6 and 8; form_1603q.rs writes txtPg2TIN1-3/BranchCode from the TIN and txtPg2TaxpayerName from taxpayer_name, and the sheet prints them from there (html-frozen/1603q-2018/writer-cells.json derived:tin_digits, frm1603Q:txtPg2TaxpayerName)."
+    },
+    "layout": {
+      "evidence": "PR 2: the printed sheet's structure (html-frozen/1603q-2018/index.html, BIR Form 1603Q January 2018: items 1-5, Part I 6-13A, Part II 14-23, Part III 24-27, page 2 Part IV Schedule 1 rows 1-2 and item 3, its total) and html-frozen/1603q-2018/writer-cells.json joins. Schedule 1's cells leave item 4 and the loose group for one table; its ATC, divisor and rate are preprinted (not_joined). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1603Q:txtTIN1",
+                "frm1603Q:txtTIN2",
+                "frm1603Q:txtTIN3",
+                "frm1603Q:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm1603Q:rdoCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Withholding Agent's Name",
+              "k": [
+                "frm1603Q:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address",
+              "k": [
+                "frm1603Q:txtAddress"
+              ]
+            },
+            {
+              "no": "9A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1603Q:txtZipCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Contact Number",
+              "k": [
+                "frm1603Q:txtTelNum"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1603Q:CatAgent_P",
+                "frm1603Q:CatAgent_G"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Are there payees availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1603Q:SpecialTax_1",
+                "frm1603Q:SpecialTax_2"
+              ]
+            },
+            {
+              "no": "13A",
+              "l": "If yes, specify",
+              "k": [
+                "frm1603Q:selTreaty"
+              ]
+            }
+          ]
+        },
+        {
+          "keep": 2
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "24",
+              "l": "Cash/Bank Debit Memo",
+              "k": [
+                "frm1603Q:txtAgency24",
+                "frm1603Q:txtNumber24",
+                "frm1603Q:txtDate24",
+                "frm1603Q:txtAmount24"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Check",
+              "k": [
+                "frm1603Q:txtAgency25",
+                "frm1603Q:txtNumber25",
+                "frm1603Q:txtDate25",
+                "frm1603Q:txtAmount25"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Tax Debit Memo",
+              "k": [
+                "frm1603Q:txtNumber26",
+                "frm1603Q:txtDate26",
+                "frm1603Q:txtAmount26"
+              ]
+            },
+            {
+              "no": "27",
+              "l": "Others (specify below)",
+              "k": [
+                "frm1603Q:txtParticular27",
+                "frm1603Q:txtAgency27",
+                "frm1603Q:txtNumber27",
+                "frm1603Q:txtDate27",
+                "frm1603Q:txtAmount27"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 1 – Computation of Tax",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1 (Items 1 and 2)",
+              "grid": {
+                "cols": [
+                  "ATC (B)",
+                  "Monetary Value of Fringe Benefit (C)",
+                  "Percentage Divisor (D)",
+                  "Tax Base Grossed-up Monetary Value (E)",
+                  "Tax Rate (F)",
+                  "Taxes Withheld (G) = (E x F)"
+                ],
+                "row_labels": {
+                  "caption": "Recipients (A)",
+                  "rows": [
+                    "In General, for Citizen, Resident Alien and Non-Resident Alien Engaged in Trade or Business Within the Philippines",
+                    "Non-Resident Alien Not Engaged in Trade or Business Within the Philippines"
+                  ]
+                },
+                "keys": [
+                  [
+                    "frm1603Q:Sched1:txtATC1",
+                    "frm1603Q:Sched1:txtValue1",
+                    "frm1603Q:Sched1:txtDivisor1",
+                    "frm1603Q:Sched1:txtTaxBase1",
+                    "frm1603Q:Sched1:txtTaxRate1",
+                    "frm1603Q:Sched1:txtTaxWithheld1"
+                  ],
+                  [
+                    "frm1603Q:Sched1:txtATC2",
+                    "frm1603Q:Sched1:txtValue2",
+                    "frm1603Q:Sched1:txtDivisor2",
+                    "frm1603Q:Sched1:txtTaxBase2",
+                    "frm1603Q:Sched1:txtTaxRate2",
+                    "frm1603Q:Sched1:txtTaxWithheld2"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "3",
+              "l": "Total Taxes Withheld (Sum of Items 1 and 2) (To Part II, Item 14)",
+              "k": [
+                "frm1603Q:Sched1:txtTotalTax"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "1604C": {

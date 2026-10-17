@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_withholding;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -84,6 +85,8 @@ export interface ScreenFormOpened {
     blank: string[];
     /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
     needs: Record<string, string>;
+    /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
+    waits: Record<string, string>;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
     /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -679,7 +682,13 @@ fn apply_layout(form: &mut Value, layout: &Value) {
     };
     // What the layout places itself: field keys, and every cell of a named table.
     let mut claimed: BTreeSet<String> = named_items()
-        .flat_map(|it| it["k"].as_array().into_iter().flatten())
+        .flat_map(|it| {
+            it["k"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .chain(grid_keys(it))
+        })
         .filter_map(|k| k.as_str().map(str::to_string))
         .collect();
     let table_keys = |item: &Value| -> Vec<String> {
@@ -751,6 +760,18 @@ fn apply_layout(form: &mut Value, layout: &Value) {
                 }
                 continue;
             }
+            if entry.get("grid").is_some() {
+                if let Some(table) = grid_table(entry, &fields) {
+                    items.push(table);
+                }
+                continue;
+            }
+            // A printed item with no box in the official program (1601EQ's
+            // item 24): its number and caption, and the note saying so.
+            if let Some(note) = entry["note"].as_str() {
+                items.push(json!({ "no": entry["no"].clone(), "l": entry["l"].clone(), "p": entry["p"].clone(), "f": [], "note": note }));
+                continue;
+            }
             let mut page = Value::Null;
             let chosen: Vec<Value> = entry["k"]
                 .as_array()
@@ -802,6 +823,73 @@ fn apply_layout(form: &mut Value, layout: &Value) {
         parts.push(json!({ "n": name, "items": rest }));
     }
     form["parts"] = Value::Array(parts);
+}
+
+/// The field keys of a layout `grid` entry, row by row.
+fn grid_keys(entry: &Value) -> impl Iterator<Item = &Value> {
+    entry["grid"]["keys"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|row| row.as_array().into_iter().flatten())
+}
+
+/// A layout `grid` entry: `{no, l, grid: {cols: [captions], keys: [[row
+/// keys]], start, row_labels: {caption, rows}}}` becomes one schedule
+/// table of those boxes, wherever the extractor put them. Each column
+/// takes its first row's type and computed flag (the overrides already
+/// applied); `row_labels` are the sheet's preprinted row captions (1603Q
+/// Schedule I's recipients). None when a key is not on the form.
+fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Option<Value> {
+    let grid = &entry["grid"];
+    let keys: Vec<Vec<String>> = grid["keys"]
+        .as_array()?
+        .iter()
+        .map(|row| {
+            row.as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|k| k.as_str().map(str::to_string))
+                .collect()
+        })
+        .collect();
+    let first = keys.first()?;
+    if keys.iter().flatten().any(|key| !fields.contains_key(key)) {
+        return None;
+    }
+    let captions = grid["cols"].as_array().cloned().unwrap_or_default();
+    let cols: Vec<Value> = first
+        .iter()
+        .enumerate()
+        .map(|(c, key)| {
+            let (field, _) = &fields[key];
+            let mut col = json!({
+                "l": captions.get(c).cloned().unwrap_or_else(|| field["l"].clone()),
+                "t": field["t"].clone(),
+            });
+            for flag in ["c", "o"] {
+                if let Some(value) = field.get(flag) {
+                    col[flag] = value.clone();
+                }
+            }
+            col
+        })
+        .collect();
+    let mut table = json!({
+        "no": entry["no"].clone(),
+        "l": entry["l"].clone(),
+        "p": fields[&first[0]].1.clone(),
+        "cols": cols,
+        "rows": keys.len(),
+        "keys": keys,
+    });
+    if let Some(start) = grid["start"].as_u64() {
+        table["start"] = Value::from(start);
+    }
+    if grid.get("row_labels").is_some() {
+        table["row_labels"] = grid["row_labels"].clone();
+    }
+    Some(table)
 }
 
 /// Take the field `key` out of its item and append it to the item `fix.to`
@@ -2320,6 +2408,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "waits": rows_withholding::waits(kind),
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -5570,6 +5659,873 @@ mod tests {
         assert_eq!(cleared["draft"]["schedule"].as_array().unwrap().len(), 1);
     }
 
+    // ---------------------------------------------------------------
+    // PR 2: the Q3 withholding remittances (1601EQ, 1601FQ, 1602Q, 1603Q).
+
+    /// `(code, frozen sheet slug)` of the four forms.
+    const Q3_FORMS: [(&str, &str); 4] = [
+        ("1601EQ", "1601eq-2019"),
+        ("1601FQ", "1601-fq-2020"),
+        ("1602Q", "1602q-2019"),
+        ("1603Q", "1603q-2018"),
+    ];
+
+    fn q3_writer_cells(slug: &str) -> Value {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/writer-cells.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        serde_json::from_str(&std::fs::read_to_string(&path).expect("writer-cells"))
+            .expect("writer-cells json")
+    }
+
+    /// The frozen sheet's printed words, one space between text runs.
+    fn q3_sheet_text(slug: &str) -> String {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/index.html",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let html = std::fs::read_to_string(&path).expect("frozen sheet");
+        let mut text = String::new();
+        let mut tag = false;
+        for c in html.chars() {
+            match c {
+                '<' => {
+                    tag = true;
+                    text.push(' ');
+                }
+                '>' => tag = false,
+                _ if !tag => text.push(c),
+                _ => {}
+            }
+        }
+        text.replace("&amp;", "&")
+            .replace('\u{2019}', "'")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Every drawn field of a form: `(part name, item no, item label, field)`.
+    fn q3_drawn(code: &str) -> Vec<(String, String, String, Value)> {
+        let form = schema_entry(code).unwrap();
+        let mut out = Vec::new();
+        for part in form["parts"].as_array().unwrap() {
+            for item in part["items"].as_array().unwrap() {
+                for field in item["f"].as_array().into_iter().flatten() {
+                    if field["t"] != "hidden" {
+                        out.push((
+                            part["n"].as_str().unwrap().to_string(),
+                            item["no"].as_str().unwrap_or("").to_string(),
+                            item["l"].as_str().unwrap_or("").to_string(),
+                            field.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// The table holding `key`: `(part name, table)`.
+    fn q3_table(code: &str, key: &str) -> Option<(String, Value)> {
+        let form = schema_entry(code).unwrap();
+        form["parts"].as_array().unwrap().iter().find_map(|part| {
+            part["items"].as_array().unwrap().iter().find_map(|item| {
+                item["keys"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|row| row.as_array().into_iter().flatten())
+                    .any(|k| k == key)
+                    .then(|| (part["n"].as_str().unwrap().to_string(), item.clone()))
+            })
+        })
+    }
+
+    /// R3: every box the sheet prints with an item number sits under that
+    /// item on the page, and each quarter option reads as printed. The
+    /// oracle is html-frozen/<slug>/writer-cells.json's printed captions.
+    #[test]
+    fn q3_withholding_boxes_sit_under_their_printed_item_numbers() {
+        // writer-cells prints item 12 for 1603Q's Item 13 radios, whose
+        // printed number on the sheet is 13 (the text layer reads "13 13A If
+        // yes, specify Yes No Special Law ..."; checked below).
+        const CAPTION_SLIPS: [&str; 2] = ["frm1603Q:SpecialTax_1", "frm1603Q:SpecialTax_2"];
+        let number = regex_lite_number;
+        for (code, slug) in Q3_FORMS {
+            let drawn = q3_drawn(code);
+            let cells = q3_writer_cells(slug);
+            let mut checked = 0;
+            for join in ["joins", "money_joins", "xbox_joins"]
+                .iter()
+                .flat_map(|list| cells[*list].as_array().unwrap())
+            {
+                let key = join["writer_key"].as_str().unwrap();
+                let printed = join["printed"].as_str().unwrap();
+                let Some(no) = number(printed) else {
+                    continue;
+                };
+                let Some((_, item_no, _, field)) = drawn.iter().find(|(_, _, _, f)| f["k"] == key)
+                else {
+                    continue;
+                };
+                let expected = if CAPTION_SLIPS.contains(&key) {
+                    "13".to_string()
+                } else {
+                    no
+                };
+                assert_eq!(item_no, &expected, "{code} {key} prints at {printed:?}");
+                if let Some(option) = printed.strip_prefix("2 Quarter") {
+                    let option = option.trim_start_matches(':').trim();
+                    assert_eq!(field["l"], option, "{code} {key}");
+                }
+                checked += 1;
+            }
+            assert!(checked >= 20, "{code}: {checked} boxes checked");
+        }
+        let sheet = q3_sheet_text("1603q-2018");
+        assert!(
+            sheet
+                .contains("13 13A If yes, specify Yes No Special Law or International Tax Treaty?")
+        );
+    }
+
+    /// The printed item number a writer-cells caption starts with (`9A`).
+    fn regex_lite_number(printed: &str) -> Option<String> {
+        let head = printed.split_whitespace().next()?;
+        let digits = head.trim_end_matches(|c: char| c.is_ascii_uppercase());
+        (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) && head.len() <= 3)
+            .then(|| head.to_string())
+    }
+
+    /// R3: the official program's ATC popup slots (1601EQ AtcCode1..111,
+    /// 1601FQ AtcCd1..41) and the later pages' header copies are not drawn;
+    /// the print still writes them from the draft (writer-cells' page 2
+    /// header joins), so nothing printed is lost.
+    #[test]
+    fn q3_withholding_draws_no_popup_slot_and_no_header_copy() {
+        setup();
+        let hidden = |code: &str, key: &str| {
+            q3_drawn(code).iter().all(|(_, _, _, f)| f["k"] != key)
+                && schema_keys(code).contains(key)
+        };
+        for n in 1..=111 {
+            assert!(
+                hidden("1601EQ", &format!("AtcCode{n}")),
+                "1601EQ AtcCode{n}"
+            );
+        }
+        for n in 1..=41 {
+            assert!(hidden("1601FQ", &format!("AtcCd{n}")), "1601FQ AtcCd{n}");
+        }
+        let copies: [(&str, &[&str]); 3] = [
+            (
+                "1601FQ",
+                &[
+                    "frm1601FQ:txtPg2TIN1",
+                    "frm1601FQ:txtPg2TIN2",
+                    "frm1601FQ:txtPg2TIN3",
+                    "frm1601FQ:txtPg2BranchCode",
+                    "frm1601FQ:txtPg2TaxpayerName",
+                ],
+            ),
+            (
+                "1602Q",
+                &[
+                    "frm1602Q:txtPage2TIN",
+                    "frm1602Q:txtPage2Agent",
+                    "frm1602Q:txtPage3TIN",
+                    "frm1602Q:txtPage3Agent",
+                ],
+            ),
+            (
+                "1603Q",
+                &[
+                    "frm1603Q:txtPg2TIN1",
+                    "frm1603Q:txtPg2TIN2",
+                    "frm1603Q:txtPg2TIN3",
+                    "frm1603Q:txtPg2BranchCode",
+                    "frm1603Q:txtPg2TaxpayerName",
+                ],
+            ),
+        ];
+        for (code, keys) in copies {
+            for key in keys {
+                assert!(hidden(code, key), "{code} {key}");
+            }
+            // No drawn box outside Part I is a TIN part (R5.1).
+            for (part, _, _, field) in q3_drawn(code) {
+                let key = field["k"].as_str().unwrap();
+                assert!(
+                    part.starts_with("Part I ") || !key.contains("TIN"),
+                    "{code}: {key} in {part}"
+                );
+            }
+            let kind = kind_of(code).unwrap();
+            let opened = open(code, 3);
+            let map = with_database(|db| print_map(db, kind, &opened["draft"]))
+                .unwrap()
+                .0;
+            let slug = Q3_FORMS.iter().find(|(c, _)| *c == code).unwrap().1;
+            let cells = q3_writer_cells(slug);
+            for join in cells["joins"].as_array().unwrap() {
+                let key = join["writer_key"].as_str().unwrap();
+                if join["printed"].as_str().unwrap().starts_with("Page 2")
+                    || key == "derived:tin_digits"
+                {
+                    assert!(
+                        !map.get(key).map_or("", String::as_str).trim().is_empty(),
+                        "{code}: the print still writes {key}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// R3 (1601EQ manual-1): item 24 Other Payments Made is shown between
+    /// 23 and 25 with its printed caption and a note, and has no box: the
+    /// official program has none (the layout's txtTax24-30 print at items
+    /// 25-31, writer-cells' rule). Part II runs 19 to 31 with no gap.
+    #[test]
+    fn form_1601eq_item_24_is_shown_with_its_printed_caption() {
+        let form = schema_entry("1601EQ").unwrap();
+        let part = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["n"] == "Part II · Computation of Tax")
+            .unwrap();
+        let numbers: Vec<&str> = part["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|it| it["no"].as_str())
+            .filter(|no| !no.is_empty())
+            .collect();
+        let expected: Vec<String> = std::iter::once("13".to_string())
+            .chain((19..=31).map(|n| n.to_string()))
+            .collect();
+        assert_eq!(numbers, expected);
+        let item = part["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|it| it["no"] == "24")
+            .unwrap();
+        assert_eq!(item["f"], json!([]));
+        assert!(item["note"].as_str().unwrap().contains("no box"));
+        let sheet = q3_sheet_text("1601eq-2019");
+        assert!(sheet.contains("24 Other Payments Made (please attach proof of payments"));
+        assert!(
+            item["l"]
+                .as_str()
+                .unwrap()
+                .starts_with("Other Payments Made (please attach proof of payments")
+        );
+        let rule = q3_writer_cells("1601eq-2019")["rule"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(rule.contains("adds 'Other Payments Made' at item 24"));
+    }
+
+    /// R3: Line of Business, which these sheets do not print (writer-cells
+    /// has no join for it; 1601FQ's and 1603Q's list it as not on the paper
+    /// form), is in "Not on the printed sheet", not among the numbered items.
+    #[test]
+    fn q3_withholding_line_of_business_is_not_on_the_printed_sheet() {
+        for (code, slug, key) in [
+            ("1601EQ", "1601eq-2019", "frm1601EQ:txtLineBus"),
+            ("1601FQ", "1601-fq-2020", "frm1601FQ:txtLineBus"),
+            ("1603Q", "1603q-2018", "frm1603Q:txtLineBus"),
+        ] {
+            let cells = q3_writer_cells(slug);
+            let joined = ["joins", "money_joins", "xbox_joins"]
+                .iter()
+                .flat_map(|list| cells[*list].as_array().unwrap())
+                .any(|join| join["writer_key"] == key);
+            assert!(!joined, "{code}: the sheet prints no {key}");
+            let (part, no, label, _) = q3_drawn(code)
+                .into_iter()
+                .find(|(_, _, _, f)| f["k"] == key)
+                .unwrap();
+            assert_eq!(part, "Not on the printed sheet", "{code}");
+            assert_eq!(no, "", "{code}");
+            assert!(
+                label.to_lowercase().contains("line of business"),
+                "{code}: {label}"
+            );
+        }
+    }
+
+    /// R3: the labels the findings named read as printed (a hand list from
+    /// the frozen sheets, checked against their text): 1601FQ item 9 and
+    /// item 23, 1602Q items 18 and 19, 1603Q items 9 and 16, and no item
+    /// named after its own row ("Row 1") or a key.
+    #[test]
+    fn q3_withholding_labels_read_as_printed() {
+        let label = |code: &str, no: &str| {
+            q3_drawn(code)
+                .into_iter()
+                .find(|(_, n, _, _)| n == no)
+                .map(|(_, _, l, _)| l)
+                .unwrap_or_else(|| panic!("{code} item {no}"))
+        };
+        assert_eq!(label("1601FQ", "9"), "Registered Address");
+        assert_eq!(
+            label("1601FQ", "23"),
+            "Less: Remittances Made: 1st Month of the Quarter"
+        );
+        assert_eq!(label("1601FQ", "13A"), "If yes, specify");
+        assert_eq!(
+            label("1602Q", "18"),
+            "Less: Remittances Made: 1st Month of the Quarter"
+        );
+        assert_eq!(label("1602Q", "19"), "2nd Month of the Quarter");
+        assert_eq!(label("1603Q", "9"), "Registered Address");
+        assert_eq!(label("1601EQ", "11"), "Category of Withholding Agent");
+        // The sheets print the ordinal's "st" as a superscript run.
+        for (slug, printed) in [
+            ("1601-fq-2020", "9 Registered Address"),
+            ("1601-fq-2020", "Less: Remittances Made: 1"),
+            (
+                "1602q-2019",
+                "st 18 Less: Remittances Made: 1 Month of the Quarter",
+            ),
+            ("1603q-2018", "9 Registered Address"),
+        ] {
+            assert!(q3_sheet_text(slug).contains(printed), "{slug}: {printed}");
+        }
+        // 13A lists the reliefs by name; its official blank 0 (Item 13 not
+        // Yes, writer-cells not_joined "0 none, 1 special rate, 2 treaty, 3
+        // both") is no choice, so the page shows Choose... for it.
+        for (code, key) in [
+            ("1601FQ", "frm1601FQ:drpSpecialTax"),
+            ("1602Q", "frm1602Q:lstSpecialTax"),
+        ] {
+            let field = q3_drawn(code)
+                .into_iter()
+                .find(|(_, _, _, f)| f["k"] == key)
+                .unwrap()
+                .3;
+            assert_eq!(field["t"], "sel", "{key}");
+            assert_eq!(
+                field["o"],
+                json!([
+                    {"value": "1", "label": "Special Rate"},
+                    {"value": "2", "label": "International Tax Treaty"},
+                    {"value": "3", "label": "Both"}
+                ]),
+                "{key}"
+            );
+        }
+        // 1602Q item 28's options are the printed ones (writer-cells
+        // xbox_joins "If over-remittance: <option>").
+        let cells = q3_writer_cells("1602q-2019");
+        for join in cells["xbox_joins"].as_array().unwrap() {
+            let printed = join["printed"].as_str().unwrap();
+            if let Some(option) = printed.strip_prefix("If over-remittance: ") {
+                let key = join["writer_key"].as_str().unwrap();
+                let field = q3_drawn("1602Q")
+                    .into_iter()
+                    .find(|(_, _, _, f)| f["k"] == key)
+                    .unwrap()
+                    .3;
+                assert!(
+                    option.starts_with(field["l"].as_str().unwrap()),
+                    "{key}: {option}"
+                );
+            }
+        }
+        let sixteen: Vec<String> = q3_drawn("1603Q")
+            .into_iter()
+            .filter(|(_, no, _, _)| no == "16")
+            .map(|(_, _, _, f)| f["l"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(sixteen, ["Specify", "Amount"]);
+        for (code, _) in Q3_FORMS {
+            for (_, no, item_label, field) in q3_drawn(code) {
+                assert!(
+                    !item_label.starts_with("Row "),
+                    "{code} item {no}: {item_label}"
+                );
+                let field_label = field["l"].as_str().unwrap_or("");
+                assert!(
+                    !field_label.contains("selection") && !field_label.contains("printed item"),
+                    "{code} {}: {field_label}",
+                    field["k"]
+                );
+            }
+        }
+    }
+
+    /// R3 (1601FQ manual-0): Part II's ATC rows 14-19 are one table at the
+    /// top of Part II (not loose boxes in Part I); a row's ATC is chosen
+    /// from the category's popup and its tax base typed; rate and tax
+    /// withheld follow (Form1601FqDraft). Rows keep popup order, an ATC
+    /// appears once, Item 11 and Item 4 "No" clear the rows as the official
+    /// handlers do, rows 7 on are the attachment's table, and the field map
+    /// and the print carry what the page shows.
+    #[test]
+    fn form_1601fq_part_ii_rows_are_chosen_on_the_page_and_print() {
+        use bir_core::forms::form_1601fq::FORM_1601FQ_PRIVATE_ATCS as PRIVATE;
+        setup();
+        let (part, printed) = q3_table("1601FQ", "frm1601FQ:txtAtcCode1").unwrap();
+        assert_eq!(part, "Part II · Computation of Tax");
+        assert_eq!(
+            (printed["no"].clone(), printed["start"].clone()),
+            (json!("14"), json!(14))
+        );
+        assert_eq!(printed["rows"], 6);
+        assert_eq!(printed["cols"][0]["t"], "sel");
+        let (part, more) = q3_table("1601FQ", "frm1601FQ:txtAtcCode7").unwrap();
+        assert_eq!(
+            part,
+            "Additional ATC rows (attachment; the sheet prints six)"
+        );
+        assert_eq!(
+            (more["rows"].clone(), more["start"].clone()),
+            (json!(35), json!(7))
+        );
+        assert!(
+            q3_drawn("1601FQ")
+                .iter()
+                .all(|(_, _, _, f)| !f["k"].as_str().unwrap().contains("txtAtcCode"))
+        );
+
+        let opened = open("1601FQ", 3);
+        for n in 1..=6 {
+            assert!(
+                opened["locks"]
+                    .get(format!("frm1601FQ:txtAtcCode{n}"))
+                    .is_none()
+            );
+            assert!(
+                opened["locks"]
+                    .get(format!("frm1601FQ:txtTaxBase{n}"))
+                    .is_none()
+            );
+            assert_eq!(
+                opened["waits"][format!("frm1601FQ:txtTaxRate{n}")],
+                rows_withholding::RATE_WAITS
+            );
+        }
+        let answered = fill(
+            "1601FQ",
+            &opened["draft"],
+            json!({"frm1601FQ:TaxWithheld_1": "true", "frm1601FQ:TaxWithheld_2": "false", "frm1601FQ:CatAgent_P": "true", "frm1601FQ:CatAgent_G": "false"}),
+        );
+        assert_eq!(answered["rejected"], json!({}));
+        let filled = fill(
+            "1601FQ",
+            &answered["draft"],
+            json!({
+                "frm1601FQ:txtAtcCode1": "catalog:3",
+                "frm1601FQ:txtAtcCode2": "catalog:0",
+                "frm1601FQ:txtTaxBase2": "1000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        // Popup order: entry 0 before entry 3; the base followed its row.
+        let rows: Vec<(u64, f64)> = filled["draft"]["schedule"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r["popup_index"].as_u64().unwrap(),
+                    r["tax_base"].as_f64().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(rows, [(0, 0.0), (3, 1000.0)]);
+        let values = &filled["values"];
+        assert_eq!(values["frm1601FQ:txtAtcCode1"], PRIVATE[0].code);
+        assert_eq!(values["frm1601FQ:txtAtcCode2"], PRIVATE[3].code);
+        assert_eq!(values["frm1601FQ:txtTaxBase2"], "1,000.00");
+        assert_eq!(
+            values["frm1601FQ:txtTaxRate2"],
+            format!(" {}", PRIVATE[3].rate_text)
+        );
+        let withheld = (1000.0 * PRIVATE[3].rate() / 100.0 * 100.0).round() / 100.0;
+        assert_eq!(amount(values, "frm1601FQ:txtTaxbeWithHeld2"), withheld);
+        assert_eq!(amount(values, "frm1601FQ:txtTax20"), withheld);
+        let selected: Vec<&str> = filled["options"]["frm1601FQ:txtAtcCode2"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|o| o["selected"] == true)
+            .map(|o| o["value"].as_str().unwrap())
+            .collect();
+        assert_eq!(selected, ["catalog:3"]);
+        let map = with_database(|db| print_map(db, kind_of("1601FQ")?, &filled["draft"]))
+            .unwrap()
+            .0;
+        for key in [
+            "frm1601FQ:txtAtcCode2",
+            "frm1601FQ:txtTaxBase2",
+            "frm1601FQ:txtTaxbeWithHeld2",
+        ] {
+            assert_eq!(map[key], values[key].as_str().unwrap(), "{key}");
+        }
+        let dup = fill(
+            "1601FQ",
+            &filled["draft"],
+            json!({"frm1601FQ:txtAtcCode3": "catalog:0"}),
+        );
+        assert!(dup["rejected"].get("frm1601FQ:txtAtcCode3").is_some());
+        let early = fill(
+            "1601FQ",
+            &filled["draft"],
+            json!({"frm1601FQ:txtTaxBase5": "10"}),
+        );
+        assert!(early["rejected"].get("frm1601FQ:txtTaxBase5").is_some());
+        // A changed ATC keeps its row's base.
+        let changed = fill(
+            "1601FQ",
+            &filled["draft"],
+            json!({"frm1601FQ:txtAtcCode2": "catalog:5"}),
+        );
+        assert_eq!(changed["draft"]["schedule"][1]["tax_base"], 1000.0);
+        assert_eq!(changed["values"]["frm1601FQ:txtAtcCode2"], PRIVATE[5].code);
+        save("1601FQ", &changed["draft"]);
+        let reopened = open("1601FQ", 3);
+        assert_eq!(reopened["values"]["frm1601FQ:txtAtcCode2"], PRIVATE[5].code);
+        // Blank unticks; the rows close up.
+        let cleared = fill(
+            "1601FQ",
+            &reopened["draft"],
+            json!({"frm1601FQ:txtAtcCode1": ""}),
+        );
+        assert_eq!(cleared["draft"]["schedule"].as_array().unwrap().len(), 1);
+        assert_eq!(cleared["values"]["frm1601FQ:txtAtcCode1"], PRIVATE[5].code);
+        // The attachment rows: a seventh ATC lands on row 7.
+        let mut seven = reopened["draft"].clone();
+        for n in 3..=7 {
+            seven = fill(
+                "1601FQ",
+                &seven,
+                json!({ format!("frm1601FQ:txtAtcCode{n}"): format!("catalog:{}", 10 + n) }),
+            )["draft"]
+                .clone();
+        }
+        let seven = fill("1601FQ", &seven, json!({}));
+        assert_eq!(seven["values"]["frm1601FQ:txtAtcCode7"], PRIVATE[17].code);
+        // Item 11 draws another popup list, Item 4 "No" closes Part II.
+        let government = fill(
+            "1601FQ",
+            &seven["draft"],
+            json!({"frm1601FQ:CatAgent_G": "true", "frm1601FQ:CatAgent_P": "false"}),
+        );
+        assert_eq!(government["draft"]["schedule"], json!([]));
+        assert_eq!(government["draft"]["category"], "government");
+        let no = fill(
+            "1601FQ",
+            &seven["draft"],
+            json!({"frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false"}),
+        );
+        assert_eq!(no["draft"]["schedule"], json!([]));
+        assert_eq!(no["values"]["frm1601FQ:TaxWithheld_2"], "true");
+    }
+
+    /// R8 (1601FQ R8.0, manual-4) and R3: items 23-25 are typed, and the
+    /// computed surcharge, interest and compromise open with one Edit
+    /// (penalties_are_computed_and_one_edit_overrides_all_three_on_every_form
+    /// covers the Edit); items 26-27 and 31-32 follow, in the field map.
+    #[test]
+    fn form_1601fq_remittances_are_typed_and_the_totals_follow() {
+        setup();
+        let opened = open("1601FQ", 3);
+        for key in [
+            "frm1601FQ:txtTax23",
+            "frm1601FQ:txtTax24",
+            "frm1601FQ:txtTax25",
+        ] {
+            assert!(opened["locks"].get(key).is_none(), "{key}");
+        }
+        let amended = fill(
+            "1601FQ",
+            &opened["draft"],
+            json!({"frm1601FQ:AmendedRtn_1": "true", "frm1601FQ:AmendedRtn_2": "false"}),
+        );
+        let filled = fill(
+            "1601FQ",
+            &amended["draft"],
+            json!({"frm1601FQ:txtTax23": "100", "frm1601FQ:txtTax24": "200", "frm1601FQ:txtTax25": "50"}),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let map = agent::field_map(kind_of("1601FQ").unwrap(), &filled["draft"]).unwrap();
+        assert_eq!(map["frm1601FQ:txtTax23"], "100.00");
+        assert_eq!(map["frm1601FQ:txtTax24"], "200.00");
+        assert_eq!(map["frm1601FQ:txtTax25"], "50.00");
+        assert_eq!(map["frm1601FQ:txtTax26"], "350.00");
+        assert_eq!(
+            agent::parse_amount(&map["frm1601FQ:txtTax27"]),
+            Some(-350.0)
+        );
+        let penalties = opened["penalties"].as_array().unwrap();
+        assert_eq!(penalties.len(), 1);
+        assert_eq!(
+            strings(&penalties[0]["keys"]),
+            BTreeSet::from(
+                [
+                    "frm1601FQ:txtTax28",
+                    "frm1601FQ:txtTax29",
+                    "frm1601FQ:txtTax30"
+                ]
+                .map(String::from)
+            )
+        );
+    }
+
+    /// R3, preview: Item 13 is answered on the page. 1601FQ: Yes opens
+    /// Schedule 1 and 13A (set_tax_relief), a 13A relief answers Yes, No
+    /// closes them; 1603Q: Yes opens 13A blank, No closes it; 1602Q: No
+    /// clears Schedule 2 (set_availing_tax_relief). Page and print agree.
+    #[test]
+    fn q3_withholding_item_13_is_answered_on_the_page_and_prints() {
+        setup();
+        let printed = |code: &str, draft: &Value| {
+            with_database(|db| print_map(db, kind_of(code)?, draft))
+                .unwrap()
+                .0
+        };
+        // 1601FQ
+        let opened = open("1601FQ", 3);
+        for key in [
+            "frm1601FQ:SpecialTax_1",
+            "frm1601FQ:SpecialTax_2",
+            "frm1601FQ:drpSpecialTax",
+        ] {
+            assert!(opened["locks"].get(key).is_none(), "{key}");
+        }
+        let yes = fill(
+            "1601FQ",
+            &opened["draft"],
+            json!({"frm1601FQ:SpecialTax_1": "true", "frm1601FQ:SpecialTax_2": "false"}),
+        );
+        assert_eq!(yes["rejected"], json!({}));
+        assert_eq!(yes["values"]["frm1601FQ:SpecialTax_1"], "true");
+        assert_eq!(yes["values"]["frm1601FQ:drpSpecialTax"], "1");
+        assert_eq!(yes["values"]["drpTreatyCode0"], "NA");
+        let both = fill(
+            "1601FQ",
+            &yes["draft"],
+            json!({"frm1601FQ:drpSpecialTax": "3"}),
+        );
+        assert_eq!(both["values"]["frm1601FQ:drpSpecialTax"], "3");
+        let map = printed("1601FQ", &both["draft"]);
+        for key in [
+            "frm1601FQ:SpecialTax_1",
+            "frm1601FQ:SpecialTax_2",
+            "frm1601FQ:drpSpecialTax",
+        ] {
+            assert_eq!(map[key], both["values"][key].as_str().unwrap(), "{key}");
+        }
+        let no = fill(
+            "1601FQ",
+            &both["draft"],
+            json!({"frm1601FQ:SpecialTax_2": "true", "frm1601FQ:SpecialTax_1": "false"}),
+        );
+        assert_eq!(no["values"]["frm1601FQ:SpecialTax_2"], "true");
+        assert_eq!(no["draft"]["schedule1"], json!([]));
+        let from_13a = fill(
+            "1601FQ",
+            &opened["draft"],
+            json!({"frm1601FQ:drpSpecialTax": "2"}),
+        );
+        assert_eq!(from_13a["values"]["frm1601FQ:SpecialTax_1"], "true");
+        // 1603Q
+        let opened = open("1603Q", 3);
+        assert!(opened["locks"].get("frm1603Q:SpecialTax_1").is_none());
+        let yes = fill(
+            "1603Q",
+            &opened["draft"],
+            json!({"frm1603Q:SpecialTax_1": "true", "frm1603Q:SpecialTax_2": "false"}),
+        );
+        assert_eq!(yes["rejected"], json!({}));
+        assert_eq!(yes["values"]["frm1603Q:SpecialTax_1"], "true");
+        assert_eq!(yes["draft"]["tax_relief"], "unspecified");
+        let map = printed("1603Q", &yes["draft"]);
+        assert_eq!(map["frm1603Q:SpecialTax_1"], "true");
+        let no = fill(
+            "1603Q",
+            &yes["draft"],
+            json!({"frm1603Q:SpecialTax_2": "true", "frm1603Q:SpecialTax_1": "false"}),
+        );
+        assert_eq!(no["draft"]["tax_relief"], Value::Null);
+        assert_eq!(no["values"]["frm1603Q:SpecialTax_2"], "true");
+        // 1602Q
+        let opened = open("1602Q", 3);
+        let yes = fill(
+            "1602Q",
+            &opened["draft"],
+            json!({"frm1602Q:OptSpecialTax1": "true", "frm1602Q:OptSpecialTax2": "false"}),
+        );
+        let typed = fill(
+            "1602Q",
+            &yes["draft"],
+            json!({"frm1602Q:lstSpecialTax": "2", "frm1602Q:txtSched2ATC1": "WI330", "frm1602Q:txtSched2Interest1": "1000"}),
+        );
+        assert_eq!(typed["rejected"], json!({}));
+        assert_eq!(typed["values"]["frm1602Q:txtSched2Interest1"], "1,000.00");
+        let no = fill(
+            "1602Q",
+            &typed["draft"],
+            json!({"frm1602Q:OptSpecialTax2": "true", "frm1602Q:OptSpecialTax1": "false"}),
+        );
+        assert_eq!(no["values"]["frm1602Q:txtSched2Interest1"], "0.00");
+        assert_eq!(no["values"]["frm1602Q:txtSched2ATC1"], "");
+        assert_eq!(no["values"]["frm1602Q:lstSpecialTax"], "0");
+        // Closed, a Schedule 2 box keeps nothing written to it.
+        let dropped = fill(
+            "1602Q",
+            &no["draft"],
+            json!({"frm1602Q:txtSched2Interest1": "500"}),
+        );
+        assert_eq!(dropped["values"]["frm1602Q:txtSched2Interest1"], "0.00");
+    }
+
+    /// preview: the boxes the findings saw printed as a constant follow the
+    /// draft: each quarter's boxes (the return's period) and 1601FQ's
+    /// Schedule 1 Nature of Income Payment show on the page what the print
+    /// prints, for every quarter.
+    #[test]
+    fn q3_withholding_page_and_print_agree_on_the_period_boxes() {
+        setup();
+        let keys: [(&str, Vec<String>); 4] = [
+            (
+                "1601EQ",
+                (1..=4)
+                    .map(|q| format!("frm1601EQ:optQuarter:{q}"))
+                    .collect(),
+            ),
+            (
+                "1601FQ",
+                (1..=4)
+                    .map(|q| format!("frm1601FQ:OptQuarter{q}"))
+                    .chain((0..5).map(|i| format!("txtNatIncPayment{i}")))
+                    .chain([
+                        "frm1601FQ:SpecialTax_1".into(),
+                        "frm1601FQ:SpecialTax_2".into(),
+                    ])
+                    .collect(),
+            ),
+            (
+                "1602Q",
+                (1..=4).map(|q| format!("frm1602Q:qtr_{q}")).collect(),
+            ),
+            (
+                "1603Q",
+                (1..=4)
+                    .map(|q| format!("frm1603Q:optQuarter{q}"))
+                    .chain([
+                        "frm1603Q:SpecialTax_1".into(),
+                        "frm1603Q:SpecialTax_2".into(),
+                    ])
+                    .collect(),
+            ),
+        ];
+        for (code, keys) in keys {
+            let kind = kind_of(code).unwrap();
+            for quarter in 1..=4 {
+                let opened = open(code, quarter);
+                let map = with_database(|db| print_map(db, kind, &opened["draft"]))
+                    .unwrap()
+                    .0;
+                for key in &keys {
+                    assert_eq!(
+                        opened["values"][key].as_str().unwrap_or(""),
+                        map.get(key).map_or("", String::as_str),
+                        "{code} Q{quarter} {key}"
+                    );
+                }
+                let ticked: Vec<&String> = keys
+                    .iter()
+                    .filter(|k| k.contains("uarter") || k.contains("qtr_"))
+                    .filter(|k| opened["values"][k.as_str()] == "true")
+                    .collect();
+                assert_eq!(ticked.len(), 1, "{code} Q{quarter}");
+                assert!(
+                    ticked[0].ends_with(&quarter.to_string()),
+                    "{code} Q{quarter}"
+                );
+            }
+        }
+    }
+
+    /// R3: the schedules are tables of their printed columns in their own
+    /// parts: 1603Q Schedule I (none of its cells left in item 4 or a loose
+    /// group, its preprinted recipients as row captions, the total item 3),
+    /// 1601FQ Schedule 1 (rows 1-5, the total) and 1602Q Schedules 2 and 3.
+    #[test]
+    fn q3_withholding_schedules_are_tables_of_their_printed_columns() {
+        let (part, table) = q3_table("1603Q", "frm1603Q:Sched1:txtValue1").unwrap();
+        assert_eq!(part, "Part IV · Schedule 1 – Computation of Tax");
+        assert_eq!(table["rows"], 2);
+        assert_eq!(
+            table["keys"][1],
+            json!([
+                "frm1603Q:Sched1:txtATC2",
+                "frm1603Q:Sched1:txtValue2",
+                "frm1603Q:Sched1:txtDivisor2",
+                "frm1603Q:Sched1:txtTaxBase2",
+                "frm1603Q:Sched1:txtTaxRate2",
+                "frm1603Q:Sched1:txtTaxWithheld2"
+            ])
+        );
+        let sheet = q3_sheet_text("1603q-2018");
+        for (row, label) in table["row_labels"]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+        {
+            let label = label.as_str().unwrap();
+            // Row 1's caption wraps around the printed row number and ATC.
+            let start = label.split(" or Business").next().unwrap();
+            assert!(sheet.contains(start), "row {row}: {label}");
+        }
+        let item4: Vec<String> = q3_drawn("1603Q")
+            .into_iter()
+            .filter(|(_, no, _, _)| no == "4")
+            .map(|(_, _, _, f)| f["k"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(item4, ["frm1603Q:TaxWithheld_1", "frm1603Q:TaxWithheld_2"]);
+        assert!(
+            q3_drawn("1603Q").iter().all(|(_, _, _, f)| !f["k"]
+                .as_str()
+                .unwrap()
+                .contains("Sched1:")
+                || f["k"] == "frm1603Q:Sched1:txtTotalTax")
+        );
+        let total = q3_drawn("1603Q")
+            .into_iter()
+            .find(|(_, _, _, f)| f["k"] == "frm1603Q:Sched1:txtTotalTax")
+            .unwrap();
+        assert_eq!(
+            (total.0.as_str(), total.1.as_str()),
+            ("Part IV · Schedule 1 – Computation of Tax", "3")
+        );
+
+        let (part, table) = q3_table("1601FQ", "drpTreatyCode0").unwrap();
+        assert_eq!(
+            part,
+            "Part IV · Schedule 1 – Details of Final Tax Based on Tax Treaty Rates"
+        );
+        assert_eq!(table["rows"], 5);
+        assert_eq!(table["keys"][4][5], "txtReqWithheld4");
+        for (code, cell, rows, cols) in [
+            ("1602Q", "frm1602Q:txtSched2TreatyCode1", 2, 5),
+            ("1602Q", "frm1602Q:txtSched3IPA2", 2, 4),
+        ] {
+            let (_, table) = q3_table(code, cell).unwrap();
+            assert_eq!(table["rows"], rows, "{cell}");
+            assert_eq!(table["cols"].as_array().unwrap().len(), cols, "{cell}");
+        }
+    }
+
     /// Item 3: boxes the official page leaves open but the models never
     /// stored now save: 1801/2200A/2200T Details of Payment, 2200C's number
     /// of sheets attached and 1701MS's signatory name and representative.
@@ -5835,9 +6791,15 @@ mod tests {
         assert_error_keys_on_screen("2550M", &validated["errors"]);
     }
 
+    /// Table cells whose dropdown list a catalog supplies: 1601FQ's 41 Part
+    /// II ATC rows and Schedule 1's ten lists, 2550M's 36 Schedule 1 ATCs,
+    /// 1601EQ's 30 Part II ATC rows, 1801's seven and 1600WP's two.
+    const CATALOG_TABLE_CELLS: usize = 51 + 36 + 30 + 7 + 2;
+
     #[test]
     fn catalog_lists_have_unique_values_across_the_schema() {
         let mut supplied = 0;
+        let mut cells = 0;
         let mut missing = Vec::new();
         for form in schema() {
             let code = form["c"].as_str().unwrap();
@@ -5869,19 +6831,38 @@ mod tests {
                             }
                         }
                     }
+                    // A table's dropdown column: every cell has its list.
+                    let cols = item["cols"].as_array();
+                    for row in item["keys"].as_array().into_iter().flatten() {
+                        for (c, key) in row.as_array().into_iter().flatten().enumerate() {
+                            let col = &cols.unwrap()[c];
+                            if col["t"] == "sel" && col["o"].as_array().is_none_or(Vec::is_empty) {
+                                let key = key.as_str().unwrap();
+                                if options.get(key).is_some() {
+                                    cells += 1;
+                                } else {
+                                    missing.push(format!("{code} {key} (table cell)"));
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         println!(
-            "Catalogs supply {supplied} schema dropdowns (including dependent lists awaiting a parent); remaining: {missing:#?}"
+            "Catalogs supply {supplied} schema dropdowns (including dependent lists awaiting a parent) and {cells} table cells; remaining: {missing:#?}"
         );
         // Explicitly retain the non-catalog / unbound cases as open work.
         // They must not silently turn into an incomplete catalog rollout.
         // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
-        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
-        // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), less
+        // 1601FQ Schedule 1's ten Treaty Code and ATC lists, table cells
+        // since PR 2. Table cells are counted apart: the 36 2550M Schedule
+        // 1 ATC lists (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows,
+        // 1601FQ Schedule 1's ten lists, and the other forms' tables.
+        assert_eq!(supplied, 72);
+        assert_eq!(cells, CATALOG_TABLE_CELLS);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8527,8 +9508,10 @@ mod tests {
         let locked = |key: &str| opened["locks"][key].as_str();
         let ticked = |key: &str| opened["values"][key].as_str() == Some("true");
         // A reason counts where the page draws it: in the box, beside a tick
-        // box, under a radio group (form_page.js `reasonFor`).
-        let reason = |key: &str| opened["needs"].get(key).is_some();
+        // box, under a radio group (form_page.js `reasonFor`): a sample's
+        // held box, or a box waiting for another box of its row.
+        let reason =
+            |key: &str| opened["needs"].get(key).is_some() || opened["waits"].get(key).is_some();
         let drawn = |key: &str| {
             opened["lock_notes"][key].as_str().is_some_and(|note| {
                 !note.is_empty()
@@ -9588,7 +10571,8 @@ mod tests {
                 ("0619F", 2),
                 ("1601C", 2),
                 ("1601EQ", 4),
-                ("1602Q", 3),
+                // PR 2: 1602Q Item 13A and the eight Schedule 2 boxes wait for Item 13 Yes.
+                ("1602Q", 12),
                 ("1604C", 5),
                 ("1604F", 1),
                 ("1606", 2),
@@ -9744,6 +10728,23 @@ mod tests {
                 Box::new(by(json!({"frm1602Q:txt18": "1000"}))),
             ),
             (
+                "1602Q",
+                vec![
+                    "frm1602Q:lstSpecialTax",
+                    "frm1602Q:txtSched2TreatyCode1",
+                    "frm1602Q:txtSched2ATC1",
+                    "frm1602Q:txtSched2TaxRate1",
+                    "frm1602Q:txtSched2Interest1",
+                    "frm1602Q:txtSched2TreatyCode2",
+                    "frm1602Q:txtSched2ATC2",
+                    "frm1602Q:txtSched2TaxRate2",
+                    "frm1602Q:txtSched2Interest2",
+                ],
+                Box::new(by(
+                    json!({"frm1602Q:OptSpecialTax1": "true", "frm1602Q:OptSpecialTax2": "false"}),
+                )),
+            ),
+            (
                 "1604C",
                 vec![
                     "frm1604c:txtRefMonth",
@@ -9834,6 +10835,8 @@ mod tests {
             ("1601C", json!({"frm1601c:AmendedRtn_1": "true"})),
             ("1601EQ", json!({"frm1601EQ:txtTax20": "1000"})),
             ("1602Q", json!({"frm1602Q:txt18": "1000"})),
+            ("1602Q", json!({"frm1602Q:OptSpecialTax1": "true"})),
+            ("1602Q", json!({"frm1602Q:OptSpecialTax2": "true"})),
             ("1604C", json!({"frm1604c:releasedOfFunds_1": "true"})),
             ("1604F", json!({"frm1604f:taxRelief_1": "true"})),
             ("1701Q", json!({"frm1701q:optType_1": "true"})),
@@ -9876,6 +10879,8 @@ mod tests {
             ("1600WP", 1),
             ("1601C", 1),
             ("1601EQ", 1),
+            // PR 2: 1601FQ items 28-30 bind the penalty overrides (probe.rs FILER_TYPED).
+            ("1601FQ", 1),
             ("1602Q", 1),
             ("1603Q", 1),
             ("1606", 1),
