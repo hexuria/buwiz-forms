@@ -17,7 +17,7 @@
   },
   "manual-1": {
    "pr": "PR 6",
-   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; screen_form_module::tests::annual_1604::pr6_a_layout_claiming_part_of_a_table_is_an_error; tools/test_form_annual_1604.mjs (just shell-ui-test)",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; screen_form_module::tests::annual_1604::pr6_a_layout_claiming_part_of_a_table_is_an_error; tools/test_form_annual_1604.mjs (just shell-ui-test); screen_form_module::tests::annual_1604::pr6_part_ii_dates_clear_and_legacy_text_stays; screen_form_module::tests::annual_1604::pr6_page_fixture_is_the_hosts",
    "status": "fixed"
   },
   "manual-2": {
@@ -49,7 +49,7 @@
   },
   "manual-0": {
    "pr": "PR 6",
-   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_form_1604e_totals_are_computed_by_the_form; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; tools/test_form_annual_1604.mjs (just shell-ui-test)",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_form_1604e_totals_are_computed_by_the_form; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; tools/test_form_annual_1604.mjs (just shell-ui-test); screen_form_module::tests::annual_1604::pr6_part_ii_dates_clear_and_legacy_text_stays; screen_form_module::tests::annual_1604::pr6_page_fixture_is_the_hosts; note: nothing migrates, so a legacy 1604E draft whose penalties were typed through a Total cell before probe.rs COMPUTED_BY_FORM still files those penalties (raised with the maintainer)",
    "status": "fixed"
   },
   "manual-1": {
@@ -76,7 +76,7 @@
   },
   "manual-0": {
    "pr": "PR 6",
-   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; tools/test_form_annual_1604.mjs (just shell-ui-test)",
+   "proof": "screen_form_module::tests::annual_1604::pr6_part_ii_schedules_follow_the_printed_rows_and_columns; screen_form_module::tests::annual_1604::pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them; screen_form_module::tests::annual_1604::pr6_every_part_ii_date_cell_keeps_a_whole_date; screen_form_module::tests::annual_1604::pr6_every_extracted_table_cell_is_drawn; tools/test_form_annual_1604.mjs (just shell-ui-test); screen_form_module::tests::annual_1604::pr6_part_ii_dates_clear_and_legacy_text_stays; screen_form_module::tests::annual_1604::pr6_page_fixture_is_the_hosts",
    "status": "fixed"
   },
   "manual-1": {
