@@ -1248,34 +1248,38 @@ fn load_draft(
     let exact = exact.filter(|_| store.is_some());
     let queueable = match kind {
         AgentFormKind::Form1601C => {
-            let month = period.clamp(1, 12);
-            let draft = match store
-                .map(|db| db.get_1601c_draft(tin, year, month))
-                .transpose()
-                .map_err(|error| read_error("1601C", error))?
-                .flatten()
-            {
-                Some(draft) => draft,
-                None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
-                None => {
-                    form_1601c::Form1601CDraft::new_unanswered_from_profile(profile, year, month)
-                }
-            };
-            return serde_json::to_value(draft).map_err(|error| error.to_string());
+            return out_of_line(|| {
+                let month = period.clamp(1, 12);
+                let draft = match store
+                    .map(|db| db.get_1601c_draft(tin, year, month))
+                    .transpose()
+                    .map_err(|error| read_error("1601C", error))?
+                    .flatten()
+                {
+                    Some(draft) => draft,
+                    None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
+                    None => form_1601c::Form1601CDraft::new_unanswered_from_profile(
+                        profile, year, month,
+                    ),
+                };
+                serde_json::to_value(draft).map_err(|error| error.to_string())
+            });
         }
         AgentFormKind::Form2551Q => {
-            let quarter = period.clamp(1, 4);
-            let draft = match store
-                .map(|db| db.get_2551q_draft(tin, year, quarter))
-                .transpose()
-                .map_err(|error| read_error("2551Q", error))?
-                .flatten()
-            {
-                Some(draft) => draft,
-                None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
-                None => form_2551q::Form2551QDraft::new_from_profile(profile, year, quarter),
-            };
-            return serde_json::to_value(draft).map_err(|error| error.to_string());
+            return out_of_line(|| {
+                let quarter = period.clamp(1, 4);
+                let draft = match store
+                    .map(|db| db.get_2551q_draft(tin, year, quarter))
+                    .transpose()
+                    .map_err(|error| read_error("2551Q", error))?
+                    .flatten()
+                {
+                    Some(draft) => draft,
+                    None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
+                    None => form_2551q::Form2551QDraft::new_from_profile(profile, year, quarter),
+                };
+                serde_json::to_value(draft).map_err(|error| error.to_string())
+            });
         }
         AgentFormKind::Queueable(kind) => kind,
     };
@@ -1284,23 +1288,25 @@ fn load_draft(
     if let (Some(key), Some(store)) = (exact, store)
         && queueable != QueueableKind::Form2550Q
     {
-        let found = bir_core::with_queueable_kind!(queueable, F => {
-            match stored::<F>(Some(store), tin, year, key)? {
+        let found = bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
+            Ok::<_, String>(match stored::<F>(Some(store), tin, year, key)? {
                 Some(found) => Some(finish(db, profile, found)?),
                 None => None,
-            }
-        });
+            })
+        })?);
         return found.ok_or_else(|| NO_LONGER_STORED.to_string());
     }
     let column = i64::from(period);
     macro_rules! simple {
-        ($ty:ty, $new:expr) => {{
-            let draft: $ty = stored::<$ty>(store, tin, year, column)?.unwrap_or_else(|| $new);
-            finish(db, profile, draft)
-        }};
+        ($ty:ty, $new:expr) => {
+            out_of_line(|| {
+                let draft: $ty = stored::<$ty>(store, tin, year, column)?.unwrap_or_else(|| $new);
+                finish(db, profile, draft)
+            })
+        };
     }
     match queueable {
-        QueueableKind::Form2550Q => {
+        QueueableKind::Form2550Q => out_of_line(|| {
             let quarter = period.clamp(1, 4);
             let draft = store
                 .map(|db| {
@@ -1323,8 +1329,8 @@ fn load_draft(
             bir_core::form_rules::prepare_form_2550q_live_row_identities(&mut draft)
                 .map_err(|error| format!("the 2550Q draft's row identities are unsafe: {error}"))?;
             serde_json::to_value(draft).map_err(|error| error.to_string())
-        }
-        QueueableKind::Form0605 => {
+        }),
+        QueueableKind::Form0605 => out_of_line(|| {
             type F = form_0605::Form0605Draft;
             let slot = period.max(1);
             let draft = match (stored::<F>(store, tin, year, i64::from(slot))?, store) {
@@ -1341,7 +1347,7 @@ fn load_draft(
             }
             .unwrap_or_else(|| F::new_from_profile(profile, year, slot));
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form0619E => simple!(
             form_0619e::Form0619EDraft,
             form_0619e::Form0619EDraft::new_from_profile(profile, year, period)
@@ -1398,7 +1404,7 @@ fn load_draft(
             form_1700::Form1700Draft,
             form_1700::Form1700Draft::new_from_profile(profile, year)
         ),
-        QueueableKind::Form1701 => {
+        QueueableKind::Form1701 => out_of_line(|| {
             type F = form_1701::Form1701Draft;
             let draft = stored_annual::<F>(store, tin, year)?.unwrap_or_else(|| {
                 let mut draft = F::new_from_profile(profile, year, 12);
@@ -1406,7 +1412,7 @@ fn load_draft(
                 draft
             });
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form1701A => simple!(
             form_1701a::Form1701ADraft,
             form_1701a::Form1701ADraft::new_from_profile(profile, year)
@@ -1425,7 +1431,7 @@ fn load_draft(
             form_1702ex::Form1702ExDraft,
             form_1702ex::Form1702ExDraft::new_from_profile(profile, year)
         ),
-        QueueableKind::Form1702MX => {
+        QueueableKind::Form1702MX => out_of_line(|| {
             type F = form_1702mx::Form1702MXDraft;
             let draft = stored_annual::<F>(store, tin, year)?.unwrap_or_else(|| {
                 let mut draft = F::new_from_profile(profile, year);
@@ -1433,12 +1439,12 @@ fn load_draft(
                 draft
             });
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form1702Q => simple!(form_1702q::Form1702qDraft, {
             let quarter = if (1..=3).contains(&period) { period } else { 1 };
             form_1702q::Form1702qDraft::new_from_profile(profile, year, quarter)
         }),
-        QueueableKind::Form1702RT => {
+        QueueableKind::Form1702RT => out_of_line(|| {
             type F = form_1702rt::Form1702RTDraft;
             let draft = stored_annual::<F>(store, tin, year)?.unwrap_or_else(|| {
                 let mut draft = F::new_from_profile(profile, year, 12);
@@ -1448,7 +1454,7 @@ fn load_draft(
                 draft
             });
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form1706 => simple!(
             form_1706::Form1706Draft,
             form_1706::Form1706Draft::new_from_profile(profile, year, u32::from(period.max(1)))
@@ -1461,7 +1467,7 @@ fn load_draft(
             form_1707a::Form1707ADraft,
             form_1707a::Form1707ADraft::new_from_profile(profile, year, u32::from(period.max(1)))
         ),
-        QueueableKind::Form1800 => {
+        QueueableKind::Form1800 => out_of_line(|| {
             type F = form_1800::Form1800Draft;
             let mut draft = stored::<F>(store, tin, year, column)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, u32::from(period.max(1))));
@@ -1470,8 +1476,8 @@ fn load_draft(
                 draft.tin = tin.to_string();
             }
             finish(db, profile, draft)
-        }
-        QueueableKind::Form1801 => {
+        }),
+        QueueableKind::Form1801 => out_of_line(|| {
             type F = form_1801::Form1801Draft;
             let mut draft = stored::<F>(store, tin, year, column)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, u32::from(period.max(1))));
@@ -1479,12 +1485,12 @@ fn load_draft(
                 draft.tin = tin.to_string();
             }
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form2000 => simple!(
             form_2000::Form2000Draft,
             form_2000::Form2000Draft::new_from_profile(profile, year, period.clamp(1, 12))
         ),
-        QueueableKind::Form2000OT => {
+        QueueableKind::Form2000OT => out_of_line(|| {
             // One return per transaction date (`MMDD`): this year's latest
             // editable draft, else a new transaction.
             type F = form_2000ot::Form2000OTDraft;
@@ -1493,19 +1499,19 @@ fn load_draft(
             })?
             .unwrap_or_else(|| F::new_from_profile(profile, year));
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form2200A => simple!(
             form_2200a::Form2200ADraft,
             form_2200a::Form2200ADraft::new_from_profile(profile, year, period)
         ),
-        QueueableKind::Form2200AN => {
+        QueueableKind::Form2200AN => out_of_line(|| {
             type F = form_2200an::Form2200ANDraft;
             let month = i64::from(period.clamp(1, 12));
             let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 0..=31), |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, period));
             finish(db, profile, draft)
-        }
-        QueueableKind::Form2200C => {
+        }),
+        QueueableKind::Form2200C => out_of_line(|| {
             type F = form_2200c::Form2200CDraft;
             let months = if (1..=12).contains(&period) {
                 i64::from(period)..=i64::from(period)
@@ -1515,7 +1521,7 @@ fn load_draft(
             let draft = latest::<F>(store, tin, year, mmdd_keys(months, 0..=31), |_| true)?
                 .unwrap_or_else(|| F::new_for_month(profile, year, period));
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form2200M => simple!(
             form_2200m::Form2200MDraft,
             form_2200m::Form2200MDraft::new_from_profile(profile, year, period)
@@ -1524,13 +1530,13 @@ fn load_draft(
             form_2200p::Form2200PDraft,
             form_2200p::Form2200PDraft::new_from_profile(profile, year, period)
         ),
-        QueueableKind::Form2200S => {
+        QueueableKind::Form2200S => out_of_line(|| {
             type F = form_2200s::Form2200SDraft;
             let month = i64::from(period.clamp(1, 12));
             let draft = latest::<F>(store, tin, year, mmdd_keys(month..=month, 0..=31), |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, period));
             finish(db, profile, draft)
-        }
+        }),
         QueueableKind::Form2200T => simple!(
             form_2200t::Form2200TDraft,
             form_2200t::Form2200TDraft::new_from_profile(profile, year, period)
@@ -1539,7 +1545,7 @@ fn load_draft(
             form_2550m::Form2550MDraft,
             form_2550m::Form2550MDraft::new_from_profile(profile, year, month_or(period, 1))
         ),
-        QueueableKind::Form2552 => {
+        QueueableKind::Form2552 => out_of_line(|| {
             // Keyed by its Item 1 date: this year's latest return still in
             // progress (month/day 0 is a blank component), else a new one.
             type F = form_2552::Form2552Draft;
@@ -1551,16 +1557,25 @@ fn load_draft(
             })?
             .unwrap_or_else(|| F::new_from_profile(profile, year, 0, 0));
             finish(db, profile, draft)
-        }
-        QueueableKind::Form2553 => {
+        }),
+        QueueableKind::Form2553 => out_of_line(|| {
             // The return names its own quarter (Item 3): this year's latest.
             type F = form_2553::Form2553Draft;
             let quarter = if (1..=4).contains(&period) { period } else { 0 };
             let draft = latest::<F>(store, tin, year, 1..=4, |_| true)?
                 .unwrap_or_else(|| F::new_from_profile(profile, year, quarter));
             finish(db, profile, draft)
-        }
+        }),
     }
+}
+
+/// Run `run` in a frame of its own. A dispatcher over every form calls
+/// each form's arm through this, so in a debug build (no stack colouring)
+/// its own frame holds only the arm's result, not every form's typed draft
+/// at once; each arm (each closure type) gets its own out-of-line copy.
+#[inline(never)]
+pub(crate) fn out_of_line<T>(run: impl FnOnce() -> T) -> T {
+    run()
 }
 
 /// `MMDD` period keys for every month and day in the ranges.
@@ -4051,7 +4066,7 @@ fn stored_for_date(
     // Every stored entry of the year, read once, matched in memory: an
     // entry past MAX_ENTRY (stored by another writer) counts too, so a
     // same-date return is never stored twice.
-    let rows: Vec<(i64, Value)> = bir_core::with_queueable_kind!(queueable, F => {
+    let rows: Vec<(i64, Value)> = bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
         db.list_queueable_drafts::<F>(&identity.tin, identity.taxable_year)
             .map_err(|error| read_error(code, error))?
             .into_iter()
@@ -4060,8 +4075,8 @@ fn stored_for_date(
                     .map(|row| (entry, row))
                     .map_err(|error| error.to_string())
             })
-            .collect::<Result<_, String>>()?
-    });
+            .collect::<Result<Vec<_>, String>>()
+    })?);
     for (entry, row) in rows {
         if typed_of(&row)? != typed {
             continue;
@@ -4137,27 +4152,35 @@ fn stored_return(
             .transpose()
     }
     match kind {
-        AgentFormKind::Form1601C => to_value(
-            db.get_1601c_draft(tin, year, slot)
-                .map_err(|error| read_error("1601C", error))?,
-        ),
-        AgentFormKind::Form2551Q => to_value(
-            db.get_2551q_draft(tin, year, slot)
-                .map_err(|error| read_error("2551Q", error))?,
-        ),
-        AgentFormKind::Queueable(QueueableKind::Form2550Q) => to_value(
-            db.get_form_draft::<form_2550q::Form2550QDraft>(tin, "2550Q", year, Some(slot))
-                .map_err(|error| read_error("2550Q", error))?,
-        ),
-        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
-            let found = match stored::<F>(Some(db), tin, year, column)? {
-                Some(found) => Some(found),
-                None => db
-                    .get_form_draft_v2::<F>(tin, F::FORM_CODE, year, &identity.period)
-                    .map_err(|error| read_error(F::FORM_CODE, error))?,
-            };
-            to_value(found)
+        AgentFormKind::Form1601C => out_of_line(|| {
+            to_value(
+                db.get_1601c_draft(tin, year, slot)
+                    .map_err(|error| read_error("1601C", error))?,
+            )
         }),
+        AgentFormKind::Form2551Q => out_of_line(|| {
+            to_value(
+                db.get_2551q_draft(tin, year, slot)
+                    .map_err(|error| read_error("2551Q", error))?,
+            )
+        }),
+        AgentFormKind::Queueable(QueueableKind::Form2550Q) => out_of_line(|| {
+            to_value(
+                db.get_form_draft::<form_2550q::Form2550QDraft>(tin, "2550Q", year, Some(slot))
+                    .map_err(|error| read_error("2550Q", error))?,
+            )
+        }),
+        AgentFormKind::Queueable(queueable) => {
+            bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
+                let found = match stored::<F>(Some(db), tin, year, column)? {
+                    Some(found) => Some(found),
+                    None => db
+                        .get_form_draft_v2::<F>(tin, F::FORM_CODE, year, &identity.period)
+                        .map_err(|error| read_error(F::FORM_CODE, error))?,
+                };
+                to_value(found)
+            }))
+        }
     }
 }
 
@@ -4182,7 +4205,7 @@ fn stored_for_period(
             if monthly && key >= 101 =>
         {
             let month = i64::from(key / 100);
-            bir_core::with_queueable_kind!(queueable, F => {
+            bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
                 let found = latest::<F>(
                     Some(db),
                     &identity.tin,
@@ -4193,7 +4216,7 @@ fn stored_for_period(
                 found
                     .map(|found| serde_json::to_value(found).map_err(|error| error.to_string()))
                     .transpose()
-            })
+            }))
         }
         _ => stored_return(db, kind, draft),
     }
@@ -4274,23 +4297,28 @@ fn save_amendment(
     };
     agent::compute(kind, draft)?;
     let error = |error: bir_core::db::DbError| error.to_string();
+    let draft_ref = &*draft;
     let id = match kind {
-        AgentFormKind::Form1601C => db
-            .save_1601c_amendment(
-                &serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?,
+        AgentFormKind::Form1601C => out_of_line(|| {
+            db.save_1601c_amendment(
+                &serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?,
                 &base,
             )
-            .map_err(error)?,
-        AgentFormKind::Form2551Q => db
-            .save_2551q_amendment(
-                &serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?,
+            .map_err(error)
+        })?,
+        AgentFormKind::Form2551Q => out_of_line(|| {
+            db.save_2551q_amendment(
+                &serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?,
                 &base,
             )
-            .map_err(error)?,
-        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
-            let typed: F = serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
-            db.save_queueable_amendment(&typed, &base).map_err(error)?
-        }),
+            .map_err(error)
+        })?,
+        AgentFormKind::Queueable(queueable) => {
+            bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
+            let typed: F = serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?;
+            db.save_queueable_amendment(&typed, &base).map_err(error)
+        })?)
+        }
     };
     draft["id"] = Value::from(id);
     Ok(id)
@@ -4437,27 +4465,29 @@ pub(crate) fn print_map(
     fn typed<F: serde::de::DeserializeOwned>(draft: &Value) -> Result<F, HostError> {
         serde_json::from_value(draft.clone()).map_err(|error| host_error(error.to_string()))
     }
-    Ok(match kind {
-        AgentFormKind::Form1601C => {
+    match kind {
+        AgentFormKind::Form1601C => out_of_line(|| {
             let d: bir_core::forms::Form1601CDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email_address);
-            (d.to_print_field_map(), page)
-        }
-        AgentFormKind::Form2551Q => {
+            Ok((d.to_print_field_map(), page))
+        }),
+        AgentFormKind::Form2551Q => out_of_line(|| {
             let d: bir_core::forms::Form2551QDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email);
-            (d.to_print_field_map(), page)
-        }
-        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
-            let d: F = typed(draft)?;
-            let page = crate::bir_module::receipt_page(
-                db,
-                d.lifecycle().receipt_id,
-                d.submission_email(),
-            );
-            (d.print_field_map(), page)
+            Ok((d.to_print_field_map(), page))
         }),
-    })
+        AgentFormKind::Queueable(queueable) => {
+            bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
+                let d: F = typed(draft)?;
+                let page = crate::bir_module::receipt_page(
+                    db,
+                    d.lifecycle().receipt_id,
+                    d.submission_email(),
+                );
+                Ok((d.print_field_map(), page))
+            }))
+        }
+    }
 }
 
 /// Print preview of the draft the page holds (save it first). Works from the
@@ -4550,7 +4580,7 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
         )));
     };
     with_database(|db| {
-        bir_core::with_queueable_kind!(queueable, F => {
+        bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let mut typed: F = serde_json::from_value(draft.clone())
                 .map_err(|error| host_error(error.to_string()))?;
             if typed.draft_id().is_none() {
@@ -4570,7 +4600,7 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
             db.save_queued_queueable(&typed)
                 .map(|id| HostValue::Number(id as f64))
                 .map_err(|error| host_error(error.to_string()))
-        })
+        }))
     })
 }
 
@@ -4587,13 +4617,13 @@ fn screen_form_cancel_queue(arguments: &HostArguments) -> HostResult {
         )));
     };
     with_database(|db| {
-        bir_core::with_queueable_kind!(queueable, F => {
+        bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let typed: F = serde_json::from_value(draft.clone())
                 .map_err(|error| host_error(error.to_string()))?;
             db.cancel_queued_queueable(&typed)
                 .map(|_| HostValue::Null)
                 .map_err(|error| host_error(error.to_string()))
-        })
+        }))
     })
 }
 
@@ -7547,6 +7577,54 @@ mod tests {
             }
             _ => {}
         }
+    }
+
+    /// The heaviest host paths fit a small stack on every form. A debug
+    /// build keeps every match arm's locals in the dispatcher's frame, which
+    /// once made one per-form dispatcher over a megabyte and overflowed the
+    /// Windows test threads (2 MB); the arms now run out of line. Here each
+    /// form opens, takes a complete sample period, fills, saves, queues and
+    /// prints (its print map and filled sheet) on a 1 MB thread.
+    #[test]
+    fn every_forms_host_paths_fit_a_one_megabyte_stack() {
+        let run = std::thread::Builder::new()
+            .name("one-megabyte-stack".into())
+            .stack_size(1024 * 1024)
+            .spawn(|| {
+                setup();
+                let mut done = Vec::new();
+                for kind in AgentFormKind::all() {
+                    let code = kind.form_code();
+                    let period = page_period_of(code);
+                    let opened = open(code, period);
+                    let answer = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
+                    assert_eq!(answer["complete"], true, "{code}");
+                    let filled = fill(code, &opened["draft"], json!({}));
+                    let saved = save(code, &filled["draft"]);
+                    // Queued or refused on validation: either way it returns.
+                    let _ = match kind {
+                        AgentFormKind::Queueable(_) => call(
+                            "screen_form_queue",
+                            vec![code.into(), json(saved["draft"].clone())],
+                        ),
+                        _ => call(
+                            "queue_form_draft",
+                            vec![TIN.into(), code.into(), YEAR.into(), period.into()],
+                        ),
+                    };
+                    let slug = crate::bir_module::print_slug_for(code).expect("a print sheet");
+                    let (fields, _) =
+                        with_database(|db| print_map(db, kind, &saved["draft"])).unwrap();
+                    bir_print::frozen_html::filled_document(slug, &fields).expect("prints");
+                    done.push(code);
+                }
+                done.len()
+            })
+            .expect("a thread");
+        assert_eq!(
+            run.join().expect("no stack overflow"),
+            AgentFormKind::all().len()
+        );
     }
 
     #[test]
