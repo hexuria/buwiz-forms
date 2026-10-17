@@ -409,6 +409,14 @@ impl Form1702MXDraft {
             ],
         );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
+        // Item 9's first line prints the registered address the return
+        // files there (the official map's `txtPg1Pt1I10RegisteredAddress`),
+        // not the first entry of the line list, which the page does not
+        // write: a long address prints whole over the item's lines.
+        fields.insert(
+            "frm1702MX:txtPg1Pt1I10RegisteredAddress".to_string(),
+            self.registered_address.trim().to_string(),
+        );
         for (key, name) in [
             ("frm1702MX:ddlPg1I2Date", "mm"),
             ("frm1702MX:txtPg1I2YearEnd", "yy"),

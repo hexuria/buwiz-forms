@@ -185,6 +185,18 @@
    "status": "fixed"
   }
  },
+ "1702MX": {
+  "R5.0": {
+   "pr": "PR 0c",
+   "proof": "bir_print::frozen_html::tests::a_stacked_item_past_its_boxes_prints_whole_as_plain_type_on_every_sheet; bir_print::frozen_html::tests::a_single_line_name_past_its_boxes_prints_whole_on_every_sheet; screen_form_module::tests::every_reviewed_long_box_prints_whole_past_its_boxes (each box listed here typed as long as the page takes it, saved and printed through the form's print map: the whole text prints, in its boxes while it fits and as plain type over them past that, and no other value the map carries is cut; a box the page never types is listed with what prints it); screen_form_module::tests::a_long_1702mx_address_prints_whole_over_its_lines (Item 9's first line prints the address the return files, whole over its three lines)",
+   "status": "fixed"
+  },
+  "R5.1": {
+   "pr": "PR 0c",
+   "proof": "bir_print::frozen_html::tests::a_stacked_item_past_its_boxes_prints_whole_as_plain_type_on_every_sheet; bir_print::frozen_html::tests::a_single_line_name_past_its_boxes_prints_whole_on_every_sheet; screen_form_module::tests::every_reviewed_long_box_prints_whole_past_its_boxes (each box listed here typed as long as the page takes it, saved and printed through the form's print map: the whole text prints, in its boxes while it fits and as plain type over them past that, and no other value the map carries is cut; a box the page never types is listed with what prints it); screen_form_module::tests::a_long_1702mx_address_prints_whole_over_its_lines (Item 9's first line prints the address the return files, whole over its three lines)",
+   "status": "fixed"
+  }
+ },
  "1702Q": {
   "R5.0": {
    "pr": "PR 0c",

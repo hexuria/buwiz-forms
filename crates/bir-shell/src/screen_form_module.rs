@@ -10335,6 +10335,77 @@ mod tests {
         cut
     }
 
+    /// 1702MX's registered address (Item 9, three comb lines), typed in its
+    /// first box: within the first line's 38 boxes it prints there; past
+    /// them the whole address prints as plain type across the three lines,
+    /// at most 9 pt and shrunk only when needed. Nothing is lost.
+    #[test]
+    fn a_long_1702mx_address_prints_whole_over_its_lines() {
+        setup();
+        let (code, key, slug) = (
+            "1702MX",
+            "frm1702MX:txtPg1Pt1I10RegisteredAddress",
+            "1702mx-2018c",
+        );
+        let kind = kind_of(code).unwrap();
+        let lines = ["p1c40", "p1c41", "p1c42"];
+        let opened = open(code, 0);
+        // The page takes at most `longest` characters; a longer address
+        // (one stored before, or imported) is written to the draft directly.
+        let longest = field_length(code, key).map_or(120, |m| m as usize);
+        for len in [30, longest, 200, 400] {
+            let text = address_of(len);
+            let draft = if len <= longest {
+                let filled = fill_unlocked(code, &opened["draft"], json!({ key: text }), &[key]);
+                assert_eq!(filled["rejected"], json!({}), "{len}");
+                filled["draft"].clone()
+            } else {
+                let mut draft = opened["draft"].clone();
+                draft["registered_address"] = json!(text);
+                draft
+            };
+            let (fields, _) = with_database(|db| print_map(db, kind, &draft)).unwrap();
+            let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
+            let printed = bir_print::frozen_html::printed_cells(&document);
+            let parts: Vec<&(String, Option<f64>)> =
+                lines.iter().map(|cell| &printed[*cell]).collect();
+            if len <= 38 {
+                assert_eq!(parts[0].0.trim_end(), text, "in the first line's boxes");
+                assert!(parts.iter().all(|(_, size)| size.is_none()));
+                continue;
+            }
+            if len <= 38 + 38 + 30 {
+                // Within the item's boxes: split over its lines.
+                let boxed: String = parts.iter().map(|(t, _)| t.as_str()).collect();
+                assert_eq!(
+                    squeezed(&boxed),
+                    squeezed(&text),
+                    "{len}: over the lines' boxes"
+                );
+                assert!(parts.iter().all(|(_, size)| size.is_none()), "{len}");
+                assert!(parts[1].0.trim().len() > 0, "{len}: the second line used");
+                continue;
+            }
+            let whole: Vec<&str> = parts.iter().map(|(t, _)| t.as_str()).collect();
+            assert_eq!(whole.join(" "), text, "{len}: the whole address, in order");
+            let sizes: Vec<f64> = parts.iter().map(|(_, size)| size.unwrap()).collect();
+            assert!(
+                sizes
+                    .iter()
+                    .all(|s| *s == sizes[0] && *s <= 9.0 && *s >= 4.0)
+            );
+            let room: f64 = lines
+                .iter()
+                .map(|cell| (cell_width(slug, cell) - 2.0) / (0.58 * 9.0))
+                .sum();
+            assert_eq!(
+                sizes[0] < 9.0,
+                len as f64 > room,
+                "{len}: shrunk only when needed"
+            );
+        }
+    }
+
     /// The boxes the form review found growing text printed into fixed
     /// character boxes, or taking more characters than the boxes hold
     /// (docs/form-findings R5 "print in fixed char boxes" and "accept more
@@ -10875,11 +10946,6 @@ mod tests {
                 "the app writes it (no draft field)",
             ),
         ]);
-        // Typed whole, filed whole, but printed from elsewhere: 1702MX's
-        // first address line is the whole address while its print reads the
-        // address lines (combs: not pooled), so typing it does not reach
-        // the sheet. Not a cut by the print; its finding stays open.
-        let print_reads_elsewhere = ["frm1702MX:txtPg1Pt1I10RegisteredAddress"];
         let mut whole = 0;
         for (code, keys) in reviewed {
             let kind = kind_of(code).unwrap();
@@ -10922,13 +10988,6 @@ mod tests {
                     with_database(|db| print_map(db, kind, &filled["draft"])).unwrap();
                 let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
                 let printed = squeezed(&printed_cells_in_order(slug, &document));
-                if print_reads_elsewhere.contains(key) {
-                    assert!(
-                        !printed.contains(&squeezed(&text)),
-                        "{code} {key}: now reaches the sheet; close its finding"
-                    );
-                    continue;
-                }
                 assert!(
                     printed.contains(&squeezed(&text)),
                     "{code} {key}: the whole {length} characters print"
@@ -10938,7 +10997,7 @@ mod tests {
                 whole += 1;
             }
         }
-        assert_eq!(whole, 158, "boxes typed long and printed whole");
+        assert_eq!(whole, 159, "boxes typed long and printed whole");
     }
 
     /// Rules page question 4, decided 2026-10-17, end to end on every pooled
