@@ -10528,7 +10528,7 @@ mod tests {
             assert!(
                 sizes
                     .iter()
-                    .all(|s| *s == sizes[0] && *s <= 9.0 && *s >= 4.0)
+                    .all(|s| *s == sizes[0] && *s <= 9.0)
             );
             let room: f64 = lines
                 .iter()

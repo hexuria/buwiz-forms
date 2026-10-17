@@ -155,9 +155,6 @@ enum CellFill {
 
 /// The type a comb's boxes print in: the largest an overflow line uses.
 const PLAIN_MAX_PT: f64 = 9.0;
-/// The smallest type an overflow line shrinks to (the floor the comb
-/// overflow line always had): text needing less runs past its cell.
-const PLAIN_MIN_PT: f64 = 4.0;
 /// Arimo averages about 0.55 em per character; keep a small margin.
 const EM_PER_CHAR: f64 = 0.58;
 
@@ -298,13 +295,14 @@ fn join_lines(lines: &[String], slots: &[usize]) -> String {
     text
 }
 
-/// The type size (pt) `chars` characters fit `width` pt at, between
-/// [`PLAIN_MIN_PT`] and [`PLAIN_MAX_PT`].
+/// The type size (pt) `chars` characters fit `width` pt at, at most
+/// [`PLAIN_MAX_PT`] and with no floor: text that would not fit shrinks
+/// further rather than run past its cell (nothing is lost).
 fn fit_size(width: f64, chars: usize) -> f64 {
     if chars == 0 {
         return PLAIN_MAX_PT;
     }
-    ((width - 2.0).max(1.0) / (chars as f64 * EM_PER_CHAR)).clamp(PLAIN_MIN_PT, PLAIN_MAX_PT)
+    ((width - 2.0).max(1.0) / (chars as f64 * EM_PER_CHAR)).min(PLAIN_MAX_PT)
 }
 
 /// `text` as plain type over lines of `widths` pt, broken only between
@@ -4549,8 +4547,7 @@ mod tests {
                                 .unwrap_or_else(|| panic!("{slug} {}: a plain line", line.cell));
                             assert!(!part.is_empty(), "{slug} {}: every line used", line.cell);
                             assert!(
-                                size == PLAIN_MIN_PT
-                                    || part.chars().count() as f64 * 0.55 * size <= line.width,
+                                part.chars().count() as f64 * EM_PER_CHAR * size <= line.width,
                                 "{slug} {}: {part:?} at {size}pt fits {}pt",
                                 line.cell,
                                 line.width
@@ -4630,10 +4627,9 @@ mod tests {
                     assert_eq!(boxes.trim(), "", "{slug} {key}");
                     let (part, size) = overlay.unwrap_or_else(|| panic!("{slug} {key}: plain"));
                     assert_eq!(part, text, "{slug} {key}: whole");
-                    assert!(size >= PLAIN_MIN_PT, "{slug} {key}: the 4 pt floor");
                     assert!(
-                        size == PLAIN_MIN_PT || len as f64 * 0.55 * size <= width,
-                        "{slug} {key}"
+                        len as f64 * EM_PER_CHAR * size <= width,
+                        "{slug} {key}: {len} characters at {size}pt fit {width}pt"
                     );
                     if shrunk {
                         assert!(size < 9.0, "{slug} {key}: {size}");
@@ -4645,8 +4641,9 @@ mod tests {
     }
 
     /// A fitting two-line address prints byte for byte as before the
-    /// overflow rule: each box takes one character, the first carries the
-    /// whole line as its writer value, and no overlay is drawn.
+    /// overflow rule: 0619E's whole address item (its two comb lines, from
+    /// `<div id="p1c41"` to the next cell) equals what the fill printed at
+    /// `pr0b-push`, captured then into `fixtures/0619e-fitting-address.html`.
     #[test]
     fn a_fitting_address_prints_byte_for_byte_as_before() {
         let fields = BTreeMap::from([
@@ -4660,24 +4657,19 @@ mod tests {
             ),
         ]);
         let document = filled_document("0619e-2018", &fields).unwrap();
-        assert!(!document.contains("data-overflow-of"));
-        let expected = concat!(
-            r#"<div id="p1c42" class="c f" data-cell-kind="field" data-row="11" data-col="0" data-field-kind="comb" data-field-name="p1c42" data-comb-capacity="31" data-comb-slots="31" data-comb-pitch="14.4" style="left:17.62pt;top:240.62pt;width:446.52pt;height:18.27pt">"#,
-            r#"<div class="s" data-slot="0" style="left:0.74pt;top:0.48pt;width:13.44pt;height:17.31pt">"#,
-            r#"<input type="text" class="fi fh8 fc" id="p1c42-s0" name="p1c42" data-slot-index="0" maxlength="1" autocomplete="off" spellcheck="false" value="Q" data-writer-value="QUEZON CITY"></div>"#,
-            r#"<div class="s" data-slot="1" style="left:14.18pt;top:0.48pt;width:14.28pt;height:17.31pt">"#,
-            r#"<input type="text" class="fi fh8 fc" id="p1c42-s1" name="p1c42" data-slot-index="1" maxlength="1" autocomplete="off" spellcheck="false" value="U"></div>"#,
-        );
-        assert!(document.contains(expected), "line 2 as it always printed");
+        let start = document.find("<div id=\"p1c41\"").unwrap();
+        let end = document.find("<div id=\"p1c43\"").unwrap();
         assert_eq!(
-            printed_text(&document, "p1c41").trim_end(),
-            "1 EXAMPLE STREET"
+            &document[start..end],
+            include_str!("fixtures/0619e-fitting-address.html"),
+            "the address item as it printed before"
         );
-        assert_eq!(printed_text(&document, "p1c42").trim_end(), "QUEZON CITY");
+        assert!(!document.contains("data-overflow-of"));
     }
 
     /// One long address, pinned: 200 characters over 0619E's two address
-    /// lines print as plain type in one size, never under the 4 pt floor.
+    /// lines print as plain type in one size; far longer, the type keeps
+    /// shrinking so the text still fits its cells (no floor).
     #[test]
     fn a_long_address_prints_at_a_pinned_size() {
         let text = words_of(200);
@@ -4688,12 +4680,27 @@ mod tests {
         assert_eq!(format!("{first} {second}"), text);
         assert_eq!(size, again);
         assert_eq!(size, Some(8.61));
-        assert!(document.contains("font-size:8.61pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"p1c41\""));
-        // Past what 4 pt holds the floor stays and the text runs on.
-        let fields = BTreeMap::from([("frm0619E:txtAddress".to_string(), words_of(600))]);
+        assert!(document.contains(
+            "font-size:8.61pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"p1c41\""
+        ));
+        // 600 characters: under 4 pt, and still inside each cell.
+        let text = words_of(600);
+        let fields = BTreeMap::from([("frm0619E:txtAddress".to_string(), text.clone())]);
         let document = filled_document("0619e-2018", &fields).unwrap();
-        assert_eq!(printed_cell(&document, "p1c41").1, Some(4.0));
-        assert_eq!(fit_size(100.0, 1000), PLAIN_MIN_PT);
+        let mut parts = Vec::new();
+        for cell in ["p1c41", "p1c42"] {
+            let (part, size) = printed_cell(&document, cell);
+            let size = size.unwrap();
+            let width = comb_cell(&document, cell).unwrap().1;
+            assert!(size < 4.0, "{cell}: {size}");
+            assert!(
+                part.chars().count() as f64 * EM_PER_CHAR * size <= width,
+                "{cell}: {} characters at {size}pt fit {width}pt",
+                part.chars().count()
+            );
+            parts.push(part);
+        }
+        assert_eq!(parts.join(" "), text, "nothing is lost");
         assert_eq!(fit_size(1000.0, 5), PLAIN_MAX_PT);
     }
 }
