@@ -1797,10 +1797,10 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
-    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), plus 1
-    // for 1604C (PR 6, item 5 RDO). The 36 2550M Schedule 1 ATC lists
-    // (N03) are table cells, counted apart.
-    assert_eq!(supplied, 83, "catalog lists, dependent ones included");
+    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), plus 3
+    // for 1604C, 1604E and 1604F (PR 6, item 5 RDO). The 36 2550M Schedule
+    // 1 ATC lists (N03) are table cells, counted apart.
+    assert_eq!(supplied, 85, "catalog lists, dependent ones included");
 }
 
 #[test]

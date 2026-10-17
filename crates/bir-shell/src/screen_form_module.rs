@@ -85,8 +85,6 @@ export interface ScreenFormOpened {
     blank: string[];
     /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
     needs: Record<string, string>;
-    /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
-    waits: Record<string, string>;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
     /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -745,6 +743,21 @@ fn apply_layout(form: &mut Value, layout: &Value) {
         let keys = table_keys(table);
         if keys.iter().any(|k| wanted_tables.contains(&k.as_str())) {
             claimed.extend(keys);
+        }
+    }
+    // An extracted table goes whole: a layout that names only some of its
+    // cells would drop the rest from the page, so it is a broken override.
+    for table in &tables {
+        let keys = table_keys(table);
+        let taken = keys.iter().filter(|k| claimed.contains(*k)).count();
+        if taken > 0 && taken < keys.len() {
+            panic!(
+                "{}: schema-overrides.json layout names {taken} of the {} cells of table {:?} (first cell {}); name every cell or none",
+                form["c"].as_str().unwrap_or("?"),
+                keys.len(),
+                table["l"].as_str().unwrap_or(""),
+                keys[0]
+            );
         }
     }
     let mut kept = BTreeSet::new();
@@ -6012,9 +6025,9 @@ mod tests {
         // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), plus
-        // 1 for 1604C (PR 6, item 5 RDO). The 36 2550M Schedule 1 ATC lists
-        // (N03) are table cells, not fields.
-        assert_eq!(supplied, 83);
+        // 3 for 1604C, 1604E and 1604F (PR 6, item 5 RDO). The 36 2550M
+        // Schedule 1 ATC lists (N03) are table cells, not fields.
+        assert_eq!(supplied, 85);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 

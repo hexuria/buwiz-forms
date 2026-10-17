@@ -548,7 +548,19 @@ fn pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them() {
         (
             "1604E",
             "1604e-2018",
+            // Schedule 1's 3rd quarter and Schedule 2's February: rows whose
+            // Total the probe once bound to their penalties.
             json!({
+                "frm1604e:txtSched1RemDate3": "10/20/2026",
+                "frm1604e:txtSched1BankCode3": "PNB 003",
+                "frm1604e:txtSched1TRANo3": "TRA-Q3",
+                "frm1604e:txtSched1TaxWithheld3": "700",
+                "frm1604e:txtSched1Penalties3": "30",
+                "frm1604e:txtSched2RemDate2": "03/10/2026",
+                "frm1604e:txtSched2BankCode2": "LBP 004",
+                "frm1604e:txtSched2TRANo2": "TRA-02",
+                "frm1604e:txtSched2TaxWithheld2": "40",
+                "frm1604e:txtSched2Penalties2": "5",
                 "frm1604e:txtSched2RemDate12": "01/10/2027",
                 "frm1604e:txtSched2BankCode12": "BDO 002",
                 "frm1604e:txtSched2TRANo12": "TRA-12",
@@ -556,10 +568,15 @@ fn pr6_part_ii_rows_compute_and_print_where_the_sheet_prints_them() {
                 "frm1604e:txtSched2Penalties12": "20",
             }),
             vec![
+                ("frm1604e:txtSched1TotRemAmt3", "730.00"),
+                ("frm1604e:txtSched1TaxWithheldTtl", "700.00"),
+                ("frm1604e:txtSched1PenaltiesTtl", "30.00"),
+                ("frm1604e:txtSched1TotRemAmtTtl", "730.00"),
+                ("frm1604e:txtSched2TotRemAmt2", "45.00"),
                 ("frm1604e:txtSched2TotRemAmt12", "320.00"),
-                ("frm1604e:txtSched2TaxWithheldTtl", "300.00"),
-                ("frm1604e:txtSched2PenaltiesTtl", "20.00"),
-                ("frm1604e:txtSched2TotRemAmtTtl", "320.00"),
+                ("frm1604e:txtSched2TaxWithheldTtl", "340.00"),
+                ("frm1604e:txtSched2PenaltiesTtl", "25.00"),
+                ("frm1604e:txtSched2TotRemAmtTtl", "365.00"),
             ],
         ),
     ] {
@@ -838,7 +855,7 @@ fn pr6_item_11_no_asks_before_clearing_what_was_typed() {
     assert_eq!(typed["rejected"], json!({}));
     assert_eq!(typed["draft"]["refund_date"], "03/15/2026");
     assert_eq!(typed["draft"]["first_crediting_month"], 4);
-    let cleared = fill("1604C", &typed["draft"], no);
+    let cleared = fill("1604C", &typed["draft"], no.clone());
     assert_eq!(cleared["draft"]["refunds_released"], false);
     assert_eq!(cleared["draft"]["refund_date"], "");
     assert_eq!(cleared["draft"]["overremittance"], 0.0);
@@ -847,7 +864,17 @@ fn pr6_item_11_no_asks_before_clearing_what_was_typed() {
         cleared["removes"],
         json!({
             "message": "Changing item 11 to No clears item 11A (date of refund 03/15/2026), item 12 (₱1,234.50) and item 13 (April). Continue?",
-            "done": "Cleared items 11A to 13",
+            "done": "Cleared items 11A, 12 and 13",
+            "rows": 0,
+        })
+    );
+    // The Undo toast names only what was cleared.
+    let only_12 = fill("1604C", &yes["draft"], json!({"frm1604c:txt12": "500"}));
+    assert_eq!(
+        fill("1604C", &only_12["draft"], no)["removes"],
+        json!({
+            "message": "Changing item 11 to No clears item 12 (₱500.00). Continue?",
+            "done": "Cleared item 12",
             "rows": 0,
         })
     );
@@ -934,4 +961,308 @@ fn pr6_a_grid_of_loose_fields_is_unchanged_by_table_cells() {
         .map(|(code, _)| code)
         .collect();
     assert_eq!(with_grid, ["1604C", "1604E", "1604F"]);
+}
+
+/// 1604E review (items 1 and 2): every Total Amount Remitted cell of Part
+/// II, the 16 rows and the TOTAL rows' 6 boxes, is the form's: drawn as
+/// computed, locked with "Computed by the form.", a typed value refused, and
+/// a Total edit never moves any row's penalties (the probe bound 10 of them
+/// to /scheduleN/k/penalties before COMPUTED_BY_FORM). The oracle is the
+/// writer-cells caption of each cell ("... Total Amount Remitted", "...
+/// TOTAL ...").
+#[test]
+fn pr6_form_1604e_totals_are_computed_by_the_form() {
+    setup();
+    let slug = "1604e-2018";
+    let totals: Vec<String> = joins(slug)
+        .into_iter()
+        .filter(|(k, _, printed)| {
+            k.starts_with("frm1604e:txtSched")
+                && (printed.ends_with("Total Amount Remitted") || printed.contains(" TOTAL "))
+        })
+        .map(|(k, _, _)| k)
+        .collect();
+    assert_eq!(totals.len(), 16 + 6, "{totals:?}");
+    let computed_on_page = |key: &str| -> bool {
+        let form = schema_entry("1604E").unwrap();
+        form["parts"].as_array().unwrap().iter().any(|p| {
+            p["items"].as_array().unwrap().iter().any(|it| {
+                it["f"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|f| f["k"] == key && f["c"].as_i64() == Some(1))
+                    || it["keys"].as_array().into_iter().flatten().any(|row| {
+                        row.as_array()
+                            .unwrap()
+                            .iter()
+                            .position(|k| k == key)
+                            .is_some_and(|c| it["cols"][c]["c"].as_i64() == Some(1))
+                    })
+            })
+        })
+    };
+    let opened = open("1604E", 0);
+    let penalties = |draft: &Value| -> Vec<Value> {
+        ["schedule1", "schedule2"]
+            .iter()
+            .flat_map(|s| {
+                draft[*s]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|r| r["penalties"].clone())
+            })
+            .collect()
+    };
+    for key in &totals {
+        assert!(computed_on_page(key), "{key} is drawn as computed");
+        assert_eq!(
+            opened["locks"][key], "computed by BIR's own formulas",
+            "{key}"
+        );
+        assert_eq!(opened["lock_notes"][key], "Computed by the form.", "{key}");
+        let typed = fill("1604E", &opened["draft"], json!({ key.as_str(): "1000" }));
+        assert!(
+            typed["rejected"].get(key).is_some(),
+            "{key} refuses a typed value"
+        );
+        assert_eq!(
+            penalties(&typed["draft"]),
+            penalties(&opened["draft"]),
+            "{key}"
+        );
+        // Not even through Edit: no Edit opens a computed box.
+        let unlocked = fill_unlocked(
+            "1604E",
+            &opened["draft"],
+            json!({ key.as_str(): "1000" }),
+            &[key],
+        );
+        assert!(unlocked["rejected"].get(key).is_some(), "{key} with Edit");
+        assert_eq!(
+            penalties(&unlocked["draft"]),
+            penalties(&opened["draft"]),
+            "{key}"
+        );
+    }
+    let def = kind_of("1604E").unwrap().definition();
+    assert!(
+        totals.iter().all(|key| !def.bindings.contains_key(key)),
+        "no Total is bound"
+    );
+}
+
+/// Review item 6: item 5 RDO Code of 1604E and 1604F is the same catalog
+/// select as 1604C's, profile-locked with Edit; the edit stays on this
+/// return and prints at "5 RDO Code". A stored draft whose RDO is not in
+/// the catalog still shows it, prints it and files it unchanged.
+#[test]
+fn pr6_item_5_rdo_is_one_catalog_select_on_all_three() {
+    setup();
+    for (code, slug, key) in [
+        ("1604C", "1604c-2018", "frm1604c:rdoCode"),
+        ("1604E", "1604e-2018", "frm1604e:txtRDOCode"),
+        ("1604F", "1604f-2018", "frm1604f:rdoCode"),
+    ] {
+        let (_, no, _) = placed(code, key);
+        assert_eq!(no, "5");
+        assert!(
+            drawn(code)
+                .iter()
+                .any(|(_, _, _, k, t)| k == key && t == "sel"),
+            "{code}"
+        );
+        assert_eq!(printed_at(slug, key), "5 RDO Code");
+        let opened = open(code, 0);
+        assert_eq!(opened["values"][key], "039");
+        assert_eq!(
+            opened["locks"][key],
+            agent::Lock::Profile.reason(),
+            "{code}"
+        );
+        assert!(strings(&opened["profile_edit"]).contains(key), "{code}");
+        let options = opened["options"][key].as_array().unwrap();
+        assert_eq!(
+            options.len(),
+            bir_core::reference::get_all_rdos().len(),
+            "{code}: the catalog"
+        );
+        let refused = fill(code, &opened["draft"], json!({ key: "040" }));
+        assert!(refused["rejected"].get(key).is_some(), "{code}");
+        let edited = fill_unlocked(code, &opened["draft"], json!({ key: "040" }), &[key]);
+        assert_eq!(edited["rejected"], json!({}), "{code}");
+        assert_eq!(edited["draft"]["rdo_code"], "040");
+        let (_, cell, _) = joins(slug).into_iter().find(|(k, _, _)| k == key).unwrap();
+        let html = document(code, slug, &edited["draft"]);
+        assert_eq!(bir_print::frozen_html::printed_text(&html, &cell), "040");
+        // A legacy value the catalog does not list.
+        assert!(!options.iter().any(|o| o["value"] == "9Z9"));
+        let mut legacy = opened["draft"].clone();
+        legacy["rdo_code"] = json!("9Z9");
+        let saved = save(code, &legacy);
+        assert_eq!(saved["draft"]["rdo_code"], "9Z9", "{code}");
+        let reopened = open(code, 0);
+        assert_eq!(
+            reopened["draft"]["rdo_code"], "9Z9",
+            "{code}: never changed on open"
+        );
+        assert_eq!(reopened["values"][key], "9Z9", "{code}: shown as stored");
+        let html = document(code, slug, &reopened["draft"]);
+        assert_eq!(bir_print::frozen_html::printed_text(&html, &cell), "9Z9");
+        let values = values_json(kind_of(code).unwrap(), &reopened["draft"]).unwrap();
+        assert_eq!(values[key], "9Z9", "{code}: the field map files it");
+        // An unrelated edit keeps it.
+        let other = fill(code, &reopened["draft"], json!({}));
+        assert_eq!(other["draft"]["rdo_code"], "9Z9");
+    }
+}
+
+/// Review item 7: a layout that names only some cells of an extracted
+/// table is a broken override and stops the load, naming the form and the
+/// table; naming all of them builds.
+#[test]
+fn pr6_a_layout_claiming_part_of_a_table_is_an_error() {
+    let form = json!({
+        "c": "TEST",
+        "parts": [{"n": "P", "items": [
+            {"no": "", "l": "Schedule 9", "p": 1, "cols": [{"l": "A", "t": "text"}, {"l": "B", "t": "money"}],
+             "rows": 2, "keys": [["a1", "b1"], ["a2", "b2"]]},
+        ]}],
+    });
+    let layout = |keys: Value| json!({"parts": [{"n": "P", "items": [{"no": "", "l": "g", "grid": {"keys": keys}}]}]});
+    let partial = std::panic::catch_unwind(|| {
+        let mut f = form.clone();
+        apply_layout(&mut f, &layout(json!([["a1", "b1"]])));
+    })
+    .expect_err("a partial claim stops the load");
+    let message = partial
+        .downcast_ref::<String>()
+        .cloned()
+        .unwrap_or_default();
+    assert!(message.starts_with("TEST: "), "{message}");
+    assert!(
+        message.contains("names 2 of the 4 cells of table \"Schedule 9\""),
+        "{message}"
+    );
+    let mut whole = form.clone();
+    apply_layout(&mut whole, &layout(json!([["a1", "b1"], ["a2", "b2"]])));
+    assert_eq!(
+        whole["parts"][0]["items"][0]["keys"],
+        json!([["a1", "b1"], ["a2", "b2"]])
+    );
+}
+
+/// Review item 11: every Part II date cell is a whole MM/DD/YYYY date, the
+/// rows the samples left blank too (the probe bound them as plain text): a
+/// date typed or picked (the calendar sends ISO) is stored as MM/DD/YYYY,
+/// and part of a date is refused, exactly as on a row the samples dated.
+#[test]
+fn pr6_every_part_ii_date_cell_keeps_a_whole_date() {
+    setup();
+    for (code, dated, blank, path) in [
+        (
+            "1604C",
+            "frm1604c:txtSched1Date1",
+            "frm1604c:txtSched1Date4",
+            "/months/3/date",
+        ),
+        (
+            "1604E",
+            "frm1604e:txtSched2RemDate1",
+            "frm1604e:txtSched2RemDate2",
+            "/schedule2/1/date",
+        ),
+        (
+            "1604F",
+            "frm1604f:txtSched1Date1",
+            "frm1604f:txtSched2Date1",
+            "/schedules/1/0/date",
+        ),
+    ] {
+        let def = kind_of(code).unwrap().definition();
+        let dates: Vec<&String> = schema_keys(code)
+            .iter()
+            .filter(|k| k.contains(":txtSched") && k.contains("Date"))
+            .collect();
+        assert_eq!(dates.len(), if code == "1604E" { 16 } else { 12 }, "{code}");
+        for key in dates {
+            assert!(
+                matches!(
+                    def.bindings.get(key).map(|b| &b.binding),
+                    Some(Binding::Text {
+                        date: Some(agent::DateFormat::Mdy),
+                        part: None,
+                        ..
+                    })
+                ),
+                "{code} {key} keeps a whole MM/DD/YYYY date"
+            );
+        }
+        let opened = open(code, 0);
+        for key in [dated, blank] {
+            let typed = fill(code, &opened["draft"], json!({ key: "04/10/2026" }));
+            assert_eq!(typed["rejected"], json!({}), "{code} {key}");
+            let picked = fill(code, &opened["draft"], json!({ key: "2026-04-10" }));
+            let partial = fill(code, &opened["draft"], json!({ key: "04/2026" }));
+            assert!(
+                partial["rejected"].get(key).is_some(),
+                "{code} {key} refuses part of a date"
+            );
+            if key == blank {
+                assert_eq!(
+                    typed["draft"].pointer(path),
+                    Some(&json!("04/10/2026")),
+                    "{code}"
+                );
+                assert_eq!(
+                    picked["draft"].pointer(path),
+                    typed["draft"].pointer(path),
+                    "{code} picked"
+                );
+            }
+            assert_eq!(picked["values"][key], typed["values"][key], "{code} {key}");
+        }
+    }
+}
+
+/// Review item 12: no cell of an extracted table is lost; every one is drawn
+/// in Part II (the oracle is app/forms/forms-schema.json, the extracted
+/// schema before any override).
+#[test]
+fn pr6_every_extracted_table_cell_is_drawn() {
+    let raw: Value =
+        serde_json::from_str(include_str!("../../../../../app/forms/forms-schema.json")).unwrap();
+    for (code, _) in FORMS {
+        let form = raw
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["c"] == code)
+            .unwrap();
+        let cells: Vec<String> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .flat_map(|it| it["keys"].as_array().cloned().unwrap_or_default())
+            .flat_map(|row| row.as_array().cloned().unwrap_or_default())
+            .map(|k| k.as_str().unwrap().to_string())
+            .collect();
+        let expected = match code {
+            "1604C" => 12 * 7,
+            "1604F" => 3 * 4 * 5,
+            _ => (4 + 12) * 6,
+        };
+        assert_eq!(cells.len(), expected, "{code}");
+        let on_page = drawn(code);
+        for cell in &cells {
+            assert!(
+                on_page
+                    .iter()
+                    .any(|(part, _, _, k, _)| k == cell && part.starts_with("Part II")),
+                "{code} {cell} is drawn in Part II"
+            );
+        }
+    }
 }

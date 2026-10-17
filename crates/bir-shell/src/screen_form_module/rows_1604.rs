@@ -48,9 +48,10 @@ fn pesos(amount: f64) -> String {
 
 /// When `edits` turned `before` into `after` by clearing what the filer
 /// typed, what the page asks first (`message`), what the Undo toast says
-/// (`done`) and how many rows went (none: these are items); `None` when
-/// nothing typed went. The host applies the edit either way; the page
-/// keeps its old draft until the filer chooses Continue.
+/// (`done`: the items actually cleared) and how many rows went (none: these
+/// are items); `None` when nothing typed went. The host returns the edited
+/// draft; the page holds it, still showing the old one, and takes it only
+/// when the filer chooses Continue (Cancel and Esc drop it).
 pub(super) fn removes(
     kind: AgentFormKind,
     before: &Value,
@@ -61,27 +62,34 @@ pub(super) fn removes(
     let closed = |flag: &str| before[flag] == true && after[flag] == false;
     match kind.form_code() {
         "1604C" if edited("frm1604c:releasedOfFunds") && closed("refunds_released") => {
-            let mut lost = Vec::new();
+            let (mut lost, mut items) = (Vec::new(), Vec::new());
             let date = text(before, "refund_date");
             if !date.is_empty() && text(after, "refund_date").is_empty() {
                 lost.push(format!("item 11A (date of refund {date})"));
+                items.push("11A".to_string());
             }
             let over = amount(before, "overremittance");
             if over != 0.0 && amount(after, "overremittance") == 0.0 {
                 lost.push(format!("item 12 (₱{})", pesos(over)));
+                items.push("12".to_string());
             }
             let month = before["first_crediting_month"].as_u64().unwrap_or(0);
             if (1..=12).contains(&month)
                 && after["first_crediting_month"].as_u64().unwrap_or(0) == 0
             {
                 lost.push(format!("item 13 ({})", MONTHS[month as usize - 1]));
+                items.push("13".to_string());
             }
             if lost.is_empty() {
                 return None;
             }
+            let done = match items.as_slice() {
+                [one] => format!("Cleared item {one}"),
+                _ => format!("Cleared items {}", join(&items)),
+            };
             Some(json!({
                 "message": format!("Changing item 11 to No clears {}. Continue?", join(&lost)),
-                "done": "Cleared items 11A to 13",
+                "done": done,
                 "rows": 0,
             }))
         }

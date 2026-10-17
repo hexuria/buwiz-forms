@@ -4701,7 +4701,8 @@
     },
     "frm1604e:txtRDOCode": {
       "label": "RDO Code",
-      "evidence": "agent box label: 'RDO Code'; writer-cells printed caption: 'RDO Code'"
+      "evidence": "PR 6 (review item 6): item 5 is the same catalog select as 1604C's; the agent binds frm1604e:txtRDOCode to /rdo_code with the profile lock, so the RDO list comes from the catalog (catalogs.rs field_options) and Edit opens it. html-frozen/1604e-2018/writer-cells.json joins it at \"5 RDO Code\". agent box label: 'RDO Code'; writer-cells printed caption: 'RDO Code'",
+      "kind": "sel"
     },
     "frm1604e:WthldngAgntCtgry_1": {
       "label": "Private",
@@ -4721,7 +4722,8 @@
     },
     "frm1604e:txtSched1TotRemAmtTtl": {
       "label": "Total Amount Remitted",
-      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 1 TOTAL Total Amount Remitted'"
+      "evidence": "PR 6 (1604E review): form_1604e.rs compute_schedule sets total_remitted = taxes_withheld + penalties per row and sums the rows into the TOTAL row; crates/bir-core/data/agent-forms/1604e-v2018.json marks the box computed (probe.rs COMPUTED_BY_FORM), so the column is the form's, as 1604C's and 1604F's are. PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 1 TOTAL Total Amount Remitted'",
+      "computed": true
     },
     "frm1604e:txtSched2TaxWithheldTtl": {
       "label": "Taxes Withheld",
@@ -4733,7 +4735,8 @@
     },
     "frm1604e:txtSched2TotRemAmtTtl": {
       "label": "Total Amount Remitted",
-      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 2 TOTAL Total Amount Remitted'"
+      "evidence": "PR 6 (1604E review): form_1604e.rs compute_schedule sets total_remitted = taxes_withheld + penalties per row and sums the rows into the TOTAL row; crates/bir-core/data/agent-forms/1604e-v2018.json marks the box computed (probe.rs COMPUTED_BY_FORM), so the column is the form's, as 1604C's and 1604F's are. PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 2 TOTAL Total Amount Remitted'",
+      "computed": true
     },
     "frm1604e:txtPg2TIN1": {
       "evidence": "PR 6 (1604E R2.0, R3.0, R5.2): page 2's header copy of item 4. html-frozen/1604e-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
@@ -5093,6 +5096,14 @@
           ]
         }
       ]
+    },
+    "frm1604e:txtSched1TotRemAmt1": {
+      "computed": true,
+      "evidence": "PR 6 (1604E review): form_1604e.rs compute_schedule sets total_remitted = taxes_withheld + penalties per row and sums the rows into the TOTAL row; crates/bir-core/data/agent-forms/1604e-v2018.json marks the box computed (probe.rs COMPUTED_BY_FORM), so the column is the form's, as 1604C's and 1604F's are."
+    },
+    "frm1604e:txtSched2TotRemAmt1": {
+      "computed": true,
+      "evidence": "PR 6 (1604E review): form_1604e.rs compute_schedule sets total_remitted = taxes_withheld + penalties per row and sums the rows into the TOTAL row; crates/bir-core/data/agent-forms/1604e-v2018.json marks the box computed (probe.rs COMPUTED_BY_FORM), so the column is the form's, as 1604C's and 1604F's are."
     }
   },
   "1604F": {
@@ -5174,7 +5185,8 @@
     },
     "frm1604f:rdoCode": {
       "label": "RDO Code",
-      "evidence": "PR 6 (1604F R3.0): the printed caption (html-frozen/1604f-2018/writer-cells.json joins frm1604f:rdoCode at \"5 RDO Code\")."
+      "evidence": "PR 6 (review item 6): item 5 is the same catalog select as 1604C's; the agent binds frm1604f:rdoCode to /rdo_code with the profile lock, so the RDO list comes from the catalog (catalogs.rs field_options) and Edit opens it. html-frozen/1604f-2018/writer-cells.json joins it at \"5 RDO Code\". PR 6 (1604F R3.0): the printed caption (html-frozen/1604f-2018/writer-cells.json joins frm1604f:rdoCode at \"5 RDO Code\").",
+      "kind": "sel"
     },
     "txtEmail": {
       "kind": "hidden",
