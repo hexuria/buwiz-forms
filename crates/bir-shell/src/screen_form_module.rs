@@ -4045,32 +4045,40 @@ fn stored_for_date(
         return Ok(None);
     }
     let identity = agent::identity(kind, draft)?;
-    let stored = db
-        .list_draft_summaries(&identity.tin, identity.taxable_year)
-        .map_err(|error| error.to_string())?
-        .iter()
-        .filter(|row| row.form_code == code)
-        .count();
-    let mut found = 0;
-    for entry in 1..=MAX_ENTRY {
-        if found == stored {
-            break;
-        }
-        let mut candidate = draft.clone();
-        set_draft_path(&mut candidate, entry_pointer(draft), json!(entry));
-        let Some(row) = stored_return(db, kind, &candidate)? else {
+    let AgentFormKind::Queueable(queueable) = kind else {
+        return Ok(None);
+    };
+    // Every stored entry of the year, read once, matched in memory: an
+    // entry past MAX_ENTRY (stored by another writer) counts too, so a
+    // same-date return is never stored twice.
+    let rows: Vec<(i64, Value)> = bir_core::with_queueable_kind!(queueable, F => {
+        db.list_queueable_drafts::<F>(&identity.tin, identity.taxable_year)
+            .map_err(|error| read_error(code, error))?
+            .into_iter()
+            .map(|(entry, row)| {
+                serde_json::to_value(row)
+                    .map(|row| (entry, row))
+                    .map_err(|error| error.to_string())
+            })
+            .collect::<Result<_, String>>()?
+    });
+    for (entry, row) in rows {
+        if typed_of(&row)? != typed {
             continue;
-        };
-        found += 1;
-        if typed_of(&row)? == typed {
-            return Ok(Some(row));
         }
+        if entry > i64::from(MAX_ENTRY) {
+            return Err(format!(
+                "a {code} return for this date is already stored as entry {entry}, past entry {MAX_ENTRY}, which this app cannot open; it is not stored again"
+            ));
+        }
+        return Ok(Some(row));
     }
     Ok(None)
 }
 
-/// The highest entry number: a page period (`u8`), so every entry opens
-/// with its own number.
+/// The highest entry number a new entry takes: a page period (`u8`), so
+/// every entry opens with its own number. Stored entries past it are still
+/// matched by date (`stored_for_date`), never stored again.
 const MAX_ENTRY: u32 = 255;
 
 /// Where an entry-numbered draft keeps its entry number.
@@ -7821,6 +7829,31 @@ mod tests {
         let opens = opens_for(kind_of("2552").unwrap(), &saved["draft"]).unwrap();
         assert_eq!(opens, json!({ "year": 2024, "period": 3, "key": 315 }));
         assert_eq!(MAX_ENTRY, u32::from(u8::MAX));
+        // An entry past 255 (another writer's) still matches its date: the
+        // same sale is never stored again, and the app says why it cannot
+        // open it.
+        let built = sample_period(TIN, code, typed_parts(code, 2024, 7, 9, 1));
+        let mut draft = built["sample"]["draft"].clone();
+        let sample = draft.clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        draft["open_ended_key"] = json!(300);
+        assert_eq!(save(code, &draft)["stored_period"], 300);
+        let refused = call_async(
+            "screen_form_sample_period",
+            vec![
+                TIN.into(),
+                code.into(),
+                json(typed_parts(code, 2024, 7, 9, 1)),
+            ],
+        )
+        .expect_err("matched, but not openable");
+        assert!(
+            refused.to_string().contains("entry 300, past entry 255"),
+            "{refused}"
+        );
+        let refused = call("screen_form_save", vec![code.into(), json(sample)])
+            .expect_err("never stored twice");
+        assert!(refused.to_string().contains("entry 300"), "{refused}");
     }
 
     /// Decided 2026-10-17: a sample can be saved as a real return. On every
