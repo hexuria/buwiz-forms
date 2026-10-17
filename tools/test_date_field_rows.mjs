@@ -42,7 +42,7 @@ function element(){
 function mount(e){if(e?.view && e.dirty&&!e.released){e.dirty=false;const old=owner;owner=e;e.view.render(context(e));owner=old;}}
 const inputs=[];
 const InputState={new({value=""}={}){let text=value;const h={};const i={value:()=>text,set_value:v=>{text=v;},on(n,f){h[n]=f;},fire(n,c){h[n]?.({},c);},type(v,c){text=v;h.change?.({},c);},release(){return true;}};inputs.push(i);return i;}};
-const CalendarState={new(){let v=null;return {set_value(x){v=x;},value:()=>v,on(){},month:()=>12,year:()=>2020,month_days:()=>[[]],prev_month(){},next_month(){}};}};
+const CalendarState={new(){let v=null;return {set_value(x){v=x;},value:()=>v,on(){},month:()=>12,year:()=>2020,today:()=>"2026-10-17",month_days:()=>[[]],prev_month(){},next_month(){}};}};
 const contextVM=vm.createContext({console,Map,Set,JSON,window:{viewport_size:()=>({width:1400,height:900})}});
 function mock(name,exports){const m=new vm.SyntheticModule(Object.keys(exports),function(){for(const [k,v]of Object.entries(exports))this.setExport(k,v);},{context:contextVM,identifier:name});return m;}
 const kit=mock("gpui-kit",{div:element,svg:element,View});
@@ -94,7 +94,7 @@ const typing={rowBuilds:traces.length,distinctRows:[...new Set(traces)],rootDirt
 assert.equal(input.value(),"12012020","typing is left as typed");
 assert.equal(app.formUi.state.pending[dateKey],"12/01/2020","draft gets MM/DD/YYYY");
 input.fire("blur",cx);frame();await settle();frame();
-assert.equal(input.value(),"12/01/2020","blur normalizes the box");
+assert.equal(input.value(),"Dec 1, 2020","blur shows the date as Dec 1, 2020 (rule 4)");
 assert.equal(values[dateKey],"12/01/2020");
 const afterBlur=[...new Set(traces)];
 assert.deepEqual(afterBlur.filter(r=>r!==row),[],"only the date row rebuilds while typing and on blur");
@@ -117,8 +117,8 @@ const closeBuilds=traces.length;
 // Pick a date through the calendar.
 press();traces.length=0;
 app.formUi.pickDate({single:cat.it.f[0]},"2019-03-07",cx);frame();await settle();frame();
-assert.equal(input.value(),"03/07/2019");assert.equal(values[dateKey],"03/07/2019");
+assert.equal(input.value(),"Mar 7, 2019");assert.equal(values[dateKey],"03/07/2019");
 const pickRows=[...new Set(traces)];
 assert.deepEqual(pickRows,[row],"picking a date rebuilds only its row");
 console.log(JSON.stringify({typing8Keys:typing,picker:{openBuilds,closeBuilds,pickRows:pickRows.length}}));
-console.log("PASS: typed dates normalize to MM/DD/YYYY, calendar fills the box, only the date row rebuilds.");
+console.log("PASS: typed dates reach the draft as MM/DD/YYYY and show as Dec 1, 2020, calendar fills the box, only the date row rebuilds.");

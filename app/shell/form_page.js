@@ -166,6 +166,23 @@ export function formatMDY({ y, m, d }) {
   return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
 }
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** How a date box shows a parsed date: "Dec 10, 2020" (rule 4). */
+export function formatLongDate({ y, m, d }) {
+  return `${MONTH_SHORT[m - 1]} ${d}, ${y}`;
+}
+
+/**
+ * What a date box shows for the draft's text: the date as "Dec 10, 2020"
+ * when it reads as one, else the text as it is (a blank, a part-typed date).
+ * Display only: the draft keeps the form's own format.
+ */
+export function shownDate(text) {
+  const date = parseTypedDate(text);
+  return date ? formatLongDate(date) : String(text ?? "");
+}
+
 const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
 
 /**
@@ -174,23 +191,87 @@ const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 1201202
  */
 const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, choose Start a return, or New return (the + button or Cmd/Ctrl+N).";
 
-/** One box holding a whole MM/DD/YYYY date. */
-function isDateField(f, it) {
-  return f.t === "date" || (f.t === "text" && /MM\/DD\/YYYY/i.test(`${it?.l || ""} ${f.l || ""}`));
+/** How faded a box another answer turns off is (rule 6). */
+const OFF_OPACITY = 0.45;
+
+/**
+ * The tag on a box another answer turns off (rule 6): the host's reviewed
+ * tag ("Needs item 13 = Yes"), cut if it ever runs long.
+ */
+export function needsText(tag) {
+  const text = String(tag || "").trim();
+  return text.length > 90 ? `${text.slice(0, 89).trimEnd()}…` : text;
+}
+
+/** One box holding a whole date: the host types it from its binding. */
+function isDateField(f) {
+  return f.t === "date";
 }
 
 function itemKeys(it) {
   if (it.rows) return it.keys.flat();
-  return (it.f || []).map((f) => f.k);
+  // A pooled address line is drawn by its pool's first line.
+  return (it.f || []).flatMap((f) => (f.pool ? f.pool.keys : [f.k]));
 }
 
-/** "1,234.50" from a number-ish string; empty stays empty. */
-function formatMoney(text) {
+/**
+ * Lay `text` over stacked lines of `slots` character boxes (rule 5), as the
+ * host splits a pooled address (combs::split_lines): each line but the last
+ * ends at the last space run that starts within its boxes, the run kept at
+ * the end of that line, and the last takes the rest, so the lines put end
+ * to end are the text. A word longer than its line is cut at the line's
+ * last box when `cutWords` (the host splits these lines into saved fields),
+ * else it stays whole on the line (the boxes are only shown).
+ */
+export function splitLines(text, slots, cutWords = false) {
+  const lines = [];
+  let rest = [...String(text ?? "").trim()];
+  const space = (c) => /\s/.test(c);
+  slots.forEach((n, i) => {
+    if (i === slots.length - 1 || rest.length <= n) {
+      lines.push(rest.join(""));
+      rest = [];
+      return;
+    }
+    let cut = -1;
+    for (let p = n; p >= 1; p--) {
+      if (space(rest[p]) && !space(rest[p - 1])) {
+        cut = p;
+        break;
+      }
+    }
+    if (cut < 0 && cutWords) cut = n;
+    else {
+      if (cut < 0) {
+        cut = n;
+        while (cut < rest.length && !space(rest[cut])) cut++;
+      }
+      while (cut < rest.length && space(rest[cut])) cut++;
+    }
+    lines.push(rest.slice(0, cut).join(""));
+    rest = rest.slice(cut);
+  });
+  return lines;
+}
+
+/** Whether `text` fits the boxes of `slots`: boxes until it no longer fits. */
+export function fitsBoxes(text, slots, cutWords = false) {
+  return splitLines(text, slots, cutWords).every((line, i) => line.trimEnd().length <= slots[i]);
+}
+
+/**
+ * "1,234.50" from a number-ish string; empty stays empty. `whole`: a box
+ * over a whole-number field shows whole pesos ("1,234"); a typed fraction
+ * stays as typed so the box's own message explains it.
+ */
+export function formatMoney(text, whole = false) {
   const n = Number(String(text).replace(/[₱,\s]/g, ""));
   if (String(text).trim() === "" || Number.isNaN(n)) return String(text);
+  if (whole && !Number.isInteger(n)) return String(text);
   // QuickJS has no Intl, so group the digits by hand.
-  const [whole, frac] = Math.abs(n).toFixed(2).split(".");
-  return `${n < 0 ? "-" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${frac}`;
+  const [int, frac] = Math.abs(n).toFixed(whole ? 0 : 2).split(".");
+  const grouped = `${n < 0 ? "-" : ""}${int.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+  return whole ? grouped : `${grouped}.${frac}`;
 }
 
 export class FormPageActions {
@@ -261,6 +342,11 @@ export class FormPageActions {
       sample: Boolean(opts.sample),
       blank: new Set(),
       needs: {},
+      // Boxes another answer turns off, each with what turns it on (rule 6).
+      off: {},
+      // Each party's penalty boxes (rule 8), and the ones Edit penalties opened.
+      penalties: [],
+      penaltyOpen: new Set(),
       typed: new Set(),
       errors: [],
       messages: {},
@@ -339,6 +425,9 @@ export class FormPageActions {
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
     s.needs = r.needs || {};
+    s.off = r.off || {};
+    s.penalties = r.penalties || [];
+    s.poolTexts = r.pools || {};
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -352,11 +441,13 @@ export class FormPageActions {
     const make = (k, t) => {
       if (s.inputs.has(k)) return;
       let value = s.values[k] ?? "";
-      if (t === "money" && value !== "") value = formatMoney(value);
+      if (t === "money" && value !== "") value = formatMoney(value, this.isWhole(k));
+      if (t === "date") value = shownDate(value);
       const input = InputState.new({ value: String(value) });
       if (t === "date") {
         // Typing stays as typed; the draft gets MM/DD/YYYY as soon as it
-        // reads as a date, and the box is normalized on blur.
+        // reads as a date (12102020, 12-10-2020 and 12/10/2020 alike), and
+        // on blur the box shows it as "Dec 10, 2020".
         input.on("change", (_e, cx) => {
           const raw = input.value();
           const date = parseTypedDate(raw);
@@ -367,7 +458,7 @@ export class FormPageActions {
           const raw = input.value();
           const date = parseTypedDate(raw);
           if (date) {
-            const text = formatMDY(date);
+            const text = formatLongDate(date);
             if (text !== raw) input.set_value(text);
             this.setDateError(k, "");
           } else this.setDateError(k, raw.trim() ? DATE_ERROR : "");
@@ -379,9 +470,11 @@ export class FormPageActions {
         (s.inputKinds ||= new Map()).set(k, t);
         return;
       }
-      input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
+      const pool = this.poolOf(k);
+      if (pool) input.set_value(this.poolText({ pool }));
+      input.on("change", (_e, cx) => (pool ? this.editPool(pool, input.value(), cx) : this.edit(k, input.value(), cx)));
       input.on("blur", (_e, cx) => {
-        if (t === "money") input.set_value(formatMoney(input.value()));
+        if (t === "money") input.set_value(formatMoney(input.value(), this.isWhole(k)));
         // Leaving an edited profile item keeps the value on this return and
         // gives its boxes their profile look (and Edit) back.
         this.leaveBox(k, cx);
@@ -395,7 +488,7 @@ export class FormPageActions {
       if (it.rows) {
         it.keys.forEach((row) => row.forEach((k, c) => make(k, it.cols[c].t)));
       } else {
-        for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, isDateField(f, it) ? "date" : f.t);
+        for (const f of it.f || []) if (["text", "money", "pct", "int", "date", "email", "phone"].includes(f.t)) make(f.k, f.t);
       }
     }
     if (cx) {
@@ -432,13 +525,13 @@ export class FormPageActions {
   rowSnapshot({ state: s, it, pi, ii, width }) {
     const id = `${pi}:${ii}`;
     const keys = itemKeys(it);
-    const picker = s.picker?.id === id ? s.picker.cal : null;
+    const picker = s.picker?.row === id ? s.picker.cal : null;
     return JSON.stringify([
       width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
-      picker ? [picker.year(), picker.month(), picker.value()] : null,
+      picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
-      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
+      keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
   }
 
@@ -530,6 +623,10 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.editable) return;
     if (s.periodParts?.has(k)) return this.setPeriodPart({ [k]: value }, cx);
+    // Only what is typed is sent: in a penalty group opened with Edit the
+    // boxes left alone stay computed (rule 8). The page refilling a box
+    // (InputState.set_value) emits no "change" (gpui turns events off for
+    // it), so focusing or reformatting a box never sends it.
     s.pending[k] = value;
     s.dirty = true;
     const token = this.token;
@@ -577,7 +674,7 @@ export class FormPageActions {
       const f = date.single;
       if (f.c || this.isLocked(f.k)) return;
       const text = formatMDY({ y: Number(y), m: Number(m), d: Number(d) });
-      s.inputs.get(f.k)?.set_value(text);
+      s.inputs.get(f.k)?.set_value(shownDate(text));
       this.setDateError(f.k, "");
       s.picker = null;
       this.choose({ [f.k]: text }, cx);
@@ -635,6 +732,8 @@ export class FormPageActions {
         s.draft = r.draft;
         s.values = this.shown(r.values);
         s.options = r.options || {};
+        if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+        if (r.pools) s.poolTexts = r.pools;
         this.syncComputed();
         this.syncChanged(before, edits);
         // The preview prints the draft the host just applied, never the
@@ -999,9 +1098,39 @@ export class FormPageActions {
     const s = this.state;
     for (const [k, input] of s.inputs) {
       if (!(this.isLocked(k) || this.isComputed(k))) continue;
-      const v = s.values[k] ?? "";
-      if (input.value() !== v) input.set_value(String(v));
+      const pool = this.poolOf(k);
+      const kind = s.inputKinds?.get(k);
+      const raw = String(s.values[k] ?? "");
+      const v = pool ? this.poolText({ pool }) : kind === "date" ? shownDate(raw) : kind === "money" && raw !== "" ? formatMoney(raw, this.isWhole(k)) : raw;
+      if (input.value() !== v) input.set_value(v);
     }
+  }
+
+  /** The pool (rule 5) whose first line is `k`, if any. */
+  poolOf(k) {
+    const s = this.state;
+    if (!s.pools) {
+      s.pools = new Map();
+      for (const p of s.schema.parts) for (const it of p.items) for (const f of it.f || []) if (f.pool) s.pools.set(f.k, f.pool);
+    }
+    return s.pools.get(k) || null;
+  }
+
+  /**
+   * A pooled address as one text, as the host reads it from the draft
+   * (`pools`): never the field map's lines, which are cut at a fixed width.
+   */
+  poolText(f) {
+    return String(this.state.poolTexts?.[f.pool.keys[0]] ?? "");
+  }
+
+  /**
+   * Stage a pooled address: the whole text goes to its first line, and the
+   * host writes it into the draft's own fields (combs::write_pool), split
+   * over the lines only where each has a field of its own.
+   */
+  editPool(pool, text, cx) {
+    this.edit(pool.keys[0], text, cx);
   }
 
   /**
@@ -1013,10 +1142,17 @@ export class FormPageActions {
     const s = this.state;
     for (const [k, input] of s.inputs) {
       if (k in edits) continue;
+      const pool = this.poolOf(k);
+      if (pool) {
+        const now = this.poolText({ pool });
+        if (input.value() !== now) input.set_value(now);
+        continue;
+      }
       const was = before[k] ?? "";
       const now = s.values[k] ?? "";
       if (was === now) continue;
-      const shown = s.inputKinds?.get(k) === "money" && now !== "" ? formatMoney(now) : String(now);
+      const kind = s.inputKinds?.get(k);
+      const shown = kind === "money" && now !== "" ? formatMoney(now, this.isWhole(k)) : kind === "date" ? shownDate(now) : String(now);
       if (input.value() !== shown) input.set_value(shown);
     }
   }
@@ -1038,8 +1174,9 @@ export class FormPageActions {
   /**
    * Why an item's shut boxes show blank, in the filer's words (the host's
    * `lock_notes`; a box the form computes: "Computed by the form."), once
-   * each. A box saying what it waits for (`needs`) says it in its place
-   * instead; a computed amount shows 0.00, never blank.
+   * each. A box saying what it waits for (`needs`, or the tag of a box
+   * another answer turns off) says it there instead; a computed amount shows
+   * 0.00, never blank.
    */
   lockNotesFor(it) {
     const s = this.state;
@@ -1050,7 +1187,7 @@ export class FormPageActions {
       if (text && !notes.includes(text)) notes.push(text);
     };
     const shut = (k, c) => c || this.isLocked(k);
-    const waits = (k) => Boolean(this.reasonFor(k));
+    const waits = (k) => Boolean(this.reasonFor(k) || this.isOff(k));
     const ticked = (k) => ["true", "1", "Y"].includes(String(s.values[k] ?? ""));
     const blankText = (k, t) => {
       const v = String(s.values[k] ?? "").trim();
@@ -1091,10 +1228,65 @@ export class FormPageActions {
     return this.isComputed(k) || /^computed/.test(this.state.locks[k] || "");
   }
 
-  /** Locked on the page: a host lock, unless it is a profile box opened with Edit. */
+  /** A peso box over a whole-number field (the host's `w`): no centavos. */
+  isWhole(k) {
+    const s = this.state;
+    if (!s.wholeKeys) {
+      s.wholeKeys = new Set();
+      for (const p of s.schema.parts) {
+        for (const it of p.items) {
+          if (it.rows) it.cols.forEach((c, ci) => c.w && it.keys.forEach((row) => s.wholeKeys.add(row[ci])));
+          else for (const f of it.f || []) if (f.w) s.wholeKeys.add(f.k);
+        }
+      }
+    }
+    return s.wholeKeys.has(k);
+  }
+
+  /**
+   * Locked on the page: a host lock, unless it is a profile box opened with
+   * Edit; or a box another answer turns off (rule 6), until it holds.
+   */
   isLocked(k) {
     const s = this.state;
+    if (this.isOff(k)) return true;
+    const penalty = this.penaltyGroupOf(k);
+    if (penalty) return !penalty.applies || !(penalty.edited || s.penaltyOpen.has(k));
     return s.locks[k] !== undefined && !(s.profileEdit.has(k) && s.editing.has(k));
+  }
+
+  /** A penalty box's state for row snapshots: edited, part of the return, opened. */
+  penaltySignature(k) {
+    const g = this.penaltyGroupOf(k);
+    return g ? `${g.edited}:${g.applies}:${this.state.penaltyOpen.has(k)}` : "";
+  }
+
+  /** The penalty group (rule 8) `k` belongs to, if any. */
+  penaltyGroupOf(k) {
+    return (this.state.penalties || []).find((g) => g.keys.includes(k)) || null;
+  }
+
+  /** Edit penalties: the group's three boxes open together. */
+  openPenalties(group, cx) {
+    const s = this.state;
+    if (!s.editable || !group.applies) return;
+    for (const k of group.keys) s.penaltyOpen.add(k);
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** Use the computed amounts: the group's overrides are cleared. */
+  usePenaltyComputed(group, cx) {
+    const s = this.state;
+    for (const k of group.keys) s.penaltyOpen.delete(k);
+    if (group.edited) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** What turns `k` on, while another answer has it off (the host's `off`). */
+  isOff(k) {
+    return this.state.off?.[k] || "";
   }
 
   /**
@@ -1120,7 +1312,7 @@ export class FormPageActions {
    */
   unlockedFor(edits) {
     const s = this.state;
-    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.opened.has(k));
+    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.opened.has(k) || s.penaltyOpen.has(k));
   }
 
   /** A sample shows a box it blanked once the host has taken an edit for it. */
@@ -1234,6 +1426,9 @@ export class FormPageActions {
         if (this.state.sample && Array.isArray(r.blank)) this.state.blank = new Set(r.blank);
         this.state.values = this.shown({ ...this.state.values, ...r.values });
         this.state.options = r.options || {};
+        this.state.off = r.off || {};
+        if (Array.isArray(r.penalties)) this.state.penalties = r.penalties;
+        if (r.pools) this.state.poolTexts = r.pools;
         this.syncComputed();
         this.setErrors(r.errors);
       } catch (e) {
@@ -1333,6 +1528,8 @@ export class FormPageActions {
         this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);
+        if (f.pools) s.poolTexts = f.pools;
+        if (Array.isArray(f.penalties)) s.penalties = f.penalties;
         edits = {};
       }
       const r = this.app.store.write("screen_form_save", s.code, s.draft);
@@ -1477,7 +1674,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const width = controlWidth(f, available);
   const showSub = multi && f.l && f.l !== itemLabel && !/^\d+[A-Z]?$/.test(f.l);
   const locked = !s.editable || f.c || ui.isLocked(f.k);
-  const value = s.values[f.k] ?? "";
+  const value = f.pool ? ui.poolText(f) : s.values[f.k] ?? "";
   let el;
   if (f.t === "sel") {
     el = selectBox(cx, ui, f.k, f.l, f.o, value, locked, width);
@@ -1490,12 +1687,13 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .flex_row()
       .items_center()
       .gap(SPACE[2])
+      .when(Boolean(ui.isOff(f.k)), (el) => el.opacity(OFF_OPACITY))
       .child(Checkbox(cx, `fp-${f.k}`, on, (v, cx) => (locked ? null : ui.choose({ [f.k]: v ? "true" : "false" }, cx)), f.l || itemLabel))
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
-    // A computed amount shows 0.00 for zero, never an empty box.
-    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : "")) : value;
+    // A computed amount (a penalty too, until Edit penalties) shows 0.00 for zero, never an empty box.
+    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) || ui.penaltyGroupOf(f.k) ? "0" : ""), f.w) : f.t === "date" ? shownDate(value) : value;
     // Locked and blank only with a reason: what it waits for.
     const hint = !shown ? ui.reasonFor(f.k) : "";
     el = lockedBox(cx, shown || hint, width, { right: !hint && (f.t === "money" || f.t === "pct"), hint: Boolean(hint) });
@@ -1526,10 +1724,43 @@ function control(cx, ui, f, itemLabel, multi, available) {
       } else el = box;
     }
   }
-  const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0);
+  // Rule 6: a box another answer turns off looks off.
+  const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0).when(Boolean(ui.isOff(f.k)), (el) => el.opacity(OFF_OPACITY));
   if (showSub) wrap.child(Text(cx, "meta", f.l, "fg2").max_w(width).whitespace_normal());
   void t;
-  return wrap.child(el);
+  wrap.child(el);
+  // Rule 5: the printed boxes, while the text fits them.
+  const slots = f.pool ? f.pool.slots : f.slots ? [f.slots] : null;
+  const text = f.pool ? ui.poolText(f) : value;
+  const cutWords = Boolean(f.pool && f.pool.write.length > 1);
+  if (slots && fitsBoxes(text, slots, cutWords)) wrap.child(charBoxes(cx, f.k, splitLines(text, slots, cutWords).map((line) => line.trimEnd()), slots));
+  return wrap;
+}
+
+/** Rows of character boxes, one character each, as the paper prints them. */
+function charBoxes(cx, k, lines, slots) {
+  const t = tokens(cx);
+  const rows = div().id(`fp-boxes-${k}`).flex().flex_col().gap(2).accessibility_label(`${slots.join(" + ")} character boxes`);
+  lines.forEach((line, i) => {
+    const row = div().flex().flex_row().flex_wrap();
+    for (let c = 0; c < slots[i]; c++) {
+      row.child(
+        div()
+          .flex()
+          .items_center()
+          .justify_center()
+          .w(14)
+          .h(18)
+          .border_l(c ? 0 : 1)
+          .border_r(1)
+          .border_y(1)
+          .border_color(t.border)
+          .child(Text(cx, "cap", line[c] || "", "fg2")),
+      );
+    }
+    rows.child(row);
+  });
+  return rows;
 }
 
 /** BIR's own words for the income-tax ATCs the forms list as bare codes. */
@@ -1597,7 +1828,7 @@ function radioGroup(cx, ui, it, radios) {
       .child(box)
       .child(Text(cx, "body", label, locked ? "fg2" : "fg").whitespace_normal());
     if (!locked) item.cursor_pointer().on_click((_e, cx) => pick(cx));
-    else item.opacity(0.7);
+    else item.opacity(ui.isOff(f.k) ? OFF_OPACITY : 0.7);
     row.child(item);
   }
   if (hint) row.child(Text(cx, "meta", hint, "fg3"));
@@ -1650,13 +1881,13 @@ function scheduleTable(cx, ui, it, width) {
       } else if (col.t === "sel") {
         cell = selectBox(cx, ui, k, `${col.l}, row ${no}`, col.o, value, locked, colW - 16);
       } else if (locked || !s.inputs.get(k)) {
-        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : "")) : value;
+        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : ""), col.w) : col.t === "date" ? shownDate(value) : value;
         const hint = !shown ? ui.reasonFor(k) : "";
         cell = lockedBox(cx, shown || hint, colW - 16, { right: !hint && col.t === "money", hint: Boolean(hint) });
       } else {
         cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 16 }).h(30);
       }
-      tr.child(div().w(colW).flex_none().py(6).px(SPACE[2]).child(cell));
+      tr.child(div().w(colW).flex_none().py(6).px(SPACE[2]).when(Boolean(ui.isOff(k)), (el) => el.opacity(OFF_OPACITY)).child(cell));
     });
     body.child(tr);
   });
@@ -1689,8 +1920,60 @@ function dateParts(fs) {
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+/**
+ * Move the calendar's grid to `year` and `month` (1-12) in one jump: select
+ * the same day there (the last one when the month is shorter), as the rules
+ * page's calendar does. The box is filled only when a day is picked;
+ * `picker.jumpedTo` lets the calendar's change event tell this jump from a
+ * pick. Steps the rest one month at a time if the grid did not follow.
+ */
+export function moveCalendar(cal, year, month, picker = null) {
+  const selected = typeof cal.value() === "string" ? cal.value() : "";
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const day = Math.min(Number(selected.slice(8, 10)) || 1, days);
+  const target = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  if (picker) picker.jumpedTo = target;
+  cal.set_value(target);
+  let steps = (year - cal.year()) * 12 + (month - cal.month());
+  for (; steps > 0; steps--) cal.next_month();
+  for (; steps < 0; steps++) cal.prev_month();
+}
+
+/**
+ * The calendar's month or year list (rule 4: the picker changes the month
+ * and the year, not just the day). Years run from 1900, for dates of birth,
+ * to ten years ahead.
+ */
+function calendarSelect(cx, ui, id, cal, which) {
+  const s = ui.state;
+  const month = which === "month";
+  const last = Number(String(cal.today()).slice(0, 4)) + 10;
+  const options = month
+    ? MONTH_NAMES.map((name, i) => ({ value: String(i + 1), label: name }))
+    : Array.from({ length: last - 1899 }, (_x, i) => String(last - i)).map((y) => ({ value: y, label: y }));
+  return Dropdown(cx, `fp-date-${which}-${id}`, {
+    label: month ? "Month" : "Year",
+    width: month ? 128 : 88,
+    options,
+    value: String(month ? cal.month() : cal.year()),
+    open: s.picker?.select === which,
+    onOpenChange: (open, cx) => {
+      if (s.picker) s.picker.select = open ? which : null;
+      ui.refreshRows();
+      cx.notify();
+    },
+    onChange: (v, cx) => {
+      if (month) moveCalendar(cal, cal.year(), Number(v), s.picker);
+      else moveCalendar(cal, Number(v), cal.month(), s.picker);
+      if (s.picker) s.picker.select = null;
+      ui.refreshRows();
+      cx.notify();
+    },
+  });
+}
+
 /** A calendar button beside an item's date boxes; picking a day fills them. Typing still works. */
-function datePicker(cx, ui, id, date) {
+function datePicker(cx, ui, id, date, row = id) {
   const s = ui.state;
   const t = tokens(cx);
   const open = s.picker && s.picker.id === id;
@@ -1712,9 +1995,10 @@ function datePicker(cx, ui, id, date) {
         cal.set_value(`${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`);
       }
       cal.on("change", (value, cx) => {
-        if (typeof value === "string") ui.pickDate(date, value, cx);
+        // A month or year jump selects a day too; only a pick fills the box.
+        if (typeof value === "string" && s.picker && value !== s.picker.jumpedTo) ui.pickDate(date, value, cx);
       });
-      s.picker = { id, cal };
+      s.picker = { id, row, cal };
       ui.refreshRows();
       cx.notify();
     },
@@ -1737,8 +2021,20 @@ function datePicker(cx, ui, id, date) {
     .bg(t.raised)
     .shadow_lg()
     .on_mouse_down_out((_e, cx) => {
-      s.picker = null;
-      cx.notify();
+      // A click away closes the calendar. While a month or year list is
+      // open over the card, wait for the list: a click in it is the card's
+      // own, and one outside it closes the list and the calendar.
+      // The deferred check uses the timer's own context: this handler's
+      // is gone by then.
+      const close = (c) => {
+        s.picker = null;
+        ui.refreshRows();
+        c.notify();
+      };
+      if (!s.picker?.select) return close(cx);
+      cx.timer.after(0, (acx) => {
+        if (s.picker && !s.picker.select) close(acx);
+      });
     })
     .child(
       div()
@@ -1747,9 +2043,10 @@ function datePicker(cx, ui, id, date) {
         .items_center()
         .gap(SPACE[1])
         .mb(SPACE[1])
-        .child(IconButton(cx, `fp-date-prev-${id}`, "chevron-left", { tooltip: "Previous month", onClick: (_e, cx) => { cal.prev_month(); cx.notify(); } }))
-        .child(Text(cx, "control", `${MONTH_NAMES[cal.month() - 1]} ${cal.year()}`).font_weight(600).flex_1().text_center())
-        .child(IconButton(cx, `fp-date-next-${id}`, "chevron-right", { tooltip: "Next month", onClick: (_e, cx) => { cal.next_month(); cx.notify(); } })),
+        .child(IconButton(cx, `fp-date-prev-${id}`, "chevron-left", { tooltip: "Previous month", onClick: (_e, cx) => { cal.prev_month(); ui.refreshRows(); cx.notify(); } }))
+        .child(calendarSelect(cx, ui, id, cal, "month"))
+        .child(calendarSelect(cx, ui, id, cal, "year"))
+        .child(IconButton(cx, `fp-date-next-${id}`, "chevron-right", { tooltip: "Next month", onClick: (_e, cx) => { cal.next_month(); ui.refreshRows(); cx.notify(); } })),
     )
     .child(div().flex().flex_row().children(WEEKDAYS.map((w) => div().w(32).flex().justify_center().child(Text(cx, "cap", w, "fg3")))));
   for (const week of grid) {
@@ -1769,6 +2066,9 @@ function datePicker(cx, ui, id, date) {
           .when(on, (el) => el.bg(t.primary))
           .when(!on, (el) => el.hover((st) => st.bg(t.hover)))
           .on_click((_e, cx) => {
+            // gpui's set_value emits no "change" (CalendarState::set_date only
+            // notifies); marked anyway so a pick can never run twice.
+            if (s.picker) s.picker.jumpedTo = day;
             cal.set_value(day);
             ui.pickDate(date, day, cx);
           })
@@ -1837,7 +2137,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
     markers.push(["user", tip]);
   }
   if (allCalc) markers.push(["lock", "Computed from other items"]);
-  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0);
+  // Rule 8: the penalties show what is computed; one Edit opens all three.
+  const penalty = s.editable ? fs.map((f) => ui.penaltyGroupOf(f.k)).find((g) => g && g.applies) : null;
+  const penaltyOpen = Boolean(penalty) && (penalty.edited || penalty.keys.some((k) => s.penaltyOpen.has(k)));
+  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0) + (penalty ? (penaltyOpen ? 210 : 130) : 0);
   const label = div()
     .flex()
     .flex_row()
@@ -1853,6 +2156,13 @@ function itemRow(cx, ui, it, pi, ii, width) {
   if (it.rows) label.child(Text(cx, "meta", `${it.rows} rows`, "fg3").flex_none().pt(2));
   for (const [icon, tip] of markers) {
     label.child(div().id(`fp-mark-${icon}-${id}`).flex_none().pt(3).tooltip(tip).accessibility_label(tip).child(Icon(cx, icon, { size: 14, color: "fg3" })));
+  }
+  if (penalty) {
+    label.child(
+      penaltyOpen
+        ? AppButton(cx, `fp-penalty-computed-${id}`, "Use the computed amounts", { size: "sm", variant: "ghost", icon: "history", onClick: (_e, cx) => ui.usePenaltyComputed(penalty, cx) })
+        : AppButton(cx, `fp-penalty-edit-${id}`, "Edit penalties", { size: "sm", variant: "ghost", icon: "pencil", onClick: (_e, cx) => ui.openPenalties(penalty, cx) }),
+    );
   }
   if (hasEdit) {
     // The button stays in place (and keeps the keyboard) while the boxes
@@ -1893,6 +2203,11 @@ function itemRow(cx, ui, it, pi, ii, width) {
     label.child(edit);
   }
 
+  // Rule 6: what turns the item's faded boxes on.
+  const needs = [...new Set(itemKeys(it).map((k) => ui.isOff(k)).filter(Boolean))].map((why, n) =>
+    div().id(`fp-needs-${id}-${n}`).mb(6).tooltip(why).child(Text(cx, "meta", needsText(why), "fg3").whitespace_normal()),
+  );
+
   let controls;
   if (it.rows) {
     controls = scheduleTable(cx, ui, it, inner);
@@ -1929,10 +2244,18 @@ function itemRow(cx, ui, it, pi, ii, width) {
     controls = div().flex().flex_row().flex_wrap().gap_x(SPACE[4]).gap_y(SPACE[3]).items_end();
     const radios = fs.filter((f) => f.t === "radio");
     if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
-    for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
-    const single = fs.filter((f) => isDateField(f, it));
-    if (single.length === 1 && s.editable && !single[0].c && !ui.isLocked(single[0].k)) {
-      controls.child(datePicker(cx, ui, id, { single: single[0] }));
+    // Each whole date box has its own calendar beside it (2200A's four
+    // payment dates, 1702EX's Effectivity From and To).
+    const single = fs.filter((f) => isDateField(f));
+    for (const f of fs) {
+      if (f.t === "radio") continue;
+      const box = control(cx, ui, f, it.l, fs.length > 1, inner);
+      if (!isDateField(f) || !s.editable || f.c || ui.isLocked(f.k)) {
+        controls.child(box);
+        continue;
+      }
+      const pickerId = single.length === 1 ? id : `${id}-${single.indexOf(f)}`;
+      controls.child(div().flex().flex_row().items_end().gap(SPACE[1]).child(box).child(datePicker(cx, ui, pickerId, { single: f }, id)));
     }
     const date = single.length ? null : dateParts(fs);
     if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || ui.isLocked(f.k))) {
@@ -1987,6 +2310,7 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .flex_1()
         .min_w(0)
         .child(label)
+        .children(needs)
         .child(controls)
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
