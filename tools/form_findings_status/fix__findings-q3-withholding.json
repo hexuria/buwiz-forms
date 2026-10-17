@@ -7,7 +7,7 @@
   },
   "manual-0": {
    "pr": "PR 2",
-   "proof": "screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's pinned lines removed)",
+   "proof": "screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the form's pinned lines removed); screen_form_module::tests::q3_withholding_removing_typed_rows_is_reported (1601EQ items 4 and 11 go through the form's setters and ask first)",
    "status": "fixed"
   },
   "manual-1": {
@@ -44,7 +44,7 @@
   },
   "R3.4": {
    "reason": "Tax Agent Accreditation No., Date of Issue, Date of Expiry and Part III items 33-36 are disabled at load in the official runtime (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json: disabled true) and saved blank; no handler in the tracked rule package enables them (none of rules/forms/1601fq-v2018/workflow.json, validations.json or calculations.json names them). The tax agent's accreditation and the Part III payment details are written on the printed sheet by hand or by the bank, not in eBIRForms. The page leaves them out (schema-overrides.json evidence) and the print leaves them blank, as the program does; giving them boxes would file values the official upload never carries.",
-   "reviewer": "Agree (PR 2 review): all 12 listed keys are disabled:true at load in the official runtime inventory, and no handler enables them.",
+   "reviewer": "Agree (PR 2 review): the official runtime inventory lists 20 Part III and accreditation keys (the tax agent block and items 33-36) disabled:true at load, the 12 the finding lists among them, and no handler enables them.",
    "status": "not_a_bug"
   },
   "R5.1": {
@@ -69,7 +69,7 @@
   },
   "manual-2": {
    "pr": "PR 2",
-   "proof": "screen_form_module::tests::q3_withholding_schedules_are_tables_of_their_printed_columns; screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy; screen_form_module::tests::form_1601fq_schedule_1_rate_follows_its_atc (a page-chosen ATC sets the row's rate; items 21 and 32 count it)",
+   "proof": "screen_form_module::tests::q3_withholding_schedules_are_tables_of_their_printed_columns; screen_form_module::tests::q3_withholding_draws_no_popup_slot_and_no_header_copy; screen_form_module::tests::form_1601fq_schedule_1_rate_follows_its_atc (a page-chosen ATC sets the row's rate; items 21 and 32 count it); screen_form_module::tests::form_1601fq_schedule_1_rate_follows_its_atc (rows 1-5; item 11's own list)",
    "status": "fixed"
   },
   "manual-3": {
@@ -106,7 +106,7 @@
   },
   "R6.0": {
    "pr": "PR 2",
-   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1602Q: 12 off boxes); screen_form_module::tests::a_box_comes_alive_when_its_answer_holds (1602Q Item 13 Yes); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers (1602Q Item 13 Yes and No); screen_form_module::tests::q3_withholding_item_13_is_answered_on_the_page_and_prints; screen_form_module::tests::form_1602q_a_legacy_schedule_2_under_item_13_no_is_off_and_refuses_writes",
+   "proof": "screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1602Q: 12 off boxes); screen_form_module::tests::a_box_comes_alive_when_its_answer_holds (1602Q Item 13 Yes); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers (1602Q Item 13 Yes and No); screen_form_module::tests::q3_withholding_item_13_is_answered_on_the_page_and_prints; screen_form_module::tests::form_1602q_a_legacy_schedule_2_under_item_13_no_is_off_and_refuses_writes; tools/test_form_q3_withholding.mjs (confirm, Cancel, Esc, Undo on its own page only)",
    "status": "fixed"
   },
   "manual-0": {
