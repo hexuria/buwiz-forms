@@ -541,9 +541,12 @@ fn form_1701q_leaving_married_asks_first_and_clears_the_spouse_part() {
     }
 }
 
-/// Lesson 6: a draft stored before Civil Status existed opens as it was: a
-/// spouse means Married, none shows the part closed with what opens it,
-/// and nothing in the stored draft changes on open.
+/// Lesson 6 and the stored shape: a draft stored before Civil Status and
+/// the penalty model existed opens exactly as stored (the whole draft), a
+/// spouse means Married, none shows the part closed with what opens it, its
+/// typed penalties file as they were (a zero too), and saving it again with
+/// no edits writes the same stored JSON: no `civil_status`, `penalty` or
+/// `spouse_penalty` key appears.
 #[test]
 fn form_1701q_stored_drafts_open_unchanged() {
     use bir_core::forms::form_1701q::{
@@ -551,6 +554,22 @@ fn form_1701q_stored_drafts_open_unchanged() {
         Form1701QSpouseType,
     };
     setup();
+    let stored_json = |quarter: u8| -> Value {
+        with_database(|db| {
+            db.get_form_draft::<Value>(TIN, Q, YEAR as u16, Some(quarter))
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap()
+        .expect("stored")
+    };
+    let stored_typed = |quarter: u8| -> Form1701QDraft {
+        with_database(|db| {
+            db.get_queueable_draft::<Form1701QDraft>(TIN, YEAR as u16, i64::from(quarter))
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap()
+        .expect("stored")
+    };
     let store = |quarter: u8, spouse: bool| -> Value {
         let mut draft = Form1701QDraft {
             taxable_year: YEAR as u16,
@@ -576,33 +595,43 @@ fn form_1701q_stored_drafts_open_unchanged() {
         draft.set_amount(64, Form1701QParty::Taxpayer, Some(125.0));
         draft.set_amount(65, Form1701QParty::Taxpayer, Some(0.0));
         draft.set_amount(66, Form1701QParty::Taxpayer, Some(1_000.0));
+        draft.recompute();
         assert_eq!(draft.penalty.penalty_model_version, 0);
-        with_database(|db| {
-            db.save_queueable_draft(&draft)
-                .map(|_| ())
-                .map_err(|e| HostError::new(e.to_string()))
-        })
-        .unwrap();
-        serde_json::to_value(draft).unwrap()
+        // Stored twice, so the stored JSON carries its own row id as a
+        // saved draft does.
+        let save = |draft: &Form1701QDraft| {
+            with_database(|db| {
+                db.save_queueable_draft(draft)
+                    .map_err(|e| HostError::new(e.to_string()))
+            })
+            .unwrap()
+        };
+        draft.id = Some(save(&draft));
+        save(&draft);
+        let raw = stored_json(quarter);
+        for key in ["civil_status", "penalty", "spouse_penalty"] {
+            assert!(raw.get(key).is_none(), "the stored draft has no {key}");
+        }
+        raw
     };
 
+    // The host bridge writes a whole amount as an integer (50500 for
+    // 50500.0); the drafts compare as the typed drafts they are.
+    let as_draft =
+        |value: &Value| -> Form1701QDraft { serde_json::from_value(value.clone()).unwrap() };
     let stored = store(2, true);
+    let bytes = serde_json::to_string(&stored_typed(2)).unwrap();
     let opened = open(Q, 2);
+    assert_eq!(
+        as_draft(&opened["draft"]),
+        as_draft(&stored),
+        "the whole draft opens as stored"
+    );
     assert_eq!(opened["values"][rows_income_q::CIVIL_STATUS], "Married");
     assert_eq!(
         opened["values"]["frm1701q:txtSpouseName"],
         "DELA CRUZ, MARIA"
     );
-    for key in [
-        "has_spouse",
-        "spouse_name",
-        "spouse_type",
-        "spouse_atc",
-        "date_of_birth",
-    ] {
-        assert_eq!(opened["draft"][key], stored[key], "{key}");
-    }
-    assert!(opened["draft"].get("civil_status").is_none());
     // Its typed penalties file as they were, the zero too.
     for (key, shown) in [
         ("frm1701q:txt64A", "125.00"),
@@ -612,15 +641,49 @@ fn form_1701q_stored_drafts_open_unchanged() {
         assert_eq!(opened["values"][key], shown, "{key}");
         assert_eq!(field_map(Q, &opened["draft"])[key], shown, "{key} files");
     }
+    // Saved again with no edit: the same stored JSON (the store writes
+    // serde_json::to_string of the typed draft, so equal typed drafts are
+    // equal bytes).
+    save(Q, &opened["draft"]);
+    assert_eq!(stored_json(2), stored);
+    assert_eq!(serde_json::to_string(&stored_typed(2)).unwrap(), bytes);
 
     // Stored with no spouse (an older page wrote the name only): the part
     // is closed and says why; the stored name stays in the draft.
     let stored = store(3, false);
     let opened = open(Q, 3);
+    assert_eq!(
+        as_draft(&opened["draft"]),
+        as_draft(&stored),
+        "the whole draft opens as stored"
+    );
     assert_eq!(opened["values"][rows_income_q::CIVIL_STATUS], "");
     assert_eq!(opened["off"]["frm1701q:txtSpouseName"], NEEDS_MARRIED);
-    assert_eq!(opened["draft"]["spouse_name"], stored["spouse_name"]);
-    assert_eq!(opened["draft"]["has_spouse"], false);
+    // Answering Single clears that hidden name: asked first (review 6).
+    let single = fill(
+        Q,
+        &opened["draft"],
+        json!({ rows_income_q::CIVIL_STATUS: "Single" }),
+    );
+    assert!(
+        single["removes"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("Civil Status")),
+        "{}",
+        single["removes"]
+    );
+    assert_eq!(single["draft"]["spouse_name"], "");
+    // Married keeps it, and shows it: nothing to ask.
+    let married = fill(
+        Q,
+        &opened["draft"],
+        json!({ rows_income_q::CIVIL_STATUS: "Married" }),
+    );
+    assert!(married["removes"].is_null());
+    assert_eq!(
+        married["values"]["frm1701q:txtSpouseName"],
+        "DELA CRUZ, MARIA"
+    );
 }
 
 /// R6.1, R6.2, R6.4, R6.8-R6.13: with the spouse part open, each conditional
@@ -1131,4 +1194,220 @@ fn form_1702q_quarter_boxes_agree_with_the_print() {
             assert_eq!(sheet[&key], expected, "Q{quarter} {key} prints");
         }
     }
+}
+
+/// The refusals in the filer's words, asked of the host directly: items 43
+/// and 48's "(specify)" boxes while no party files their schedule, the
+/// spouse part's radio groups and a spouse penalty (even opened with Edit)
+/// while Part II is closed, and the spouse's penalties for a compensation
+/// earner only (no Edit, faded, refused).
+#[test]
+fn form_1701q_closed_boxes_refuse_a_direct_write_in_the_filer_words() {
+    setup();
+    let opened = open(Q, 1);
+    let refused = |draft: &Value, key: &str, value: &str, unlocked: &[&str]| -> Value {
+        let filled = fill_unlocked(Q, draft, json!({ key: value }), unlocked);
+        filled["rejected"][key].clone()
+    };
+    assert_eq!(
+        refused(&opened["draft"], "frm1701q:txt43Desc", "RENTAL", &[]),
+        "Item 43 is Schedule I's: choose Graduated Rates at item 16 (or item 25 for the spouse) first."
+    );
+    assert_eq!(
+        refused(&opened["draft"], "frm1701q:txt48Desc", "INTEREST", &[]),
+        "Item 48 is Schedule II's: choose the 8% rate at item 16 (or item 25 for the spouse) first."
+    );
+    for (key, value) in [
+        ("frm1701q:optSpouseATC", "II012"),
+        ("frm1701q:optSpouseType", "Single"),
+        ("frm1701q:optSpouseTaxRate", "Graduated"),
+        ("frm1701q:optSpouseMethod", "I"),
+        ("frm1701q:optSpouseForeignTaxCred", "Y"),
+    ] {
+        assert_eq!(
+            refused(&opened["draft"], key, value, &[]),
+            MARRIED_FIRST,
+            "{key}"
+        );
+    }
+    let penalties = ["frm1701q:txt64B", "frm1701q:txt65B", "frm1701q:txt66B"];
+    assert_eq!(
+        refused(&opened["draft"], "frm1701q:txt64B", "100", &penalties),
+        MARRIED_FIRST,
+        "a closed spouse penalty, even opened"
+    );
+    // Graduated rates open item 43's box.
+    let graduated = married(&opened);
+    let filled = fill(Q, &graduated, json!({"frm1701q:txt43Desc": "RENTAL"}));
+    assert_eq!(filled["rejected"], json!({}));
+    assert_eq!(
+        field_map(Q, &filled["draft"])["frm1701q:txt43Desc"],
+        "RENTAL"
+    );
+
+    // A compensation earner only: the spouse's column files no penalties.
+    let earner = fill(Q, &graduated, json!({"frm1701q:optSpouseType_3": "true"}));
+    let checked = validated(Q, &earner["draft"]);
+    let group = checked["penalties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["keys"][0] == "frm1701q:txt64B")
+        .unwrap();
+    assert_eq!(group["applies"], false, "no Edit penalties");
+    for key in penalties {
+        assert_eq!(
+            checked["off"][key], "Needs item 20 other than II011 Compensation Income",
+            "{key}"
+        );
+        assert_eq!(
+            refused(&earner["draft"], key, "100", &penalties),
+            "A spouse who is a compensation earner only (item 20 II011) files no penalties here: choose the spouse's other ATC at item 20 first.",
+            "{key}"
+        );
+        assert_eq!(field_map(Q, &earner["draft"])[key], "0.00");
+    }
+}
+
+/// Review 5: the spouse's answers (items 19, 20, 25, 25A) count in what
+/// leaving Married removes, with no text typed.
+#[test]
+fn form_1701q_leaving_married_counts_the_spouse_answers() {
+    setup();
+    let opened = open(Q, 1);
+    let answered = fill(
+        Q,
+        &married(&opened),
+        json!({
+            "frm1701q:optSpouseType_1": "true",
+            "frm1701q:optSpouseATC_1": "true",
+            "frm1701q:optSpouseMethod:_1": "true",
+        }),
+    );
+    assert_eq!(answered["rejected"], json!({}));
+    let left = fill(
+        Q,
+        &answered["draft"],
+        json!({ rows_income_q::CIVIL_STATUS: "Single" }),
+    );
+    // Item 19, item 20, item 25 (which the ATC sets) and item 25A.
+    assert_eq!(left["removes"]["rows"], 4, "{}", left["removes"]);
+    for key in [
+        "spouse_type",
+        "spouse_atc",
+        "spouse_tax_rate",
+        "spouse_deduction_method",
+    ] {
+        assert!(left["draft"][key].is_null(), "{key}");
+    }
+}
+
+/// Review 1: an answer that replaces a typed amount with a computed one
+/// asks first. 1702Q item 12 OSD replaces Schedule 2 item 6 (the typed
+/// deductions) with 40% of the gross income.
+#[test]
+fn form_1702q_osd_asks_before_it_replaces_typed_deductions() {
+    setup();
+    let opened = open(C, 2);
+    let typed = fill(
+        C,
+        &opened["draft"],
+        json!({
+            "frm1702q:cbATC_2": "IC010_25%",
+            "frm1702q:rbATC_2": "true",
+            "frm1702q:rbMthdOfDdctns_1": "true",
+        }),
+    );
+    let typed = fill(
+        C,
+        &typed["draft"],
+        json!({"frm1702q:Sched2:txtTax1": "1000000", "frm1702q:Sched2:txtTax6": "50000"}),
+    );
+    assert_eq!(typed["rejected"], json!({}), "{}", typed["rejected"]);
+    assert_eq!(
+        amount(&typed["values"], "frm1702q:Sched2:txtTax6"),
+        50_000.0
+    );
+    let osd = fill(
+        C,
+        &typed["draft"],
+        json!({"frm1702q:rbMthdOfDdctns_2": "true", "frm1702q:rbMthdOfDdctns_1": "false"}),
+    );
+    assert_eq!(
+        amount(&osd["values"], "frm1702q:Sched2:txtTax6"),
+        400_000.0,
+        "40% of gross"
+    );
+    assert_eq!(
+        osd["removes"]["message"],
+        "This answer replaces what you typed in Schedule 2 item 6. Continue?"
+    );
+    assert_eq!(osd["removes"]["rows"], 1);
+    // Typing another amount under OSD replaces nothing typed: no question.
+    let more = fill(
+        C,
+        &osd["draft"],
+        json!({"frm1702q:Sched2:txtTax1": "2000000"}),
+    );
+    assert!(more["removes"].is_null(), "{}", more["removes"]);
+}
+
+/// Review 3: a 1702Q box that waits for its gate refuses a write, with the
+/// tag rule 6 shows (app/forms/condition-labels.json, for the condition
+/// app/forms/conditions.json gives the box), instead of taking it and
+/// losing it to the recompute.
+#[test]
+fn form_1702q_a_gated_box_refuses_a_write_with_what_it_needs() {
+    setup();
+    let labels = repo_json("app/forms/condition-labels.json");
+    let conditions = repo_json("app/forms/conditions.json");
+    let tag = |key: &str| -> String {
+        let condition = conditions[C][key].as_str().unwrap();
+        labels["conditions"][C][condition]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let opened = open(C, 1);
+    for key in [
+        "frm1702q:Sched2:txtTax1",
+        "frm1702q:Sched1:txtTax1B",
+        "frm1702q:Sched4:txtOthrTxCrdts0",
+        "frm1702q:Sched3:txtTax1",
+        "frm1702q:txtTxRlfSpcfy",
+        "frm1702q:txtTax15",
+    ] {
+        let filled = fill(C, &opened["draft"], json!({ key: "1000" }));
+        assert_eq!(filled["rejected"][key], tag(key), "{key}");
+        assert_eq!(
+            opened["off"][key],
+            tag(key),
+            "{key} is faded with the same words"
+        );
+    }
+    assert_eq!(tag("frm1702q:Sched2:txtTax1"), "Needs item 5 = an ATC");
+    // With an ATC on a first-quarter return, the previous quarters still wait.
+    let with_atc = fill(
+        C,
+        &opened["draft"],
+        json!({"frm1702q:cbATC_2": "IC010_25%", "frm1702q:rbATC_2": "true", "frm1702q:rbMthdOfDdctns_2": "true"}),
+    );
+    for key in [
+        "frm1702q:Sched4:txtTax2",
+        "frm1702q:Sched2:txtTax6",
+        "frm1702q:Sched4:txtTax6",
+    ] {
+        let filled = fill(C, &with_atc["draft"], json!({ key: "1000" }));
+        assert_eq!(filled["rejected"][key], tag(key), "{key}");
+    }
+    let filled = fill(
+        C,
+        &with_atc["draft"],
+        json!({"frm1702q:Sched2:txtTax1": "1000"}),
+    );
+    assert_eq!(filled["rejected"], json!({}), "open once its gate holds");
+    // Clearing a gated box (0, as an amount box takes it) is taken: it
+    // files nothing either way.
+    let cleared = fill(C, &opened["draft"], json!({"frm1702q:Sched2:txtTax1": "0"}));
+    assert_eq!(cleared["rejected"], json!({}));
 }

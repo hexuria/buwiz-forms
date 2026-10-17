@@ -30,8 +30,10 @@ use std::collections::BTreeMap;
 
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::form_1701q::{
-    Form1701QAtc, Form1701QCivilStatus, Form1701QDraft, Form1701QFilerType, Form1701QTaxRate,
+    Form1701QAtc, Form1701QCivilStatus, Form1701QDraft, Form1701QFilerType, Form1701QParty,
+    Form1701QTaxRate, USER_ENTERED_AMOUNT_ITEMS,
 };
+use bir_core::forms::form_1702q::{Form1702qDeduction, Form1702qDraft};
 use serde_json::{Map, Value, json};
 
 /// The page box of 1701Q's Civil Status. Not an official control: the
@@ -75,6 +77,116 @@ pub(super) fn is_gate_refusal(reason: &str) -> bool {
         NOT_II011_FIRST,
     ]
     .contains(&reason)
+        || Gate::ALL.iter().any(|gate| gate.tag() == reason)
+}
+
+/// What a 1702Q schedule entry waits for. `recompute` (form_1702q.rs)
+/// clears or overwrites the entry while it does not hold, so the host
+/// refuses a write there with the tag (app/forms/condition-labels.json),
+/// rather than taking it and losing it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Gate {
+    /// Item 5 has an ATC (Schedules 1, 2 and 4).
+    Atc,
+    /// And the return is for the 2nd or 3rd quarter.
+    AtcLaterQuarter,
+    /// And item 12 is not OSD (Schedule 2 item 6, which OSD overwrites).
+    AtcItemized,
+    /// And Amended Return is Yes (Schedule 4 item 6).
+    AtcAmended,
+    /// Both item 5 boxes are ticked (Schedule 3).
+    Mcit,
+    McitLaterQuarter,
+    McitThirdQuarter,
+    /// Item 13 Yes (13A).
+    Relief,
+    /// The regular income tax is above the MCIT (item 15).
+    PriorMcit,
+}
+
+impl Gate {
+    #[cfg(test)]
+    pub(super) const ALL: [Self; 9] = [
+        Self::Atc,
+        Self::AtcLaterQuarter,
+        Self::AtcItemized,
+        Self::AtcAmended,
+        Self::Mcit,
+        Self::McitLaterQuarter,
+        Self::McitThirdQuarter,
+        Self::Relief,
+        Self::PriorMcit,
+    ];
+
+    /// The tag rule 6 shows, and the refusal of a write while closed.
+    pub(super) const fn tag(self) -> &'static str {
+        match self {
+            Self::Atc => "Needs item 5 = an ATC",
+            Self::AtcLaterQuarter => "Needs item 5 = an ATC, on a 2nd or 3rd quarter return",
+            Self::AtcItemized => "Needs item 5 = an ATC and item 12 = Itemized Deductions",
+            Self::AtcAmended => "Needs item 5 = an ATC and item 4 = Yes",
+            Self::Mcit => "Needs both item 5 boxes ticked (MCIT and an ATC)",
+            Self::McitLaterQuarter => {
+                "Needs both item 5 boxes ticked, on a 2nd or 3rd quarter return"
+            }
+            Self::McitThirdQuarter => "Needs both item 5 boxes ticked, on a 3rd quarter return",
+            Self::Relief => "Needs item 13 = Yes",
+            Self::PriorMcit => "Needs the regular income tax above the MCIT (Schedule 2)",
+        }
+    }
+
+    /// The gate of a 1702Q box, if any.
+    pub(super) fn of(key: &str) -> Option<Self> {
+        let tail = key.strip_prefix("frm1702q:")?;
+        Some(match tail {
+            "Sched1:txtTax8A" | "Sched1:txtTax8B" | "Sched2:txtTax8" | "Sched4:txtTax2"
+            | "Sched4:txtTax3" | "Sched4:txtTax4" => Self::AtcLaterQuarter,
+            "Sched1:txtTax1A"
+            | "Sched1:txtTax1B"
+            | "Sched1:txtTax2A"
+            | "Sched1:txtTax2B"
+            | "Sched1:txtTax4A"
+            | "Sched1:txtTax4B"
+            | "Sched1:txtTax6A"
+            | "Sched1:txtTax6B"
+            | "Sched1:txtTax10B"
+            | "Sched1:txtTax12B"
+            | "Sched2:txtTax1"
+            | "Sched2:txtTax2"
+            | "Sched2:txtTax4"
+            | "Sched4:txtTax1"
+            | "Sched4:txtTax5"
+            | "Sched4:txtOthrTxCrdts0"
+            | "Sched4:txtOthrTxCrdtAmnt0"
+            | "Sched4:txtOthrTxCrdts1"
+            | "Sched4:txtOthrTxCrdtAmnt1" => Self::Atc,
+            "Sched2:txtTax6" => Self::AtcItemized,
+            "Sched4:txtTax6" => Self::AtcAmended,
+            "Sched3:txtTax1" => Self::Mcit,
+            "Sched3:txtTax2" => Self::McitLaterQuarter,
+            "Sched3:txtTax3" => Self::McitThirdQuarter,
+            "txtTxRlfSpcfy" => Self::Relief,
+            "txtTax15" => Self::PriorMcit,
+            _ => return None,
+        })
+    }
+
+    /// Whether the gate holds on this (computed) draft, with the port's own
+    /// test for each (form_1702q.rs `recompute`).
+    fn holds(self, form: &Form1702qDraft) -> bool {
+        let atc = form.atc_option().is_some();
+        match self {
+            Self::Atc => atc,
+            Self::AtcLaterQuarter => atc && form.previous_quarters_open(),
+            Self::AtcItemized => atc && form.deduction != Form1702qDeduction::Osd,
+            Self::AtcAmended => atc && form.previously_filed_open(),
+            Self::Mcit => form.mcit_open(),
+            Self::McitLaterQuarter => form.mcit_open() && form.quarter >= 2,
+            Self::McitThirdQuarter => form.mcit_open() && form.quarter >= 3,
+            Self::Relief => form.tax_relief,
+            Self::PriorMcit => form.prior_mcit_open(),
+        }
+    }
 }
 
 /// Part II's boxes (items 17-25A).
@@ -129,13 +241,28 @@ pub(super) enum Cell {
     /// columns: open while either party files that schedule (the official
     /// enableSchedule1/2; the compute keeps the text, so the host closes it).
     Specify(bool),
+    /// A 1702Q box that waits for its gate.
+    Gated1702Q(Gate),
 }
+
+/// Part II's radio groups' own boxes: a batch (the assistant, a preview
+/// sync) may name the group rather than its radios.
+pub(crate) const SPOUSE_GROUPS: [&str; 5] = [
+    "frm1701q:optSpouseType",
+    "frm1701q:optSpouseATC",
+    "frm1701q:optSpouseTaxRate",
+    "frm1701q:optSpouseMethod",
+    "frm1701q:optSpouseForeignTaxCred",
+];
 
 fn is_1701q(kind: AgentFormKind) -> bool {
     kind.form_code() == "1701Q"
 }
 
 pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
+    if kind.form_code() == "1702Q" {
+        return Gate::of(key).map(Cell::Gated1702Q);
+    }
     if !is_1701q(kind) {
         return None;
     }
@@ -149,7 +276,7 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
         "frm1701q:txtSpouseBranchCode" => return Some(Cell::SpouseTin(3)),
         _ => {}
     }
-    if SPOUSE_PART.contains(&key) {
+    if SPOUSE_PART.contains(&key) || SPOUSE_GROUPS.contains(&key) {
         return Some(Cell::SpousePart);
     }
     match key {
@@ -183,7 +310,7 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
     match cell(kind, key)? {
         Cell::CivilStatus | Cell::Specify(_) => None,
         Cell::SpouseTin(part) => Some(1 + part),
-        Cell::SpousePart | Cell::SpousePenalty => Some(5),
+        Cell::SpousePart | Cell::SpousePenalty | Cell::Gated1702Q(_) => Some(5),
     }
 }
 
@@ -258,8 +385,17 @@ fn closed(cell: Cell, form: &Form1701QDraft) -> Option<(&'static str, &'static s
                 .then_some((NOT_II011_FIRST, NEEDS_NOT_II011))
         }),
         Cell::Specify(graduated) => specify_closed(form, graduated),
-        Cell::CivilStatus => None,
+        Cell::CivilStatus | Cell::Gated1702Q(_) => None,
     }
+}
+
+/// [`closed`] on a draft of either form.
+fn closed_on(cell: Cell, draft: &Value) -> Option<(&'static str, &'static str)> {
+    if let Cell::Gated1702Q(gate) = cell {
+        let form: Form1702qDraft = serde_json::from_value(draft.clone()).ok()?;
+        return (!gate.holds(&form)).then_some((gate.tag(), gate.tag()));
+    }
+    closed(cell, &typed(draft).ok()?)
 }
 
 /// `Some(tag)` for a box the host closes while its answer does not hold
@@ -268,9 +404,7 @@ fn closed(cell: Cell, form: &Form1701QDraft) -> Option<(&'static str, &'static s
 /// their schedule), `None` for every other box. Rule 6 fades it with the
 /// tag whatever it shows: a legacy draft's value there is faded, not hidden.
 pub(super) fn gated(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
-    let cell = cell(kind, key)?;
-    let form = typed(draft).ok()?;
-    closed(cell, &form).map(|(_, tag)| tag)
+    closed_on(cell(kind, key)?, draft).map(|(_, tag)| tag)
 }
 
 /// The refusal of a write to a closed spouse part (`None` for every other
@@ -286,7 +420,7 @@ pub(super) fn closed_refusal(
     if says_nothing(value) {
         return None;
     }
-    closed(cell, &typed(draft).ok()?).map(|(refusal, _)| refusal)
+    closed_on(cell, draft).map(|(refusal, _)| refusal)
 }
 
 /// Write `key` when this module owns it: `None` leaves it to the ordinary
@@ -308,6 +442,14 @@ fn fill_cell(
     value: &Value,
     ordinary: impl FnOnce(&mut Value) -> Result<(), String>,
 ) -> Result<(), String> {
+    if let Cell::Gated1702Q(_) = cell {
+        if let Some((refusal, _)) = closed_on(cell, draft)
+            && !says_nothing(value)
+        {
+            return Err(refusal.to_string());
+        }
+        return ordinary(draft);
+    }
     let mut form = typed(draft)?;
     if cell == Cell::CivilStatus {
         let answer = text(value);
@@ -443,6 +585,75 @@ fn typed_entries(kind: AgentFormKind, draft: &Value) -> BTreeMap<String, String>
         .collect()
 }
 
+/// A choice: a radio, tick box or list (its binding or its control), or the
+/// Civil Status.
+fn is_answer(kind: AgentFormKind, key: &str) -> bool {
+    let def = kind.definition();
+    key == CIVIL_STATUS
+        || matches!(
+            def.bindings.get(key).map(|bound| &bound.binding),
+            Some(Binding::Choice { .. })
+        )
+        || def.box_def(key).is_some_and(|entry| {
+            ["radio", "checkbox", "select"]
+                .iter()
+                .any(|kind| entry.kind.contains(kind))
+        })
+}
+
+/// How many entries of 1701Q's spouse part `before` held that `after` does
+/// not, read from the drafts (so a name a stored draft kept with no spouse,
+/// which the page does not show, counts too): items 17-25A's texts and
+/// answers, column B's typed amounts and the spouse's penalty overrides.
+fn spouse_entries_removed(before: &Value, after: &Value) -> usize {
+    let (Ok(was), Ok(now)) = (typed(before), typed(after)) else {
+        return 0;
+    };
+    let text = |form: &Form1701QDraft| {
+        [
+            form.spouse_tin.clone(),
+            form.spouse_rdo_code.clone(),
+            form.spouse_name.clone(),
+            form.spouse_citizenship.clone(),
+            form.spouse_foreign_tax_number.clone(),
+        ]
+        .map(|value| !says_nothing(&json!(value)))
+    };
+    let choices = |form: &Form1701QDraft| {
+        [
+            form.spouse_type.is_some(),
+            form.spouse_atc.is_some(),
+            form.spouse_claims_foreign_tax_credits.is_some(),
+            form.spouse_tax_rate.is_some(),
+            form.spouse_deduction_method.is_some(),
+        ]
+    };
+    let amounts = |form: &Form1701QDraft| -> Vec<bool> {
+        USER_ENTERED_AMOUNT_ITEMS
+            .iter()
+            .filter(|item| !(64..=66).contains(*item))
+            .map(|item| {
+                form.amount(*item, Form1701QParty::Spouse)
+                    .is_some_and(|value| value != 0.0)
+            })
+            .collect()
+    };
+    let overrides = |form: &Form1701QDraft| {
+        bir_core::penalties::PenaltyComponent::ALL.map(|component| {
+            form.spouse_penalty
+                .penalty_overrides
+                .get(component)
+                .is_some_and(|value| value != 0.0)
+        })
+    };
+    let gone =
+        |a: &[bool], b: &[bool]| a.iter().zip(b).filter(|(was, now)| **was && !**now).count();
+    gone(&text(&was), &text(&now))
+        + gone(&choices(&was), &choices(&now))
+        + gone(&amounts(&was), &amounts(&now))
+        + gone(&overrides(&was), &overrides(&now))
+}
+
 /// When `edits` turned `before` into `after` by removing what the filer
 /// typed in other boxes, what the page asks first (`message`), what the
 /// Undo toast says (`done`) and how many boxes went; `None` when nothing
@@ -457,18 +668,11 @@ pub(super) fn removes(
     if !matches!(kind.form_code(), "1701Q" | "1702Q") {
         return None;
     }
-    let had = typed_entries(kind, before);
-    let has = typed_entries(kind, after);
-    let lost: Vec<&String> = had
-        .keys()
-        .filter(|key| !edits.contains_key(*key) && !has.contains_key(*key))
-        .collect();
-    if lost.is_empty() {
-        return None;
-    }
-    let n = lost.len();
-    let done = format!("Removed {n} entr{}", if n == 1 { "y" } else { "ies" });
-    if edits.contains_key(CIVIL_STATUS) {
+    if is_1701q(kind) && edits.contains_key(CIVIL_STATUS) {
+        let n = spouse_entries_removed(before, after);
+        if n == 0 {
+            return None;
+        }
         return Some(json!({
             "message": format!(
                 "Without Married at Civil Status, the spouse's part goes: this removes {n} entr{} you made in Part II and column B. Continue?",
@@ -478,6 +682,36 @@ pub(super) fn removes(
             "rows": n,
         }));
     }
+    let had = typed_entries(kind, before);
+    let has = typed_entries(kind, after);
+    // An answer (a choice) can also replace a typed amount with a computed
+    // one (1702Q's item 12 OSD over Schedule 2 item 6): that is lost too.
+    let answered = edits.keys().any(|key| is_answer(kind, key));
+    let cleared: Vec<&String> = had
+        .keys()
+        .filter(|key| !edits.contains_key(*key) && !has.contains_key(*key))
+        .collect();
+    let replaced: Vec<&String> = had
+        .iter()
+        .filter(|(key, was)| {
+            answered && !edits.contains_key(*key) && has.get(*key).is_some_and(|now| now != *was)
+        })
+        .map(|(key, _)| key)
+        .collect();
+    let lost: Vec<&String> = had
+        .keys()
+        .filter(|key| cleared.contains(key) || replaced.contains(key))
+        .collect();
+    if lost.is_empty() {
+        return None;
+    }
+    let n = lost.len();
+    let done = format!("Removed {n} entr{}", if n == 1 { "y" } else { "ies" });
+    let verb = match (cleared.is_empty(), replaced.is_empty()) {
+        (false, true) => "clears",
+        (true, false) => "replaces",
+        _ => "clears or replaces",
+    };
     let mut items: Vec<String> = Vec::new();
     for key in &lost {
         let item = item_name(kind, key);
@@ -496,11 +730,20 @@ pub(super) fn removes(
     } else {
         items[0].clone()
     };
+    // Page 1's items are numbers ("items 36A and 37A"); 1702Q's schedule
+    // items carry their schedule ("Schedule 2 item 6").
+    let numbered = items
+        .iter()
+        .all(|item| item.starts_with(|c: char| c.is_ascii_digit()));
+    let what = if !numbered {
+        shown
+    } else if items.len() == 1 {
+        format!("item {shown}")
+    } else {
+        format!("items {shown}")
+    };
     Some(json!({
-        "message": format!(
-            "This answer clears what you typed in item{} {shown}. Continue?",
-            if items.len() == 1 { "" } else { "s" }
-        ),
+        "message": format!("This answer {verb} what you typed in {what}. Continue?"),
         "done": done,
         "rows": n,
     }))

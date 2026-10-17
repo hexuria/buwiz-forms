@@ -9761,8 +9761,9 @@ mod tests {
                 // and so are items 43 and 48's "(specify)" boxes, which the
                 // host closes (rows_income_q.rs).
                 ("1701Q", 57),
-                // Plus 32 for 1702Q (PR 5): its schedules wait for item 5's
-                // ATC (CORPUS_GAPS_PR5), 13A for item 13, 15 for the MCIT.
+                // New entry, 1702Q with 32 (PR 5): its schedules wait for
+                // item 5's ATC (CORPUS_GAPS_PR5), 13A for item 13, 15 for
+                // the MCIT; before PR 5 it had no conditional box.
                 ("1702Q", 32),
                 ("1800", 1),
                 ("1801", 1),
