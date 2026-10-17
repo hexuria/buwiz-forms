@@ -77,7 +77,7 @@ function selectBox(cx, ui, k, label, listedRaw, value, locked, width) {
   const shown = selected ? selected.value : known ? value : /^(0+|-)$/.test(value) ? "" : value;
   if (shown && !selected && !known) options.push({ value: shown, label: shown });
   if (locked) {
-    const hint = !shown && s.blank.has(k) ? s.needs?.[k] || "" : "";
+    const hint = !shown ? ui.reasonFor(k) : "";
     if (hint) return lockedBox(cx, hint, width, { hint: true });
     return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
   }
@@ -105,8 +105,9 @@ function isTinItem(it) {
 
 /**
  * Drop fields the schema marks `hidden` (internal or login controls of the
- * official runtime), and items left with no field. Validation messages for
- * them fall back to their item number or the first item.
+ * official runtime), and items left with no field, except a printed item
+ * with a `note` (one the official program gives no box). Validation messages
+ * for them fall back to their item number or the first item.
  */
 function withoutHidden(schema) {
   const parts = schema.parts
@@ -114,7 +115,7 @@ function withoutHidden(schema) {
       ...p,
       items: p.items
         .map((it) => (it.f ? { ...it, f: it.f.filter((f) => f.t !== "hidden") } : it))
-        .filter((it) => it.rows || (it.f && it.f.length)),
+        .filter((it) => it.rows || (it.f && it.f.length) || it.note),
     }))
     .filter((p) => p.items.length);
   return { ...schema, parts };
@@ -1220,7 +1221,21 @@ export class FormPageActions {
   /** A sample's locked blank box: what it waits for, shown in its place. */
   reasonFor(k) {
     const s = this.state;
-    return s.blank.has(k) ? s.needs?.[k] || "" : "";
+    if (s.blank.has(k)) return s.needs?.[k] || "";
+    // A printed box the filer cannot fill (the schema's reviewed `why`)
+    // says why in its place whenever it is blank; the host lists it in
+    // `needs` too.
+    return this.whyFor(k) ? s.needs?.[k] || "" : "";
+  }
+
+  /** The schema's reviewed reason a printed box cannot be filled here. */
+  whyFor(k) {
+    const s = this.state;
+    if (!s.whys) {
+      s.whys = new Map();
+      for (const p of s.schema.parts) for (const it of p.items) for (const f of it.f || []) if (f.why) s.whys.set(f.k, f.why);
+    }
+    return s.whys.get(k) || "";
   }
 
   /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */
@@ -2211,6 +2226,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
   let controls;
   if (it.rows) {
     controls = scheduleTable(cx, ui, it, inner);
+  } else if (!fs.length && it.note) {
+    // A printed item with no box: what the paper prints there instead.
+    controls = div().id(`fp-note-${id}`).child(Text(cx, "meta", it.note, "fg3").whitespace_normal());
   } else if (it.l === "Additional details") {
     const open = s.moreOpen.has(id);
     controls = div()

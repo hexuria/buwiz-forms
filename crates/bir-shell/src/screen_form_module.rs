@@ -82,7 +82,7 @@ export interface ScreenFormOpened {
     sample: boolean;
     /** A sample's boxes shown blank while its period is not set: its period parts and everything that follows the period. */
     blank: string[];
-    /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
+    /** A blank box that cannot be typed, with what it waits for (shown in the box): a sample's held box, or a printed box the filer cannot fill here (the schema's `why`). */
     needs: Record<string, string>;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
@@ -544,7 +544,8 @@ fn hide_repeated_occurrences(form: &mut Value) {
 /// options or computed flag of that field, or of a schedule column when `k`
 /// is a table cell)
 /// or `item:<part>:<index>` (that item's printed label). `kind: "hidden"`
-/// keeps the field for validation placement but the page does not draw it.
+/// keeps the field for validation placement but the page does not draw it;
+/// `why` is what a printed box the filer cannot fill says while blank.
 /// The `evidence` text is provenance only.
 fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
     let set = |target: &mut Value, fix: &Value, kind_key: &str| {
@@ -556,6 +557,12 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
         }
         if let Some(options) = fix.get("options") {
             target["o"] = options.clone();
+        }
+        // `why`: what a box the filer cannot fill says while it is blank
+        // (a printed box the official program fills elsewhere or this app
+        // files blank), so it never looks shut for no reason.
+        if let Some(why) = fix.get("why") {
+            target["why"] = why.clone();
         }
         // `computed: false` corrects a field the extractor marked computed
         // although the filer chooses it (1606 Item 31).
@@ -666,7 +673,11 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
 /// items (less what the layout names elsewhere) unchanged, its name too when
 /// `n` is absent. Whatever the layout does not name keeps its own label and
 /// goes to a last part (`rest`, "Not on the printed sheet") without an item
-/// number, so no control is lost.
+/// number, so no control is lost. A `k` may name a cell of an extracted
+/// table: that cell becomes a field of the item (the table is then taken
+/// apart, so a layout naming one of its cells names them all). An item with
+/// no control but a `note` is a printed item the official program gives no
+/// box; the page shows its caption and the note.
 fn apply_layout(form: &mut Value, layout: &Value) {
     let Some(old_parts) = form["parts"].as_array().cloned() else {
         return;
@@ -702,6 +713,28 @@ fn apply_layout(form: &mut Value, layout: &Value) {
                 if let Some(key) = field["k"].as_str() {
                     fields.insert(key.to_string(), (field.clone(), item["p"].clone()));
                 }
+            }
+        }
+    }
+    // A cell the layout names by key leaves its extracted table and takes
+    // that column's caption and type as a field (2550Q's Items 42, 47 and
+    // 56 "Others (Specify)" lines, which the extractor drew as one table).
+    for table in &tables {
+        for row in table["keys"].as_array().into_iter().flatten() {
+            for (c, cell) in row.as_array().into_iter().flatten().enumerate() {
+                let Some(key) = cell.as_str().filter(|key| claimed.contains(*key)) else {
+                    continue;
+                };
+                let col = &table["cols"][c];
+                let mut field = json!({"k": key, "l": col["l"].clone(), "t": col["t"].clone()});
+                for flag in ["c", "w"] {
+                    if col.get(flag).is_some() {
+                        field[flag] = col[flag].clone();
+                    }
+                }
+                fields
+                    .entry(key.to_string())
+                    .or_insert((field, table["p"].clone()));
             }
         }
     }
@@ -767,6 +800,11 @@ fn apply_layout(form: &mut Value, layout: &Value) {
                 .collect();
             if !chosen.is_empty() {
                 items.push(json!({ "no": entry["no"].clone(), "l": entry["l"].clone(), "p": page, "f": chosen }));
+            } else if let Some(note) = entry["note"].as_str() {
+                // A printed item the official program has no control for
+                // (2550Q's Part III payment lines): its caption and why it
+                // takes no entry here.
+                items.push(json!({ "no": entry["no"].clone(), "l": entry["l"].clone(), "p": entry["p"].clone(), "f": [], "note": note }));
             }
         }
         let mut name = spec["n"].clone();
@@ -1037,6 +1075,27 @@ fn schema_computed(form_code: &str, key: &str) -> bool {
             });
             field || cell
         })
+}
+
+/// Each field the schema gives a `why` (an override's reviewed reason a
+/// printed box cannot be filled here), with that reason.
+fn schema_whys(form_code: &str) -> Vec<(String, String)> {
+    let Some(form) = schema_entry(form_code) else {
+        return Vec::new();
+    };
+    form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        .flat_map(|item| item["f"].as_array().into_iter().flatten())
+        .filter_map(|field| {
+            Some((
+                field["k"].as_str()?.to_string(),
+                field["why"].as_str()?.to_string(),
+            ))
+        })
+        .collect()
 }
 
 /// Every control key `k` the schema shows for a form (fields and table cells).
@@ -1777,9 +1836,20 @@ fn profile_edit_keys(kind: AgentFormKind, from_profile: &FromProfile) -> Vec<Str
 /// keys, so every write goes through a bound box of the typed draft.
 fn occurrence_aliases(kind: AgentFormKind) -> Vec<(&'static String, &'static str)> {
     let def = kind.definition();
+    occurrence_keys(kind)
+        .into_iter()
+        .filter(|(key, _)| !def.bindings.contains_key(*key))
+        .collect()
+}
+
+/// Every on-screen key that repeats an official control id, bound or not,
+/// with that official key. A bound one (2551Q's Item 11 email, keyed
+/// `txtEmail#occurrence-1`) writes its draft field like any box; the field
+/// map still writes the value once, under the official key, so the page
+/// shows it from there.
+fn occurrence_keys(kind: AgentFormKind) -> Vec<(&'static String, &'static str)> {
     schema_keys(kind.form_code())
         .iter()
-        .filter(|key| !def.bindings.contains_key(*key))
         .filter_map(|key| {
             key.split_once("#occurrence-")
                 .map(|(official, _)| (key, official))
@@ -1901,7 +1971,7 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
             atc.elected_other_code(),
         );
     }
-    for (key, official) in occurrence_aliases(kind) {
+    for (key, official) in occurrence_keys(kind) {
         if !map.contains_key(key)
             && let Some(value) = map.get(official).cloned()
         {
@@ -2267,6 +2337,16 @@ fn opened_json(
         }
     }
     blank_sample(&blank, &mut values, &mut errors);
+    // A printed box the filer cannot fill says why while it is blank (the
+    // schema's reviewed `why`).
+    for (key, why) in schema_whys(code) {
+        let blank = values[key.as_str()]
+            .as_str()
+            .is_none_or(|shown| shown.trim().is_empty());
+        if blank && locks.contains_key(&key) && !needs.contains_key(&key) {
+            needs.insert(key, json!(why));
+        }
+    }
     let lock_notes: Map<String, Value> = locks
         .iter()
         .map(|(key, reason)| {
@@ -5241,10 +5321,25 @@ mod tests {
             let first = format!("frm2550qv2024:totalTaxPayableNo{item}Description0");
             assert_eq!(table(&first)["rows"], 12);
         }
-        assert_eq!(
-            table("frm2550qv2024:addSpecifyNo42")["cols"][2]["t"],
-            "hidden"
-        );
+        // Items 42, 47 and 56 are each their own printed item now (R3): the
+        // popup row templates the extracted Item 42 table hid stay hidden,
+        // each in its own item.
+        for item in ["42", "47", "56"] {
+            let printed = items
+                .iter()
+                .find(|it| it["no"] == item)
+                .unwrap_or_else(|| panic!("2550Q item {item}"));
+            for column in ["Description", "Amount"] {
+                let key = format!("frm2550qv2024:totalTaxPayableNo{item}{column}{{N>=0}}");
+                let field = printed["f"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|f| f["k"] == key.as_str())
+                    .unwrap_or_else(|| panic!("{key} in item {item}"));
+                assert_eq!(field["t"], "hidden", "{key}");
+            }
+        }
         // A row box sits in its table only, though the extractor split the
         // first two rows across two parts.
         let loose: Vec<&str> = items
@@ -5880,8 +5975,18 @@ mod tests {
         // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
-        // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields,
+        // and so (PR 1) are 2551Q's six Schedule 1 ATC lists: 82 - 6.
+        assert_eq!(supplied, 76);
+        let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
+        for row in 1..=6 {
+            assert!(
+                atc[format!("drpATC{row}")]
+                    .as_array()
+                    .is_some_and(|list| !list.is_empty()),
+                "2551Q drpATC{row} keeps its catalog list in the table"
+            );
+        }
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -7910,9 +8015,11 @@ mod tests {
         assert!(checked > 43, "{checked} penalty amounts checked");
         // The 2551Q page boxes the findings saw at 1,000.00.
         let opened = sample("2551Q");
-        for key in ["txtTax22", "txtTax23", "txtTax24"] {
+        for key in ["txt20", "txt21", "txt22", "txt23", "txt24"] {
             let key = format!("frm2551Qv2018:{key}");
-            let shown = opened["values"][&key].as_str().unwrap_or("0");
+            let shown = opened["values"][&key]
+                .as_str()
+                .unwrap_or_else(|| panic!("{key} shows on the page"));
             assert_eq!(agent::parse_amount(shown).unwrap_or(0.0), 0.0, "{key}");
         }
     }
@@ -8378,7 +8485,6 @@ mod tests {
         "2200P frm2200P:txtPg2RegisteredName",
         "2200T frm2200Tv2020:registeredName_2",
         "2200T frm2200Tv2020:registeredName_3",
-        "2550Q frm2550qv2024:Pg2TaxPayer",
         "2552 frm2552:txtLOB",
     ];
 
@@ -8642,16 +8748,17 @@ mod tests {
             NOTE_NOT_YET
         );
         // "It will be added" only where a form group is assigned to open
-        // the box: 2551Q's repeated email is (PR 1).
-        assert!(assigned_to_open("2551Q", "txtEmail#occurrence-1"));
+        // the box: 0605's quarter is (PR 9). 2551Q's repeated email was
+        // (PR 1), which opened it: it is no longer pinned.
+        assert!(!assigned_to_open("2551Q", "txtEmail#occurrence-1"));
         assert!(assigned_to_open("0605", "itemQuarter_1"));
         assert!(!assigned_to_open("2551Q", "txtEmail"));
         assert!(!assigned_to_open("0619E", "txtEmail#occurrence-1"));
         assert_eq!(
             lock_note_for(
-                "2551Q",
-                "txtEmail#occurrence-1",
-                "repeats the official field `txtEmail`, which this page cannot write"
+                "0605",
+                "itemQuarter_1",
+                "cannot be filled here: written by the app without a draft field (a constant or the period)"
             ),
             NOTE_ASSIGNED
         );
@@ -8671,10 +8778,10 @@ mod tests {
             ),
             NOTE_COMPUTED
         );
-        // 2551Q's repeated email: shut, blank, and now saying why.
+        // 2551Q's Item 11 email (PR 1): a profile box now, its note says so.
         setup();
         let opened = open_for(TIN, "2551Q", YEAR, page_period_of("2551Q"));
-        assert_eq!(opened["lock_notes"]["txtEmail#occurrence-1"], NOTE_ASSIGNED);
+        assert_eq!(opened["lock_notes"]["txtEmail#occurrence-1"], NOTE_PROFILE);
     }
 
     #[test]
@@ -8721,7 +8828,6 @@ mod tests {
     const EMAIL_BOXES_SHUT_FOR_OTHER_REASONS: &[&str] = &[
         "1701MS frm1701MS:txtEmaila: cannot be filled here: derived by the app: shows /email combined with /foreign_tax_credits_description",
         "1701MS frm1701MS:txtEmailb: cannot be filled here: derived by the app: shows /spouse_info/email combined with /foreign_tax_credits_description",
-        "2551Q txtEmail#occurrence-1: repeats the official field `txtEmail`, which this page cannot write",
     ];
 
     #[test]
@@ -9079,6 +9185,12 @@ mod tests {
         "2000OT frm2000OT:txtTransactionDate: picks which return this is; reopen the form for another TIN or period",
         "2550Q frm2550qv2024:RtnPeriodFromNo4: cannot be filled here: derived by the app: changes with /return_period_from/day, /return_period_from/month, /return_period_from/year but never shows one field's value",
         "2550Q frm2550qv2024:RtnPeriodToNo4: cannot be filled here: derived by the app: changes with /return_period_to/day, /return_period_to/month, /return_period_to/year but never shows one field's value",
+        // Part III Details of Payment, shown since PR 1: the official
+        // program keeps these boxes closed (the bank fills them on payment).
+        "2551Q frm2551Qv2018:txtDate25: cannot be filled here: not written by this app's field map for any sample draft",
+        "2551Q frm2551Qv2018:txtDate26: cannot be filled here: not written by this app's field map for any sample draft",
+        "2551Q frm2551Qv2018:txtDate27: cannot be filled here: not written by this app's field map for any sample draft",
+        "2551Q frm2551Qv2018:txtDate28: cannot be filled here: not written by this app's field map for any sample draft",
         "2551Q txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "2551Q txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "2552 frm2552:txtPg2Pt5Sch1Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
@@ -9899,6 +10011,7 @@ mod tests {
             ("2200P", 1),
             ("2200T", 1),
             ("2550M", 1),
+            ("2551Q", 1),
             ("2552", 1),
             ("2553", 1),
         ]);
@@ -10383,22 +10496,78 @@ mod tests {
                 .map(String::as_str),
             Some("books@example.com")
         );
-        // Still read-only: the box is locked with an accurate reason and a
-        // write by key is refused, so nothing bypasses the typed draft.
-        let lock = opened["locks"]["txtEmail#occurrence-1"].as_str().unwrap();
-        assert!(
-            lock.contains("repeats the official field `txtEmail`"),
-            "{lock}"
+        // Item 11 is the profile's email: a profile box (folded, with Edit),
+        // and an edit opened with Edit writes the draft's email, which the
+        // field map writes once, under txtEmail, for both occurrences.
+        assert_eq!(
+            opened["locks"]["txtEmail#occurrence-1"],
+            agent::Lock::Profile.reason()
         );
-        let filled = fill(
+        assert!(strings(&opened["profile_edit"]).contains("txtEmail#occurrence-1"));
+        let refused = fill(
             "2551Q",
             &opened["draft"],
             json!({"txtEmail#occurrence-1": "other@example.com"}),
         );
-        assert!(filled["rejected"]["txtEmail#occurrence-1"].is_string());
+        assert!(refused["rejected"]["txtEmail#occurrence-1"].is_string());
+        let filled = fill_unlocked(
+            "2551Q",
+            &opened["draft"],
+            json!({"txtEmail#occurrence-1": "other@example.com"}),
+            &["txtEmail#occurrence-1"],
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(filled["draft"]["email"], "other@example.com");
+        for key in ["txtEmail", "txtEmail#occurrence-1", "txtEmail#occurrence-2"] {
+            assert_eq!(filled["values"][key], "other@example.com", "{key}");
+        }
+    }
+
+    /// The 2551Q Item 11 email the page now writes reaches the saved XML
+    /// under the official key, in the official save format: the oracle is
+    /// the official program's own save of the sample return
+    /// (bir-core tests/sample-payloads/2551Q-122025Q1.official.xml).
+    #[test]
+    fn form_2551q_email_typed_on_the_page_is_in_the_official_xml() {
+        setup();
+        let official = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../bir-core/tests/sample-payloads/2551Q-122025Q1.official.xml"
+        ))
+        .expect("official 2551Q sample");
+        // The official program writes `<div>txtEmail={value}txtEmail=</div>`.
+        assert!(official.contains("<div>txtEmail=sample.taxpayer@example.comtxtEmail=</div>"));
+        let opened = open("2551Q", 3);
+        let filled = fill_unlocked(
+            "2551Q",
+            &opened["draft"],
+            json!({"txtEmail#occurrence-1": "Filer.Q3@Example.com"}),
+            &["txtEmail#occurrence-1"],
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        save("2551Q", &filled["draft"]);
+        let reopened = open("2551Q", 3);
+        assert_eq!(reopened["draft"]["email"], "Filer.Q3@Example.com");
+        let draft: bir_core::forms::form_2551q::Form2551QDraft =
+            serde_json::from_value(reopened["draft"].clone()).expect("typed 2551Q");
+        let layout =
+            bir_core::official_xml::layout(bir_core::forms::form_2551q_xml::FORM_2551Q_FORM_ID)
+                .expect("2551Q layout");
+        let xml =
+            bir_core::official_xml::write(layout, &draft.to_bir_field_map()).expect("2551Q XML");
+        assert!(
+            xml.contains("<div>txtEmail=Filer.Q3@Example.comtxtEmail=</div>"),
+            "{}",
+            &xml[xml.find("txtEmail").unwrap_or(0)..][..80]
+        );
+        assert_eq!(xml.matches("txtEmail=Filer.Q3@Example.com").count(), 1);
+        // The print shows it in Item 11.
         assert_eq!(
-            filled["values"]["txtEmail#occurrence-2"],
-            "books@example.com"
+            draft
+                .to_print_field_map()
+                .get("txtEmail")
+                .map(String::as_str),
+            Some("Filer.Q3@Example.com")
         );
     }
 
@@ -10569,6 +10738,554 @@ mod tests {
             }),
             ("item_14_amount_of_remittance", 3000.0),
         );
+    }
+
+    // ------------------------------------------------ PR 1: 2551Q and 2550Q
+
+    /// One item the page draws (a field that is not hidden, a table, or a
+    /// note): its part, printed number, label and keys.
+    struct Shown {
+        part: String,
+        no: String,
+        label: String,
+        keys: Vec<String>,
+        table: bool,
+        note: Option<String>,
+    }
+
+    fn shown_items(code: &str) -> Vec<Shown> {
+        let form = schema_entry(code).expect("schema entry");
+        let mut out = Vec::new();
+        for part in form["parts"].as_array().unwrap() {
+            for item in part["items"].as_array().unwrap() {
+                let table = item.get("rows").is_some();
+                let keys: Vec<String> = if table {
+                    item["keys"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .flat_map(|row| row.as_array().unwrap().iter())
+                        .filter_map(|key| key.as_str().map(str::to_string))
+                        .collect()
+                } else {
+                    item["f"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter(|field| field["t"] != "hidden")
+                        .filter_map(|field| field["k"].as_str().map(str::to_string))
+                        .collect()
+                };
+                let note = item["note"].as_str().map(str::to_string);
+                if keys.is_empty() && note.is_none() {
+                    continue;
+                }
+                out.push(Shown {
+                    part: part["n"].as_str().unwrap_or("").to_string(),
+                    no: item["no"].as_str().unwrap_or("").to_string(),
+                    label: item["l"].as_str().unwrap_or("").to_string(),
+                    keys,
+                    table,
+                    note,
+                });
+            }
+        }
+        out
+    }
+
+    fn parts_in_order(items: &[Shown]) -> Vec<&str> {
+        let mut parts: Vec<&str> = Vec::new();
+        for item in items {
+            if parts.last() != Some(&item.part.as_str()) {
+                parts.push(&item.part);
+            }
+        }
+        parts
+    }
+
+    fn item_index(items: &[Shown], key: &str) -> usize {
+        items
+            .iter()
+            .position(|item| item.keys.iter().any(|k| k == key))
+            .unwrap_or_else(|| panic!("{key} is on the page"))
+    }
+
+    fn field_label(code: &str, key: &str) -> String {
+        schema_fields(code)
+            .into_iter()
+            .find(|field| field["k"] == key)
+            .and_then(|field| field["l"].as_str().map(str::to_string))
+            .unwrap_or_else(|| panic!("{code}: {key}"))
+    }
+
+    /// Each box the print sheet joins at a numbered caption, with that
+    /// printed number (`31A VATable Sales` -> `31A`), from the sheet's
+    /// writer-cells.json: an oracle written from the printed page.
+    fn printed_numbers(slug: &str) -> Vec<(String, String)> {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/writer-cells.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cells: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let mut out = Vec::new();
+        for list in ["joins", "money_joins", "xbox_joins", "date_joins"] {
+            for cell in cells[list].as_array().into_iter().flatten() {
+                let (Some(key), Some(printed)) =
+                    (cell["writer_key"].as_str(), cell["printed"].as_str())
+                else {
+                    continue;
+                };
+                let token = printed.split_whitespace().next().unwrap_or("");
+                if token.starts_with(|c: char| c.is_ascii_digit())
+                    && token.chars().all(|c| c.is_ascii_alphanumeric())
+                {
+                    out.push((key.to_string(), token.to_string()));
+                }
+            }
+        }
+        out
+    }
+
+    /// Every box on the page sits under the item number its sheet prints
+    /// it at (`10A` as item 10A, `31A` and `31B` in item 31).
+    fn assert_printed_items(code: &str, slug: &str) -> usize {
+        let items = shown_items(code);
+        let mut checked = 0;
+        for (key, token) in printed_numbers(slug) {
+            let Some(item) = items.iter().find(|item| item.keys.contains(&key)) else {
+                continue;
+            };
+            let digits: String = token.chars().take_while(char::is_ascii_digit).collect();
+            assert!(
+                item.no == token || item.no == digits,
+                "{code}: {key} printed at {token} sits under item {:?} ({})",
+                item.no,
+                item.label
+            );
+            checked += 1;
+        }
+        checked
+    }
+
+    /// The extracted schema entry's keys (fields and table cells), before
+    /// any correction.
+    fn extracted_keys(code: &str) -> BTreeSet<String> {
+        let forms: Vec<Value> =
+            serde_json::from_str(include_str!("../../../app/forms/forms-schema.json")).unwrap();
+        let form = forms.iter().find(|form| form["c"] == code).unwrap();
+        let mut keys = BTreeSet::new();
+        for part in form["parts"].as_array().unwrap() {
+            for item in part["items"].as_array().unwrap() {
+                for field in item["f"].as_array().into_iter().flatten() {
+                    keys.extend(field["k"].as_str().map(str::to_string));
+                }
+                for row in item["keys"].as_array().into_iter().flatten() {
+                    for key in row.as_array().into_iter().flatten() {
+                        keys.extend(key.as_str().map(str::to_string));
+                    }
+                }
+            }
+        }
+        keys
+    }
+
+    /// Rule 3 on 2551Q (R3.0, R3.1, R3.2, R3.3, manual-1, manual-2): every
+    /// box in the part and item the sheet prints it at, nothing in an
+    /// "Additional details" group, no control lost. Oracles: the printed
+    /// item numbers in order, read off html-frozen/2551q-2018 by hand, and
+    /// each box's printed caption in the sheet's writer-cells joins.
+    #[test]
+    fn form_2551q_boxes_sit_in_their_printed_parts_and_items() {
+        setup();
+        let code = "2551Q";
+        let items = shown_items(code);
+        assert_eq!(
+            parts_in_order(&items),
+            [
+                "Page 1",
+                "Part I · Background Information",
+                "Part II · Total Tax Payable",
+                "Part III · Details of Payment",
+                "Schedule 1 · Computation of Tax (Attach additional sheet/s, if necessary)",
+            ]
+        );
+        let numbers: Vec<&str> = items.iter().map(|item| item.no.as_str()).collect();
+        let mut expected: Vec<String> = (1..=24).map(|n| n.to_string()).collect();
+        expected.extend(["", ""].map(String::from));
+        expected.extend((25..=28).map(|n| n.to_string()));
+        expected.extend(["", "7"].map(String::from));
+        assert_eq!(numbers, expected);
+        assert!(items.iter().all(|item| item.label != "Additional details"));
+        // The overpayment choice right under item 24.
+        let at24 = item_index(&items, "frm2551Qv2018:txt24");
+        for key in ["frm2551Qv2018:overPayment1", "frm2551Qv2018:overPayment2"] {
+            assert_eq!(item_index(&items, key), at24 + 1, "{key}");
+        }
+        assert_eq!(items[at24 + 1].label, "If overpayment, mark one box only");
+        // Part III, items 25 to 28.
+        for (no, stems) in [
+            ("25", &["Agency", "Number", "Date", "Amount"][..]),
+            ("26", &["Agency", "Number", "Date", "Amount"][..]),
+            ("27", &["Agency", "Number", "Date", "Amount"][..]),
+            (
+                "28",
+                &["Particular", "Agency", "Number", "Date", "Amount"][..],
+            ),
+        ] {
+            for stem in stems {
+                let item = &items[item_index(&items, &format!("frm2551Qv2018:txt{stem}{no}"))];
+                assert_eq!(
+                    (item.part.as_str(), item.no.as_str()),
+                    ("Part III · Details of Payment", no)
+                );
+            }
+        }
+        // Schedule 1: its six rows, open in one table.
+        let table = &items[item_index(&items, "drpATC1")];
+        assert!(table.table);
+        assert_eq!(table.keys.len(), 24);
+        for row in 1..=6 {
+            for stem in ["drpATC", "txtATCAmt", "txtATCRate", "txtATCDue"] {
+                assert!(table.keys.contains(&format!("{stem}{row}")), "{stem}{row}");
+            }
+        }
+        // Printed captions, not key text.
+        for (n, name) in ["1st", "2nd", "3rd", "4th"].iter().enumerate() {
+            assert_eq!(
+                field_label(code, &format!("frm2551Qv2018:qtr_{}", n + 1)),
+                *name
+            );
+        }
+        assert_eq!(field_label(code, "frm2551Qv2018:txt17Specify"), "Specify");
+        let checked = assert_printed_items(code, "2551q-2018");
+        assert_eq!(checked, 31, "printed captions checked");
+        let on_screen = schema_keys(code);
+        for key in extracted_keys(code) {
+            assert!(on_screen.contains(&key), "{key} is still in the schema");
+        }
+        // A printed box the filer cannot fill says why while it is blank.
+        let opened = open(code, 3);
+        let mut closed: Vec<String> = ["txtTaxAgentNo", "txtDateIssue", "txtDateExpiry"]
+            .map(String::from)
+            .to_vec();
+        for n in 25..=28 {
+            for stem in ["Agency", "Number", "Date", "Amount"] {
+                closed.push(format!("frm2551Qv2018:txt{stem}{n}"));
+            }
+        }
+        closed.push("frm2551Qv2018:txtParticular28".into());
+        for key in &closed {
+            assert!(opened["locks"][key].is_string(), "{key} is locked");
+            assert_eq!(
+                opened["values"][key].as_str().unwrap_or(""),
+                "",
+                "{key} is blank"
+            );
+            assert!(
+                opened["needs"][key]
+                    .as_str()
+                    .is_some_and(|why| !why.is_empty()),
+                "{key} says why"
+            );
+        }
+    }
+
+    /// Rule 3 on 2550Q (R3.0-R3.5, manual-0, -2, -3, -4, -5, -6): Part I to
+    /// Part V in printed order, Items 31-61 numbered in Part IV, the
+    /// schedules in Part V, item 7 TIN then branch code, one email box,
+    /// printed labels. Oracles as for 2551Q (html-frozen/2550q-2024).
+    #[test]
+    fn form_2550q_boxes_sit_in_their_printed_parts_and_items() {
+        setup();
+        let code = "2550Q";
+        let items = shown_items(code);
+        assert_eq!(
+            parts_in_order(&items),
+            [
+                "Page 1",
+                "Part I · Background Information",
+                "Part II · Total Tax Payable",
+                "Part III · Details of Payment",
+                "Part IV · Details of VAT Computation",
+                "Part V · Schedules",
+            ]
+        );
+        let numbers: Vec<&str> = items.iter().map(|item| item.no.as_str()).collect();
+        let mut expected: Vec<String> = (1..=9).map(|n| n.to_string()).collect();
+        expected.extend(["10", "10A", "11", "12", "13", "14", "14A"].map(String::from));
+        expected.extend((15..=19).map(|n| n.to_string()));
+        expected.push(String::new());
+        expected.extend((20..=42).map(|n| n.to_string()));
+        expected.push(String::new());
+        expected.extend((43..=47).map(|n| n.to_string()));
+        expected.push(String::new());
+        expected.extend((48..=56).map(|n| n.to_string()));
+        expected.push(String::new());
+        expected.extend((57..=61).map(|n| n.to_string()));
+        expected.extend(std::iter::repeat_n(String::new(), 7));
+        assert_eq!(numbers, expected);
+        assert!(items.iter().all(|item| item.label != "Additional details"));
+        let item = |key: &str| &items[item_index(&items, key)];
+        // Item 7: the TIN, then the branch code, as printed.
+        assert_eq!(
+            item("frm2550qv2024:txtTIN1").keys,
+            [
+                "frm2550qv2024:txtTIN1",
+                "frm2550qv2024:txtTIN2",
+                "frm2550qv2024:txtTIN3",
+                "frm2550qv2024:branchCode"
+            ]
+        );
+        // Item 12: one email box.
+        assert_eq!(
+            item("frm2550qv2024:taxpayerEmailAddress").keys,
+            ["frm2550qv2024:taxpayerEmailAddress"]
+        );
+        // Items 3, 4 and 14 read as printed.
+        assert_eq!(item("frm2550qv2024:OptQuarter1").label, "Quarter");
+        assert_eq!(field_label(code, "frm2550qv2024:RtnPeriodFromNo4"), "From");
+        assert_eq!(field_label(code, "frm2550qv2024:RtnPeriodToNo4"), "To");
+        assert_eq!(
+            item("frm2550qv2024:internationalTreatyYn").label,
+            "Are you availing of tax relief under Special Law or International Tax Treaty?"
+        );
+        assert_eq!(
+            field_label(code, "frm2550qv2024:internationalTreatyYn"),
+            "Yes"
+        );
+        assert_eq!(field_label(code, "frm2550qv2024:specialRateYn"), "No");
+        assert!(
+            item("frm2550qv2024:taxpayerAddress")
+                .label
+                .ends_with("by using BIR Form No. 1905)")
+        );
+        // Items 42, 47 and 56 each under its own number.
+        for n in ["42", "47", "56"] {
+            assert_eq!(item(&format!("frm2550qv2024:addSpecifyNo{n}")).no, n);
+        }
+        // Items 31 to 61 are Part IV's.
+        for n in 31..=61 {
+            assert!(
+                items.iter().any(|item| item.no == n.to_string()
+                    && item.part == "Part IV · Details of VAT Computation"),
+                "item {n} in Part IV"
+            );
+        }
+        // Schedules 1 to 4 are Part V's.
+        for key in [
+            "txtDatePurchase10",
+            "sched1TotalBalPrev",
+            "frm2550qv2024:sched2TotalAttr",
+            "txtDateCovered30",
+            "sched3TotalTax",
+            "txtDate40",
+            "sched4AmountPaid",
+        ] {
+            assert_eq!(item(key).part, "Part V · Schedules", "{key}");
+        }
+        // Part III: items 27 to 30, which the official program gives no box.
+        let payment: Vec<&Shown> = items
+            .iter()
+            .filter(|item| item.part == "Part III · Details of Payment")
+            .collect();
+        assert_eq!(
+            payment
+                .iter()
+                .map(|item| item.no.as_str())
+                .collect::<Vec<_>>(),
+            ["27", "28", "29", "30"]
+        );
+        assert!(
+            payment
+                .iter()
+                .all(|item| item.keys.is_empty() && item.note.is_some())
+        );
+        // Item 25 is the form's sum: computed on the page.
+        assert!(schema_computed(code, "frm2550qv2024:penalties"));
+        let checked = assert_printed_items(code, "2550q-2024");
+        assert_eq!(checked, 80, "printed captions checked");
+        let on_screen = schema_keys(code);
+        for key in extracted_keys(code) {
+            assert!(on_screen.contains(&key), "{key} is still in the schema");
+        }
+    }
+
+    /// Item 25 Total Penalties is the sum of Items 22-24 on the page and is
+    /// never typed: its binding would write the surcharge.
+    #[test]
+    fn form_2550q_total_penalties_is_the_computed_sum() {
+        setup();
+        let opened = open("2550Q", 3);
+        let filled = fill(
+            "2550Q",
+            &opened["draft"],
+            json!({
+                "frm2550qv2024:surcharge": "100",
+                "frm2550qv2024:interest": "20",
+                "frm2550qv2024:compromise": "3",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(amount(&filled["values"], "frm2550qv2024:penalties"), 123.0);
+        let field = schema_fields("2550Q")
+            .into_iter()
+            .find(|field| field["k"] == "frm2550qv2024:penalties")
+            .unwrap();
+        assert_eq!(
+            field["c"], 1,
+            "the page draws it computed, never a typed box"
+        );
+    }
+
+    /// Rule 8 on 2551Q (R8.0, manual-0): a return that is not late shows no
+    /// penalty; a late one shows the computed amounts locked, one Edit opens
+    /// the three, only the typed one becomes an override (the others keep
+    /// computing), the totals and the upload follow, a blank computes again.
+    #[test]
+    fn form_2551q_penalties_are_computed_and_only_a_typed_one_overrides() {
+        setup();
+        let code = "2551Q";
+        let [sur, int, comp] = [
+            "frm2551Qv2018:txt20",
+            "frm2551Qv2018:txt21",
+            "frm2551Qv2018:txt22",
+        ];
+        let (total, payable, still) = (
+            "frm2551Qv2018:txt23",
+            "frm2551Qv2018:txt24",
+            "frm2551Qv2018:txt19",
+        );
+        // Next year's last quarter is not late.
+        let ahead = open_for(TIN, code, sample_year(), 4);
+        let sold = fill(code, &ahead["draft"], json!({"txtATCAmt1": "500000"}));
+        for key in [sur, int, comp, total] {
+            assert_eq!(amount(&sold["values"], key), 0.0, "{key}");
+        }
+        assert_eq!(
+            amount(&sold["values"], payable),
+            amount(&sold["values"], still)
+        );
+        // Q1 2024 is long past its deadline.
+        let late = open_for(TIN, code, 2024, 1);
+        for key in [sur, int, comp] {
+            assert_eq!(late["locks"][key], penalties::LOCK, "{key}");
+        }
+        let sold = fill(code, &late["draft"], json!({"txtATCAmt1": "500000"}));
+        assert_eq!(sold["rejected"], json!({}));
+        let computed = [sur, int, comp].map(|key| amount(&sold["values"], key));
+        assert!(computed.iter().all(|value| *value > 0.0), "{computed:?}");
+        let refused = fill(code, &sold["draft"], json!({ int: "123.45" }));
+        assert!(
+            refused["rejected"][int].is_string(),
+            "a computed penalty needs Edit"
+        );
+        let typed = fill_unlocked(
+            code,
+            &sold["draft"],
+            json!({ int: "123.45" }),
+            &[sur, int, comp],
+        );
+        assert_eq!(typed["rejected"], json!({}));
+        let overrides = &typed["draft"]["penalty_overrides"];
+        assert!(overrides["surcharge"].is_null());
+        assert_eq!(overrides["interest"], 123.45);
+        assert!(overrides["compromise"].is_null());
+        assert_eq!(amount(&typed["values"], sur), computed[0]);
+        assert_eq!(amount(&typed["values"], int), 123.45);
+        assert_eq!(amount(&typed["values"], comp), computed[2]);
+        let cents = |value: f64| (value * 100.0).round() / 100.0;
+        let penalties_total = cents(computed[0] + 123.45 + computed[2]);
+        assert_eq!(amount(&typed["values"], total), penalties_total);
+        assert_eq!(
+            amount(&typed["values"], payable),
+            cents(amount(&typed["values"], still) + penalties_total)
+        );
+        let group = &typed["penalties"][0];
+        assert_eq!(group["edited"], true);
+        let map = agent::field_map(AgentFormKind::Form2551Q, &typed["draft"]).unwrap();
+        assert_eq!(
+            map[int], "123.45",
+            "the upload carries the entered interest"
+        );
+        let back = fill(code, &typed["draft"], json!({ int: "" }));
+        assert_eq!(back["rejected"], json!({}));
+        assert!(back["draft"]["penalty_overrides"]["interest"].is_null());
+        assert_eq!(amount(&back["values"], int), computed[1]);
+        assert_eq!(back["penalties"][0]["edited"], false);
+    }
+
+    /// The print shows page 1's TIN from the draft on both forms (preview
+    /// findings 2551Q manual-3, 2550Q manual-1), and 2550Q's Item 12 the
+    /// one email the page shows (manual-6). Oracle: the profile's TIN
+    /// 123-456-788-00000 and email, typed here by hand.
+    #[test]
+    fn page_one_tin_prints_from_the_draft_on_2551q_and_2550q() {
+        use bir_print::frozen_html::{filled_document, printed_text};
+        setup();
+        let opened = open("2551Q", 3);
+        let draft: bir_core::forms::form_2551q::Form2551QDraft =
+            serde_json::from_value(opened["draft"].clone()).unwrap();
+        let sheet = filled_document("2551q-2018", &draft.to_print_field_map()).unwrap();
+        for (name, shown) in [
+            ("frm2551Qv2018:txtTIN1", "123"),
+            ("frm2551Qv2018:txtTIN2", "456"),
+            ("frm2551Qv2018:txtTIN3", "788"),
+            ("frm2551Qv2018:txtBranchCode", "00000"),
+        ] {
+            assert_eq!(printed_text(&sheet, name), shown, "2551Q {name}");
+        }
+        let opened = open("2550Q", 3);
+        let draft: bir_core::forms::form_2550q::Form2550QDraft =
+            serde_json::from_value(opened["draft"].clone()).unwrap();
+        let sheet = filled_document("2550q-2024", &draft.print_field_map()).unwrap();
+        for (name, shown) in [
+            ("frm2550qv2024:txtTIN1", "123"),
+            ("frm2550qv2024:txtTIN2", "456"),
+            ("frm2550qv2024:txtTIN3", "788"),
+        ] {
+            assert_eq!(printed_text(&sheet, name), shown, "2550Q {name}");
+        }
+        // writer-cells joins taxpayerEmailAddress to cell p1c48 (item 12).
+        assert_eq!(printed_text(&sheet, "p1c48"), "books@example.com");
+        assert_eq!(
+            opened["values"]["frm2550qv2024:taxpayerEmailAddress"],
+            "books@example.com"
+        );
+    }
+
+    /// Boxes the 2551Q print fills by the app without a draft field (preview
+    /// finding preview.1): the page shows what the print prints.
+    #[test]
+    fn form_2551q_page_and_print_agree_on_the_app_written_boxes() {
+        setup();
+        let opened = open("2551Q", 3);
+        let draft: bir_core::forms::form_2551q::Form2551QDraft =
+            serde_json::from_value(opened["draft"].clone()).unwrap();
+        let printed = draft.to_print_field_map();
+        for key in [
+            "frm2551Qv2018:qtr_1",
+            "frm2551Qv2018:qtr_2",
+            "frm2551Qv2018:qtr_3",
+            "frm2551Qv2018:qtr_4",
+            "txtTaxAgentNo",
+            "txtDateIssue",
+            "txtDateExpiry",
+        ] {
+            assert_eq!(
+                opened["values"][key].as_str(),
+                printed.get(key).map(String::as_str),
+                "{key}"
+            );
+        }
+        // The quarter printed is the return's own.
+        assert_eq!(printed["frm2551Qv2018:qtr_3"], "true");
+        for key in [
+            "frm2551Qv2018:qtr_1",
+            "frm2551Qv2018:qtr_2",
+            "frm2551Qv2018:qtr_4",
+        ] {
+            assert_eq!(printed[key], "false", "{key}");
+        }
     }
 }
 

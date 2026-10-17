@@ -1798,8 +1798,9 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
     // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
-    // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
-    assert_eq!(supplied, 82, "catalog lists, dependent ones included");
+    // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart, and
+    // so (PR 1) are 2551Q's six Schedule 1 ATC lists: 82 - 6.
+    assert_eq!(supplied, 76, "catalog lists, dependent ones included");
 }
 
 #[test]
