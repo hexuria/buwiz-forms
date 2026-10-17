@@ -472,7 +472,8 @@ pub fn check_import<F: QueueableForm>(sample: fn() -> F, import: Import<F>) {
 
 /// Every form that declares penalty items has this check, and every form
 /// listed here declares them. 1701Q (PR 5) runs its own version of the
-/// check (form_1701q.rs `form_1701q_penalty_items_follow_the_shared_model`):
+/// check (crates/bir-core/tests/sample_payloads/form_1701q.rs
+/// `form_1701q_penalty_items_follow_the_shared_model`):
 /// its items are kept by item number, not by a field named after them.
 pub const WIRED: &[&str] = &[
     "0605", "0619E", "0619F", "1600PT", "1600VT", "1600WP", "1601EQ", "1601FQ", "1602Q", "1603Q",

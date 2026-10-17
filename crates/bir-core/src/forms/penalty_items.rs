@@ -52,8 +52,10 @@ pub fn taxpayer_class_of(tier: &EoptTier) -> TaxpayerClass {
 }
 
 /// What a wired draft stores about its penalties, next to the three items.
-/// Embedded with `#[serde(flatten)]`, so the stored JSON keys are the same on
-/// every form.
+/// Embedded with `#[serde(flatten)]` (in the party's column on a two-column
+/// return), so the stored JSON keys are the same on every form; 1701Q, whose
+/// two columns share one flat draft, keeps one state per column under
+/// `penalty` and `spouse_penalty`, left out while they are the default.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PenaltyState {
     /// `0` for a draft saved while the items were manual-only; its non-zero

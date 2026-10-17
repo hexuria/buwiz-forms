@@ -160,7 +160,7 @@ fn form_1701q_sample_payload_is_current() {
 /// amounts by item number (`amounts.item_64.taxpayer`), and a draft stored
 /// while the items were typed boxes keeps all three amounts, a zero too, so
 /// it runs here with those two differences. Q2 2025 is due 15 August 2025
-/// (calendar_rules.rs: "Q1: May 15, Q2: Aug 15, Q3: Oct 15"); the samples
+/// (calendar_rules.rs: "Q1: May 15, Q2: Aug 15, Q3: Nov 15"); the samples
 /// are filed late on 13 October 2026. Rates: surcharge 25%, interest 12% a
 /// year, compromise from the RMO 7-2015 schedule; whole pesos, as every
 /// 1701Q input.
@@ -272,9 +272,10 @@ fn form_1701q_penalty_items_follow_the_shared_model() {
     let mut legacy: Form1701QDraft = serde_json::from_value(stored).unwrap();
     assert_eq!(legacy.penalty.penalty_model_version, 0);
     compute(&mut legacy);
-    assert_eq!(legacy.penalty.penalty_overrides.surcharge, Some(125.0));
-    assert_eq!(legacy.penalty.penalty_overrides.interest, Some(0.0));
-    assert_eq!(legacy.penalty.penalty_overrides.compromise, Some(1_000.0));
+    // Left as stored: no state is added, nothing is computed.
+    assert_eq!(legacy.penalty, Default::default());
+    let shape = serde_json::to_value(&legacy).unwrap();
+    assert!(shape.get("penalty").is_none() && shape.get("spouse_penalty").is_none());
     let fields = legacy.field_map();
     assert_eq!(
         [
@@ -283,6 +284,30 @@ fn form_1701q_penalty_items_follow_the_shared_model() {
             &fields["frm1701q:txt66A"]
         ],
         ["125.00", "0.00", "1,000.00"]
+    );
+    // Typing one (Edit penalties) keeps the others at what they held and
+    // joins the model; blanking all three gives the computed amounts.
+    let mut edited = legacy.clone();
+    taxpayer.set_override(&mut edited, PenaltyComponent::Surcharge, Some(300.0));
+    compute(&mut edited);
+    let fields = edited.field_map();
+    assert_eq!(
+        [
+            &fields["frm1701q:txt64A"],
+            &fields["frm1701q:txt65A"],
+            &fields["frm1701q:txt66A"]
+        ],
+        ["300.00", "0.00", "1,000.00"]
+    );
+    assert_eq!(edited.penalty.penalty_model_version, 1);
+    let mut back = edited.clone();
+    for component in PenaltyComponent::ALL {
+        taxpayer.set_override(&mut back, component, None);
+    }
+    compute(&mut back);
+    assert_eq!(
+        back.field_map()["frm1701q:txt64A"],
+        before["frm1701q:txt64A"]
     );
 
     // The spouse's column applies only to a married filer whose spouse is
@@ -308,35 +333,50 @@ fn form_1701q_penalty_items_follow_the_shared_model() {
 }
 
 /// An imported savefile keeps the penalties it was prepared with, though
-/// its period is late: each column's three items become its overrides (a
-/// zero too), and the import files what the savefile carried. 1701Q imports
-/// its editable save (`to_bir_xml_payload`), not the outbound copy
-/// `penalty_items::check_import` reads.
+/// its period is late: it has no penalty state, so each column files the
+/// three amounts the save file carries (a zero too) and computes nothing,
+/// as a draft stored before PR 5 does. 1701Q imports its editable save
+/// (`to_bir_xml_payload`), not the outbound copy `penalty_items::check_import`
+/// reads.
 #[test]
 fn form_1701q_import_keeps_its_penalties() {
-    // The editable importer reads the typed amounts of USER_ENTERED_AMOUNT_ITEMS,
-    // which leaves out Item 52; the sample's 52B goes for this check.
-    let mut source = sample_1701q();
-    source.set_amount(52, Form1701QParty::Spouse, None);
-    source.recompute();
+    // The sample's spouse keeps 52B (250,000), which the importer restores.
+    let source = sample_1701q();
+    assert_eq!(source.amount(52, Form1701QParty::Spouse), Some(250_000.0));
     let payload = source.to_bir_xml_payload().unwrap();
     let imported = Form1701QDraft::from_bir_xml_payload(&payload).unwrap();
     for items in Form1701QDraft::penalty_items() {
         assert!((items.applies)(&imported));
-        let [s, i, c] = items.filed(&source);
-        let state = (items.state)(&imported);
         assert_eq!(
-            [
-                state.penalty_overrides.surcharge,
-                state.penalty_overrides.interest,
-                state.penalty_overrides.compromise
-            ],
-            [Some(s), Some(i), Some(c)],
+            items.filed(&imported),
+            items.filed(&source),
             "{:?}",
             items.party
         );
+        assert_eq!((items.state)(&imported).penalty_model_version, 0);
+        assert_eq!((items.state)(&imported).computed_penalties, None);
     }
     assert_eq!(imported.field_map(), source.field_map());
+    assert_eq!(imported.amount(52, Form1701QParty::Spouse), Some(250_000.0));
+}
+
+/// Item 52A, the taxpayer's P250,000 allowable reduction on 8%, is typed:
+/// the editable save carries it and the import restores it, so the filer's
+/// own save file round-trips exactly (export, import, export).
+#[test]
+fn form_1701q_item_52a_round_trips_through_the_editable_save() {
+    let source = sample_1701q_rates_swapped();
+    assert_eq!(source.amount(52, Form1701QParty::Taxpayer), Some(250_000.0));
+    let payload = source.to_bir_xml_payload().unwrap();
+    assert!(payload.contains("frm1701q:txt52A=250,000.00"), "{payload}");
+    let imported = Form1701QDraft::from_bir_xml_payload(&payload)
+        .unwrap_or_else(|errors| panic!("the save file imports: {errors:?}"));
+    assert_eq!(
+        imported.amount(52, Form1701QParty::Taxpayer),
+        Some(250_000.0)
+    );
+    assert_eq!(imported.field_map(), source.field_map());
+    assert_eq!(imported.to_bir_xml_payload().unwrap(), payload);
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).

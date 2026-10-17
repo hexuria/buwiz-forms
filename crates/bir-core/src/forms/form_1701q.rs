@@ -454,8 +454,11 @@ pub struct Form1701QPaymentDetails {
     pub machine_validation_or_receipt_details: String,
 }
 
+/// The amounts the filer types, in both columns. Item 52 (the P250,000
+/// allowable reduction) is typed too (`item52Validate` checks what is
+/// entered), so a save file restores it.
 pub const USER_ENTERED_AMOUNT_ITEMS: &[u8] = &[
-    36, 37, 39, 42, 43, 44, 47, 48, 50, 55, 56, 57, 58, 59, 60, 61, 64, 65, 66,
+    36, 37, 39, 42, 43, 44, 47, 48, 50, 52, 55, 56, 57, 58, 59, 60, 61, 64, 65, 66,
 ];
 
 /// App-owned semantic draft for the exact January 2018 revision.
@@ -553,11 +556,14 @@ pub struct Form1701QDraft {
 
     /// Each party's Surcharge, Interest and Compromise (Items 64-66, columns
     /// A and B) on the shared penalty model ([`super::penalty_items`]):
-    /// computed values, overrides and engine inputs. A draft stored while
-    /// the items were typed boxes has neither (`penalty_model_version` 0).
-    #[serde(default)]
+    /// computed values, overrides and engine inputs, one state per column
+    /// (the draft is flat, so they are not flattened into it). A draft
+    /// stored while the items were typed boxes has neither (the default,
+    /// `penalty_model_version` 0) and is written back without them, so its
+    /// stored shape never changes until the filer edits a penalty.
+    #[serde(default, skip_serializing_if = "penalty_state_is_default")]
     pub penalty: PenaltyState,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "penalty_state_is_default")]
     pub spouse_penalty: PenaltyState,
 
     // Part IV.
@@ -580,6 +586,10 @@ pub struct Form1701QDraft {
     /// `submission_attempts`, ...).
     #[serde(flatten)]
     pub lifecycle: SubmissionLifecycle,
+}
+
+fn penalty_state_is_default(state: &PenaltyState) -> bool {
+    *state == PenaltyState::default()
 }
 
 impl Form1701QDraft {
@@ -800,7 +810,7 @@ impl Form1701QDraft {
             || self.spouse_claims_foreign_tax_credits.is_some()
             || self.spouse_tax_rate.is_some()
             || self.spouse_deduction_method.is_some();
-        let typed = USER_ENTERED_AMOUNT_ITEMS.iter().chain(&[52]).any(|item| {
+        let typed = USER_ENTERED_AMOUNT_ITEMS.iter().any(|item| {
             self.amount(*item, Form1701QParty::Spouse)
                 .is_some_and(|v| v != 0.0)
         });

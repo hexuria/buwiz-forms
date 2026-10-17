@@ -242,14 +242,38 @@ impl Form1701QDraft {
                 continue;
             }
             // Until PR 5 the 1701Q penalties were typed boxes the model never
-            // computed: a draft stored then keeps every amount it held, a
-            // zero too, as the filer's own, so opening it files what it
-            // filed. "Use the computed amounts" brings the computed back.
-            if (items.applies)(self)
-                && (items.state)(self).penalty_model_version
-                    < super::penalty_items::PENALTY_MODEL_VERSION
+            // computed. A draft stored then, or an imported save file (no
+            // penalty state: version 0), files every amount it holds, a zero
+            // too, and is left exactly as stored. Once the filer types one of
+            // the column's amounts (Edit penalties writes its override), the
+            // others become overrides at the amounts they held and the
+            // column joins the model; "Use the computed amounts" then brings
+            // the computed values back.
+            if (items.state)(self).penalty_model_version
+                < super::penalty_items::PENALTY_MODEL_VERSION
             {
-                items.adopt_imported(self);
+                use crate::penalties::PenaltyComponent;
+                let typed = PenaltyComponent::ALL.into_iter().any(|component| {
+                    (items.state)(self)
+                        .penalty_overrides
+                        .get(component)
+                        .is_some()
+                });
+                if !typed {
+                    continue;
+                }
+                let filed = items.filed(self);
+                for (component, value) in PenaltyComponent::ALL.into_iter().zip(filed) {
+                    if (items.state)(self)
+                        .penalty_overrides
+                        .get(component)
+                        .is_none()
+                    {
+                        items.set_override(self, component, Some(value));
+                    }
+                }
+                (items.state_mut)(self).penalty_model_version =
+                    super::penalty_items::PENALTY_MODEL_VERSION;
             }
             items.apply(self);
         }
@@ -976,6 +1000,23 @@ impl QueueableForm for Form1701QDraft {
     }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         Self::penalty_declarations()
+    }
+    /// A column still on the typed boxes (a draft stored before PR 5, or an
+    /// imported save file: penalty_model_version 0) computes nothing, so its
+    /// stored state is left exactly as it is; the others resolve their
+    /// deadline and class from the profile as on every wired form.
+    fn apply_penalty_profile(
+        &mut self,
+        profile: &crate::profile::TaxpayerProfile,
+        global_overrides: &[crate::calendar_rules::DeadlineOverride],
+    ) {
+        for items in Self::penalty_items() {
+            if (items.state)(self).penalty_model_version
+                >= super::penalty_items::PENALTY_MODEL_VERSION
+            {
+                items.apply_profile(self, profile, global_overrides);
+            }
+        }
     }
 }
 

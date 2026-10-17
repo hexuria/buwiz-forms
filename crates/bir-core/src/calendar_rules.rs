@@ -611,10 +611,14 @@ impl DeadlineResolver {
                 form_nos: vec!["1701Q"],
                 form_name: "Quarterly Income Tax Return (Individual)",
                 frequency: Frequency::Quarterly,
-                description: "Q1: May 15, Q2: Aug 15, Q3: Oct 15",
+                // BIR Form 1701Q (January 2018) guidelines, "When and Where
+                // to File": May 15, August 15 and November 15 of the taxable
+                // year (html-frozen/1701q-2018/guide.html;
+                // rules/forms/1701q-v2018/workflow.json filing_deadlines).
+                description: "Q1: May 15, Q2: Aug 15, Q3: Nov 15",
                 generator: |year, forms, desc, name| {
                     let mut res = Vec::new();
-                    let due_dates = [(1, 5, 15), (2, 8, 15), (3, 10, 15)];
+                    let due_dates = [(1, 5, 15), (2, 8, 15), (3, 11, 15)];
                     for &form_no in forms {
                         for (quarter, due_month, due_day) in due_dates {
                             let end_month = quarter * 3;
@@ -1150,6 +1154,54 @@ mod tests {
         assert!(q1.matches_period_filter(&[3], &[]));
         assert!(!q1.matches_period_filter(&[4], &[]));
         assert!(!q1.matches_period_filter(&[5], &[]));
+    }
+
+    /// The 1701Q deadlines as the January 2018 guidelines print them
+    /// ("1st quarter On or before May 15 ... 2nd quarter On or before August
+    /// 15 ... 3rd quarter On or before November 15 of the current taxable
+    /// year", html-frozen/1701q-2018/guide.html), as the rules corpus records
+    /// them (rules/forms/1701q-v2018/workflow.json filing_deadlines).
+    #[test]
+    fn form_1701q_quarters_are_due_may_15_august_15_and_november_15() {
+        for year in [2025, 2026] {
+            let deadlines = DeadlineResolver::resolve_taxable_year(year);
+            for (quarter, month) in [(1u8, 5u32), (2, 8), (3, 11)] {
+                let found = deadlines
+                    .iter()
+                    .find(|d| {
+                        d.form_code == "1701Q"
+                            && d.period
+                                == (DeadlinePeriod::Quarterly {
+                                    taxable_year: year,
+                                    quarter,
+                                })
+                    })
+                    .unwrap_or_else(|| panic!("1701Q {year} Q{quarter}"));
+                assert_eq!(
+                    found.original_deadline_date(),
+                    NaiveDate::from_ymd_opt(year, month, 15),
+                    "{year} Q{quarter}"
+                );
+            }
+        }
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../rules/forms/1701q-v2018/workflow.json"
+        ))
+        .unwrap();
+        let rules: Vec<&str> = corpus["filing_deadlines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| d["due_date_rule"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            rules,
+            [
+                "On or before May 15 of the current taxable year.",
+                "On or before August 15 of the current taxable year.",
+                "On or before November 15 of the current taxable year.",
+            ]
+        );
     }
 
     #[test]

@@ -30,7 +30,7 @@ const PAIRED_AMOUNT_ITEMS: &[u8] = &[
     55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68,
 ];
 const DERIVED_AMOUNT_ITEMS: &[u8] = &[
-    26, 27, 28, 29, 30, 38, 40, 41, 45, 46, 49, 51, 52, 53, 54, 62, 63, 67, 68,
+    26, 27, 28, 29, 30, 38, 40, 41, 45, 46, 49, 51, 53, 54, 62, 63, 67, 68,
 ];
 
 /// The exact 172 fields emitted by `saveXML(false)`, in live `frmMain.elements`
