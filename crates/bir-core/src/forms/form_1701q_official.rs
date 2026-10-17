@@ -232,6 +232,15 @@ impl Form1701QDraft {
         // shared penalty model, from Item 63's tax still due), and Items
         // 67-68 and Part III add up what is filed.
         for items in Self::penalty_declarations() {
+            // A column not on the return (the spouse's, while there is no
+            // spouse or a compensation earner only) keeps no entry, as its
+            // inputs hold 0.00 (`recompute_official_party`).
+            if !(items.applies)(self) {
+                let state = (items.state_mut)(self);
+                state.clear_overrides();
+                state.computed_penalties = None;
+                continue;
+            }
             // Until PR 5 the 1701Q penalties were typed boxes the model never
             // computed: a draft stored then keeps every amount it held, a
             // zero too, as the filer's own, so opening it files what it
