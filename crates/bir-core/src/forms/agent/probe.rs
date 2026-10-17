@@ -72,6 +72,56 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ),
     ("frm1701A:txtSpouseRDOCode", "the spouse's RDO"),
     ("frm1701MS:txtRDOCodeb", "the spouse's RDO"),
+    ("frm1700:txtSpouseRDOCode", "the spouse's RDO"),
+    ("frm1707:txtPg1I6SellerName0", "Item 6: the seller's name"),
+    (
+        "frm2000:sched4:txtNumberTo0",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo1",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo2",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo3",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo4",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo5",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo6",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo7",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo8",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo9",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo10",
+        "Schedule 4: a document's last number",
+    ),
+    (
+        "frm2000:sched4:txtNumberTo11",
+        "Schedule 4: a document's last number",
+    ),
 ];
 
 /// Amounts the filer types that another field only clears. The probe sees

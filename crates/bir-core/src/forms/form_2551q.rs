@@ -1116,6 +1116,13 @@ impl Form2551QDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// The editor's Amended toggle: Yes keeps Items 16 and the on-time
+    /// answer as entered and recomputes.
+    pub fn mark_amended(&mut self) {
+        self.is_amended = true;
+        self.recompute(None);
+    }
+
     /// Transition: Any non-terminal → Draft (revert). Clears submission metadata.
     pub fn revert_to_draft(&mut self) {
         assert!(

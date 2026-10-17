@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { kitMethods } from "./kit_surface.mjs";
 const root=new URL("../",import.meta.url);
+// Mock elements answer only the methods the real kit declares.
+const KIT = kitMethods(root);
 const schema=JSON.parse(fs.readFileSync(new URL("app/forms/screen-1700-v2018.json",root)));
 const cat=schema.parts.flatMap((p,pi)=>p.items.map((it,ii)=>({it,pi,ii}))).find(x=>(x.it.f||[]).some(f=>/BirthDate$/.test(f.k)));
 assert.ok(cat,"real 1700 date of birth item");
@@ -24,7 +27,7 @@ function element(){
  const creationOwner=owner;
  const target={};
  let el=new Proxy(target,{get(o,k){
- if(k==="then")return undefined;
+ if(typeof k!=="string"||!KIT.has(k))return undefined;
  return (...args)=>{
  if(k==="id"){o.id=args[0];if(String(o.id).startsWith("fp-item-"))traces.push(o.id);}
  if(k==="on_click")clicks.set(o.id,{fn:args[0],entity:creationOwner});
@@ -46,7 +49,7 @@ const kit=mock("gpui-kit",{div:element,svg:element,View});
 const base=mock("gpui-base",{InputState,CalendarState,Popup:{new:element}});
 const components=mock("gpui-component",{Spinner:{new:element}});
 const uiExports={tokens:()=>new Proxy({},{get:()=>"#000"}),SPACE:[0,4,8,12,16,20,24],RADIUS:{},SIZE:{validationLine:18},BREAK:{formNav:760}};
-for(const n of ["Text","Line","Code","Icon","AppButton","IconButton","Avatar","Chip","Switch","Checkbox","TextField","Dropdown","PageHeader","MetaLine"])uiExports[n]=element;
+for(const n of ["Text","Line","Code","Icon","AppButton","IconButton","Avatar","Chip","Switch","Checkbox","TextField","Dropdown","PageHeader","MetaLine","Overlay","CheckboxLabel"])uiExports[n]=element;
 uiExports.AppButton=(_cx,id,label,opts={})=>{
  if(id==="fp-check")checkButtons.push({label,ariaLabel:opts.ariaLabel,leading:opts.leading});
  return element();
@@ -54,7 +57,7 @@ uiExports.AppButton=(_cx,id,label,opts={})=>{
 uiExports.IconButton=(_cx,id,_icon,opts={})=>{const owner_=owner;clicks.set(id,{fn:opts.onClick,entity:owner_});return element();};
 uiExports.Chip=(_cx,label)=>{chips.push(label);return element();};
 const uiModule=mock("./ui.js",uiExports);
-const store=mock("./store.js",{formatTin:x=>x});
+const store=mock("./store.js",{formatTin:x=>x,errorText:e=>String(e&&e.message?e.message:e)});
 const periods=mock("./periods.js",{periodLabel:()=>"March 2026"});
 const mod=new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js",root),"utf8"),{context:contextVM});
 await mod.link(s=>({"gpui-kit":kit,"gpui-base":base,"gpui-component":components,"./ui.js":uiModule,"./store.js":store,"./periods.js":periods}[s]));

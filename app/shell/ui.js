@@ -272,7 +272,9 @@ export function IconButton(cx, id, icon, opts) {
 /**
  * AppButton: 32 (md) or 28 (sm) tall, padding 12 or 10, label 13/500,
  * leading icon 16, gap 6, radius 6. Variants: primary (inverted ink),
- * secondary (bordered surface), ghost, danger (soft tint).
+ * secondary (bordered surface), ghost, danger (soft tint). `block` fills
+ * the container's width; `hint` puts a line under the label, inside the
+ * button (a dialog's choices).
  */
 export function AppButton(cx, id, label, opts = {}) {
   const t = tokens(cx);
@@ -285,23 +287,33 @@ export function AppButton(cx, id, label, opts = {}) {
     .id(id)
     .flex()
     .flex_none()
-    .items_center()
-    .justify_center()
-    .gap(6)
-    .h(sm ? SIZE.controlSm : SIZE.control)
     .px(sm ? 10 : 12)
     .rounded(RADIUS.ctl)
     .border(1)
     .border_color(variant === "secondary" ? t.borderStrong : "#00000000")
-    .whitespace_nowrap()
     .accessibility_label(opts.ariaLabel || label);
   if (variant === "primary") btn.bg(t.primary);
   else if (variant === "secondary") btn.bg(t.surface);
   else if (variant === "danger") btn.bg(t.dangerSoft);
-  if (opts.leading) btn.child(opts.leading);
-  else if (opts.icon) btn.child(Icon(cx, opts.icon, { color: fg }));
-  btn.child(Text(cx, "control", label, fg));
-  if (opts.trailing) btn.child(opts.trailing);
+  // `block`: the button fills its container's width.
+  if (opts.block) btn.w_full();
+  if (opts.hint) {
+    // A choice: its label and, under it inside the button, what it does.
+    btn
+      .flex_col()
+      .items_start()
+      .justify_center()
+      .gap(2)
+      .py(SPACE[2])
+      .child(Text(cx, "control", label, fg))
+      .child(Text(cx, "meta", opts.hint, variant === "primary" ? "primaryFg" : variant === "danger" ? "danger" : "fg2").whitespace_normal());
+  } else {
+    btn.items_center().justify_center().gap(6).h(sm ? SIZE.controlSm : SIZE.control).whitespace_nowrap();
+    if (opts.leading) btn.child(opts.leading);
+    else if (opts.icon) btn.child(Icon(cx, opts.icon, { color: fg }));
+    btn.child(Text(cx, "control", label, fg));
+    if (opts.trailing) btn.child(opts.trailing);
+  }
   if (disabled) {
     btn.opacity(0.5).disabled(true);
   } else {
@@ -1250,8 +1262,60 @@ export function SidePanel(cx, id, opts) {
 }
 
 /** Bottom-centre toast on `primary`, 20 px above the window edge. */
-export function Toast(cx, message, icon = "circle-check") {
+/**
+ * A toast. `opts.action` ({label, onClick}) adds a button (Undo), and
+ * `opts.progress` (1 to 0) a bar counting down the time left to use it.
+ */
+export function Toast(cx, message, icon = "circle-check", opts = {}) {
   const t = tokens(cx);
+  const width = 440;
+  const body = div()
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(10)
+    .child(Icon(cx, icon, { color: "primaryFg" }))
+    .child(Text(cx, "control", message, "primaryFg").flex_1().min_w(0).whitespace_normal());
+  if (opts.action) {
+    body.child(
+      div()
+        .id("toast-action")
+        .flex_none()
+        .px(SPACE[2])
+        .py(2)
+        .rounded(RADIUS.ctl)
+        .border(1)
+        .border_color(t.primaryFg)
+        .cursor_pointer()
+        .accessibility_label(opts.action.label)
+        .on_click((e, cx) => opts.action.onClick(e, cx))
+        .child(Text(cx, "control", opts.action.label, "primaryFg").font_weight(600)),
+    );
+  }
+  if (opts.action) {
+    const bar = Math.max(0, Math.min(1, opts.progress ?? 1));
+    return div()
+      .id("toast")
+      .absolute()
+      .bottom(20)
+      .left(0)
+      .right(0)
+      .flex()
+      .flex_row()
+      .justify_center()
+      .child(
+        div()
+          .flex()
+          .flex_col()
+          .w(width)
+          .rounded(RADIUS.card)
+          .bg(t.primary)
+          .shadow_lg()
+          .overflow_hidden()
+          .child(body.py(10).px(14))
+          .child(div().h(3).w(Math.round(width * bar)).bg(t.primaryFg).opacity(0.6)),
+      );
+  }
   return div()
     .id("toast")
     .absolute()
@@ -1278,10 +1342,15 @@ export function Toast(cx, message, icon = "circle-check") {
     );
 }
 
-/** A full-window scrim with a dialog card (radius 14) near the top. */
-export function Overlay(cx, id, card, onDismiss) {
+/**
+ * A full-window scrim with a dialog card (radius 14), centred on both axes,
+ * `width` wide (560 by default) and never wider than the window less its
+ * margins. `top: true` anchors it near the top instead: the command
+ * palette, whose results change length while typing, must not jump.
+ */
+export function Overlay(cx, id, card, onDismiss, opts = {}) {
   const t = tokens(cx);
-  return div()
+  const scrim = div()
     .id(id)
     .absolute()
     .top(0)
@@ -1291,28 +1360,29 @@ export function Overlay(cx, id, card, onDismiss) {
     .flex()
     .flex_col()
     .items_center()
-    .pt(64)
     .px(SPACE[4])
     .pb(SPACE[4])
     .bg(t.scrim)
-    .on_mouse_down("left", (_e, cx) => onDismiss(cx))
-    .child(
-      div()
-        .id(`${id}-card`)
-        .flex()
-        .flex_col()
-        .w_full()
-        .max_w(560)
-        .max_h_full()
-        .rounded(RADIUS.dialog)
-        .border(1)
-        .border_color(t.border)
-        .bg(t.surface)
-        .shadow_xl()
-        .overflow_hidden()
-        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .child(card),
-    );
+    .on_mouse_down("left", (_e, cx) => onDismiss(cx));
+  if (opts.top) scrim.pt(64);
+  else scrim.justify_center().pt(SPACE[4]);
+  return scrim.child(
+    div()
+      .id(`${id}-card`)
+      .flex()
+      .flex_col()
+      .w_full()
+      .max_w(opts.width || 560)
+      .max_h_full()
+      .rounded(RADIUS.dialog)
+      .border(1)
+      .border_color(t.border)
+      .bg(t.surface)
+      .shadow_xl()
+      .overflow_hidden()
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .child(card),
+  );
 }
 
 /** Hairline used between list rows and disclosure sections only. */

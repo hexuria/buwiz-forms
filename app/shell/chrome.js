@@ -31,6 +31,7 @@ import {
   DigitCells,
 } from "./ui.js";
 import { themeIcon } from "./theme.js";
+import { recentOpenOptions } from "./recent.js";
 import { formatTin, shortDate } from "./store.js";
 import { periodOptions, periodLabel, frequencyOf } from "./periods.js";
 
@@ -256,9 +257,9 @@ export function renderSidebar(cx, app) {
       const name = (app.taxpayers().find((x) => x.tin_root === String(r.tin).slice(0, 9)) || {}).name || "";
       const label = `${r.code} ${periodLabel(frequencyOf(app.store.screenIndex(), r.code), r.year, r.period, true)} · ${name}`;
       nav.child(
-        NavRow(cx, `recent-${r.key.replace(/[^A-Za-z0-9]/g, "-")}`, "file-text", label, {
+        NavRow(cx, `recent-${String(r.key).replace(/[^A-Za-z0-9]/g, "-")}`, "file-text", label, {
           tooltip: label,
-          onClick: (_e, cx) => app.openForm({ tin: r.tin, code: r.code, year: r.year, period: r.period }, cx),
+          onClick: (_e, cx) => app.openForm(recentOpenOptions(r), cx),
         }),
       );
     });
@@ -654,7 +655,7 @@ export function renderPalette(cx, app) {
         .child(Kbd(cx, "Esc")),
     )
     .child(list);
-  return Overlay(cx, "palette", card, (cx) => app.closeOverlay(cx));
+  return Overlay(cx, "palette", card, (cx) => app.closeOverlay(cx), { top: true });
 }
 
 // ---------------------------------------------------------------- new return
