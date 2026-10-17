@@ -1672,11 +1672,13 @@ fn monthly_due_date_day_is_the_filers_as_on_the_official_page() {
 }
 
 /// PR 3 review item 15: rows_monthly.rs reads the whole typed draft, but
-/// that adds no refusal: the host reads the typed draft for every edit
-/// (screen_form_fill's identity check, agent::identity), so a stored draft
-/// missing a field the form requires is refused the same way for an
-/// ordinary box as for the answers and an ATC, before any box is written.
-/// A draft with extra keys an older build wrote takes them all.
+/// that adds no refusal. The host reads the typed draft for every edit
+/// (screen_form_fill's identity check, agent::identity), which refuses
+/// only what serde cannot deserialize: a field missing without
+/// `#[serde(default)]` (1600PT's `contact_number`, 1600VT's and 1600WP's
+/// `email`) is refused the same way for an ordinary box as for the answers
+/// and an ATC, before any box is written; a field with `#[serde(default)]`
+/// is taken when missing, and so are extra keys an older build wrote.
 #[test]
 fn monthly_answers_refuse_no_draft_the_ordinary_fill_takes() {
     setup();
@@ -1723,6 +1725,11 @@ fn monthly_answers_refuse_no_draft_the_ordinary_fill_takes() {
         // Keys an older build kept that the form no longer reads.
         let mut older = opened["draft"].clone();
         older["legacy_note"] = json!("kept by an older build");
+        // A field the form defaults (`#[serde(default)] line_of_business`
+        // on 1600PT and 1600VT) may be missing.
+        if code != "1600WP" {
+            older.as_object_mut().unwrap().remove("line_of_business");
+        }
         let answers = if code == "1600WP" {
             json!({"frm1600WP:AnyTaxHeld_1": "true", "frm1600WP:CategoryAgent_P": "true"})
         } else {

@@ -1,7 +1,7 @@
 {
  "0619E": {
   "R3.1": {
-   "reason": "The official program disables these 19 inputs (tax agent accreditation number and dates, Part III rows 19-22), so they are not boxes the page is missing. The evidence is the untracked official mirror, ebirforms-mirror/forms/BIR-Form0619E.hta, which gives each a bare `disabled` (txtTaxAgentNo line 786, txtAgency19 line 853, and the lines the hidden-box entries in app/forms/schema-overrides.json cite), and the tracked crates/bir-core/src/forms/form_0619e_official.rs, whose to_official_field_map leaves them out ('The tax-agent and Part III payment controls are disabled on the official page, so they keep their blank defaults'). The tracked runtime inventory (rules/forms/0619e-v2018/fixtures/runtime-control-inventory-v796.json) records them disabled:false, which conflicts; its source lines run 4 above the mirror's (txtTaxAgentNo 790, txtAgency19 857), so it was read from another version of the .hta and is not evidence against the mirror.",
+   "reason": "The official program disables these 20 inputs (the tax agent accreditation number and its dates of issue and expiry, and the 17 Part III boxes of rows 19-22), so they are not boxes the page is missing. The finding listed 19; the mirror has 20. The evidence is the untracked official mirror, ebirforms-mirror/forms/BIR-Form0619E.hta, which gives each a bare `disabled`: txtTaxAgentNo (line 786), txtDateIssue (799), txtDateExpiry (812), and rows 19-22's Agency, Number, Date and Amount boxes with txtParticular22 (876), the lines the hidden-box entries in app/forms/schema-overrides.json cite, and the tracked crates/bir-core/src/forms/form_0619e_official.rs, whose to_official_field_map leaves them out ('The tax-agent and Part III payment controls are disabled on the official page, so they keep their blank defaults'). The tracked runtime inventory (rules/forms/0619e-v2018/fixtures/runtime-control-inventory-v796.json) records them disabled:false, which conflicts; its source lines run 4 above the mirror's (txtTaxAgentNo 790, txtAgency19 857), so it was read from another version of the .hta and is not evidence against the mirror.",
    "reviewer": "Agree (PR 3 review, reason corrected): the official mirror (untracked, ebirforms-mirror/forms/BIR-Form0619E.hta, bare `disabled` at 786 and 853) disables these inputs; the tracked inventory's disabled:false is not evidence against it, since its source lines run +4 from the mirror (another version).",
    "status": "not_a_bug"
   },
@@ -205,7 +205,7 @@
   },
   "manual-2": {
    "reason": "Item 11 cannot be bound to Yes/No boxes the filer answers, because the official program gives the filer none: rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json records frm1600WP:SpecialLaw_1 (line 819), SpecialLaw_2 (823) and SpecialLawSelect (833) disabled:true at load, and rules/forms/1600wp-v2010/fields.json gives SpecialLaw_1 and SpecialLaw_2 enabled_when null (no answer turns them on). The page now draws item 11, between items 10 and 12, with its printed caption and a note.",
-   "reviewer": "",
+   "reviewer": "Agree (PR 3 review): 1600wp-v2010 inventory records SpecialLaw_1 (819), SpecialLaw_2 (823) and SpecialLawSelect (833) disabled:true at load and fields.json gives them enabled_when null; the page draws item 11 with its caption and a note.",
    "status": "not_a_bug"
   },
   "manual-3": {
