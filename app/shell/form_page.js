@@ -487,6 +487,11 @@ export class FormPageActions {
       (s.inputKinds ||= new Map()).set(k, t);
     };
     for (const it of part.items) {
+      const date = oneDate(it);
+      if (date) {
+        this.makeOneDate(date);
+        continue;
+      }
       if (it.rows) {
         it.keys.forEach((row) => row.forEach((k, c) => make(k, it.cols[c].t)));
       } else {
@@ -516,6 +521,43 @@ export class FormPageActions {
       });
       this.refreshRows();
     }
+  }
+
+  /**
+   * The one date box of a `one_date` item: what it reads goes to the month,
+   * day and year boxes together as soon as it reads as a date (12102020,
+   * 12-10-2020, 12/10/2020 or "Dec 10, 2020"), and a blank box clears all
+   * three; on blur it shows "Dec 10, 2020", or says what it needs.
+   */
+  makeOneDate(date) {
+    const s = this.state;
+    const k = date.oneKey;
+    if (s.inputs.has(k)) return;
+    const keys = [date.month.k, date.day.k, date.year.k];
+    const input = InputState.new({ value: shownDate(oneDateText(s.values, date)) });
+    input.on("change", (_e, cx) => {
+      const raw = input.value();
+      const typed = parseTypedDate(raw);
+      if (typed || !raw.trim()) this.setDateError(keys[0], "");
+      if (!typed && raw.trim()) return;
+      const [m, d, y] = typed ? formatMDY(typed).split("/") : ["", "", ""];
+      [m, d, y].forEach((v, i) => this.edit(keys[i], v, cx));
+    });
+    input.on("blur", (_e, cx) => {
+      const raw = input.value();
+      const typed = parseTypedDate(raw);
+      if (typed) {
+        const text = formatLongDate(typed);
+        if (text !== raw) input.set_value(text);
+        this.setDateError(keys[0], "");
+      } else this.setDateError(keys[0], raw.trim() ? DATE_ERROR : "");
+      this.leaveBox(keys[0], cx);
+      this.flush(cx);
+    });
+    input.on("focus", () => this.enterBox(keys[0]));
+    s.inputs.set(k, input);
+    (s.inputKinds ||= new Map()).set(k, "date");
+    (s.oneDates ||= new Map()).set(k, date);
   }
 
   rowWidth() {
@@ -697,6 +739,10 @@ export class FormPageActions {
     put(date.month, m);
     put(date.day, d);
     put(date.year, y);
+    if (date.oneKey) {
+      s.inputs.get(date.oneKey)?.set_value(formatLongDate({ y: Number(y), m: Number(m), d: Number(d) }));
+      this.setDateError(date.month.k, "");
+    }
     s.picker = null;
     this.choose(edits, cx);
   }
@@ -1254,6 +1300,14 @@ export class FormPageActions {
       const kind = s.inputKinds?.get(k);
       const shown = kind === "money" && now !== "" ? formatMoney(now, this.isWhole(k)) : kind === "date" ? shownDate(now) : String(now);
       if (input.value() !== shown) input.set_value(shown);
+    }
+    for (const [k, date] of s.oneDates || []) {
+      const keys = [date.month.k, date.day.k, date.year.k];
+      if (keys.some((part) => part in edits)) continue;
+      const was = oneDateText(before, date);
+      const now = oneDateText(s.values, date);
+      const input = s.inputs.get(k);
+      if (input && was !== now && input.value() !== shownDate(now)) input.set_value(shownDate(now));
     }
   }
 
@@ -2033,6 +2087,24 @@ function dateParts(fs) {
   return { month, day: day && day !== month && day !== year ? day : null, year };
 }
 
+/**
+ * An item the host marks `one_date` (1701Q item 11): its month, day and year
+ * boxes are one date on the page, typed or picked as "May 17, 1980", while
+ * the draft keeps the three boxes. The page's box for it is keyed
+ * `<month key>#date`; it is never sent to the host.
+ */
+function oneDate(it) {
+  if (!it.one_date) return null;
+  const date = dateParts(it.f || []);
+  return date ? { ...date, oneKey: `${date.month.k}#date` } : null;
+}
+
+/** The three boxes' values as the MM/DD/YYYY text a date box reads ("" when all are blank). */
+export function oneDateText(values, date) {
+  const parts = [date.month, date.day, date.year].map((f) => String((f && values[f.k]) ?? "").trim());
+  return parts.every((v) => !v) ? "" : parts.join("/");
+}
+
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -2356,6 +2428,17 @@ function itemRow(cx, ui, it, pi, ii, width) {
       for (const f of fs) wrap.child(control(cx, ui, f, f.l, true, inner));
       controls.child(wrap);
     }
+  } else if (oneDate(it)) {
+    const date = oneDate(it);
+    const parts = [date.month, date.day, date.year];
+    const locked = !s.editable || parts.every((f) => f.c || ui.isLocked(f.k));
+    const input = s.inputs.get(date.oneKey);
+    const box =
+      locked || !input
+        ? lockedBox(cx, shownDate(oneDateText(s.values, date)), controlWidth({ t: "date" }, inner))
+        : TextField(cx, input, { id: `fp-${date.oneKey}`, label: it.l, width: controlWidth({ t: "date" }, inner), error: false });
+    controls = div().flex().flex_row().items_end().gap(SPACE[1]).child(box);
+    if (!locked) controls.child(datePicker(cx, ui, id, date));
   } else if (tin) {
     controls = tinBoxes(cx, ui, it);
   } else {
