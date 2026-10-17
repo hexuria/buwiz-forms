@@ -54,6 +54,167 @@ const USER_CHOSEN: &[(&str, &str)] = &[
     ),
 ];
 
+/// Amount boxes the rules corpus marks computed although the official page
+/// leaves them open for the filer to type (the corpus is read only, see
+/// [`USER_CHOSEN`]). Unlike a choice they keep the corpus's `optional`.
+/// PR 7: 1701's corpus marks Schedule 3 items 8, 9 and 11, Schedule 4 items 3
+/// and 6-13, Schedule 6's NOLCO rows 6, 7B and 9-12B and Part IV item 6
+/// computed, although no rules/forms/1701-v2018/calculations.json calculation
+/// outputs them and form_1701_official.rs keeps each as the filer enters it;
+/// 1701MS's marks Part IV item 2 computed, an input of its own item 3
+/// calculation. The probe never bound them, so the page could not type a
+/// 1701 filer's sales or most of Schedule 4.
+const FILER_TYPED: &[(&str, &str)] = &[
+    (
+        "frm1701:txtPg2IShed3_8A",
+        "Schedule 3 item 8A Sales/Revenues/Receipts/Fees: `self.typed(Schedule3, 8, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_9A",
+        "Schedule 3 item 9A Less: Sales Returns, Allowances and Discounts: `self.typed(Schedule3, 9, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_11A",
+        "Schedule 3 item 11A Less: Cost of Sales/Services: `self.typed(Schedule3, 11, party)`",
+    ),
+    (
+        "frm1701:txtPg3IShed4_3A",
+        "Schedule 4 item 3A Charitable and Other Contributions: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_6A",
+        "Schedule 4 item 6A Entertainment, Amusement and Recreation: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_7A",
+        "Schedule 4 item 7A Fringe Benefits: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_8A",
+        "Schedule 4 item 8A Interest: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_9A",
+        "Schedule 4 item 9A Losses: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_10A",
+        "Schedule 4 item 10A Pension Trusts: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_11A",
+        "Schedule 4 item 11A Rental: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_12A",
+        "Schedule 4 item 12A Research and Development: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_13A",
+        "Schedule 4 item 13A Salaries, Wages and Allowances: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg2IShed3_8B",
+        "Schedule 3 item 8B Sales/Revenues/Receipts/Fees: `self.typed(Schedule3, 8, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_9B",
+        "Schedule 3 item 9B Less: Sales Returns, Allowances and Discounts: `self.typed(Schedule3, 9, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_11B",
+        "Schedule 3 item 11B Less: Cost of Sales/Services: `self.typed(Schedule3, 11, party)`",
+    ),
+    (
+        "frm1701:txtPg3IShed4_3B",
+        "Schedule 4 item 3B Charitable and Other Contributions: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_6B",
+        "Schedule 4 item 6B Entertainment, Amusement and Recreation: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_7B",
+        "Schedule 4 item 7B Fringe Benefits: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_8B",
+        "Schedule 4 item 8B Interest: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_9B",
+        "Schedule 4 item 9B Losses: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_10B",
+        "Schedule 4 item 10B Pension Trusts: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_11B",
+        "Schedule 4 item 11B Rental: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_12B",
+        "Schedule 4 item 12B Research and Development: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_13B",
+        "Schedule 4 item 13B Salaries, Wages and Allowances: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed6_6A",
+        "Schedule 6 item 6A, the third NOLCO row's amount (row index 2): `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg3IShed6_6B",
+        "Schedule 6 item 6B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg3IShed6_7B",
+        "Schedule 6 item 7B, the current year's row's NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_9A",
+        "Schedule 6 item 9A, the spouse's first NOLCO row's amount: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_9B",
+        "Schedule 6 item 9B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_10A",
+        "Schedule 6 item 10A, the spouse's second row's amount: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_10B",
+        "Schedule 6 item 10B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_11A",
+        "Schedule 6 item 11A, the spouse's third row's amount: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_11B",
+        "Schedule 6 item 11B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_12B",
+        "Schedule 6 item 12B, the spouse's current-year row's NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg2I6TelNum",
+        "Part IV item 6, the spouse's contact number: `to_official_field_map` writes spouse.contact_number there on a joint return",
+    ),
+    (
+        "frm1701MS:txtLessNonTaxablea",
+        "Part IV item 2A Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered",
+    ),
+    (
+        "frm1701MS:txtLessNonTaxableb",
+        "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered",
+    ),
+];
+
 /// Boxes whose value only coincides with the sample profile's: the recorded
 /// samples put the property and the spouse in the filer's own RDO (039), so
 /// the probe would lock them as the profile's. They are the filer's answers.
@@ -124,6 +285,71 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Boxes the rules corpus lists as entries although the form computes them
+/// (the opposite of [`USER_CHOSEN`]): the projection marks them computed, so
+/// they are never bound to a draft field. The field map and the upload are
+/// unchanged.
+const COMPUTED_BY_FORM: &[(&str, &str)] = &[
+    // PR 7: 1701's totals. form_1701_official.rs `official_recompute` puts
+    // each from the items it sums, so a value typed there was overwritten;
+    // the probe, which saw them move with one of those items, had bound them
+    // to that item (16A wrote Schedule 4 item 1, 14A Schedule 5 item 1's
+    // amount, 15A and 8D the first NOLCO row's current-year application,
+    // Part IX 10B item 6B).
+    (
+        "frm1701:txtPg2IShed3_14A",
+        "Schedule 3 item 14A Special Allowable Itemized Deductions (From Schedule 5 \
+         Item 3): `self.put(Schedule3, 14, party, i14)` with i14 the Schedule 5 total",
+    ),
+    (
+        "frm1701:txtPg2IShed3_15A",
+        "Schedule 3 item 15A NOLCO (From Schedule 6 Item 8): \
+         `self.put(Schedule3, 15, party, i15)` with i15 the Schedule 6 total",
+    ),
+    (
+        "frm1701:txtPg2IShed3_16A",
+        "Schedule 3 item 16A Total Allowable Itemized Deductions (Sum of Items 13 to \
+         15): `self.put(Schedule3, 16, party, item_16)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_22B",
+        "Schedule 3 item 22B Total Other Non-Operating Income (Sum of Items 19 to 21): \
+         `self.put(Schedule3, 22, party, item_22)`",
+    ),
+    (
+        "frm1701:txtPg3IShed6_8D",
+        "Schedule 6 item 8D Total NOLCO - Taxpayer/Filer (Sum of Items 4D to 7D): \
+         `recompute_nolco_official` sets schedule_6_total_taxpayer to the sum",
+    ),
+    (
+        "frm1701:txtPg4IPart9_10A",
+        "Part IX item 10A Total (Sum of Items 6 to 9): `self.put(PartIx, 10, party, ix_10)`",
+    ),
+    (
+        "frm1701:txtPg4IPart9_10B",
+        "Part IX item 10B Total (Sum of Items 6 to 9): `self.put(PartIx, 10, party, ix_10)`",
+    ),
+];
+
+/// Text boxes the form's own page upper-cases when another field is typed,
+/// so the probe sees them change with that field and would call them a
+/// combination: 1701MS's `capital(this, event)` on Part V items 7 and 9
+/// upper-cases every text control (form_1701ms.rs `part_v_capitalizes`).
+/// They are bound to the one path they echo; the field map, the upload and
+/// the print are unchanged.
+const CASE_FOLLOWS_ANOTHER_FIELD: &[(&str, &str)] = &[
+    (
+        "frm1701MS:txtEmaila",
+        "Item 9A Email Address: the field map writes /email, upper-cased once \
+         Part V items 7 or 9 are typed (part_v_capitalizes)",
+    ),
+    (
+        "frm1701MS:txtEmailb",
+        "Item 9B the spouse's Email Address: the field map writes \
+         /spouse_info/email on a joint return, upper-cased as item 9A",
+    ),
+];
+
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
 /// the other field closes a gate (no overpayment left) and `compute` empties
@@ -148,6 +374,14 @@ const GATED_ENTRY: &[(&str, &str)] = &[
         "Item 31 \"To be carried over\" amount: typed by the filer; cleared \
          by `compute` with its box when the overpayment ends",
     ),
+    (
+        "frm1701MS:txtShareOfOtherNo20b",
+        "Item 20B Less: Share of Other Government Agency (PR 7): typed by the \
+         filer as item 20A is (bound to /taxpayer/share_of_other_agencies); \
+         form_1701ms.rs `compute` clears it while `share_open` does not hold \
+         (item 19B, the spouse's income tax due, is not above zero), which \
+         the probe saw move with the spouse's sales",
+    ),
 ];
 
 /// Project `fields.json` onto the boxes the assistant needs.
@@ -169,13 +403,22 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                 .find(|meaning| meaning["stored_value"] == "true");
             let key = text(field, "field_key");
             let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
+            let computed_by_form = COMPUTED_BY_FORM.iter().any(|(k, _)| *k == key);
+            let typed_by_user = FILER_TYPED.iter().any(|(k, _)| *k == key);
             BoxDef {
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
-                computed: !chosen_by_user && field["computed"].as_bool().unwrap_or(false),
+                computed: computed_by_form
+                    || (!chosen_by_user
+                        && !typed_by_user
+                        && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()
+                } else if computed_by_form {
+                    "computed".to_string()
+                } else if typed_by_user {
+                    "optional".to_string()
                 } else {
                     text(field, "required")
                 },
@@ -1567,6 +1810,7 @@ fn decide(
         // or a combination (Total Remitted = Tax + Penalty), not an entry,
         // unless the other field only clears it (`GATED_ENTRY`).
         if !GATED_ENTRY.iter().any(|(k, _)| *k == key)
+            && !CASE_FOLLOWS_ANOTHER_FIELD.iter().any(|(k, _)| *k == key)
             && let Some((_, other)) = evidence
                 .misses
                 .iter()

@@ -175,10 +175,48 @@ fn form_1701_sample_payload_matches_the_official_page() {
     );
 }
 
+/// The joint sample amended, with the entries the other samples leave
+/// blank: both foreign tax numbers (item 14 and Part IV item 9, kept only
+/// while items 13 and 8 are Yes), Schedule 3 item 20's description, Part VII item 6 (tax
+/// paid in the return previously filed, kept only on an amended return) and
+/// Part IX's particulars. For the agent-form probe only (PR 7): without it
+/// the probe saw those boxes blank on every sample and could not bind them.
+fn sample_1701_joint_details() -> Form1701Draft {
+    let mut d = sample_1701_joint();
+    d.is_amended = true;
+    d.claims_foreign_tax_credits = Some(true);
+    d.foreign_tax_number = "TP-FTN-0001".into();
+    d.spouse.claims_foreign_tax_credits = Some(true);
+    d.spouse.foreign_tax_number = "SP-FTN-0001".into();
+    d.computations
+        .schedule_3_descriptions
+        .insert(20, "Royalty income".into());
+    d.set_amount(S::Schedule3, 20, SP, Some(2_000.0));
+    d.set_amount(S::PartVii, 6, TP, Some(1_500.0));
+    d.set_amount(S::PartVii, 6, SP, Some(700.0));
+    for (item, particulars) in [
+        (2, "Non-deductible expense"),
+        (3, "Taxable other income"),
+        (4, "Other addition"),
+        (6, "Non-taxable income"),
+        (7, "Income subjected to final tax"),
+        (8, "Special deduction"),
+        (9, "Other allowable deduction"),
+    ] {
+        d.computations
+            .part_ix_descriptions
+            .insert(item, particulars.into());
+        d.set_amount(S::PartIx, item, TP, Some(100.0 * f64::from(item)));
+    }
+    d.recompute();
+    d
+}
+
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![
         serde_json::to_value(sample_1701()).expect("sample serializes"),
         serde_json::to_value(sample_1701_joint()).expect("sample serializes"),
+        serde_json::to_value(sample_1701_joint_details()).expect("sample serializes"),
     ]
 }
