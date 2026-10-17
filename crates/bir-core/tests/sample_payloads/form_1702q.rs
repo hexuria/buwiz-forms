@@ -74,5 +74,14 @@ fn form_1702q_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_1702q()).expect("sample serializes")]
+    // The same return in the third quarter, for Schedule 3 Item 3 (the 3rd
+    // quarter's gross income, which only a third-quarter return keeps).
+    let mut third = sample_1702q();
+    third.quarter = 3;
+    third.mcit_gross_income_q3 = 2_500_000.0;
+    third.recompute();
+    vec![
+        serde_json::to_value(sample_1702q()).expect("sample serializes"),
+        serde_json::to_value(third).expect("sample serializes"),
+    ]
 }

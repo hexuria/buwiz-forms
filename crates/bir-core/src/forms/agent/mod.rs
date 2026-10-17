@@ -436,7 +436,17 @@ fn probe_eval(kind: AgentFormKind, draft: &Value) -> Option<(Value, BTreeMap<Str
         let mut typed: F = serde_json::from_value(draft.clone()).ok()?;
         catch_unwind(AssertUnwindSafe(|| {
             typed.seam_compute();
-            let map = typed.seam_field_map();
+            let mut map = typed.seam_field_map();
+            // A box keyed as the first occurrence of a control the field
+            // map writes once shows that control's value.
+            for (code, alias, _) in probe::FIRST_OCCURRENCE {
+                if *code == kind.form_code()
+                    && let Some((official, _)) = alias.split_once("#occurrence-")
+                    && let Some(value) = map.get(official).cloned()
+                {
+                    map.entry(alias.to_string()).or_insert(value);
+                }
+            }
             (serde_json::to_value(&typed).ok(), map)
         }))
         .ok()

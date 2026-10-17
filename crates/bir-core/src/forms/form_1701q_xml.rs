@@ -857,6 +857,7 @@ impl Form1701QDraft {
             deduction_method,
             contact_number: field(fields, "frm1701q:txtTelno").to_string(),
             line_of_business: field(fields, "frm1701q:txtLOB").to_string(),
+            civil_status: None,
             has_spouse,
             spouse_tin: joined_tin(fields, "Spouse"),
             spouse_rdo_code: normalize_empty_rdo(field(fields, "frm1701q:txtSpouseRDOCode")),
@@ -875,6 +876,10 @@ impl Form1701QDraft {
             item_48_non_operating_income_description: field(fields, "frm1701q:txt48Desc")
                 .to_string(),
             item_61_other_tax_credit_description: field(fields, "frm1701q:txt61Desc").to_string(),
+            // A version-0 state: the first compute keeps every penalty the
+            // savefile carries as the filer's own (form_1701q_official.rs).
+            penalty: Default::default(),
+            spouse_penalty: Default::default(),
             payment_details: Form1701QPaymentDetails {
                 item_32_cash_or_bank_debit_memo: parse_payment_row(fields, 32, true, &mut errors),
                 item_33_check: parse_payment_row(fields, 33, true, &mut errors),

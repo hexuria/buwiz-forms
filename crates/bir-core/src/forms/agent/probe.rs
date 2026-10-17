@@ -148,7 +148,57 @@ const GATED_ENTRY: &[(&str, &str)] = &[
         "Item 31 \"To be carried over\" amount: typed by the filer; cleared \
          by `compute` with its box when the overpayment ends",
     ),
+    // PR 5: 1702Q's schedule entries. The official page's
+    // ATCEnableDisableSchedules opens Schedules 1, 2 and 4 once Item 5 has
+    // an ATC, and Schedule 3 once both Item 5 boxes are ticked;
+    // form_1702q.rs `recompute` clears them while that does not hold (no
+    // ATC, `mcit_open`), which the probe sees as a combination with /atc.
+    ("frm1702q:Sched1:txtTax1B", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched1:txtTax2B", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched1:txtTax4B", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched1:txtTax6B", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched1:txtTax8B", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched1:txtTax10B", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched2:txtTax1", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched2:txtTax2", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched2:txtTax4", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched2:txtTax6", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched2:txtTax8", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched3:txtTax1", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched3:txtTax2", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched3:txtTax3", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtTax1", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtTax2", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtTax3", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtTax4", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtTax5", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtOthrTxCrdts0", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtOthrTxCrdts1", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtOthrTxCrdtAmnt0", GATED_1702Q_SCHEDULE),
+    ("frm1702q:Sched4:txtOthrTxCrdtAmnt1", GATED_1702Q_SCHEDULE),
 ];
+
+/// Why each 1702Q schedule entry is in [`GATED_ENTRY`].
+const GATED_1702Q_SCHEDULE: &str = "1702Q schedule entry typed by the filer (rules/forms/1702q-v2018c/fields.json: \
+     not computed); form_1702q.rs recompute clears Schedules 1, 2 and 4 while \
+     Item 5 has no ATC and Schedule 3 while `mcit_open` does not hold, as the \
+     official ATCEnableDisableSchedules disables them";
+
+/// Boxes `fields.json` keys only as an occurrence of an official control
+/// (`X#occurrence-1`) that it lists under no key of its own, while the app's
+/// field map writes the control once, under `X`: `(form code, box key,
+/// evidence)`. The probe reads such a box as `X`, so it binds to the draft
+/// field `X` shows; the field map, the upload and the print are unchanged.
+pub(crate) const FIRST_OCCURRENCE: &[(&str, &str, &str)] = &[(
+    "1702Q",
+    "frm1702q:txtTelNum#occurrence-1",
+    "Item 10 Contact Number (PR 5): rules/forms/1702q-v2018c/fields.json lists \
+     the two txtTelNum controls as occurrence-1 (item 10) and occurrence-2 \
+     (\"Hidden duplicate profile contact number\"); the upload writes the one \
+     value under txtTelNum for both (tests/sample-payloads/1702Q-2025Q2.official.xml) \
+     and the sheet prints it once (html-frozen/1702q-2018/writer-cells.json join \
+     frm1702q:txtTelNum, \"10 Contact Number\")",
+)];
 
 /// Project `fields.json` onto the boxes the assistant needs.
 pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {

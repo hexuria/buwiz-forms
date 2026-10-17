@@ -18,6 +18,7 @@ use super::form_1701q::{
     Form1701QAtc, Form1701QDeductionMethod, Form1701QDraft, Form1701QFilerType, Form1701QParty,
     Form1701QSpouseType, Form1701QTaxRate,
 };
+use super::penalty_items::{PenaltyItems, PenaltyRounding};
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -224,6 +225,25 @@ impl Form1701QDraft {
             self.spouse_deduction_method = None;
         }
 
+        for party in [Form1701QParty::Taxpayer, Form1701QParty::Spouse] {
+            self.recompute_official_party(party);
+        }
+        // Items 64-66 file their override, else the computed value (the
+        // shared penalty model, from Item 63's tax still due), and Items
+        // 67-68 and Part III add up what is filed.
+        for items in Self::penalty_declarations() {
+            // Until PR 5 the 1701Q penalties were typed boxes the model never
+            // computed: a draft stored then keeps every amount it held, a
+            // zero too, as the filer's own, so opening it files what it
+            // filed. "Use the computed amounts" brings the computed back.
+            if (items.applies)(self)
+                && (items.state)(self).penalty_model_version
+                    < super::penalty_items::PENALTY_MODEL_VERSION
+            {
+                items.adopt_imported(self);
+            }
+            items.apply(self);
+        }
         for party in [Form1701QParty::Taxpayer, Form1701QParty::Spouse] {
             self.recompute_official_party(party);
         }
@@ -807,6 +827,67 @@ impl Form1701QDraft {
     }
 }
 
+impl Form1701QDraft {
+    /// Items 64-66 of each column on the shared penalty model
+    /// ([`super::penalty_items`]): the taxpayer/filer's (column A), then the
+    /// spouse's (column B), which apply only while the spouse's column is
+    /// open (a married individual whose spouse is not a compensation earner
+    /// only, `recompute_official_party`'s `spouse_off`). Amounts are whole
+    /// pesos, as every 1701Q input (`wholenumber`).
+    pub fn penalty_declarations() -> Vec<PenaltyItems<Self>> {
+        use crate::penalties::PenaltyComponent as C;
+        const fn item(component: C) -> u8 {
+            match component {
+                C::Surcharge => 64,
+                C::Interest => 65,
+                C::Compromise => 66,
+            }
+        }
+        let common = PenaltyItems::<Self> {
+            form_code: super::form_1701q::FORM_CODE,
+            party: Some("Taxpayer/Filer"),
+            applies: |_| true,
+            schedule: crate::penalties::PenaltyProfile::StandardFiling,
+            // The validation's field names for these boxes (`item_64_taxpayer`,
+            // "Item 64A takes whole pesos only."), so a message lands on its box.
+            fields: ["item_64_taxpayer", "item_65_taxpayer", "item_66_taxpayer"],
+            controls: ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"],
+            labels: ["64 Surcharge", "65 Interest", "66 Compromise"],
+            basic_tax_due_label: "Item 63A",
+            rounding: PenaltyRounding::WholePesos,
+            get: |d, component| d.input(item(component), Form1701QParty::Taxpayer),
+            set: |d, component, value| {
+                d.set_amount(item(component), Form1701QParty::Taxpayer, Some(value));
+            },
+            basic_tax_due: |d| d.input(63, Form1701QParty::Taxpayer),
+            gross_sales: None,
+            state: |d| &d.penalty,
+            state_mut: |d| &mut d.penalty,
+            status: |d| d.lifecycle.status.clone(),
+            deadline_period: super::penalty_items::calendar_period::<Self>,
+            period_code: |d| QueueableForm::period_code(d),
+            is_amended: |d| d.is_amended,
+            recompute: |d| d.recompute(),
+        };
+        let spouse = PenaltyItems::<Self> {
+            party: Some("Spouse"),
+            fields: ["item_64_spouse", "item_65_spouse", "item_66_spouse"],
+            applies: |d| d.spouse_active() && d.spouse_atc != Some(Form1701QAtc::Ii011),
+            controls: ["frm1701q:txt64B", "frm1701q:txt65B", "frm1701q:txt66B"],
+            basic_tax_due_label: "Item 63B",
+            get: |d, component| d.input(item(component), Form1701QParty::Spouse),
+            set: |d, component, value| {
+                d.set_amount(item(component), Form1701QParty::Spouse, Some(value));
+            },
+            basic_tax_due: |d| d.input(63, Form1701QParty::Spouse),
+            state: |d| &d.spouse_penalty,
+            state_mut: |d| &mut d.spouse_penalty,
+            ..common
+        };
+        vec![common, spouse]
+    }
+}
+
 fn party_name(party: Form1701QParty) -> &'static str {
     match party {
         Form1701QParty::Taxpayer => "taxpayer",
@@ -884,6 +965,9 @@ impl QueueableForm for Form1701QDraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_official_field_map()
     }
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        Self::penalty_declarations()
+    }
 }
 
 #[cfg(test)]
@@ -920,6 +1004,9 @@ mod tests {
         draft.set_amount(42, Form1701QParty::Taxpayer, Some(-1_000.505));
         draft.set_amount(55, Form1701QParty::Taxpayer, Some(10_000.0));
         draft.set_amount(64, Form1701QParty::Taxpayer, Some(1_000.0));
+        // An entered surcharge (Items 64-66 are on the shared penalty model
+        // since PR 5): it files as typed.
+        draft.keep_entered_penalties();
         draft.recompute();
         draft
     }

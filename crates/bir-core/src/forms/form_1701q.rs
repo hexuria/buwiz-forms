@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::form_2551q::{AnnualIncomeTaxElection, annual_income_tax_election};
+use super::penalty_items::PenaltyState;
 use super::queueable::SubmissionLifecycle;
 use super::{FilingPeriod, FormValidator, TypedBirForm};
 use crate::profile::{TaxpayerProfile, TaxpayerType};
@@ -223,6 +224,42 @@ impl Form1701QDeductionMethod {
             Self::Itemized => "Itemized Deduction",
             Self::Osd => "Optional Standard Deduction (OSD)",
         }
+    }
+}
+
+/// The filer's civil status. The January 2018 sheet prints no such item (and
+/// the upload carries none); it is the page's answer that opens Part II: the
+/// spouse part applies only to a married filer (`has_spouse`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Form1701QCivilStatus {
+    Single,
+    Married,
+    LegallySeparated,
+    Widowed,
+}
+
+impl Form1701QCivilStatus {
+    pub const ALL: [Self; 4] = [
+        Self::Single,
+        Self::Married,
+        Self::LegallySeparated,
+        Self::Widowed,
+    ];
+
+    /// The words BIR prints for the same answer on Form 1701 (item 16).
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Single => "Single",
+            Self::Married => "Married",
+            Self::LegallySeparated => "Legally Separated",
+            Self::Widowed => "Widow/er",
+        }
+    }
+
+    pub fn from_label(text: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|status| status.label().eq_ignore_ascii_case(text.trim()))
     }
 }
 
@@ -472,6 +509,12 @@ pub struct Form1701QDraft {
     #[serde(default)]
     pub line_of_business: String,
 
+    /// The page's Civil Status answer for a status other than Married (a
+    /// married filer is `has_spouse`). `None` until the filer answers; a
+    /// draft stored before the answer existed has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub civil_status: Option<Form1701QCivilStatus>,
+
     // Items 17-25A.
     #[serde(default)]
     pub has_spouse: bool,
@@ -507,6 +550,15 @@ pub struct Form1701QDraft {
     pub item_48_non_operating_income_description: String,
     #[serde(default)]
     pub item_61_other_tax_credit_description: String,
+
+    /// Each party's Surcharge, Interest and Compromise (Items 64-66, columns
+    /// A and B) on the shared penalty model ([`super::penalty_items`]):
+    /// computed values, overrides and engine inputs. A draft stored while
+    /// the items were typed boxes has neither (`penalty_model_version` 0).
+    #[serde(default)]
+    pub penalty: PenaltyState,
+    #[serde(default)]
+    pub spouse_penalty: PenaltyState,
 
     // Part IV.
     #[serde(default)]
@@ -630,6 +682,7 @@ impl Form1701QDraft {
             deduction_method,
             contact_number: profile.phone.clone(),
             line_of_business: profile.line_of_business.clone(),
+            civil_status: None,
             has_spouse: false,
             spouse_tin: String::new(),
             spouse_rdo_code: String::new(),
@@ -646,6 +699,9 @@ impl Form1701QDraft {
             item_43_non_operating_income_description: String::new(),
             item_48_non_operating_income_description: String::new(),
             item_61_other_tax_credit_description: String::new(),
+            penalty: PenaltyState::for_profile(profile),
+            // The profile's EOPT class is the filer's, not the spouse's.
+            spouse_penalty: PenaltyState::new(None),
             payment_details: Form1701QPaymentDetails::default(),
             total_tax_due: 0.0,
             total_amount_payable: 0.0,
@@ -690,6 +746,95 @@ impl Form1701QDraft {
         if let Some(pair) = self.amounts.get_mut(item) {
             pair.set(party, value);
         }
+    }
+
+    /// The Civil Status the page shows: Married for a draft that reports a
+    /// spouse (`has_spouse`, which a draft stored before the answer existed
+    /// may already carry), else the other status answered, if any.
+    pub fn shown_civil_status(&self) -> Option<Form1701QCivilStatus> {
+        if self.has_spouse {
+            Some(Form1701QCivilStatus::Married)
+        } else {
+            self.civil_status
+                .filter(|status| *status != Form1701QCivilStatus::Married)
+        }
+    }
+
+    /// Answer Civil Status. Married opens Part II and the spouse's column
+    /// (`has_spouse`); any other answer, or none, closes them and clears
+    /// everything entered there (items 17-25A, the B column, the spouse's
+    /// penalty overrides), so nothing of it is filed or printed. Recomputes.
+    pub fn set_civil_status(&mut self, status: Option<Form1701QCivilStatus>) {
+        let married = status == Some(Form1701QCivilStatus::Married);
+        self.civil_status = status.filter(|_| !married);
+        if married {
+            // A draft stored while the spouse's penalties were typed boxes
+            // had no spouse here: there is nothing of theirs to keep.
+            if !self.has_spouse
+                && self.spouse_penalty.penalty_model_version
+                    < super::penalty_items::PENALTY_MODEL_VERSION
+            {
+                self.spouse_penalty = PenaltyState::new(None);
+            }
+            self.has_spouse = true;
+        } else {
+            self.has_spouse = false;
+            self.clear_spouse_part();
+        }
+        self.recompute();
+    }
+
+    /// Whether Part II or the spouse's column holds anything entered.
+    pub fn spouse_part_has_entries(&self) -> bool {
+        let text = [
+            &self.spouse_tin,
+            &self.spouse_rdo_code,
+            &self.spouse_name,
+            &self.spouse_citizenship,
+            &self.spouse_foreign_tax_number,
+        ]
+        .iter()
+        .any(|value| !value.trim().is_empty());
+        let chosen = self.spouse_type.is_some()
+            || self.spouse_atc.is_some()
+            || self.spouse_claims_foreign_tax_credits.is_some()
+            || self.spouse_tax_rate.is_some()
+            || self.spouse_deduction_method.is_some();
+        let typed = USER_ENTERED_AMOUNT_ITEMS.iter().chain(&[52]).any(|item| {
+            self.amount(*item, Form1701QParty::Spouse)
+                .is_some_and(|v| v != 0.0)
+        });
+        let overridden = crate::penalties::PenaltyComponent::ALL
+            .iter()
+            .any(|component| {
+                self.spouse_penalty
+                    .penalty_overrides
+                    .get(*component)
+                    .is_some_and(|value| value != 0.0)
+            });
+        text || chosen || typed || overridden
+    }
+
+    /// Blank Part II and the spouse's column.
+    fn clear_spouse_part(&mut self) {
+        self.spouse_tin.clear();
+        self.spouse_rdo_code.clear();
+        self.spouse_type = None;
+        self.spouse_atc = None;
+        self.spouse_name.clear();
+        self.spouse_citizenship.clear();
+        self.spouse_foreign_tax_number.clear();
+        self.spouse_claims_foreign_tax_credits = None;
+        self.spouse_tax_rate = None;
+        self.spouse_deduction_method = None;
+        for item in [
+            26, 27, 28, 29, 30, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52,
+            53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68,
+        ] {
+            self.set_amount(item, Form1701QParty::Spouse, None);
+        }
+        self.spouse_penalty.clear_overrides();
+        self.spouse_penalty.computed_penalties = None;
     }
 
     /// The official compute chain (see `form_1701q_official`).
@@ -781,6 +926,110 @@ mod tests {
         ];
 
         assert!(expected.into_iter().all(|item| amounts.get(item).is_some()));
+    }
+
+    /// A married filer with a spouse on graduated rates and typed amounts.
+    fn married() -> Form1701QDraft {
+        let mut draft = Form1701QDraft {
+            taxable_year: 2025,
+            quarter: 2,
+            filer_type: Some(Form1701QFilerType::Professional),
+            atc: Some(Form1701QAtc::Ii014),
+            deduction_method: Some(Form1701QDeductionMethod::Osd),
+            penalty: PenaltyState::new(None),
+            spouse_penalty: PenaltyState::new(None),
+            ..Default::default()
+        };
+        draft.set_civil_status(Some(Form1701QCivilStatus::Married));
+        draft.spouse_tin = "987654321".into();
+        draft.spouse_name = "SAMPLE SPOUSE".into();
+        draft.spouse_type = Some(Form1701QSpouseType::Professional);
+        draft.spouse_atc = Some(Form1701QAtc::Ii014);
+        draft.spouse_deduction_method = Some(Form1701QDeductionMethod::Itemized);
+        draft.set_amount(36, Form1701QParty::Spouse, Some(500_000.0));
+        draft.set_amount(58, Form1701QParty::Spouse, Some(1_000.0));
+        draft.recompute();
+        draft
+    }
+
+    /// Decision 11: Married opens Part II; another answer closes it and
+    /// clears everything entered there, so none of it files.
+    #[test]
+    fn civil_status_married_opens_part_ii_and_another_answer_clears_it() {
+        let draft = married();
+        assert!(draft.has_spouse);
+        assert_eq!(
+            draft.shown_civil_status(),
+            Some(Form1701QCivilStatus::Married)
+        );
+        assert!(draft.spouse_part_has_entries());
+        let fields = draft.to_official_field_map();
+        assert_eq!(fields["frm1701q:txtSpouseName"], "SAMPLE SPOUSE");
+        assert_eq!(fields["frm1701q:txt36B"], "500,000.00");
+
+        for status in [
+            Some(Form1701QCivilStatus::Single),
+            Some(Form1701QCivilStatus::LegallySeparated),
+            Some(Form1701QCivilStatus::Widowed),
+            None,
+        ] {
+            let mut closed = draft.clone();
+            closed.set_civil_status(status);
+            assert!(!closed.has_spouse);
+            assert_eq!(closed.shown_civil_status(), status);
+            assert!(!closed.spouse_part_has_entries(), "{status:?}");
+            assert_eq!(closed.spouse_name, "");
+            assert_eq!(closed.spouse_tin, "");
+            assert_eq!(closed.spouse_type, None);
+            assert_eq!(closed.spouse_atc, None);
+            assert_eq!(closed.amount(36, Form1701QParty::Spouse), Some(0.0));
+            let fields = closed.to_official_field_map();
+            assert_eq!(fields["frm1701q:txtSpouseName"], "");
+            assert_eq!(fields["frm1701q:txt36B"], "0.00");
+            assert_eq!(fields["frm1701q:txt26B"], "0.00");
+            // The taxpayer's column is untouched.
+            assert_eq!(
+                fields["frm1701q:txt26A"],
+                draft.to_official_field_map()["frm1701q:txt26A"]
+            );
+        }
+    }
+
+    /// The answer is the page's: it is not in the upload, and a draft
+    /// stored before it existed reads and writes as it was.
+    #[test]
+    fn civil_status_is_not_filed_and_legacy_drafts_keep_their_shape() {
+        let mut single = married();
+        single.set_civil_status(Some(Form1701QCivilStatus::Single));
+        let mut unanswered = married();
+        unanswered.set_civil_status(None);
+        assert_eq!(
+            single.to_official_field_map(),
+            unanswered.to_official_field_map()
+        );
+        assert_eq!(
+            single.to_official_xml_payload(),
+            unanswered.to_official_xml_payload()
+        );
+
+        // A stored draft from before: a spouse means Married, none means
+        // unanswered, and it serializes without the new key.
+        let mut stored = serde_json::to_value(married()).unwrap();
+        assert!(stored.get("civil_status").is_none());
+        stored.as_object_mut().unwrap().remove("penalty");
+        let legacy: Form1701QDraft = serde_json::from_value(stored).unwrap();
+        assert_eq!(
+            legacy.shown_civil_status(),
+            Some(Form1701QCivilStatus::Married)
+        );
+        let mut alone = serde_json::to_value(Form1701QDraft::default()).unwrap();
+        alone.as_object_mut().unwrap().remove("civil_status");
+        let alone: Form1701QDraft = serde_json::from_value(alone).unwrap();
+        assert_eq!(alone.shown_civil_status(), None);
+        assert_eq!(
+            Form1701QCivilStatus::from_label("widow/er"),
+            Some(Form1701QCivilStatus::Widowed)
+        );
     }
 
     #[test]
