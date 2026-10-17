@@ -1694,6 +1694,9 @@ export class FormPageActions {
         if (Array.isArray(f.penalties)) s.penalties = f.penalties;
         edits = {};
       }
+      // A save is the return's new state: a removal's Undo offered before
+      // it would bring back a draft older than what is saved, so it goes.
+      this.retireRemovalUndo();
       const r = this.app.store.write("screen_form_save", s.code, s.draft);
       s.draft = r.draft;
       s.status = r.status;

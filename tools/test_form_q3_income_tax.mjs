@@ -8,12 +8,17 @@
 // nothing; the box follows the three boxes when the host changes them (an
 // Undo); a locked item shows the date. Which keys are parts of one date is
 // the host's to say (crates/bir-shell screen_form_module tests).
+// Decision 11's question: an answer that removes what the filer typed (Civil
+// Status off Married, the host's `removes`) is asked first; Continue applies
+// it and offers Undo, which brings the old draft back; a save, or any later
+// edit, retires that Undo.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 const root = new URL("../", import.meta.url);
 
 const K = (tail) => `frmTEST:${tail}`;
+const CIVIL = "page:TEST:civilStatus";
 const schema = {
   c: "TEST", t: "Test return", rev: "2026", freq: "Quarterly", pages: 1, n: 4, q: 1,
   parts: [
@@ -29,6 +34,8 @@ const schema = {
             { k: K("txtBirthYear"), t: "int", l: "Date of Birth" },
           ],
         },
+        { no: "", l: "Civil Status", f: [{ k: CIVIL, t: "sel", l: "Civil Status", o: ["Single", "Married", "Legally Separated", "Widow/er"] }] },
+        { no: "21", l: "Spouse's Name", f: [{ k: K("spouse"), t: "text", l: "Spouse's Name" }] },
         {
           no: "12", l: "Date of Registration (three boxes)",
           f: [
@@ -130,7 +137,7 @@ await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": c
 await mod.evaluate();
 const { FormPageActions, renderFormPage, oneDateText } = mod.namespace;
 
-let hostValues = { [K("name")]: "DELA CRUZ, JUAN", [MONTH]: "05", [DAY]: "17", [YEAR]: "1980", [K("regMonth")]: "01", [K("regDay")]: "02", [K("regYear")]: "2003" };
+let hostValues = { [CIVIL]: "Married", [K("spouse")]: "DELA CRUZ, MARIA", [K("name")]: "DELA CRUZ, JUAN", [MONTH]: "05", [DAY]: "17", [YEAR]: "1980", [K("regMonth")]: "01", [K("regDay")]: "02", [K("regYear")]: "2003" };
 let editable = true;
 const opened = () => ({
   draft: { id: 7 }, status: editable ? "Draft" : "Submitted", editable, values: { ...hostValues }, options: {}, locks: {},
@@ -139,6 +146,8 @@ const opened = () => ({
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
   invalidate() {}, toast() {}, startNewReturn() {},
+  toastState: null,
+  toastUndo(what, run) { this.toastState = { text: what, action: { run } }; },
   store: {
     templates: () => [],
     write(name, ...args) { calls.push([name, ...args]); return { id: 7, status: "Draft", draft: args[1] }; },
@@ -147,10 +156,17 @@ const app = {
       if (name === "screen_form_schema") return schema;
       if (name === "screen_form_open") return Promise.resolve(opened());
       if (name === "screen_form_fill") {
-        hostValues = { ...hostValues, ...args[2] };
-        return { draft: args[1], values: { ...hostValues }, options: {}, rejected: {}, penalties: [], pools: {} };
+        // Like the host, a fill works on the draft it is given (an Undo
+        // refills the draft it was offered with).
+        const values = { ...(args[1].values || hostValues), ...args[2] };
+        let removes = null;
+        if (args[2][CIVIL] && args[2][CIVIL] !== "Married" && (args[1].values || hostValues)[K("spouse")]) {
+          removes = { message: "Without Married at Civil Status, the spouse's part goes. Continue?", done: "Cleared the spouse's part", rows: 1 };
+          values[K("spouse")] = "";
+        }
+        return { draft: { id: 7, values }, values: { ...values }, options: {}, rejected: {}, penalties: [], pools: {}, removes };
       }
-      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
+      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...(args[1].values || hostValues) }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
     },
@@ -233,3 +249,40 @@ await openAll();
 assert.ok(texts.includes("May 17, 1980"), "a locked item shows the date");
 assert.ok(!ids.has(`fp-date-${idOf()}`), "and no calendar");
 console.log("PASS 1701Q item 11: a locked return shows the date.");
+
+// ---- Decision 11: leaving Married asks first; Continue offers Undo.
+editable = true;
+hostValues = { ...hostValues, [CIVIL]: "Married", [K("spouse")]: "DELA CRUZ, MARIA" };
+await openAll();
+const asked = () => app.overlay === "removal";
+ui.choose({ [CIVIL]: "Single" }, cx);
+assert.ok(asked(), "the removal is asked first");
+assert.equal(ui.state.values[CIVIL], "Married", "while asked, the old answer shows");
+assert.equal(ui.state.values[K("spouse")], "DELA CRUZ, MARIA", "and the spouse's name stays");
+ui.cancelRemoval(cx);
+assert.equal(ui.state.values[K("spouse")], "DELA CRUZ, MARIA", "Cancel keeps both");
+ui.choose({ [CIVIL]: "Single" }, cx);
+ui.confirmRemoval(cx);
+await settle();
+assert.equal(ui.state.values[CIVIL], "Single", "Continue applies the answer");
+assert.equal(ui.state.values[K("spouse")], "", "and clears the spouse's part");
+assert.equal(app.toastState?.text, "Cleared the spouse's part.", "an Undo is offered");
+const fillsBeforeUndo = fills().length;
+act(app.toastState.action.run);
+await settle();
+assert.equal(fills().length, fillsBeforeUndo + 1, "Undo refills the old draft");
+assert.equal(JSON.stringify(lastFill()[3]), "{}");
+assert.equal(ui.state.values[CIVIL], "Married", "Undo brings the answer back");
+assert.equal(ui.state.values[K("spouse")], "DELA CRUZ, MARIA", "and the spouse's name");
+// A save retires the Undo: it would bring back a draft older than the saved one.
+ui.choose({ [CIVIL]: "Widow/er" }, cx);
+ui.confirmRemoval(cx);
+await settle();
+const undo = app.toastState.action.run;
+ui.save(cx);
+assert.equal(app.toastState, null, "a save retires the Undo");
+const fillsAfterSave = fills().length;
+act(undo);
+assert.equal(fills().length, fillsAfterSave, "and a stale Undo does nothing");
+assert.equal(ui.state.values[CIVIL], "Widow/er");
+console.log("PASS 1701Q Civil Status: leaving Married asks first, Undo brings it back, a save retires the Undo.");
