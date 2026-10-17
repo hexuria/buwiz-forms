@@ -72,7 +72,11 @@ function selectBox(cx, ui, k, label, listedRaw, value, locked, width) {
   // RDO). A listed 0 or "-" stays selectable.
   const shown = selected ? selected.value : known ? value : /^(0+|-)$/.test(value) ? "" : value;
   if (shown && !selected && !known) options.push({ value: shown, label: shown });
-  if (locked) return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
+  if (locked) {
+    const hint = !shown && s.blank.has(k) ? s.needs?.[k] || "" : "";
+    if (hint) return lockedBox(cx, hint, width, { hint: true });
+    return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
+  }
   return Dropdown(cx, `fp-${k}`, {
     label,
     width,
@@ -235,6 +239,7 @@ export class FormPageActions {
       // A Form library sample: its period and date boxes stay blank until typed.
       sample: Boolean(opts.sample),
       blank: new Set(),
+      needs: {},
       typed: new Set(),
       errors: [],
       messages: {},
@@ -272,6 +277,8 @@ export class FormPageActions {
         s.locks = r.locks;
         s.profile = new Set(r.profile || []);
         s.profileEdit = new Set(r.profile_edit || []);
+        // A sample's blank box that cannot be typed says what it waits for.
+        s.needs = r.needs || {};
         s.saved = Boolean(r.draft && r.draft.id);
         this.setErrors(r.errors);
         // Every part already open (one picked while the return was still
@@ -567,6 +574,8 @@ export class FormPageActions {
       try {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
         this.accepted(edits, r.rejected);
+        // The host says which of a sample's boxes are still blank.
+        if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
         const before = s.values;
         s.draft = r.draft;
         s.values = this.shown(r.values);
@@ -762,6 +771,7 @@ export class FormPageActions {
         if (token !== this.token || seq !== this.state.validateSeq) return;
         // Keep a newer local draft if the user typed meanwhile; take values/errors.
         if (this.state.draft === draft) this.state.draft = r.draft;
+        if (this.state.sample && Array.isArray(r.blank)) this.state.blank = new Set(r.blank);
         this.state.values = this.shown({ ...this.state.values, ...r.values });
         this.state.options = r.options || {};
         this.syncComputed();
@@ -972,7 +982,7 @@ function lockedBox(cx, value, width, opts = {}) {
     .bg(t.hover)
     .when(opts.right, (el) => el.justify_end())
     .when(opts.center, (el) => el.justify_center())
-    .child(Line(cx, "body", value || "", "fg2"));
+    .child(Line(cx, "body", value || "", opts.hint ? "fg3" : "fg2"));
 }
 
 function control(cx, ui, f, itemLabel, multi, available) {
@@ -997,7 +1007,9 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal());
   } else if (locked) {
     const shown = f.t === "money" ? formatMoney(value || (f.c ? "0" : "")) : value;
-    el = lockedBox(cx, shown, width, { right: f.t === "money" || f.t === "pct" });
+    // Locked and blank only with a reason: what it waits for.
+    const hint = !shown && s.blank.has(f.k) ? s.needs?.[f.k] || "" : "";
+    el = lockedBox(cx, shown || hint, width, { right: !hint && (f.t === "money" || f.t === "pct"), hint: Boolean(hint) });
   } else {
     const input = s.inputs.get(f.k);
     if (!input) el = lockedBox(cx, value, width);

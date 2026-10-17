@@ -77,8 +77,10 @@ export interface ScreenFormOpened {
     profile_edit: string[];
     /** Opened from the Form library: a blank sample that is never saved. */
     sample: boolean;
-    /** A sample's period and date boxes, shown blank until the filer types one. */
+    /** A sample's period and date boxes, shown blank until the filer types one; a sample's period boxes are open. */
     blank: string[];
+    /** A sample's blank box that cannot be typed: what it waits for (shown in the box). */
+    needs: Record<string, string>;
     errors: ScreenFormError[];
 }
 export interface ScreenFormFilled {
@@ -86,12 +88,16 @@ export interface ScreenFormFilled {
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;
+    /** A sample's boxes still blank (null for a return). */
+    blank?: string[] | null;
 }
 export interface ScreenFormValidated {
     draft: object;
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     errors: ScreenFormError[];
+    /** A sample's boxes still blank (null for a return). */
+    blank?: string[] | null;
 }
 export interface ScreenFormOption {
     value: string;
@@ -1618,34 +1624,60 @@ fn screen_form_sample(
     open_screen_form(arguments, true)
 }
 
-/// Marks a Form library sample's draft, with the period and date boxes it
-/// still shows blank (`{"blank": [...]}`; a box leaves the list once the
-/// host takes an edit for it). The typed draft has no such field, so the
-/// host takes it off before any agent call and puts it back on what it
-/// returns (`take_sample_mark`, `put_sample_mark`).
+/// Marks a Form library sample's draft: `blank`, the period and date boxes
+/// it still shows blank (a box leaves the list once the host takes an edit
+/// for it, and the whole list goes once every period box is typed), and
+/// `open`, its period boxes, which the filer types although a return keeps
+/// them locked. The typed draft has no such field, so the host takes it off
+/// before any agent call and puts it back on what it returns
+/// (`take_sample_mark`, `put_sample_mark`).
 const SAMPLE_MARK: &str = "screen_form_sample";
 
-/// The sample's blank boxes, or `None` for a return.
-fn take_sample_mark(draft: &mut Value) -> Option<Vec<String>> {
-    let Value::Object(object) = draft else {
-        return None;
-    };
-    match object.remove(SAMPLE_MARK)? {
-        Value::Null | Value::Bool(false) => None,
-        mark => Some(
-            mark["blank"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|key| key.as_str().map(str::to_string))
-                .collect(),
-        ),
+#[derive(Default)]
+struct SampleMark {
+    blank: Vec<String>,
+    open: BTreeSet<String>,
+}
+
+impl SampleMark {
+    /// A box the host took an edit for is no longer blank; once no period
+    /// box is left blank, what follows the period (a due date) shows too.
+    fn typed(&mut self, accepted: impl Fn(&str) -> bool) {
+        self.blank.retain(|key| !accepted(key));
+        if !self.blank.iter().any(|key| self.open.contains(key)) {
+            self.blank.clear();
+        }
     }
 }
 
-fn put_sample_mark(draft: &mut Value, blank: Option<&[String]>) {
-    if let (Some(blank), Value::Object(object)) = (blank, draft) {
-        object.insert(SAMPLE_MARK.into(), json!({ "blank": blank }));
+/// The sample's mark, or `None` for a return.
+fn take_sample_mark(draft: &mut Value) -> Option<SampleMark> {
+    let Value::Object(object) = draft else {
+        return None;
+    };
+    let keys = |mark: &Value, name: &str| -> Vec<String> {
+        mark[name]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|key| key.as_str().map(str::to_string))
+            .collect()
+    };
+    match object.remove(SAMPLE_MARK)? {
+        Value::Null | Value::Bool(false) => None,
+        mark => Some(SampleMark {
+            blank: keys(&mark, "blank"),
+            open: keys(&mark, "open").into_iter().collect(),
+        }),
+    }
+}
+
+fn put_sample_mark(draft: &mut Value, mark: Option<&SampleMark>) {
+    if let (Some(mark), Value::Object(object)) = (mark, draft) {
+        object.insert(
+            SAMPLE_MARK.into(),
+            json!({ "blank": mark.blank, "open": mark.open }),
+        );
     }
 }
 
@@ -1727,13 +1759,25 @@ fn open_screen_form(
                 None => Vec::new(),
             };
             blank_sample(kind, &blank, &mut values, &mut errors);
+            let mut locks = locks;
+            let mark = sample.then(|| sample_mark(kind, blank.clone(), &locks));
+            let mut needs = Map::new();
+            if let Some(mark) = &mark {
+                for key in &mark.blank {
+                    if mark.open.contains(key) {
+                        locks.remove(key);
+                    } else if locks.contains_key(key) {
+                        needs.insert(key.clone(), json!(SAMPLE_NEEDS));
+                    }
+                }
+            }
             let stored_period = if sample {
                 None
             } else {
                 stored_period(kind, &draft)
             };
             let options = catalogs::options(kind, &draft);
-            put_sample_mark(&mut draft, sample.then_some(blank.as_slice()));
+            put_sample_mark(&mut draft, mark.as_ref());
             Ok(json!({
                 "form_code": code,
                 "year": year,
@@ -1749,6 +1793,7 @@ fn open_screen_form(
                 "profile_edit": profile_edit,
                 "sample": sample,
                 "blank": blank,
+                "needs": needs,
                 "errors": errors,
             }))
         })
@@ -1952,6 +1997,33 @@ fn blank_sample(kind: AgentFormKind, blank: &[String], values: &mut Value, error
     }
 }
 
+/// What a sample's blank box that cannot be typed says it is waiting for.
+const SAMPLE_NEEDS: &str = "Shows once the period is typed";
+
+/// A sample's mark: its blank boxes, and the ones among them the filer may
+/// type: open on the page, or locked only as a return's identity (year,
+/// month, quarter, day), which a sample opens.
+fn sample_mark(kind: AgentFormKind, blank: Vec<String>, locks: &Map<String, Value>) -> SampleMark {
+    let def = kind.definition();
+    let identity = |key: &str| {
+        let bound = def.bindings.get(key).or_else(|| {
+            def.box_def(key)
+                .and_then(|entry| entry.group.as_deref())
+                .and_then(|group| def.bindings.get(group))
+        });
+        bound.is_some_and(|bound| bound.lock == Some(agent::Lock::Identity))
+            && def
+                .box_def(key)
+                .is_some_and(|entry| entry.is_user_box() && entry.required != "computed")
+    };
+    let open = blank
+        .iter()
+        .filter(|key| !locks.contains_key(*key) || identity(key))
+        .cloned()
+        .collect();
+    SampleMark { blank, open }
+}
+
 fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
@@ -1963,7 +2035,11 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let editable = agent::identity(kind, &draft).map_err(host_error)?.status == FilingStatus::Draft;
     let edits: Map<String, Value> = edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
     let unlocked = unlocked_argument(arguments, 3);
-    let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
+    let period = sample
+        .as_ref()
+        .map(|mark| mark.open.clone())
+        .unwrap_or_default();
+    let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked, &period)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
         // same step opening a draft runs.
@@ -1979,17 +2055,18 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     }
     let mut values = values_json(kind, &draft).map_err(host_error)?;
     let options = catalogs::options(kind, &draft);
-    let sample = sample.map(|mut blank| {
-        blank.retain(|key| !edits.contains_key(key) || rejected.contains_key(key));
-        blank_sample(kind, &blank, &mut values, &mut Value::Null);
-        blank
+    let sample = sample.map(|mut mark| {
+        mark.typed(|key| edits.contains_key(key) && !rejected.contains_key(key));
+        blank_sample(kind, &mark.blank, &mut values, &mut Value::Null);
+        mark
     });
-    put_sample_mark(&mut draft, sample.as_deref());
+    put_sample_mark(&mut draft, sample.as_ref());
     Ok(json(json!({
         "draft": draft,
         "values": values,
         "options": options,
         "rejected": rejected,
+        "blank": sample.as_ref().map(|mark| mark.blank.clone()),
     })))
 }
 
@@ -1998,22 +2075,36 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
 /// than the page shows. Returns the rejected keys with their reasons.
 /// `unlocked`: profile boxes the page has open, opened with Edit or left
 /// blank by the profile (a radio by its own key or its item's group box);
-/// their edits stay on this return.
+/// their edits stay on this return. `sample_period`: a Form library
+/// sample's period boxes, which its filer types (the sample is never saved).
 fn apply_screen_edits(
     kind: AgentFormKind,
     draft: &mut Value,
     edits: &Map<String, Value>,
     editable: bool,
     unlocked: &BTreeSet<String>,
+    sample_period: &BTreeSet<String>,
 ) -> Result<Map<String, Value>, HostError> {
     // An open radio opens its item's group box, and an open group box its radios.
     let def = kind.definition();
-    let mut open: BTreeSet<&str> = unlocked.iter().map(String::as_str).collect();
-    for entry in unlocked.iter().filter_map(|key| def.box_def(key)) {
-        open.extend(entry.group.as_deref());
-        open.extend(entry.members.iter().map(String::as_str));
-    }
-    let profile_edit = |key: &str| open.contains(key);
+    let expand = |keys: &BTreeSet<String>| {
+        let mut open: BTreeSet<String> = keys.clone();
+        for entry in keys.iter().filter_map(|key| def.box_def(key)) {
+            open.extend(entry.group.clone());
+            open.extend(entry.members.iter().cloned());
+        }
+        open
+    };
+    let (profile_open, period_open) = (expand(unlocked), expand(sample_period));
+    let lift = |key: &str| {
+        if period_open.contains(key) {
+            catalogs::Lift::SamplePeriod
+        } else if profile_open.contains(key) {
+            catalogs::Lift::Profile
+        } else {
+            catalogs::Lift::Nothing
+        }
+    };
     let mut rejected = Map::new();
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
@@ -2025,9 +2116,7 @@ fn apply_screen_edits(
         }
         let mut next = draft.clone();
         let result = match step {
-            ChoiceStep::Fill(value) => {
-                catalogs::fill(kind, &mut next, &key, &value, profile_edit(&key))
-            }
+            ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value, lift(&key)),
             ChoiceStep::Set(sets) => {
                 for (path, value) in sets {
                     set_draft_path(&mut next, &path, value);
@@ -2269,16 +2358,18 @@ fn screen_form_validate(
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
             let (mut values, mut errors, _) = evaluate_here(kind, &mut draft)?;
-            if let Some(blank) = &sample {
-                blank_sample(kind, blank, &mut values, &mut errors);
+            if let Some(mark) = &sample {
+                blank_sample(kind, &mark.blank, &mut values, &mut errors);
             }
             let options = catalogs::options(kind, &draft);
-            put_sample_mark(&mut draft, sample.as_deref());
+            let blank = sample.as_ref().map(|mark| mark.blank.clone());
+            put_sample_mark(&mut draft, sample.as_ref());
             Ok(json!({
                 "draft": draft,
                 "values": values,
                 "options": options,
                 "errors": errors,
+                "blank": blank,
             }))
         })
         .and_then(|result| result)
@@ -2388,7 +2479,7 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
             edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
         if !edits.is_empty() {
             let unlocked = unlocked_argument(arguments, 3);
-            let _ = apply_screen_edits(kind, &mut draft, &edits, true, &unlocked);
+            let _ = apply_screen_edits(kind, &mut draft, &edits, true, &unlocked, &BTreeSet::new());
             let _ = agent::compute(kind, &mut draft);
         }
     }
@@ -4549,6 +4640,7 @@ mod tests {
                 edit.as_object().unwrap(),
                 true,
                 &BTreeSet::new(),
+                &BTreeSet::new(),
             )
             .unwrap();
             agent::compute(kind, &mut staged).unwrap();
@@ -5359,6 +5451,99 @@ mod tests {
     }
 
     #[test]
+    fn a_sample_takes_its_period_and_a_return_keeps_it_locked() {
+        setup();
+        // Every period box of a sample is open, on every form: none is
+        // locked and blank (the whole item reads the same).
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let opened = sample(code);
+            let open = strings(&opened["draft"][SAMPLE_MARK]["open"]);
+            for key in &open {
+                assert!(opened["locks"].get(key).is_none(), "{code}: {key} is open");
+            }
+            for key in strings(&opened["blank"]) {
+                assert!(
+                    open.contains(&key) || opened["needs"].get(&key).is_some(),
+                    "{code}: blank {key} is typeable or says what it needs"
+                );
+            }
+        }
+        // 2200M item 1: month, day and year are typed, then judged as typed.
+        let opened = sample("2200M");
+        let (month, day, year) = (
+            "frm2200M:txtPg1I1Month",
+            "frm2200M:txtPg1I1Day",
+            "frm2200M:txtPg1I1Year",
+        );
+        let filled = fill(
+            "2200M",
+            &opened["draft"],
+            json!({ month: "03", day: "15", year: "2025" }),
+        );
+        assert!(
+            filled["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            filled["rejected"]
+        );
+        assert_eq!(
+            filled["draft"]["year"], 2025,
+            "the typed year is the draft's"
+        );
+        assert_eq!(filled["values"][year], "2025");
+        assert!(
+            strings(&filled["blank"]).is_empty(),
+            "nothing left blank once the period is typed"
+        );
+        let validated = call_async(
+            "screen_form_validate",
+            vec!["2200M".into(), json(filled["draft"].clone())],
+        )
+        .unwrap();
+        for error in validated["errors"].as_array().unwrap() {
+            let message = error["message"].as_str().unwrap_or("").to_ascii_lowercase();
+            assert!(!message.contains("future"), "{error}");
+        }
+        // A future year typed into a sample is judged like any other.
+        let future = fill(
+            "2200M",
+            &opened["draft"],
+            json!({ month: "03", day: "15", year: "2099" }),
+        );
+        let validated = call_async(
+            "screen_form_validate",
+            vec!["2200M".into(), json(future["draft"].clone())],
+        )
+        .unwrap();
+        assert!(
+            validated["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|error| error["message"].as_str().unwrap_or("").contains("future")),
+            "{}",
+            validated["errors"]
+        );
+        // Without the sample mark the same draft is a return: its period stays locked.
+        let mut plain = opened["draft"].clone();
+        plain.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let refused = fill("2200M", &plain, json!({ year: "2025" }));
+        assert!(
+            refused["rejected"].get(year).is_some(),
+            "{}",
+            refused["rejected"]
+        );
+        let real = open("2551Q", 3);
+        let refused = fill(
+            "2551Q",
+            &real["draft"],
+            json!({"frm2551Qv2018:txtYear": "2025"}),
+        );
+        assert!(refused["rejected"].get("frm2551Qv2018:txtYear").is_some());
+        assert!(real["locks"].get("frm2551Qv2018:txtYear").is_some());
+    }
+
+    #[test]
     fn library_sample_computes_no_penalty_on_any_form() {
         setup();
         let mut failures = Vec::new();
@@ -5946,6 +6131,101 @@ mod tests {
         }
         assert!(failures.is_empty(), "{failures:#?}");
         assert!(checked > 200, "{checked} profile boxes checked");
+    }
+
+    /// Pre-existing boxes that are locked and blank with no visible reason,
+    /// each with the form group that fixes it (`CODE key: reason | PR n`).
+    const LOCKED_AND_BLANK_NOT_YET_FIXED: &str =
+        include_str!("screen_form_module/locked_and_blank.txt");
+
+    /// Every on-screen box with its schema type and computed flag.
+    fn screen_fields(code: &str) -> Vec<(String, String, bool)> {
+        let form = schema_entry(code).expect("schema entry");
+        let mut out = Vec::new();
+        let items = form["parts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten());
+        for item in items {
+            for field in item["f"].as_array().into_iter().flatten() {
+                out.push((
+                    field["k"].as_str().unwrap_or("").to_string(),
+                    field["t"].as_str().unwrap_or("").to_string(),
+                    field["c"].as_bool().unwrap_or(false),
+                ));
+            }
+            let cols = item["cols"].as_array();
+            for row in item["keys"].as_array().into_iter().flatten() {
+                for (c, key) in row.as_array().into_iter().flatten().enumerate() {
+                    let col = cols.and_then(|cols| cols.get(c));
+                    out.push((
+                        key.as_str().unwrap_or("").to_string(),
+                        col.and_then(|col| col["t"].as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        col.and_then(|col| col["c"].as_bool()).unwrap_or(false),
+                    ));
+                }
+            }
+        }
+        out
+    }
+
+    /// Boxes that are locked AND blank with no visible reason. A locked box
+    /// must show its value (computed, profile, a real return's period) or
+    /// say what turns it on (`needs`). Grouped by the boxes' own form group.
+    fn locked_and_blank(opened: &Value, code: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for (key, t, computed) in screen_fields(code) {
+            // A tick box shows its state; a computed amount shows 0.00.
+            if matches!(t.as_str(), "hidden" | "radio" | "chk") || (computed && t == "money") {
+                continue;
+            }
+            let Some(reason) = opened["locks"][&key].as_str() else {
+                continue;
+            };
+            let shown = opened["values"][&key].as_str().unwrap_or("").trim();
+            if shown.is_empty() && opened["needs"].get(&key).is_none() {
+                out.push(format!("{code} {key}: {reason}"));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn no_box_is_locked_and_blank_without_a_reason_on_every_form() {
+        setup();
+        let sparse = install_sparse_profile();
+        let mut found = BTreeSet::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let period = page_period_of(code);
+            for opened in [
+                open_for(TIN, code, YEAR, period),
+                open_for(sparse, code, YEAR, period),
+                sample(code),
+            ] {
+                found.extend(locked_and_blank(&opened, code));
+            }
+        }
+        let found: Vec<String> = found.into_iter().collect();
+        let mut expected: Vec<String> = LOCKED_AND_BLANK_NOT_YET_FIXED
+            .lines()
+            .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+            .map(|line| {
+                line.rsplit_once(" | ")
+                    .map_or(line, |(entry, _)| entry)
+                    .to_string()
+            })
+            .collect();
+        expected.sort();
+        let new: Vec<&String> = found.iter().filter(|e| !expected.contains(e)).collect();
+        let fixed: Vec<&String> = expected.iter().filter(|e| !found.contains(e)).collect();
+        assert!(
+            new.is_empty() && fixed.is_empty(),
+            "locked and blank, not pinned: {new:#?}\npinned but fixed (remove the line): {fixed:#?}"
+        );
     }
 
     /// Email boxes a profile without an email still leaves shut, and why:

@@ -27989,8 +27989,10 @@ declare module "bir" {
       profile_edit: string[];
       /** Opened from the Form library: a blank sample that is never saved. */
       sample: boolean;
-      /** A sample's period and date boxes, shown blank until the filer types one. */
+      /** A sample's period and date boxes, shown blank until the filer types one; a sample's period boxes are open. */
       blank: string[];
+      /** A sample's blank box that cannot be typed: what it waits for (shown in the box). */
+      needs: Record<string, string>;
       errors: ScreenFormError[];
   }
   export interface ScreenFormFilled {
@@ -27998,12 +28000,16 @@ declare module "bir" {
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       rejected: Record<string, string>;
+      /** A sample's boxes still blank (null for a return). */
+      blank?: string[] | null;
   }
   export interface ScreenFormValidated {
       draft: object;
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       errors: ScreenFormError[];
+      /** A sample's boxes still blank (null for a return). */
+      blank?: string[] | null;
   }
   export interface ScreenFormOption {
       value: string;

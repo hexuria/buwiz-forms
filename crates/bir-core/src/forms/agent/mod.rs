@@ -693,6 +693,21 @@ pub fn fill_profile_box_as_user(
     fill_box(kind, draft, key, value, &[Lock::Election, Lock::Profile])
 }
 
+/// [`fill_as_user`] for a period box ([`Lock::Identity`]: year, month,
+/// quarter, day) of a form shown as a sample that is never saved, so the
+/// filer can type the period to see the form work. The caller must hold such
+/// a sample; a stored return's period stays locked through every other
+/// writer. Profile, computed, hidden and unbound boxes are refused as in
+/// [`fill_as_user`].
+pub fn fill_sample_period_box(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    fill_box(kind, draft, key, value, &[Lock::Election, Lock::Identity])
+}
+
 fn fill_box(
     kind: AgentFormKind,
     draft: &mut Value,
@@ -705,8 +720,8 @@ fn fill_box(
     let let_through = match lock {
         Some(Lock::Election) => allowed.contains(&Lock::Election),
         // Only the lock itself is lifted: a computed or hidden box stays refused.
-        Some(Lock::Profile) => {
-            allowed.contains(&Lock::Profile)
+        Some(lock @ (Lock::Profile | Lock::Identity)) => {
+            allowed.contains(&lock)
                 && def
                     .box_def(key)
                     .is_some_and(|entry| entry.is_user_box() && entry.required != "computed")

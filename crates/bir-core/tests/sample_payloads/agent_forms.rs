@@ -427,12 +427,23 @@ fn the_page_writes_profile_boxes_and_never_identity_boxes() {
                 Lock::Identity => {
                     let refused = result.expect_err(key);
                     assert!(refused.contains(lock.reason()), "{key}: {refused}");
+                    // Only a sample's period writer lifts it.
+                    let mut draft = seed.clone();
+                    let sample = agent::fill_sample_period_box(kind, &mut draft, key, &value);
+                    if let Err(error) = sample {
+                        assert!(!error.contains(lock.reason()), "{key}: {error}");
+                    }
                 }
                 _ => {
                     result.unwrap_or_else(|error| {
                         panic!("{} {key} = {value}: {error}", kind.form_code())
                     });
                     written += 1;
+                    // A sample's period writer never lifts a profile lock.
+                    let mut draft = seed.clone();
+                    let refused = agent::fill_sample_period_box(kind, &mut draft, key, &value)
+                        .expect_err(key);
+                    assert!(refused.contains(lock.reason()), "{key}: {refused}");
                 }
             }
         }

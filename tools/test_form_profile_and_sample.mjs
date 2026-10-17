@@ -77,6 +77,7 @@ const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine"]) uiExports[n] = element;
 uiExports.AppButton = (_cx, id, _label, opts = {}) => { buttons.push(id); const el = element(); el.id(id); if (opts.onClick) el.on_click(opts.onClick); return el; };
 uiExports.Text = (_cx, _variant, text) => { texts.push(String(text)); return element(); };
+uiExports.Line = uiExports.Text;
 const store = mock("./store.js", { formatTin: (x) => x, errorText: (e) => String(e && e.message ? e.message : e) });
 const periods = mock("./periods.js", { periodLabel: () => "Q3 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
@@ -102,6 +103,8 @@ const opened = (sample) => ({
   locks: { ...Object.fromEntries(filled.map((k) => [k, PROFILE_REASON])), [K("txtYear")]: IDENTITY_REASON },
   profile: filled, profile_edit: filled, sample,
   blank: sample ? blankKeys : [],
+  // The host's reason for a blank box it keeps locked (here the year).
+  needs: sample ? { [K("txtYear")]: "Shows once the period is typed" } : {},
   errors: [],
 });
 let validateErrors = [];
@@ -151,6 +154,7 @@ assert.equal(ui.state.values[K("qtr_1")], "", "quarter blank");
 assert.ok(!buttons.includes("fp-save") && !buttons.includes("fp-queue") && !buttons.includes("fp-print"), `no Save/Queue/Print on a sample: ${buttons}`);
 assert.ok(texts.some((t) => /not saved.*Start a return.*New return/.test(t)), "the sample says how to start a return");
 assert.ok(texts.includes("Sample from the Form library"), "no period in the taxpayer bar");
+assert.ok(texts.includes("Shows once the period is typed"), "a locked blank box says what it waits for");
 press(clicks, "fp-start-return");
 assert.equal(json(calls.at(-1)), json(["startNewReturn", "2551Q"]), "Start a return opens New return for this form");
 
