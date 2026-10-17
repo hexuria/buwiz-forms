@@ -28,16 +28,20 @@ import {
   Chip,
   Switch,
   Checkbox,
+  CheckboxLabel,
   TextField,
   Dropdown,
 
   PageHeader,
   MetaLine,
+  Overlay,
 } from "./ui.js";
 import { errorText as message, formatTin } from "./store.js";
 import { periodLabel } from "./periods.js";
 
 const VALIDATE_DELAY = 300;
+/** A sample's period is asked about this long after its last change. */
+const PERIOD_ASK_DELAY = 300;
 /** Debounce for live print-preview sync (ms after the last keystroke). */
 const LIVE_PREVIEW_DELAY = 120;
 
@@ -72,7 +76,11 @@ function selectBox(cx, ui, k, label, listedRaw, value, locked, width) {
   // RDO). A listed 0 or "-" stays selectable.
   const shown = selected ? selected.value : known ? value : /^(0+|-)$/.test(value) ? "" : value;
   if (shown && !selected && !known) options.push({ value: shown, label: shown });
-  if (locked) return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
+  if (locked) {
+    const hint = !shown && s.blank.has(k) ? s.needs?.[k] || "" : "";
+    if (hint) return lockedBox(cx, hint, width, { hint: true });
+    return lockedBox(cx, (options.find((o) => o.value === shown) || { label: shown }).label, width);
+  }
   return Dropdown(cx, `fp-${k}`, {
     label,
     width,
@@ -160,6 +168,12 @@ export function formatMDY({ y, m, d }) {
 
 const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
 
+/**
+ * A Form library sample is a preview and is never saved (provisional: the
+ * findings rules page, question 1). A return starts with New return.
+ */
+const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, choose Start a return, or New return (the + button or Cmd/Ctrl+N).";
+
 /** One box holding a whole MM/DD/YYYY date. */
 function isDateField(f, it) {
   return f.t === "date" || (f.t === "text" && /MM\/DD\/YYYY/i.test(`${it?.l || ""} ${f.l || ""}`));
@@ -186,13 +200,31 @@ export class FormPageActions {
     this.token = 0;
   }
 
-  /** Load the schema now and the return in the background. */
-  open(opts, cx) {
+  /** Release a form's retained views, text states and focus handles. */
+  release(state) {
+    for (const row of state?.rowViews?.values() || []) row.entity.release();
+    for (const input of state?.inputs?.values() || []) input.release();
+    for (const handle of state?.editFocus?.values() || []) handle.release();
+    state?.checkButton?.entity.release();
+  }
+
+  /**
+   * Load the schema now and the return in the background. `keep`: the form
+   * on screen is kept alive (not released) for an Undo to bring back.
+   * `then(error, cx)` runs once the host answered (error null on success).
+   * `opts.returnKey`: the stored return's exact key (a transaction's MMDD, 2553's
+   * quarter); `opts.filedOriginal`: an amended return's filed version.
+   */
+  open(opts, cx, keep = false, then = null) {
     const app = this.app;
-    // The last form's retained views and text states go with it.
-    for (const row of this.state?.rowViews?.values() || []) row.entity.release();
-    for (const input of this.state?.inputs?.values() || []) input.release();
-    this.state?.checkButton?.entity.release();
+    // Leaving the sample: an offer of a stored return for its period goes.
+    this.closeOffer();
+    // The last form's retained views and text states go with it, unless an
+    // Undo may still bring it back.
+    if (this.kept && this.kept !== this.state) this.release(this.kept);
+    this.kept = null;
+    if (keep) this.kept = this.state;
+    else this.release(this.state);
     const token = ++this.token;
     let schema = null;
     let error = null;
@@ -214,6 +246,22 @@ export class FormPageActions {
       options: {},
       locks: {},
       profile: new Set(),
+      // Filled profile boxes the filer may open with Edit, and the ones open.
+      profileEdit: new Set(),
+      editing: new Set(),
+      // Profile boxes the filer opened with Edit on this visit (sent as
+      // `unlocked`), the item under the pointer, and the box that has focus.
+      opened: new Set(),
+      hoverItem: null,
+      focusKey: null,
+      editFocus: new Map(),
+      // Parts whose "From tax profile" group is unfolded.
+      profileOpen: new Set(),
+      // A Form library sample: its period and date boxes stay blank until typed.
+      sample: Boolean(opts.sample),
+      blank: new Set(),
+      needs: {},
+      typed: new Set(),
       errors: [],
       messages: {},
       formErrors: [],
@@ -235,31 +283,64 @@ export class FormPageActions {
     };
     cx.spawn(async (acx) => {
       try {
-        const r = await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
+        const key = opts.returnKey ?? null;
+        const r = opts.sample
+          ? await app.store.call("screen_form_sample", opts.tin, opts.code)
+          : opts.filedOriginal
+            ? await app.store.call("screen_form_filed_original", opts.code, opts.filedOriginal)
+            : opts.amend
+              ? await app.store.call("screen_form_amend", opts.tin, opts.code, opts.year, opts.period, key)
+              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key, opts.newKey ?? null);
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
-        s.draft = r.draft;
-        s.status = r.status;
-        s.editable = r.editable;
-        s.values = r.values;
-        s.options = r.options || {};
-        s.locks = r.locks;
-        s.profile = new Set(r.profile || []);
-        s.saved = Boolean(r.draft && r.draft.id);
-        this.setErrors(r.errors);
+        this.takeOpened(r);
         // Every part already open (one picked while the return was still
         // opening, too) gets its inputs now that the draft is here.
         for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i, acx);
         s.chromeSnapshot = this.chromeSnapshot();
         acx.notify();
+        if (then) then(null, acx);
       } catch (e) {
         if (token !== this.token) return;
         this.state.loading = false;
         this.state.error = message(e);
         acx.notify();
+        if (then) then(this.state.error, acx);
       }
     });
+  }
+
+  /** Take what the host opened (a return, a sample, or a sample rebuilt for its period). */
+  takeOpened(r) {
+    const s = this.state;
+    s.draft = r.draft;
+    s.status = r.status;
+    s.editable = r.editable;
+    s.blank = new Set(r.blank || []);
+    // A sample's period parts: page inputs the filer sets the period with,
+    // never written into the draft (screen_form_sample_period rebuilds it).
+    s.periodParts = new Map((r.period_parts || []).map((p) => [p.key, p]));
+    s.periodSet = Boolean(r.period_set);
+    // A read-only return says when it was sent and confirmed; an amendment
+    // says what it amends.
+    s.submittedAt = r.submitted_at || null;
+    s.confirmedAt = r.confirmed_at || null;
+    s.amends = r.amends || null;
+    // An amended return's filed version, kept in its history; and, on that
+    // version opened read-only, what it is.
+    s.filedOriginal = r.filed_original || null;
+    s.filedOriginalView = r.filed_original_view || null;
+    s.values = this.shown(r.values);
+    s.options = r.options || {};
+    s.locks = r.locks;
+    s.lockNotes = r.lock_notes || {};
+    s.profile = new Set(r.profile || []);
+    s.profileEdit = new Set(r.profile_edit || []);
+    // A sample's held box that cannot be typed says what it waits for.
+    s.needs = r.needs || {};
+    s.saved = Boolean(r.draft && r.draft.id);
+    this.setErrors(r.errors);
   }
 
   /** Create InputStates for one part's text-like controls (only once). */
@@ -290,8 +371,10 @@ export class FormPageActions {
             if (text !== raw) input.set_value(text);
             this.setDateError(k, "");
           } else this.setDateError(k, raw.trim() ? DATE_ERROR : "");
+          this.leaveBox(k, cx);
           this.flush(cx);
         });
+        input.on("focus", () => this.enterBox(k));
         s.inputs.set(k, input);
         (s.inputKinds ||= new Map()).set(k, t);
         return;
@@ -299,8 +382,12 @@ export class FormPageActions {
       input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
       input.on("blur", (_e, cx) => {
         if (t === "money") input.set_value(formatMoney(input.value()));
+        // Leaving an edited profile item keeps the value on this return and
+        // gives its boxes their profile look (and Edit) back.
+        this.leaveBox(k, cx);
         this.flush(cx);
       });
+      input.on("focus", () => this.enterBox(k));
       s.inputs.set(k, input);
       (s.inputKinds ||= new Map()).set(k, t);
     };
@@ -312,8 +399,17 @@ export class FormPageActions {
       }
     }
     if (cx) {
+      // So is the part's "From tax profile" fold (Enter or Space unfolds it).
+      const fold = `fold-${partIndex}`;
+      if (cx.focus_handle && !s.editFocus.has(fold) && this.tuckedItems(partIndex).length) {
+        s.editFocus.set(fold, cx.focus_handle());
+      }
       part.items.forEach((it, ii) => {
         const id = `${partIndex}:${ii}`;
+        // The Edit button of a profile item is a tab stop (Tab, then Enter).
+        if (cx.focus_handle && !s.editFocus.has(id) && (it.f || []).some((f) => s.profileEdit.has(f.k))) {
+          s.editFocus.set(id, cx.focus_handle());
+        }
         if (!s.rowViews.has(id)) {
           const props = { ui: this, state: s, it, pi: partIndex, ii, width: this.rowWidth() };
           s.rowViews.set(id, {
@@ -341,7 +437,8 @@ export class FormPageActions {
       width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value()] : null,
-      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), this.optionsSignature(k)]),
+      s.hoverItem === id,
+      keys.map(k => [s.values[k] ?? "", s.locks[k], s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
     ]);
   }
 
@@ -432,6 +529,7 @@ export class FormPageActions {
   edit(k, value, cx) {
     const s = this.state;
     if (!s || !s.editable) return;
+    if (s.periodParts?.has(k)) return this.setPeriodPart({ [k]: value }, cx);
     s.pending[k] = value;
     s.dirty = true;
     const token = this.token;
@@ -453,7 +551,8 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.previewOpen) return;
     try {
-      this.app.store.call("screen_form_preview_sync", s.code, s.draft, s.pending || {});
+      const pending = s.pending || {};
+      this.app.store.call("screen_form_preview_sync", s.code, s.draft, pending, this.unlockedFor(pending));
     } catch (_e) {
       /* preview sync is best effort */
     }
@@ -476,7 +575,7 @@ export class FormPageActions {
     const [y, m, d] = iso.split("-");
     if (date.single) {
       const f = date.single;
-      if (f.c || s.locks[f.k] !== undefined) return;
+      if (f.c || this.isLocked(f.k)) return;
       const text = formatMDY({ y: Number(y), m: Number(m), d: Number(d) });
       s.inputs.get(f.k)?.set_value(text);
       this.setDateError(f.k, "");
@@ -486,7 +585,7 @@ export class FormPageActions {
     }
     const edits = {};
     const put = (f, v) => {
-      if (!f || f.c || s.locks[f.k] !== undefined) return;
+      if (!f || f.c || this.isLocked(f.k)) return;
       let value = v;
       if (f.t === "sel" && f.o) {
         const hit = f.o.map(optionOf).find((o) => o && (o.value === v || o.value === String(Number(v))));
@@ -507,6 +606,12 @@ export class FormPageActions {
   choose(edits, cx) {
     const s = this.state;
     if (!s || !s.editable) return;
+    const period = Object.fromEntries(Object.entries(edits).filter(([k]) => s.periodParts?.has(k)));
+    if (Object.keys(period).length) {
+      this.setPeriodPart(period, cx);
+      edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in period)));
+      if (!Object.keys(edits).length) return;
+    }
     Object.assign(s.pending, edits);
     s.dirty = true;
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
@@ -522,10 +627,13 @@ export class FormPageActions {
     s.pending = {};
     if (Object.keys(edits).length) {
       try {
-        const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
+        const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        this.accepted(edits, r.rejected);
+        // The host says which of a sample's boxes are still blank.
+        if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
         const before = s.values;
         s.draft = r.draft;
-        s.values = r.values;
+        s.values = this.shown(r.values);
         s.options = r.options || {};
         this.syncComputed();
         this.syncChanged(before, edits);
@@ -546,11 +654,351 @@ export class FormPageActions {
     this.validate(cx);
   }
 
+  /**
+   * A sample's period part changed: the page keeps it (it is never a draft
+   * write) and asks the host about the period PERIOD_ASK_DELAY after the
+   * last change, so a year typed digit by digit is asked about once. Any
+   * change closes an offer still on screen and forgets the last answer: an
+   * offer, Start a return and the fast lane only ever act on the answer for
+   * the period the boxes show now. A new complete period rebuilds the
+   * sample for it, with what the filer typed elsewhere applied again; a
+   * period that already has a stored return is offered (offerExisting),
+   * never opened by itself.
+   */
+  setPeriodPart(parts, cx) {
+    const s = this.state;
+    s.periodValues = { ...(s.periodValues || {}), ...parts };
+    for (const [k, v] of Object.entries(parts)) {
+      const text = String(v);
+      s.values[k] = text;
+      // A part set by a click or a picker shows in its box too.
+      const input = s.inputs.get(k);
+      if (input && input.value() !== text) input.set_value(text);
+    }
+    const asked = JSON.stringify(s.periodValues);
+    if (asked === s.periodAsked) return this.notify(cx);
+    s.periodAsked = asked;
+    this.closeOffer();
+    s.opens = null;
+    s.existing = null;
+    const token = this.token;
+    const seq = (s.periodSeq = (s.periodSeq || 0) + 1);
+    cx.timer.after(PERIOD_ASK_DELAY, (tcx) => {
+      if (token !== this.token || seq !== this.state.periodSeq) return;
+      this.askPeriod(asked, tcx);
+    });
+    this.notify(cx);
+  }
+
+  /** Ask the host about the period the boxes show (`asked`, the parts as JSON). */
+  askPeriod(asked, cx) {
+    const s = this.state;
+    const token = this.token;
+    s.periodInFlight = asked;
+    cx.spawn(async (acx) => {
+      let r;
+      try {
+        r = await this.app.store.call("screen_form_sample_period", s.tin, s.code, JSON.parse(asked));
+      } catch (e) {
+        if (s.periodInFlight === asked) s.periodInFlight = null;
+        s.startAfterAnswer = false;
+        if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
+        return;
+      }
+      if (s.periodInFlight === asked) s.periodInFlight = null;
+      if (token !== this.token || asked !== this.state.periodAsked) return;
+      s.periodAnswered = asked;
+      this.takePeriod(r, acx);
+      // Start a return pressed while this answer was pending acts on it now
+      // (an existing return was offered by the answer itself).
+      if (s.startAfterAnswer) {
+        s.startAfterAnswer = false;
+        if (this.state === s && !s.existing) this.startReturn(acx);
+      }
+    });
+  }
+
+  /**
+   * The host's answer for a sample's typed period. A fresh sample is built
+   * for a new complete period. A sample built for an earlier period goes
+   * back to the placeholder sample once its period is incomplete or has a
+   * stored return, so nothing on screen belongs to a period the boxes no
+   * longer show; a stored return is then offered.
+   */
+  takePeriod(r, cx) {
+    const s = this.state;
+    s.opens = r.complete ? r.opens || null : null;
+    s.existing = r.existing || null;
+    const period = (s.periodToken = (s.periodToken || 0) + 1);
+    this.closeOffer();
+    const offer = (acx) => {
+      if (r.existing) this.offerExisting(r.existing, acx);
+    };
+    if (r.sample) {
+      this.rebuild(r.sample, cx);
+      offer(cx);
+    } else if (s.periodSet) {
+      this.toPlaceholder(period, cx, offer);
+    } else {
+      offer(cx);
+    }
+    if (this.state === s) this.notify(cx);
+  }
+
+  /** The placeholder sample again (the period not set), then `then`. */
+  toPlaceholder(period, cx, then) {
+    const s = this.state;
+    const token = this.token;
+    cx.spawn(async (acx) => {
+      let r;
+      try {
+        r = await this.app.store.call("screen_form_sample", s.tin, s.code);
+      } catch (e) {
+        if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
+        return;
+      }
+      if (token !== this.token || period !== this.state.periodToken) return;
+      this.rebuild(r, acx);
+      if (then) then(acx);
+      if (this.state === s) this.notify(acx);
+    });
+  }
+
+  /** Take a sample the host built, with what the filer typed outside the period applied again. */
+  rebuild(sample, cx) {
+    const s = this.state;
+    const before = s.values;
+    this.takeOpened(sample);
+    const typed = s.typedEdits || {};
+    if (Object.keys(typed).length) {
+      try {
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, typed, this.unlockedFor(typed));
+        s.draft = f.draft;
+        s.values = this.shown(f.values);
+        s.options = f.options || {};
+      } catch (e) {
+        this.app.toast(message(e), cx, "triangle-alert");
+      }
+    }
+    this.syncComputed();
+    this.syncChanged(before, { ...typed, ...(s.periodValues || {}) });
+    this.validate(cx);
+  }
+
+  /** The stored-return offer leaves the screen (a new answer, a choice, or leaving the sample). */
+  closeOffer() {
+    const app = this.app;
+    if (app.overlay === "existing") app.overlay = null;
+    app.existingOffer = null;
+  }
+
+  /**
+   * A stored return already has the sample's period: the app's modal
+   * offers what its status allows. `existing` carries the period, its
+   * label, status, last save and total payable.
+   */
+  offerExisting(existing, cx) {
+    const app = this.app;
+    this.state.existing = existing;
+    // "Don't ask again for drafts" (until the app quits or the session
+    // ends): a draft loads straight away. Queued and filed returns always ask.
+    if (existing.status === "Draft" && app.fastLane?.drafts) return this.takeExisting("load", cx, true);
+    app.existingOffer = existing;
+    app.overlay = "existing";
+    cx.notify();
+  }
+
+  /**
+   * The filer's choice for a stored return of the sample's period: `load`
+   * (a draft), `view` (read-only), `amend` (a new amended return), `keep`
+   * (stay in the sample, its period cleared). It acts only on the answer
+   * for the period the boxes show now, and opens exactly the return that
+   * answer matched (`opens`: its year, period and stored key). Each can be
+   * undone once; the Undo toast shows only once the return opened.
+   */
+  takeExisting(choice, cx, auto = false) {
+    const app = this.app;
+    const s = this.state;
+    const offered = auto ? null : app.existingOffer;
+    const existing = auto ? s?.existing : offered;
+    this.closeOffer();
+    if (!s || !s.sample || !existing || existing !== s.existing || !s.opens) return cx.notify();
+    if (choice === "keep") {
+      const before = this.periodSnapshot();
+      this.keepForm(cx);
+      return this.offerUndo("Kept this form; its period is cleared", (ucx) => this.restorePeriod(before, existing, ucx), cx);
+    }
+    const sample = s;
+    const { year, period, key } = s.opens;
+    const opts = { tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : {}) };
+    const what = {
+      load: auto ? `Loaded your saved ${existing.label} draft (you chose not to be asked again)` : `Loaded your saved ${existing.label} draft`,
+      view: `Opened ${existing.label} read-only`,
+      amend: `Started an amended ${existing.label} return`,
+    }[choice];
+    const then = (error, acx) => {
+      if (error) {
+        // Nothing opened: back to the sample, and say why.
+        this.restoreForm(sample, acx);
+        return this.app.toast(`Could not open ${existing.label}: ${error}`, acx, "triangle-alert");
+      }
+      this.offerUndo(what, (ucx) => this.restoreForm(sample, ucx, offered), acx);
+    };
+    if (choice === "amend") this.open({ ...opts, amend: true }, cx, true, then);
+    else app.openForm(opts, cx, true, then);
+  }
+
+  /** The Undo window closed: the form kept for it goes. */
+  dropKept() {
+    if (this.kept && this.kept !== this.state) this.release(this.kept);
+    this.kept = null;
+  }
+
+  /** "<what happened>. Undo" for a few seconds; Undo runs `undo` once. */
+  offerUndo(what, undo, cx) {
+    if (this.app.toastUndo) this.app.toastUndo(`${what}.`, undo, cx);
+  }
+
+  /**
+   * Undo a Load, View or Amend: the sample comes back exactly as it was,
+   * with the offer it was answered from (`offer`) open again. An amended
+   * return that was never saved is simply dropped; one already saved stays
+   * saved (nothing is deleted) and the toast says so. Edits not saved yet
+   * are never dropped: Undo refuses and says why.
+   */
+  restoreForm(sample, cx, offer = null) {
+    if (!sample || this.state === sample) return;
+    const s = this.state;
+    if (s && (s.dirty || Object.keys(s.pending || {}).length)) {
+      return this.app.toast("Undo would lose edits you have not saved. Save them first, or leave this return.", cx, "triangle-alert");
+    }
+    const savedAmendment = Boolean(s?.amends && s.saved);
+    this.release(s);
+    this.kept = null;
+    this.state = sample;
+    this.token++;
+    if (offer && sample.existing === offer) {
+      this.app.existingOffer = offer;
+      this.app.overlay = "existing";
+    }
+    this.app.go?.("form", cx);
+    this.refreshRows();
+    if (savedAmendment) this.app.toast("Back to the sample. The amended return was saved and stays saved.", cx, "undo-2");
+    if (this.app.invalidate) this.app.invalidate();
+    else cx.notify();
+  }
+
+  /** What Keep clears, to put back on Undo: the fields and every box's text. */
+  periodSnapshot() {
+    const s = this.state;
+    const inputs = {};
+    for (const [k, input] of s.inputs) inputs[k] = input.value();
+    return {
+      state: s,
+      fields: {
+        draft: s.draft,
+        values: { ...s.values },
+        options: s.options,
+        locks: s.locks,
+        lockNotes: s.lockNotes,
+        blank: s.blank,
+        needs: s.needs,
+        errors: s.errors,
+        messages: s.messages,
+        formErrors: s.formErrors,
+        periodValues: { ...(s.periodValues || {}) },
+        periodAsked: s.periodAsked,
+        periodSet: s.periodSet,
+        opens: s.opens,
+        existing: s.existing,
+      },
+      inputs,
+    };
+  }
+
+  /**
+   * Undo a Keep: the period and everything built from it come back, every
+   * box showing exactly what it showed, and the offer it was kept from.
+   */
+  restorePeriod(snapshot, offer, cx) {
+    const s = this.state;
+    if (s !== snapshot.state) return;
+    s.periodToken = (s.periodToken || 0) + 1;
+    s.periodSeq = (s.periodSeq || 0) + 1;
+    Object.assign(s, snapshot.fields);
+    for (const [k, input] of s.inputs) {
+      let text = snapshot.inputs[k];
+      if (text === undefined) {
+        // A box made after the Keep shows the restored value.
+        const v = s.values[k] ?? "";
+        text = s.inputKinds?.get(k) === "money" && v !== "" ? formatMoney(v) : String(v);
+      }
+      if (input.value() !== text) input.set_value(text);
+    }
+    if (offer && s.existing === offer) {
+      this.app.existingOffer = offer;
+      this.app.overlay = "existing";
+    }
+    this.refreshRows();
+    if (this.app.invalidate) this.app.invalidate();
+    else cx?.notify();
+  }
+
+  /**
+   * Keep this form: the same sample with every value the filer typed
+   * outside the period, and every period part blank again (the period
+   * "not set"), rebuilt on the placeholder period the host holds.
+   */
+  keepForm(cx) {
+    const s = this.state;
+    s.periodValues = {};
+    s.periodAsked = JSON.stringify({});
+    s.periodSeq = (s.periodSeq || 0) + 1;
+    s.opens = null;
+    s.existing = null;
+    for (const k of s.periodParts?.keys() || []) {
+      s.values[k] = "";
+      s.inputs.get(k)?.set_value("");
+    }
+    if (s.periodSet) {
+      // The sample was built for an earlier period: back to the placeholder.
+      this.toPlaceholder((s.periodToken = (s.periodToken || 0) + 1), cx, null);
+    }
+    this.notify(cx);
+  }
+
+  /**
+   * Start a return from a sample: the return its period matched (exactly
+   * that one, by its stored key), offered first when one is stored; New
+   * return while the period is not set, and always for a form whose
+   * returns are numbered entries rather than periods (no `opens`).
+   */
+  startReturn(cx) {
+    const s = this.state;
+    // A period change still waiting for its answer (the pause before the
+    // ask): ask now, and act once the answer is in.
+    if (s.periodAsked && s.periodAnswered !== s.periodAsked && Object.keys(s.periodValues || {}).length) {
+      s.startAfterAnswer = true;
+      if (s.periodInFlight !== s.periodAsked) {
+        s.periodSeq = (s.periodSeq || 0) + 1;
+        this.askPeriod(s.periodAsked, cx);
+      }
+      return;
+    }
+    if (!s.opens) return this.app.startNewReturn(cx, s.code);
+    if (s.existing) return this.offerExisting(s.existing, cx);
+    const { year, period, key, new_key: newKey } = s.opens;
+    this.app.openForm(
+      { tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : newKey != null ? { newKey } : {}) },
+      cx,
+    );
+  }
+
   /** Computed and locked boxes follow the draft; user boxes keep what was typed. */
   syncComputed() {
     const s = this.state;
     for (const [k, input] of s.inputs) {
-      if (!(s.locks[k] !== undefined || this.isComputed(k))) continue;
+      if (!(this.isLocked(k) || this.isComputed(k))) continue;
       const v = s.values[k] ?? "";
       if (input.value() !== v) input.set_value(String(v));
     }
@@ -587,6 +1035,188 @@ export class FormPageActions {
     return s.computedKeys.has(k);
   }
 
+  /**
+   * Why an item's shut boxes show blank, in the filer's words (the host's
+   * `lock_notes`; a box the form computes: "Computed by the form."), once
+   * each. A box saying what it waits for (`needs`) says it in its place
+   * instead; a computed amount shows 0.00, never blank.
+   */
+  lockNotesFor(it) {
+    const s = this.state;
+    if (!s.editable || !s.draft) return [];
+    const notes = [];
+    const note = (k) => {
+      const text = s.lockNotes?.[k] || (this.isComputed(k) ? "Computed by the form." : "");
+      if (text && !notes.includes(text)) notes.push(text);
+    };
+    const shut = (k, c) => c || this.isLocked(k);
+    const waits = (k) => Boolean(this.reasonFor(k));
+    const ticked = (k) => ["true", "1", "Y"].includes(String(s.values[k] ?? ""));
+    const blankText = (k, t) => {
+      const v = String(s.values[k] ?? "").trim();
+      if (t === "money" && this.isComputedBox(k)) return false;
+      if (t === "sel") return v === "" || /^(0+|-)$/.test(v);
+      return v === "";
+    };
+    if (it.rows) {
+      it.keys.forEach((row) =>
+        row.forEach((k, c) => {
+          const col = it.cols[c];
+          if (col.t === "hidden" || !shut(k, col.c) || waits(k)) return;
+          if (col.t === "radio" || col.t === "chk" ? !ticked(k) : blankText(k, col.t)) note(k);
+        }),
+      );
+      return notes;
+    }
+    const fs = it.f || [];
+    const radios = fs.filter((f) => f.t === "radio");
+    if (radios.length && radios.every((f) => shut(f.k, f.c)) && !radios.some((f) => ticked(f.k)) && !radios.some((f) => waits(f.k))) {
+      note(radios[0].k);
+    }
+    for (const f of fs) {
+      if (f.t === "radio" || f.t === "hidden" || !shut(f.k, f.c) || waits(f.k)) continue;
+      if (f.t === "chk" ? !ticked(f.k) : blankText(f.k, f.t)) note(f.k);
+    }
+    return notes;
+  }
+
+  /** A sample's locked blank box: what it waits for, shown in its place. */
+  reasonFor(k) {
+    const s = this.state;
+    return s.blank.has(k) ? s.needs?.[k] || "" : "";
+  }
+
+  /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */
+  isComputedBox(k) {
+    return this.isComputed(k) || /^computed/.test(this.state.locks[k] || "");
+  }
+
+  /** Locked on the page: a host lock, unless it is a profile box opened with Edit. */
+  isLocked(k) {
+    const s = this.state;
+    return s.locks[k] !== undefined && !(s.profileEdit.has(k) && s.editing.has(k));
+  }
+
+  /**
+   * The values a page shows: on a Form library sample its period and date
+   * boxes stay blank until the filer types one (rule 1).
+   */
+  shown(values) {
+    const s = this.state;
+    if (!s.sample || !s.blank.size) return values;
+    const out = { ...values };
+    for (const k of s.blank) {
+      // A period part shows what the filer typed into it.
+      if (s.periodParts?.has(k)) out[k] = s.periodValues?.[k] ?? "";
+      else if (k in out && !s.typed.has(k)) out[k] = "";
+    }
+    return out;
+  }
+
+  /**
+   * The boxes of an edit batch the page has open (screen_form_fill's
+   * `unlocked`): a box with no lock, and a profile box the filer opened
+   * with Edit. A box locked for any other reason is never sent.
+   */
+  unlockedFor(edits) {
+    const s = this.state;
+    return Object.keys(edits).filter((k) => s.locks[k] === undefined || s.opened.has(k));
+  }
+
+  /** A sample shows a box it blanked once the host has taken an edit for it. */
+  accepted(edits, rejected) {
+    const s = this.state;
+    for (const [k, v] of Object.entries(edits)) {
+      if (rejected && k in rejected) continue;
+      s.typed.add(k);
+      // A sample keeps what the filer typed, for a rebuild for its period.
+      if (s.sample) (s.typedEdits ||= {})[k] = v;
+    }
+  }
+
+  /** Edit on a profile item: its profile boxes take typing; the edit stays on this return. */
+  startProfileEdit(keys, cx) {
+    const s = this.state;
+    if (!s.editable) return;
+    const id = keys.length ? this.itemIdForKey(keys[0]) : null;
+    this.endProfileEdit([...s.editing].filter((k) => this.itemIdForKey(k) !== id));
+    if (id) {
+      const [pi, ii] = id.split(":").map(Number);
+      if (s.schema.parts[pi].items[ii].l === "Additional details") s.moreOpen.add(id);
+    }
+    for (const k of keys) {
+      if (!s.profileEdit.has(k)) continue;
+      s.editing.add(k);
+      s.opened.add(k);
+    }
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** The profile boxes of the item that holds `k`. */
+  itemEditKeys(k) {
+    const s = this.state;
+    const id = this.itemIdForKey(k);
+    if (!id) return [k];
+    const [pi, ii] = id.split(":").map(Number);
+    return (s.schema.parts[pi].items[ii].f || []).map((f) => f.k).filter((key) => s.profileEdit.has(key));
+  }
+
+  /**
+   * A box took focus. An item still open with Edit elsewhere (a select or
+   * radio item has no box to blur) goes back to its profile look.
+   */
+  enterBox(k) {
+    const s = this.state;
+    s.focusKey = k;
+    const here = this.itemIdForKey(k);
+    this.endProfileEdit([...s.editing].filter((key) => this.itemIdForKey(key) !== here));
+  }
+
+  /**
+   * A box lost focus: once focus has not landed on another box of the same
+   * item, the item's profile boxes go back to their profile look.
+   */
+  leaveBox(k, cx) {
+    const s = this.state;
+    if (s.focusKey === k) s.focusKey = null;
+    if (!this.itemEditKeys(k).some((key) => s.editing.has(key))) return;
+    const token = this.token;
+    cx.timer.after(50, () => {
+      if (token !== this.token) return;
+      const now = this.state.focusKey;
+      if (now && this.itemIdForKey(now) === this.itemIdForKey(k)) return;
+      this.endProfileEdit(this.itemEditKeys(k));
+    });
+  }
+
+  /** Back to the profile look; the value stays (the draft has it, unsaved). */
+  endProfileEdit(keys) {
+    const s = this.state;
+    let changed = false;
+    for (const k of keys) changed = s.editing.delete(k) || changed;
+    if (changed) this.refreshRows();
+    return changed;
+  }
+
+  /**
+   * A part's items the profile filled whole (every box it fills has a value
+   * and the item has nothing else to type): they fold into one "From tax
+   * profile" group. A box the profile left blank stays in paper order.
+   */
+  tuckedItems(pi) {
+    const s = this.state;
+    const part = s.schema.parts[pi];
+    if (!part || !s.profile.size) return [];
+    const out = [];
+    part.items.forEach((it, ii) => {
+      if (it.rows || it.l === "Additional details") return;
+      const typed = (it.f || []).filter((f) => !f.c);
+      if (typed.length && typed.every((f) => s.profile.has(f.k))) out.push(ii);
+    });
+    return out;
+  }
+
   validate(cx) {
     const s = this.state;
     if (!s || !s.draft) return;
@@ -601,7 +1231,8 @@ export class FormPageActions {
         if (token !== this.token || seq !== this.state.validateSeq) return;
         // Keep a newer local draft if the user typed meanwhile; take values/errors.
         if (this.state.draft === draft) this.state.draft = r.draft;
-        this.state.values = { ...this.state.values, ...r.values };
+        if (this.state.sample && Array.isArray(r.blank)) this.state.blank = new Set(r.blank);
+        this.state.values = this.shown({ ...this.state.values, ...r.values });
         this.state.options = r.options || {};
         this.syncComputed();
         this.setErrors(r.errors);
@@ -634,6 +1265,7 @@ export class FormPageActions {
    */
   setErrors(errors) {
     const s = this.state;
+    // The host holds back what a sample's blank period cannot judge.
     s.errors = errors || [];
     s.messages = {};
     const items = [];
@@ -691,14 +1323,16 @@ export class FormPageActions {
   save(cx) {
     const s = this.state;
     if (!s || !s.draft) return;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
     // Take whatever is staged before saving, without waiting for the debounce.
     let edits = s.pending;
     s.pending = {};
     try {
       if (Object.keys(edits).length) {
-        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits);
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        this.accepted(edits, f.rejected);
         s.draft = f.draft;
-        s.values = f.values;
+        s.values = this.shown(f.values);
         edits = {};
       }
       const r = this.app.store.write("screen_form_save", s.code, s.draft);
@@ -723,19 +1357,46 @@ export class FormPageActions {
   /** Save if anything changed; false when the save failed (its toast says why). */
   ensureSaved(cx) {
     const s = this.state;
+    if (s.sample) {
+      this.app.toast(SAMPLE_NOTE, cx);
+      return false;
+    }
     if (!s.dirty && s.saved) return true;
     this.save(cx);
     return s.saved && !s.dirty;
   }
 
+  /**
+   * "View the filed original": an amended return's filed version, from its
+   * history, read-only. Back to the amendment reopens the return.
+   */
+  openFiledOriginal(cx) {
+    const s = this.state;
+    if (!s.filedOriginal) return;
+    if (s.dirty || Object.keys(s.pending || {}).length) {
+      return this.app.toast("Save your edits first: viewing the filed original leaves this return.", cx, "triangle-alert");
+    }
+    const back = { tin: s.tin, code: s.code, year: s.year, period: s.period, ...(s.returnKey != null ? { returnKey: s.returnKey } : {}) };
+    this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period, filedOriginal: s.filedOriginal.id, back }, cx);
+    cx.notify();
+  }
+
+  backToAmendment(cx) {
+    const back = this.state.back;
+    if (!back) return;
+    this.open(back, cx);
+    cx.notify();
+  }
+
   /** Reopen the return as stored (after queueing or cancelling). */
   reload(cx) {
     const s = this.state;
-    this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period }, cx);
+    this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period, sample: s.sample }, cx);
   }
 
   queue(cx) {
     const s = this.state;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
     if (!this.ensureSaved(cx)) return;
     try {
       if (this.usesPeriodPath()) this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
@@ -749,6 +1410,7 @@ export class FormPageActions {
 
   cancelQueue(cx) {
     const s = this.state;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
     try {
       if (this.usesPeriodPath()) this.app.store.write("cancel_queued", s.tin, s.code, s.year, s.period || null);
       else this.app.store.write("screen_form_cancel_queue", s.code, s.draft);
@@ -759,10 +1421,16 @@ export class FormPageActions {
     }
   }
 
-  /** Print preview of the return as saved: the official sheet, filled. */
+  /**
+   * Print preview of the return as saved: the official sheet, filled. An
+   * amendment not saved yet prints from the page and is not saved: its
+   * first save is the filer's own choice, as it reverts the filed return.
+   */
   print(cx) {
     const s = this.state;
-    if (s.editable && !this.ensureSaved(cx)) return;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
+    if (s.amends && !s.saved) this.flush(cx);
+    else if (s.editable && !this.ensureSaved(cx)) return;
     try {
       this.app.store.call("screen_form_print", s.code, s.draft);
       s.previewOpen = true;
@@ -800,7 +1468,7 @@ function lockedBox(cx, value, width, opts = {}) {
     .bg(t.hover)
     .when(opts.right, (el) => el.justify_end())
     .when(opts.center, (el) => el.justify_center())
-    .child(Line(cx, "body", value || "", "fg2"));
+    .child(Line(cx, "body", value || "", opts.hint ? "fg3" : "fg2"));
 }
 
 function control(cx, ui, f, itemLabel, multi, available) {
@@ -808,13 +1476,14 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const t = tokens(cx);
   const width = controlWidth(f, available);
   const showSub = multi && f.l && f.l !== itemLabel && !/^\d+[A-Z]?$/.test(f.l);
-  const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+  const locked = !s.editable || f.c || ui.isLocked(f.k);
   const value = s.values[f.k] ?? "";
   let el;
   if (f.t === "sel") {
     el = selectBox(cx, ui, f.k, f.l, f.o, value, locked, width);
   } else if (f.t === "chk") {
     const on = value === "true" || value === "1" || value === "Y";
+    const hint = locked && !on ? ui.reasonFor(f.k) : "";
     return div()
       .id(`fp-${f.k}-row`)
       .flex()
@@ -822,10 +1491,14 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .items_center()
       .gap(SPACE[2])
       .child(Checkbox(cx, `fp-${f.k}`, on, (v, cx) => (locked ? null : ui.choose({ [f.k]: v ? "true" : "false" }, cx)), f.l || itemLabel))
-      .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal());
+      .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
+      .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
-    const shown = f.t === "money" ? formatMoney(value || (f.c ? "0" : "")) : value;
-    el = lockedBox(cx, shown, width, { right: f.t === "money" || f.t === "pct" });
+    // A computed amount shows 0.00 for zero, never an empty box.
+    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : "")) : value;
+    // Locked and blank only with a reason: what it waits for.
+    const hint = !shown ? ui.reasonFor(f.k) : "";
+    el = lockedBox(cx, shown || hint, width, { right: !hint && (f.t === "money" || f.t === "pct"), hint: Boolean(hint) });
   } else {
     const input = s.inputs.get(f.k);
     if (!input) el = lockedBox(cx, value, width);
@@ -886,9 +1559,12 @@ function radioGroup(cx, ui, it, radios) {
   const t = tokens(cx);
   const wide = radios.some((f) => choiceLabel(f).length > 24);
   const row = div().flex().gap_x(SPACE[4]).gap_y(SPACE[2]).when(wide, (el) => el.flex_col()).when(!wide, (el) => el.flex_row().flex_wrap());
+  // A locked group with nothing ticked says what it waits for.
+  const shut = radios.every((f) => !s.editable || f.c || ui.isLocked(f.k)) && !radios.some((f) => s.values[f.k] === "true");
+  const hint = shut ? radios.map((f) => ui.reasonFor(f.k)).find(Boolean) || "" : "";
   for (const f of radios) {
     const on = s.values[f.k] === "true";
-    const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+    const locked = !s.editable || f.c || ui.isLocked(f.k);
     const pick = (cx) => {
       if (locked) return;
       if (on) {
@@ -924,6 +1600,7 @@ function radioGroup(cx, ui, it, radios) {
     else item.opacity(0.7);
     row.child(item);
   }
+  if (hint) row.child(Text(cx, "meta", hint, "fg3"));
   void it;
   return row;
 }
@@ -935,7 +1612,7 @@ function tinBoxes(cx, ui, it) {
     if (j) row.child(Text(cx, "body", "-", "fg3"));
     const width = j === 3 ? 76 : 58;
     // A TIN the filer types (1700's spouse) is editable; the profile's is locked.
-    const locked = !s.editable || f.c || s.locks[f.k] !== undefined;
+    const locked = !s.editable || f.c || ui.isLocked(f.k);
     const input = s.inputs.get(f.k);
     if (locked || !input) row.child(lockedBox(cx, s.values[f.k] ?? "", width, { center: true }));
     else row.child(TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }));
@@ -962,16 +1639,20 @@ function scheduleTable(cx, ui, it, width) {
     row.forEach((k, c) => {
       const col = it.cols[c];
       if (col.t === "hidden") return;
-      const locked = !s.editable || col.c || s.locks[k] !== undefined;
+      const locked = !s.editable || col.c || ui.isLocked(k);
       const value = s.values[k] ?? "";
       let cell;
       if (col.t === "radio" || col.t === "chk") {
         const on = value === "true";
+        const hint = locked && !on ? ui.reasonFor(k) : "";
         cell = Checkbox(cx, `fp-${k}`, on, (v, cx) => (locked ? null : ui.choose({ [k]: v ? "true" : "false" }, cx)), `${col.l}, row ${no}`);
+        if (hint) cell = div().flex().flex_row().items_center().gap(SPACE[1]).child(cell).child(Text(cx, "meta", hint, "fg3"));
       } else if (col.t === "sel") {
         cell = selectBox(cx, ui, k, `${col.l}, row ${no}`, col.o, value, locked, colW - 16);
       } else if (locked || !s.inputs.get(k)) {
-        cell = lockedBox(cx, col.t === "money" ? formatMoney(value) : value, colW - 16, { right: col.t === "money" });
+        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : "")) : value;
+        const hint = !shown ? ui.reasonFor(k) : "";
+        cell = lockedBox(cx, shown || hint, colW - 16, { right: !hint && col.t === "money", hint: Boolean(hint) });
       } else {
         cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 16 }).h(30);
       }
@@ -1138,12 +1819,25 @@ function itemRow(cx, ui, it, pi, ii, width) {
   // The host says which boxes the profile fills (the schema's auto flag is
   // only the extractor's guess).
   const fromProfile = tin || fs.some((x) => s.profile.has(x.k));
+  // Profile boxes keep the profile mark, which turns into Edit while the
+  // pointer is over the item or the keyboard is on the button (Tab, then
+  // Enter): the edit stays on this return, never in the profile (rule 2).
+  const editKeys = fs.filter((x) => s.profileEdit.has(x.k)).map((x) => x.k);
+  const editingHere = editKeys.some((k) => s.editing.has(k));
+  const hasEdit = editKeys.length > 0 && s.editable;
   // Markers are 16 px icons that explain themselves on hover, so a long
   // printed label is never covered; the label gets a pixel width.
   const markers = [];
-  if (fromProfile) markers.push(["user", "From tax profile. Change it in the tax profile."]);
+  if (fromProfile) {
+    const tip = editKeys.length
+      ? "From tax profile. Edit changes this return only; the profile stays as it is."
+      : tin
+        ? "From tax profile. Change it in the tax profile."
+        : "From tax profile. It repeats a box above; use Edit there.";
+    markers.push(["user", tip]);
+  }
   if (allCalc) markers.push(["lock", "Computed from other items"]);
-  const markerW = markers.length * 20 + (it.rows ? 64 : 0);
+  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0);
   const label = div()
     .flex()
     .flex_row()
@@ -1159,6 +1853,44 @@ function itemRow(cx, ui, it, pi, ii, width) {
   if (it.rows) label.child(Text(cx, "meta", `${it.rows} rows`, "fg3").flex_none().pt(2));
   for (const [icon, tip] of markers) {
     label.child(div().id(`fp-mark-${icon}-${id}`).flex_none().pt(3).tooltip(tip).accessibility_label(tip).child(Icon(cx, icon, { size: 14, color: "fg3" })));
+  }
+  if (hasEdit) {
+    // The button stays in place (and keeps the keyboard) while the boxes
+    // are open, only hidden, so Tab from it goes on into the box.
+    const shown = !editingHere && s.hoverItem === id;
+    const edit = div()
+      .id(`fp-edit-${id}`)
+      .flex()
+      .flex_none()
+      .flex_row()
+      .items_center()
+      .gap(4)
+      .h(22)
+      .px(SPACE[2])
+      .rounded(RADIUS.ctl)
+      .opacity(shown ? 1 : 0)
+      .border(1)
+      .border_color("#00000000")
+      .focus((st) => st.opacity(1).border_color(t.primary))
+      .accessibility_label(editingHere ? `${it.l}: editing on this return` : `Edit ${it.l} on this return`)
+      .child(Icon(cx, "pencil", { size: 12, color: "fg2" }))
+      .child(Text(cx, "meta", "Edit", "fg2"));
+    if (!editingHere) {
+      edit
+        .cursor_pointer()
+        .hover((st) => st.bg(t.hover))
+        .tooltip("Change it on this return only")
+        .on_click((_e, cx) => ui.startProfileEdit(editKeys, cx));
+    }
+    const focus = s.editFocus.get(id);
+    if (focus) {
+      edit.track_focus(focus).tab_index(0).on_key_down((e, cx) => {
+        if (editingHere || (e.key !== "enter" && e.key !== "space")) return;
+        ui.startProfileEdit(editKeys, cx);
+        cx.stop_propagation();
+      });
+    }
+    label.child(edit);
   }
 
   let controls;
@@ -1199,11 +1931,11 @@ function itemRow(cx, ui, it, pi, ii, width) {
     if (radios.length) controls.child(radioGroup(cx, ui, it, radios));
     for (const f of fs) if (f.t !== "radio") controls.child(control(cx, ui, f, it.l, fs.length > 1, inner));
     const single = fs.filter((f) => isDateField(f, it));
-    if (single.length === 1 && s.editable && !single[0].c && s.locks[single[0].k] === undefined) {
+    if (single.length === 1 && s.editable && !single[0].c && !ui.isLocked(single[0].k)) {
       controls.child(datePicker(cx, ui, id, { single: single[0] }));
     }
     const date = single.length ? null : dateParts(fs);
-    if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || s.locks[f.k] !== undefined)) {
+    if (date && s.editable && ![date.month, date.day, date.year].filter(Boolean).every((f) => f.c || ui.isLocked(f.k))) {
       controls.child(datePicker(cx, ui, id, date));
     }
   }
@@ -1219,6 +1951,25 @@ function itemRow(cx, ui, it, pi, ii, width) {
     .pb(SPACE[2])
     .pl(SPACE[3])
     .when(allCalc, (el) => el.bg(t.bg))
+    // The pointer over a profile item turns its mark into Edit.
+    .when(hasEdit, (el) =>
+      el.on_hover((hovered, cx) => {
+        const next = hovered ? id : s.hoverItem === id ? null : s.hoverItem;
+        if (next === s.hoverItem) return;
+        s.hoverItem = next;
+        ui.refreshRows();
+        cx.notify();
+      }),
+    )
+    // Clicking away from an item opened with Edit gives it the profile look
+    // back; what was typed stays on this return. A list still open is the
+    // item's own and does not count as away.
+    .when(editingHere, (el) =>
+      el.on_mouse_down_out((_e, cx) => {
+        if (editKeys.includes(s.openSelect)) return;
+        if (ui.endProfileEdit(editKeys)) ui.flush(cx);
+      }),
+    )
     .child(
       div()
         .w(44)
@@ -1237,9 +1988,156 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .min_w(0)
         .child(label)
         .child(controls)
+        // A shut box that shows blank says why, in the filer's words.
+        .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
         // Reserved 18 px validation line, present with or without a message.
         .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " "))),
     );
+}
+
+/**
+ * The fold for a part's profile-filled items: "From tax profile · N filled
+ * boxes", collapsed so the filer sees what is left to type. A message on a
+ * folded item is counted on the fold.
+ */
+function profileGroup(cx, ui, pi, tucked, border) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const open = s.profileOpen.has(pi);
+  const items = tucked.map((ii) => s.schema.parts[pi].items[ii]);
+  // A ticked radio item is one box, however many radios it has.
+  const boxes = (it) => {
+    const fs = (it.f || []).filter((f) => s.profile.has(f.k));
+    return fs.filter((f) => f.t !== "radio").length + (fs.some((f) => f.t === "radio") ? 1 : 0);
+  };
+  const filled = items.reduce((n, it) => n + boxes(it), 0);
+  const flagged = tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors?.[`${pi}:${ii}`]).length;
+  const label = `From tax profile · ${filled} filled box${filled === 1 ? "" : "es"}`;
+  const toggle = (cx) => {
+    if (s.profileOpen.has(pi)) s.profileOpen.delete(pi);
+    else s.profileOpen.add(pi);
+    ui.refreshRows();
+    cx.notify();
+  };
+  const header = div()
+    .id(`fp-profile-${pi}`)
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(SPACE[2])
+    .min_h(40)
+    .pl(SPACE[3])
+    .pr(SPACE[5])
+    .cursor_pointer()
+    .when(border, (el) => el.border_t(1).border_color(t.border))
+    .bg(t.bg)
+    .hover((st) => st.bg(t.hover))
+    .focus((st) => st.bg(t.selected))
+    .accessibility_label(open ? `${label}, shown` : `${label}, folded`)
+    .on_click((_e, cx) => toggle(cx))
+    .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
+    .child(Icon(cx, "user", { size: 14, color: "fg3" }))
+    .child(Text(cx, "metaStrong", label, "fg2"))
+    .when(flagged > 0, (el) => el.child(Text(cx, "meta", `· ${flagged} need${flagged === 1 ? "s" : ""} attention`, "danger")));
+  const focus = s.editFocus.get(`fold-${pi}`);
+  if (focus) {
+    header.track_focus(focus).tab_index(0).on_key_down((e, cx) => {
+      if (e.key !== "enter" && e.key !== "space") return;
+      toggle(cx);
+      cx.stop_propagation();
+    });
+  }
+  return header;
+}
+
+// ---------------------------------------------------------------- existing return
+
+/** The strip on an amended return's filed version, opened from its history. */
+export function filedOriginalStrip(view) {
+  const when = view.filed_on ? ` on ${shortDate(view.filed_on)}` : "";
+  return `This is the version filed${when}, kept in this return's history; the current return is its amendment. Nothing here can be changed.`;
+}
+
+/** Where an amended return's filed version goes (the history view). */
+export const FILED_KEPT = "The filed version is kept in this return's history.";
+
+/** `2026-10-01T…` → `Oct 1, 2026`; anything else as given. */
+function shortDate(text) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(text || ""));
+  if (!m) return String(text || "");
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+/**
+ * What the offer says and offers for a stored return's status: a draft is
+ * loaded, a queued return viewed, one that left the app viewed read-only
+ * or amended (only where the host offers `amend`).
+ */
+export function existingOfferFor(existing) {
+  const label = existing.label;
+  const has = (action) => (existing.actions || []).includes(action);
+  const keep = { id: "keep", label: "Keep this form", hint: "Stay in the sample; the period clears." };
+  if (existing.status === "Draft") {
+    return {
+      title: `You already have a ${label} draft`,
+      subtitle: existing.updated_at ? `edited ${shortDate(existing.updated_at)}.` : "",
+      choices: [{ id: "load", label: "Load saved draft", hint: "Continue where you left off.", variant: "primary" }, keep],
+      fastLane: true,
+    };
+  }
+  if (existing.status === "Queued") {
+    return {
+      title: `${label} is queued to send to BIR`,
+      subtitle: "",
+      choices: [{ id: "view", label: "View it", hint: "Read-only while it waits to send.", variant: "primary" }, keep],
+      fastLane: false,
+    };
+  }
+  const filed = existing.status === "Submitted" ? "submitted" : "filed";
+  const choices = [{ id: "view", label: "View read-only", hint: `See exactly what was ${filed}.`, variant: "primary" }];
+  if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: `New amended return. ${FILED_KEPT}`, variant: "danger" });
+  choices.push(keep);
+  return { title: `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
+}
+
+/** The app's modal for a stored return of a sample's period (Esc or outside: Keep this form). */
+export function renderExistingOffer(cx, app) {
+  const ui = app.formUi;
+  const existing = app.existingOffer;
+  if (!existing) return div();
+  const offer = existingOfferFor(existing);
+  // One left edge and equal padding on every side: the title, the
+  // full-width choices (each with what it does inside it) and the checkbox.
+  const card = div().flex().flex_col().items_stretch().w_full().gap(SPACE[3]).p(SPACE[5]);
+  const head = div().flex().flex_col().gap(2).child(Text(cx, "title", offer.title).whitespace_normal());
+  if (offer.subtitle) head.child(Text(cx, "meta", offer.subtitle, "fg2"));
+  card.child(head);
+  for (const choice of offer.choices) {
+    card.child(
+      AppButton(cx, `existing-${choice.id}`, choice.label, {
+        variant: choice.variant || "secondary",
+        block: true,
+        hint: choice.hint,
+        onClick: (_e, cx) => ui.takeExisting(choice.id, cx),
+      }),
+    );
+  }
+  if (offer.fastLane) {
+    card.child(
+      CheckboxLabel(
+        cx,
+        "existing-fast-lane",
+        Boolean(app.fastLane?.drafts),
+        (v, cx) => {
+          app.fastLane = { ...(app.fastLane || {}), drafts: v };
+          cx.notify();
+        },
+        "Don't ask again for drafts (this session)",
+      ),
+    );
+  }
+  return Overlay(cx, "existing-offer", card, (cx) => ui.takeExisting("keep", cx), { width: 420 });
 }
 
 // ---------------------------------------------------------------- page
@@ -1266,8 +2164,17 @@ function formContent(cx, app, width) {
   const branchCode = String(s.tin).slice(9) || "00000";
   const draftLayout = f.q < 0.8;
 
-  const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
-  if (s.status === "Queued") {
+  // A library sample has only Check: Print, Queue and Save need a return.
+  const actions = s.sample ? [] : [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
+  if (s.filedOriginal && !s.filedOriginalView) {
+    actions.push(AppButton(cx, "fp-filed-original", "View the filed original", { size: "sm", icon: "history", onClick: (_e, cx) => ui.openFiledOriginal(cx) }));
+  }
+  if (s.filedOriginalView) {
+    actions.push(AppButton(cx, "fp-back-to-amendment", "Back to the amendment", { size: "sm", onClick: (_e, cx) => ui.backToAmendment(cx) }));
+  } else if (s.sample) {
+    if (s.editable) actions.push(s.checkButton.entity);
+    actions.push(AppButton(cx, "fp-start-return", "Start a return", { variant: "primary", size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
+  } else if (s.status === "Queued") {
     actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
   } else if (s.editable) {
     actions.push(s.checkButton.entity);
@@ -1278,7 +2185,9 @@ function formContent(cx, app, width) {
   const chips = div().flex().flex_row().flex_wrap().items_center().gap(SPACE[2]).mt(SPACE[2]);
   chips.child(Chip(cx, f.freq)).child(Chip(cx, `${f.pages} page${f.pages > 1 ? "s" : ""}`)).child(Chip(cx, `${f.n} fields`));
   if (draftLayout) chips.child(Chip(cx, "Draft layout", "warning", "triangle-alert"));
-  if (s.status !== "Draft") chips.child(Chip(cx, s.status, s.status === "Queued" ? "accent" : "success"));
+  if (s.status !== "Draft") chips.child(Chip(cx, s.editable ? s.status : `${s.status} · read-only`, s.status === "Queued" ? "accent" : "success"));
+  if (s.amends || s.filedOriginal) chips.child(Chip(cx, "Amended return", "warning"));
+  if (s.filedOriginalView) chips.child(Chip(cx, "Filed original · read-only", "success"));
 
   const head = div()
     .flex()
@@ -1329,7 +2238,7 @@ function formContent(cx, app, width) {
     bar.child(Code(cx, formatTin(String(s.tin).slice(0, 9), branchCode), "fg2").font_weight(400));
   }
   bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
-  bar.child(Text(cx, "meta", `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
+  bar.child(Text(cx, "meta", s.sample ? "Sample from the Form library" : `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
   if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
   bar.child(div().flex_1());
   // Guided mode walks the fields a template marks, so it shows only when this
@@ -1353,6 +2262,18 @@ function formContent(cx, app, width) {
   }
 
   const page = div().flex().flex_col().child(head).child(bar);
+  if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
+  // An amended return says where its filed version is; that version, opened
+  // from its history, says what it is.
+  if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());
+  if (s.filedOriginalView) page.child(Text(cx, "meta", filedOriginalStrip(s.filedOriginalView), "fg2").mb(SPACE[4]).whitespace_normal());
+  // A return that left the app is read-only, and says when it went.
+  if (!s.editable && !s.filedOriginalView && (s.submittedAt || s.confirmedAt)) {
+    const parts = [];
+    if (s.submittedAt) parts.push(`Sent to BIR ${shortDate(s.submittedAt)}`);
+    if (s.confirmedAt) parts.push(`confirmed ${shortDate(s.confirmedAt)}`);
+    page.child(Text(cx, "meta", `${parts.join(", ")}. Nothing here can be changed.`, "fg2").mb(SPACE[4]).whitespace_normal());
+  }
   if (s.error) {
     return { page: page.child(div().p(SPACE[4]).rounded(RADIUS.card).bg(t.dangerSoft).child(Text(cx, "body", s.error, "danger").whitespace_normal())) };
   }
@@ -1484,13 +2405,26 @@ function formContent(cx, app, width) {
       );
     if (open) {
       const body = div().flex().flex_col().border_t(1).border_color(t.border);
+      const rowOf = (ii) => {
+        const retained = s.rowViews.get(`${pi}:${ii}`);
+        const row = retained ? retained.entity : itemRow(cx, ui, p.items[ii], pi, ii, partsW);
+        if (!retained && ii > 0) row.border_t(1).border_color(t.border);
+        return row;
+      };
+      // Items the profile filled fold into one group where the first sits.
+      const tucked = ui.tuckedItems(pi);
       p.items.forEach((it, ii) => {
         // Dev start route only (BIR_SHELL_START items=a-b): show a slice.
         if (ui.devItems && (ii < ui.devItems.from || ii > ui.devItems.to)) return;
-        const retained = s.rowViews.get(`${pi}:${ii}`);
-        const row = retained ? retained.entity : itemRow(cx, ui, it, pi, ii, partsW);
-        if (!retained && ii > 0) row.border_t(1).border_color(t.border);
-        body.child(row);
+        if (tucked.includes(ii)) {
+          if (ii !== tucked[0]) return;
+          body.child(profileGroup(cx, ui, pi, tucked, ii > 0));
+          if (s.profileOpen.has(pi)) {
+            for (const tj of tucked) body.child(tj === 0 ? div().border_t(1).border_color(t.border).child(rowOf(tj)) : rowOf(tj));
+          }
+          return;
+        }
+        body.child(rowOf(ii));
       });
       card.child(body);
     }

@@ -80,6 +80,8 @@ futures = "0.3"
 [dev-dependencies]
 # Tests produce a current authenticator code for a generated secret.
 totp-rs = "5.7.1"
+# Host tests stage filed returns and failing writes with raw SQL.
+bir-core = { path = "../bir-core", features = ["test-support"] }
 
 # The monorepo's crates/shell/rquickjs-compat facade (a package named
 # `rquickjs`) routes LLRT stdlib's crates.io rquickjs dependency onto the
