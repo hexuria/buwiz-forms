@@ -17440,8 +17440,8 @@
       "evidence": "PR 4 (2000 R2.2, preview.0, manual-0): the agent binds frm2000:txtRDOCode to /rdo_code with the profile lock (probe.rs PRINTED_NOT_IN_CORPUS: rules/forms/2000-v2018/validations.json 2000-val-006-rdo asks \"Please enter a valid RDO Code on Item 5.\" and html-frozen/2000-dst-2018/writer-cells.json joins it at \"5 RDO Code\"), but the extracted schema had no control for it; the layout puts it at item 5. The RDO list comes from the catalog."
     },
     "layout": {
-      "evidence": "PR 4: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/2000-dst-2018/index.html (BIR Form 2000-DST January 2018: items 1-3, Part I 4-13, Part II 14-19, Part III 20-23, page 2 Schedules 1-4 with three printed rows each) and html-frozen/2000-dst-2018/writer-cells.json joins (which box prints at which item and column; Schedule 4's columns left to right: RCO Code, Remittance Date, Agent Bank, Amount Remitted, From, To). Part III's boxes are disabled at load in the official program (runtime-control-inventory-v796.json) and never written by this app, so each printed item shows a note. Field keys, values, the official XML and the print map are unchanged.",
-      "rest": "Not drawn (the official program's own controls)",
+      "evidence": "PR 4: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/2000-dst-2018/index.html (BIR Form 2000-DST January 2018: items 1-3, Part I 4-13, Part II 14-19, Part III 20-23, page 2 Schedules 1-4 with three printed rows each) and html-frozen/2000-dst-2018/writer-cells.json joins (which box prints at which item and column; Schedule 4's columns left to right: RCO Code, Remittance Date, Agent Bank, Amount Remitted, From, To). Part III's boxes are disabled at load in the official program (runtime-control-inventory-v796.json) and never written by this app, so each printed item shows a note. Field keys, values, the official XML and the print map are unchanged. The tax agent's Accreditation No., Date of Issue and Date of Expiry (txtTaxAgentNo, txtDateIssue, txtDateExpiry; disabled at load, inventory source lines 964, 977, 990) show their printed caption with a note after item 19, where the sheet prints them, as PR 3 does for 1601C.",
+      "rest": "Not on the printed sheet",
       "parts": [
         {
           "n": "Page 1",
@@ -17646,6 +17646,11 @@
               "k": [
                 "frm2000:txtTax19"
               ]
+            },
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable), Date of Issue and Date of Expiry",
+              "note": "The official eBIRForms program keeps these boxes shut and files them blank, so they have no box here; they stay blank on the printed return."
             }
           ]
         },
@@ -25700,7 +25705,7 @@
     },
     "layout": {
       "evidence": "PR 4 (2550M manual-1, manual-4): show the printed sheet's captions. Structure and captions from html-frozen/2550m-2007/index.html (BIR Form 2550M February 2007: items 1-3, Part I 4-11, Part II 12-26, Part III 29-32, page 2 Schedules 1-8) and html-frozen/2550m-2007/writer-cells.json joins (the schedule totals' printed captions: \"Schedule 1 Total Amount (to Item 12A)\", ...). Each schedule's totals sit under its table. The official program has no control for Part III (rules/forms/2550m-v2007/fixtures/runtime-control-inventory-v796.json lists none), so each Part III item shows a note. Field keys, values, the official XML and the print map are unchanged.",
-      "rest": "Not drawn (the official program's own controls)",
+      "rest": "Not on the printed sheet",
       "parts": [
         {
           "n": "Page 1",
@@ -28035,7 +28040,7 @@
     },
     "frm2553:txt18B": {
       "kind": "sel",
-      "evidence": "PR 4 (2553 manual-0, manual-1): row 18's ATC comes from the official popup (BIR-Form2553.hta getATCCode: the four atcCodes.xml entries of Form2553Draft's FORM_2553_ATC_OPTIONS); the host lists them (rows_dst_pt_vat.rs) and writes the row through Form2553Draft::set_atc, whose duplicate check is the official one."
+      "evidence": "PR 4 review (2553 manual-1): every row's ATC is a choice from the official popup (BIR-Form2553.hta: each of rows 14-18 has its own popup button, showModalATC('18'), filled by getATCCode); the host lists Form2553Draft's FORM_2553_ATC_OPTIONS (rows_dst_pt_vat.rs) and writes the row through Form2553Draft::set_atc. The sheet's printed entry is the blank row's default, shown in column A."
     },
     "txtEmail": {
       "label": "Email Address",
@@ -28043,7 +28048,7 @@
     },
     "layout": {
       "evidence": "PR 4: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/2553-1999/index.html (BIR Form 2553 July 1999: items 1-5, Part I 6-13, Part II 14-23, Part III 26-29) and html-frozen/2553-1999/writer-cells.json joins. Rows 14-17 print their classification, ATC and rate on the sheet (the print fills only their amounts, writer-cells rule) and row 18 is typed. The official program has no control for Part III (rules/forms/2553-v1999/fixtures/runtime-control-inventory-v796.json lists none), so each Part III item shows a note. Field keys, values, the official XML and the print map are unchanged.",
-      "rest": "Not drawn (the official program's own controls)",
+      "rest": "Not on the printed sheet",
       "parts": [
         {
           "n": "Page 1",
@@ -28363,6 +28368,22 @@
     "frm2553:optQtr:_4": {
       "label": "4th",
       "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/index.html prints item 3's boxes \"1st 2nd 3rd 4th\"; writer-cells.json xbox_joins joins this one at \"3 Quarter 4\"."
+    },
+    "frm2553:txt14B": {
+      "kind": "sel",
+      "evidence": "PR 4 review (2553 manual-1): every row's ATC is a choice from the official popup (BIR-Form2553.hta: each of rows 14-18 has its own popup button, showModalATC('14'), filled by getATCCode); the host lists Form2553Draft's FORM_2553_ATC_OPTIONS (rows_dst_pt_vat.rs) and writes the row through Form2553Draft::set_atc. The sheet's printed entry is the blank row's default, shown in column A."
+    },
+    "frm2553:txt15B": {
+      "kind": "sel",
+      "evidence": "PR 4 review (2553 manual-1): every row's ATC is a choice from the official popup (BIR-Form2553.hta: each of rows 14-18 has its own popup button, showModalATC('15'), filled by getATCCode); the host lists Form2553Draft's FORM_2553_ATC_OPTIONS (rows_dst_pt_vat.rs) and writes the row through Form2553Draft::set_atc. The sheet's printed entry is the blank row's default, shown in column A."
+    },
+    "frm2553:txt16B": {
+      "kind": "sel",
+      "evidence": "PR 4 review (2553 manual-1): every row's ATC is a choice from the official popup (BIR-Form2553.hta: each of rows 14-18 has its own popup button, showModalATC('16'), filled by getATCCode); the host lists Form2553Draft's FORM_2553_ATC_OPTIONS (rows_dst_pt_vat.rs) and writes the row through Form2553Draft::set_atc. The sheet's printed entry is the blank row's default, shown in column A."
+    },
+    "frm2553:txt17B": {
+      "kind": "sel",
+      "evidence": "PR 4 review (2553 manual-1): every row's ATC is a choice from the official popup (BIR-Form2553.hta: each of rows 14-18 has its own popup button, showModalATC('17'), filled by getATCCode); the host lists Form2553Draft's FORM_2553_ATC_OPTIONS (rows_dst_pt_vat.rs) and writes the row through Form2553Draft::set_atc. The sheet's printed entry is the blank row's default, shown in column A."
     }
   }
 }

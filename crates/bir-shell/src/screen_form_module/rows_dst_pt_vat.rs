@@ -14,11 +14,13 @@
 //!   OT010 5%, Clark Development Corporations OT011 5%, Special/Regular
 //!   Economic/Free Port Zone Enterprises OT011 5%, Others OT012), and the
 //!   print fills only their amounts (writer-cells.json rule: "rows 14-17
-//!   expose only some columns"). The page types a row's taxable amount; the
-//!   host gives the row its printed ATC through `Form2553Draft::set_atc`, so
-//!   the rate and the tax due follow. Row 18 takes an ATC from the official
-//!   popup's list (`FORM_2553_ATC_OPTIONS`, `getATCCode`), whose duplicate
-//!   check is the form's own. A stored draft keeps its rows as they are.
+//!   expose only some columns"). That printed entry is a blank row's
+//!   default: typing a blank row's taxable amount gives it its printed ATC
+//!   through `Form2553Draft::set_atc` (the rate and the tax due follow),
+//!   unless another row already holds that entry. Every row's ATC (14B-18B)
+//!   stays a choice from the official popup's list (`FORM_2553_ATC_OPTIONS`,
+//!   `getATCCode`), whose duplicate check is the form's own, so any row may
+//!   hold any entry and a stored row can be changed or cleared.
 //! - 2553 Item 13: Yes opens the list blank (`YesUnspecified`, which
 //!   validation asks for), No closes it; while it is No the list takes
 //!   nothing (fields.json `enabled_when`: "Item 13 Yes is selected."), so
@@ -26,8 +28,9 @@
 //! - 2553 Item 23's boxes take a choice only while Item 23 is an
 //!   overpayment (the official `checkOverpayment`).
 //! - An answer that removes what the filer typed (2000 Item 13's schedule
-//!   rows, Item 10's other party, an Amended Return "No" that clears 2000's
-//!   15A, 2553's 20A or 2550M's 23D, a cleared ATC with its tax base) is
+//!   rows, item 10's other party, an Amended Return "No" that clears 2000's
+//!   15A, 2553's 20A or 2550M's 23D, 2553 item 13 "No" clearing a chosen
+//!   relief, a cleared 2000, 2553 or 2550M ATC with its amount) is
 //!   reported ([`removes`]) so the page asks first and offers Undo, the way
 //!   PR 2's `rows_withholding::removes` does for the quarterly withholding
 //!   returns.
@@ -49,8 +52,8 @@ pub(super) enum Cell {
     PtAmount(usize),
     /// 2553 row `14 + .0` column D (tax rate).
     PtRate(usize),
-    /// 2553 item 18B: the row's ATC from the popup's list.
-    PtAtc18,
+    /// 2553 row `14 + .0` column B: the row's ATC from the popup's list.
+    PtAtc(usize),
     /// 2553 item 13 Yes (`true`) or No.
     PtItem13(bool),
     /// 2553 item 13's list (`lstTaxTreaty`).
@@ -87,9 +90,11 @@ const PT_FIRST_ITEM: usize = 14;
 pub(super) const RATE_WAITS: &str = "Shows the ATC's rate once this row's ATC is chosen.";
 /// What 2553's item 18A waits for.
 pub(super) const ATC_18_WAITS: &str = "Shows the classification of the ATC chosen in 18B.";
-/// The lock reason of a 2553 box the sheet preprints.
-pub(super) const PRINTED_LOCK: &str =
-    "printed on the form; filled in with the row's ATC when its taxable amount is typed";
+/// The lock reason of a 2553 classification box (column A): the official
+/// popup writes it with the row's ATC (`getATCCode`), so it follows the
+/// ATC chosen in the row's B box.
+pub(super) const CLASSIFICATION_LOCK: &str =
+    "follows the ATC chosen in this row's ATC box (column B)";
 
 fn pt_option(index: usize) -> &'static Form2553AtcOption {
     &FORM_2553_ATC_OPTIONS[index]
@@ -135,13 +140,13 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
                 .then_some(Cell::DstSchedule(n as u8))
         }
         "2553" => match key {
-            "frm2553:txt18B" => Some(Cell::PtAtc18),
             "frm2553:optTreaty_1" => Some(Cell::PtItem13(true)),
             "frm2553:optTreaty_2" => Some(Cell::PtItem13(false)),
             "frm2553:lstTaxTreaty" => Some(Cell::PtItem13List),
             "frm2553:ifoverpay_1" | "frm2553:ifoverpay_2" => Some(Cell::PtOverpayment),
-            _ => pt_item(key, 'C')
-                .map(Cell::PtAmount)
+            _ => pt_item(key, 'B')
+                .map(Cell::PtAtc)
+                .or_else(|| pt_item(key, 'C').map(Cell::PtAmount))
                 .or_else(|| pt_item(key, 'D').map(Cell::PtRate)),
         },
         _ => None,
@@ -217,7 +222,7 @@ pub(super) fn fill(
         }
         Cell::PtAmount(row) => fill_pt_amount(draft, row, value),
         Cell::PtRate(row) => fill_pt_rate(draft, row, value),
-        Cell::PtAtc18 => fill_pt_atc_18(draft, value),
+        Cell::PtAtc(row) => fill_pt_atc(draft, row, value),
         Cell::PtItem13(yes) => fill_pt_item_13(draft, yes, value),
         Cell::PtItem13List => fill_pt_item_13_list(draft, value),
     })
@@ -270,6 +275,17 @@ fn fill_pt_amount(draft: &mut Value, row: usize, value: &Value) -> Result<(), St
         }
         (None, _) if amount == 0.0 => return Ok(()),
         (None, Some(printed)) => {
+            // The printed ATC is the blank row's default, unless another
+            // row already holds it (the official popup's duplicate check).
+            if let Some(other) = form.schedule.iter().position(|entry| {
+                entry.atc_code == printed.code && entry.description == printed.description
+            }) {
+                return Err(format!(
+                    "Choose this row's ATC; {} is already on row {}.",
+                    printed.code,
+                    PT_FIRST_ITEM + other
+                ));
+            }
             form.set_atc(row, printed)?;
             form.schedule[row].taxable_amount = amount;
             form.recompute();
@@ -334,8 +350,9 @@ fn popup_entry(value: &Value) -> Result<Option<&'static Form2553AtcOption>, Stri
         .ok_or_else(|| "Choose an ATC from the official list.".to_string())
 }
 
-fn fill_pt_atc_18(draft: &mut Value, value: &Value) -> Result<(), String> {
-    let row = PT_ROWS - 1;
+/// A row's ATC from the popup's list (any row may hold any entry, as the
+/// official popup allows); blank clears the row.
+fn fill_pt_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
     let mut form: Form2553Draft = typed(draft)?;
     match popup_entry(value)? {
         None => form.clear_atc(row),
@@ -378,16 +395,16 @@ fn fill_pt_item_13_list(draft: &mut Value, value: &Value) -> Result<(), String> 
     store(draft, &form)
 }
 
-/// 2553 item 18B's list: the official popup's entries, by position, the
+/// A 2553 row's ATC list: the official popup's entries, by position, the
 /// row's own entry marked.
 pub(super) fn options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Value>> {
-    if cell(kind, key)? != Cell::PtAtc18 {
+    let Cell::PtAtc(row) = cell(kind, key)? else {
         return None;
-    }
+    };
     let form: Option<Form2553Draft> = typed(draft).ok();
     let held = form
         .as_ref()
-        .and_then(|form| form.schedule.get(PT_ROWS - 1).cloned())
+        .and_then(|form| form.schedule.get(row).cloned())
         .filter(|row| !row.is_empty());
     Some(
         FORM_2553_ATC_OPTIONS
@@ -445,22 +462,18 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
             }
         }
         "2553" => {
+            // A blank row 14-17 shows the sheet's printed default.
             for (row, (_, caption, atc, rate)) in PT_PRINTED_ROWS.iter().enumerate() {
                 let item = PT_FIRST_ITEM + row;
+                let rate = if rate.is_empty() {
+                    "rate you enter"
+                } else {
+                    rate
+                };
                 out.insert(
                     format!("frm2553:txt{item}A"),
-                    json!(format!("Printed: {caption}")),
+                    json!(format!("Printed: {caption}, {atc}, {rate}")),
                 );
-                out.insert(
-                    format!("frm2553:txt{item}B"),
-                    json!(format!("Printed: {atc}")),
-                );
-                if !rate.is_empty() {
-                    out.insert(
-                        format!("frm2553:txt{item}D"),
-                        json!(format!("Printed: {rate}")),
-                    );
-                }
             }
             out.insert("frm2553:txt18A".into(), json!(ATC_18_WAITS));
         }
@@ -470,7 +483,7 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
 }
 
 /// The boxes this module shuts, and why, over the probed locks: 2553's
-/// preprinted cells and 18A, its quarter boxes (the return's own period),
+/// classification boxes (14A-18A), its quarter boxes (the return's own period),
 /// and 2000's 15B and 15C, which `recompute` totals from Schedules 2 and 3.
 pub(super) fn relock(kind: AgentFormKind, locks: &mut Map<String, Value>) {
     match kind.form_code() {
@@ -480,8 +493,8 @@ pub(super) fn relock(kind: AgentFormKind, locks: &mut Map<String, Value>) {
             }
         }
         "2553" => {
-            for key in waits(kind).keys() {
-                locks.insert(key.clone(), json!(PRINTED_LOCK));
+            for item in PT_FIRST_ITEM..PT_FIRST_ITEM + PT_ROWS {
+                locks.insert(format!("frm2553:txt{item}A"), json!(CLASSIFICATION_LOCK));
             }
             for quarter in 1..=4 {
                 locks.insert(
@@ -593,6 +606,23 @@ pub(super) fn removes(
             }));
         }
     }
+    // 2553 item 13 No clears the relief named under "If yes, specify".
+    if code == "2553" && edited("frm2553:optTreaty_") {
+        let relief = |draft: &Value| match draft["tax_treaty"].as_str() {
+            Some("special_rate") => Some("Special Rate"),
+            Some("international_tax_treaty") => Some("International Tax Treaty"),
+            _ => None,
+        };
+        if let Some(chosen) = relief(before)
+            && after["tax_treaty"] == "no"
+        {
+            return Some(json!({
+                "message": format!("Changing item 13 to No clears the relief chosen under If yes, specify ({chosen}). Continue?"),
+                "done": "Cleared item 13's relief",
+                "rows": 0,
+            }));
+        }
+    }
     // Amended Return Yes -> No clears the previous return's payment.
     let amended = match code {
         "2000" => Some(("frm2000:AmendedRtn_", "balance_carried_over", "15A")),
@@ -619,13 +649,14 @@ pub(super) fn removes(
     let cleared_atc = edits.iter().any(|(key, value)| {
         text(value).is_empty()
             && ((code == "2000" && key.starts_with("drpATCCode"))
-                || cell(kind, key) == Some(Cell::PtAtc18))
+                || (code == "2550M" && key.starts_with("frm2550m:txtAtcCde"))
+                || matches!(cell(kind, key), Some(Cell::PtAtc(_))))
     });
     if cleared_atc {
-        let (list, field) = if code == "2000" {
-            ("schedule1", "tax_base")
-        } else {
-            ("schedule", "taxable_amount")
+        let (list, field) = match code {
+            "2000" => ("schedule1", "tax_base"),
+            "2550M" => ("sales_schedule", "amount"),
+            _ => ("schedule", "taxable_amount"),
         };
         let base = |draft: &Value| -> f64 {
             rows(draft, list)

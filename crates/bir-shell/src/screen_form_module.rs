@@ -2371,6 +2371,9 @@ fn opened_json(
         }
     }
     blank_sample(&blank, &mut values, &mut errors);
+    // What a blank box waits for (PR 4's forms; the integration merge adds
+    // the other form groups' maps to this one).
+    let waits = rows_dst_pt_vat::waits(kind);
     let lock_notes: Map<String, Value> = locks
         .iter()
         .map(|(key, reason)| {
@@ -2424,7 +2427,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
-        "waits": rows_dst_pt_vat::waits(kind),
+        "waits": waits,
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -3207,6 +3210,9 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 4's forms; the integration merge chains the other form groups').
+    let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3217,8 +3223,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
-        // Rows the filer typed that this edit removed: the page asks first.
-        "removes": rows_dst_pt_vat::removes(kind, &before, &draft, &edits),
+        "removes": removes,
     })))
 }
 
