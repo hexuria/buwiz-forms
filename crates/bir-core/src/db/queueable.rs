@@ -223,6 +223,36 @@ impl Database {
         .transpose()
     }
 
+    /// Every stored `F` return of a TIN and year, each with its period
+    /// column (an entry-numbered form's entry, a transaction's `MMDD`), in
+    /// one read.
+    pub fn list_queueable_drafts<F: QueueableForm>(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+    ) -> Result<Vec<(i64, F)>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, quarter, data_json FROM form_drafts
+             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
+             ORDER BY quarter",
+        )?;
+        let rows = stmt.query_map(params![tin, F::FORM_CODE, i64::from(taxable_year)], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut drafts = Vec::new();
+        for row in rows {
+            let (id, period, json) = row?;
+            let mut draft: F = serde_json::from_str(&json)?;
+            draft.set_draft_id(Some(id));
+            drafts.push((period.unwrap_or(0), draft));
+        }
+        Ok(drafts)
+    }
+
     /// Save an editable Draft. A queued or filed snapshot is never replaced.
     pub fn save_queueable_draft<F: QueueableForm>(&self, draft: &F) -> Result<i64, DbError> {
         if !draft.lifecycle().is_editable() {

@@ -78,6 +78,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_form_profile_and_sample.mjs
     node --experimental-vm-modules tools/test_date_field_rows.mjs
     node --experimental-vm-modules tools/test_form_existing_offer.mjs
+    node --experimental-vm-modules tools/test_form_sample_save.mjs
     node --experimental-vm-modules tools/test_form_shared_mechanisms.mjs
     node --experimental-vm-modules tools/test_form_q3_withholding.mjs
 

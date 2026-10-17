@@ -34,7 +34,7 @@ import { renderCalendar } from "./shell/calendar_page.js";
 import { renderFilings } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
-import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, FormPageActions } from "./shell/form_page.js";
+import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { SecurityActions } from "./shell/security.js";
@@ -533,6 +533,7 @@ class BirApp extends View {
     // Esc on "this removes the rows you typed" is Cancel.
     if (this.overlay === "removal") return this.formUi.cancelRemoval(cx);
     this.existingOffer = null;
+    this.samplePeriod = null;
     this.overlay = null;
     this.newReturn.periodOpen = false;
     this.focusRoot.focus();
@@ -1504,6 +1505,7 @@ class BirApp extends View {
     if (this.overlay === "new") root.child(renderNewReturn(cx, this));
     if (this.overlay === "existing") root.child(renderExistingOffer(cx, this));
     if (this.overlay === "removal") root.child(renderRemovalConfirm(cx, this));
+    if (this.overlay === "sample-period") root.child(renderSamplePeriod(cx, this));
     if (this.toastState) {
       const st = this.toastState;
       root.child(

@@ -15,6 +15,11 @@
 //!   that). A blank box clears its override: "Use the computed amounts"
 //!   blanks all three.
 //!
+//! - 0605 (decided 2026-10-17) has no due date to compute a penalty from,
+//!   so its three boxes (20A-20C) are plain open boxes: no lock and no
+//!   Edit. They still write the overrides, and 20D Total Penalties still
+//!   adds them up. Every other form keeps its locked group and Edit.
+//!
 //! Validation, the assistant's `form.fill` and the XML are untouched; the
 //! XML carries whatever the filer entered, which is the point of the rule.
 
@@ -180,6 +185,26 @@ pub(super) fn error_keys(kind: AgentFormKind, field: &str) -> Vec<String> {
         .collect()
 }
 
+/// Forms whose penalties the filer types, with no computed amount to
+/// lock: 0605 only (decided 2026-10-17; it has no due date to compute
+/// from).
+const OPEN_PENALTY_FORMS: [&str; 1] = ["0605"];
+
+/// Whether `kind`'s penalty groups are computed, locked until Edit opens
+/// them; false for 0605, whose penalty boxes are open.
+pub(super) fn computes(kind: AgentFormKind) -> bool {
+    !OPEN_PENALTY_FORMS.contains(&kind.form_code())
+}
+
+/// The groups locked until Edit opens them: every group, or none on 0605.
+pub(super) fn computed_groups(kind: AgentFormKind) -> Vec<Group> {
+    if computes(kind) {
+        groups(kind)
+    } else {
+        Vec::new()
+    }
+}
+
 /// Whether the filer has entered any of the group's amounts.
 pub(super) fn edited(group: &Group, draft: &Value) -> bool {
     COMPONENTS.iter().any(|component| {
@@ -211,11 +236,13 @@ pub(super) fn applies(kind: AgentFormKind, group: &Group, draft: &Value) -> bool
     bir_core::forms::agent::compute(kind, &mut copy).is_ok() && edited(group, &copy)
 }
 
-/// What the page needs: each group's boxes, whether the filer entered its
-/// amounts, and whether it is part of the return (Edit is offered).
+/// What the page needs: each computed group's boxes, whether the filer
+/// entered its amounts, and whether it is part of the return (Edit is
+/// offered). A group the model does not compute is not listed: its boxes
+/// are plain open boxes.
 pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
     Value::Array(
-        groups(kind)
+        computed_groups(kind)
             .iter()
             .map(|group| {
                 json!({

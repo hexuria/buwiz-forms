@@ -340,6 +340,17 @@ pub struct Form2551QDraft {
     pub next_retry_at: Option<String>,
     #[serde(default)]
     pub last_error: Option<String>,
+    /// Profile boxes the filer edited on this return (their on-screen
+    /// keys). They keep the edit when the tax profile changes; every other
+    /// profile box of a Draft follows the profile. Never filed or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_edits: Vec<String>,
+    /// The tax-profile values the draft's profile boxes were built from
+    /// (draft path -> value), recorded when the page opens or saves it. A
+    /// profile box follows a later profile change only while it still
+    /// holds this value. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
 
     /// Set to true when this draft was pre-filled from a previous quarter.
     /// UI shows a "Pre-filled from Q{n} {year}" banner when true.
@@ -349,6 +360,16 @@ pub struct Form2551QDraft {
     #[serde(default)]
     pub payment_receipt_path: Option<String>,
 }
+
+/// The page's 2551Q profile boxes (their keys) and the draft field each
+/// writes: what `profile_edits` names.
+const PROFILE_BOXES: [(&str, &str); 5] = [
+    ("frm2551Qv2018:txtRDOCode", "/rdo_code"),
+    ("frm2551Qv2018:registeredName", "/taxpayer_name"),
+    ("frm2551Qv2018:registeredAddress", "/registered_address"),
+    ("frm2551Qv2018:zipCode", "/zip_code"),
+    ("frm2551Qv2018:telNo", "/contact_number"),
+];
 
 impl Form2551QDraft {
     /// Minimum Item 5 count required by application-generated Schedule 1
@@ -454,6 +475,8 @@ impl Form2551QDraft {
             submission_attempts: 0,
             next_retry_at: None,
             last_error: None,
+            profile_edits: Vec::new(),
+            profile_baseline: std::collections::BTreeMap::new(),
             carried_forward_from: None,
             payment_receipt_path: None,
         };
@@ -624,6 +647,24 @@ impl Form2551QDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// Whether the filer edited the page's profile box writing `path` on
+    /// this return (`profile_edits` holds the boxes' keys).
+    fn edited_on_return(&self, path: &str) -> bool {
+        PROFILE_BOXES
+            .iter()
+            .any(|(key, field)| *field == path && self.profile_edits.iter().any(|edit| edit == key))
+    }
+
+    fn profile_field_mut(&mut self, path: &str) -> &mut String {
+        match path {
+            "/rdo_code" => &mut self.rdo_code,
+            "/taxpayer_name" => &mut self.taxpayer_name,
+            "/registered_address" => &mut self.registered_address,
+            "/zip_code" => &mut self.zip_code,
+            _ => &mut self.contact_number,
+        }
+    }
+
     fn sync_with_profile_snapshot(
         &mut self,
         profile: &TaxpayerProfile,
@@ -636,11 +677,14 @@ impl Form2551QDraft {
                 && self.business_start_date == profile.business_start_date
                 && self.eopt_tier == profile.eopt_tier
                 && self.annual_income_tax_election == Some(annual_election)
-                && self.rdo_code == profile.rdo_code
-                && self.taxpayer_name == profile.full_name
-                && self.registered_address == profile.registered_address
-                && self.zip_code == profile.zip_code
-                && self.contact_number == profile.phone
+                && (self.rdo_code == profile.rdo_code || self.edited_on_return("/rdo_code"))
+                && (self.taxpayer_name == profile.full_name
+                    || self.edited_on_return("/taxpayer_name"))
+                && (self.registered_address == profile.registered_address
+                    || self.edited_on_return("/registered_address"))
+                && (self.zip_code == profile.zip_code || self.edited_on_return("/zip_code"))
+                && (self.contact_number == profile.phone
+                    || self.edited_on_return("/contact_number"))
                 && self.email == profile.email
                 && effective_profile_version_id.is_none_or(|version_id| {
                     self.effective_profile_version_id.as_deref() == Some(version_id)
@@ -660,11 +704,24 @@ impl Form2551QDraft {
         self.business_start_date = profile.business_start_date;
         self.eopt_tier = profile.eopt_tier.clone();
         self.annual_income_tax_election = Some(annual_election);
-        self.rdo_code = profile.rdo_code.clone();
-        self.taxpayer_name = profile.full_name.clone();
-        self.registered_address = profile.registered_address.clone();
-        self.zip_code = profile.zip_code.clone();
-        self.contact_number = profile.phone.clone();
+        // A profile box the filer edited on this return keeps the edit; the
+        // others take the profile, and their baseline with them, so the
+        // page's profile follow sees them as following.
+        for (path, value) in [
+            ("/rdo_code", &profile.rdo_code),
+            ("/taxpayer_name", &profile.full_name),
+            ("/registered_address", &profile.registered_address),
+            ("/zip_code", &profile.zip_code),
+            ("/contact_number", &profile.phone),
+        ] {
+            if self.edited_on_return(path) {
+                continue;
+            }
+            *self.profile_field_mut(path) = value.clone();
+            if let Some(baseline) = self.profile_baseline.get_mut(path) {
+                *baseline = serde_json::Value::String(value.clone());
+            }
+        }
         self.email = profile.email.clone();
         self.item_13_election = match self.item_13_is_applicable() {
             Some(false)
@@ -1186,6 +1243,11 @@ impl Form2551QDraft {
             "Cannot revert a Paid form to Draft"
         );
         self.status = FilingStatus::Draft;
+        // Back to Draft (an amended copy, a cancelled queue, a refused
+        // submission) its boxes were not built from the profile as it is
+        // now: no baseline, so a later profile change moves nothing until
+        // the filer chooses it (the page offers "Use profile values").
+        self.profile_baseline.clear();
         self.submitted_at = None;
         self.confirmed_at = None;
         self.receipt_id = None;
@@ -2866,6 +2928,53 @@ mod tests {
                 Some(AnnualIncomeTaxElection::Graduated)
             );
         }
+    }
+
+    /// The profile reconciliation and the page's profile follow agree: a
+    /// box the filer edited on the return (`profile_edits`) keeps the edit
+    /// through a sync, the others take the profile and their baseline with
+    /// them, and a queued return whose only difference is such an edit is
+    /// not marked stale.
+    #[test]
+    fn profile_sync_keeps_the_returns_own_edits_and_moves_the_baseline() {
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
+        draft.profile_edits = vec!["frm2551Qv2018:txtRDOCode".to_string()];
+        draft.rdo_code = "040".to_string();
+        draft.profile_baseline = std::collections::BTreeMap::from([
+            (
+                "/rdo_code".to_string(),
+                serde_json::json!(test_profile().rdo_code),
+            ),
+            (
+                "/zip_code".to_string(),
+                serde_json::json!(test_profile().zip_code),
+            ),
+        ]);
+        let mut changed = test_profile();
+        changed.rdo_code = "043".to_string();
+        changed.zip_code = "1200".to_string();
+        draft.sync_with_profile(&changed);
+        assert_eq!(draft.rdo_code, "040", "the edit on this return is kept");
+        assert_eq!(draft.zip_code, "1200", "an unedited box follows");
+        assert_eq!(draft.profile_baseline["/zip_code"], "1200");
+        assert_eq!(
+            draft.profile_baseline["/rdo_code"],
+            serde_json::json!(test_profile().rdo_code),
+            "the edited box's baseline is left alone"
+        );
+        // Queued with that edit: the snapshot still matches the profile.
+        draft.status = FilingStatus::Queued;
+        draft.sync_with_profile(&changed);
+        assert!(
+            !draft.profile_snapshot_stale,
+            "{:?}",
+            draft.profile_snapshot_stale_reason
+        );
+        assert_eq!(draft.rdo_code, "040");
+        // An unedited box that differs still marks it stale.
+        changed.zip_code = "1300".to_string();
+        draft.sync_with_profile(&changed);
+        assert!(draft.profile_snapshot_stale);
     }
 
     #[test]

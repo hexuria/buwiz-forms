@@ -128,24 +128,33 @@ fn string_map(value: &Value) -> BTreeMap<String, String> {
 /// The print field map of a draft as it stands: the function
 /// `form_print_html` calls on the stored draft.
 fn print_map_of(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
+    use crate::screen_form_module::out_of_line;
     use bir_core::forms::queueable::QueueableForm as _;
-    Ok(match kind {
-        AgentFormKind::Form1601C => {
-            serde_json::from_value::<bir_core::forms::Form1601CDraft>(draft.clone())
-                .map_err(|error| error.to_string())?
-                .to_print_field_map()
-        }
-        AgentFormKind::Form2551Q => {
-            serde_json::from_value::<bir_core::forms::form_2551q::Form2551QDraft>(draft.clone())
-                .map_err(|error| error.to_string())?
-                .to_print_field_map()
-        }
-        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
-            serde_json::from_value::<F>(draft.clone())
-                .map_err(|error| error.to_string())?
-                .print_field_map()
+    match kind {
+        AgentFormKind::Form1601C => out_of_line(|| {
+            Ok(
+                serde_json::from_value::<bir_core::forms::Form1601CDraft>(draft.clone())
+                    .map_err(|error| error.to_string())?
+                    .to_print_field_map(),
+            )
         }),
-    })
+        AgentFormKind::Form2551Q => out_of_line(|| {
+            Ok(
+                serde_json::from_value::<bir_core::forms::form_2551q::Form2551QDraft>(
+                    draft.clone(),
+                )
+                .map_err(|error| error.to_string())?
+                .to_print_field_map(),
+            )
+        }),
+        AgentFormKind::Queueable(queueable) => {
+            bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
+                Ok(serde_json::from_value::<F>(draft.clone())
+                    .map_err(|error| error.to_string())?
+                    .print_field_map())
+            }))
+        }
+    }
 }
 
 // ---------------------------------------------------------------- schema

@@ -1074,7 +1074,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let quarter = optional_quarter(arguments, 3)?;
     with_database(|db| {
         let queued: Result<i64, HostError> = (|| match form_code.as_str() {
-            "2551Q" => {
+            "2551Q" => crate::screen_form_module::out_of_line(|| {
                 let q = quarter.ok_or_else(|| {
                     HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
                 })?;
@@ -1093,8 +1093,8 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 })?;
                 db.save_queued_2551q_draft_and_election(&draft)
                     .map_err(|error| HostError::new(error.to_string()))
-            }
-            "1601C" => {
+            }),
+            "1601C" => crate::screen_form_module::out_of_line(|| {
                 let month = quarter
                     .ok_or_else(|| HostError::new("1601C drafts are monthly: pass the month"))?;
                 let mut draft = db
@@ -1112,12 +1112,12 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 })?;
                 db.save_queued_1601c_draft(&draft)
                     .map_err(|error| HostError::new(error.to_string()))
-            }
+            }),
             _ => {
                 use bir_core::forms::queueable::QueueableKind;
                 let kind = QueueableKind::from_form_code(&form_code)
                     .ok_or_else(|| HostError::new(format!("Form {form_code} is not queueable")))?;
-                bir_core::with_queueable_kind!(kind, F => {
+                bir_core::with_queueable_kind!(kind, F => crate::screen_form_module::out_of_line(|| {
                     let mut draft: F = db
                         .get_form_draft(&tin, &form_code, year, quarter)
                         .map_err(|error| HostError::new(error.to_string()))?
@@ -1137,7 +1137,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                         })?;
                     db.save_queued_queueable(&draft)
                         .map_err(|error| HostError::new(error.to_string()))
-                })
+                }))
             }
         })();
         queued.map(|id| HostValue::Number(id as f64))
@@ -1153,7 +1153,7 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     let quarter = optional_quarter(arguments, 3)?;
     with_database(|db| {
         let result: Result<(), HostError> = (|| match form_code.as_str() {
-            "2551Q" => {
+            "2551Q" => crate::screen_form_module::out_of_line(|| {
                 let q = quarter.ok_or_else(|| {
                     HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
                 })?;
@@ -1164,8 +1164,8 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
                 db.cancel_queued_2551q_submission(&draft)
                     .map_err(|error| HostError::new(error.to_string()))?;
                 Ok(())
-            }
-            "1601C" => {
+            }),
+            "1601C" => crate::screen_form_module::out_of_line(|| {
                 let month = quarter
                     .ok_or_else(|| HostError::new("1601C drafts are monthly: pass the month"))?;
                 let draft = db
@@ -1175,12 +1175,12 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
                 db.cancel_queued_1601c_submission(&draft)
                     .map_err(|error| HostError::new(error.to_string()))?;
                 Ok(())
-            }
+            }),
             _ => {
                 use bir_core::forms::queueable::QueueableKind;
                 let kind = QueueableKind::from_form_code(&form_code)
                     .ok_or_else(|| HostError::new(format!("Form {form_code} is not queueable")))?;
-                bir_core::with_queueable_kind!(kind, F => {
+                bir_core::with_queueable_kind!(kind, F => crate::screen_form_module::out_of_line(|| {
                     let draft: F = db
                         .get_form_draft(&tin, &form_code, year, quarter)
                         .map_err(|error| HostError::new(error.to_string()))?
@@ -1190,7 +1190,7 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
                     db.cancel_queued_queueable(&draft)
                         .map_err(|error| HostError::new(error.to_string()))?;
                     Ok(())
-                })
+                }))
             }
         })();
         result.map(|_| HostValue::Null)
@@ -1424,30 +1424,30 @@ pub(crate) fn print_fields(
     ),
     HostError,
 > {
-    Ok(match form_code {
-        "2551Q" => {
+    match form_code {
+        "2551Q" => crate::screen_form_module::out_of_line(|| {
             let q = quarter.ok_or_else(|| HostError::new("2551Q drafts are quarterly"))?;
             let draft = db
                 .get_2551q_draft(tin, year, q)
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email);
-            (draft.to_print_field_map(), page)
-        }
-        "1601C" => {
+            Ok((draft.to_print_field_map(), page))
+        }),
+        "1601C" => crate::screen_form_module::out_of_line(|| {
             let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
             let draft = db
                 .get_1601c_draft(tin, year, month)
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email_address);
-            (draft.to_print_field_map(), page)
-        }
+            Ok((draft.to_print_field_map(), page))
+        }),
         _ => {
             use bir_core::forms::queueable::QueueableKind;
             let kind = QueueableKind::from_form_code(form_code)
                 .ok_or_else(|| HostError::new(format!("Form {form_code} is not printable")))?;
-            bir_core::with_queueable_kind!(kind, F => {
+            bir_core::with_queueable_kind!(kind, F => crate::screen_form_module::out_of_line(|| {
                 let draft: F = db
                     .get_form_draft(tin, form_code, year, quarter)
                     .map_err(|error| HostError::new(error.to_string()))?
@@ -1459,10 +1459,10 @@ pub(crate) fn print_fields(
                     draft.lifecycle().receipt_id,
                     draft.submission_email(),
                 );
-                (draft.print_field_map(), page)
-            })
+                Ok((draft.print_field_map(), page))
+            }))
         }
-    })
+    }
 }
 
 /// Fill the form's frozen print sheet, write it to a temp HTML file, and open

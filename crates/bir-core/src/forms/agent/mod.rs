@@ -283,14 +283,50 @@ fn guarded<T>(what: &str, run: impl FnOnce() -> T) -> Result<T, String> {
     catch_unwind(AssertUnwindSafe(run)).map_err(|_| format!("{what} failed on this draft"))
 }
 
+// Each operation's work on the typed draft lives in one generic function
+// per draft type, kept out of line: the dispatcher (a match over every
+// form) then holds only the small result in its frame, never every form's
+// typed draft at once, which in a debug build made each dispatcher's frame
+// hundreds of kilobytes.
+
+#[inline(never)]
+fn compute_as<F: Seam>(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
+    let mut typed: F = parse(kind, draft)?;
+    guarded("recompute", || typed.seam_compute())?;
+    *draft = to_json(&typed)?;
+    Ok(())
+}
+
+#[inline(never)]
+fn validate_as<F: Seam>(
+    kind: AgentFormKind,
+    draft: &mut Value,
+) -> Result<Vec<(String, String)>, String> {
+    let mut typed: F = parse(kind, draft)?;
+    guarded("recompute", || typed.seam_compute())?;
+    let errors = guarded("validate", || typed.seam_validate())?;
+    *draft = to_json(&typed)?;
+    Ok(errors)
+}
+
+#[inline(never)]
+fn field_map_as<F: Seam>(
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<BTreeMap<String, String>, String> {
+    let typed: F = parse(kind, draft)?;
+    guarded("field map", || typed.seam_field_map())
+}
+
+#[inline(never)]
+fn identity_as<F: Seam>(kind: AgentFormKind, draft: &Value) -> Result<DraftIdentity, String> {
+    let typed: F = parse(kind, draft)?;
+    Ok(typed.seam_identity())
+}
+
 /// Recompute `draft` in place, as the page does after every edit.
 pub fn compute(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
-    with_agent_kind!(kind, F => {
-        let mut typed: F = parse(kind, draft)?;
-        guarded("recompute", || typed.seam_compute())?;
-        *draft = to_json(&typed)?;
-        Ok(())
-    })
+    with_agent_kind!(kind, F => compute_as::<F>(kind, draft))
 }
 
 /// Bring a stored draft to the current model before any box is written, so
@@ -315,29 +351,17 @@ pub fn prepare_for_writes(kind: AgentFormKind, draft: &mut Value) -> Result<(), 
 /// The page's Validate: recompute `draft` in place, then run the form's
 /// checks. Errors are `(field, message)` exactly as the page shows them.
 pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, String)>, String> {
-    with_agent_kind!(kind, F => {
-        let mut typed: F = parse(kind, draft)?;
-        guarded("recompute", || typed.seam_compute())?;
-        let errors = guarded("validate", || typed.seam_validate())?;
-        *draft = to_json(&typed)?;
-        Ok(errors)
-    })
+    with_agent_kind!(kind, F => validate_as::<F>(kind, draft))
 }
 
 /// Official control id -> value for `draft` as it stands.
 pub fn field_map(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
-    with_agent_kind!(kind, F => {
-        let typed: F = parse(kind, draft)?;
-        guarded("field map", || typed.seam_field_map())
-    })
+    with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))
 }
 
 /// TIN, year, period and filing status of `draft`.
 pub fn identity(kind: AgentFormKind, draft: &Value) -> Result<DraftIdentity, String> {
-    with_agent_kind!(kind, F => {
-        let typed: F = parse(kind, draft)?;
-        Ok(typed.seam_identity())
-    })
+    with_agent_kind!(kind, F => identity_as::<F>(kind, draft))
 }
 
 /// A new amended return copied from one that reached BIR (Submitted or
@@ -357,30 +381,44 @@ pub fn amended_copy(kind: AgentFormKind, draft: &Value) -> Result<Value, String>
         ));
     }
     match kind {
-        AgentFormKind::Form1601C => {
-            let mut copy: Form1601CDraft = parse(kind, draft)?;
-            copy.revert_to_draft();
-            copy.mark_amended();
-            copy.id = None;
-            to_json(&copy)
+        AgentFormKind::Form1601C => amended_1601c(kind, draft),
+        AgentFormKind::Form2551Q => amended_2551q(kind, draft),
+        AgentFormKind::Queueable(queueable) => {
+            crate::with_queueable_kind!(queueable, F => amended_queueable::<F>(kind, draft))
         }
-        AgentFormKind::Form2551Q => {
-            let mut copy: Form2551QDraft = parse(kind, draft)?;
-            copy.revert_to_draft();
-            copy.mark_amended();
-            copy.id = None;
-            to_json(&copy)
-        }
-        AgentFormKind::Queueable(queueable) => crate::with_queueable_kind!(queueable, F => {
-            let mut copy: F = parse(kind, draft)?;
-            copy.lifecycle_mut().revert_to_draft();
-            if !copy.mark_amended() {
-                return Err(format!("{} has no amended-return answer", kind.form_code()));
-            }
-            copy.set_draft_id(None);
-            to_json(&copy)
-        }),
     }
+}
+
+#[inline(never)]
+fn amended_1601c(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
+    let mut copy: Form1601CDraft = parse(kind, draft)?;
+    copy.revert_to_draft();
+    copy.mark_amended();
+    copy.id = None;
+    to_json(&copy)
+}
+
+#[inline(never)]
+fn amended_2551q(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
+    let mut copy: Form2551QDraft = parse(kind, draft)?;
+    copy.revert_to_draft();
+    copy.mark_amended();
+    copy.id = None;
+    to_json(&copy)
+}
+
+#[inline(never)]
+fn amended_queueable<F: QueueableForm + Serialize + DeserializeOwned>(
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<Value, String> {
+    let mut copy: F = parse(kind, draft)?;
+    copy.lifecycle_mut().revert_to_draft();
+    if !copy.mark_amended() {
+        return Err(format!("{} has no amended-return answer", kind.form_code()));
+    }
+    copy.set_draft_id(None);
+    to_json(&copy)
 }
 
 /// Save an editable Draft the way its page's "Save draft" does, recomputed
@@ -396,49 +434,12 @@ pub fn save_draft(
         return Err("this return is no longer a draft".to_string());
     }
     let id = match kind {
-        AgentFormKind::Form1601C => {
-            let typed: Form1601CDraft = parse(kind, draft)?;
-            db.save_1601c_draft(&typed)
-                .map_err(|error| error.to_string())?
-        }
-        AgentFormKind::Form2551Q => {
-            let typed: Form2551QDraft = parse(kind, draft)?;
-            db.save_2551q_draft(&typed)
-                .map_err(|error| error.to_string())?
-        }
+        AgentFormKind::Form1601C => save_1601c(kind, db, draft)?,
+        AgentFormKind::Form2551Q => save_2551q(kind, db, draft)?,
         // The 2550Q page keeps its own row format (`save_form_draft_v2`).
-        AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
-            let typed: super::form_2550q::Form2550QDraft = parse(kind, draft)?;
-            let quarter = typed.quarter_number().unwrap_or(0);
-            // Its row path upserts by period: never over a return that left Draft.
-            if let Some(stored) = db
-                .get_form_draft_v2::<super::form_2550q::Form2550QDraft>(
-                    &typed.tin,
-                    "2550Q",
-                    typed.taxable_year,
-                    &FilingPeriod::Quarterly(quarter),
-                )
-                .map_err(|error| error.to_string())?
-                && stored.lifecycle.status != FilingStatus::Draft
-            {
-                return Err(format!(
-                    "the 2550Q return for this quarter is {:?}; it can no longer change",
-                    stored.lifecycle.status
-                ));
-            }
-            db.save_form_draft_v2(
-                &typed.tin,
-                "2550Q",
-                typed.taxable_year,
-                &FilingPeriod::Quarterly(quarter),
-                &typed.lifecycle.status,
-                &typed,
-            )
-            .map_err(|error| error.to_string())?
-        }
+        AgentFormKind::Queueable(QueueableKind::Form2550Q) => save_2550q(kind, db, draft)?,
         AgentFormKind::Queueable(queueable) => crate::with_queueable_kind!(queueable, F => {
-            let typed: F = parse(kind, draft)?;
-            db.save_queueable_draft(&typed).map_err(|error| error.to_string())?
+            save_queueable::<F>(kind, db, draft)?
         }),
     };
     if let Value::Object(object) = draft {
@@ -447,38 +448,104 @@ pub fn save_draft(
     Ok(id)
 }
 
+#[inline(never)]
+fn save_1601c(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+    let typed: Form1601CDraft = parse(kind, draft)?;
+    db.save_1601c_draft(&typed)
+        .map_err(|error| error.to_string())
+}
+
+#[inline(never)]
+fn save_2551q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+    let typed: Form2551QDraft = parse(kind, draft)?;
+    db.save_2551q_draft(&typed)
+        .map_err(|error| error.to_string())
+}
+
+#[inline(never)]
+fn save_queueable<F: QueueableForm + Serialize + DeserializeOwned>(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &Value,
+) -> Result<i64, String> {
+    let typed: F = parse(kind, draft)?;
+    db.save_queueable_draft(&typed)
+        .map_err(|error| error.to_string())
+}
+
+#[inline(never)]
+fn save_2550q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+    Ok({
+        let typed: super::form_2550q::Form2550QDraft = parse(kind, draft)?;
+        let quarter = typed.quarter_number().unwrap_or(0);
+        // Its row path upserts by period: never over a return that left Draft.
+        if let Some(stored) = db
+            .get_form_draft_v2::<super::form_2550q::Form2550QDraft>(
+                &typed.tin,
+                "2550Q",
+                typed.taxable_year,
+                &FilingPeriod::Quarterly(quarter),
+            )
+            .map_err(|error| error.to_string())?
+            && stored.lifecycle.status != FilingStatus::Draft
+        {
+            return Err(format!(
+                "the 2550Q return for this quarter is {:?}; it can no longer change",
+                stored.lifecycle.status
+            ));
+        }
+        db.save_form_draft_v2(
+            &typed.tin,
+            "2550Q",
+            typed.taxable_year,
+            &FilingPeriod::Quarterly(quarter),
+            &typed.lifecycle.status,
+            &typed,
+        )
+        .map_err(|error| error.to_string())?
+    })
+}
+
 /// Parse `draft` as `kind`'s draft type, recompute it and return the field
 /// map. Used by [`probe`]; `None` when the value is not a valid draft or the
 /// form code panics on it.
 fn probe_eval(kind: AgentFormKind, draft: &Value) -> Option<(Value, BTreeMap<String, String>)> {
-    with_agent_kind!(kind, F => {
-        let mut typed: F = serde_json::from_value(draft.clone()).ok()?;
-        catch_unwind(AssertUnwindSafe(|| {
-            typed.seam_compute();
-            let mut map = typed.seam_field_map();
-            // A box keyed as the first occurrence of a control the field
-            // map writes once shows that control's value.
-            for (code, alias, _) in probe::FIRST_OCCURRENCE {
-                if *code == kind.form_code()
-                    && let Some((official, _)) = alias.split_once("#occurrence-")
-                    && let Some(value) = map.get(official).cloned()
-                {
-                    map.entry(alias.to_string()).or_insert(value);
-                }
+    with_agent_kind!(kind, F => probe_eval_as::<F>(kind.form_code(), draft))
+}
+
+#[inline(never)]
+fn probe_eval_as<F: Seam>(code: &str, draft: &Value) -> Option<(Value, BTreeMap<String, String>)> {
+    let mut typed: F = serde_json::from_value(draft.clone()).ok()?;
+    catch_unwind(AssertUnwindSafe(|| {
+        typed.seam_compute();
+        let mut map = typed.seam_field_map();
+        // A box keyed as the first occurrence of a control the field
+        // map writes once shows that control's value.
+        for (form, alias, _) in probe::FIRST_OCCURRENCE {
+            if *form == code
+                && let Some((official, _)) = alias.split_once("#occurrence-")
+                && let Some(value) = map.get(official).cloned()
+            {
+                map.entry(alias.to_string()).or_insert(value);
             }
-            (serde_json::to_value(&typed).ok(), map)
-        }))
-        .ok()
-        .and_then(|(json, map)| json.map(|json| (json, map)))
-    })
+        }
+        (serde_json::to_value(&typed).ok(), map)
+    }))
+    .ok()
+    .and_then(|(json, map)| json.map(|json| (json, map)))
 }
 
 /// The deserialization error for `draft`, if any (used by [`probe`] to read
 /// an enum's variants).
 fn parse_error(kind: AgentFormKind, draft: &Value) -> Option<String> {
-    with_agent_kind!(kind, F => {
-        serde_json::from_value::<F>(draft.clone()).err().map(|error| error.to_string())
-    })
+    with_agent_kind!(kind, F => parse_error_as::<F>(draft))
+}
+
+#[inline(never)]
+fn parse_error_as<F: DeserializeOwned>(draft: &Value) -> Option<String> {
+    serde_json::from_value::<F>(draft.clone())
+        .err()
+        .map(|error| error.to_string())
 }
 
 /// The identity of a probed draft, for [`probe`]'s lock detection.
