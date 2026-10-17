@@ -1250,8 +1250,60 @@ export function SidePanel(cx, id, opts) {
 }
 
 /** Bottom-centre toast on `primary`, 20 px above the window edge. */
-export function Toast(cx, message, icon = "circle-check") {
+/**
+ * A toast. `opts.action` ({label, onClick}) adds a button (Undo), and
+ * `opts.progress` (1 to 0) a bar counting down the time left to use it.
+ */
+export function Toast(cx, message, icon = "circle-check", opts = {}) {
   const t = tokens(cx);
+  const width = 440;
+  const body = div()
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(10)
+    .child(Icon(cx, icon, { color: "primaryFg" }))
+    .child(Text(cx, "control", message, "primaryFg").flex_1().min_w(0).whitespace_normal());
+  if (opts.action) {
+    body.child(
+      div()
+        .id("toast-action")
+        .flex_none()
+        .px(SPACE[2])
+        .py(2)
+        .rounded(RADIUS.ctl)
+        .border(1)
+        .border_color(t.primaryFg)
+        .cursor_pointer()
+        .accessibility_label(opts.action.label)
+        .on_click((e, cx) => opts.action.onClick(e, cx))
+        .child(Text(cx, "control", opts.action.label, "primaryFg").font_weight(600)),
+    );
+  }
+  if (opts.action) {
+    const bar = Math.max(0, Math.min(1, opts.progress ?? 1));
+    return div()
+      .id("toast")
+      .absolute()
+      .bottom(20)
+      .left(0)
+      .right(0)
+      .flex()
+      .flex_row()
+      .justify_center()
+      .child(
+        div()
+          .flex()
+          .flex_col()
+          .w(width)
+          .rounded(RADIUS.card)
+          .bg(t.primary)
+          .shadow_lg()
+          .overflow_hidden()
+          .child(body.py(10).px(14))
+          .child(div().h(3).w(Math.round(width * bar)).bg(t.primaryFg).opacity(0.6)),
+      );
+  }
   return div()
     .id("toast")
     .absolute()

@@ -33,7 +33,7 @@ import { renderCalendar } from "./shell/calendar_page.js";
 import { renderFilings } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
-import { renderFormPage, renderFormSplit, FormPageActions } from "./shell/form_page.js";
+import { renderFormPage, renderFormSplit, renderExistingOffer, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { SecurityActions } from "./shell/security.js";
@@ -75,8 +75,11 @@ class BirApp extends View {
     this.panel = null;
     /** The panel the title-bar panel button reopens. */
     this.lastPanel = "profile";
-    /** null | "palette" | "new" */
+    /** null | "palette" | "new" | "existing" (a stored return of a sample's period) */
     this.overlay = null;
+    this.existingOffer = null;
+    /** Choices for this run only, lost on quit ("Don't ask again for drafts"). */
+    this.session = { fastDrafts: false };
     this.accountMenu = false;
     this.toastState = null;
 
@@ -167,6 +170,7 @@ class BirApp extends View {
       ["l", "lock-app"],
       ["[", "go-back"],
       ["]", "go-forward"],
+      ["z", "undo-last"],
     ];
     cx.bind_keys([
       ...chords.flatMap(([key, action]) => [
@@ -507,6 +511,8 @@ class BirApp extends View {
   }
 
   closeOverlay(cx) {
+    // Esc or a click outside the stored-return offer is "Keep this form".
+    if (this.overlay === "existing") return this.formUi.takeExisting("keep", cx);
     this.overlay = null;
     this.newReturn.periodOpen = false;
     this.focusRoot.focus();
@@ -563,13 +569,14 @@ class BirApp extends View {
     return "Add a taxpayer first, then open a form for them.";
   }
 
-  openForm(opts, cx) {
+  /** `keep`: the form on screen stays alive for an Undo (see FormPageActions.open). */
+  openForm(opts, cx, keep = false) {
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
     if (!this.branchFor(opts.tin)) {
       return this.toast("That return belongs to a taxpayer that is not in this database.", cx, "triangle-alert");
     }
     this.overlay = null;
-    this.formUi.open(opts, cx);
+    this.formUi.open(opts, cx, keep);
     // A library sample is no return, so it is not a recent one.
     if (!opts.sample) this.pushRecent(opts);
     this.go("form", cx);
@@ -662,6 +669,42 @@ class BirApp extends View {
   }
 
   // ---------------------------------------------------------------- toast
+
+  /**
+   * "<what happened>. Undo" for six seconds with a countdown bar; Undo (or
+   * Cmd/Ctrl+Z while it shows) runs `undo` once. One level: a newer toast
+   * replaces it.
+   */
+  toastUndo(message, undo, cx) {
+    const id = (this.toastState ? this.toastState.id : 0) + 1;
+    const total = 6000;
+    const ends = Date.now() + total;
+    this.toastState = { id, message, icon: "undo-2", action: { label: "Undo", run: undo }, ends, total, progress: 1 };
+    const tick = (cx) => {
+      const st = this.toastState;
+      if (!st || st.id !== id) return;
+      const left = st.ends - Date.now();
+      if (left <= 0) {
+        this.toastState = null;
+        this.formUi.dropKept();
+      } else {
+        st.progress = left / st.total;
+        cx.timer.after(200, tick);
+      }
+      this.invalidate();
+    };
+    cx.timer.after(200, tick);
+    this.invalidate();
+  }
+
+  /** Undo the last action while its toast shows. */
+  undoLast(cx) {
+    const st = this.toastState;
+    if (!st || !st.action) return;
+    this.toastState = null;
+    st.action.run(cx);
+    this.invalidate();
+  }
 
   toast(message, cx, icon) {
     const id = (this.toastState ? this.toastState.id : 0) + 1;
@@ -1373,6 +1416,7 @@ class BirApp extends View {
       .on_action("go-back", (_e, cx) => this.goBack(cx))
       .on_action("go-forward", (_e, cx) => this.goForward(cx))
       .on_action("dismiss", (_e, cx) => this.dismiss(cx))
+      .on_action("undo-last", (_e, cx) => this.undoLast(cx))
       .on_key_down((e, cx) => this.paletteKey(e, cx))
       .child(renderTitleBar(cx, this, L))
       .child(body);
@@ -1421,7 +1465,13 @@ class BirApp extends View {
     }
     if (this.overlay === "palette") root.child(renderPalette(cx, this));
     if (this.overlay === "new") root.child(renderNewReturn(cx, this));
-    if (this.toastState) root.child(Toast(cx, this.toastState.message, this.toastState.icon));
+    if (this.overlay === "existing") root.child(renderExistingOffer(cx, this));
+    if (this.toastState) {
+      const st = this.toastState;
+      root.child(
+        Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress } : {}),
+      );
+    }
     return root;
   }
 }

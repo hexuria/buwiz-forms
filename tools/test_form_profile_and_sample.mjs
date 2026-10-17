@@ -74,7 +74,7 @@ const kit = mock("gpui-kit", { div: element, svg: element, View });
 const base = mock("gpui-base", { InputState, CalendarState: {}, Popup: { new: element } });
 const components = mock("gpui-component", { Spinner: { new: element } });
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
-for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine"]) uiExports[n] = element;
+for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel"]) uiExports[n] = element;
 uiExports.AppButton = (_cx, id, _label, opts = {}) => { buttons.push(id); const el = element(); el.id(id); if (opts.onClick) el.on_click(opts.onClick); return el; };
 uiExports.Text = (_cx, _variant, text) => { texts.push(String(text)); return element(); };
 uiExports.Line = uiExports.Text;

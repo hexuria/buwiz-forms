@@ -28,11 +28,13 @@ import {
   Chip,
   Switch,
   Checkbox,
+  CheckboxLabel,
   TextField,
   Dropdown,
 
   PageHeader,
   MetaLine,
+  Overlay,
 } from "./ui.js";
 import { errorText as message, formatTin } from "./store.js";
 import { periodLabel } from "./periods.js";
@@ -196,14 +198,26 @@ export class FormPageActions {
     this.token = 0;
   }
 
-  /** Load the schema now and the return in the background. */
-  open(opts, cx) {
+  /** Release a form's retained views, text states and focus handles. */
+  release(state) {
+    for (const row of state?.rowViews?.values() || []) row.entity.release();
+    for (const input of state?.inputs?.values() || []) input.release();
+    for (const handle of state?.editFocus?.values() || []) handle.release();
+    state?.checkButton?.entity.release();
+  }
+
+  /**
+   * Load the schema now and the return in the background. `keep`: the form
+   * on screen is kept alive (not released) for an Undo to bring back.
+   */
+  open(opts, cx, keep = false) {
     const app = this.app;
-    // The last form's retained views and text states go with it.
-    for (const row of this.state?.rowViews?.values() || []) row.entity.release();
-    for (const input of this.state?.inputs?.values() || []) input.release();
-    for (const handle of this.state?.editFocus?.values() || []) handle.release();
-    this.state?.checkButton?.entity.release();
+    // The last form's retained views and text states go with it, unless an
+    // Undo may still bring it back.
+    if (this.kept && this.kept !== this.state) this.release(this.kept);
+    this.kept = null;
+    if (keep) this.kept = this.state;
+    else this.release(this.state);
     const token = ++this.token;
     let schema = null;
     let error = null;
@@ -264,7 +278,9 @@ export class FormPageActions {
       try {
         const r = opts.sample
           ? await app.store.call("screen_form_sample", opts.tin, opts.code)
-          : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
+          : opts.amend
+            ? await app.store.call("screen_form_amend", opts.tin, opts.code, opts.year, opts.period)
+            : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
@@ -295,6 +311,11 @@ export class FormPageActions {
     s.periodParts = new Map((r.period_parts || []).map((p) => [p.key, p]));
     s.periodSet = Boolean(r.period_set);
     s.savedPeriods = r.saved_periods || [];
+    // A read-only return says when it was sent and confirmed; an amendment
+    // says what it amends.
+    s.submittedAt = r.submitted_at || null;
+    s.confirmedAt = r.confirmed_at || null;
+    s.amends = r.amends || null;
     s.values = this.shown(r.values);
     s.options = r.options || {};
     s.locks = r.locks;
@@ -651,6 +672,7 @@ export class FormPageActions {
     const s = this.state;
     s.opens = r.complete ? r.opens : null;
     s.existing = r.existing || null;
+    s.periodToken = (s.periodToken || 0) + 1;
     if (r.existing) {
       this.offerExisting(r.existing, cx);
     } else if (r.sample) {
@@ -683,8 +705,146 @@ export class FormPageActions {
    * status, last save and total payable.
    */
   offerExisting(existing, cx) {
+    const app = this.app;
     this.state.existing = existing;
-    void cx;
+    // "Don't ask again for drafts" (this session): a draft loads straight
+    // away. Queued and filed returns always ask.
+    if (existing.status === "Draft" && app.session?.fastDrafts) return this.takeExisting("load", cx, true);
+    app.existingOffer = existing;
+    app.overlay = "existing";
+    cx.notify();
+  }
+
+  /**
+   * The filer's choice for a stored return of the sample's period: `load`
+   * (a draft), `view` (read-only), `amend` (a new amended return), `keep`
+   * (stay in the sample, its period cleared). Each can be undone once.
+   */
+  takeExisting(choice, cx, auto = false) {
+    const app = this.app;
+    const s = this.state;
+    const existing = app.existingOffer || s.existing;
+    if (app.overlay === "existing") app.overlay = null;
+    app.existingOffer = null;
+    if (!existing) return;
+    if (choice === "keep") {
+      const before = this.periodSnapshot();
+      this.keepForm(cx);
+      return this.offerUndo("Kept this form; its period is cleared", () => this.restorePeriod(before), cx);
+    }
+    const sample = this.state;
+    const opts = { tin: s.tin, code: s.code, year: existing.year, period: existing.period };
+    if (choice === "amend") {
+      this.open({ ...opts, amend: true }, cx, true);
+    } else {
+      app.openForm(opts, cx, true);
+    }
+    const what = {
+      load: auto ? `Loaded your saved ${existing.label} draft (you chose not to be asked again)` : `Loaded your saved ${existing.label} draft`,
+      view: `Opened ${existing.label} read-only`,
+      amend: `Started an amended ${existing.label} return`,
+    }[choice];
+    this.offerUndo(what, (cx) => this.restoreForm(sample, cx), cx);
+  }
+
+  /** The Undo window closed: the form kept for it goes. */
+  dropKept() {
+    if (this.kept && this.kept !== this.state) this.release(this.kept);
+    this.kept = null;
+  }
+
+  /** "<what happened>. Undo" for a few seconds; Undo runs `undo` once. */
+  offerUndo(what, undo, cx) {
+    if (this.app.toastUndo) this.app.toastUndo(`${what}.`, undo, cx);
+  }
+
+  /**
+   * Undo a Load, View or Amend: the sample comes back exactly as it was. An
+   * amended return that was never saved is simply dropped; one already
+   * saved stays saved (nothing is deleted), and Undo only returns here.
+   */
+  restoreForm(sample, cx) {
+    if (!sample || this.state === sample) return;
+    this.release(this.state);
+    this.kept = null;
+    this.state = sample;
+    this.token++;
+    this.app.go?.("form", cx);
+    this.refreshRows();
+    if (this.app.invalidate) this.app.invalidate();
+    else cx.notify();
+  }
+
+  /** What Keep clears, to put back on Undo. */
+  periodSnapshot() {
+    const s = this.state;
+    const inputs = {};
+    for (const k of s.periodParts?.keys() || []) {
+      const input = s.inputs.get(k);
+      if (input) inputs[k] = input.value();
+    }
+    return {
+      fields: {
+        draft: s.draft,
+        values: { ...s.values },
+        options: s.options,
+        locks: s.locks,
+        blank: s.blank,
+        needs: s.needs,
+        errors: s.errors,
+        messages: s.messages,
+        periodValues: { ...(s.periodValues || {}) },
+        periodAsked: s.periodAsked,
+        periodSet: s.periodSet,
+        opens: s.opens,
+        existing: s.existing,
+      },
+      inputs,
+    };
+  }
+
+  /** Undo a Keep: the period and everything built from it come back. */
+  restorePeriod(snapshot) {
+    const s = this.state;
+    s.periodToken = (s.periodToken || 0) + 1;
+    Object.assign(s, snapshot.fields);
+    for (const [k, text] of Object.entries(snapshot.inputs)) s.inputs.get(k)?.set_value(text);
+    this.refreshRows();
+    if (this.app.invalidate) this.app.invalidate();
+  }
+
+  /**
+   * Keep this form: the same sample with every value the filer typed
+   * outside the period, and every period part blank again (the period
+   * "not set"), rebuilt on the placeholder period the host holds.
+   */
+  keepForm(cx) {
+    const s = this.state;
+    s.periodValues = {};
+    s.periodAsked = JSON.stringify({});
+    s.opens = null;
+    s.existing = null;
+    for (const k of s.periodParts?.keys() || []) {
+      s.values[k] = "";
+      s.inputs.get(k)?.set_value("");
+    }
+    if (s.periodSet) {
+      // The sample was built for an earlier period: back to the placeholder.
+      const token = this.token;
+      const period = (s.periodToken = (s.periodToken || 0) + 1);
+      cx.spawn(async (acx) => {
+        let r;
+        try {
+          r = await this.app.store.call("screen_form_sample", s.tin, s.code);
+        } catch (e) {
+          if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
+          return;
+        }
+        if (token !== this.token || period !== this.state.periodToken) return;
+        this.takePeriod({ complete: false, sample: r }, acx);
+      });
+    }
+    this.notify(cx);
   }
 
   /** Start a return from a sample: its period's return once the period is set, else New return. */
@@ -1676,6 +1836,86 @@ function profileGroup(cx, ui, pi, tucked, border) {
   return header;
 }
 
+// ---------------------------------------------------------------- existing return
+
+/** `2026-10-01T…` → `Oct 1, 2026`; anything else as given. */
+function shortDate(text) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(text || ""));
+  if (!m) return String(text || "");
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+/**
+ * What the offer says and offers for a stored return's status: a draft is
+ * loaded, a queued return viewed, one that left the app viewed read-only
+ * or amended (only where the host offers `amend`).
+ */
+export function existingOfferFor(existing) {
+  const label = existing.label;
+  const has = (action) => (existing.actions || []).includes(action);
+  const keep = { id: "keep", label: "Keep this form", hint: "Stay in the sample; the period clears." };
+  if (existing.status === "Draft") {
+    return {
+      title: `You already have a ${label} draft`,
+      subtitle: existing.updated_at ? `edited ${shortDate(existing.updated_at)}.` : "",
+      choices: [{ id: "load", label: "Load saved draft", hint: "Continue where you left off.", variant: "primary" }, keep],
+      fastLane: true,
+    };
+  }
+  if (existing.status === "Queued") {
+    return {
+      title: `${label} is queued to send to BIR`,
+      subtitle: "",
+      choices: [{ id: "view", label: "View it", hint: "Read-only while it waits to send.", variant: "primary" }, keep],
+      fastLane: false,
+    };
+  }
+  const filed = existing.status === "Submitted" ? "submitted" : "filed";
+  const choices = [{ id: "view", label: "View read-only", hint: `See exactly what was ${filed}.`, variant: "primary" }];
+  if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: "New amended return; the original stays as filed.", variant: "danger" });
+  choices.push(keep);
+  return { title: `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
+}
+
+/** The app's modal for a stored return of a sample's period (Esc or outside: Keep this form). */
+export function renderExistingOffer(cx, app) {
+  const t = tokens(cx);
+  const ui = app.formUi;
+  const existing = app.existingOffer;
+  if (!existing) return div();
+  const offer = existingOfferFor(existing);
+  const card = div().flex().flex_col().gap(SPACE[3]).p(SPACE[5]).w(440);
+  card.child(Text(cx, "title", offer.title).whitespace_normal());
+  if (offer.subtitle) card.child(Text(cx, "meta", offer.subtitle, "fg2"));
+  for (const choice of offer.choices) {
+    card.child(
+      div()
+        .flex()
+        .flex_col()
+        .gap(2)
+        .child(AppButton(cx, `existing-${choice.id}`, choice.label, { variant: choice.variant || "secondary", onClick: (_e, cx) => ui.takeExisting(choice.id, cx) }))
+        .child(Text(cx, "meta", choice.hint, "fg3")),
+    );
+  }
+  if (offer.fastLane) {
+    card.child(
+      CheckboxLabel(
+        cx,
+        "existing-fast-lane",
+        Boolean(app.session?.fastDrafts),
+        (v, cx) => {
+          app.session = { ...(app.session || {}), fastDrafts: v };
+          cx.notify();
+        },
+        "Don't ask again for drafts (this session)",
+      ),
+    );
+  }
+  void t;
+  return Overlay(cx, "existing-offer", card, (cx) => ui.takeExisting("keep", cx));
+}
+
 // ---------------------------------------------------------------- page
 
 /**
@@ -1716,7 +1956,8 @@ function formContent(cx, app, width) {
   const chips = div().flex().flex_row().flex_wrap().items_center().gap(SPACE[2]).mt(SPACE[2]);
   chips.child(Chip(cx, f.freq)).child(Chip(cx, `${f.pages} page${f.pages > 1 ? "s" : ""}`)).child(Chip(cx, `${f.n} fields`));
   if (draftLayout) chips.child(Chip(cx, "Draft layout", "warning", "triangle-alert"));
-  if (s.status !== "Draft") chips.child(Chip(cx, s.status, s.status === "Queued" ? "accent" : "success"));
+  if (s.status !== "Draft") chips.child(Chip(cx, s.editable ? s.status : `${s.status} · read-only`, s.status === "Queued" ? "accent" : "success"));
+  if (s.amends) chips.child(Chip(cx, `Amended return (the ${s.amends.toLowerCase()} one stays as filed)`, "warning"));
 
   const head = div()
     .flex()
@@ -1792,6 +2033,13 @@ function formContent(cx, app, width) {
 
   const page = div().flex().flex_col().child(head).child(bar);
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
+  // A return that left the app is read-only, and says when it went.
+  if (!s.editable && (s.submittedAt || s.confirmedAt)) {
+    const parts = [];
+    if (s.submittedAt) parts.push(`Sent to BIR ${shortDate(s.submittedAt)}`);
+    if (s.confirmedAt) parts.push(`confirmed ${shortDate(s.confirmedAt)}`);
+    page.child(Text(cx, "meta", `${parts.join(", ")}. Nothing here can be changed.`, "fg2").mb(SPACE[4]).whitespace_normal());
+  }
   if (s.error) {
     return { page: page.child(div().p(SPACE[4]).rounded(RADIUS.card).bg(t.dangerSoft).child(Text(cx, "body", s.error, "danger").whitespace_normal())) };
   }
