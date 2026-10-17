@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use super::form_2551q::{AnnualIncomeTaxElection, annual_income_tax_election};
+use super::penalty_items::PenaltyState;
 use super::queueable::SubmissionLifecycle;
 use super::{FilingPeriod, FormValidator, TypedBirForm};
 use crate::profile::{IncomeTaxElection, TaxClassification, TaxpayerProfile, TaxpayerType};
@@ -425,6 +426,19 @@ pub struct Form1701Draft {
     /// round-trips; the generic lifecycle reports `submission_error`.
     pub last_error: Option<String>,
 
+    /// Each column's Interest, Surcharge and Compromise (Items 27-29, A and
+    /// B) on the shared penalty model ([`super::penalty_items`]): computed
+    /// values, overrides and engine inputs, one state per column. A column at
+    /// `penalty_model_version` 0 (a draft stored before PR 7, or an imported
+    /// save file) still holds the filer's own typed amounts. The stored shape
+    /// is kept: a draft stored with no `penalty` key is written back without
+    /// it while it is the default, and one stored with the key (even at its
+    /// default) is written back with it ([`PenaltySlot`]).
+    #[serde(default, skip_serializing_if = "PenaltySlot::is_absent")]
+    pub penalty: PenaltySlot,
+    #[serde(default, skip_serializing_if = "PenaltySlot::is_absent")]
+    pub spouse_penalty: PenaltySlot,
+
     /// Status, queue authorization and retry state. Flattened so stored JSON
     /// keeps the keys earlier builds wrote inline (`status`, `created_at`,
     /// `submission_attempts`, ...).
@@ -474,8 +488,61 @@ impl Default for Form1701Draft {
             line_of_business: String::new(),
             spouse_rdo_code: String::new(),
             last_error: None,
+            penalty: PenaltySlot::default(),
+            spouse_penalty: PenaltySlot::default(),
             lifecycle: SubmissionLifecycle::default(),
         }
+    }
+}
+
+/// One column's [`PenaltyState`], remembering whether the stored draft had
+/// the key, so a save writes back the shape it read: present stays present
+/// (even at the default), absent stays absent until the state is used.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PenaltySlot {
+    pub state: PenaltyState,
+    /// The stored draft carried this key.
+    present: bool,
+}
+
+impl PenaltySlot {
+    pub fn new(state: PenaltyState) -> Self {
+        Self {
+            state,
+            present: false,
+        }
+    }
+
+    fn is_absent(&self) -> bool {
+        !self.present && self.state == PenaltyState::default()
+    }
+}
+
+impl std::ops::Deref for PenaltySlot {
+    type Target = PenaltyState;
+    fn deref(&self) -> &PenaltyState {
+        &self.state
+    }
+}
+
+impl std::ops::DerefMut for PenaltySlot {
+    fn deref_mut(&mut self) -> &mut PenaltyState {
+        &mut self.state
+    }
+}
+
+impl Serialize for PenaltySlot {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.state.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PenaltySlot {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self {
+            state: PenaltyState::deserialize(deserializer)?,
+            present: true,
+        })
     }
 }
 
@@ -563,6 +630,9 @@ impl Form1701Draft {
             email: profile.email.clone(),
             contact_number: profile.phone.clone(),
             line_of_business: profile.line_of_business.clone(),
+            penalty: PenaltySlot::new(PenaltyState::for_profile(profile)),
+            // The profile's EOPT class is the filer's, not the spouse's.
+            spouse_penalty: PenaltySlot::new(PenaltyState::new(None)),
             ..Self::default()
         };
 

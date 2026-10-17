@@ -27,6 +27,7 @@ use super::form_1701::{
     Form1701DeductionMethod, Form1701Draft, Form1701JointFilingStatus, Form1701NolcoRow,
     Form1701OverpaymentDisposition, Form1701Party, Form1701TaxRate,
 };
+use super::penalty_items::{PenaltyItems, PenaltyRounding};
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -169,8 +170,150 @@ impl Form1701Draft {
         value
     }
 
-    /// The official compute chain for both columns.
+    /// The official compute chain for both columns, with Items 27-29 on
+    /// the shared penalty model: the chain runs once for each column's tax
+    /// still due (Item 26), the penalty items file their override, else the
+    /// computed value, and the chain runs again so Items 30-32 add up what
+    /// is filed.
     pub(super) fn official_recompute(&mut self) {
+        self.official_recompute_chain();
+        for items in Self::penalty_declarations() {
+            // A column not on the return (the spouse's off a joint return)
+            // keeps no entry: its Items 27-29 hold 0.00.
+            if !(items.applies)(self) {
+                let state = (items.state_mut)(self);
+                state.clear_overrides();
+                state.computed_penalties = None;
+                continue;
+            }
+            // Until PR 7 the 1701 penalties were typed boxes the model never
+            // computed. A draft stored then, or an imported save file (no
+            // penalty state: version 0), files every amount it holds, a zero
+            // too, and is left exactly as stored. Once the filer types one of
+            // the column's amounts (Edit penalties writes its override), the
+            // others become overrides at the amounts they held and the column
+            // joins the model; "Use the computed amounts" then brings the
+            // computed values back.
+            if (items.state)(self).penalty_model_version
+                < super::penalty_items::PENALTY_MODEL_VERSION
+            {
+                use crate::penalties::PenaltyComponent;
+                let typed = PenaltyComponent::ALL.into_iter().any(|component| {
+                    (items.state)(self)
+                        .penalty_overrides
+                        .get(component)
+                        .is_some()
+                });
+                if !typed {
+                    continue;
+                }
+                let filed = items.filed(self);
+                for (component, value) in PenaltyComponent::ALL.into_iter().zip(filed) {
+                    if (items.state)(self)
+                        .penalty_overrides
+                        .get(component)
+                        .is_none()
+                    {
+                        items.set_override(self, component, Some(value));
+                    }
+                }
+                (items.state_mut)(self).penalty_model_version =
+                    super::penalty_items::PENALTY_MODEL_VERSION;
+            }
+            items.apply(self);
+        }
+        self.official_recompute_chain();
+    }
+
+    /// Items 27-29 (Interest, Surcharge, Compromise) of each column on the
+    /// shared penalty model ([`super::penalty_items`]): the taxpayer/filer's
+    /// (column A), then the spouse's (column B), which apply only on a joint
+    /// return (`spouse_column_active`). The engine runs on Item 26, the
+    /// amount of tax payable before penalties (Item 31 adds Item 30 to it).
+    pub fn penalty_declarations() -> Vec<PenaltyItems<Self>> {
+        use crate::penalties::PenaltyComponent as C;
+        const fn item(component: C) -> u8 {
+            match component {
+                C::Surcharge => 28,
+                C::Interest => 27,
+                C::Compromise => 29,
+            }
+        }
+        let common = PenaltyItems::<Self> {
+            form_code: super::form_1701::FORM_CODE,
+            party: Some("Taxpayer/Filer"),
+            applies: |_| true,
+            schedule: crate::penalties::PenaltyProfile::StandardFiling,
+            fields: ["item_28_taxpayer", "item_27_taxpayer", "item_29_taxpayer"],
+            controls: [
+                "frm1701:txtPg1I28A",
+                "frm1701:txtPg1I27A",
+                "frm1701:txtPg1I29A",
+            ],
+            labels: ["28 Surcharge", "27 Interest", "29 Compromise"],
+            basic_tax_due_label: "Item 26A",
+            rounding: PenaltyRounding::Cents,
+            get: |d, component| {
+                d.get(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Taxpayer,
+                )
+            },
+            set: |d, component, value| {
+                d.put(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Taxpayer,
+                    value,
+                );
+            },
+            basic_tax_due: |d| d.get(Form1701AmountSection::PartIi, 26, Form1701Party::Taxpayer),
+            gross_sales: None,
+            state: |d| &d.penalty.state,
+            state_mut: |d| &mut d.penalty.state,
+            status: |d| d.lifecycle.status.clone(),
+            deadline_period: super::penalty_items::calendar_period::<Self>,
+            period_code: |d| QueueableForm::period_code(d),
+            is_amended: |d| d.is_amended,
+            recompute: |d| d.recompute(),
+        };
+        let spouse = PenaltyItems::<Self> {
+            party: Some("Spouse"),
+            applies: |d| d.spouse_column_active(),
+            fields: ["item_28_spouse", "item_27_spouse", "item_29_spouse"],
+            controls: [
+                "frm1701:txtPg1I28B",
+                "frm1701:txtPg1I27B",
+                "frm1701:txtPg1I29B",
+            ],
+            basic_tax_due_label: "Item 26B",
+            get: |d, component| {
+                d.get(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Spouse,
+                )
+            },
+            set: |d, component, value| {
+                d.put(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Spouse,
+                    value,
+                );
+            },
+            basic_tax_due: |d| d.get(Form1701AmountSection::PartIi, 26, Form1701Party::Spouse),
+            state: |d| &d.spouse_penalty.state,
+            state_mut: |d| &mut d.spouse_penalty.state,
+            ..common
+        };
+        vec![common, spouse]
+    }
+
+    /// The official compute chain for both columns (see
+    /// [`Self::official_recompute`]).
+    fn official_recompute_chain(&mut self) {
         use Form1701AmountSection::*;
         if !self.is_short_period {
             self.period_end_month = 12;
@@ -1658,6 +1801,26 @@ fn zero_nolco() -> Form1701NolcoRow {
 impl QueueableForm for Form1701Draft {
     fn print_field_map(&self) -> BTreeMap<String, String> {
         self.to_print_field_map()
+    }
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        Self::penalty_declarations()
+    }
+    /// A column still on the typed boxes (a draft stored before PR 7, or an
+    /// imported save file: penalty_model_version 0) computes nothing, so its
+    /// stored state is left exactly as it is; the others resolve their
+    /// deadline and class from the profile as on every wired form.
+    fn apply_penalty_profile(
+        &mut self,
+        profile: &crate::profile::TaxpayerProfile,
+        global_overrides: &[crate::calendar_rules::DeadlineOverride],
+    ) {
+        for items in Self::penalty_items() {
+            if (items.state)(self).penalty_model_version
+                >= super::penalty_items::PENALTY_MODEL_VERSION
+            {
+                items.apply_profile(self, profile, global_overrides);
+            }
+        }
     }
     const FORM_CODE: &'static str = "1701";
     const FORM_TYPE: &'static str = FORM_1701_FORM_TYPE;
