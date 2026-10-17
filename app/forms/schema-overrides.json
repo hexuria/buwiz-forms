@@ -4307,20 +4307,20 @@
       "evidence": "fields.json logical_type date-component-or-string, max_length None — one component of a split date"
     },
     "frm1604c:txtSched1TaxWheldTotal": {
-      "label": "Part II TOTAL Taxes Withheld",
-      "evidence": "agent box label: 'Part II TOTAL Taxes Withheld'; writer-cells printed caption: 'Part II TOTAL Taxes Withheld'"
+      "label": "Taxes Withheld",
+      "evidence": "PR 6 (1604C R3.0, manual-1): the TOTAL row's column, as printed. agent box label: 'Part II TOTAL Taxes Withheld'; writer-cells printed caption: 'Part II TOTAL Taxes Withheld'"
     },
     "frm1604c:txtSched1AdjTotal": {
-      "label": "Part II continuation TOTAL Adjustment",
-      "evidence": "agent box label: 'Part II continuation TOTAL Adjustment'; writer-cells printed caption: 'Part II continuation TOTAL Adjustment'"
+      "label": "Adjustment",
+      "evidence": "PR 6 (1604C R3.0, manual-1): the TOTAL row's column, as printed. agent box label: 'Part II continuation TOTAL Adjustment'; writer-cells printed caption: 'Part II continuation TOTAL Adjustment'"
     },
     "frm1604c:txtSched1PenTotal": {
-      "label": "Part II continuation TOTAL Penalties",
-      "evidence": "agent box label: 'Part II continuation TOTAL Penalties'; writer-cells printed caption: 'Part II continuation TOTAL Penalties'"
+      "label": "Penalties",
+      "evidence": "PR 6 (1604C R3.0, manual-1): the TOTAL row's column, as printed. agent box label: 'Part II continuation TOTAL Penalties'; writer-cells printed caption: 'Part II continuation TOTAL Penalties'"
     },
     "frm1604c:txtSched1Total": {
-      "label": "Part II continuation TOTAL Total Amount Remitted",
-      "evidence": "agent box label: 'Part II continuation TOTAL Total Amount Remitted'; writer-cells printed caption: 'Part II continuation TOTAL Total Amount Remitted'"
+      "label": "Total Amount Remitted",
+      "evidence": "PR 6 (1604C R3.0, manual-1): the TOTAL row's column, as printed. agent box label: 'Part II continuation TOTAL Total Amount Remitted'; writer-cells printed caption: 'Part II continuation TOTAL Total Amount Remitted'"
     },
     "frm1604c:txtRefMonth": {
       "label": "Refund date, month",
@@ -4388,6 +4388,310 @@
     "move:frm1604c:txtRefYear": {
       "to": "1:8",
       "evidence": "P4: D02 evidence — Item 11's refund date (BIR-Form1604CF.hta changeRefund enables it only when Item 11 is Yes; form_1604c.rs refund_date split into txtRefMonth/txtRefDate/txtRefYear)"
+    },
+    "add:1:0": {
+      "fields": [
+        {
+          "k": "frm1604c:rdoCode",
+          "l": "RDO Code",
+          "t": "sel"
+        }
+      ],
+      "evidence": "PR 6 (1604C R2.2, preview.0, manual-0): crates/bir-core/data/agent-forms/1604c-v2018.json binds frm1604c:rdoCode to /rdo_code with the profile lock (kind runtime-injected-control: the official program injects it at run time) and html-frozen/1604c-2018/writer-cells.json joins it at \"5 RDO Code\", but the extracted schema had no control for it; the layout puts it at item 5. The RDO list comes from the catalog."
+    },
+    "layout": {
+      "evidence": "PR 6: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/1604c-2018/index.html (BIR Form No. 1604-C January 2018: items 1-3, Part I 4-13, Part II Summary of Remittances per BIR Form No. 1601-C, January to December and TOTAL, with the Continuation of Part II holding Adjustment, Penalties and Total Amount Remitted) and html-frozen/1604c-2018/writer-cells.json joins (which box prints at which item, month and column: e.g. txtTra1 at \"Part II January TRA/eROR/eAR Number\", txtSched1Adj1 at \"Part II continuation January Adjustment\"). Part II is one table of the seven printed columns in the sheet's order, a row per printed month, with its TOTAL row under it. Field keys, values, the official XML and the print map are unchanged.",
+      "rest": "Not on the printed sheet",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Year (20YY)",
+              "k": [
+                "frm1604c:txtYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1604c:amendedRtn_1",
+                "frm1604c:amendedRtn_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1604c:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1604c:tinA",
+                "frm1604c:tinB",
+                "frm1604c:tinC",
+                "frm1604c:branchCode"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm1604c:rdoCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm1604c:registeredName"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm1604c:registeredAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1604c:zipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1604c:categoryAgent_1",
+                "frm1604c:categoryAgent_2"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "If private, top withholding agent?",
+              "k": [
+                "frm1604c:topAgent_1",
+                "frm1604c:topAgent_2"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "k": [
+                "frm1604c:telephoneNumber"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "In case of overwithholding/overremittance after the year-end adjustments on compensation, have you released the refund/s to your employee/s?",
+              "k": [
+                "frm1604c:releasedOfFunds_1",
+                "frm1604c:releasedOfFunds_2"
+              ]
+            },
+            {
+              "no": "11A",
+              "l": "If Yes, specify the date of refund (MM/DD/YYYY)",
+              "k": [
+                "frm1604c:txtRefMonth",
+                "frm1604c:txtRefDate",
+                "frm1604c:txtRefYear"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Total amount of overremittance on Tax withheld under compensation",
+              "k": [
+                "frm1604c:txt12"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Month of First Crediting of Overremittance (MM)",
+              "k": [
+                "frm1604c:select13"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Summary of Remittances per BIR Form No. 1601-C",
+          "items": [
+            {
+              "no": "",
+              "l": "January to December (Part II and its Continuation)",
+              "grid": {
+                "cols": [
+                  "Date of Remittance (MM/DD/YYYY)",
+                  "Drawee Bank/Bank Code/Agency",
+                  "TRA/eROR/eAR Number",
+                  "Taxes Withheld",
+                  "Adjustment",
+                  "Penalties",
+                  "Total Amount Remitted"
+                ],
+                "keys": [
+                  [
+                    "frm1604c:txtSched1Date1",
+                    "frm1604c:txtSched1BankVal1",
+                    "frm1604c:txtTra1",
+                    "frm1604c:txtSched1TaxWheld1",
+                    "frm1604c:txtSched1Adj1",
+                    "frm1604c:txtSched1Pen1",
+                    "frm1604c:txtSched1TotalAmt1"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date2",
+                    "frm1604c:txtSched1BankVal2",
+                    "frm1604c:txtTra2",
+                    "frm1604c:txtSched1TaxWheld2",
+                    "frm1604c:txtSched1Adj2",
+                    "frm1604c:txtSched1Pen2",
+                    "frm1604c:txtSched1TotalAmt2"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date3",
+                    "frm1604c:txtSched1BankVal3",
+                    "frm1604c:txtTra3",
+                    "frm1604c:txtSched1TaxWheld3",
+                    "frm1604c:txtSched1Adj3",
+                    "frm1604c:txtSched1Pen3",
+                    "frm1604c:txtSched1TotalAmt3"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date4",
+                    "frm1604c:txtSched1BankVal4",
+                    "frm1604c:txtTra4",
+                    "frm1604c:txtSched1TaxWheld4",
+                    "frm1604c:txtSched1Adj4",
+                    "frm1604c:txtSched1Pen4",
+                    "frm1604c:txtSched1TotalAmt4"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date5",
+                    "frm1604c:txtSched1BankVal5",
+                    "frm1604c:txtTra5",
+                    "frm1604c:txtSched1TaxWheld5",
+                    "frm1604c:txtSched1Adj5",
+                    "frm1604c:txtSched1Pen5",
+                    "frm1604c:txtSched1TotalAmt5"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date6",
+                    "frm1604c:txtSched1BankVal6",
+                    "frm1604c:txtTra6",
+                    "frm1604c:txtSched1TaxWheld6",
+                    "frm1604c:txtSched1Adj6",
+                    "frm1604c:txtSched1Pen6",
+                    "frm1604c:txtSched1TotalAmt6"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date7",
+                    "frm1604c:txtSched1BankVal7",
+                    "frm1604c:txtTra7",
+                    "frm1604c:txtSched1TaxWheld7",
+                    "frm1604c:txtSched1Adj7",
+                    "frm1604c:txtSched1Pen7",
+                    "frm1604c:txtSched1TotalAmt7"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date8",
+                    "frm1604c:txtSched1BankVal8",
+                    "frm1604c:txtTra8",
+                    "frm1604c:txtSched1TaxWheld8",
+                    "frm1604c:txtSched1Adj8",
+                    "frm1604c:txtSched1Pen8",
+                    "frm1604c:txtSched1TotalAmt8"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date9",
+                    "frm1604c:txtSched1BankVal9",
+                    "frm1604c:txtTra9",
+                    "frm1604c:txtSched1TaxWheld9",
+                    "frm1604c:txtSched1Adj9",
+                    "frm1604c:txtSched1Pen9",
+                    "frm1604c:txtSched1TotalAmt9"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date10",
+                    "frm1604c:txtSched1BankVal10",
+                    "frm1604c:txtTra10",
+                    "frm1604c:txtSched1TaxWheld10",
+                    "frm1604c:txtSched1Adj10",
+                    "frm1604c:txtSched1Pen10",
+                    "frm1604c:txtSched1TotalAmt10"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date11",
+                    "frm1604c:txtSched1BankVal11",
+                    "frm1604c:txtTra11",
+                    "frm1604c:txtSched1TaxWheld11",
+                    "frm1604c:txtSched1Adj11",
+                    "frm1604c:txtSched1Pen11",
+                    "frm1604c:txtSched1TotalAmt11"
+                  ],
+                  [
+                    "frm1604c:txtSched1Date12",
+                    "frm1604c:txtSched1BankVal12",
+                    "frm1604c:txtTra12",
+                    "frm1604c:txtSched1TaxWheld12",
+                    "frm1604c:txtSched1Adj12",
+                    "frm1604c:txtSched1Pen12",
+                    "frm1604c:txtSched1TotalAmt12"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Month",
+                  "rows": [
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "k": [
+                "frm1604c:txtSched1TaxWheldTotal",
+                "frm1604c:txtSched1AdjTotal",
+                "frm1604c:txtSched1PenTotal",
+                "frm1604c:txtSched1Total"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "1604E": {
@@ -4408,56 +4712,387 @@
       "evidence": "agent group option: 'Government'; agent box label minus group question: 'Government'; binding /agent_category='government' when selected: 'Government'"
     },
     "frm1604e:txtSched1TaxWithheldTtl": {
-      "label": "Schedule 1 TOTAL Taxes Withheld",
-      "evidence": "agent box label: 'Schedule 1 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 1 TOTAL Taxes Withheld'"
+      "label": "Taxes Withheld",
+      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 1 TOTAL Taxes Withheld'"
     },
     "frm1604e:txtSched1PenaltiesTtl": {
-      "label": "Schedule 1 TOTAL Penalties",
-      "evidence": "agent box label: 'Schedule 1 TOTAL Penalties'; writer-cells printed caption: 'Schedule 1 TOTAL Penalties'"
+      "label": "Penalties",
+      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Penalties'; writer-cells printed caption: 'Schedule 1 TOTAL Penalties'"
     },
     "frm1604e:txtSched1TotRemAmtTtl": {
-      "label": "Schedule 1 TOTAL Total Amount Remitted",
-      "evidence": "agent box label: 'Schedule 1 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 1 TOTAL Total Amount Remitted'"
+      "label": "Total Amount Remitted",
+      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 1 TOTAL Total Amount Remitted'"
     },
     "frm1604e:txtSched2TaxWithheldTtl": {
-      "label": "Schedule 2 TOTAL Taxes Withheld",
-      "evidence": "agent box label: 'Schedule 2 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 2 TOTAL Taxes Withheld'"
+      "label": "Taxes Withheld",
+      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 2 TOTAL Taxes Withheld'"
     },
     "frm1604e:txtSched2PenaltiesTtl": {
-      "label": "Schedule 2 TOTAL Penalties",
-      "evidence": "agent box label: 'Schedule 2 TOTAL Penalties'; writer-cells printed caption: 'Schedule 2 TOTAL Penalties'"
+      "label": "Penalties",
+      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Penalties'; writer-cells printed caption: 'Schedule 2 TOTAL Penalties'"
     },
     "frm1604e:txtSched2TotRemAmtTtl": {
-      "label": "Schedule 2 TOTAL Total Amount Remitted",
-      "evidence": "agent box label: 'Schedule 2 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 2 TOTAL Total Amount Remitted'"
+      "label": "Total Amount Remitted",
+      "evidence": "PR 6 (1604E R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 2 TOTAL Total Amount Remitted'"
     },
     "frm1604e:txtPg2TIN1": {
-      "label": "Page 2 TIN 1",
-      "evidence": "agent box label: 'Page 2 TIN 1'"
+      "evidence": "PR 6 (1604E R2.0, R3.0, R5.2): page 2's header copy of item 4. html-frozen/1604e-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604e:txtPg2TIN2": {
-      "label": "Page 2 TIN 2",
-      "evidence": "agent box label: 'Page 2 TIN 2'"
+      "evidence": "PR 6 (1604E R2.0, R3.0, R5.2): page 2's header copy of item 4. html-frozen/1604e-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604e:txtPg2TIN3": {
-      "label": "Page 2 TIN 3",
-      "evidence": "agent box label: 'Page 2 TIN 3'"
+      "evidence": "PR 6 (1604E R2.0, R3.0, R5.2): page 2's header copy of item 4. html-frozen/1604e-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604e:txtPg2BranchCode": {
-      "label": "Page 2 Branch Code",
-      "evidence": "agent box label: 'Page 2 Branch Code'"
+      "evidence": "PR 6 (1604E R2.0, R3.0, R5.2): page 2's header copy of item 4. html-frozen/1604e-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604e:txtPg2TaxpayerName": {
-      "label": "Withholding agent's name",
-      "evidence": "painted form_1604e_view.rs (local:name via binding /taxpayer_name): \"Withholding agent's name\"; agent box label: 'Page 2 Withholding Agent’s Name'; writer-cells printed caption: 'Page 2 Withholding Agent’s Name'"
+      "evidence": "PR 6 (1604E R2.0, R3.0): page 2's header copy of item 6; it binds /taxpayer_name like item 6 (crates/bir-core/data/agent-forms/1604e-v2018.json), so item 6's box (and its Edit) writes it. html-frozen/1604e-2018/writer-cells.json joins it at \"Page 2 Withholding Agent's Name\"; the print still writes it.",
+      "kind": "hidden"
     },
     "frm1604e:txtLineBus": {
-      "label": "Line of business",
-      "evidence": "painted form_1604e_view.rs (local:lob via binding /line_of_business): 'Line of business'"
+      "label": "Line of Business",
+      "evidence": "PR 6 (1604E R2.0, R3.0): html-frozen/1604e-2018/writer-cells.json not_joined: \"not on the paper form: this sheet has no line-of-business box\"; the profile fills it (binding /line_of_business, lock profile) and the official XML keeps it, so it is shown under Not on the printed sheet, with its Edit."
     },
     "frm1604e:txtMaxPage": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled at load (rules/forms/1604e-v2018/fixtures/runtime-control-inventory-v796.json: id frm1604e:txtMaxPage, source line 1697) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm1604e:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "PR 6 (1604E R3.0): html-frozen/1604e-2018/writer-cells.json not_joined: \"page counter of the eBIRForms page, not a box on the paper form\"."
+    },
+    "layout": {
+      "evidence": "PR 6: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/1604e-2018/index.html (BIR Form No. 1604-E January 2018: items 1-3, Part I 4-10, Part II Summary of Remittances with Schedule 1 per BIR Form No. 1601-EQ by quarter and Schedule 2 per BIR Form No. 1606 by month, each with its TOTAL row) and html-frozen/1604e-2018/writer-cells.json joins (e.g. txtSched2BankCode1 at \"Schedule 2 January Drawee Bank/Bank Code/Agency\"). Page 2's Part III (Schedules 3 and 4) is printed 'Format Only' and has no box. The page 2 header copies and the page counter are not drawn; the line of business, which the sheet does not print (not_joined: \"not on the paper form\"), goes under Not on the printed sheet. Field keys, values, the official XML and the print map are unchanged.",
+      "rest": "Not on the printed sheet",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Year (20YY)",
+              "k": [
+                "frm1604e:txtYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1604e:AmendedRtn_1",
+                "frm1604e:AmendedRtn_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1604e:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1604e:txtTIN1",
+                "frm1604e:txtTIN2",
+                "frm1604e:txtTIN3",
+                "frm1604e:txtBranchCode"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm1604e:txtRDOCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm1604e:txtWthhldngAgntsNme"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm1604e:txtAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1604e:txtZipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1604e:WthldngAgntCtgry_1",
+                "frm1604e:WthldngAgntCtgry_2"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "If private, top withholding agent?",
+              "k": [
+                "frm1604e:TpWthldngAgnt_1",
+                "frm1604e:TpWthldngAgnt_2"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "k": [
+                "frm1604e:txtTelNum"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Summary of Remittances",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1 – Remittance per BIR Form No. 1601-EQ",
+              "grid": {
+                "cols": [
+                  "Date of Remittance (MM/DD/YYYY)",
+                  "Drawee Bank/Bank Code/Agency",
+                  "TRA/eROR/eAR Number",
+                  "Taxes Withheld",
+                  "Penalties",
+                  "Total Amount Remitted"
+                ],
+                "keys": [
+                  [
+                    "frm1604e:txtSched1RemDate1",
+                    "frm1604e:txtSched1BankCode1",
+                    "frm1604e:txtSched1TRANo1",
+                    "frm1604e:txtSched1TaxWithheld1",
+                    "frm1604e:txtSched1Penalties1",
+                    "frm1604e:txtSched1TotRemAmt1"
+                  ],
+                  [
+                    "frm1604e:txtSched1RemDate2",
+                    "frm1604e:txtSched1BankCode2",
+                    "frm1604e:txtSched1TRANo2",
+                    "frm1604e:txtSched1TaxWithheld2",
+                    "frm1604e:txtSched1Penalties2",
+                    "frm1604e:txtSched1TotRemAmt2"
+                  ],
+                  [
+                    "frm1604e:txtSched1RemDate3",
+                    "frm1604e:txtSched1BankCode3",
+                    "frm1604e:txtSched1TRANo3",
+                    "frm1604e:txtSched1TaxWithheld3",
+                    "frm1604e:txtSched1Penalties3",
+                    "frm1604e:txtSched1TotRemAmt3"
+                  ],
+                  [
+                    "frm1604e:txtSched1RemDate4",
+                    "frm1604e:txtSched1BankCode4",
+                    "frm1604e:txtSched1TRANo4",
+                    "frm1604e:txtSched1TaxWithheld4",
+                    "frm1604e:txtSched1Penalties4",
+                    "frm1604e:txtSched1TotRemAmt4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Quarter",
+                  "rows": [
+                    "1st Quarter",
+                    "2nd Quarter",
+                    "3rd Quarter",
+                    "4th Quarter"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "k": [
+                "frm1604e:txtSched1TaxWithheldTtl",
+                "frm1604e:txtSched1PenaltiesTtl",
+                "frm1604e:txtSched1TotRemAmtTtl"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 – Remittance per BIR Form No. 1606",
+              "grid": {
+                "cols": [
+                  "Date of Remittance (MM/DD/YYYY)",
+                  "Drawee Bank/Bank Code/Agency",
+                  "TRA/eROR/eAR Number",
+                  "Taxes Withheld",
+                  "Penalties",
+                  "Total Amount Remitted"
+                ],
+                "keys": [
+                  [
+                    "frm1604e:txtSched2RemDate1",
+                    "frm1604e:txtSched2BankCode1",
+                    "frm1604e:txtSched2TRANo1",
+                    "frm1604e:txtSched2TaxWithheld1",
+                    "frm1604e:txtSched2Penalties1",
+                    "frm1604e:txtSched2TotRemAmt1"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate2",
+                    "frm1604e:txtSched2BankCode2",
+                    "frm1604e:txtSched2TRANo2",
+                    "frm1604e:txtSched2TaxWithheld2",
+                    "frm1604e:txtSched2Penalties2",
+                    "frm1604e:txtSched2TotRemAmt2"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate3",
+                    "frm1604e:txtSched2BankCode3",
+                    "frm1604e:txtSched2TRANo3",
+                    "frm1604e:txtSched2TaxWithheld3",
+                    "frm1604e:txtSched2Penalties3",
+                    "frm1604e:txtSched2TotRemAmt3"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate4",
+                    "frm1604e:txtSched2BankCode4",
+                    "frm1604e:txtSched2TRANo4",
+                    "frm1604e:txtSched2TaxWithheld4",
+                    "frm1604e:txtSched2Penalties4",
+                    "frm1604e:txtSched2TotRemAmt4"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate5",
+                    "frm1604e:txtSched2BankCode5",
+                    "frm1604e:txtSched2TRANo5",
+                    "frm1604e:txtSched2TaxWithheld5",
+                    "frm1604e:txtSched2Penalties5",
+                    "frm1604e:txtSched2TotRemAmt5"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate6",
+                    "frm1604e:txtSched2BankCode6",
+                    "frm1604e:txtSched2TRANo6",
+                    "frm1604e:txtSched2TaxWithheld6",
+                    "frm1604e:txtSched2Penalties6",
+                    "frm1604e:txtSched2TotRemAmt6"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate7",
+                    "frm1604e:txtSched2BankCode7",
+                    "frm1604e:txtSched2TRANo7",
+                    "frm1604e:txtSched2TaxWithheld7",
+                    "frm1604e:txtSched2Penalties7",
+                    "frm1604e:txtSched2TotRemAmt7"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate8",
+                    "frm1604e:txtSched2BankCode8",
+                    "frm1604e:txtSched2TRANo8",
+                    "frm1604e:txtSched2TaxWithheld8",
+                    "frm1604e:txtSched2Penalties8",
+                    "frm1604e:txtSched2TotRemAmt8"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate9",
+                    "frm1604e:txtSched2BankCode9",
+                    "frm1604e:txtSched2TRANo9",
+                    "frm1604e:txtSched2TaxWithheld9",
+                    "frm1604e:txtSched2Penalties9",
+                    "frm1604e:txtSched2TotRemAmt9"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate10",
+                    "frm1604e:txtSched2BankCode10",
+                    "frm1604e:txtSched2TRANo10",
+                    "frm1604e:txtSched2TaxWithheld10",
+                    "frm1604e:txtSched2Penalties10",
+                    "frm1604e:txtSched2TotRemAmt10"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate11",
+                    "frm1604e:txtSched2BankCode11",
+                    "frm1604e:txtSched2TRANo11",
+                    "frm1604e:txtSched2TaxWithheld11",
+                    "frm1604e:txtSched2Penalties11",
+                    "frm1604e:txtSched2TotRemAmt11"
+                  ],
+                  [
+                    "frm1604e:txtSched2RemDate12",
+                    "frm1604e:txtSched2BankCode12",
+                    "frm1604e:txtSched2TRANo12",
+                    "frm1604e:txtSched2TaxWithheld12",
+                    "frm1604e:txtSched2Penalties12",
+                    "frm1604e:txtSched2TotRemAmt12"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Month",
+                  "rows": [
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "k": [
+                "frm1604e:txtSched2TaxWithheldTtl",
+                "frm1604e:txtSched2PenaltiesTtl",
+                "frm1604e:txtSched2TotRemAmtTtl"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business",
+              "k": [
+                "frm1604e:txtLineBus"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "1604F": {
@@ -4474,68 +5109,401 @@
       "evidence": "agent group option: 'No'; agent box label minus group question: 'No'; binding /tax_relief=False when selected: 'No'"
     },
     "frm1604f:txtSched1TaxWheldTotal": {
-      "label": "Schedule 1 TOTAL Taxes Withheld",
-      "evidence": "agent box label: 'Schedule 1 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 1 TOTAL Taxes Withheld'"
+      "label": "Taxes Withheld",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 1 TOTAL Taxes Withheld'"
     },
     "frm1604f:txtSched1PenTotal": {
-      "label": "Schedule 1 TOTAL Penalties",
-      "evidence": "agent box label: 'Schedule 1 TOTAL Penalties'; writer-cells printed caption: 'Schedule 1 TOTAL Penalties'"
+      "label": "Penalties",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Penalties'; writer-cells printed caption: 'Schedule 1 TOTAL Penalties'"
     },
     "frm1604f:txtSched1Total": {
-      "label": "Schedule 1 TOTAL Total Amount Remitted",
-      "evidence": "agent box label: 'Schedule 1 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 1 TOTAL Total Amount Remitted'"
+      "label": "Total Amount Remitted",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 1 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 1 TOTAL Total Amount Remitted'"
     },
     "frm1604f:txtSched2TaxWheldTotal": {
-      "label": "Schedule 2 TOTAL Taxes Withheld",
-      "evidence": "agent box label: 'Schedule 2 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 2 TOTAL Taxes Withheld'"
+      "label": "Taxes Withheld",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 2 TOTAL Taxes Withheld'"
     },
     "frm1604f:txtSched2PenTotal": {
-      "label": "Schedule 2 TOTAL Penalties",
-      "evidence": "agent box label: 'Schedule 2 TOTAL Penalties'; writer-cells printed caption: 'Schedule 2 TOTAL Penalties'"
+      "label": "Penalties",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Penalties'; writer-cells printed caption: 'Schedule 2 TOTAL Penalties'"
     },
     "frm1604f:txtSched2Total": {
-      "label": "Schedule 2 TOTAL Total Amount Remitted",
-      "evidence": "agent box label: 'Schedule 2 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 2 TOTAL Total Amount Remitted'"
+      "label": "Total Amount Remitted",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 2 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 2 TOTAL Total Amount Remitted'"
     },
     "frm1604f:txtSched3TaxWheldTotal": {
-      "label": "Schedule 3 TOTAL Taxes Withheld",
-      "evidence": "agent box label: 'Schedule 3 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 3 TOTAL Taxes Withheld'"
+      "label": "Taxes Withheld",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 3 TOTAL Taxes Withheld'; writer-cells printed caption: 'Schedule 3 TOTAL Taxes Withheld'"
     },
     "frm1604f:txtSched3PenTotal": {
-      "label": "Schedule 3 TOTAL Penalties",
-      "evidence": "agent box label: 'Schedule 3 TOTAL Penalties'; writer-cells printed caption: 'Schedule 3 TOTAL Penalties'"
+      "label": "Penalties",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 3 TOTAL Penalties'; writer-cells printed caption: 'Schedule 3 TOTAL Penalties'"
     },
     "frm1604f:txtSched3Total": {
-      "label": "Schedule 3 TOTAL Total Amount Remitted",
-      "evidence": "agent box label: 'Schedule 3 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 3 TOTAL Total Amount Remitted'"
+      "label": "Total Amount Remitted",
+      "evidence": "PR 6 (1604F R3.0, manual-0): the TOTAL row's column, as printed. agent box label: 'Schedule 3 TOTAL Total Amount Remitted'; writer-cells printed caption: 'Schedule 3 TOTAL Total Amount Remitted'"
     },
     "frm1604f:txtLineBus": {
-      "label": "Line of business",
-      "evidence": "painted form_1604f_view.rs (local:lob via binding /line_of_business): 'Line of business'"
+      "label": "Line of Business",
+      "evidence": "PR 6 (1604F R2.0, R3.0): html-frozen/1604f-2018/writer-cells.json not_joined: \"not on the paper form: this sheet has no line-of-business box\"; the profile fills it (binding /line_of_business, lock profile) and the official XML keeps it, so it is shown under Not on the printed sheet, with its Edit."
     },
     "frm1604f:txtPg2TIN1": {
-      "label": "Page 2 TIN 1",
-      "evidence": "agent box label: 'Page 2 TIN 1'"
+      "evidence": "PR 6 (1604F R2.0, R3.0): page 2's header copy of item 4. html-frozen/1604f-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604f:txtPg2TIN2": {
-      "label": "Page 2 TIN 2",
-      "evidence": "agent box label: 'Page 2 TIN 2'"
+      "evidence": "PR 6 (1604F R2.0, R3.0): page 2's header copy of item 4. html-frozen/1604f-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604f:txtPg2TIN3": {
-      "label": "Page 2 TIN 3",
-      "evidence": "agent box label: 'Page 2 TIN 3'"
+      "evidence": "PR 6 (1604F R2.0, R3.0): page 2's header copy of item 4. html-frozen/1604f-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604f:txtPg2BranchCode": {
-      "label": "Page 2 Branch Code",
-      "evidence": "agent box label: 'Page 2 Branch Code'"
+      "evidence": "PR 6 (1604F R2.0, R3.0): page 2's header copy of item 4. html-frozen/1604f-2018/writer-cells.json not_joined: \"page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits\", the draft's /tin, which item 4 shows. The XML and the print still write it.",
+      "kind": "hidden"
     },
     "frm1604f:txtPg2TaxpayerName": {
-      "label": "Withholding agent's name",
-      "evidence": "painted form_1604f_view.rs (local:name via binding /taxpayer_name): \"Withholding agent's name\"; agent box label: 'Page 2 Withholding Agent’s Name'; writer-cells printed caption: 'Page 2 Withholding Agent’s Name'"
+      "evidence": "PR 6 (1604F R2.0, R3.0): page 2's header copy of item 6; it binds /taxpayer_name like item 6 (crates/bir-core/data/agent-forms/1604f-v2018.json), so item 6's box (and its Edit) writes it. html-frozen/1604f-2018/writer-cells.json joins it at \"Page 2 Withholding Agent's Name\"; the print still writes it.",
+      "kind": "hidden"
     },
     "frm1604f:txtMaxPage": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled at load (rules/forms/1604f-v2018/fixtures/runtime-control-inventory-v796.json: id frm1604f:txtMaxPage, source line 2248) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm1604f:rdoCode": {
+      "label": "RDO Code",
+      "evidence": "PR 6 (1604F R3.0): the printed caption (html-frozen/1604f-2018/writer-cells.json joins frm1604f:rdoCode at \"5 RDO Code\")."
+    },
+    "txtEmail": {
+      "kind": "hidden",
+      "evidence": "PR 6 (1604F manual-1): html-frozen/1604f-2018/writer-cells.json not_joined: \"duplicate of frm1604f:email (same value), which prints in item 10\"; both bind /email (crates/bir-core/data/agent-forms/1604f-v2018.json), so item 10 shows the one box the sheet prints. The XML still writes both."
+    },
+    "frm1604f:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "PR 6 (1604F R3.0): html-frozen/1604f-2018/writer-cells.json not_joined: \"page counter of the eBIRForms page, not a box on the paper form\"."
+    },
+    "layout": {
+      "evidence": "PR 6: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/1604f-2018/index.html (BIR Form No. 1604-F January 2018: items 1-3, Part I 4-11A, Part II Summary of Remittances with Schedules 1-3 by quarter and their TOTAL rows) and html-frozen/1604f-2018/writer-cells.json joins (e.g. txtSched2TRA1 at \"Schedule 2 1st Quarter TRA/eROR/eAR Number\"). Page 2's Part III (Schedules 4-6) is printed 'Format only' and has no box. The page 2 header copies and the page counter are not drawn; the line of business, which the sheet does not print (not_joined: \"not on the paper form\"), goes under Not on the printed sheet. Field keys, values, the official XML and the print map are unchanged.",
+      "rest": "Not on the printed sheet",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Year (YYYY)",
+              "k": [
+                "frm1604f:txtYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1604f:amendedRtn_1",
+                "frm1604f:amendedRtn_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "No. of Sheet/s Attached",
+              "k": [
+                "frm1604f:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1604f:tinA",
+                "frm1604f:tinB",
+                "frm1604f:tinC",
+                "frm1604f:branchCode"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm1604f:rdoCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm1604f:registeredName"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm1604f:RegisteredAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1604f:zipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1604f:categoryAgent_1",
+                "frm1604f:categoryAgent_2"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "If private, top withholding agent?",
+              "k": [
+                "frm1604f:privateAgent_1",
+                "frm1604f:privateAgent_2"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "k": [
+                "frm1604f:telephoneNumber"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Email Address",
+              "k": [
+                "frm1604f:email"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Are there payees availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1604f:taxRelief_1",
+                "frm1604f:taxRelief_2"
+              ]
+            },
+            {
+              "no": "11A",
+              "l": "If yes, specify",
+              "k": [
+                "frm1604f:availedTaxRelief"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Summary of Remittances",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1 – Remittance per BIR Form No. 1601-FQ on Final Taxes Withheld",
+              "grid": {
+                "cols": [
+                  "Date of Remittance (MM/DD/YYYY)",
+                  "TRA/eROR/eAR Number",
+                  "Taxes Withheld",
+                  "Penalties",
+                  "Total Amount Remitted"
+                ],
+                "keys": [
+                  [
+                    "frm1604f:txtSched1Date1",
+                    "frm1604f:txtSched1TRA1",
+                    "frm1604f:txtSched1TaxWheld1",
+                    "frm1604f:txtSched1Pen1",
+                    "frm1604f:txtSched1TotalAmt1"
+                  ],
+                  [
+                    "frm1604f:txtSched1Date2",
+                    "frm1604f:txtSched1TRA2",
+                    "frm1604f:txtSched1TaxWheld2",
+                    "frm1604f:txtSched1Pen2",
+                    "frm1604f:txtSched1TotalAmt2"
+                  ],
+                  [
+                    "frm1604f:txtSched1Date3",
+                    "frm1604f:txtSched1TRA3",
+                    "frm1604f:txtSched1TaxWheld3",
+                    "frm1604f:txtSched1Pen3",
+                    "frm1604f:txtSched1TotalAmt3"
+                  ],
+                  [
+                    "frm1604f:txtSched1Date4",
+                    "frm1604f:txtSched1TRA4",
+                    "frm1604f:txtSched1TaxWheld4",
+                    "frm1604f:txtSched1Pen4",
+                    "frm1604f:txtSched1TotalAmt4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Quarter",
+                  "rows": [
+                    "1st Quarter",
+                    "2nd Quarter",
+                    "3rd Quarter",
+                    "4th Quarter"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "k": [
+                "frm1604f:txtSched1TaxWheldTotal",
+                "frm1604f:txtSched1PenTotal",
+                "frm1604f:txtSched1Total"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 – Remittance per BIR Form No. 1602Q on Interest Payments",
+              "grid": {
+                "cols": [
+                  "Date of Remittance (MM/DD/YYYY)",
+                  "TRA/eROR/eAR Number",
+                  "Taxes Withheld",
+                  "Penalties",
+                  "Total Amount Remitted"
+                ],
+                "keys": [
+                  [
+                    "frm1604f:txtSched2Date1",
+                    "frm1604f:txtSched2TRA1",
+                    "frm1604f:txtSched2TaxWheld1",
+                    "frm1604f:txtSched2Pen1",
+                    "frm1604f:txtSched2TotalAmt1"
+                  ],
+                  [
+                    "frm1604f:txtSched2Date2",
+                    "frm1604f:txtSched2TRA2",
+                    "frm1604f:txtSched2TaxWheld2",
+                    "frm1604f:txtSched2Pen2",
+                    "frm1604f:txtSched2TotalAmt2"
+                  ],
+                  [
+                    "frm1604f:txtSched2Date3",
+                    "frm1604f:txtSched2TRA3",
+                    "frm1604f:txtSched2TaxWheld3",
+                    "frm1604f:txtSched2Pen3",
+                    "frm1604f:txtSched2TotalAmt3"
+                  ],
+                  [
+                    "frm1604f:txtSched2Date4",
+                    "frm1604f:txtSched2TRA4",
+                    "frm1604f:txtSched2TaxWheld4",
+                    "frm1604f:txtSched2Pen4",
+                    "frm1604f:txtSched2TotalAmt4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Quarter",
+                  "rows": [
+                    "1st Quarter",
+                    "2nd Quarter",
+                    "3rd Quarter",
+                    "4th Quarter"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "k": [
+                "frm1604f:txtSched2TaxWheldTotal",
+                "frm1604f:txtSched2PenTotal",
+                "frm1604f:txtSched2Total"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 – Remittance per BIR Form No. 1603Q on Fringe Benefits",
+              "grid": {
+                "cols": [
+                  "Date of Remittance (MM/DD/YYYY)",
+                  "TRA/eROR/eAR Number",
+                  "Taxes Withheld",
+                  "Penalties",
+                  "Total Amount Remitted"
+                ],
+                "keys": [
+                  [
+                    "frm1604f:txtSched3Date1",
+                    "frm1604f:txtSched3TRA1",
+                    "frm1604f:txtSched3TaxWheld1",
+                    "frm1604f:txtSched3Pen1",
+                    "frm1604f:txtSched3TotalAmt1"
+                  ],
+                  [
+                    "frm1604f:txtSched3Date2",
+                    "frm1604f:txtSched3TRA2",
+                    "frm1604f:txtSched3TaxWheld2",
+                    "frm1604f:txtSched3Pen2",
+                    "frm1604f:txtSched3TotalAmt2"
+                  ],
+                  [
+                    "frm1604f:txtSched3Date3",
+                    "frm1604f:txtSched3TRA3",
+                    "frm1604f:txtSched3TaxWheld3",
+                    "frm1604f:txtSched3Pen3",
+                    "frm1604f:txtSched3TotalAmt3"
+                  ],
+                  [
+                    "frm1604f:txtSched3Date4",
+                    "frm1604f:txtSched3TRA4",
+                    "frm1604f:txtSched3TaxWheld4",
+                    "frm1604f:txtSched3Pen4",
+                    "frm1604f:txtSched3TotalAmt4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Quarter",
+                  "rows": [
+                    "1st Quarter",
+                    "2nd Quarter",
+                    "3rd Quarter",
+                    "4th Quarter"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL",
+              "k": [
+                "frm1604f:txtSched3TaxWheldTotal",
+                "frm1604f:txtSched3PenTotal",
+                "frm1604f:txtSched3Total"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business",
+              "k": [
+                "frm1604f:txtLineBus"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "1606": {

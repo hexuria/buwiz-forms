@@ -1797,9 +1797,10 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
-    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
-    // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
-    assert_eq!(supplied, 82, "catalog lists, dependent ones included");
+    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), plus 1
+    // for 1604C (PR 6, item 5 RDO). The 36 2550M Schedule 1 ATC lists
+    // (N03) are table cells, counted apart.
+    assert_eq!(supplied, 83, "catalog lists, dependent ones included");
 }
 
 #[test]
@@ -2034,7 +2035,9 @@ fn symptom_p4_1800_branch_code_sits_with_the_donor_tin() {
 
 /// P2a found 1603Q's tax-relief controls under "12 Email Address" and
 /// 1604C's refund date in an unlabelled group; they sit with their printed
-/// items (1603Q 13/13A, 1604C 11).
+/// items (1603Q 13/13A, 1604C 11A: PR 6 moved the refund date from item 11
+/// to its own printed item 11A, html-frozen/1604c-2018/writer-cells.json
+/// "11A Date of refund MM/DD/YYYY").
 #[test]
 fn symptom_p4_relief_and_refund_controls_sit_with_their_printed_items() {
     let item_of = |code: &str, key: &str| {
@@ -2059,7 +2062,11 @@ fn symptom_p4_relief_and_refund_controls_sit_with_their_printed_items() {
         "frm1604c:txtRefDate",
         "frm1604c:txtRefYear",
     ] {
-        assert_eq!(item_of("1604C", key), refund, "{key}");
+        assert_eq!(
+            item_of("1604C", key),
+            "11A If Yes, specify the date of refund (MM/DD/YYYY)",
+            "{key}"
+        );
     }
 }
 

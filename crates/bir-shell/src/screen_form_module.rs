@@ -715,6 +715,28 @@ fn apply_layout(form: &mut Value, layout: &Value) {
             }
         }
     }
+    // What a `grid` may name: the loose fields, and (PR 6, 1604C/E/F Part
+    // II) the cells of an extracted table, each as a field of its column on
+    // the table's page. A grid naming no table cell builds what it built.
+    let mut grid_fields = fields.clone();
+    for table in &tables {
+        for row in table["keys"].as_array().into_iter().flatten() {
+            for (c, key) in row.as_array().into_iter().flatten().enumerate() {
+                let (Some(key), Some(col)) = (key.as_str(), table["cols"].get(c)) else {
+                    continue;
+                };
+                let mut field = json!({ "k": key, "l": col["l"].clone(), "t": col["t"].clone() });
+                for flag in ["c", "o"] {
+                    if let Some(value) = col.get(flag) {
+                        field[flag] = value.clone();
+                    }
+                }
+                grid_fields
+                    .entry(key.to_string())
+                    .or_insert((field, table["p"].clone()));
+            }
+        }
+    }
     let wanted_tables: Vec<&str> = named_items()
         .filter_map(|it| it["table"].as_str())
         .collect();
@@ -764,7 +786,7 @@ fn apply_layout(form: &mut Value, layout: &Value) {
             if entry.get("grid").is_some() {
                 // A grid that cannot be built is a broken override, never a
                 // silently missing table (its keys are claimed already).
-                let table = grid_table(entry, &fields).unwrap_or_else(|error| {
+                let table = grid_table(entry, &grid_fields).unwrap_or_else(|error| {
                     panic!(
                         "{}: schema-overrides.json layout grid {}: {error}",
                         form["c"].as_str().unwrap_or("?"),
@@ -4132,6 +4154,9 @@ mod tests {
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
 
+    // PR 6: 1604C, 1604F and 1604E against their printed sheets.
+    mod annual_1604;
+
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
 
@@ -5980,9 +6005,10 @@ mod tests {
         // They must not silently turn into an incomplete catalog rollout.
         // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
-        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
-        // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), plus
+        // 1 for 1604C (PR 6, item 5 RDO). The 36 2550M Schedule 1 ATC lists
+        // (N03) are table cells, not fields.
+        assert_eq!(supplied, 83);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8437,10 +8463,6 @@ mod tests {
     /// so those forms' R2.0 stays open. A new one fails this test.
     const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
         "0605 txtEmail",
-        "1604E frm1604e:txtLineBus",
-        "1604E frm1604e:txtPg2TaxpayerName",
-        "1604F frm1604f:txtLineBus",
-        "1604F frm1604f:txtPg2TaxpayerName",
         "1701 frm1701:txtLineBus",
         "1701 frm1701:txtPg1mTaxpayerName",
         "1701 frm1701:txtPg2mTaxpayerName",
