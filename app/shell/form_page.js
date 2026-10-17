@@ -1174,8 +1174,9 @@ export class FormPageActions {
   /**
    * Why an item's shut boxes show blank, in the filer's words (the host's
    * `lock_notes`; a box the form computes: "Computed by the form."), once
-   * each. A box saying what it waits for (`needs`) says it in its place
-   * instead; a computed amount shows 0.00, never blank.
+   * each. A box saying what it waits for (`needs`, or the tag of a box
+   * another answer turns off) says it there instead; a computed amount shows
+   * 0.00, never blank.
    */
   lockNotesFor(it) {
     const s = this.state;
@@ -1186,7 +1187,7 @@ export class FormPageActions {
       if (text && !notes.includes(text)) notes.push(text);
     };
     const shut = (k, c) => c || this.isLocked(k);
-    const waits = (k) => Boolean(this.reasonFor(k));
+    const waits = (k) => Boolean(this.reasonFor(k) || this.isOff(k));
     const ticked = (k) => ["true", "1", "Y"].includes(String(s.values[k] ?? ""));
     const blankText = (k, t) => {
       const v = String(s.values[k] ?? "").trim();
