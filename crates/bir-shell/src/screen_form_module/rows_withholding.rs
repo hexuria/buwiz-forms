@@ -29,6 +29,7 @@
 //! unchanged.
 
 use bir_core::forms::agent::AgentFormKind;
+use bir_core::forms::form_1601eq::{Form1601EqCategory, Form1601EqDraft};
 use bir_core::forms::form_1601fq::{Form1601FqCategory, Form1601FqDraft, Form1601FqTaxRelief};
 use bir_core::forms::form_1602q::Form1602QDraft;
 use bir_core::forms::form_1603q::{Form1603QDraft, Form1603QTaxRelief};
@@ -72,6 +73,9 @@ pub(super) enum Cell {
     FqSched1Atc(usize),
     /// 1601FQ item 25: open on an amended return only.
     FqTax25,
+    /// 1601EQ items 4 and 11 (`set_any_tax_withheld`, `set_category`).
+    EqWithheld(bool),
+    EqCategory(Form1601EqCategory),
 }
 
 /// What a box Item 13 has closed says when it is written to.
@@ -137,6 +141,13 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
                 _ => None,
             }
         }
+        "1601EQ" => match key {
+            "frm1601EQ:optWithheld:Y" => Some(Cell::EqWithheld(true)),
+            "frm1601EQ:optWithheld:N" => Some(Cell::EqWithheld(false)),
+            "frm1601EQ:optCategory:P" => Some(Cell::EqCategory(Form1601EqCategory::Private)),
+            "frm1601EQ:optCategory:G" => Some(Cell::EqCategory(Form1601EqCategory::Government)),
+            _ => None,
+        },
         "1603Q" => match key {
             "frm1603Q:SpecialTax_1" => Some(Cell::QItem13(true)),
             "frm1603Q:SpecialTax_2" => Some(Cell::QItem13(false)),
@@ -286,6 +297,22 @@ fn write(cell: Cell, draft: &mut Value, value: &Value) -> Result<(), String> {
             form.set_availing_tax_relief(yes);
             store(draft, &form)
         }
+        Cell::EqWithheld(withheld) => {
+            if !ticked(value) {
+                return Ok(());
+            }
+            let mut form: Form1601EqDraft = typed(draft)?;
+            form.set_any_tax_withheld(withheld);
+            store(draft, &form)
+        }
+        Cell::EqCategory(category) => {
+            if !ticked(value) {
+                return Ok(());
+            }
+            let mut form: Form1601EqDraft = typed(draft)?;
+            form.set_category(category);
+            store(draft, &form)
+        }
         Cell::FqSched1Atc(row) => {
             let code = text(value);
             let code = if code.is_empty() {
@@ -299,8 +326,28 @@ fn write(cell: Cell, draft: &mut Value, value: &Value) -> Result<(), String> {
                 ));
             }
             let mut form: Form1601FqDraft = typed(draft)?;
-            if form.schedule1.get(row).is_none() {
+            if form.tax_relief.is_none() {
                 return Err(ANSWER_13_FIRST.to_string());
+            }
+            if form.schedule1.get(row).is_none() {
+                return Err(format!("Schedule 1 has no row {} on this return.", row + 1));
+            }
+            // Item 11's own list when it is answered (the rate comes from
+            // it); unanswered, the union of both.
+            if let Some(category) = form.category
+                && code != "NA"
+                && category
+                    .atc_options()
+                    .iter()
+                    .all(|option| option.code != code)
+            {
+                let (theirs, ours) = match category {
+                    Form1601FqCategory::Private => ("government", "Private"),
+                    Form1601FqCategory::Government => ("private", "Government"),
+                };
+                return Err(format!(
+                    "{code} is for {theirs} withholding agents; item 11 says {ours}."
+                ));
             }
             // `getATCdrpTaxRate`: the rate follows the ATC.
             form.set_schedule1_atc(row, &code);
@@ -490,6 +537,30 @@ pub(super) fn removes(
     edits: &Map<String, Value>,
 ) -> Option<Value> {
     let code = kind.form_code();
+    if let Some(answer) = sections_removed(kind, before, after, edits) {
+        return Some(answer);
+    }
+    // Amended Return Yes -> No clears a typed item 25 (form_1601fq.rs
+    // recompute).
+    let amended_no = edits.iter().any(|(key, value)| {
+        (key == "frm1601FQ:AmendedRtn_2" && ticked(value))
+            || (key == "frm1601FQ:AmendedRtn_1" && value.as_str() == Some("false"))
+    });
+    let previous = amount_of(before, "tax_remitted_previous");
+    if code == "1601FQ"
+        && amended_no
+        && previous != 0.0
+        && amount_of(after, "tax_remitted_previous") == 0.0
+    {
+        return Some(json!({
+            "message": format!(
+                "Changing Amended Return to No clears item 25 (₱{}). Continue?",
+                pesos(previous)
+            ),
+            "done": "Cleared item 25",
+            "rows": 0,
+        }));
+    }
     let clears_atc = edits.iter().any(|(key, value)| {
         text(value).is_empty()
             && (matches!(cell(kind, key), Some(Cell::FqAtc(_)))
@@ -519,14 +590,26 @@ pub(super) fn removes(
             "rows": 1,
         }));
     }
+    None
+}
+
+/// The rows an answer that closes a section removed (items 4, 11, 13).
+fn sections_removed(
+    kind: AgentFormKind,
+    before: &Value,
+    after: &Value,
+    edits: &Map<String, Value>,
+) -> Option<Value> {
     let trigger = edits
         .iter()
         .find_map(|(key, value)| match cell(kind, key)? {
             Cell::FqItem13(false) | Cell::Q2Item13(false) if ticked(value) => {
                 Some("Changing item 13 to No")
             }
-            Cell::FqWithheld(false) if ticked(value) => Some("Changing item 4 to No"),
-            Cell::FqCategory(_) if ticked(value) => Some("Changing item 11"),
+            Cell::FqWithheld(false) | Cell::EqWithheld(false) if ticked(value) => {
+                Some("Changing item 4 to No")
+            }
+            Cell::FqCategory(_) | Cell::EqCategory(_) if ticked(value) => Some("Changing item 11"),
             _ => None,
         })?;
     let lost = |b: usize, a: usize| b.saturating_sub(a);
@@ -566,8 +649,9 @@ pub(super) fn removes(
 /// `1234.5` -> `1,234.50`.
 fn pesos(amount: f64) -> String {
     let cents = (amount * 100.0).round() as i64;
-    let (whole, cents) = (cents / 100, (cents % 100).abs());
-    let digits = whole.abs().to_string();
+    let negative = cents < 0;
+    let (whole, cents) = ((cents / 100).abs(), (cents % 100).abs());
+    let digits = whole.to_string();
     let mut grouped = String::new();
     for (i, c) in digits.chars().enumerate() {
         if i > 0 && (digits.len() - i) % 3 == 0 {
@@ -575,5 +659,17 @@ fn pesos(amount: f64) -> String {
         }
         grouped.push(c);
     }
-    format!("{}{grouped}.{cents:02}", if whole < 0 { "-" } else { "" })
+    format!("{}{grouped}.{cents:02}", if negative { "-" } else { "" })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn pesos_group_and_keep_the_sign() {
+        assert_eq!(super::pesos(1234.5), "1,234.50");
+        assert_eq!(super::pesos(1_000_000.0), "1,000,000.00");
+        assert_eq!(super::pesos(-0.5), "-0.50");
+        assert_eq!(super::pesos(-1234.56), "-1,234.56");
+        assert_eq!(super::pesos(0.0), "0.00");
+    }
 }

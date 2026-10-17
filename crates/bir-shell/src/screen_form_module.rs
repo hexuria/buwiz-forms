@@ -6631,10 +6631,69 @@ mod tests {
         );
         let wrong = fill("1601FQ", &yes["draft"], json!({"drpATCCode0": "ZZ999"}));
         assert!(wrong["rejected"].get("drpATCCode0").is_some());
+        // Every row's ATC sets that row's rate.
+        let mut rows = yes["draft"].clone();
+        for i in 1..5 {
+            rows = fill(
+                "1601FQ",
+                &rows,
+                json!({ format!("drpATCCode{i}"): "WI330", format!("txtAmtIncomePay{i}"): "100" }),
+            )["draft"]
+                .clone();
+        }
+        let rows = fill("1601FQ", &rows, json!({}));
+        for i in 1..5 {
+            assert_eq!(
+                amount(&rows["values"], &format!("txtRate{i}")),
+                rate,
+                "row {i}"
+            );
+            assert_eq!(
+                amount(&rows["values"], &format!("txtReqWithheld{i}")),
+                100.0 * rate / 100.0,
+                "row {i}"
+            );
+        }
+        // Item 11 answered: only its own list. WI202 is a private ATC.
+        use bir_core::forms::form_1601fq::FORM_1601FQ_GOVERNMENT_ATCS as GOVERNMENT;
+        let private_only = PRIVATE
+            .iter()
+            .find(|a| GOVERNMENT.iter().all(|g| g.code != a.code))
+            .unwrap()
+            .code;
+        let government = fill(
+            "1601FQ",
+            &yes["draft"],
+            json!({"frm1601FQ:CatAgent_G": "true", "frm1601FQ:CatAgent_P": "false"}),
+        );
+        let refused = fill(
+            "1601FQ",
+            &government["draft"],
+            json!({"drpATCCode0": private_only}),
+        );
+        assert_eq!(
+            refused["rejected"]["drpATCCode0"],
+            format!("{private_only} is for private withholding agents; item 11 says Government.")
+        );
+        // Unanswered, the union of both lists.
+        let union = fill(
+            "1601FQ",
+            &yes["draft"],
+            json!({"drpATCCode0": private_only}),
+        );
+        assert_eq!(union["rejected"], json!({}));
+        // A legacy draft short of Schedule 1 rows says which row is missing.
+        let mut short = yes["draft"].clone();
+        short["schedule1"].as_array_mut().unwrap().truncate(1);
+        let missing = fill("1601FQ", &short, json!({"drpATCCode3": "WI330"}));
+        assert_eq!(
+            missing["rejected"]["drpATCCode3"],
+            "Schedule 1 has no row 4 on this return."
+        );
     }
 
-    /// PR 2 review: 1601FQ item 25 waits for Amended Return Yes (the
-    /// official runtime enables it only then): off with its tag and
+    /// PR 2 review: 1601FQ item 25 waits for Amended Return Yes (the tracked
+    /// inventory records it disabled at load, and recompute keeps it only on an amended return): off with its tag and
     /// refusing a typed amount on a return that is not amended, open once
     /// it is.
     #[test]
@@ -6653,12 +6712,32 @@ mod tests {
         let typed = fill("1601FQ", &amended, json!({ key: "100" }));
         assert_eq!(typed["rejected"], json!({}));
         assert_eq!(typed["values"][key], "100.00");
+        // Amended Yes -> No clears it, and the host says so first.
+        let not_amended = fill(
+            "1601FQ",
+            &typed["draft"],
+            json!({"frm1601FQ:AmendedRtn_2": "true", "frm1601FQ:AmendedRtn_1": "false"}),
+        );
+        assert_eq!(not_amended["values"][key], "0.00");
+        assert_eq!(
+            not_amended["removes"]["message"],
+            "Changing Amended Return to No clears item 25 (₱100.00). Continue?"
+        );
+        assert_eq!(not_amended["removes"]["done"], "Cleared item 25");
+        // With item 25 blank, No asks nothing.
+        let quiet = fill(
+            "1601FQ",
+            &amended,
+            json!({"frm1601FQ:AmendedRtn_2": "true", "frm1601FQ:AmendedRtn_1": "false"}),
+        );
+        assert_eq!(quiet["removes"], Value::Null);
     }
 
     /// PR 2 review: a 1602Q draft saved with Schedule 2 values while Item
-    /// 13 is No (a legacy one) keeps filing what it holds, its Schedule 2
-    /// boxes are faded with their tag although they hold values, and a
-    /// write there is refused in the filer's words.
+    /// 13 is No (a legacy one) opens with those values, faded with their
+    /// tag; a write there is refused; validation names the way out (Yes
+    /// keeps them, No again removes them); and No again does remove them,
+    /// asking first.
     #[test]
     fn form_1602q_a_legacy_schedule_2_under_item_13_no_is_off_and_refuses_writes() {
         setup();
@@ -6689,6 +6768,23 @@ mod tests {
             rows_withholding::ANSWER_13_FIRST
         );
         assert_eq!(refused["draft"]["schedule2"], checked["draft"]["schedule2"]);
+        let errors = serde_json::to_string(&checked["errors"]).unwrap();
+        assert!(
+            errors.contains(
+                "Schedule 2 has amounts but item 13 is No. Answer item 13 Yes, or choose No again to remove them."
+            ),
+            "{errors}"
+        );
+        let again = fill(
+            "1602Q",
+            &legacy,
+            json!({"frm1602Q:OptSpecialTax2": "true", "frm1602Q:OptSpecialTax1": "false"}),
+        );
+        assert_eq!(
+            again["removes"]["message"],
+            "Changing item 13 to No removes the 1 Schedule 2 row you typed. Continue?"
+        );
+        assert_eq!(again["values"]["frm1602Q:txtSched2Interest1"], "0.00");
     }
 
     /// PR 2 review: an answer that closes a section, or a cleared ATC whose
@@ -6759,6 +6855,40 @@ mod tests {
         assert_eq!(
             fill("1601EQ", &eq["draft"], json!({"frm1601EQ:txtAtcCd1": ""}))["removes"]["message"],
             "Clearing this ATC removes its row and its tax base of ₱250.50. Continue?"
+        );
+        // 1601EQ items 4 and 11 go through the form's own setters: the rows
+        // go, and the host asks first.
+        let no = fill(
+            "1601EQ",
+            &eq["draft"],
+            json!({"frm1601EQ:optWithheld:N": "true", "frm1601EQ:optWithheld:Y": "false"}),
+        );
+        assert_eq!(no["draft"]["schedule"], json!([]));
+        assert_eq!(
+            no["removes"]["message"],
+            "Changing item 4 to No removes the 1 Part II ATC row you typed. Continue?"
+        );
+        let government = fill(
+            "1601EQ",
+            &eq["draft"],
+            json!({"frm1601EQ:optCategory:G": "true", "frm1601EQ:optCategory:P": "false"}),
+        );
+        assert_eq!(government["draft"]["schedule"], json!([]));
+        assert_eq!(government["draft"]["category"], "government");
+        assert_eq!(
+            government["removes"]["message"],
+            "Changing item 11 removes the 1 Part II ATC row you typed. Continue?"
+        );
+        // A cleared ATC in the same batch as an answer that closes the
+        // section: the answer's question.
+        let batch = fill(
+            "1601FQ",
+            &based["draft"],
+            json!({"frm1601FQ:txtAtcCode1": "", "frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false"}),
+        );
+        assert_eq!(
+            batch["removes"]["message"],
+            "Changing item 4 to No removes the 1 Part II ATC row you typed. Continue?"
         );
     }
 

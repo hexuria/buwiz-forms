@@ -273,17 +273,19 @@ pub(super) mod tests {
         keys
     }
 
-    /// Conditions the corpus leaves out although the official runtime gates
-    /// the box on an answer (the corpus is read only; each entry carries its
-    /// evidence). The condition text is the corpus's own wording for the
-    /// same gate on a sibling form.
+    /// Conditions the corpus leaves out although the box waits on an answer
+    /// (the corpus is read only; each entry carries its evidence). The
+    /// condition text is the corpus's own wording for the same gate on a
+    /// sibling form.
     const CORPUS_GAPS: [(&str, &str, &str, &str); 1] = [(
         "1601FQ",
         "frm1601FQ:txtTax25",
         "Enabled only when Amended Return Yes is selected.",
-        "rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json: txtTax25 \
-         disabled at load (source line 814); form_1601fq.rs recompute clears \
-         tax_remitted_previous unless is_amended; 1601EQ's txtTax22 carries this text",
+        "the tracked inventory (rules/forms/1601fq-v2018/fixtures/\
+         runtime-control-inventory-v796.json) records txtTax25 disabled at load \
+         (source line 814), and this port's recompute (form_1601fq.rs) zeroes \
+         tax_remitted_previous unless the return is amended; 1601EQ's txtTax22 \
+         carries this text",
     )];
 
     /// What `app/forms/conditions.json` should hold, read from the corpus:

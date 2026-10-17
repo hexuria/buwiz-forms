@@ -3678,7 +3678,7 @@
     },
     "frm1601FQ:txtTax25": {
       "label": "25 Tax Remitted in Return Previously Filed",
-      "evidence": "P4: printed caption '25 Tax Remitted in Return Previously Filed' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax25) PR 2: the filer types it; the official runtime enables it on an amended return (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) and crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED).",
+      "evidence": "P4: printed caption '25 Tax Remitted in Return Previously Filed' (html-frozen/1601-fq-2020/writer-cells.json money_joins frm1601FQ:txtTax25) PR 2: the filer types it on an amended return. The tracked inventory (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json) records it disabled at load, and this port's recompute (form_1601fq.rs) zeroes it unless the return is amended; crates/bir-core/data/agent-forms/1601fq-v2018.json binds it (probe.rs FILER_TYPED) and conditions.json gates it on Amended Return Yes.",
       "computed": false
     },
     "frm1601FQ:txtTax26": {
