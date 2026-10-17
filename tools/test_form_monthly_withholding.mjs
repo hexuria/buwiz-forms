@@ -38,6 +38,8 @@ const schema = {
         { no: "13", l: "Special Law or International Tax Treaty?", f: [{ k: K("yes"), t: "radio", l: "Yes" }, { k: K("no"), t: "radio", l: "No" }] },
         { no: "13A", l: "If yes, specify", f: [{ k: K("relief"), t: "sel", l: "If yes, specify", o: [{ value: "Special Rate", label: "Special Rate" }, { value: "International Tax Treaty", label: "International Tax Treaty" }, { value: "Both", label: "Both" }] }] },
         { no: "1", l: "For the month (MM/20YY)", f: [{ k: K("year"), t: "sel", l: "Filing two-digit year", o: [{ value: "25", label: "2025" }, { value: "26", label: "2026" }] }] },
+        { no: "1", l: "For the Period – From (MM/DD/YYYY)", f: [{ k: K("fromMonth"), t: "int", l: "Date withholding month" }, { k: K("fromDay"), t: "int", l: "Date withholding day" }, { k: K("fromYear"), t: "int", l: "Date withholding year" }] },
+        { no: "1", l: "For the Period – To (MM/DD/YYYY)", f: [{ k: K("toMonth"), t: "int", l: "Date withholding to month", c: 1 }, { k: K("toDay"), t: "int", l: "Date withholding to day", c: 1 }, { k: K("toYear"), t: "int", l: "Date withholding to year", c: 1 }] },
       ],
     },
   ],
@@ -116,11 +118,13 @@ const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page
 await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
 await mod.evaluate();
 const { FormPageActions, renderFormPage, renderRemovalConfirm } = mod.namespace;
+const part0Index = (label) => schema.parts[0].items.findIndex((it) => it.l === label);
 
 let hostValues = {
   [K("atc1")]: "WI330", [K("base1")]: "1000", [K("rate1")]: " 25.0",
   [K("atc2")]: "", [K("base2")]: "", [K("rate2")]: "",
   [K("over")]: "0.00", [K("relief")]: "0", [K("value1")]: "0.00", [K("year")]: "26",
+  [K("fromMonth")]: "03", [K("fromDay")]: "16", [K("fromYear")]: "2026", [K("toMonth")]: "03", [K("toDay")]: "31", [K("toYear")]: "2026",
   [K("yes")]: "true", [K("no")]: "false", [K("value1")]: "0.00",
 };
 const opened = () => ({
@@ -182,6 +186,14 @@ assert.ok(![...ids].some((id) => /^fp-frmTEST:/.test(id) && id.includes("37")), 
 const part = ui.state.schema.parts[0];
 assert.ok(part.items.some((it) => it.no === "37"), "the page keeps an item that has only its note");
 console.log("PASS a printed item with no box shows its caption and note.");
+
+// ---- 1600WP item 1: From and To are two dates; From has its calendar.
+const from = part0Index("For the Period – From (MM/DD/YYYY)");
+const to = part0Index("For the Period – To (MM/DD/YYYY)");
+assert.ok(ids.has(`fp-item-0:${from}`) && ids.has(`fp-item-0:${to}`), "From and To are two items");
+assert.ok(ids.has(`fp-date-0:${from}`), "From has its own calendar");
+assert.ok(!ids.has(`fp-date-0:${to}`), "To, which the form computes, has none");
+console.log("PASS 1600WP item 1 is two dates, From with its calendar.");
 
 
 // ---- A rate that waits for its ATC.

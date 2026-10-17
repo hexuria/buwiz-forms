@@ -556,14 +556,22 @@ fn monthly_payment_rows_show_their_printed_items_with_a_note() {
                 _ => {}
             }
         }
-        // The app writes nothing there for a new return.
+        // The app writes nothing there for a new return, on the print or
+        // in the upload's field map; no page box can change that.
         let opened = open(code, 3);
         let map = print_of(code, &opened["draft"]);
+        let xml = agent::field_map(kind_of(code).unwrap(), &opened["draft"]).unwrap();
         for (key, _) in &payment {
             assert!(
                 map.get(key).is_none_or(|v| v.trim().is_empty()),
                 "{code} {key}"
             );
+            assert!(
+                xml.get(key).is_none_or(|v| v.trim().is_empty()),
+                "{code} {key}"
+            );
+            let refused = fill(code, &opened["draft"], json!({ key: "X" }));
+            assert!(refused["rejected"][key].is_string(), "{code} {key}");
         }
     }
     // R4 (1601C): none of the six dates is a box on the page any more.
@@ -1492,4 +1500,53 @@ fn form_1601c_address_lines_are_one_pool() {
         whole.split_whitespace().collect::<Vec<_>>(),
         typed.split_whitespace().collect::<Vec<_>>()
     );
+}
+
+/// 0619E manual-4, 0619F manual-3: item 2 is as the official page has it:
+/// the day an ordinary box the filer may change (fields.json: required,
+/// not computed, default 10), the month and year computed from the period
+/// (fields.json: computed). The page shows the day open and the month and
+/// year locked with their values.
+#[test]
+fn monthly_due_date_day_is_the_filers_as_on_the_official_page() {
+    setup();
+    for (code, package) in [("0619E", "0619e-v2018"), ("0619F", "0619f-v2018")] {
+        let fields = read_json(&format!("rules/forms/{package}/fields.json"));
+        let field = |key: &str| {
+            fields["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|f| f["field_key"] == key)
+                .unwrap()
+                .clone()
+        };
+        let p = format!("frm{code}:");
+        let day = field(&format!("{p}txtDueDay"));
+        assert_eq!(day["computed"], false, "{code}");
+        assert_eq!(day["default_value"], "10", "{code}");
+        let opened = open(code, 3);
+        assert!(
+            opened["locks"].get(format!("{p}txtDueDay")).is_none(),
+            "{code}"
+        );
+        assert_eq!(opened["values"][format!("{p}txtDueDay")], "10", "{code}");
+        assert_eq!(drawn_key(code, &format!("{p}txtDueDay")).unwrap().no, "2");
+        for part in ["txtDueMonth", "txtDueYear"] {
+            let key = format!("{p}{part}");
+            assert_eq!(field(&key)["computed"], true, "{code} {part}");
+            assert!(
+                opened["locks"][&key]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("computed"),
+                "{code} {key}"
+            );
+            assert!(
+                !opened["values"][&key].as_str().unwrap().is_empty(),
+                "{code} {key}"
+            );
+            assert_eq!(drawn_key(code, &key).unwrap().no, "2");
+        }
+    }
 }
