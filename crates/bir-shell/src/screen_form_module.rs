@@ -2633,7 +2633,7 @@ fn screen_form_sample_period(
             // match a typed date to a stored return.
             let numbered = NUMBERED_FORMS.contains(&code);
             let stored = if numbered {
-                None
+                stored_for_date(db, kind, &draft).map_err(host_error)?
             } else {
                 stored_for_period(db, kind, &draft).map_err(host_error)?
             };
@@ -3819,14 +3819,21 @@ fn save_sample(kind: AgentFormKind, mut draft: Value, mark: &SampleMark) -> Host
         )));
     }
     with_database(|db| {
-        if NUMBERED_FORMS.contains(&code) {
-            next_free_entry(db, kind, &mut draft).map_err(host_error)?;
-        } else if let Some(stored) = stored_for_period(db, kind, &draft).map_err(host_error)? {
+        let numbered = NUMBERED_FORMS.contains(&code);
+        let stored = if numbered {
+            stored_for_date(db, kind, &draft).map_err(host_error)?
+        } else {
+            stored_for_period(db, kind, &draft).map_err(host_error)?
+        };
+        if let Some(stored) = stored {
             return Ok(json(json!({
                 "saved": false,
                 "existing": existing_return(db, kind, &stored).map_err(host_error)?,
                 "opens": opens_for(kind, &stored).map_err(host_error)?,
             })));
+        }
+        if numbered {
+            next_free_entry(db, kind, &mut draft).map_err(host_error)?;
         }
         refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
         let id = agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
@@ -3843,14 +3850,17 @@ fn save_sample(kind: AgentFormKind, mut draft: Value, mark: &SampleMark) -> Host
 }
 
 /// What `screen_form_open` takes to open exactly this stored return: its
-/// year, the page period, and its stored key.
+/// year, the page period, and its stored key. An entry-numbered form's
+/// key is its entry (the page period too); any other open-ended key of
+/// 101 or more is a transaction's `MMDD`, whose page period is the month.
 fn opens_for(kind: AgentFormKind, stored: &Value) -> Result<Value, String> {
     let identity = agent::identity(kind, stored)?;
+    let numbered = NUMBERED_FORMS.contains(&kind.form_code());
     let period = match identity.period {
         FilingPeriod::Monthly(month) => u32::from(month),
         FilingPeriod::Quarterly(quarter) => u32::from(quarter),
         FilingPeriod::Annual => 0,
-        FilingPeriod::OpenEnded(key) if key >= 101 => key / 100,
+        FilingPeriod::OpenEnded(key) if key >= 101 && !numbered => key / 100,
         FilingPeriod::OpenEnded(key) => key,
     };
     Ok(json!({
@@ -3860,17 +3870,72 @@ fn opens_for(kind: AgentFormKind, stored: &Value) -> Result<Value, String> {
     }))
 }
 
-/// An entry-numbered form's sample (0605, 1606, 1706, 1707, 1707A, 1800,
-/// 1801) takes the first entry of its year with no stored return.
-fn next_free_entry(db: &Database, kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
+/// The stored return of an entry-numbered form (1606, 1706, 1707, 1707A,
+/// 1800, 1801) for exactly the transaction date its draft's period parts
+/// hold: the same taxpayer, year and date. `None` without a typed day
+/// (0605), or when no entry of the year has that date: a new transaction.
+fn stored_for_date(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<Option<Value>, String> {
     let code = kind.form_code();
-    let pointer = if draft.pointer("/open_ended_key").is_some() {
+    let parts = sample_period_parts(kind);
+    let typed_of = |draft: &Value| -> Result<TypedPeriod, String> {
+        let values = values_json(kind, draft)?;
+        let values = values.as_object().cloned().unwrap_or_default();
+        Ok(read_typed_period(code, &parts, &values))
+    };
+    let typed = typed_of(draft)?;
+    if typed.day.is_none() {
+        return Ok(None);
+    }
+    let identity = agent::identity(kind, draft)?;
+    let stored = db
+        .list_draft_summaries(&identity.tin, identity.taxable_year)
+        .map_err(|error| error.to_string())?
+        .iter()
+        .filter(|row| row.form_code == code)
+        .count();
+    let mut found = 0;
+    for entry in 1..=MAX_ENTRY {
+        if found == stored {
+            break;
+        }
+        let mut candidate = draft.clone();
+        set_draft_path(&mut candidate, entry_pointer(draft), json!(entry));
+        let Some(row) = stored_return(db, kind, &candidate)? else {
+            continue;
+        };
+        found += 1;
+        if typed_of(&row)? == typed {
+            return Ok(Some(row));
+        }
+    }
+    Ok(None)
+}
+
+/// The highest entry number: a page period (`u8`), so every entry opens
+/// with its own number.
+const MAX_ENTRY: u32 = 255;
+
+/// Where an entry-numbered draft keeps its entry number.
+fn entry_pointer(draft: &Value) -> &'static str {
+    if draft.pointer("/open_ended_key").is_some() {
         "/open_ended_key"
     } else {
         // 0605 keeps its entry number in `month`.
         "/month"
-    };
-    for entry in 1..=999u32 {
+    }
+}
+
+/// An entry-numbered form's sample (0605, 1606, 1706, 1707, 1707A, 1800,
+/// 1801) that matched no stored transaction takes the first entry of its
+/// year with no stored return.
+fn next_free_entry(db: &Database, kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
+    let code = kind.form_code();
+    let pointer = entry_pointer(draft);
+    for entry in 1..=MAX_ENTRY {
         let mut candidate = draft.clone();
         set_draft_path(&mut candidate, pointer, json!(entry));
         let identity = agent::identity(kind, &candidate)?;
@@ -7480,10 +7545,11 @@ mod tests {
     /// Decided 2026-10-17: a form filed "As needed" and keyed by its
     /// transaction date matches a stored return by that exact date; a
     /// monthly form keeps matching by month and year, whatever the day. On
-    /// every form whose period parts include a day (entry-numbered forms
-    /// never match), a return stored for 03/15/2024 is found on 03/15; on
-    /// 03/16 a monthly form finds it and a per-transaction form builds a
-    /// fresh sample, the second transaction of the month; April is new.
+    /// every form whose period parts include a day, entry-numbered forms
+    /// included, a return stored for 03/15/2024 is found on 03/15; on 03/16
+    /// a monthly form finds it and a per-transaction form builds a fresh
+    /// sample, the second transaction of the month (an entry-numbered form
+    /// saves it as a new entry, found again by its date); April is new.
     #[test]
     fn a_transaction_date_matches_exactly_and_a_month_by_month() {
         setup();
@@ -7494,17 +7560,23 @@ mod tests {
             let has_day = sample_period_parts(kind)
                 .iter()
                 .any(|(_, part)| matches!(part, PeriodPart::Day | PeriodPart::Date));
-            if !has_day || NUMBERED_FORMS.contains(&code) {
+            if !has_day {
                 continue;
             }
+            let numbered = NUMBERED_FORMS.contains(&code);
             let built = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
             let mut draft = built["sample"]["draft"].clone();
             draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
-            save(code, &draft);
+            let first = save(code, &draft)["id"].clone();
             let same = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
             assert!(
                 same["existing"].is_object(),
                 "{code}: the same date: {same}"
+            );
+            assert_eq!(
+                opens_of(code, &same["opens"])["draft"]["id"],
+                first,
+                "{code}: the offer opens that very return"
             );
             let next_day = sample_period(TIN, code, typed_parts(code, 2024, 3, 16, 1));
             if next_day["existing"].is_object() {
@@ -7516,13 +7588,42 @@ mod tests {
                 );
                 assert_eq!(next_day["sample"]["sample"], true, "{code}");
                 exact.push(code);
+                if numbered {
+                    // Saved from the library, it is a new entry, and its
+                    // date finds it.
+                    let saved = call(
+                        "screen_form_save",
+                        vec![code.into(), json(next_day["sample"]["draft"].clone())],
+                    )
+                    .unwrap();
+                    assert_eq!(saved["saved"], true, "{code}: {saved}");
+                    assert_ne!(saved["id"], first, "{code}: a return of its own");
+                    let again = sample_period(TIN, code, typed_parts(code, 2024, 3, 16, 1));
+                    assert_eq!(
+                        opens_of(code, &again["opens"])["draft"]["id"],
+                        saved["id"],
+                        "{code}: the second transaction, by its date"
+                    );
+                    // The same sale saved twice is offered, never entry 3.
+                    let twice = call(
+                        "screen_form_save",
+                        vec![code.into(), json(next_day["sample"]["draft"].clone())],
+                    )
+                    .unwrap();
+                    assert_eq!(twice["saved"], false, "{code}: {twice}");
+                    assert!(twice["existing"].is_object(), "{code}");
+                }
             }
             let april = sample_period(TIN, code, typed_parts(code, 2024, 4, 15, 1));
             assert!(april["existing"].is_null(), "{code}: April is new");
         }
         exact.sort_unstable();
         by_month.sort_unstable();
-        assert_eq!(exact, ["2000OT", "2552"], "As needed, keyed by the date");
+        assert_eq!(
+            exact,
+            ["1606", "1706", "1707", "1800", "1801", "2000OT", "2552"],
+            "As needed, keyed by the date (entry-numbered forms by their date too)"
+        );
         assert_eq!(
             by_month,
             [
@@ -7539,12 +7640,42 @@ mod tests {
         }
     }
 
+    /// An entry-numbered return past entry 100 reopens as that entry: its
+    /// key is the entry, never read as a transaction's `MMDD` (entry 150 is
+    /// not month 1), and entries stop at 255, the last page period.
+    #[test]
+    fn a_high_entry_number_reopens_as_itself() {
+        setup();
+        let code = "1706";
+        let kind = kind_of(code).unwrap();
+        let built = sample_period(TIN, code, typed_parts(code, 2024, 3, 15, 1));
+        let mut draft = built["sample"]["draft"].clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        draft["open_ended_key"] = json!(150);
+        let saved = save(code, &draft);
+        assert_eq!(saved["stored_period"], 150);
+        let opens = opens_for(kind, &saved["draft"]).unwrap();
+        assert_eq!(opens, json!({ "year": 2024, "period": 150, "key": 150 }));
+        let reopened = opens_of(code, &opens);
+        assert_eq!(reopened["draft"]["id"], saved["id"]);
+        assert_eq!(reopened["period"], 150, "the entry's own number");
+        // A transaction's MMDD key still opens on its month.
+        let built = sample_period(TIN, "2552", typed_parts("2552", 2024, 3, 15, 1));
+        let mut draft = built["sample"]["draft"].clone();
+        draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let saved = save("2552", &draft);
+        let opens = opens_for(kind_of("2552").unwrap(), &saved["draft"]).unwrap();
+        assert_eq!(opens, json!({ "year": 2024, "period": 3, "key": 315 }));
+        assert_eq!(MAX_ENTRY, u32::from(u8::MAX));
+    }
+
     /// Decided 2026-10-17: a sample can be saved as a real return. On every
     /// form: the placeholder sample (period not set) is refused with what to
     /// do; one rebuilt for a complete period saves as that period's return,
     /// with what was typed into it; saving it again finds that stored return
-    /// (the matching rules) and saves nothing; an entry-numbered form takes
-    /// its next free entry instead, so nothing is replaced either way.
+    /// (the matching rules: an entry-numbered form by its transaction date)
+    /// and saves nothing; an entry-numbered form with no transaction day
+    /// takes its next free entry instead, so nothing is replaced either way.
     #[test]
     fn a_library_sample_saves_as_its_periods_return_on_every_form() {
         setup();
@@ -7625,7 +7756,12 @@ mod tests {
             // Saved again, the same sample never replaces it.
             let again = call("screen_form_save", vec![code.into(), json(built.clone())])
                 .unwrap_or_else(|error| panic!("{code}: {error}"));
-            if NUMBERED_FORMS.contains(&code) {
+            // An entry-numbered form with no transaction day (0605,
+            // 1707A) cannot match a stored entry: its next entry.
+            let dated = sample_period_parts(kind)
+                .iter()
+                .any(|(_, part)| matches!(part, PeriodPart::Day | PeriodPart::Date));
+            if NUMBERED_FORMS.contains(&code) && !dated {
                 assert_eq!(again["saved"], true, "{code}: the next entry");
                 assert_ne!(which(&again["draft"]), id, "{code}: a return of its own");
                 assert_ne!(again["stored_period"], saved["stored_period"], "{code}");
