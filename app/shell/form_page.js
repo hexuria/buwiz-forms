@@ -640,6 +640,17 @@ export class FormPageActions {
     return s.computedKeys.has(k);
   }
 
+  /** A sample's locked blank box: what it waits for, shown in its place. */
+  reasonFor(k) {
+    const s = this.state;
+    return s.blank.has(k) ? s.needs?.[k] || "" : "";
+  }
+
+  /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */
+  isComputedBox(k) {
+    return this.isComputed(k) || /^computed/.test(this.state.locks[k] || "");
+  }
+
   /** Locked on the page: a host lock, unless it is a profile box opened with Edit. */
   isLocked(k) {
     const s = this.state;
@@ -805,10 +816,8 @@ export class FormPageActions {
    */
   setErrors(errors) {
     const s = this.state;
-    // A sample's blank period is not judged until the filer types one.
-    // Dropped only when every box it names is still blank.
-    const untyped = (k) => s.blank.has(k) && !s.typed.has(k);
-    s.errors = (errors || []).filter((e) => !s.sample || !(e.keys || []).length || !e.keys.every(untyped));
+    // The host holds back what a sample's blank period cannot judge.
+    s.errors = errors || [];
     s.messages = {};
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
@@ -997,6 +1006,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
     el = selectBox(cx, ui, f.k, f.l, f.o, value, locked, width);
   } else if (f.t === "chk") {
     const on = value === "true" || value === "1" || value === "Y";
+    const hint = locked && !on ? ui.reasonFor(f.k) : "";
     return div()
       .id(`fp-${f.k}-row`)
       .flex()
@@ -1004,11 +1014,13 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .items_center()
       .gap(SPACE[2])
       .child(Checkbox(cx, `fp-${f.k}`, on, (v, cx) => (locked ? null : ui.choose({ [f.k]: v ? "true" : "false" }, cx)), f.l || itemLabel))
-      .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal());
+      .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
+      .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
-    const shown = f.t === "money" ? formatMoney(value || (f.c ? "0" : "")) : value;
+    // A computed amount shows 0.00 for zero, never an empty box.
+    const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) ? "0" : "")) : value;
     // Locked and blank only with a reason: what it waits for.
-    const hint = !shown && s.blank.has(f.k) ? s.needs?.[f.k] || "" : "";
+    const hint = !shown ? ui.reasonFor(f.k) : "";
     el = lockedBox(cx, shown || hint, width, { right: !hint && (f.t === "money" || f.t === "pct"), hint: Boolean(hint) });
   } else {
     const input = s.inputs.get(f.k);
@@ -1070,6 +1082,9 @@ function radioGroup(cx, ui, it, radios) {
   const t = tokens(cx);
   const wide = radios.some((f) => choiceLabel(f).length > 24);
   const row = div().flex().gap_x(SPACE[4]).gap_y(SPACE[2]).when(wide, (el) => el.flex_col()).when(!wide, (el) => el.flex_row().flex_wrap());
+  // A locked group with nothing ticked says what it waits for.
+  const shut = radios.every((f) => !s.editable || f.c || ui.isLocked(f.k)) && !radios.some((f) => s.values[f.k] === "true");
+  const hint = shut ? radios.map((f) => ui.reasonFor(f.k)).find(Boolean) || "" : "";
   for (const f of radios) {
     const on = s.values[f.k] === "true";
     const locked = !s.editable || f.c || ui.isLocked(f.k);
@@ -1108,6 +1123,7 @@ function radioGroup(cx, ui, it, radios) {
     else item.opacity(0.7);
     row.child(item);
   }
+  if (hint) row.child(Text(cx, "meta", hint, "fg3"));
   void it;
   return row;
 }
@@ -1151,11 +1167,15 @@ function scheduleTable(cx, ui, it, width) {
       let cell;
       if (col.t === "radio" || col.t === "chk") {
         const on = value === "true";
+        const hint = locked && !on ? ui.reasonFor(k) : "";
         cell = Checkbox(cx, `fp-${k}`, on, (v, cx) => (locked ? null : ui.choose({ [k]: v ? "true" : "false" }, cx)), `${col.l}, row ${no}`);
+        if (hint) cell = div().flex().flex_row().items_center().gap(SPACE[1]).child(cell).child(Text(cx, "meta", hint, "fg3"));
       } else if (col.t === "sel") {
         cell = selectBox(cx, ui, k, `${col.l}, row ${no}`, col.o, value, locked, colW - 16);
       } else if (locked || !s.inputs.get(k)) {
-        cell = lockedBox(cx, col.t === "money" ? formatMoney(value) : value, colW - 16, { right: col.t === "money" });
+        const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : "")) : value;
+        const hint = !shown ? ui.reasonFor(k) : "";
+        cell = lockedBox(cx, shown || hint, colW - 16, { right: !hint && col.t === "money", hint: Boolean(hint) });
       } else {
         cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 16 }).h(30);
       }

@@ -391,7 +391,7 @@ fn radio_items_are_one_box_with_options() {
 #[test]
 fn the_page_writes_profile_boxes_and_never_identity_boxes() {
     use agent::{DatePart, Lock};
-    let mut written = 0;
+    let (mut written, mut periods) = (0, 0);
     for kind in AgentFormKind::all() {
         let def = kind.definition();
         let seed = seeds_for(kind).remove(0);
@@ -427,12 +427,18 @@ fn the_page_writes_profile_boxes_and_never_identity_boxes() {
                 Lock::Identity => {
                     let refused = result.expect_err(key);
                     assert!(refused.contains(lock.reason()), "{key}: {refused}");
-                    // Only a sample's period writer lifts it.
+                    // Only a sample's period writer lifts it, and only on a
+                    // period box: the TIN stays refused.
                     let mut draft = seed.clone();
                     let sample = agent::fill_sample_period_box(kind, &mut draft, key, &value);
-                    if let Err(error) = sample {
-                        assert!(!error.contains(lock.reason()), "{key}: {error}");
-                    }
+                    let refused = sample.err().unwrap_or_default();
+                    let period = agent::writes_only_the_period(&bound.binding);
+                    assert_eq!(
+                        refused.contains(lock.reason()),
+                        !period,
+                        "{key} (period box: {period}): {refused}"
+                    );
+                    periods += usize::from(period);
                 }
                 _ => {
                     result.unwrap_or_else(|error| {
@@ -449,4 +455,5 @@ fn the_page_writes_profile_boxes_and_never_identity_boxes() {
         }
     }
     assert!(written > 100, "{written} profile boxes written");
+    assert!(periods > 40, "{periods} period boxes");
 }

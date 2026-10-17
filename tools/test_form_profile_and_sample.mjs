@@ -97,14 +97,20 @@ let hostValues = {
 const filled = [K("txtRDOCode"), K("registeredName"), K("registeredAddress"), K("telNo")];
 const blankKeys = [K("txtYear"), K("rtnMonth"), K("qtr_1")];
 const opened = (sample) => ({
-  draft: sample ? { screen_form_sample: true } : { id: 7 }, status: "Draft", editable: true,
+  draft: sample ? { screen_form_sample: { blank: blankKeys, open: [] } } : { id: 7 }, status: "Draft", editable: true,
   values: sample ? { ...hostValues, ...Object.fromEntries(blankKeys.map((k) => [k, ""])) } : { ...hostValues },
   options: {},
-  locks: { ...Object.fromEntries(filled.map((k) => [k, PROFILE_REASON])), [K("txtYear")]: IDENTITY_REASON },
+  locks: {
+    ...Object.fromEntries(filled.map((k) => [k, PROFILE_REASON])),
+    [K("txtYear")]: IDENTITY_REASON,
+    // A radio group a sample keeps shut, with its reason (item 1, "For the").
+    ...(sample ? { [K("forThe_1")]: IDENTITY_REASON, [K("forThe_2")]: IDENTITY_REASON } : {}),
+  },
   profile: filled, profile_edit: filled, sample,
-  blank: sample ? blankKeys : [],
-  // The host's reason for a blank box it keeps locked (here the year).
-  needs: sample ? { [K("txtYear")]: "Shows once the period is typed" } : {},
+  blank: sample ? [...blankKeys, K("forThe_1"), K("forThe_2")] : [],
+  // The host's reason for a blank box it keeps locked (the year, and the
+  // "For the" radios).
+  needs: sample ? { [K("txtYear")]: "Shows once the period is typed", [K("forThe_1")]: "Set when you start a return" } : {},
   errors: [],
 });
 let validateErrors = [];
@@ -155,18 +161,20 @@ assert.ok(!buttons.includes("fp-save") && !buttons.includes("fp-queue") && !butt
 assert.ok(texts.some((t) => /not saved.*Start a return.*New return/.test(t)), "the sample says how to start a return");
 assert.ok(texts.includes("Sample from the Form library"), "no period in the taxpayer bar");
 assert.ok(texts.includes("Shows once the period is typed"), "a locked blank box says what it waits for");
+assert.ok(texts.includes("Set when you start a return"), "a shut radio group says what it waits for");
 press(clicks, "fp-start-return");
 assert.equal(json(calls.at(-1)), json(["startNewReturn", "2551Q"]), "Start a return opens New return for this form");
 
 // The host's refill stays blank, and a check naming only blank boxes waits.
+// The host holds back what the blank period cannot judge; the page shows
+// exactly the messages it is given.
 validateErrors = [
-  { field: "year", keys: [K("txtYear")], message: "Future filing is not allowed" },
   { field: "year and sales", keys: [K("txtYear"), K("txtTax14")], message: "Sales need a year" },
 ];
 ui.choose({ [K("amendedRtn_2")]: "true" }, cx);
 await settle(); frame();
 assert.equal(ui.state.values[K("txtYear")], "", "year stays blank after a fill");
-assert.equal(json(ui.state.errors.map((e) => e.field)), json(["year and sales"]), "only a message naming a typed-in box shows");
+assert.equal(json(ui.state.errors.map((e) => e.field)), json(["year and sales"]), "the host's messages show as given");
 // An edit the host refuses keeps the box blank.
 ui.choose({ [K("rtnMonth")]: "13" }, cx);
 await settle(); frame();

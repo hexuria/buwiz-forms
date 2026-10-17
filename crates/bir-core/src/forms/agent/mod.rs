@@ -693,12 +693,57 @@ pub fn fill_profile_box_as_user(
     fill_box(kind, draft, key, value, &[Lock::Election, Lock::Profile])
 }
 
-/// [`fill_as_user`] for a period box ([`Lock::Identity`]: year, month,
-/// quarter, day) of a form shown as a sample that is never saved, so the
-/// filer can type the period to see the form work. The caller must hold such
-/// a sample; a stored return's period stays locked through every other
-/// writer. Profile, computed, hidden and unbound boxes are refused as in
-/// [`fill_as_user`].
+/// Draft fields that hold a return's own period. Exact names: a field that
+/// only mentions a period (`/estimated_life_months`, the Calendar answer of
+/// "For the") is an answer, not the period.
+pub const PERIOD_FIELDS: &[&str] = &[
+    "year",
+    "taxable_year",
+    "month",
+    "quarter",
+    "day",
+    "transaction_year",
+    "transaction_month",
+    "transaction_day",
+    "transaction_date",
+    "year_end_month",
+    "year_end_day",
+    "year_end_year",
+    "is_short_period",
+    "due_day",
+];
+
+/// The draft paths a binding writes.
+pub fn binding_paths(binding: &Binding) -> Vec<&str> {
+    match binding {
+        Binding::Text { path, .. } | Binding::Amount { path, .. } | Binding::Whole { path, .. } => {
+            vec![path.as_str()]
+        }
+        Binding::Choice { options } => options
+            .iter()
+            .flat_map(|option| option.set.keys().map(String::as_str))
+            .collect(),
+    }
+}
+
+/// Whether every path a binding writes is one of [`PERIOD_FIELDS`].
+pub fn writes_only_the_period(binding: &Binding) -> bool {
+    let paths = binding_paths(binding);
+    !paths.is_empty()
+        && paths.iter().all(|path| {
+            path.rsplit('/')
+                .next()
+                .is_some_and(|leaf| PERIOD_FIELDS.contains(&leaf))
+        })
+}
+
+/// [`fill_as_user`] for a period box ([`Lock::Identity`] on a binding that
+/// writes only [`PERIOD_FIELDS`]: year, month, quarter, day) of a form shown
+/// as a sample that is never saved, so the filer can type the period to see
+/// the form work. The TIN, the other identity box, stays refused. The caller
+/// must hold such a sample; a stored return's period stays locked through
+/// every other writer. Profile, computed, hidden and unbound boxes are
+/// refused as in [`fill_as_user`].
 pub fn fill_sample_period_box(
     kind: AgentFormKind,
     draft: &mut Value,
@@ -725,6 +770,11 @@ fn fill_box(
                 && def
                     .box_def(key)
                     .is_some_and(|entry| entry.is_user_box() && entry.required != "computed")
+                && (lock != Lock::Identity
+                    || def
+                        .bindings
+                        .get(key)
+                        .is_some_and(|bound| writes_only_the_period(&bound.binding)))
         }
         _ => false,
     };
@@ -1469,6 +1519,32 @@ mod tests {
             }
         }
         assert!(lifted > 100, "{lifted} profile boxes");
+    }
+
+    #[test]
+    fn a_samples_period_writer_lifts_only_period_fields() {
+        let text = |path: &str| Binding::Text {
+            path: path.into(),
+            nullable: false,
+            date: None,
+            part: None,
+        };
+        let choice = |paths: &[&str]| Binding::Choice {
+            options: vec![ChoiceOption {
+                value: "true".into(),
+                set: paths
+                    .iter()
+                    .map(|p| (p.to_string(), Value::from(1)))
+                    .collect(),
+            }],
+        };
+        assert!(writes_only_the_period(&text("/taxable_year")));
+        assert!(writes_only_the_period(&choice(&["/quarter"])));
+        // The TIN is identity too, and never a sample's to type.
+        assert!(!writes_only_the_period(&text("/tin")));
+        assert!(!writes_only_the_period(&text("/estimated_life_months")));
+        assert!(!writes_only_the_period(&choice(&["/quarter", "/tin"])));
+        assert!(!writes_only_the_period(&choice(&[])));
     }
 
     #[test]
