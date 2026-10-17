@@ -451,9 +451,9 @@ fn retype_by_binding(form: &mut Value, code: &str) {
                 .iter()
                 .map(|key| page_type(def, code, key, &t, &label))
                 .collect();
-            // A date column some of whose rows the binding data left as plain
-            // text (1604C Part II) is a date column: plain text keeps the
-            // MM/DD/YYYY the page sends.
+            // A date column some of whose rows the binding data leaves as
+            // plain text is a date column: plain text keeps the MM/DD/YYYY
+            // the page sends.
             let plain_text = |key: &&String| {
                 matches!(
                     binding(key),
@@ -937,6 +937,11 @@ fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Resul
     }
     if grid.get("row_labels").is_some() {
         table["row_labels"] = grid["row_labels"].clone();
+    }
+    // `numbered: false`: the row captions stand in for the row numbers
+    // (PR 6: the 1604 Part II sheets print no row numbers).
+    if grid["numbered"] == false {
+        table["numbered"] = Value::Bool(false);
     }
     Ok(table)
 }
@@ -3349,6 +3354,15 @@ fn apply_screen_edits(
                 *draft = next;
                 continue;
             }
+        }
+        // A Part II date cleared on the page clears the draft's date (PR 6;
+        // the whole-date binding takes only MM/DD/YYYY text).
+        if let ChoiceStep::Fill(value) = &step
+            && let Some(path) = rows_1604::cleared_date(kind, &key, value)
+        {
+            set_draft_path(&mut next, &path, Value::String(String::new()));
+            *draft = next;
+            continue;
         }
         let result = match step {
             // A pooled address (rule 5) comes as one text on its first line.

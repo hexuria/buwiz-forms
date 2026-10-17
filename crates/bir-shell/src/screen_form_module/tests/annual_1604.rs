@@ -1266,3 +1266,182 @@ fn pr6_every_extracted_table_cell_is_drawn() {
         }
     }
 }
+
+/// Round 2, F3/F7: a Part II Date of Remittance can be cleared (the draft
+/// and the print go blank with the box); other text is still refused unless
+/// it is a whole MM/DD/YYYY date, a two-digit year included; a stored
+/// legacy plain-text date opens, shows, prints and files unchanged until the
+/// filer edits it.
+#[test]
+fn pr6_part_ii_dates_clear_and_legacy_text_stays() {
+    setup();
+    for (code, slug, key, path) in [
+        (
+            "1604C",
+            "1604c-2018",
+            "frm1604c:txtSched1Date4",
+            "/months/3/date",
+        ),
+        (
+            "1604E",
+            "1604e-2018",
+            "frm1604e:txtSched2RemDate2",
+            "/schedule2/1/date",
+        ),
+        (
+            "1604F",
+            "1604f-2018",
+            "frm1604f:txtSched2Date1",
+            "/schedules/1/0/date",
+        ),
+    ] {
+        let (_, cell, _) = joins(slug).into_iter().find(|(k, _, _)| k == key).unwrap();
+        let opened = open(code, 0);
+        let typed = fill(code, &opened["draft"], json!({ key: "04/10/2026" }));
+        assert_eq!(typed["draft"].pointer(path), Some(&json!("04/10/2026")));
+        let cleared = fill(code, &typed["draft"], json!({ key: "" }));
+        assert_eq!(cleared["rejected"], json!({}), "{code}: a clear is taken");
+        assert_eq!(cleared["draft"].pointer(path), Some(&json!("")), "{code}");
+        assert_eq!(cleared["values"][key], "", "{code}");
+        let html = document(code, slug, &cleared["draft"]);
+        assert_eq!(
+            bir_print::frozen_html::printed_text(&html, &cell),
+            "",
+            "{code}"
+        );
+        // Other text: a whole MM/DD/YYYY date or refused.
+        for text in ["4/10/26", "04/10/26", "April", "04/2026"] {
+            let refused = fill(code, &typed["draft"], json!({ key: text }));
+            let reason = refused["rejected"][key].as_str().unwrap_or("");
+            assert!(
+                reason.contains("must be a date as MM/DD/YYYY"),
+                "{code} {text:?}: {reason}"
+            );
+            assert_eq!(
+                refused["draft"].pointer(path),
+                Some(&json!("04/10/2026")),
+                "{code}"
+            );
+        }
+        // A legacy draft that stored "4/10/26" as plain text.
+        let mut legacy = opened["draft"].clone();
+        *legacy.pointer_mut(path).unwrap() = json!("4/10/26");
+        save(code, &legacy);
+        let reopened = open(code, 0);
+        assert_eq!(
+            reopened["draft"].pointer(path),
+            Some(&json!("4/10/26")),
+            "{code}: unchanged on open"
+        );
+        assert_eq!(
+            reopened["values"][key], "4/10/26",
+            "{code}: shown as stored"
+        );
+        let html = document(code, slug, &reopened["draft"]);
+        assert_eq!(
+            bir_print::frozen_html::printed_text(&html, &cell),
+            "4/10/26",
+            "{code}"
+        );
+        let other = fill(code, &reopened["draft"], json!({}));
+        assert_eq!(
+            other["draft"].pointer(path),
+            Some(&json!("4/10/26")),
+            "{code}: an unrelated fill keeps it"
+        );
+        let resent = fill(code, &reopened["draft"], json!({ key: "4/10/26" }));
+        assert!(
+            resent["rejected"].get(key).is_some(),
+            "{code}: re-entering the two-digit year is refused"
+        );
+        assert_eq!(
+            resent["draft"].pointer(path),
+            Some(&json!("4/10/26")),
+            "{code}: and nothing changes"
+        );
+    }
+}
+
+/// The page fixture `tools/fixtures/form_1604_page.json` that
+/// tools/test_form_annual_1604.mjs drives the real page with: the host's
+/// own schema entry, opened locks, values and drafts, and the removes of
+/// item 11 No, for 1604C and 1604F. Regenerate with
+/// `UPDATE_PAGE_FIXTURES=1 cargo test pr6_page_fixture`.
+#[test]
+fn pr6_page_fixture_is_the_hosts() {
+    setup();
+    let mut fixture = Map::new();
+    for (code, yes, typed, no) in [
+        (
+            "1604C",
+            json!({"frm1604c:releasedOfFunds_1": "true", "frm1604c:releasedOfFunds_2": "false"}),
+            json!({
+                "frm1604c:txtRefMonth": "03", "frm1604c:txtRefDate": "15", "frm1604c:txtRefYear": "2026",
+                "frm1604c:txt12": "1234.5", "frm1604c:select13": "4",
+                "frm1604c:txtSched1Date1": "02/10/2026", "frm1604c:txtSched1TaxWheld1": "1000",
+                "frm1604c:txtSched1Adj1": "50", "frm1604c:txtSched1Pen1": "25",
+            }),
+            json!({"frm1604c:releasedOfFunds_1": "false", "frm1604c:releasedOfFunds_2": "true"}),
+        ),
+        (
+            "1604F",
+            json!({"frm1604f:taxRelief_1": "true", "frm1604f:taxRelief_2": "false"}),
+            json!({
+                "frm1604f:availedTaxRelief": "PEZA",
+                "frm1604f:txtSched1Date1": "04/25/2026", "frm1604f:txtSched1TaxWheld1": "2000",
+                "frm1604f:txtSched1Pen1": "100",
+            }),
+            json!({"frm1604f:taxRelief_1": "false", "frm1604f:taxRelief_2": "true"}),
+        ),
+    ] {
+        let opened = open(code, 0);
+        let answered = fill(code, &opened["draft"], yes);
+        let typed = fill(code, &answered["draft"], typed);
+        assert_eq!(typed["rejected"], json!({}), "{code}");
+        let cleared = fill(code, &typed["draft"], no.clone());
+        assert!(cleared["removes"].is_object(), "{code}");
+        fixture.insert(
+            code.to_string(),
+            json!({
+                "schema": schema_entry(code).unwrap(),
+                "locks": opened["locks"],
+                "lock_notes": opened["lock_notes"],
+                "typed": {"draft": typed["draft"], "values": typed["values"]},
+                "no": no,
+                "cleared": {"draft": cleared["draft"], "values": cleared["values"], "removes": cleared["removes"]},
+            }),
+        );
+    }
+    // The clock's stamps are the run's, not the page's.
+    fn unstamp(value: &mut Value) {
+        match value {
+            Value::Object(map) => {
+                for (name, child) in map.iter_mut() {
+                    if name == "created_at" || name == "updated_at" {
+                        *child = json!("(stamp)");
+                    } else {
+                        unstamp(child);
+                    }
+                }
+            }
+            Value::Array(items) => items.iter_mut().for_each(unstamp),
+            _ => {}
+        }
+    }
+    let mut fixture = Value::Object(fixture);
+    unstamp(&mut fixture);
+    let text = serde_json::to_string_pretty(&fixture).unwrap() + "\n";
+    let path = format!(
+        "{}/../../tools/fixtures/form_1604_page.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    if std::env::var("UPDATE_PAGE_FIXTURES").is_ok() {
+        std::fs::create_dir_all(std::path::Path::new(&path).parent().unwrap()).unwrap();
+        std::fs::write(&path, &text).unwrap();
+    }
+    let pinned = std::fs::read_to_string(&path).unwrap_or_default();
+    assert!(
+        pinned == text,
+        "tools/fixtures/form_1604_page.json is stale; regenerate with UPDATE_PAGE_FIXTURES=1"
+    );
+}

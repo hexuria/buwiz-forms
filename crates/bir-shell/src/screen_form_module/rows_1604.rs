@@ -2,9 +2,10 @@
 //! that closes a section clears what the filer typed there (the official
 //! handlers, kept by each form's `recompute`): 1604C Item 11 No clears
 //! Items 11A to 13 (`changeRefund`), 1604F Item 11 No clears Item 11A
-//! (`TaxReliefEnable`). The page asks first and offers Undo.
+//! (`TaxReliefEnable`). The page asks first and offers Undo. A Part II
+//! Date of Remittance the filer clears is cleared.
 
-use bir_core::forms::agent::AgentFormKind;
+use bir_core::forms::agent::{AgentFormKind, Binding, DateFormat};
 use serde_json::{Map, Value, json};
 
 const MONTHS: [&str; 12] = [
@@ -106,6 +107,52 @@ pub(super) fn removes(
         }
         _ => None,
     }
+}
+
+/// The draft path a cleared Part II Date of Remittance empties: the key is
+/// one of the 1604C/E/F schedule date boxes (a whole MM/DD/YYYY date) and
+/// the page sent blank. The binding writes only a whole date, so without
+/// this a filer could not empty a date they typed; other text is still
+/// judged by the binding (MM/DD/YYYY or refused), as on every date box.
+pub(super) fn cleared_date(kind: AgentFormKind, key: &str, value: &Value) -> Option<String> {
+    if !matches!(kind.form_code(), "1604C" | "1604E" | "1604F") || !is_part_ii_date(key) {
+        return None;
+    }
+    let blank = value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty());
+    if !blank {
+        return None;
+    }
+    match kind
+        .definition()
+        .bindings
+        .get(key)
+        .map(|bound| &bound.binding)
+    {
+        Some(Binding::Text {
+            path,
+            date: Some(DateFormat::Mdy),
+            part: None,
+            ..
+        }) => Some(path.clone()),
+        _ => None,
+    }
+}
+
+/// A Part II Date of Remittance box of 1604C, 1604E or 1604F.
+pub(super) fn is_part_ii_date(key: &str) -> bool {
+    [
+        "frm1604c:txtSched1Date",
+        "frm1604e:txtSched1RemDate",
+        "frm1604e:txtSched2RemDate",
+        "frm1604f:txtSched1Date",
+        "frm1604f:txtSched2Date",
+        "frm1604f:txtSched3Date",
+    ]
+    .iter()
+    .any(|stem| {
+        key.strip_prefix(stem)
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    })
 }
 
 /// `a`, `a and b`, `a, b and c`.
