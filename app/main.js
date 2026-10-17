@@ -11,7 +11,7 @@
 import { View, div } from "gpui-kit";
 import process from "process";
 import { InputState, OtpState } from "gpui-base";
-import { Store } from "./shell/store.js";
+import { Store, errorText } from "./shell/store.js";
 import {
   applyThemePreference,
   nextThemePreference,
@@ -412,33 +412,45 @@ class BirApp extends View {
 
   go(view, cx) {
     if (view !== this.view) {
-      // A recovery key on screen is shown once: leaving Settings hides it for good.
-      if (this.view === "settings") this.security.leave();
       this.history.push(this.view);
       this.forward = [];
-      this.view = view;
-      this.taxpayerUi.leaveView();
+      this.enterView(view);
     }
-    this.accountMenu = false;
-    if (this.narrow()) {
-      this.sidebarOpen = false;
-      this.panel = null;
-    }
+    this.closeTransient();
     cx.notify();
   }
 
   goBack(cx) {
     if (!this.history.length) return;
     this.forward.push(this.view);
-    this.view = this.history.pop();
+    this.enterView(this.history.pop());
+    this.closeTransient();
     cx.notify();
   }
 
   goForward(cx) {
     if (!this.forward.length) return;
     this.history.push(this.view);
-    this.view = this.forward.pop();
+    this.enterView(this.forward.pop());
+    this.closeTransient();
     cx.notify();
+  }
+
+  /** Switch views with the cleanup every way of leaving one needs. */
+  enterView(view) {
+    // A recovery key on screen is shown once: leaving Settings hides it for good.
+    if (this.view === "settings") this.security.leave();
+    this.view = view;
+    this.taxpayerUi.leaveView();
+  }
+
+  /** Moving anywhere closes the account menu, and the overlays on a narrow window. */
+  closeTransient() {
+    this.accountMenu = false;
+    if (this.narrow()) {
+      this.sidebarOpen = false;
+      this.panel = null;
+    }
   }
 
   toggleSidebar(cx) {
@@ -602,13 +614,19 @@ class BirApp extends View {
     return items;
   }
 
-  /** Re-read filed returns and announce events that appeared since the last look. */
+  /**
+   * Re-read what the submission worker changes behind this app's back
+   * (returns, their deadlines and yearly form rows, background jobs), redraw,
+   * and announce events that appeared since the last look.
+   */
   pollEvents(cx) {
-    this.store.forget("returns:filed");
+    this.store.forgetWhere((key) => /^(returns:|deadlines|forms:|jobs$)/.test(key));
     const fresh = this.notifications().filter((n) => !this.knownEvents.has(n.id));
-    if (!fresh.length) return;
     for (const n of fresh) this.knownEvents.add(n.id);
-    this.toast(fresh.length === 1 ? fresh[0].title : `${fresh.length} filing updates. Open notifications to see them.`, cx, fresh[0].icon);
+    if (fresh.length) {
+      this.toast(fresh.length === 1 ? fresh[0].title : `${fresh.length} filing updates. Open notifications to see them.`, cx, fresh[0].icon);
+    }
+    cx.notify();
   }
 
   markAllRead(cx) {
@@ -902,7 +920,10 @@ class BirApp extends View {
     try {
       if (target.admin) ok = this.store.call(totp ? "verify_admin_totp" : "verify_admin_pin", code);
       else ok = this.store.call(totp ? "verify_taxpayer_totp" : "verify_taxpayer_pin", target.root, code);
-    } catch (_e) {}
+    } catch (e) {
+      // Too many wrong tries, or the check itself failed: say which.
+      return this.fail(errorText(e), cx);
+    }
     if (!ok) {
       if (!target.admin) {
         const c = this.taxpayerCreds(target.root);
@@ -913,14 +934,16 @@ class BirApp extends View {
     this.startSession(target.admin ? { kind: "admin" } : { kind: "taxpayer", root: target.root }, cx);
   }
 
-  /** The admin's PIN or authenticator code as typed; false when neither matches. */
-  checkAdminCode() {
+  /** Why the admin's PIN or authenticator code as typed does not open; null when one matches. */
+  adminCodeError() {
     const a = this.authState();
     try {
-      if (a.has_admin_pin && this.adminPinOtp.value().length === 4 && this.store.call("verify_admin_pin", this.adminPinOtp.value())) return true;
-      if (a.has_admin_totp && this.adminTotpOtp.value().length === 6 && this.store.call("verify_admin_totp", this.adminTotpOtp.value())) return true;
-    } catch (_e) {}
-    return false;
+      if (a.has_admin_pin && this.adminPinOtp.value().length === 4 && this.store.call("verify_admin_pin", this.adminPinOtp.value())) return null;
+      if (a.has_admin_totp && this.adminTotpOtp.value().length === 6 && this.store.call("verify_admin_totp", this.adminTotpOtp.value())) return null;
+    } catch (e) {
+      return errorText(e);
+    }
+    return "Wrong admin PIN or code. Try again.";
   }
 
   /** "Forgot PIN? Ask the admin": the admin's code opens the taxpayer typed above. */
@@ -928,7 +951,8 @@ class BirApp extends View {
     const target = this.signInTarget();
     if (target.error) return this.fail(target.error, cx);
     if (target.admin) return this.fail("That is the admin's TIN. Use the recovery key or your Mac login below.", cx);
-    if (!this.checkAdminCode()) return this.fail("Wrong admin PIN or code. Try again.", cx);
+    const error = this.adminCodeError();
+    if (error) return this.fail(error, cx);
     this.startSession({ kind: "taxpayer", root: target.root }, cx);
     this.toast("Opened by the admin. Set a new PIN in Settings.", cx, "lock");
   }
@@ -940,24 +964,35 @@ class BirApp extends View {
     let ok = false;
     try {
       ok = this.store.write("use_recovery_key", key);
-    } catch (_e) {}
+    } catch (e) {
+      return this.fail(errorText(e), cx);
+    }
     if (!ok) return this.fail("That recovery key does not match. Check it and try again.", cx);
     this.recoveredAdmin(cx, "Recovery key used. It works only once: set a new admin PIN and make a new key.");
   }
 
-  /** Last resort: whoever can log in to this Mac can reset the admin PIN. */
-  async submitMacLogin(cx) {
+  /**
+   * Last resort: whoever can log in to this Mac can reset the admin PIN. The
+   * click's `cx` ends with the click, so the wait runs in a task whose
+   * context outlives the prompt.
+   */
+  submitMacLogin(cx) {
     if (this.signIn.busy) return;
     this.signIn.busy = true;
     this.authError = null;
     cx.notify();
-    let ok = false;
-    try {
-      ok = await this.store.call("mac_login", "reset the eBIRForms admin PIN");
-    } catch (_e) {}
-    this.signIn.busy = false;
-    if (!ok) return this.fail("Mac login was cancelled or did not match.", cx);
-    this.recoveredAdmin(cx, "Signed in with your Mac login. Set a new admin PIN now.");
+    cx.spawn(async (acx) => {
+      let ok = false;
+      let error = null;
+      try {
+        ok = await this.store.call("mac_login", "reset the eBIRForms admin PIN");
+      } catch (e) {
+        error = errorText(e);
+      }
+      this.signIn.busy = false;
+      if (!ok) return this.fail(error || "Mac login was cancelled or did not match.", acx);
+      this.recoveredAdmin(acx, "Signed in with your Mac login. Set a new admin PIN now.");
+    });
   }
 
   recoveredAdmin(cx, message) {
@@ -1161,7 +1196,8 @@ class BirApp extends View {
       try {
         this.jobLogCache = this.store.call("job_log_tail");
       } catch (e) {
-        this.jobLogCache = { path: "", lines: [String(e)] };
+        // The shape logsTab reads, with the reason it shows.
+        this.jobLogCache = { file_name: "", lines: 0, content: "", error: errorText(e) };
       }
     }
     return this.jobLogCache;

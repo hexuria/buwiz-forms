@@ -10,12 +10,28 @@
 
 import * as bir from "bir";
 
+/**
+ * A read that failed is answered from its fallback for this long, then tried
+ * again: one transient failure (a database another process holds locked)
+ * must not show empty data until the next write.
+ */
+const FAILED_READ_RETRY_MS = 2000;
+
+/** The text of a host error: "`bir.fn`: text" arrives; the person needs only the text. */
+export function errorText(e) {
+  return String(e && e.message ? e.message : e)
+    .replace(/^Error:\s*/, "")
+    .replace(/^`[^`]+`:\s*/, "");
+}
+
 export class Store {
   constructor() {
     this.version = 0;
     this.cache = new Map();
     /** Last error per cache key, for screens that show one. */
     this.errors = new Map();
+    /** When each failed read failed (`Date.now()`), so it is tried again. */
+    this.failedAt = new Map();
     /**
      * Which taxpayers this session may see. `scopeRoot` (a TIN root) narrows
      * the taxpayer list to one taxpayer for a taxpayer sign-in; `canSee(root)`
@@ -36,6 +52,7 @@ export class Store {
     this.version += 1;
     this.cache.clear();
     this.errors.clear();
+    this.failedAt.clear();
   }
 
   call(name, ...args) {
@@ -44,23 +61,42 @@ export class Store {
     return fn(...args);
   }
 
-  /** Memoised read: `fallback` when the call throws; the error is kept. */
+  /**
+   * Memoised read: `fallback` when the call throws; the error is kept, and
+   * the call is tried again on the first read after FAILED_READ_RETRY_MS.
+   */
   read(key, name, args, fallback) {
-    if (this.cache.has(key)) return this.cache.get(key);
+    if (this.cache.has(key)) {
+      const failed = this.failedAt.get(key);
+      if (failed === undefined || Date.now() - failed < FAILED_READ_RETRY_MS) return this.cache.get(key);
+    }
     let value = fallback;
     try {
       value = this.call(name, ...args);
       this.errors.delete(key);
+      this.failedAt.delete(key);
     } catch (e) {
       this.errors.set(key, String(e));
+      this.failedAt.set(key, Date.now());
     }
     this.cache.set(key, value);
     return value;
   }
 
+  /** True when the last read of `key` failed and holds its fallback. */
+  failed(key) {
+    return this.failedAt.has(key);
+  }
+
   /** Drop one cached read so the next render reads it again. */
   forget(key) {
     this.cache.delete(key);
+    this.failedAt.delete(key);
+  }
+
+  /** Drop every cached read whose key `test` accepts. */
+  forgetWhere(test) {
+    for (const key of [...this.cache.keys()]) if (test(key)) this.forget(key);
   }
 
   /** A write: runs the call, bumps the version, rethrows errors as Error. */
@@ -135,16 +171,18 @@ export class Store {
    */
   formDeadlines(tin, code, year, from, to) {
     const key = `deadlines_by_form:${from}:${to}`;
+    const source = `deadlines:${from}:${to}`;
     let index = this.cache.get(key);
     if (!index) {
       index = new Map();
-      for (const d of this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], [])) {
+      for (const d of this.read(source, "deadlines_between", [from, to], [])) {
         const k = `${d.tin}|${d.form_code}|${d.taxable_year}`;
         const rows = index.get(k);
         if (rows) rows.push(d);
         else index.set(k, [d]);
       }
-      this.cache.set(key, index);
+      // An index of a failed read stays uncached, so the retry rebuilds it.
+      if (!this.failed(source)) this.cache.set(key, index);
     }
     return (index.get(`${tin}|${code}|${year}`) || []).filter((d) => this.canSee(d.tin_root));
   }

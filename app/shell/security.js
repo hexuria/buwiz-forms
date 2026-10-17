@@ -11,13 +11,7 @@
 import { div } from "gpui-kit";
 import { OtpState } from "gpui-base";
 import { SPACE, AppButton, Card, SettingRow, PinCells, Code } from "./ui.js";
-
-function message(e) {
-  // Host errors arrive as "`bir.fn`: text"; the person needs only the text.
-  return String(e && e.message ? e.message : e)
-    .replace(/^Error:\s*/, "")
-    .replace(/^`[^`]+`:\s*/, "");
-}
+import { errorText as message } from "./store.js";
 
 export class SecurityActions {
   constructor(app) {

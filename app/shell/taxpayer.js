@@ -46,7 +46,7 @@ import {
   ComboState,
   ComboField,
 } from "./ui.js";
-import { formatTin, shortDate, daysUntil } from "./store.js";
+import { errorText as message, formatTin, shortDate, daysUntil } from "./store.js";
 import { searchText } from "./library.js";
 
 const SELECTION_KEY = "redesign.selection";
@@ -79,14 +79,6 @@ function factState(app, field, value) {
   if (field === "rdo_code") return new ComboState(app.store.rdoOptions(), value, "Type a code or district, like 050 or Makati");
   if (field === "zip_code") return new ComboState(app.store.zipOptions(), value, "Type a code or place, like 1226 or Makati");
   return InputState.new({ value });
-}
-
-/** A host error as one sentence for a toast. */
-function message(e) {
-  // Host errors arrive as "`bir.fn`: text"; the person needs only the text.
-  return String(e && e.message ? e.message : e)
-    .replace(/^Error:\s*/, "")
-    .replace(/^`[^`]+`:\s*/, "");
 }
 
 /** Owns the taxpayer screens' state and talks to the store. */
@@ -246,15 +238,23 @@ export class TaxpayerActions {
         }
         const name = this.inputs.name.value().trim();
         let toastText = "Changes saved";
+        // Name and type first, under the TIN they were opened with: the move
+        // is the step a TIN in use refuses, and a refusal must not leave a
+        // moved TIN with the rest unsaved.
+        app.store.write("update_taxpayer", t.tin_root, { name: name || t.name, taxpayer_type: this.typeValue || t.taxpayer_type });
         if (digits !== t.tin_root) {
           // One transaction in bir-core: branches, tax years, returns and
           // templates move together; a TIN in use is refused there.
-          app.store.write("move_taxpayer_tin", t.tin_root, digits);
+          try {
+            app.store.write("move_taxpayer_tin", t.tin_root, digits);
+          } catch (e) {
+            this.tinError = `Name and type saved. The TIN did not change: ${message(e)}`;
+            return cx.notify();
+          }
           app.remapRecent((tin) => (tin.startsWith(t.tin_root) ? digits + tin.slice(9) : tin));
           app.selRoot = digits;
           toastText = `TIN changed to ${formatTin(digits)}. Every branch, tax year, return and template moved with it.`;
         }
-        app.store.write("update_taxpayer", digits, { name: name || t.name, taxpayer_type: this.typeValue || t.taxpayer_type });
         app.writeLocal(SELECTION_KEY, { root: app.selRoot, code: app.selCode });
         this.editSec = null;
         this.tinError = null;

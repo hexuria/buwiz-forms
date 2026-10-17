@@ -98,10 +98,12 @@ function jobsTab(cx, app, width) {
 
 function logsTab(cx, app, width) {
   const t = tokens(cx);
+  /** @type {{ file_name: string, lines: number, content: string, error?: string }} */
   let log = { file_name: "", lines: 0, content: "" };
   let error = null;
   try {
     log = app.jobLogTail();
+    error = log.error || null;
   } catch (e) {
     error = String(e);
   }

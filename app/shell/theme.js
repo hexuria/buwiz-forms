@@ -7,7 +7,7 @@
 // so base components (inputs, tooltips, scrollbars) share the palette.
 
 import { set_theme } from "gpui-base";
-import { baseColors } from "./ui.js";
+import { baseColors, noteAppliedAppearance } from "./ui.js";
 
 export const THEME_PREF_KEY = "theme_preference";
 
@@ -45,6 +45,7 @@ export function applyThemePreference(cx, pref) {
   const theme = cx.theme();
   const system = typeof window !== "undefined" && window.appearance ? window.appearance() : theme.appearance;
   const appearance = pref === "system" ? system : pref === "dark" ? "dark" : "light";
+  noteAppliedAppearance(appearance);
   set_theme({
     appearance,
     tokens: {

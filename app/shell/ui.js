@@ -137,7 +137,21 @@ export const BREAK = {
  * @returns {Palette}
  */
 export function tokens(cx) {
+  if (appliedAppearance) return PALETTES[appliedAppearance];
   return cx.theme().is_dark ? PALETTES.dark : PALETTES.light;
+}
+
+/**
+ * The appearance `applyThemePreference` last set. Every text element asks for
+ * the palette, so `tokens` answers from this rather than projecting the whole
+ * host theme (`cx.theme()`) once per element per render.
+ * @type {"light" | "dark" | null}
+ */
+let appliedAppearance = null;
+
+/** Record the appearance just handed to `set_theme`. */
+export function noteAppliedAppearance(appearance) {
+  appliedAppearance = appearance === "dark" ? "dark" : "light";
 }
 
 /**
@@ -726,6 +740,11 @@ export function Dropdown(cx, id, opts) {
 export class ComboState {
   constructor(options, value = "", placeholder = "Type to search") {
     this.options = options;
+    // The ZIP list runs to thousands of labels: lower-case them once, and
+    // keep the last match so a render that did not change the text reuses it.
+    this.lowerLabels = options.map((o) => o.label.toLowerCase());
+    this.byValue = new Map(options.map((o) => [o.value, o]));
+    this.lastMatch = { text: null, limit: 0, out: [] };
     this.open = false;
     /** Called after the person types or picks. @type {((cx: any) => void) | null} */
     this.onChange = null;
@@ -746,7 +765,7 @@ export class ComboState {
   }
 
   labelOf(code) {
-    const o = this.options.find((x) => x.value === code);
+    const o = this.byValue.get(code);
     return o ? o.label : code || "";
   }
 
@@ -765,20 +784,25 @@ export class ComboState {
   /** True when the text is empty or names one of the options. */
   isKnown() {
     const v = this.value();
-    return !v || this.options.some((x) => x.value === v);
+    return !v || this.byValue.has(v);
   }
 
   /** Options whose label holds every typed word; all of them once one is picked. */
   matches(limit = 60) {
     const text = this.input.value().trim().toLowerCase();
-    if (!text || this.options.some((x) => x.label.toLowerCase() === text)) return this.options.slice(0, limit);
-    const words = text.split(/\s+/);
-    const out = [];
-    for (const o of this.options) {
-      const label = o.label.toLowerCase();
-      if (words.every((w) => label.includes(w))) out.push(o);
-      if (out.length >= limit) break;
+    const last = this.lastMatch;
+    if (last.text === text && last.limit === limit) return last.out;
+    let out;
+    if (!text || this.lowerLabels.includes(text)) out = this.options.slice(0, limit);
+    else {
+      const words = text.split(/\s+/);
+      out = [];
+      for (let i = 0; i < this.options.length && out.length < limit; i++) {
+        const label = this.lowerLabels[i];
+        if (words.every((w) => label.includes(w))) out.push(this.options[i]);
+      }
     }
+    this.lastMatch = { text, limit, out };
     return out;
   }
 
