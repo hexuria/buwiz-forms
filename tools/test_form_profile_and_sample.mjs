@@ -309,6 +309,33 @@ console.log("PASS: library sample blank and unsaved; profile boxes fold, show Ed
   await settle(); frame();
   assert.ok(!texts.some((t) => t.startsWith("Updated from your tax profile")), "nothing moved: no note");
   console.log("PASS: a draft that followed the tax profile says what changed at the top.");
+
+  // A legacy draft that differs from the profile: listed, not changed;
+  // "Use profile values" applies them and saves.
+  const asked = [];
+  app.store.call = (name, ...args) => {
+    if (name === "screen_form_open") return Promise.resolve({ ...opened(false), profile_differs: ["RDO 039 (profile 043)"] });
+    if (name === "screen_form_use_profile") {
+      asked.push(args);
+      return { draft: { id: 7, used: true }, values: { ...hostValues, [K("txtRDOCode")]: "043" }, options: {}, rejected: {}, penalties: [], pools: {} };
+    }
+    return plain.call(app.store, name, ...args);
+  };
+  ui.open({ code: "2551Q", tin: "12345678800000", year: 2026, period: 3 }, cx);
+  await settle(); frame();
+  assert.ok(texts.includes("Differs from your profile: RDO 039 (profile 043)"), "the note lists what differs");
+  assert.ok(buttons.includes("fp-use-profile"), "with Use profile values");
+  assert.equal(ui.state.values[K("txtRDOCode")], "039", "nothing moved on open");
+  const saves = calls.filter((c) => c[0] === "screen_form_save").length;
+  press(clicks, "fp-use-profile");
+  assert.equal(JSON.stringify(asked.at(-1).slice(0, 3)), JSON.stringify(["2551Q", 2026, 3]), "the host applies them for this return");
+  assert.equal(ui.state.values[K("txtRDOCode")], "043", "the profile's value shows");
+  assert.equal(calls.filter((c) => c[0] === "screen_form_save").length, saves + 1, "and the return is saved");
+  assert.equal(calls.filter((c) => c[0] === "screen_form_save").at(-1)[2].used, true, "with the applied draft");
+  await settle(); frame();
+  assert.ok(!texts.some((t) => t.startsWith("Differs from your profile")), "the note goes");
+  app.store.call = plain;
+  console.log("PASS: a draft that differs from the profile says so and Use profile values applies them.");
 }
 
 // ---- A sample's period (option B): page inputs, a host answer once complete.

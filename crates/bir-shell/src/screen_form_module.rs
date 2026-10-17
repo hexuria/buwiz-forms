@@ -107,6 +107,8 @@ export interface ScreenFormOpened {
     pools: Record<string, string>;
     /** A stored Draft whose profile boxes the filer did not edit followed a later tax-profile change (saved): what changed ("RDO 050 → 043"). Empty when nothing moved. */
     profile_updates?: string[];
+    /** A Draft saved before it recorded its profile baseline (or reverted to Draft): its unedited profile boxes that differ from the profile now ("RDO 039 (profile 043)"), not changed; `screen_form_use_profile` applies them. */
+    profile_differs?: string[];
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -199,6 +201,8 @@ export function screen_form_filed_original(form_code: string, snapshot_id: numbe
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
+/** "Use profile values" on a draft that differs from the tax profile (`profile_differs`): every profile box the filer did not edit takes the profile's value, and they follow later profile changes. Nothing is saved; save the draft. */
+export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object): ScreenFormFilled;
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 /** Save a draft. A Form library sample saves only once its period is set, never over a stored return of that period (answering the offer instead); an entry-numbered form takes its next free entry. */
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
@@ -222,6 +226,7 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("screen_form_amend", screen_form_amend)
         .async_function("screen_form_filed_original", screen_form_filed_original)
         .function("screen_form_fill", screen_form_fill)
+        .function("screen_form_use_profile", screen_form_use_profile)
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
         .function("screen_form_print", screen_form_print)
@@ -1812,10 +1817,27 @@ fn mark_profile_edit(draft: &mut Value, key: &str) {
     }
 }
 
-/// How a profile box's change reads in the note at the top of a draft:
-/// its item's caption without the parenthetical or a trailing "code"
-/// ("RDO Code" reads "RDO"), and what the page showed before and after.
-fn profile_change_note(code: &str, key: &str, before: &Value, after: &Value) -> Option<String> {
+/// How a profile note names a box's two values.
+#[derive(Clone, Copy)]
+enum NoteStyle {
+    /// It followed the profile: "RDO 050 → 043".
+    Followed,
+    /// It differs from the profile, which was not applied: "RDO 039
+    /// (profile 043)".
+    Differs,
+}
+
+/// How a profile box reads in a note at the top of a draft: its item's
+/// caption without the parenthetical or a trailing "code" ("RDO Code"
+/// reads "RDO"), and what the page shows (`before`) and what the profile
+/// gives (`after`).
+fn profile_change_note(
+    code: &str,
+    key: &str,
+    before: &Value,
+    after: &Value,
+    style: NoteStyle,
+) -> Option<String> {
     let form = schema_entry(code)?;
     let (item, field) = form["parts"]
         .as_array()?
@@ -1842,7 +1864,10 @@ fn profile_change_note(code: &str, key: &str, before: &Value, after: &Value) -> 
             return None;
         }
         let picked = field["l"].as_str().unwrap_or(key);
-        return Some(format!("{caption} → {picked}"));
+        return Some(match style {
+            NoteStyle::Followed => format!("{caption} → {picked}"),
+            NoteStyle::Differs => format!("{caption} (profile {picked})"),
+        });
     }
     let shown = |text: &str| {
         if text.is_empty() {
@@ -1851,7 +1876,10 @@ fn profile_change_note(code: &str, key: &str, before: &Value, after: &Value) -> 
             text.to_string()
         }
     };
-    Some(format!("{caption} {} → {}", shown(&was), shown(&now)))
+    Some(match style {
+        NoteStyle::Followed => format!("{caption} {} → {}", shown(&was), shown(&now)),
+        NoteStyle::Differs => format!("{caption} {} (profile {})", shown(&was), shown(&now)),
+    })
 }
 
 /// The draft fields the form's profile boxes write (period fields aside).
@@ -1874,48 +1902,40 @@ fn profile_values(kind: AgentFormKind, from_profile: &Value) -> Map<String, Valu
         .collect()
 }
 
-/// Record what the profile makes now as the baseline of a Draft that has
-/// none (a new return, a sample, an amendment): its first save keeps it.
-fn record_profile_baseline(kind: AgentFormKind, draft: &mut Value, from_profile: &Value) {
-    let pointer = lifecycle_pointer(draft, "profile_baseline");
-    if draft
-        .pointer(&pointer)
+/// Whether a Draft records the profile values its boxes were built from.
+fn has_profile_baseline(draft: &Value) -> bool {
+    draft
+        .pointer(&lifecycle_pointer(draft, "profile_baseline"))
         .and_then(Value::as_object)
         .is_some_and(|baseline| !baseline.is_empty())
-    {
-        return;
-    }
+}
+
+/// Record what the profile makes now as the draft's baseline (in the draft
+/// only: the next save keeps it).
+fn set_profile_baseline(kind: AgentFormKind, draft: &mut Value, from_profile: &Value) {
     let values = profile_values(kind, from_profile);
     if !values.is_empty() {
+        let pointer = lifecycle_pointer(draft, "profile_baseline");
         set_draft_path(draft, &pointer, Value::Object(values));
     }
 }
 
-/// A Draft follows a later change of the tax profile in every profile box
-/// the filer did not edit on it (`profile_edits`). The draft keeps the
-/// profile values its boxes were built from (`profile_baseline`); a box
-/// takes the profile's new value (`from_profile`, what the profile alone
-/// makes now) only when the profile changed since that baseline AND the
-/// box still holds the baseline value, so a value typed or written by any
-/// writer that differs from the profile is never replaced. A draft with no
-/// baseline (saved before it existed) changes nothing: it only records the
-/// profile as it is now. Returns what changed, in the filer's words, for
-/// the note at the top of the page ("RDO 050 → 043"); `None` when neither
-/// a value nor the baseline moved, always on a return that left Draft. The
-/// profile is only read, never written.
-fn follow_profile(
-    kind: AgentFormKind,
-    draft: &mut Value,
-    from_profile: &Value,
-) -> Result<Option<Vec<String>>, String> {
-    if agent::identity(kind, draft)?.status != FilingStatus::Draft {
-        return Ok(None);
-    }
-    let code = kind.form_code();
+/// The form's profile boxes (their keys).
+fn profile_box_keys(kind: AgentFormKind) -> Vec<&'static String> {
+    let def = kind.definition();
+    def.boxes
+        .iter()
+        .filter(|entry| is_profile_box(def, entry))
+        .map(|entry| &entry.key)
+        .collect()
+}
+
+/// The draft fields of the profile boxes the filer edited on this return
+/// (`profile_edits`; a pooled address and a radio group count as one box).
+fn edited_profile_paths(kind: AgentFormKind, draft: &Value) -> BTreeSet<&'static str> {
     let def = kind.definition();
     let edits = profile_edits(draft);
-    // A pooled address is one box: an edit to it keeps all its lines.
-    let pools = combs::pools(code);
+    let pools = combs::pools(kind.form_code());
     let edited = |key: &str| {
         edits.contains(key)
             || pools.values().any(|pool| {
@@ -1930,61 +1950,143 @@ fn follow_profile(
                 })
             })
     };
-    let profile_boxes: Vec<&String> = def
-        .boxes
-        .iter()
-        .filter(|entry| is_profile_box(def, entry))
-        .map(|entry| &entry.key)
-        .collect();
-    let paths = profile_paths(kind);
-    let kept: BTreeSet<&str> = profile_boxes
-        .iter()
+    profile_box_keys(kind)
+        .into_iter()
         .filter(|key| edited(key))
         .flat_map(|key| bound_paths(def, key))
-        .collect();
-    let pointer = lifecycle_pointer(draft, "profile_baseline");
-    let baseline = draft.pointer(&pointer).and_then(Value::as_object).cloned();
-    let now = profile_values(kind, from_profile);
-    let mut next = draft.clone();
-    let mut moved = false;
-    if let Some(baseline) = baseline.as_ref().filter(|baseline| !baseline.is_empty()) {
-        for path in paths.iter().filter(|path| !kept.contains(*path)) {
-            let (Some(was), Some(want)) = (baseline.get(*path), now.get(*path)) else {
-                continue;
-            };
-            if want != was && next.pointer(path) == Some(was) {
-                set_draft_path(&mut next, path, want.clone());
-                moved = true;
-            }
-        }
-    }
-    let rebased = baseline.as_ref() != Some(&now);
-    if rebased {
-        set_draft_path(&mut next, &pointer, Value::Object(now));
-    }
-    if !moved {
-        if rebased {
-            *draft = next;
-            return Ok(Some(Vec::new()));
-        }
-        return Ok(None);
-    }
-    let mut before = draft.clone();
+        .collect()
+}
+
+/// The profile notes for `before` -> `after`, one per box whose shown
+/// value differs, in `style`.
+fn profile_notes(
+    kind: AgentFormKind,
+    before: &Value,
+    after: &Value,
+    style: NoteStyle,
+) -> Result<Vec<String>, String> {
+    let code = kind.form_code();
+    let mut before = before.clone();
     agent::compute(kind, &mut before)?;
     let before = values_json(kind, &before)?;
-    agent::compute(kind, &mut next)?;
-    let after = values_json(kind, &next)?;
+    let mut after = after.clone();
+    agent::compute(kind, &mut after)?;
+    let after = values_json(kind, &after)?;
     let mut notes: Vec<String> = Vec::new();
-    for key in profile_boxes {
+    for key in profile_box_keys(kind) {
         if before[key.as_str()] == after[key.as_str()] {
             continue;
         }
-        if let Some(note) = profile_change_note(code, key, &before, &after)
+        if let Some(note) = profile_change_note(code, key, &before, &after, style)
             && !notes.contains(&note)
         {
             notes.push(note);
         }
     }
+    Ok(notes)
+}
+
+/// The draft with every profile box the filer did not edit set to what the
+/// profile makes now (`from_profile`), and whether any value changed.
+fn with_profile_values(kind: AgentFormKind, draft: &Value, from_profile: &Value) -> (Value, bool) {
+    let kept = edited_profile_paths(kind, draft);
+    let now = profile_values(kind, from_profile);
+    let mut next = draft.clone();
+    let mut moved = false;
+    for (path, want) in now.iter().filter(|(path, _)| !kept.contains(path.as_str())) {
+        if next.pointer(path) != Some(want) {
+            set_draft_path(&mut next, path, want.clone());
+            moved = true;
+        }
+    }
+    (next, moved)
+}
+
+/// A Draft with no baseline (saved before baselines existed, or reverted
+/// to Draft: an amended copy, a cancelled queue) is never changed on open.
+/// Its profile boxes that differ from the profile now, and that the filer
+/// did not edit on it, are only listed ("RDO 039 (profile 043)"), for the
+/// page's "Use profile values"; the profile as it is now becomes its
+/// baseline (in the draft: the next save keeps it, so an open writes
+/// nothing). Nothing for a draft that has a baseline or left Draft.
+fn profile_differs(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    from_profile: &Value,
+) -> Result<Vec<String>, String> {
+    if agent::identity(kind, draft)?.status != FilingStatus::Draft || has_profile_baseline(draft) {
+        return Ok(Vec::new());
+    }
+    let (applied, moved) = with_profile_values(kind, draft, from_profile);
+    let notes = if moved {
+        profile_notes(kind, draft, &applied, NoteStyle::Differs)?
+    } else {
+        Vec::new()
+    };
+    set_profile_baseline(kind, draft, from_profile);
+    Ok(notes)
+}
+
+/// "Use profile values": every profile box the filer did not edit takes
+/// what the profile makes now, and the profile becomes the baseline, so
+/// those boxes follow later changes too.
+fn use_profile_values(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    from_profile: &Value,
+) -> Result<(), String> {
+    let (applied, _) = with_profile_values(kind, draft, from_profile);
+    *draft = applied;
+    set_profile_baseline(kind, draft, from_profile);
+    Ok(())
+}
+
+/// A Draft follows a later change of the tax profile in every profile box
+/// the filer did not edit on it (`profile_edits`). The draft keeps the
+/// profile values its boxes were built from (`profile_baseline`); a box
+/// takes the profile's new value (`from_profile`, what the profile alone
+/// makes now) only when the profile changed since that baseline AND the
+/// box still holds the baseline value, so a value typed or written by any
+/// writer that differs from the profile is never replaced. A draft with no
+/// baseline is left to [`profile_differs`]. Returns what changed, in the
+/// filer's words, for the note at the top of the page ("RDO 050 → 043"),
+/// with the baseline moved to the profile as it is now; `None` when no
+/// box moved (the baseline is then only moved in the draft, kept by its
+/// next save), always on a return that left Draft. The profile is only
+/// read, never written.
+fn follow_profile(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    from_profile: &Value,
+) -> Result<Option<Vec<String>>, String> {
+    if agent::identity(kind, draft)?.status != FilingStatus::Draft || !has_profile_baseline(draft) {
+        return Ok(None);
+    }
+    let kept = edited_profile_paths(kind, draft);
+    let pointer = lifecycle_pointer(draft, "profile_baseline");
+    let baseline = draft
+        .pointer(&pointer)
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let now = profile_values(kind, from_profile);
+    let mut next = draft.clone();
+    let mut moved = false;
+    for (path, want) in now.iter().filter(|(path, _)| !kept.contains(path.as_str())) {
+        let Some(was) = baseline.get(path) else {
+            continue;
+        };
+        if want != was && next.pointer(path) == Some(was) {
+            set_draft_path(&mut next, path, want.clone());
+            moved = true;
+        }
+    }
+    set_draft_path(&mut next, &pointer, Value::Object(now));
+    if !moved {
+        *draft = next;
+        return Ok(None);
+    }
+    let notes = profile_notes(kind, draft, &next, NoteStyle::Followed)?;
     *draft = next;
     Ok(Some(notes))
 }
@@ -2349,7 +2451,15 @@ fn open_screen_form(
                 None
             })
         };
-        if followed.is_some() && matches!(stored_return(db, kind, &draft), Ok(Some(_))) {
+        let stored = match followed.as_ref().map(|_| stored_return(db, kind, &draft)) {
+            Some(Ok(stored)) => stored.is_some(),
+            Some(Err(error)) => {
+                tracing::warn!("{code}: reading the stored return to save it failed: {error}");
+                false
+            }
+            None => false,
+        };
+        if stored {
             let mut saved = draft.clone();
             match refuse_replacing_a_stored_return(db, kind, &saved)
                 .and_then(|()| agent::save_draft(kind, db, &mut saved))
@@ -2466,9 +2576,12 @@ fn opened_json(
         values: values_json(kind, &from_profile_draft)?,
         draft: from_profile_draft,
     };
-    if status == FilingStatus::Draft {
-        record_profile_baseline(kind, &mut draft, &from_profile.draft);
-    }
+    // A Draft with no baseline: what differs from the profile now, never
+    // changed here (the page offers "Use profile values").
+    let differs = profile_differs(kind, &mut draft, &from_profile.draft).unwrap_or_else(|error| {
+        tracing::warn!("{code}: comparing with the tax profile failed: {error}");
+        Vec::new()
+    });
     let mut locks = locks(kind, &from_profile);
     // A computed penalty is locked until Edit penalties opens its group; a
     // return with no due date computes none, and its boxes stay open.
@@ -2583,6 +2696,7 @@ fn opened_json(
         "pools": pool_texts,
         "period_parts": period_parts,
         "period_set": sample.as_ref().is_some_and(|build| build.other.is_none()),
+        "profile_differs": differs,
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
         "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
         "errors": errors,
@@ -3317,6 +3431,46 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
         "updated_at": updated_at,
         "total_payable": total_payable,
     }))
+}
+
+/// "Use profile values" (see [`use_profile_values`]): the draft the page
+/// holds with every unedited profile box at the profile's value, answered
+/// like a fill. Nothing is saved: the page saves it.
+fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
+    let kind = kind_of(arguments.string(0)?)?;
+    let year =
+        u16::try_from(arguments.integer(1)?).map_err(|_| host_error("year is out of range"))?;
+    let period = page_period(kind.form_code(), arguments.integer(2)?).map_err(host_error)?;
+    let mut draft = draft_argument(arguments, 3)?;
+    let sample = take_sample_mark(&mut draft);
+    let amendment = take_amendment_mark(&mut draft);
+    if agent::identity(kind, &draft).map_err(host_error)?.status != FilingStatus::Draft {
+        return Err(host_error("this return is no longer a draft"));
+    }
+    let tin = agent::identity(kind, &draft).map_err(host_error)?.tin;
+    let from_profile = with_database(|db| {
+        let profile = db
+            .get_profile_by_tin(&tin)
+            .map_err(|error| host_error(error.to_string()))?
+            .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
+        load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)
+    })?;
+    use_profile_values(kind, &mut draft, &from_profile).map_err(host_error)?;
+    agent::compute(kind, &mut draft).map_err(host_error)?;
+    let values = values_json(kind, &draft).map_err(host_error)?;
+    let options = catalogs::options(kind, &draft);
+    let penalty_groups = penalties::json(kind, &draft);
+    let pool_texts = combs::pool_texts(kind, &draft);
+    put_sample_mark(&mut draft, sample.as_ref());
+    put_amendment_mark(&mut draft, amendment);
+    Ok(json(json!({
+        "draft": draft,
+        "values": values,
+        "options": options,
+        "rejected": {},
+        "penalties": penalty_groups,
+        "pools": pool_texts,
+    })))
 }
 
 fn screen_form_fill(arguments: &HostArguments) -> HostResult {
@@ -8979,12 +9133,37 @@ mod tests {
         );
     }
 
+    /// The test profile's RDO set to `rdo`, as the profile editor saves it.
+    fn set_profile_rdo(rdo: &str) {
+        with_database(|db| {
+            let mut profile = db
+                .get_profile_by_tin(TIN)
+                .map_err(|error| HostError::new(error.to_string()))?
+                .expect("profile");
+            profile.rdo_code = rdo.into();
+            db.save_profile(profile)
+                .map(|_| ())
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap();
+    }
+
+    /// Strip a stored 0619E row's baseline, as a draft saved before
+    /// baselines existed.
+    fn make_legacy(id: i64) {
+        rewrite_row(id, |data| {
+            data.as_object_mut().unwrap().remove("profile_baseline");
+        });
+    }
+
     /// Only a profile CHANGE moves a box, and only a box that still holds
     /// what the profile gave it (its baseline). A draft saved before
-    /// baselines existed changes nothing on open: it records the profile as
-    /// it is then, and follows later changes from there. A value another
-    /// writer put in a profile box without marking an edit (the desktop
-    /// agent, an XML import) is never replaced.
+    /// baselines existed is never changed on open: its boxes that differ
+    /// from the profile are listed ("RDO 043 (profile 039)") for "Use
+    /// profile values", and the profile becomes its baseline when it is
+    /// next saved (opening writes nothing, so its updated_at does not move).
+    /// A value another writer put in a profile box without marking an edit
+    /// (the desktop agent, an XML import) is never replaced.
     #[test]
     fn only_a_later_profile_change_moves_a_box_still_holding_the_profiles_value() {
         setup();
@@ -9001,78 +9180,143 @@ mod tests {
             );
             id
         };
-        // A legacy draft (no baseline) whose RDO differs from the profile,
-        // with no edit recorded.
+        // A legacy draft whose RDO differs from the profile, no edit marked.
         let legacy = stored(3);
-        rewrite_row(legacy, |data| {
-            data.as_object_mut().unwrap().remove("profile_baseline");
-            data["rdo_code"] = json!("043");
-        });
+        make_legacy(legacy);
+        rewrite_row(legacy, |data| data["rdo_code"] = json!("043"));
+        let before = raw_row(legacy);
         let opened = open(code, 3);
-        assert_eq!(
-            opened["values"][rdo], "043",
-            "kept: the profile did not change"
-        );
+        assert_eq!(opened["values"][rdo], "043", "never changed on open");
         assert_eq!(opened["profile_updates"], json!([]));
-        let (_, raw) = raw_row(legacy);
-        let data: Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(data["rdo_code"], "043");
+        assert_eq!(opened["profile_differs"], json!(["RDO 043 (profile 039)"]));
         assert_eq!(
-            data["profile_baseline"]["/rdo_code"], "039",
-            "the baseline is recorded"
+            opened["draft"]["profile_baseline"]["/rdo_code"], "039",
+            "the profile becomes its baseline in the draft"
         );
-        // A legacy draft equal to the profile.
+        assert_eq!(raw_row(legacy), before, "opening writes nothing");
+        // A legacy draft equal to the profile: nothing to list; saved, it
+        // keeps the baseline and follows later changes.
         let equal = stored(5);
-        rewrite_row(equal, |data| {
-            data.as_object_mut().unwrap().remove("profile_baseline");
-        });
-        assert_eq!(
-            open(code, 5)["profile_updates"],
-            json!([]),
-            "no change on open"
-        );
+        make_legacy(equal);
+        let opened = open(code, 5);
+        assert_eq!(opened["profile_differs"], json!([]));
+        save(code, &opened["draft"]);
         // A value another writer put in, no edit marked.
         let written = stored(6);
         rewrite_row(written, |data| data["rdo_code"] = json!("050"));
 
-        with_database(|db| {
-            let mut profile = db
-                .get_profile_by_tin(TIN)
-                .map_err(|error| HostError::new(error.to_string()))?
-                .expect("profile");
-            profile.rdo_code = "044".into();
-            db.save_profile(profile)
-                .map(|_| ())
-                .map_err(|error| HostError::new(error.to_string()))
-        })
-        .unwrap();
+        set_profile_rdo("044");
         let first = open(code, 3);
         assert_eq!(
             first["values"][rdo], "043",
             "a divergent legacy value stays"
         );
+        assert_eq!(first["profile_differs"], json!(["RDO 043 (profile 044)"]));
         let second = open(code, 5);
         assert_eq!(second["values"][rdo], "044", "follows the later change");
-        assert!(strings(&second["profile_updates"]).contains("RDO 039 → 044"));
+        assert_eq!(second["profile_updates"], json!(["RDO 039 → 044"]));
+        let before = raw_row(written);
         let third = open(code, 6);
         assert_eq!(
             third["values"][rdo], "050",
             "another writer's value survives"
         );
         assert_eq!(third["profile_updates"], json!([]));
+        assert_eq!(third["profile_differs"], json!([]));
+        assert_eq!(
+            raw_row(written),
+            before,
+            "a baseline-only change writes nothing (updated_at stays)"
+        );
+    }
+
+    /// "Use profile values" on a legacy draft whose boxes differ from the
+    /// profile: every unedited profile box takes the profile's value, an
+    /// edited one keeps its edit, nothing is saved by the action itself,
+    /// and once saved the boxes follow later profile changes.
+    #[test]
+    fn use_profile_values_applies_them_and_they_follow_from_then_on() {
+        setup();
+        let (code, rdo, phone) = ("0619E", "frm0619E:txtRDOCode", "frm0619E:txtTelNum");
+        let opened = open(code, 3);
+        // The filer's own phone on this return.
+        let edited = fill_unlocked(
+            code,
+            &opened["draft"],
+            json!({ phone: "0299999999" }),
+            &[phone],
+        );
+        assert_eq!(edited["rejected"], json!({}));
+        let id = save(code, &edited["draft"])["id"].as_i64().unwrap();
+        make_legacy(id);
+        rewrite_row(id, |data| data["rdo_code"] = json!("043"));
+        let opened = open(code, 3);
+        assert_eq!(opened["profile_differs"], json!(["RDO 043 (profile 039)"]));
+        let before = raw_row(id);
+        let used = call(
+            "screen_form_use_profile",
+            vec![
+                code.into(),
+                YEAR.into(),
+                3.into(),
+                json(opened["draft"].clone()),
+            ],
+        )
+        .unwrap();
+        assert_eq!(used["values"][rdo], "039", "the profile's RDO");
+        assert_eq!(
+            used["values"][phone], "0299999999",
+            "the edit on this return stays"
+        );
+        assert_eq!(raw_row(id), before, "the action saves nothing itself");
+        save(code, &used["draft"]);
+        let reopened = open(code, 3);
+        assert_eq!(reopened["values"][rdo], "039");
+        assert_eq!(reopened["profile_differs"], json!([]));
+        set_profile_rdo("044");
+        let later = open(code, 3);
+        assert_eq!(later["values"][rdo], "044", "it follows now");
+        assert_eq!(later["values"][phone], "0299999999");
+    }
+
+    /// An amended return is a copy of a filed one: it does not inherit the
+    /// filed return's baseline, so a profile change since filing moves
+    /// nothing in it; its differing boxes are listed for "Use profile
+    /// values" instead.
+    #[test]
+    fn an_amendment_lists_what_differs_from_the_profile_and_moves_nothing() {
+        setup();
+        let (code, rdo) = ("0619E", "frm0619E:txtRDOCode");
+        let kind = kind_of(code).unwrap();
+        let filed = store_filed(code, &open(code, 6)["draft"], "Submitted");
+        let (_, raw) = raw_row(filed);
+        let filed_json: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(filed_json["profile_baseline"]["/rdo_code"], "039");
+        let copy = agent::amended_copy(kind, &filed_json).unwrap();
+        assert!(
+            copy.get("profile_baseline").is_none(),
+            "no baseline: {copy}"
+        );
+        set_profile_rdo("044");
+        let amended = call_async(
+            "screen_form_amend",
+            vec![TIN.into(), code.into(), YEAR.into(), 6.into()],
+        )
+        .unwrap();
+        assert_eq!(amended["values"][rdo], "039", "as filed");
+        assert_eq!(amended["profile_differs"], json!(["RDO 039 (profile 044)"]));
+        assert!(amended["profile_updates"].is_null() || amended["profile_updates"] == json!([]));
     }
 
     /// The quiet save on open never makes a draft unopenable: with the
-    /// store refusing writes, a draft that would record its baseline (and
-    /// one that would follow a change) still opens, as it is in memory.
+    /// store refusing writes, a draft that follows a profile change still
+    /// opens, followed in memory, and nothing is written.
     #[test]
     fn a_draft_opens_when_its_quiet_save_fails() {
         setup();
         let (code, rdo) = ("0619E", "frm0619E:txtRDOCode");
         let id = save(code, &open(code, 3)["draft"])["id"].as_i64().unwrap();
-        rewrite_row(id, |data| {
-            data.as_object_mut().unwrap().remove("profile_baseline");
-        });
+        set_profile_rdo("044");
         let before = raw_row(id);
         raw_exec("PRAGMA query_only = ON", &[]);
         let opened = call_async(
@@ -9082,11 +9326,8 @@ mod tests {
         raw_exec("PRAGMA query_only = OFF", &[]);
         let opened = opened.expect("opens although the save failed");
         assert_eq!(opened["draft"]["id"], id);
-        assert_eq!(opened["values"][rdo], "039");
-        assert_eq!(
-            opened["draft"]["profile_baseline"]["/rdo_code"], "039",
-            "the baseline is kept in memory"
-        );
+        assert_eq!(opened["values"][rdo], "044", "followed in memory");
+        assert_eq!(opened["profile_updates"], json!(["RDO 039 → 044"]));
         assert_eq!(raw_row(id), before, "nothing was written");
     }
 

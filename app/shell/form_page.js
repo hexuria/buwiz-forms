@@ -212,6 +212,15 @@ export function profileUpdatesNote(updates) {
   return `Updated from your tax profile: ${updates.join("; ")}`;
 }
 
+/**
+ * The note on a draft whose profile boxes differ from the profile and were
+ * left as they are (the host lists each: "RDO 039 (profile 043)"); "Use
+ * profile values" applies them.
+ */
+export function profileDiffersNote(differs) {
+  return `Differs from your profile: ${differs.join("; ")}`;
+}
+
 /** How faded a box another answer turns off is (rule 6). */
 const OFF_OPACITY = 0.45;
 
@@ -451,6 +460,9 @@ export class FormPageActions {
     s.poolTexts = r.pools || {};
     // A stored draft that followed a later tax-profile change: what moved.
     s.profileUpdates = r.profile_updates || [];
+    // A draft saved before it kept its profile baseline: its boxes that
+    // differ from the profile now, never changed by opening it.
+    s.profileDiffers = r.profile_differs || [];
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -1687,6 +1699,35 @@ export class FormPageActions {
     this.askPeriod(s.periodAsked, cx);
   }
 
+  /**
+   * "Use profile values": the profile boxes the filer did not edit take the
+   * profile's values and follow later profile changes. The return is then
+   * saved, except an amendment not saved yet (its first save is the filer's
+   * own choice, as it reverts the filed return).
+   */
+  useProfileValues(cx) {
+    const s = this.state;
+    if (!s || !s.draft || !s.profileDiffers?.length) return;
+    this.flush(cx);
+    const before = s.values;
+    try {
+      const r = this.app.store.call("screen_form_use_profile", s.code, s.year, s.period, s.draft);
+      s.draft = r.draft;
+      s.values = this.shown(r.values);
+      s.options = r.options || s.options;
+      if (r.pools) s.poolTexts = r.pools;
+      if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    s.profileDiffers = [];
+    s.dirty = true;
+    this.syncComputed();
+    this.syncChanged(before, {});
+    if (s.amends && !s.saved) return this.notify(cx);
+    this.save(cx);
+  }
+
   /** 1601C and 2551Q keep their own queue path, keyed by month or quarter. */
   usesPeriodPath() {
     return this.state.code === "1601C" || this.state.code === "2551Q";
@@ -2796,6 +2837,19 @@ function formContent(cx, app, width) {
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
   // A draft whose untouched profile boxes followed a later profile change.
   if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
+  if (s.editable && s.profileDiffers?.length) {
+    page.child(
+      div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap(SPACE[2])
+        .mb(SPACE[4])
+        .child(Text(cx, "meta", profileDiffersNote(s.profileDiffers), "fg2").whitespace_normal())
+        .child(AppButton(cx, "fp-use-profile", "Use profile values", { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.useProfileValues(cx) })),
+    );
+  }
   // An amended return says where its filed version is; that version, opened
   // from its history, says what it is.
   if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());

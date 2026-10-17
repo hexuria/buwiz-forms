@@ -188,6 +188,11 @@ impl SubmissionLifecycle {
             "Cannot revert a Paid form to Draft"
         );
         self.status = FilingStatus::Draft;
+        // Back to Draft (an amended copy, a cancelled queue, a refused
+        // submission) its boxes were not built from the profile as it is
+        // now: no baseline, so a later profile change moves nothing until
+        // the filer chooses it (the page offers "Use profile values").
+        self.profile_baseline.clear();
         self.submitted_at = None;
         self.confirmed_at = None;
         self.receipt_id = None;
