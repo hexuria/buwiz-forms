@@ -9481,6 +9481,16 @@ mod tests {
                         combs::TWO_FIELD_TOO_LONG,
                         "{code}"
                     );
+                    // An address the two fields file: the XML carries it.
+                    let fits = &long[..90];
+                    let typed =
+                        fill_unlocked(code, &opened["draft"], json!({ &head: fits }), &unlocked);
+                    assert_eq!(typed["rejected"], json!({}), "{code}");
+                    assert_eq!(
+                        squeezed(&xml_pool(kind, &typed["draft"], &keys)),
+                        squeezed(fits),
+                        "{code}: the XML carries it"
+                    );
                     found.insert(
                         code,
                         (

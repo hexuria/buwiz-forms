@@ -405,9 +405,9 @@ pub(super) fn split_lines(text: &str, slots: &[usize]) -> Vec<String> {
             lines.push(rest.drain(..).collect());
             continue;
         }
-        // A space at index `n` would leave `n` letters and the space on
-        // this line: only a space among the first `n` letters ends it.
-        let space = (1..n)
+        // A space right after the `n`th letter ends the line too: the line
+        // then holds `n` letters and keeps the space at its end.
+        let space = (1..=n)
             .rev()
             .find(|&p| rest[p].is_whitespace() && !rest[p - 1].is_whitespace());
         let cut = match space {
@@ -628,8 +628,10 @@ mod tests {
     }
 
     /// The lines put end to end are what was typed (a space run kept at the
-    /// end of its line), joining them gives it back, a line's letters fit its
-    /// boxes, and only a word longer than its line is cut, at the last box.
+    /// end of its line, so the next line starts on a letter), joining them
+    /// gives it back, every line but the last fits its boxes (the last takes
+    /// the rest, which can be longer than its boxes), and only a word longer
+    /// than its line is cut, at the last box.
     #[test]
     fn a_split_address_joins_back_to_what_was_typed() {
         let cases = [
@@ -660,8 +662,17 @@ mod tests {
             assert_eq!(lines.len(), slots.len(), "{text}");
             assert_eq!(lines.concat(), text, "{lines:?}");
             assert_eq!(join_lines(&lines, &slots), text, "{lines:?}");
-            for (line, n) in lines.iter().zip(&slots).take(slots.len() - 1) {
-                assert!(line.trim_end().chars().count() <= *n, "{line:?} > {n}");
+            // Every line but the last fits its boxes; the last takes the
+            // rest, which fits its boxes unless the breaks at spaces left
+            // more than they hold (the Ñ address: 30 letters for 20 boxes).
+            let last = slots.len() - 1;
+            for (i, (line, n)) in lines.iter().zip(&slots).enumerate() {
+                let letters = line.trim_end().chars().count();
+                if i < last || !text.starts_with('Ñ') {
+                    assert!(letters <= *n, "{line:?} > {n}");
+                } else {
+                    assert_eq!((letters, *n), (30, 20), "{line:?}");
+                }
             }
         }
         // A word longer than its line is cut at the last box and rejoined

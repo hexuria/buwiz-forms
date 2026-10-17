@@ -1525,17 +1525,22 @@ fn form_1601c_address_lines_are_one_pool() {
     let typed_in = |draft: &Value, text: &str| -> Value {
         fill_unlocked("1601C", draft, json!({ head: text }), &[head])
     };
+    // The draft's two lines, each checked against the upload's field map
+    // after the typed split: txtAddress and txtAddress2 file them as they
+    // are (form_1601c_xml.rs uppercases them).
     let lines = |filled: &Value| {
-        (
-            filled["draft"]["registered_address"]
-                .as_str()
-                .unwrap()
-                .to_string(),
-            filled["draft"]["registered_address_2"]
-                .as_str()
-                .unwrap()
-                .to_string(),
-        )
+        let one = filled["draft"]["registered_address"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let two = filled["draft"]["registered_address_2"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let filed = agent::field_map(kind, &filled["draft"]).unwrap();
+        assert_eq!(filed["frm1601c:txtAddress"], one.to_uppercase());
+        assert_eq!(filed["frm1601c:txtAddress2"], two.to_uppercase());
+        (one, two)
     };
     // Both parts fit: split at the last space among the first 40 letters.
     let typed = "UNIT 4 SAMPLE TOWER 456 EXAMPLE AVENUE CORNER PLACEHOLDER ST QUEZON CITY";
@@ -1729,5 +1734,113 @@ fn monthly_answers_refuse_no_draft_the_ordinary_fill_takes() {
         let answered = fill(code, &older, answers);
         assert_eq!(answered["rejected"], json!({}), "{code}");
         assert_eq!(answered["draft"]["taxes_withheld"], true, "{code}");
+    }
+}
+
+/// PR 3 review, round 2: the shared split (combs.rs `split_lines`) files
+/// exactly what the base (pr0b-push) filed for 1702RT's three lines and
+/// prints for 0619E/0619F's two: a space right after a line's last letter
+/// ends that line. Golden values, read off the base for these addresses;
+/// the 0619E/0619F upload keeps the whole address in txtAddress (their
+/// official field map re-splits it at 127 escaped characters).
+#[test]
+fn shared_address_splits_file_what_the_base_filed() {
+    setup();
+    let a = format!(
+        "{} {} {} {}",
+        "A".repeat(10),
+        "B".repeat(27),
+        "C".repeat(38),
+        "D".repeat(30)
+    );
+    let b = format!("{} {} {}", "A".repeat(10), "B".repeat(29), "C".repeat(30));
+    let c = "ROXAS MAKATI EXAMPLE METRO PLACEHOLDER 5 STREET ROXAS PHILIPPINES ROXAS PASEO 5 FLOOR"
+        .to_string();
+    let rt = [
+        "frm1702RT:txtPg1Pt1I9Address1",
+        "frm1702RT:txtPg1Pt1I9Address2",
+        "frm1702RT:txtPg1Pt1I9Address3",
+    ];
+    let rt_filed: [(&String, [String; 3]); 3] = [
+        (
+            &a,
+            [
+                "A".repeat(10) + " " + &"B".repeat(27),
+                "C".repeat(38),
+                "D".repeat(30),
+            ],
+        ),
+        (&b, ["A".repeat(10), "B".repeat(29), "C".repeat(30)]),
+        (
+            &c,
+            [
+                "ROXAS MAKATI EXAMPLE METRO PLACEHOLDER".to_string(),
+                "5 STREET ROXAS PHILIPPINES ROXAS PASEO".to_string(),
+                "5 FLOOR".to_string(),
+            ],
+        ),
+    ];
+    let opened = open("1702RT", page_period_of("1702RT"));
+    let kind = kind_of("1702RT").unwrap();
+    for (text, lines) in &rt_filed {
+        let filled = fill_unlocked("1702RT", &opened["draft"], json!({ rt[0]: text }), &[rt[0]]);
+        assert_eq!(filled["rejected"], json!({}));
+        let xml = agent::field_map(kind, &filled["draft"]).unwrap();
+        let filed: Vec<String> = rt.iter().map(|k| xml[*k].clone()).collect();
+        assert_eq!(filed, lines.to_vec(), "1702RT {text}");
+        let lengths: Vec<usize> = filed.iter().map(|l| l.chars().count()).collect();
+        if *text == &a {
+            assert_eq!(lengths, [38, 38, 30]);
+        }
+    }
+    for code in ["0619E", "0619F"] {
+        let keys = [
+            format!("frm{code}:txtAddress"),
+            format!("frm{code}:txtAddress2"),
+        ];
+        let printed_lines: [(&String, [String; 2]); 3] = [
+            (
+                &a,
+                [
+                    "A".repeat(10) + " " + &"B".repeat(27) + " ",
+                    "C".repeat(38) + " " + &"D".repeat(30),
+                ],
+            ),
+            (
+                &b,
+                ["A".repeat(10) + " " + &"B".repeat(29) + " ", "C".repeat(30)],
+            ),
+            (
+                &c,
+                [
+                    "ROXAS MAKATI EXAMPLE METRO PLACEHOLDER 5 ".to_string(),
+                    "STREET ROXAS PHILIPPINES ROXAS PASEO 5 FLOOR".to_string(),
+                ],
+            ),
+        ];
+        let opened = open(code, page_period_of(code));
+        let kind = kind_of(code).unwrap();
+        for (text, lines) in &printed_lines {
+            let filled = fill_unlocked(
+                code,
+                &opened["draft"],
+                json!({ &keys[0]: text }),
+                &[&keys[0]],
+            );
+            assert_eq!(filled["rejected"], json!({}), "{code}");
+            let printed = print_of(code, &filled["draft"]);
+            let shown: Vec<String> = keys.iter().map(|k| printed[k].clone()).collect();
+            assert_eq!(shown, lines.to_vec(), "{code} {text}");
+            if *text == &b {
+                let lengths: Vec<usize> = shown.iter().map(|l| l.chars().count()).collect();
+                assert_eq!(lengths, [41, 30], "{code}");
+            }
+            let xml = agent::field_map(kind, &filled["draft"]).unwrap();
+            assert_eq!(
+                xml[&keys[0]], **text,
+                "{code}: the upload keeps the whole address"
+            );
+            assert_eq!(xml[&keys[1]], "", "{code}");
+        }
     }
 }
