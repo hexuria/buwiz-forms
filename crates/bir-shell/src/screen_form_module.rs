@@ -2472,7 +2472,7 @@ fn opened_json(
     let mut locks = locks(kind, &from_profile);
     // A computed penalty is locked until Edit penalties opens its group; a
     // return with no due date computes none, and its boxes stay open.
-    for group in penalties::computed_groups(kind, &draft) {
+    for group in penalties::computed_groups(kind) {
         if !penalties::edited(&group, &draft) {
             let reason = if penalties::applies(kind, &group, &draft) {
                 penalties::LOCK
@@ -3410,9 +3410,9 @@ fn apply_screen_edits(
     let pools = combs::pools(kind.form_code());
     // Whether each penalty group was edited before this batch: an amount in
     // one box of a batch does not open the others, and blanking the group
-    // from a partly edited state clears all of it. A group the model does
-    // not compute (no due date) is open: it is always "edited".
-    let computes = penalties::computes(kind, draft);
+    // from a partly edited state clears all of it. 0605's group is not
+    // computed and is open: it is always "edited".
+    let computes = penalties::computes(kind);
     let penalty_groups: Vec<(penalties::Group, bool)> = penalties::groups(kind)
         .into_iter()
         .map(|group| {
@@ -11553,14 +11553,14 @@ mod tests {
         setup();
         // Parties with all three overrides on the page, read off
         // crates/bir-core/data/agent-forms (`.../penalty_overrides/...`),
-        // on the returns the penalty model computes (a due date for the
-        // period opened). The rest compute none and their boxes are open:
-        // a_penalty_with_no_due_date_is_three_open_boxes_on_every_form.
+        // except 0605, whose boxes are open
+        // (only_0605_penalties_are_three_open_boxes).
         let expected: BTreeMap<&str, usize> = BTreeMap::from([
             ("0619E", 1),
             ("0619F", 1),
             ("1600PT", 1),
             ("1600VT", 1),
+            ("1600WP", 1),
             ("1601C", 1),
             ("1601EQ", 1),
             ("1602Q", 1),
@@ -11572,7 +11572,22 @@ mod tests {
             ("1702MX", 1),
             ("1702Q", 1),
             ("1702RT", 1),
+            ("1706", 1),
+            ("1707", 1),
             ("1707A", 1),
+            ("1800", 1),
+            ("1801", 1),
+            ("2000", 1),
+            ("2000OT", 1),
+            ("2200A", 1),
+            ("2200AN", 1),
+            ("2200C", 1),
+            ("2200M", 1),
+            ("2200P", 1),
+            ("2200T", 1),
+            ("2550M", 1),
+            ("2552", 1),
+            ("2553", 1),
         ]);
         let mut found = BTreeMap::new();
         let mut not_on_return = Vec::new();
@@ -11746,18 +11761,17 @@ mod tests {
     /// Decision of 2026-10-17: 0605 has no due date to compute a penalty
     /// from, so its Surcharge, Interest and Compromise (20A-20C) are plain
     /// open boxes, with no Edit and no lock, and 20D Total Penalties stays
-    /// computed. Generic: every return the penalty model has no due date
-    /// for (the calendar's event-based forms, and 2550M after its last
-    /// year) gets the same three open boxes.
+    /// computed. That is 0605 alone: across every form, no other penalty
+    /// group is open (each keeps its locked group and Edit).
     #[test]
-    fn a_penalty_with_no_due_date_is_three_open_boxes_on_every_form() {
+    fn only_0605_penalties_are_three_open_boxes() {
         setup();
         let mut open_forms = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let groups = penalties::groups(kind);
             let opened = open(code, page_period_of(code));
-            if groups.is_empty() || penalties::computes(kind, &opened["draft"]) {
+            if groups.is_empty() || !opened["penalties"].as_array().unwrap().is_empty() {
                 continue;
             }
             open_forms.push(code);
@@ -11807,13 +11821,7 @@ mod tests {
             }
         }
         open_forms.sort_unstable();
-        assert_eq!(
-            open_forms,
-            [
-                "0605", "1600WP", "1706", "1707", "1800", "1801", "2000", "2000OT", "2200A",
-                "2200AN", "2200C", "2200M", "2200P", "2200T", "2550M", "2552", "2553"
-            ]
-        );
+        assert_eq!(open_forms, ["0605"]);
         // 0605 by name: 20A-20C open, 20D Total Penalties computed.
         let opened = open("0605", 1);
         for key in [

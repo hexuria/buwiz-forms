@@ -15,10 +15,10 @@
 //!   that). A blank box clears its override: "Use the computed amounts"
 //!   blanks all three.
 //!
-//! - A return with no due date to compute from (0605, decided 2026-10-17:
-//!   the model's calendar has no deadline for it) computes no penalty, so
-//!   its three boxes are plain open boxes: no lock and no Edit. They still
-//!   write the overrides, and Total Penalties still adds them up.
+//! - 0605 (decided 2026-10-17) has no due date to compute a penalty from,
+//!   so its three boxes (20A-20C) are plain open boxes: no lock and no
+//!   Edit. They still write the overrides, and 20D Total Penalties still
+//!   adds them up. Every other form keeps its locked group and Edit.
 //!
 //! Validation, the assistant's `form.fill` and the XML are untouched; the
 //! XML carries whatever the filer entered, which is the point of the rule.
@@ -129,36 +129,20 @@ pub(super) fn error_keys(kind: AgentFormKind, field: &str) -> Vec<String> {
         .collect()
 }
 
-/// Whether the penalty model computes this return's penalties: it has a
-/// due date to measure them from (the calendar's deadline for the return's
-/// period, or the one the app resolved when it opened). Without one (0605)
-/// nothing is computed and the boxes are the filer's to type.
-pub(super) fn computes(kind: AgentFormKind, draft: &Value) -> bool {
-    use bir_core::forms::queueable::QueueableForm;
-    match kind {
-        AgentFormKind::Queueable(kind) => bir_core::with_queueable_kind!(kind, F => {
-            serde_json::from_value::<F>(draft.clone()).is_ok_and(|typed| {
-                <F as QueueableForm>::penalty_items()
-                    .iter()
-                    .any(|items| items.due_date(&typed).is_some())
-            })
-        }),
-        AgentFormKind::Form1601C => {
-            serde_json::from_value::<bir_core::forms::form_1601c::Form1601CDraft>(draft.clone())
-                .is_ok_and(|typed| {
-                    bir_core::forms::form_1601c::Form1601CDraft::penalty_items()
-                        .due_date(&typed)
-                        .is_some()
-                })
-        }
-        AgentFormKind::Form2551Q => false,
-    }
+/// Forms whose penalties the filer types, with no computed amount to
+/// lock: 0605 only (decided 2026-10-17; it has no due date to compute
+/// from).
+const OPEN_PENALTY_FORMS: [&str; 1] = ["0605"];
+
+/// Whether `kind`'s penalty groups are computed, locked until Edit opens
+/// them; false for 0605, whose penalty boxes are open.
+pub(super) fn computes(kind: AgentFormKind) -> bool {
+    !OPEN_PENALTY_FORMS.contains(&kind.form_code())
 }
 
-/// The groups the model computes, locked until Edit opens them: every
-/// group, or none on a return with no due date ([`computes`]).
-pub(super) fn computed_groups(kind: AgentFormKind, draft: &Value) -> Vec<Group> {
-    if computes(kind, draft) {
+/// The groups locked until Edit opens them: every group, or none on 0605.
+pub(super) fn computed_groups(kind: AgentFormKind) -> Vec<Group> {
+    if computes(kind) {
         groups(kind)
     } else {
         Vec::new()
@@ -202,7 +186,7 @@ pub(super) fn applies(kind: AgentFormKind, group: &Group, draft: &Value) -> bool
 /// are plain open boxes.
 pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
     Value::Array(
-        computed_groups(kind, draft)
+        computed_groups(kind)
             .iter()
             .map(|group| {
                 json!({

@@ -2,7 +2,7 @@
  "0605": {
   "manual-4": {
    "pr": "PR 0c",
-   "proof": "screen_form_module::tests::a_penalty_with_no_due_date_is_three_open_boxes_on_every_form (0605: 20A-20C open with no Edit and no lock, typed amounts file, 20D Total Penalties computed); screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form",
+   "proof": "screen_form_module::tests::only_0605_penalties_are_three_open_boxes (0605: 20A-20C open with no Edit and no lock, typed amounts file, 20D Total Penalties computed); screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form",
    "status": "fixed"
   }
  },
