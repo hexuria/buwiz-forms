@@ -105,7 +105,9 @@ const components = mock("gpui-component", { Spinner: { new: element } });
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel"]) uiExports[n] = element;
 const dropdowns = new Map();
-uiExports.AppButton = (_cx, id) => { const el = element(); el.id(id); return el; };
+const clicks = new Map(), dismiss = new Map();
+uiExports.AppButton = (_cx, id, _label, opts = {}) => { const el = element(); el.id(id); if (opts.onClick) clicks.set(id, opts.onClick); return el; };
+uiExports.Overlay = (_cx, id, card, onDismiss) => { dismiss.set(id, onDismiss); const el = element(); el.id(id); el.child(card); return el; };
 uiExports.IconButton = (_cx, id) => { const el = element(); el.id(id); return el; };
 uiExports.Dropdown = (_cx, id, opts) => { dropdowns.set(id, opts); const el = element(); el.id(id); return el; };
 uiExports.TextField = (_cx, _input, opts = {}) => { const el = element(); el.id(opts.id); return el; };
@@ -134,7 +136,7 @@ const opened = () => ({
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
   invalidate() {}, toast() {}, startNewReturn() {},
-  toastUndo(message, undo) { undos.push({ message, undo }); },
+  toastUndo(message, undo) { undos.push({ message, undo }); app.toastState = { message, action: { label: "Undo", run: undo } }; },
   store: {
     templates: () => [],
     write(name, ...args) { calls.push([name, ...args]); return { id: 7, status: "Draft", draft: args[1] }; },
@@ -152,12 +154,13 @@ const app = {
           if (draft.rows > 0) removes = { message: trigger.message, done: `Removed ${draft.rows} row`, rows: draft.rows };
           draft.rows = 0;
         }
-        const values = { ...hostValues, ...edits, [K("value1")]: draft.rows ? "1,000.00" : "0.00" };
+        if (edits[K("over")] !== undefined) draft.over = edits[K("over")];
+        const values = { ...hostValues, ...edits, [K("value1")]: draft.rows ? "1,000.00" : "0.00", ...(draft.over !== undefined ? { [K("over")]: draft.over } : {}) };
         if (!Object.keys(edits).length) Object.assign(values, draft.answer || {});
         draft.answer = { [K("yes")]: values[K("yes")], [K("no")]: values[K("no")] };
         return { draft, values, options: {}, rejected: {}, penalties: [], pools: {}, removes };
       }
-      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues, ...(args[1].answer || {}), [K("value1")]: args[1].rows ? "1,000.00" : "0.00" }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
+      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues, ...(args[1].answer || {}), [K("value1")]: args[1].rows ? "1,000.00" : "0.00", ...(args[1].over !== undefined ? { [K("over")]: args[1].over } : {}) }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
     },
@@ -211,57 +214,113 @@ assert.equal(JSON.stringify(relief.options.map((o) => o.label)), JSON.stringify(
 console.log("PASS a dropdown's official blank 0 shows Choose..., never a raw 0.");
 
 // ---- An answer that removes typed rows asks first.
-for (const t of TRIGGERS.slice(1)) {
+const click = (id) => { const fn = clicks.get(id); assert.ok(fn, `button ${id}`); act(fn, {}); };
+const ask = () => { clicks.clear(); dismiss.clear(); texts.length = 0; renderRemovalConfirm(cx, app); };
+for (const t of TRIGGERS) {
   ui.state.draft = { ...ui.state.draft, rows: 1 };
   const kept = ui.state.draft;
   ui.choose(t.edits, cx);
   assert.equal(app.overlay, "removal", `${t.form} asks first`);
-  texts.length = 0;
-  renderRemovalConfirm(cx, app);
+  assert.ok(ui.askingRemoval(), `${t.form}: the question is open`);
+  assert.equal(ui.state.draft, kept, `${t.form}: the draft is the old one while it asks`);
+  ask();
   assert.ok(texts.includes(t.message), `${t.form}: ${t.message}`);
-  ui.cancelRemoval(cx);
+  click("removal-cancel");
+  assert.equal(app.overlay, null, `${t.form}: Cancel closes it`);
   assert.equal(ui.state.draft, kept, `${t.form}: Cancel keeps the rows`);
   ui.choose(t.edits, cx);
-  ui.confirmRemoval(cx);
+  ask();
+  act(dismiss.get("removal-confirm"));
+  assert.equal(app.overlay, null, `${t.form}: Esc is Cancel`);
+  assert.equal(ui.state.draft, kept, `${t.form}: Esc keeps the rows`);
+  ui.choose(t.edits, cx);
+  ask();
+  click("removal-continue");
   await settle();
   assert.equal(ui.state.draft.rows, 0, `${t.form}: Continue removes them`);
+  assert.equal(ui.state.dirty, true, `${t.form}: the return has unsaved changes`);
+  ui.state.dirty = false;
   act(undos.at(-1).undo);
   await settle();
   assert.equal(ui.state.draft.rows, 1, `${t.form}: Undo brings them back`);
+  assert.equal(ui.state.dirty, true, `${t.form}: Undo leaves unsaved changes too`);
 }
 undos.length = 0;
 const no = TRIGGERS[0].edits;
-const typedDraft = ui.state.draft;
 ui.choose(no, cx);
-assert.equal(app.overlay, "removal", "item 13 No with a typed row asks first");
 assert.equal(ui.state.values[K("no")], "false", "the old answer shows while it asks");
-assert.equal(ui.state.draft, typedDraft, "and the draft is the old one");
-texts.length = 0;
-renderRemovalConfirm(cx, app);
-assert.ok(texts.includes("Changing item 13 to No removes the 1 Schedule 1 row you typed. Continue?"), "it says what goes");
-assert.ok(ids.has("removal-continue") && ids.has("removal-cancel"), "with Continue and Cancel");
-ui.cancelRemoval(cx);
-assert.equal(app.overlay, null, "Cancel closes it");
-assert.equal(ui.state.values[K("no")], "false", "Cancel keeps the old answer");
-assert.equal(ui.state.draft.rows, 1, "and the rows");
-assert.equal(undos.length, 0, "and offers no Undo");
-ui.choose(no, cx);
-ui.confirmRemoval(cx);
+click("removal-continue");
 await settle();
-assert.equal(app.overlay, null);
 assert.equal(ui.state.values[K("no")], "true", "Continue applies the answer");
-assert.equal(ui.state.draft.rows, 0, "and the removal");
-assert.equal(undos.length, 1, "and offers Undo");
 assert.equal(undos[0].message, "Removed 1 row.");
 act(undos[0].undo);
 await settle();
-assert.equal(ui.state.draft.rows, 1, "Undo brings the rows back");
-assert.equal(ui.state.values[K("no")], "false", "and the old answer");
+assert.equal(ui.state.values[K("no")], "false", "Undo brings the old answer back");
 assert.equal(ui.state.values[K("value1")], "1,000.00", "and what the rows showed");
-// With nothing typed, nothing is asked.
-ui.state.draft = { ...ui.state.draft, rows: 0 };
+console.log("PASS an answer that removes typed rows asks first; Cancel, Esc and Continue click through; Undo brings them back.");
+
+// A later edit retires the Undo: it would bring back a draft without it.
 ui.choose(no, cx);
-assert.equal(app.overlay ?? null, null, "no rows typed: no question");
-assert.equal(ui.state.values[K("no")], "true", "the answer applies at once");
-assert.equal(undos.length, 1, "and no Undo is offered");
-console.log("PASS an answer that removes typed rows asks first, and Undo brings them back.");
+click("removal-continue");
+await settle();
+const stale = undos.at(-1).undo;
+assert.equal(app.toastState?.action?.run, stale, "Undo is offered");
+ui.state.pending[K("over")] = "7";
+ui.flush(cx);
+assert.equal(app.toastState, null, "a later edit takes the Undo away");
+act(stale);
+await settle();
+assert.equal(ui.state.draft.rows, 0, "and an old Undo does nothing");
+assert.equal(ui.state.values[K("over")], "7", "the later edit stays");
+console.log("PASS a later edit retires the removal's Undo.");
+
+// Undo is for the page it was offered on.
+ui.state.draft = { ...ui.state.draft, rows: 1 };
+ui.choose(no, cx);
+click("removal-continue");
+await settle();
+const offered = undos.at(-1).undo;
+const pageA = ui.state;
+ui.state = { ...pageA, draft: { id: 8, rows: 3 } };
+act(offered);
+await settle();
+assert.equal(ui.state.draft.id, 8, "Undo on another return's page does nothing");
+assert.equal(ui.state.draft.rows, 3);
+ui.state = pageA;
+ui.leavingPage();
+assert.equal(app.toastState, null, "leaving the page takes the Undo away");
+act(offered);
+await settle();
+assert.equal(ui.state.draft.rows, 0, "and it does nothing after");
+const main = fs.readFileSync(new URL("app/main.js", root), "utf8");
+assert.match(main, /go\(view, cx\) \{\n\s*\/\/[^\n]*\n\s*this\.formUi\?\.leavingPage\?\.\(\);/, "main.js go() leaves the page");
+assert.match(main, /undoLast\(cx\) \{[\s\S]{0,200}if \(this\.formUi\?\.askingRemoval\?\.\(\)\) return;/, "Cmd+Z waits while the question is open");
+assert.match(main, /openPalette\(cx\) \{\n[^\n]*\n\s*if \(this\.formUi\?\.askingRemoval\?\.\(\)\) this\.formUi\.cancelRemoval\(cx\);/, "Cmd+K cancels the question first");
+assert.match(main, /startNewReturn\(cx, code\) \{\n[^\n]*\n\s*if \(this\.formUi\?\.askingRemoval\?\.\(\)\) this\.formUi\.cancelRemoval\(cx\);/, "New return cancels the question first");
+assert.match(main, /if \(this\.overlay === "removal"\) return this\.formUi\.cancelRemoval\(cx\);/, "Esc cancels it");
+console.log("PASS a removal's Undo acts only on its own page; the app's shortcuts respect the question.");
+
+// Typed with the answer, in one batch: Cancel keeps what was typed.
+ui.state.draft = { ...ui.state.draft, rows: 1 };
+ui.state.pending[K("over")] = "500";
+ui.choose(no, cx);
+assert.equal(app.overlay, "removal");
+click("removal-cancel");
+const sent = calls.filter((c) => c[0] === "screen_form_fill").at(-1);
+assert.equal(sent[3][K("over")], "500", "Cancel sends what was typed on its own");
+assert.ok(!(K("no") in sent[3]), "without the answer");
+assert.equal(ui.state.values[K("over")], "500", "and it is in the draft");
+assert.equal(ui.state.draft.rows, 1, "the rows stay");
+console.log("PASS Cancel keeps what was typed in the same batch.");
+
+// Save never applies a removal without the question.
+const saves = () => calls.filter((c) => c[0] === "screen_form_save").length;
+const before = saves();
+ui.state.pending = { ...no };
+ui.state.chosenFrom = { [K("no")]: "false", [K("yes")]: "true" };
+ui.save(cx);
+assert.equal(app.overlay, "removal", "Save asks first");
+assert.equal(saves(), before, "and saves nothing yet");
+assert.equal(ui.state.draft.rows, 1, "the rows are still there");
+click("removal-cancel");
+console.log("PASS Save asks before it removes typed rows.");

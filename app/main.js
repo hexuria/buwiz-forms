@@ -447,6 +447,8 @@ class BirApp extends View {
   }
 
   go(view, cx) {
+    // A removal's Undo is for the page it was offered on.
+    this.formUi?.leavingPage?.();
     if (view !== this.view) {
       this.history.push(this.view);
       this.forward = [];
@@ -515,6 +517,8 @@ class BirApp extends View {
   }
 
   openPalette(cx) {
+    // An open removal question is answered Cancel first, as Esc does.
+    if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
     // The palette replaces any stored-return offer on screen.
     this.existingOffer = null;
     this.overlay = "palette";
@@ -556,6 +560,8 @@ class BirApp extends View {
 
   /** The title-bar / sidebar "+": the start-a-return dialog for the branch's year. */
   startNewReturn(cx, code) {
+    // An open removal question is answered Cancel first, as Esc does.
+    if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
     const b = this.branch();
     if (!this.years().length) {
@@ -722,6 +728,8 @@ class BirApp extends View {
   undoLast(cx) {
     const st = this.toastState;
     if (!st || !st.action) return;
+    // Nothing is undone under the "this removes the rows you typed" question.
+    if (this.formUi?.askingRemoval?.()) return;
     if (this.textHasFocus()) return;
     this.toastState = null;
     st.action.run(cx);

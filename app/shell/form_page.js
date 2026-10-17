@@ -750,8 +750,11 @@ export class FormPageActions {
    */
   holdRemoval(r, edits, cx) {
     const s = this.state;
-    for (const k of Object.keys(edits)) if (s.chosenFrom && k in s.chosenFrom) s.values[k] = s.chosenFrom[k] ?? "";
-    s.removal = { r, edits, draft: s.draft };
+    const chosen = s.chosenFrom || {};
+    for (const k of Object.keys(edits)) if (k in chosen) s.values[k] = chosen[k] ?? "";
+    // What was typed in the same batch is not the answer: Cancel keeps it.
+    const typed = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in chosen)));
+    s.removal = { r, edits, typed, draft: s.draft };
     this.app.overlay = "removal";
     this.refreshRows();
     cx.notify();
@@ -765,31 +768,64 @@ export class FormPageActions {
     s.removal = null;
     this.app.overlay = null;
     this.applyFill(held.r, held.edits);
+    s.dirty = true;
     this.refreshRows();
     this.validate(cx);
-    this.offerUndo(held.r.removes.done, (ucx) => this.undoRemoval(held.draft, ucx), cx);
+    // Undo belongs to this return's page as it is now: another return, or
+    // any later edit here, retires it (it would bring back a stale draft).
+    const undo = (ucx) => this.undoRemoval(held.draft, s, undo, ucx);
+    this.removalUndo = { state: s, undo };
+    this.offerUndo(held.r.removes.done, undo, cx);
     cx.notify();
   }
 
-  /** Cancel: the old answer and the rows stay. */
+  /** Cancel: the old answer and the rows stay, and so does what was typed with it. */
   cancelRemoval(cx) {
     const s = this.state;
-    s.removal = null;
+    const held = s?.removal;
+    if (s) s.removal = null;
     this.app.overlay = null;
+    if (held && Object.keys(held.typed).length) {
+      s.pending = { ...held.typed, ...s.pending };
+      this.flush(cx);
+    }
     this.refreshRows();
     cx.notify();
   }
 
-  /** Undo a removal: the draft from before the answer comes back. */
-  undoRemoval(draft, cx) {
+  /** The removal question is on screen (main.js blocks Cmd+Z and cancels it before Cmd+K or New return). */
+  askingRemoval() {
+    return Boolean(this.state?.removal);
+  }
+
+  /** The app leaves this page (main.js `go`): a removal's Undo stays behind. */
+  leavingPage() {
+    this.retireRemovalUndo();
+  }
+
+  /** The removal's Undo, if still offered, goes (a later edit, another page). */
+  retireRemovalUndo() {
+    const held = this.removalUndo;
+    if (!held) return;
+    this.removalUndo = null;
+    if (this.app.toastState?.action?.run === held.undo) {
+      this.app.toastState = null;
+      this.app.invalidate?.();
+    }
+  }
+
+  /** Undo a removal: the draft from before the answer comes back, on the same page only. */
+  undoRemoval(draft, state, undo, cx) {
     const s = this.state;
-    if (!s) return;
+    if (!s || s !== state || this.removalUndo?.undo !== undo) return;
+    this.removalUndo = null;
     try {
       const r = this.app.store.call("screen_form_fill", s.code, draft, {}, []);
       this.applyFill(r, {});
     } catch (e) {
       return this.app.toast(message(e), cx, "triangle-alert");
     }
+    s.dirty = true;
     this.refreshRows();
     this.validate(cx);
     cx.notify();
@@ -802,6 +838,7 @@ export class FormPageActions {
     const edits = s.pending;
     s.pending = {};
     if (Object.keys(edits).length) {
+      this.retireRemovalUndo();
       try {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
         if (r.removes) return this.holdRemoval(r, edits, cx);
@@ -1591,7 +1628,11 @@ export class FormPageActions {
     s.pending = {};
     try {
       if (Object.keys(edits).length) {
+        this.retireRemovalUndo();
         const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        // Rows this would remove are never saved without the question:
+        // ask, and save nothing until the filer answers.
+        if (f.removes) return this.holdRemoval(f, edits, cx);
         this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);
@@ -1850,7 +1891,8 @@ function choiceLabel(f) {
 /**
  * A one-answer group, drawn as the paper form's tick boxes. Ticking one
  * clears the others; the ticked box of a group of three or more unticks
- * (clears the answer), a yes/no pair keeps one answer.
+ * (clears the answer), a yes/no pair keeps one answer (picking it again
+ * sends it again).
  */
 function radioGroup(cx, ui, it, radios) {
   const s = ui.state;
@@ -1865,8 +1907,10 @@ function radioGroup(cx, ui, it, radios) {
     const locked = !s.editable || f.c || ui.isLocked(f.k);
     const pick = (cx) => {
       if (locked) return;
-      if (on) {
-        if (radios.length >= 3) ui.choose({ [f.k]: "false" }, cx);
+      // A pair's ticked answer given again runs again (1602Q item 13 "No"
+      // removes the Schedule 2 rows a legacy draft kept, after asking).
+      if (on && radios.length >= 3) {
+        ui.choose({ [f.k]: "false" }, cx);
         return;
       }
       const edits = {};
