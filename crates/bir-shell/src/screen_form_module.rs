@@ -2290,7 +2290,7 @@ fn opened_json(
             let reason = if penalties::applies(kind, &group, &draft) {
                 penalties::LOCK
             } else {
-                penalties::NOT_ON_RETURN
+                penalties::off_reason(kind, &draft)
             };
             for key in &group.keys {
                 locks.insert(key.clone(), json!(reason));
@@ -3225,6 +3225,10 @@ fn apply_screen_edits(
             catalogs::Lift::Nothing
         }
     };
+    // A stored draft is brought to the current model first, so no write
+    // below is undone by a migration in the compute (2551Q's manual
+    // penalties).
+    agent::prepare_for_writes(kind, draft).map_err(host_error)?;
     let mut rejected = Map::new();
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
@@ -3269,10 +3273,21 @@ fn apply_screen_edits(
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
         // override, so the computed amount files again (rule 8).
-        if let Some((_, edited)) = penalty_groups
+        if let Some((group, edited)) = penalty_groups
             .iter()
             .find(|(group, _)| group.keys.contains(&key))
         {
+            // 2551Q's Items 20-22 on an 8% return take no amount (the
+            // official page zeroes and disables them): refused with the
+            // reason, read on the draft as it stands at this edit, rather
+            // than dropped by the compute.
+            if kind == AgentFormKind::Form2551Q && !penalties::applies(kind, group, draft) {
+                rejected.insert(
+                    key.clone(),
+                    json!(format!("`{key}`: {}", penalties::off_reason(kind, draft))),
+                );
+                continue;
+            }
             if !unlocked.contains(&key) && !edited {
                 rejected.insert(
                     key.clone(),
@@ -11110,10 +11125,13 @@ mod tests {
         }
     }
 
-    /// Item 25 Total Penalties is the sum of Items 22-24 on the page and is
-    /// never typed: its binding would write the surcharge.
+    /// Item 25 Total Penalties is a computed box: the sum of Items 22-24,
+    /// never typed (it used to be bound to the surcharge). This is NOT rule
+    /// 8: 2550Q's Items 22-24 are still plain typed entries (the 2550Q model
+    /// computes no penalties, and its core is out of PR 1's scope), so
+    /// 2550Q R8.0 stays open.
     #[test]
-    fn form_2550q_total_penalties_is_the_computed_sum() {
+    fn form_2550q_item_25_sums_the_typed_items_22_to_24() {
         setup();
         let opened = open("2550Q", 3);
         let filled = fill(
@@ -11135,6 +11153,75 @@ mod tests {
             field["c"], 1,
             "the page draws it computed, never a typed box"
         );
+        // The agent data marks it computed and binds it to nothing, so no
+        // writer can type a total into the surcharge.
+        let def = AgentFormKind::Queueable(QueueableKind::Form2550Q).definition();
+        assert!(!def.bindings.contains_key("frm2550qv2024:penalties"));
+        assert!(
+            def.box_def("frm2550qv2024:penalties")
+                .is_some_and(|entry| entry.computed)
+        );
+        assert_eq!(
+            opened["locks"]["frm2550qv2024:penalties"],
+            "computed by BIR's own formulas"
+        );
+        let typed = fill(
+            "2550Q",
+            &filled["draft"],
+            json!({"frm2550qv2024:penalties": "999"}),
+        );
+        assert!(typed["rejected"]["frm2550qv2024:penalties"].is_string());
+        assert_eq!(typed["draft"]["part_ii"]["item_22_surcharge"], 100.0);
+    }
+
+    /// A manual 2551Q draft blanked before anything recomputed it: the
+    /// migration runs before the write, so the blank computes and the old
+    /// manual amount never comes back.
+    #[test]
+    fn form_2551q_legacy_manual_draft_blanked_item_computes() {
+        setup();
+        let late = open_for(TIN, "2551Q", 2024, 1);
+        let sold = fill("2551Q", &late["draft"], json!({"txtATCAmt1": "500000"}));
+        let computed = amount(&sold["values"], "frm2551Qv2018:txt21");
+        let mut legacy = sold["draft"].clone();
+        legacy["auto_compute_penalties"] = json!(false);
+        legacy["surcharge"] = json!(10.0);
+        legacy["interest"] = json!(31.5);
+        legacy["compromise"] = json!(5.0);
+        legacy["penalty_overrides"] = json!({});
+        let blanked = fill("2551Q", &legacy, json!({"frm2551Qv2018:txt21": ""}));
+        assert_eq!(blanked["rejected"], json!({}));
+        assert_eq!(amount(&blanked["values"], "frm2551Qv2018:txt21"), computed);
+        assert!(blanked["draft"]["penalty_overrides"]["interest"].is_null());
+        assert_eq!(amount(&blanked["values"], "frm2551Qv2018:txt20"), 10.0);
+        assert_eq!(amount(&blanked["values"], "frm2551Qv2018:txt22"), 5.0);
+    }
+
+    /// Item 13 = 8%: the official page zeroes and disables Items 20-22, so
+    /// the page locks them with that reason and refuses an amount there.
+    #[test]
+    fn form_2551q_eight_percent_return_refuses_penalty_amounts() {
+        setup();
+        let late = open_for(TIN, "2551Q", 2024, 1);
+        let mut draft = late["draft"].clone();
+        draft["item_13_election"] = json!("eight_percent");
+        let filled = fill_unlocked(
+            "2551Q",
+            &draft,
+            json!({"frm2551Qv2018:txt20": "100"}),
+            &[
+                "frm2551Qv2018:txt20",
+                "frm2551Qv2018:txt21",
+                "frm2551Qv2018:txt22",
+            ],
+        );
+        let reason = filled["rejected"]["frm2551Qv2018:txt20"]
+            .as_str()
+            .unwrap_or("");
+        assert!(reason.contains(penalties::EIGHT_PERCENT), "{reason}");
+        assert_eq!(filled["penalties"][0]["applies"], false);
+        assert_eq!(amount(&filled["values"], "frm2551Qv2018:txt20"), 0.0);
+        assert!(filled["draft"]["penalty_overrides"]["surcharge"].is_null());
     }
 
     /// Rule 8 on 2551Q (R8.0, manual-0): a return that is not late shows no

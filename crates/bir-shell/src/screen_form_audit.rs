@@ -1801,6 +1801,45 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart, and
     // so (PR 1) are 2551Q's six Schedule 1 ATC lists: 82 - 6.
     assert_eq!(supplied, 76, "catalog lists, dependent ones included");
+    // The six 2551Q Schedule 1 ATC lists left the field count because they
+    // are table cells now: each is a census control with no field dropdown,
+    // sits in the schema's Schedule 1 table under a dropdown column, and
+    // still has its catalog list.
+    let form_2551q = census["forms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|form| form["code"] == "2551Q")
+        .unwrap();
+    let table = schema_entry("2551Q").unwrap()["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|part| part["items"].as_array().unwrap())
+        .find(|item| item["keys"][0][0] == "drpATC1")
+        .expect("2551Q Schedule 1 table");
+    assert_eq!(table["cols"][0]["t"], "sel");
+    let catalog = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
+    for row in 1..=6 {
+        let key = format!("drpATC{row}");
+        let control = form_2551q["list"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|control| control["k"] == key.as_str())
+            .unwrap_or_else(|| panic!("{key} in the census"));
+        assert!(
+            control["dropdown"].is_null(),
+            "{key} is not a field dropdown"
+        );
+        assert_eq!(table["keys"][row - 1][0], key.as_str());
+        assert!(
+            catalog[&key]
+                .as_array()
+                .is_some_and(|list| !list.is_empty()),
+            "{key} keeps its catalog list"
+        );
+    }
 }
 
 #[test]

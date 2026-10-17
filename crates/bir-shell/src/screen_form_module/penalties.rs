@@ -29,6 +29,19 @@ pub(super) const LOCK: &str =
 /// with no spouse) is locked: amounts entered there would not file.
 pub(super) const NOT_ON_RETURN: &str = "computed; not part of this return as it stands";
 
+/// Why 2551Q's Items 20-22 are locked on an 8% return: the official page
+/// zeroes and disables them (`taxRateOption()`), so they take no amount.
+pub(super) const EIGHT_PERCENT: &str = "nil on this return: Item 13 is the 8% income tax rate, which the official form files with no penalties";
+
+/// Why a penalty group that is not part of the return is locked.
+pub(super) fn off_reason(kind: AgentFormKind, draft: &Value) -> &'static str {
+    if kind == AgentFormKind::Form2551Q && draft["item_13_election"] == "eight_percent" {
+        EIGHT_PERCENT
+    } else {
+        NOT_ON_RETURN
+    }
+}
+
 const COMPONENTS: [&str; 3] = ["surcharge", "interest", "compromise"];
 
 /// One party's Surcharge, Interest and Compromise boxes.
