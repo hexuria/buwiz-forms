@@ -84,6 +84,8 @@ export interface ScreenFormOpened {
     blank: string[];
     /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
     needs: Record<string, string>;
+    /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
+    waits: Record<string, string>;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
     /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -152,6 +154,8 @@ export interface ScreenFormFilled {
     pools: Record<string, string>;
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
+    /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
+    removes?: { message: string; done: string; rows: number } | null;
 }
 export interface ScreenFormValidated {
     draft: object;
@@ -679,7 +683,13 @@ fn apply_layout(form: &mut Value, layout: &Value) {
     };
     // What the layout places itself: field keys, and every cell of a named table.
     let mut claimed: BTreeSet<String> = named_items()
-        .flat_map(|it| it["k"].as_array().into_iter().flatten())
+        .flat_map(|it| {
+            it["k"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .chain(grid_keys(it))
+        })
         .filter_map(|k| k.as_str().map(str::to_string))
         .collect();
     let table_keys = |item: &Value| -> Vec<String> {
@@ -751,6 +761,25 @@ fn apply_layout(form: &mut Value, layout: &Value) {
                 }
                 continue;
             }
+            if entry.get("grid").is_some() {
+                // A grid that cannot be built is a broken override, never a
+                // silently missing table (its keys are claimed already).
+                let table = grid_table(entry, &fields).unwrap_or_else(|error| {
+                    panic!(
+                        "{}: schema-overrides.json layout grid {}: {error}",
+                        form["c"].as_str().unwrap_or("?"),
+                        entry["l"]
+                    )
+                });
+                items.push(table);
+                continue;
+            }
+            // A printed item with no box in the official program (1601EQ's
+            // item 24): its number and caption, and the note saying so.
+            if let Some(note) = entry["note"].as_str() {
+                items.push(json!({ "no": entry["no"].clone(), "l": entry["l"].clone(), "p": entry["p"].clone(), "f": [], "note": note }));
+                continue;
+            }
             let mut page = Value::Null;
             let chosen: Vec<Value> = entry["k"]
                 .as_array()
@@ -802,6 +831,78 @@ fn apply_layout(form: &mut Value, layout: &Value) {
         parts.push(json!({ "n": name, "items": rest }));
     }
     form["parts"] = Value::Array(parts);
+}
+
+/// The field keys of a layout `grid` entry, row by row.
+fn grid_keys(entry: &Value) -> impl Iterator<Item = &Value> {
+    entry["grid"]["keys"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|row| row.as_array().into_iter().flatten())
+}
+
+/// A layout `grid` entry: `{no, l, grid: {cols: [captions], keys: [[row
+/// keys]], start, row_labels: {caption, rows}}}` becomes one schedule
+/// table of those boxes, wherever the extractor put them. Each column
+/// takes its first row's type and computed flag (the overrides already
+/// applied); `row_labels` are the sheet's preprinted row captions (1603Q
+/// Schedule I's recipients). An error when it has no rows, an empty or
+/// ragged row, or a key that is not a field of the form.
+fn grid_table(entry: &Value, fields: &BTreeMap<String, (Value, Value)>) -> Result<Value, String> {
+    let grid = &entry["grid"];
+    let keys: Vec<Vec<String>> = grid["keys"]
+        .as_array()
+        .ok_or("has no `keys` rows")?
+        .iter()
+        .map(|row| {
+            row.as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|k| k.as_str().map(str::to_string))
+                .collect()
+        })
+        .collect();
+    let first = keys.first().ok_or("has no rows")?;
+    if first.is_empty() || keys.iter().any(|row| row.len() != first.len()) {
+        return Err("has an empty row or rows of different lengths".to_string());
+    }
+    if let Some(key) = keys.iter().flatten().find(|key| !fields.contains_key(*key)) {
+        return Err(format!("names `{key}`, which is not a field of the form"));
+    }
+    let captions = grid["cols"].as_array().cloned().unwrap_or_default();
+    let cols: Vec<Value> = first
+        .iter()
+        .enumerate()
+        .map(|(c, key)| {
+            let (field, _) = &fields[key];
+            let mut col = json!({
+                "l": captions.get(c).cloned().unwrap_or_else(|| field["l"].clone()),
+                "t": field["t"].clone(),
+            });
+            for flag in ["c", "o"] {
+                if let Some(value) = field.get(flag) {
+                    col[flag] = value.clone();
+                }
+            }
+            col
+        })
+        .collect();
+    let mut table = json!({
+        "no": entry["no"].clone(),
+        "l": entry["l"].clone(),
+        "p": fields[&first[0]].1.clone(),
+        "cols": cols,
+        "rows": keys.len(),
+        "keys": keys,
+    });
+    if let Some(start) = grid["start"].as_u64() {
+        table["start"] = Value::from(start);
+    }
+    if grid.get("row_labels").is_some() {
+        table["row_labels"] = grid["row_labels"].clone();
+    }
+    Ok(table)
 }
 
 /// Take the field `key` out of its item and append it to the item `fix.to`
@@ -8527,8 +8628,13 @@ mod tests {
         let locked = |key: &str| opened["locks"][key].as_str();
         let ticked = |key: &str| opened["values"][key].as_str() == Some("true");
         // A reason counts where the page draws it: in the box, beside a tick
-        // box, under a radio group (form_page.js `reasonFor`).
-        let reason = |key: &str| opened["needs"].get(key).is_some();
+        // box, under a radio group (form_page.js `reasonFor`): a sample's
+        // held box, or a box waiting for another box of its row. The TIN
+        // boxes (form_page.js `isTinItem`, drawn by `tinBoxes`) draw no
+        // reason, so a `waits` there would not show.
+        let reason = |key: &str, draws: bool| {
+            opened["needs"].get(key).is_some() || (draws && opened["waits"].get(key).is_some())
+        };
         let drawn = |key: &str| {
             opened["lock_notes"][key].as_str().is_some_and(|note| {
                 !note.is_empty()
@@ -8552,7 +8658,7 @@ mod tests {
             .into_iter()
             .flatten()
             .flat_map(|part| part["items"].as_array().into_iter().flatten());
-        let mut boxes: Vec<(String, String)> = Vec::new();
+        let mut boxes: Vec<(String, String, bool)> = Vec::new();
         for item in items {
             let fields: Vec<(String, String)> = item["f"]
                 .as_array()
@@ -8565,6 +8671,18 @@ mod tests {
                     )
                 })
                 .collect();
+            // form_page.js `isTinItem`: three to five text boxes of a TIN.
+            let tin_item = {
+                let label = item["l"].as_str().unwrap_or("");
+                let named = label
+                    .split(|c: char| !c.is_ascii_alphanumeric())
+                    .any(|w| w == "TIN")
+                    || label.contains("Identification")
+                    || fields.iter().any(|(k, _)| k.contains("txtTIN"));
+                named
+                    && (3..=5).contains(&fields.len())
+                    && fields.iter().all(|(_, t)| t == "text" || t == "int")
+            };
             // A radio group is one box: shut and blank when every radio is
             // locked and none is ticked.
             let radios: Vec<&String> = fields
@@ -8576,7 +8694,7 @@ mod tests {
                 && !radios.is_empty()
                 && radios.iter().all(|k| locked(k).is_some())
                 && !radios.iter().any(|k| ticked(k))
-                && !radios.iter().any(|k| reason(k))
+                && !radios.iter().any(|k| reason(k, true))
             {
                 out_push(
                     radios[0],
@@ -8587,7 +8705,12 @@ mod tests {
                     ),
                 );
             }
-            boxes.extend(fields.into_iter().filter(|(_, t)| t != "radio"));
+            boxes.extend(
+                fields
+                    .into_iter()
+                    .filter(|(_, t)| t != "radio")
+                    .map(|(k, t)| (k, t, !tin_item)),
+            );
             let cols = item["cols"].as_array();
             for row in item["keys"].as_array().into_iter().flatten() {
                 for (c, key) in row.as_array().into_iter().flatten().enumerate() {
@@ -8596,15 +8719,15 @@ mod tests {
                         .and_then(|col| col["t"].as_str())
                         .unwrap_or("");
                     let t = if t == "radio" { "chk" } else { t };
-                    boxes.push((key.as_str().unwrap_or("").to_string(), t.to_string()));
+                    boxes.push((key.as_str().unwrap_or("").to_string(), t.to_string(), true));
                 }
             }
         }
-        for (key, t) in boxes {
+        for (key, t, draws) in boxes {
             let Some(why) = locked(&key) else {
                 continue;
             };
-            if t == "hidden" || reason(&key) {
+            if t == "hidden" || reason(&key, draws) {
                 continue;
             }
             if t == "chk" {
