@@ -69,13 +69,24 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
     location(kind, key).map_or(0, |(_, level)| level + 1)
 }
 
+/// A lock the page has opened for one box.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Lift {
+    Nothing,
+    /// The filer chose Edit on this profile box: the edit stays on this
+    /// return and the profile itself is never written.
+    Profile,
+}
+
 /// Apply an ordinary user edit, then clear the location's descendants when
 /// a parent actually changes. The caller commits this copy only on success.
+/// `lift`: which lock the page has opened for this box.
 pub(super) fn fill(
     kind: AgentFormKind,
     draft: &mut Value,
     key: &str,
     value: &Value,
+    lift: Lift,
 ) -> Result<(), String> {
     if inactive_schedule(kind, key, draft) {
         return Err(
@@ -152,7 +163,10 @@ pub(super) fn fill(
     }
     let loc = location(kind, key);
     let before = loc.and_then(|(base, _)| draft.pointer(base).cloned());
-    agent::fill_as_user(kind, draft, key, value)?;
+    match lift {
+        Lift::Profile => agent::fill_profile_box_as_user(kind, draft, key, value)?,
+        Lift::Nothing => agent::fill_as_user(kind, draft, key, value)?,
+    }
     // 1702RT Item 5: the official select is enabled only once "Other" is
     // chosen, so picking a code chooses "Other".
     if key == "frm1702RT:drpPg1I5AtcOther"

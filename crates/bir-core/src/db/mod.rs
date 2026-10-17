@@ -35,7 +35,7 @@ mod profiles;
 mod providers;
 mod queueable;
 mod receipts;
-pub use queueable::{ClaimQueueableResult, RevertedForAmendment};
+pub use queueable::{AmendmentBase, ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
 mod taxpayers;
@@ -1028,6 +1028,15 @@ fn classify_keyring_read(result: Result<String, keyring::Error>) -> KeyringRead 
         // must not be treated as "no store".
         Err(e @ keyring::Error::PlatformFailure(_)) => KeyringRead::Unavailable(e.to_string()),
         Err(e) => KeyringRead::Refuse(e.to_string()),
+    }
+}
+
+#[cfg(feature = "test-support")]
+impl Database {
+    /// The raw connection, for another crate's test fixtures only (see the
+    /// `test-support` feature).
+    pub fn conn_for_tests(&self) -> &Connection {
+        &self.conn
     }
 }
 
