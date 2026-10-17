@@ -284,6 +284,8 @@ assert.equal(ui.unlockedFor({ [K("txtSheets")]: "1" }).length, 0);
 console.log("PASS: library sample blank and unsaved; profile boxes fold, show Edit on hover or focus, keep the edit on this return.");
 
 // ---- A sample's period (option B): page inputs, a host answer once complete.
+// The page asks about a period a moment after its last change (timers).
+async function settleAll() { for (;;) { runTimers(); if (!tasks.length) break; await settle(); } }
 const quarterKeys = [1, 2, 3, 4].map((n) => K(`qtr_${n}`));
 const periodParts = [
   { key: K("txtYear"), part: "year", quarter: null },
@@ -294,7 +296,7 @@ const asks = [];
 app.store.call = (name, ...args) => {
   if (name === "screen_form_sample") {
     calls.push([name, ...args]);
-    return Promise.resolve({ ...opened(true), period_parts: periodParts, saved_periods: [{ year: 2024, quarter: 1, month: null, status: "Draft", updated_at: "2026-10-01" }] });
+    return Promise.resolve({ ...opened(true), period_parts: periodParts });
   }
   if (name === "screen_form_sample_period") {
     const parts = args[2];
@@ -328,24 +330,24 @@ app.store.call = (name, ...args) => {
 const opens = [];
 app.openForm = (opts) => opens.push(opts);
 ui.open({ code: "2551Q", tin: "12345678800000", year: 2026, period: 0, sample: true }, cx);
-await settle();
+await settleAll();
 const fills = () => calls.filter((c) => c[0] === "screen_form_fill");
 const fillsBefore = fills().length;
 // The year alone: a page input, no draft write, not complete.
 ui.edit(K("txtYear"), "2024", cx);
-await settle();
+await settleAll();
 assert.equal(fills().length, fillsBefore, "a period part is never a draft write");
 assert.equal(ui.state.values[K("txtYear")], "2024", "the typed year shows");
 assert.equal(asks.at(-1)[K("txtYear")], "2024", "the host is asked with the parts");
 assert.equal(ui.state.opens, null, "not complete");
 // An amount typed meanwhile is kept for the rebuild.
 ui.choose({ [K("amendedRtn_2")]: "true" }, cx);
-await settle();
+await settleAll();
 assert.equal(ui.state.typedEdits[K("amendedRtn_2")], "true");
 // Q1 has a stored return: offered, never opened, the sample unchanged.
 const draftBefore = ui.state.draft;
 ui.choose(Object.fromEntries(quarterKeys.map((k, i) => [k, i === 0 ? "true" : "false"])), cx);
-await settle();
+await settleAll();
 assert.equal(ui.state.draft, draftBefore, "an existing return changes nothing by itself");
 assert.equal(ui.state.existing.label, "Q1 2024", "offerExisting holds what the chosen UI needs");
 assert.equal(opens.length, 0);
@@ -354,7 +356,7 @@ assert.equal(opens.length, 0, "Start a return offers the stored return, it does 
 // Q2 has none: the sample is rebuilt for it and the typed answer goes on again.
 const before = fills().length;
 ui.choose(Object.fromEntries(quarterKeys.map((k, i) => [k, i === 1 ? "true" : "false"])), cx);
-await settle();
+await settleAll();
 assert.equal(ui.state.draft.rebuilt ?? fills().at(-1)[2].rebuilt, 2, "the rebuilt draft");
 assert.equal(ui.state.existing, null);
 const reapplied = fills().slice(before).find((c) => c[2] && c[2].rebuilt === 2);

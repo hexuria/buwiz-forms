@@ -78,8 +78,12 @@ class BirApp extends View {
     /** null | "palette" | "new" | "existing" (a stored return of a sample's period) */
     this.overlay = null;
     this.existingOffer = null;
-    /** Choices for this run only, lost on quit ("Don't ask again for drafts"). */
-    this.session = { fastDrafts: false };
+    /**
+     * "Don't ask again for drafts" (the stored-return offer's fast lane): a
+     * choice for this run only. It is lost on quit, and Lock app and Log out
+     * reset it (endSession), so the next person to sign in is asked again.
+     */
+    this.fastLane = { drafts: false };
     this.accountMenu = false;
     this.toastState = null;
 
@@ -170,13 +174,15 @@ class BirApp extends View {
       ["l", "lock-app"],
       ["[", "go-back"],
       ["]", "go-forward"],
-      ["z", "undo-last"],
     ];
     cx.bind_keys([
       ...chords.flatMap(([key, action]) => [
         { keystroke: `ctrl-${key}`, action },
         { keystroke: `cmd-${key}`, action },
       ]),
+      // Undo of the last app action: Cmd-Z on macOS, Ctrl-Z elsewhere, and
+      // never while a text box has the keyboard (its own undo wins there).
+      { keystroke: this.isMac ? "cmd-z" : "ctrl-z", action: "undo-last", context: "!Input" },
       { keystroke: "escape", action: "dismiss" },
     ]);
   }
@@ -504,6 +510,8 @@ class BirApp extends View {
   }
 
   openPalette(cx) {
+    // The palette replaces any stored-return offer on screen.
+    this.existingOffer = null;
     this.overlay = "palette";
     this.palette.index = 0;
     this.palette.input.set_value("");
@@ -512,7 +520,8 @@ class BirApp extends View {
 
   closeOverlay(cx) {
     // Esc or a click outside the stored-return offer is "Keep this form".
-    if (this.overlay === "existing") return this.formUi.takeExisting("keep", cx);
+    if (this.overlay === "existing" && this.existingOffer) return this.formUi.takeExisting("keep", cx);
+    this.existingOffer = null;
     this.overlay = null;
     this.newReturn.periodOpen = false;
     this.focusRoot.focus();
@@ -551,6 +560,8 @@ class BirApp extends View {
       return this.toast(`${this.taxpayer().name} does not file ${code} in ${this.year()}. Add it under Forms first.`, cx);
     }
     this.newReturn = { code: code || forms[0], period: null, periodOpen: false };
+    // New return replaces any stored-return offer on screen.
+    this.existingOffer = null;
     this.overlay = "new";
     cx.notify();
   }
@@ -569,14 +580,17 @@ class BirApp extends View {
     return "Add a taxpayer first, then open a form for them.";
   }
 
-  /** `keep`: the form on screen stays alive for an Undo (see FormPageActions.open). */
-  openForm(opts, cx, keep = false) {
+  /**
+   * `keep`: the form on screen stays alive for an Undo; `then(error, cx)`
+   * runs once the host answered (see FormPageActions.open).
+   */
+  openForm(opts, cx, keep = false, then = null) {
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
     if (!this.branchFor(opts.tin)) {
       return this.toast("That return belongs to a taxpayer that is not in this database.", cx, "triangle-alert");
     }
     this.overlay = null;
-    this.formUi.open(opts, cx, keep);
+    this.formUi.open(opts, cx, keep, then);
     // A library sample is no return, so it is not a recent one.
     if (!opts.sample) this.pushRecent(opts);
     this.go("form", cx);
@@ -697,13 +711,22 @@ class BirApp extends View {
     this.invalidate();
   }
 
-  /** Undo the last action while its toast shows. */
+  /**
+   * Undo the last action while its toast shows. Never while a text box has
+   * the keyboard: Cmd/Ctrl-Z there undoes typing, not a modal's choice.
+   */
   undoLast(cx) {
     const st = this.toastState;
     if (!st || !st.action) return;
+    if (this.textHasFocus()) return;
     this.toastState = null;
     st.action.run(cx);
     this.invalidate();
+  }
+
+  /** A text box has the keyboard (a form box, or the palette's search). */
+  textHasFocus() {
+    return Boolean(this.formUi.state?.focusKey) || Boolean(this.overlay === "palette" && this.palette.focused);
   }
 
   toast(message, cx, icon) {
@@ -1115,8 +1138,10 @@ class BirApp extends View {
     }
     this.lockedFrom = { kind: this.session.kind, root: this.session.root };
     this.session = { kind: "open" };
+    this.fastLane = { drafts: false };
     this.panel = null;
     this.overlay = null;
+    this.existingOffer = null;
     this.signIn.method = "pin";
     this.signIn.forgot = false;
     this.signIn.tin.set("");

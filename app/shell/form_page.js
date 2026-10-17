@@ -40,6 +40,8 @@ import { errorText as message, formatTin } from "./store.js";
 import { periodLabel } from "./periods.js";
 
 const VALIDATE_DELAY = 300;
+/** A sample's period is asked about this long after its last change. */
+const PERIOD_ASK_DELAY = 300;
 /** Debounce for live print-preview sync (ms after the last keystroke). */
 const LIVE_PREVIEW_DELAY = 120;
 
@@ -209,9 +211,14 @@ export class FormPageActions {
   /**
    * Load the schema now and the return in the background. `keep`: the form
    * on screen is kept alive (not released) for an Undo to bring back.
+   * `then(error, cx)` runs once the host answered (error null on success).
+   * `opts.key`: the stored return's exact key (a transaction's MMDD, 2553's
+   * quarter); `opts.filedOriginal`: an amended return's filed version.
    */
-  open(opts, cx, keep = false) {
+  open(opts, cx, keep = false, then = null) {
     const app = this.app;
+    // Leaving the sample: an offer of a stored return for its period goes.
+    this.closeOffer();
     // The last form's retained views and text states go with it, unless an
     // Undo may still bring it back.
     if (this.kept && this.kept !== this.state) this.release(this.kept);
@@ -276,11 +283,14 @@ export class FormPageActions {
     };
     cx.spawn(async (acx) => {
       try {
+        const key = opts.key ?? null;
         const r = opts.sample
           ? await app.store.call("screen_form_sample", opts.tin, opts.code)
-          : opts.amend
-            ? await app.store.call("screen_form_amend", opts.tin, opts.code, opts.year, opts.period)
-            : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period);
+          : opts.filedOriginal
+            ? await app.store.call("screen_form_filed_original", opts.code, opts.filedOriginal)
+            : opts.amend
+              ? await app.store.call("screen_form_amend", opts.tin, opts.code, opts.year, opts.period, key)
+              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key);
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
@@ -290,11 +300,13 @@ export class FormPageActions {
         for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i, acx);
         s.chromeSnapshot = this.chromeSnapshot();
         acx.notify();
+        if (then) then(null, acx);
       } catch (e) {
         if (token !== this.token) return;
         this.state.loading = false;
         this.state.error = message(e);
         acx.notify();
+        if (then) then(this.state.error, acx);
       }
     });
   }
@@ -310,12 +322,15 @@ export class FormPageActions {
     // never written into the draft (screen_form_sample_period rebuilds it).
     s.periodParts = new Map((r.period_parts || []).map((p) => [p.key, p]));
     s.periodSet = Boolean(r.period_set);
-    s.savedPeriods = r.saved_periods || [];
     // A read-only return says when it was sent and confirmed; an amendment
     // says what it amends.
     s.submittedAt = r.submitted_at || null;
     s.confirmedAt = r.confirmed_at || null;
     s.amends = r.amends || null;
+    // An amended return's filed version, kept in its history; and, on that
+    // version opened read-only, what it is.
+    s.filedOriginal = r.filed_original || null;
+    s.filedOriginalView = r.filed_original_view || null;
     s.values = this.shown(r.values);
     s.options = r.options || {};
     s.locks = r.locks;
@@ -640,23 +655,48 @@ export class FormPageActions {
 
   /**
    * A sample's period part changed: the page keeps it (it is never a draft
-   * write) and asks the host about the period once it is complete. A new
-   * complete period rebuilds the sample for it, with what the filer typed
-   * elsewhere applied again; a period that already has a stored return is
-   * offered (offerExisting), never opened by itself.
+   * write) and asks the host about the period PERIOD_ASK_DELAY after the
+   * last change, so a year typed digit by digit is asked about once. Any
+   * change closes an offer still on screen and forgets the last answer: an
+   * offer, Start a return and the fast lane only ever act on the answer for
+   * the period the boxes show now. A new complete period rebuilds the
+   * sample for it, with what the filer typed elsewhere applied again; a
+   * period that already has a stored return is offered (offerExisting),
+   * never opened by itself.
    */
   setPeriodPart(parts, cx) {
     const s = this.state;
     s.periodValues = { ...(s.periodValues || {}), ...parts };
-    for (const [k, v] of Object.entries(parts)) s.values[k] = String(v);
+    for (const [k, v] of Object.entries(parts)) {
+      const text = String(v);
+      s.values[k] = text;
+      // A part set by a click or a picker shows in its box too.
+      const input = s.inputs.get(k);
+      if (input && input.value() !== text) input.set_value(text);
+    }
     const asked = JSON.stringify(s.periodValues);
-    if (asked === s.periodAsked) return;
+    if (asked === s.periodAsked) return this.notify(cx);
     s.periodAsked = asked;
+    this.closeOffer();
+    s.opens = null;
+    s.existing = null;
+    const token = this.token;
+    const seq = (s.periodSeq = (s.periodSeq || 0) + 1);
+    cx.timer.after(PERIOD_ASK_DELAY, (tcx) => {
+      if (token !== this.token || seq !== this.state.periodSeq) return;
+      this.askPeriod(asked, tcx);
+    });
+    this.notify(cx);
+  }
+
+  /** Ask the host about the period the boxes show (`asked`, the parts as JSON). */
+  askPeriod(asked, cx) {
+    const s = this.state;
     const token = this.token;
     cx.spawn(async (acx) => {
       let r;
       try {
-        r = await this.app.store.call("screen_form_sample_period", s.tin, s.code, s.periodValues);
+        r = await this.app.store.call("screen_form_sample_period", s.tin, s.code, JSON.parse(asked));
       } catch (e) {
         if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
         return;
@@ -664,52 +704,93 @@ export class FormPageActions {
       if (token !== this.token || asked !== this.state.periodAsked) return;
       this.takePeriod(r, acx);
     });
-    this.notify(cx);
-  }
-
-  /** The host's answer for a sample's typed period. */
-  takePeriod(r, cx) {
-    const s = this.state;
-    s.opens = r.complete ? r.opens : null;
-    s.existing = r.existing || null;
-    s.periodToken = (s.periodToken || 0) + 1;
-    if (r.existing) {
-      this.offerExisting(r.existing, cx);
-    } else if (r.sample) {
-      const before = s.values;
-      this.takeOpened(r.sample);
-      // What the filer typed outside the period goes onto the new draft.
-      const typed = s.typedEdits || {};
-      if (Object.keys(typed).length) {
-        try {
-          const f = this.app.store.call("screen_form_fill", s.code, s.draft, typed, this.unlockedFor(typed));
-          s.draft = f.draft;
-          s.values = this.shown(f.values);
-          s.options = f.options || {};
-        } catch (e) {
-          this.app.toast(message(e), cx, "triangle-alert");
-        }
-      }
-      this.syncComputed();
-      this.syncChanged(before, { ...typed, ...(s.periodValues || {}) });
-      this.validate(cx);
-    }
-    this.notify(cx);
   }
 
   /**
-   * A stored return already has the sample's period. How to offer it (a
-   * modal, an inline hint, a period picker marking saved periods) is the
-   * maintainer's open choice; until then the sample stays as it is and
-   * nothing opens by itself. `existing` carries the period, its label,
-   * status, last save and total payable.
+   * The host's answer for a sample's typed period. A fresh sample is built
+   * for a new complete period. A sample built for an earlier period goes
+   * back to the placeholder sample once its period is incomplete or has a
+   * stored return, so nothing on screen belongs to a period the boxes no
+   * longer show; a stored return is then offered.
+   */
+  takePeriod(r, cx) {
+    const s = this.state;
+    s.opens = r.complete ? r.opens || null : null;
+    s.existing = r.existing || null;
+    const period = (s.periodToken = (s.periodToken || 0) + 1);
+    this.closeOffer();
+    const offer = (acx) => {
+      if (r.existing) this.offerExisting(r.existing, acx);
+    };
+    if (r.sample) {
+      this.rebuild(r.sample, cx);
+      offer(cx);
+    } else if (s.periodSet) {
+      this.toPlaceholder(period, cx, offer);
+    } else {
+      offer(cx);
+    }
+    if (this.state === s) this.notify(cx);
+  }
+
+  /** The placeholder sample again (the period not set), then `then`. */
+  toPlaceholder(period, cx, then) {
+    const s = this.state;
+    const token = this.token;
+    cx.spawn(async (acx) => {
+      let r;
+      try {
+        r = await this.app.store.call("screen_form_sample", s.tin, s.code);
+      } catch (e) {
+        if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
+        return;
+      }
+      if (token !== this.token || period !== this.state.periodToken) return;
+      this.rebuild(r, acx);
+      if (then) then(acx);
+      if (this.state === s) this.notify(acx);
+    });
+  }
+
+  /** Take a sample the host built, with what the filer typed outside the period applied again. */
+  rebuild(sample, cx) {
+    const s = this.state;
+    const before = s.values;
+    this.takeOpened(sample);
+    const typed = s.typedEdits || {};
+    if (Object.keys(typed).length) {
+      try {
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, typed, this.unlockedFor(typed));
+        s.draft = f.draft;
+        s.values = this.shown(f.values);
+        s.options = f.options || {};
+      } catch (e) {
+        this.app.toast(message(e), cx, "triangle-alert");
+      }
+    }
+    this.syncComputed();
+    this.syncChanged(before, { ...typed, ...(s.periodValues || {}) });
+    this.validate(cx);
+  }
+
+  /** The stored-return offer leaves the screen (a new answer, a choice, or leaving the sample). */
+  closeOffer() {
+    const app = this.app;
+    if (app.overlay === "existing") app.overlay = null;
+    app.existingOffer = null;
+  }
+
+  /**
+   * A stored return already has the sample's period: the app's modal
+   * offers what its status allows. `existing` carries the period, its
+   * label, status, last save and total payable.
    */
   offerExisting(existing, cx) {
     const app = this.app;
     this.state.existing = existing;
-    // "Don't ask again for drafts" (this session): a draft loads straight
-    // away. Queued and filed returns always ask.
-    if (existing.status === "Draft" && app.session?.fastDrafts) return this.takeExisting("load", cx, true);
+    // "Don't ask again for drafts" (until the app quits or the session
+    // ends): a draft loads straight away. Queued and filed returns always ask.
+    if (existing.status === "Draft" && app.fastLane?.drafts) return this.takeExisting("load", cx, true);
     app.existingOffer = existing;
     app.overlay = "existing";
     cx.notify();
@@ -718,33 +799,41 @@ export class FormPageActions {
   /**
    * The filer's choice for a stored return of the sample's period: `load`
    * (a draft), `view` (read-only), `amend` (a new amended return), `keep`
-   * (stay in the sample, its period cleared). Each can be undone once.
+   * (stay in the sample, its period cleared). It acts only on the answer
+   * for the period the boxes show now, and opens exactly the return that
+   * answer matched (`opens`: its year, period and stored key). Each can be
+   * undone once; the Undo toast shows only once the return opened.
    */
   takeExisting(choice, cx, auto = false) {
     const app = this.app;
     const s = this.state;
-    const existing = app.existingOffer || s.existing;
-    if (app.overlay === "existing") app.overlay = null;
-    app.existingOffer = null;
-    if (!existing) return;
+    const offered = auto ? null : app.existingOffer;
+    const existing = auto ? s?.existing : offered;
+    this.closeOffer();
+    if (!s || !s.sample || !existing || existing !== s.existing || !s.opens) return cx.notify();
     if (choice === "keep") {
       const before = this.periodSnapshot();
       this.keepForm(cx);
-      return this.offerUndo("Kept this form; its period is cleared", () => this.restorePeriod(before), cx);
+      return this.offerUndo("Kept this form; its period is cleared", (ucx) => this.restorePeriod(before, existing, ucx), cx);
     }
-    const sample = this.state;
-    const opts = { tin: s.tin, code: s.code, year: existing.year, period: existing.period };
-    if (choice === "amend") {
-      this.open({ ...opts, amend: true }, cx, true);
-    } else {
-      app.openForm(opts, cx, true);
-    }
+    const sample = s;
+    const { year, period, key } = s.opens;
+    const opts = { tin: s.tin, code: s.code, year, period, ...(key != null ? { key } : {}) };
     const what = {
       load: auto ? `Loaded your saved ${existing.label} draft (you chose not to be asked again)` : `Loaded your saved ${existing.label} draft`,
       view: `Opened ${existing.label} read-only`,
       amend: `Started an amended ${existing.label} return`,
     }[choice];
-    this.offerUndo(what, (cx) => this.restoreForm(sample, cx), cx);
+    const then = (error, acx) => {
+      if (error) {
+        // Nothing opened: back to the sample, and say why.
+        this.restoreForm(sample, acx);
+        return this.app.toast(`Could not open ${existing.label}: ${error}`, acx, "triangle-alert");
+      }
+      this.offerUndo(what, (ucx) => this.restoreForm(sample, ucx, offered), acx);
+    };
+    if (choice === "amend") this.open({ ...opts, amend: true }, cx, true, then);
+    else app.openForm(opts, cx, true, then);
   }
 
   /** The Undo window closed: the form kept for it goes. */
@@ -759,31 +848,41 @@ export class FormPageActions {
   }
 
   /**
-   * Undo a Load, View or Amend: the sample comes back exactly as it was. An
-   * amended return that was never saved is simply dropped; one already
-   * saved stays saved (nothing is deleted), and Undo only returns here.
+   * Undo a Load, View or Amend: the sample comes back exactly as it was,
+   * with the offer it was answered from (`offer`) open again. An amended
+   * return that was never saved is simply dropped; one already saved stays
+   * saved (nothing is deleted) and the toast says so. Edits not saved yet
+   * are never dropped: Undo refuses and says why.
    */
-  restoreForm(sample, cx) {
+  restoreForm(sample, cx, offer = null) {
     if (!sample || this.state === sample) return;
-    this.release(this.state);
+    const s = this.state;
+    if (s && (s.dirty || Object.keys(s.pending || {}).length)) {
+      return this.app.toast("Undo would lose edits you have not saved. Save them first, or leave this return.", cx, "triangle-alert");
+    }
+    const savedAmendment = Boolean(s?.amends && s.saved);
+    this.release(s);
     this.kept = null;
     this.state = sample;
     this.token++;
+    if (offer && sample.existing === offer) {
+      this.app.existingOffer = offer;
+      this.app.overlay = "existing";
+    }
     this.app.go?.("form", cx);
     this.refreshRows();
+    if (savedAmendment) this.app.toast("Back to the sample. The amended return was saved and stays saved.", cx, "undo-2");
     if (this.app.invalidate) this.app.invalidate();
     else cx.notify();
   }
 
-  /** What Keep clears, to put back on Undo. */
+  /** What Keep clears, to put back on Undo: the fields and every box's text. */
   periodSnapshot() {
     const s = this.state;
     const inputs = {};
-    for (const k of s.periodParts?.keys() || []) {
-      const input = s.inputs.get(k);
-      if (input) inputs[k] = input.value();
-    }
+    for (const [k, input] of s.inputs) inputs[k] = input.value();
     return {
+      state: s,
       fields: {
         draft: s.draft,
         values: { ...s.values },
@@ -793,6 +892,7 @@ export class FormPageActions {
         needs: s.needs,
         errors: s.errors,
         messages: s.messages,
+        formErrors: s.formErrors,
         periodValues: { ...(s.periodValues || {}) },
         periodAsked: s.periodAsked,
         periodSet: s.periodSet,
@@ -803,14 +903,32 @@ export class FormPageActions {
     };
   }
 
-  /** Undo a Keep: the period and everything built from it come back. */
-  restorePeriod(snapshot) {
+  /**
+   * Undo a Keep: the period and everything built from it come back, every
+   * box showing exactly what it showed, and the offer it was kept from.
+   */
+  restorePeriod(snapshot, offer, cx) {
     const s = this.state;
+    if (s !== snapshot.state) return;
     s.periodToken = (s.periodToken || 0) + 1;
+    s.periodSeq = (s.periodSeq || 0) + 1;
     Object.assign(s, snapshot.fields);
-    for (const [k, text] of Object.entries(snapshot.inputs)) s.inputs.get(k)?.set_value(text);
+    for (const [k, input] of s.inputs) {
+      let text = snapshot.inputs[k];
+      if (text === undefined) {
+        // A box made after the Keep shows the restored value.
+        const v = s.values[k] ?? "";
+        text = s.inputKinds?.get(k) === "money" && v !== "" ? formatMoney(v) : String(v);
+      }
+      if (input.value() !== text) input.set_value(text);
+    }
+    if (offer && s.existing === offer) {
+      this.app.existingOffer = offer;
+      this.app.overlay = "existing";
+    }
     this.refreshRows();
     if (this.app.invalidate) this.app.invalidate();
+    else cx?.notify();
   }
 
   /**
@@ -822,6 +940,7 @@ export class FormPageActions {
     const s = this.state;
     s.periodValues = {};
     s.periodAsked = JSON.stringify({});
+    s.periodSeq = (s.periodSeq || 0) + 1;
     s.opens = null;
     s.existing = null;
     for (const k of s.periodParts?.keys() || []) {
@@ -830,29 +949,23 @@ export class FormPageActions {
     }
     if (s.periodSet) {
       // The sample was built for an earlier period: back to the placeholder.
-      const token = this.token;
-      const period = (s.periodToken = (s.periodToken || 0) + 1);
-      cx.spawn(async (acx) => {
-        let r;
-        try {
-          r = await this.app.store.call("screen_form_sample", s.tin, s.code);
-        } catch (e) {
-          if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
-          return;
-        }
-        if (token !== this.token || period !== this.state.periodToken) return;
-        this.takePeriod({ complete: false, sample: r }, acx);
-      });
+      this.toPlaceholder((s.periodToken = (s.periodToken || 0) + 1), cx, null);
     }
     this.notify(cx);
   }
 
-  /** Start a return from a sample: its period's return once the period is set, else New return. */
+  /**
+   * Start a return from a sample: the return its period matched (exactly
+   * that one, by its stored key), offered first when one is stored; New
+   * return while the period is not set, and always for a form whose
+   * returns are numbered entries rather than periods (no `opens`).
+   */
   startReturn(cx) {
     const s = this.state;
     if (!s.opens) return this.app.startNewReturn(cx, s.code);
     if (s.existing) return this.offerExisting(s.existing, cx);
-    this.app.openForm({ tin: s.tin, code: s.code, year: s.opens.year, period: s.opens.period }, cx);
+    const { year, period, key } = s.opens;
+    this.app.openForm({ tin: s.tin, code: s.code, year, period, ...(key != null ? { key } : {}) }, cx);
   }
 
   /** Computed and locked boxes follow the draft; user boxes keep what was typed. */
@@ -1182,6 +1295,28 @@ export class FormPageActions {
     return s.saved && !s.dirty;
   }
 
+  /**
+   * "View the filed original": an amended return's filed version, from its
+   * history, read-only. Back to the amendment reopens the return.
+   */
+  openFiledOriginal(cx) {
+    const s = this.state;
+    if (!s.filedOriginal) return;
+    if (s.dirty || Object.keys(s.pending || {}).length) {
+      return this.app.toast("Save your edits first: viewing the filed original leaves this return.", cx, "triangle-alert");
+    }
+    const back = { tin: s.tin, code: s.code, year: s.year, period: s.period, ...(s.key != null ? { key: s.key } : {}) };
+    this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period, filedOriginal: s.filedOriginal.id, back }, cx);
+    cx.notify();
+  }
+
+  backToAmendment(cx) {
+    const back = this.state.back;
+    if (!back) return;
+    this.open(back, cx);
+    cx.notify();
+  }
+
   /** Reopen the return as stored (after queueing or cancelling). */
   reload(cx) {
     const s = this.state;
@@ -1215,10 +1350,16 @@ export class FormPageActions {
     }
   }
 
-  /** Print preview of the return as saved: the official sheet, filled. */
+  /**
+   * Print preview of the return as saved: the official sheet, filled. An
+   * amendment not saved yet prints from the page and is not saved: its
+   * first save is the filer's own choice, as it reverts the filed return.
+   */
   print(cx) {
     const s = this.state;
-    if (s.editable && !this.ensureSaved(cx)) return;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
+    if (s.amends && !s.saved) this.flush(cx);
+    else if (s.editable && !this.ensureSaved(cx)) return;
     try {
       this.app.store.call("screen_form_print", s.code, s.draft);
       s.previewOpen = true;
@@ -1838,6 +1979,15 @@ function profileGroup(cx, ui, pi, tucked, border) {
 
 // ---------------------------------------------------------------- existing return
 
+/** The strip on an amended return's filed version, opened from its history. */
+export function filedOriginalStrip(view) {
+  const when = view.filed_on ? ` on ${shortDate(view.filed_on)}` : "";
+  return `This is the version filed${when}, kept in this return's history; the current return is its amendment. Nothing here can be changed.`;
+}
+
+/** Where an amended return's filed version goes (the history view). */
+export const FILED_KEPT = "The filed version is kept in this return's history.";
+
 /** `2026-10-01T…` → `Oct 1, 2026`; anything else as given. */
 function shortDate(text) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(text || ""));
@@ -1873,7 +2023,7 @@ export function existingOfferFor(existing) {
   }
   const filed = existing.status === "Submitted" ? "submitted" : "filed";
   const choices = [{ id: "view", label: "View read-only", hint: `See exactly what was ${filed}.`, variant: "primary" }];
-  if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: "New amended return; the original stays as filed.", variant: "danger" });
+  if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: `New amended return. ${FILED_KEPT}`, variant: "danger" });
   choices.push(keep);
   return { title: `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
 }
@@ -1903,9 +2053,9 @@ export function renderExistingOffer(cx, app) {
       CheckboxLabel(
         cx,
         "existing-fast-lane",
-        Boolean(app.session?.fastDrafts),
+        Boolean(app.fastLane?.drafts),
         (v, cx) => {
-          app.session = { ...(app.session || {}), fastDrafts: v };
+          app.fastLane = { ...(app.fastLane || {}), drafts: v };
           cx.notify();
         },
         "Don't ask again for drafts (this session)",
@@ -1942,7 +2092,12 @@ function formContent(cx, app, width) {
 
   // A library sample has only Check: Print, Queue and Save need a return.
   const actions = s.sample ? [] : [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
-  if (s.sample) {
+  if (s.filedOriginal && !s.filedOriginalView) {
+    actions.push(AppButton(cx, "fp-filed-original", "View the filed original", { size: "sm", icon: "history", onClick: (_e, cx) => ui.openFiledOriginal(cx) }));
+  }
+  if (s.filedOriginalView) {
+    actions.push(AppButton(cx, "fp-back-to-amendment", "Back to the amendment", { size: "sm", onClick: (_e, cx) => ui.backToAmendment(cx) }));
+  } else if (s.sample) {
     if (s.editable) actions.push(s.checkButton.entity);
     actions.push(AppButton(cx, "fp-start-return", "Start a return", { variant: "primary", size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
   } else if (s.status === "Queued") {
@@ -1957,7 +2112,8 @@ function formContent(cx, app, width) {
   chips.child(Chip(cx, f.freq)).child(Chip(cx, `${f.pages} page${f.pages > 1 ? "s" : ""}`)).child(Chip(cx, `${f.n} fields`));
   if (draftLayout) chips.child(Chip(cx, "Draft layout", "warning", "triangle-alert"));
   if (s.status !== "Draft") chips.child(Chip(cx, s.editable ? s.status : `${s.status} · read-only`, s.status === "Queued" ? "accent" : "success"));
-  if (s.amends) chips.child(Chip(cx, `Amended return (the ${s.amends.toLowerCase()} one stays as filed)`, "warning"));
+  if (s.amends || s.filedOriginal) chips.child(Chip(cx, "Amended return", "warning"));
+  if (s.filedOriginalView) chips.child(Chip(cx, "Filed original · read-only", "success"));
 
   const head = div()
     .flex()
@@ -2033,8 +2189,12 @@ function formContent(cx, app, width) {
 
   const page = div().flex().flex_col().child(head).child(bar);
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
+  // An amended return says where its filed version is; that version, opened
+  // from its history, says what it is.
+  if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());
+  if (s.filedOriginalView) page.child(Text(cx, "meta", filedOriginalStrip(s.filedOriginalView), "fg2").mb(SPACE[4]).whitespace_normal());
   // A return that left the app is read-only, and says when it went.
-  if (!s.editable && (s.submittedAt || s.confirmedAt)) {
+  if (!s.editable && !s.filedOriginalView && (s.submittedAt || s.confirmedAt)) {
     const parts = [];
     if (s.submittedAt) parts.push(`Sent to BIR ${shortDate(s.submittedAt)}`);
     if (s.confirmedAt) parts.push(`confirmed ${shortDate(s.confirmedAt)}`);
