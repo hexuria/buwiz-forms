@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_monthly;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -729,7 +730,30 @@ fn apply_layout(form: &mut Value, layout: &Value) {
     let remainder = |item: &Value, claimed: &BTreeSet<String>, number: bool| -> Option<Value> {
         if item.get("rows").is_some() {
             let keys = table_keys(item);
-            return (!keys.iter().any(|k| claimed.contains(k))).then(|| item.clone());
+            if keys.iter().any(|k| claimed.contains(k)) {
+                return None;
+            }
+            // A table whose every column an override hides (0619F's Part
+            // III, which the official program keeps disabled) is no table
+            // on the page: its cells stay in the form as hidden boxes.
+            let cols = item["cols"].as_array().cloned().unwrap_or_default();
+            if !cols.is_empty() && cols.iter().all(|col| col["t"] == "hidden") {
+                let mut hidden = item.clone();
+                let object = hidden.as_object_mut()?;
+                for gone in ["rows", "cols", "keys", "start"] {
+                    object.remove(gone);
+                }
+                hidden["f"] = Value::Array(
+                    keys.iter()
+                        .map(|key| json!({ "k": key, "l": key, "t": "hidden" }))
+                        .collect(),
+                );
+                if !number {
+                    hidden["no"] = Value::from("");
+                }
+                return Some(hidden);
+            }
+            return Some(item.clone());
         }
         let left: Vec<Value> = item["f"]
             .as_array()
@@ -2421,6 +2445,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "waits": rows_monthly::waits(kind),
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -3176,6 +3201,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3212,6 +3238,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        // Rows the filer typed that this edit removed: the page asks first.
+        "removes": rows_monthly::removes(kind, &before, &draft, &edits),
     })))
 }
 
@@ -5980,9 +6008,12 @@ mod tests {
         // They must not silently turn into an incomplete catalog rollout.
         // D01-D10 left this list with reviewed schema
         // options (schema-overrides.json, from each form's official HTA).
-        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
-        // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), less
+        // 1600PT's and 1600VT's mirrored item 6 RDO list (rdoPg1Pt1I6RDO),
+        // hidden since PR 3 (one RDO box as printed). The 36 2550M Schedule
+        // 1 ATC lists (N03) and the PR 3 Part II ATC rows are table cells,
+        // not fields.
+        assert_eq!(supplied, 80);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -9164,15 +9195,6 @@ mod tests {
     /// own identity) or whose typed date its form clears (a schedule another
     /// answer turns off): each for its form's group, not for rule 4.
     const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
-        "0619F txtDate20: cannot be filled here: not written by this app's field map for any sample draft",
-        "0619F txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
-        "0619F txtDate22: cannot be filled here: not written by this app's field map for any sample draft",
-        "1601C frm1601c:txtDate37: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C frm1601c:txtDate38: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C frm1601c:txtDate39: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C frm1601c:txtDate40: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1601C txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16b1: cannot be filled here: written by the app without a draft field (a constant or the period)",
@@ -9228,12 +9250,13 @@ mod tests {
             .collect::<String>()
     }
 
-    /// The whole address the draft holds, read by hand per form: 0619E and
-    /// 0619F join two fields, 1702RT keeps a list of lines, the rest one field.
+    /// The whole address the draft holds, read by hand per form: 0619E,
+    /// 0619F and 1601C join two fields, 1702RT keeps a list of lines, the
+    /// rest one field.
     fn draft_address(code: &str, draft: &Value) -> String {
         let s = |v: &Value| v.as_str().unwrap_or_default().to_string();
         match code {
-            "0619E" | "0619F" => format!(
+            "0619E" | "0619F" | "1601C" => format!(
                 "{}{}",
                 s(&draft["registered_address"]),
                 s(&draft["registered_address_2"])
@@ -9260,14 +9283,24 @@ mod tests {
     /// map's cut lines. The oracle is the list of two-line addresses the form
     /// review found (docs/form-findings, R5 "Two-line address") with 1702RT's
     /// three-line one; 1702MX keeps three boxes (its first line is the whole
-    /// address but its print reads the list), and the review's 1601C, 1701A,
-    /// 1702EX and 1707 print their address through the print map's own lines,
-    /// so the sheet gives their boxes no slots. The print side is not
-    /// compared: how it shows an address past its boxes is open.
+    /// address but its print reads the list), and the review's 1701A, 1702EX
+    /// and 1707 print their address through the print map's own lines, so
+    /// the sheet gives their boxes no slots. 1601C prints its two lines
+    /// through `derived:` keys too, and since PR 3 the sheet's slots for
+    /// those keys are its two boxes' (combs.rs PRINTED_THROUGH): its two
+    /// fields are one pool. The print side is not compared: how it shows an
+    /// address past its boxes is open.
     #[test]
     fn a_printed_address_over_stacked_lines_is_one_pool() {
         setup();
         let expected: BTreeMap<&str, (Vec<&str>, Vec<u64>)> = BTreeMap::from([
+            (
+                "1601C",
+                (
+                    vec!["frm1601c:txtAddress", "frm1601c:txtAddress2"],
+                    vec![40, 31],
+                ),
+            ),
             (
                 "0619E",
                 (
@@ -9426,8 +9459,18 @@ mod tests {
                     again["pools"][&head], long,
                     "{code}: unchanged on the next edit"
                 );
+                // 1601C stamps `updated_at` on every fill: the clock moves,
+                // nothing the filer typed does.
+                let unstamped = |draft: &Value| {
+                    let mut draft = draft.clone();
+                    if let Some(object) = draft.as_object_mut() {
+                        object.remove("updated_at");
+                    }
+                    draft
+                };
                 assert_eq!(
-                    again["draft"], filled["draft"],
+                    unstamped(&again["draft"]),
+                    unstamped(&filled["draft"]),
                     "{code}: the draft does not move"
                 );
                 // The page value is the draft's whole address, and the XML
@@ -9642,7 +9685,9 @@ mod tests {
 
     /// The boxes off by the test's own probing of each conditional box
     /// alone: blank now, at least one probe taken, and every probe taken
-    /// cleared by the form through the page's own fill.
+    /// cleared by the form through the page's own fill, or refused because
+    /// the answer it waits for does not hold (the host's gate refusal,
+    /// rows_monthly.rs: 1600WP item 4).
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         let corpus = conditions::tests::derived();
         corpus[code]
@@ -9658,9 +9703,11 @@ mod tests {
                     .into_iter()
                     .filter_map(|probe| {
                         let filled = fill(code, &checked["draft"], json!({ key: probe }));
-                        filled["rejected"][key]
-                            .is_null()
-                            .then(|| shows_nothing(&filled["values"][key]))
+                        match filled["rejected"][key].as_str() {
+                            None => Some(shows_nothing(&filled["values"][key])),
+                            Some(why) if rows_monthly::is_gate_refusal(why) => Some(true),
+                            Some(_) => None,
+                        }
                     })
                     .collect();
                 !taken.is_empty() && taken.iter().all(|cleared| *cleared)
@@ -9709,6 +9756,9 @@ mod tests {
             BTreeMap::from([
                 ("0605", 3),
                 ("0619F", 2),
+                // PR 3: Schedule 1.1's TIN, payee, ATC and amount, ten rows,
+                // wait for item 4 Yes (the host refuses them until then).
+                ("1600WP", 40),
                 ("1601C", 2),
                 ("1601EQ", 4),
                 ("1602Q", 3),
@@ -9903,6 +9953,19 @@ mod tests {
                 "2200A",
                 vec!["frm2200Av2020:treatyY"],
                 Box::new(by(json!({"frm2200Av2020:optTreaty_1": "true"}))),
+            ),
+            // PR 3: Schedule 1.1 opens with item 4 Yes.
+            (
+                "1600WP",
+                vec![
+                    "frm1600WP:dtSched:txtTin1",
+                    "frm1600WP:dtSched:txtFullname1",
+                    "frm1600WP:dtSched:drpAtcCode1",
+                    "frm1600WP:dtSched:amount1",
+                    "frm1600WP:dtSched:txtTin10",
+                    "frm1600WP:dtSched:amount10",
+                ],
+                Box::new(by(json!({"frm1600WP:AnyTaxHeld_1": "true"}))),
             ),
         ];
         for (code, keys, turn_on) in cases {
@@ -10693,6 +10756,9 @@ mod tests {
             ("item_14_amount_of_remittance", 3000.0),
         );
     }
+
+    /// PR 3: the monthly withholding forms.
+    mod monthly;
 }
 
 #[cfg(test)]

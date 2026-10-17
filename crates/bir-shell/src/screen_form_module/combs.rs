@@ -23,8 +23,11 @@
 //!     joins to it (0619E and 0619F's `registered_address_2`), the text is
 //!     split at the first line's boxes so both lines fill.
 //!   - `write` is every line where each has its own entry of one draft list
-//!     (1702RT's `registered_address_lines`): the text is split over them
-//!     (provisional: rules page question 5).
+//!     (1702RT's `registered_address_lines`), or where two lines are two
+//!     fields of their own (1601C's `registered_address` and
+//!     `registered_address_2`, which its print fills through `derived:`
+//!     keys): the text is split over them (provisional: rules page question
+//!     5).
 //!   - A split ([`split_lines`]) ends a line at the last space run that
 //!     starts within its boxes, the run kept at its end, or cuts a word
 //!     longer than the line at its last box; the lines put end to end are
@@ -118,9 +121,17 @@ fn list_entry(path: &str) -> Option<(&str, usize)> {
 /// one pool (see the module docs).
 fn pool_write(def: &AgentFormDef, lines: &[String]) -> Option<Vec<String>> {
     let paths: Vec<Option<&str>> = lines.iter().map(|key| text_path(def, key)).collect();
-    paths[0]?;
+    let first = paths[0]?;
     if paths[1..].iter().all(Option::is_none) {
         return Some(vec![lines[0].clone()]);
+    }
+    // Two lines the draft keeps as two fields of their own (1601C's
+    // `registered_address` and `registered_address_2`, each its own
+    // official control): the text is split over both.
+    if let [_, Some(second)] = paths.as_slice()
+        && *second == format!("{first}_2")
+    {
+        return Some(lines.to_vec());
     }
     let entries: Option<Vec<(&str, usize)>> =
         paths.iter().map(|path| path.and_then(list_entry)).collect();
@@ -446,6 +457,20 @@ mod tests {
             .collect()
     }
 
+    /// Page boxes the print sheet fills through a print-only `derived:` key
+    /// rather than their own: `(form, writer key, page box)`. 1601C's item 9
+    /// prints the draft's address over both combs, line 2 after the rest of
+    /// line 1 (form_1601c.rs `to_print_field_map`: `derived:address_line1`,
+    /// `derived:line:address_line2`); the two page boxes are those lines.
+    const PRINTED_THROUGH: [(&str, &str, &str); 2] = [
+        ("1601C", "derived:address_line1", "frm1601c:txtAddress"),
+        (
+            "1601C",
+            "derived:line:address_line2",
+            "frm1601c:txtAddress2",
+        ),
+    ];
+
     /// What `app/forms/print-cells.json` should hold, read from the sheets.
     fn derived() -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
@@ -470,9 +495,13 @@ mod tests {
                     continue;
                 };
                 if let Some(slots) = combs.get(id) {
-                    keys.entry(key.to_string()).or_insert_with(|| {
-                        json!({"slots": slots, "printed": join["printed"].as_str().unwrap_or_default()})
-                    });
+                    let cell = json!({"slots": slots, "printed": join["printed"].as_str().unwrap_or_default()});
+                    for (form, writer, page) in PRINTED_THROUGH {
+                        if form == code && writer == key {
+                            keys.entry(page.to_string()).or_insert_with(|| cell.clone());
+                        }
+                    }
+                    keys.entry(key.to_string()).or_insert_with(|| cell);
                 }
             }
             for join in cells["date_joins"].as_array().into_iter().flatten() {

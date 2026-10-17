@@ -172,8 +172,21 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
     let Some(list) = conditions()[code].as_object() else {
         return off;
     };
+    // A box the host itself closes while its answer does not hold (it
+    // refuses what is typed there, rows_monthly.rs) is off whatever it
+    // shows: a legacy draft's value there is faded, not hidden.
+    let mut gated = std::collections::BTreeSet::new();
+    for (key, condition) in list {
+        if let Some(closed) = super::rows_monthly::gated(kind, draft, key) {
+            gated.insert(key);
+            if closed {
+                off.insert(key.clone(), label(code, key, condition));
+            }
+        }
+    }
     let blank: Vec<(&String, &Value, &str)> = list
         .iter()
+        .filter(|(key, _)| !gated.contains(key))
         .map(|(key, condition)| (key, condition, values[key].as_str().unwrap_or_default()))
         .filter(|(_, _, shown)| is_blank(shown))
         .collect();
@@ -196,7 +209,10 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             off.insert(key.clone(), label(code, key, condition));
         }
     }
-    off
+    // In the conditions' own order, gated boxes among the rest.
+    list.keys()
+        .filter_map(|key| off.remove(key).map(|tag| (key.clone(), tag)))
+        .collect()
 }
 
 #[cfg(test)]

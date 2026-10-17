@@ -235,7 +235,7 @@
     },
     "frm0619E:txtLineBus": {
       "label": "Line of Business",
-      "evidence": "painted form_0619e_view.rs (local:lob via binding /line_of_business): 'Line of Business'"
+      "evidence": "painted form_0619e_view.rs (local:lob via binding /line_of_business): 'Line of Business'. PR 3 (0619E manual-0): the 0619-E sheet prints no line of business (html-frozen/0619e-2018/index.html has no such caption; writer-cells.json has no join for frm0619E:txtLineBus), so the layout leaves it in 'Not on the printed sheet' instead of under item 19."
     },
     "txtAgency19": {
       "kind": "hidden",
@@ -336,6 +336,181 @@
     "txtDate22": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled (ebirforms-mirror/forms/BIR-Form0619E.hta line 879: '<input type=\"text\" value=\"\" size=\"23\" id=\"txtDate22\" name=\"txtDate22\" maxlength=\"10\" disabled/>'; the runtime inventory reads it enabled because its parser misses the bare 'disabled' attribute) and this app's field map never writes it, so the box could never save; hidden."
+    },
+    "layout": {
+      "evidence": "PR 3: show the printed sheet's parts and item numbers. Structure from html-frozen/0619e-2018/index.html (BIR Form 0619-E January 2018: items 1-6, Part I 7-13, Part II 14-18 with the penalties printed as items 17A-17D, the tax agent line and Part III 19-22). The tax agent line and Part III have no box the filer fills (each official control is disabled: ebirforms-mirror/forms/BIR-Form0619E.hta, the lines the hidden boxes' entries cite), so they show their printed captions with a note. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "7",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm0619E:txtTIN1",
+                "frm0619E:txtTIN2",
+                "frm0619E:txtTIN3",
+                "frm0619E:txtBranchCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "RDO Code",
+              "k": [
+                "frm0619E:txtRDOCode"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm0619E:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm0619E:txtAddress",
+                "frm0619E:txtAddress2"
+              ]
+            },
+            {
+              "no": "10A",
+              "l": "ZIP Code",
+              "k": [
+                "frm0619E:txtZipCode"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Contact Number",
+              "k": [
+                "frm0619E:txtTelNum"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm0619E:optCategory:P",
+                "frm0619E:optCategory:G"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Tax Remittance",
+          "items": [
+            {
+              "no": "14",
+              "l": "Amount of Remittance",
+              "k": [
+                "frm0619E:txtTax14"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Less: Amount Remitted from Previously Filed Form, if this is an amended form",
+              "k": [
+                "frm0619E:txtTax15"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Net Amount of Remittance (Item 14 Less Item 15)",
+              "k": [
+                "frm0619E:txtTax16"
+              ]
+            },
+            {
+              "no": "17A",
+              "l": "Add: Penalties – Surcharge",
+              "k": [
+                "frm0619E:txtTax17A"
+              ]
+            },
+            {
+              "no": "17B",
+              "l": "Interest",
+              "k": [
+                "frm0619E:txtTax17B"
+              ]
+            },
+            {
+              "no": "17C",
+              "l": "Compromise",
+              "k": [
+                "frm0619E:txtTax17C"
+              ]
+            },
+            {
+              "no": "17D",
+              "l": "Total Penalties (Sum of Items 17A to 17C)",
+              "k": [
+                "frm0619E:txtTax17D"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Total Amount of Remittance (Sum of Items 16 and 17D)",
+              "k": [
+                "frm0619E:txtTax18"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable), Date of Issue and Date of Expiry",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "19",
+              "l": "Cash/Bank Debit Memo",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "20",
+              "l": "Check",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "21",
+              "l": "Tax Debit Memo",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "22",
+              "l": "Others (specify below)",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            }
+          ]
+        }
+      ],
+      "rest": "Not on the printed sheet"
+    },
+    "item:3:0": {
+      "label": "Line of Business",
+      "evidence": "PR 3: the extracted item that only holds the line of business, which this sheet does not print; under 'Not on the printed sheet' it reads as what it is (the printed item keeps its own caption in the layout)."
     }
   },
   "0619F": {
@@ -410,16 +585,625 @@
     "txtAmount23": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled (ebirforms-mirror/forms/BIR-Form0619F.hta line 925: '<input type=\"text\" value=\"\" style=\"text-align: right\" size=\"20\" id=\"txtAmount23\" name=\"txtAmount23\" maxlength=\"50\" disab'; the runtime inventory reads it enabled because its parser misses the bare 'disabled' attribute) and this app's field map never writes it, so the box could never save; hidden."
+    },
+    "txtAgency20": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtAgency20: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 898 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtNumber20": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtNumber20: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 899 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtDate20": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtDate20: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 900 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtAmount20": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtAmount20: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 901 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtAgency21": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtAgency21: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 905 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtNumber21": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtNumber21: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 906 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtDate21": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtDate21: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 907 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtAmount21": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtAmount21: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 908 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtAgency22": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtAgency22: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 912 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtNumber22": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtNumber22: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 913 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtDate22": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtDate22: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 914 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "txtAmount22": {
+      "kind": "hidden",
+      "evidence": "PR 3: rules/forms/0619f-v2018/fields.json enabled_when for txtAmount22: 'Official runtime leaves this field disabled in the observed form workflow.' (ebirforms-mirror/forms/BIR-Form0619F.hta line 915 carries the bare `disabled` attribute, which the runtime-control inventory records as disabled false), and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; the layout shows its printed item with a note instead."
+    },
+    "frm0619F:optAmend:Y": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3.1): the printed option under its item (html-frozen/0619f-2018/writer-cells.json xbox_joins frm0619F:optAmend:Y: '... Yes')."
+    },
+    "frm0619F:optAmend:N": {
+      "label": "No",
+      "evidence": "PR 3 (R3.1): the printed option under its item (html-frozen/0619f-2018/writer-cells.json xbox_joins frm0619F:optAmend:N: '... No')."
+    },
+    "frm0619F:optWithheld:Y": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3.1): the printed option under its item (html-frozen/0619f-2018/writer-cells.json xbox_joins frm0619F:optWithheld:Y: '... Yes')."
+    },
+    "frm0619F:optWithheld:N": {
+      "label": "No",
+      "evidence": "PR 3 (R3.1): the printed option under its item (html-frozen/0619f-2018/writer-cells.json xbox_joins frm0619F:optWithheld:N: '... No')."
+    },
+    "frm0619F:optCategory:P": {
+      "label": "Private",
+      "evidence": "PR 3 (0619F manual-2): the printed option (html-frozen/0619f-2018/writer-cells.json xbox_joins frm0619F:optCategory:P: '11 Category of Withholding Agent: Private')."
+    },
+    "frm0619F:optCategory:G": {
+      "label": "Government",
+      "evidence": "PR 3 (0619F manual-2): the printed option (html-frozen/0619f-2018/writer-cells.json xbox_joins frm0619F:optCategory:G: '11 Category of Withholding Agent: Government')."
+    },
+    "frm0619F:txtLineBus": {
+      "label": "Line of Business",
+      "evidence": "PR 3 (0619F manual-1): html-frozen/0619f-2018/writer-cells.json not_joined: 'not on the paper form: this sheet has no line-of-business box'; the layout leaves it in 'Not on the printed sheet' instead of a second box under item 8."
+    },
+    "layout": {
+      "evidence": "PR 3: show the printed sheet's parts and item numbers. Structure from html-frozen/0619f-2018/index.html (BIR Form 0619-F January 2018: items 1-5, Part I 6-12, Part II 13-19, the tax agent line and Part III 20-23) and html-frozen/0619f-2018/writer-cells.json joins. The tax agent line and Part III have no box the filer fills (fields.json: 'Official runtime leaves this field disabled in the observed form workflow.'), so each printed item shows its caption with a note. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm0619F:txtTIN1",
+                "frm0619F:txtTIN2",
+                "frm0619F:txtTIN3",
+                "frm0619F:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm0619F:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm0619F:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm0619F:txtAddress",
+                "frm0619F:txtAddress2"
+              ]
+            },
+            {
+              "no": "9A",
+              "l": "ZIP Code",
+              "k": [
+                "frm0619F:txtZipCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Contact Number",
+              "k": [
+                "frm0619F:txtTelNum"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm0619F:optCategory:P",
+                "frm0619F:optCategory:G"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        },
+        {
+          "keep": 2
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable), Date of Issue and Date of Expiry",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "20",
+              "l": "Cash/Bank Debit Memo",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "21",
+              "l": "Check",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "22",
+              "l": "Tax Debit Memo",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "23",
+              "l": "Others (specify below)",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            }
+          ]
+        }
+      ],
+      "rest": "Not on the printed sheet"
+    },
+    "item:1:2": {
+      "label": "Line of Business",
+      "evidence": "PR 3: the extracted item that only holds the line of business, which this sheet does not print; under 'Not on the printed sheet' it reads as what it is (the printed item keeps its own caption in the layout)."
     }
   },
   "1600PT": {
     "frm1600PT:txtPg1I1Month": {
-      "kind": "int",
-      "evidence": "binding type whole; fields.json text/string"
+      "kind": "sel",
+      "options": [
+        "01 - January",
+        "02 - February",
+        "03 - March",
+        "04 - April",
+        "05 - May",
+        "06 - June",
+        "07 - July",
+        "08 - August",
+        "09 - September",
+        "10 - October",
+        "11 - November",
+        "12 - December"
+      ],
+      "evidence": "PR 3 (1600PT manual-5): display only. The draft keeps the month (binding /month, a whole number) and the field map writes it as MM; the box shows the month's name ('03 - March', as 0619E and 1601C do) instead of a bare number. html-frozen/1600-pt-2018/writer-cells.json: '1 For the month MM'."
     },
     "frm1600PT:txtPg1I1Year": {
-      "kind": "int",
-      "evidence": "binding type whole; fields.json text/string"
+      "kind": "sel",
+      "options": [
+        {
+          "value": "00",
+          "label": "2000"
+        },
+        {
+          "value": "01",
+          "label": "2001"
+        },
+        {
+          "value": "02",
+          "label": "2002"
+        },
+        {
+          "value": "03",
+          "label": "2003"
+        },
+        {
+          "value": "04",
+          "label": "2004"
+        },
+        {
+          "value": "05",
+          "label": "2005"
+        },
+        {
+          "value": "06",
+          "label": "2006"
+        },
+        {
+          "value": "07",
+          "label": "2007"
+        },
+        {
+          "value": "08",
+          "label": "2008"
+        },
+        {
+          "value": "09",
+          "label": "2009"
+        },
+        {
+          "value": "10",
+          "label": "2010"
+        },
+        {
+          "value": "11",
+          "label": "2011"
+        },
+        {
+          "value": "12",
+          "label": "2012"
+        },
+        {
+          "value": "13",
+          "label": "2013"
+        },
+        {
+          "value": "14",
+          "label": "2014"
+        },
+        {
+          "value": "15",
+          "label": "2015"
+        },
+        {
+          "value": "16",
+          "label": "2016"
+        },
+        {
+          "value": "17",
+          "label": "2017"
+        },
+        {
+          "value": "18",
+          "label": "2018"
+        },
+        {
+          "value": "19",
+          "label": "2019"
+        },
+        {
+          "value": "20",
+          "label": "2020"
+        },
+        {
+          "value": "21",
+          "label": "2021"
+        },
+        {
+          "value": "22",
+          "label": "2022"
+        },
+        {
+          "value": "23",
+          "label": "2023"
+        },
+        {
+          "value": "24",
+          "label": "2024"
+        },
+        {
+          "value": "25",
+          "label": "2025"
+        },
+        {
+          "value": "26",
+          "label": "2026"
+        },
+        {
+          "value": "27",
+          "label": "2027"
+        },
+        {
+          "value": "28",
+          "label": "2028"
+        },
+        {
+          "value": "29",
+          "label": "2029"
+        },
+        {
+          "value": "30",
+          "label": "2030"
+        },
+        {
+          "value": "31",
+          "label": "2031"
+        },
+        {
+          "value": "32",
+          "label": "2032"
+        },
+        {
+          "value": "33",
+          "label": "2033"
+        },
+        {
+          "value": "34",
+          "label": "2034"
+        },
+        {
+          "value": "35",
+          "label": "2035"
+        },
+        {
+          "value": "36",
+          "label": "2036"
+        },
+        {
+          "value": "37",
+          "label": "2037"
+        },
+        {
+          "value": "38",
+          "label": "2038"
+        },
+        {
+          "value": "39",
+          "label": "2039"
+        },
+        {
+          "value": "40",
+          "label": "2040"
+        },
+        {
+          "value": "41",
+          "label": "2041"
+        },
+        {
+          "value": "42",
+          "label": "2042"
+        },
+        {
+          "value": "43",
+          "label": "2043"
+        },
+        {
+          "value": "44",
+          "label": "2044"
+        },
+        {
+          "value": "45",
+          "label": "2045"
+        },
+        {
+          "value": "46",
+          "label": "2046"
+        },
+        {
+          "value": "47",
+          "label": "2047"
+        },
+        {
+          "value": "48",
+          "label": "2048"
+        },
+        {
+          "value": "49",
+          "label": "2049"
+        },
+        {
+          "value": "50",
+          "label": "2050"
+        },
+        {
+          "value": "51",
+          "label": "2051"
+        },
+        {
+          "value": "52",
+          "label": "2052"
+        },
+        {
+          "value": "53",
+          "label": "2053"
+        },
+        {
+          "value": "54",
+          "label": "2054"
+        },
+        {
+          "value": "55",
+          "label": "2055"
+        },
+        {
+          "value": "56",
+          "label": "2056"
+        },
+        {
+          "value": "57",
+          "label": "2057"
+        },
+        {
+          "value": "58",
+          "label": "2058"
+        },
+        {
+          "value": "59",
+          "label": "2059"
+        },
+        {
+          "value": "60",
+          "label": "2060"
+        },
+        {
+          "value": "61",
+          "label": "2061"
+        },
+        {
+          "value": "62",
+          "label": "2062"
+        },
+        {
+          "value": "63",
+          "label": "2063"
+        },
+        {
+          "value": "64",
+          "label": "2064"
+        },
+        {
+          "value": "65",
+          "label": "2065"
+        },
+        {
+          "value": "66",
+          "label": "2066"
+        },
+        {
+          "value": "67",
+          "label": "2067"
+        },
+        {
+          "value": "68",
+          "label": "2068"
+        },
+        {
+          "value": "69",
+          "label": "2069"
+        },
+        {
+          "value": "70",
+          "label": "2070"
+        },
+        {
+          "value": "71",
+          "label": "2071"
+        },
+        {
+          "value": "72",
+          "label": "2072"
+        },
+        {
+          "value": "73",
+          "label": "2073"
+        },
+        {
+          "value": "74",
+          "label": "2074"
+        },
+        {
+          "value": "75",
+          "label": "2075"
+        },
+        {
+          "value": "76",
+          "label": "2076"
+        },
+        {
+          "value": "77",
+          "label": "2077"
+        },
+        {
+          "value": "78",
+          "label": "2078"
+        },
+        {
+          "value": "79",
+          "label": "2079"
+        },
+        {
+          "value": "80",
+          "label": "2080"
+        },
+        {
+          "value": "81",
+          "label": "2081"
+        },
+        {
+          "value": "82",
+          "label": "2082"
+        },
+        {
+          "value": "83",
+          "label": "2083"
+        },
+        {
+          "value": "84",
+          "label": "2084"
+        },
+        {
+          "value": "85",
+          "label": "2085"
+        },
+        {
+          "value": "86",
+          "label": "2086"
+        },
+        {
+          "value": "87",
+          "label": "2087"
+        },
+        {
+          "value": "88",
+          "label": "2088"
+        },
+        {
+          "value": "89",
+          "label": "2089"
+        },
+        {
+          "value": "90",
+          "label": "2090"
+        },
+        {
+          "value": "91",
+          "label": "2091"
+        },
+        {
+          "value": "92",
+          "label": "2092"
+        },
+        {
+          "value": "93",
+          "label": "2093"
+        },
+        {
+          "value": "94",
+          "label": "2094"
+        },
+        {
+          "value": "95",
+          "label": "2095"
+        },
+        {
+          "value": "96",
+          "label": "2096"
+        },
+        {
+          "value": "97",
+          "label": "2097"
+        },
+        {
+          "value": "98",
+          "label": "2098"
+        },
+        {
+          "value": "99",
+          "label": "2099"
+        }
+      ],
+      "evidence": "PR 3 (1600PT manual-5): display only. The sheet prints the year's last two digits ('1 For the month 20YY', html-frozen/1600-pt-2018/writer-cells.json) and the field map writes them (form_1600pt.rs: year % 100); each option keeps that two-digit value and shows the whole year, so '26' reads 2026. Nothing saved changes."
     },
     "frm1600PT:txtPg1I4NoOfSheets": {
       "label": "No. of sheets attached",
@@ -448,7 +1232,8 @@
     },
     "frm1600PT:txtPg2RegisteredName": {
       "label": "Withholding Agent's Name",
-      "evidence": "painted form_1600pt_view.rs (local:name via binding /agent_name): \"Withholding Agent's Name\"; writer-cells printed caption: \"Page 2 Withholding Agent's Name\""
+      "kind": "hidden",
+      "evidence": "painted form_1600pt_view.rs (local:name via binding /agent_name). PR 3 (1600PT manual-3, R3): the page-2 header copy of item 7 (same binding /agent_name), not drawn again; html-frozen/1600-pt-2018/writer-cells.json joins it as 'Page 2 Withholding Agent's Name', which prints from the draft."
     },
     "frm1600PT:Pg2Sc1AmtOfIncPmt1": {
       "label": "Schedule 1 row 1 Amount of Income Payment",
@@ -512,19 +1297,23 @@
     },
     "frm1600PT:txtPg2TinC1": {
       "label": "Page 2 header TIN (part 1)",
-      "evidence": "P4: key frm1600PT:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600PT:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1. PR 3 (1600PT manual-3, R3): not drawn again; html-frozen/1600-pt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "frm1600PT:txtPg2TinC2": {
       "label": "Page 2 header TIN (part 2)",
-      "evidence": "P4: key frm1600PT:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600PT:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2. PR 3 (1600PT manual-3, R3): not drawn again; html-frozen/1600-pt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "frm1600PT:txtPg2TinC3": {
       "label": "Page 2 header TIN (part 3)",
-      "evidence": "P4: key frm1600PT:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600PT:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3. PR 3 (1600PT manual-3, R3): not drawn again; html-frozen/1600-pt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "frm1600PT:txtPg2TinC4": {
       "label": "Page 2 header TIN (part 4)",
-      "evidence": "P4: key frm1600PT:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600PT:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4. PR 3 (1600PT manual-3, R3): not drawn again; html-frozen/1600-pt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "frm1600PT:txtPg1Pt4Indiv": {
       "kind": "hidden",
@@ -629,16 +1418,1347 @@
     "frm1600PT:Pg2Sc1SeqNo5": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled at load (rules/forms/1600pt-v2018/fixtures/runtime-control-inventory-v796.json: id frm1600PT:Pg2Sc1SeqNo5, source line 1434) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm1600PT:rdoPg1I2AmendedYes": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I2AmendedYes: '... Yes')."
+    },
+    "frm1600PT:rdoPg1I2AmendedNo": {
+      "label": "No",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I2AmendedNo: '... No')."
+    },
+    "frm1600PT:rdoPg1I3TaxWithheldYes": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I3TaxWithheldYes: '... Yes')."
+    },
+    "frm1600PT:rdoPg1I3TaxWithheldNo": {
+      "label": "No",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I3TaxWithheldNo: '... No')."
+    },
+    "frm1600PT:rdoPg1I12TaxReliefYes": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I12TaxReliefYes: '... Yes')."
+    },
+    "frm1600PT:rdoPg1I12TaxReliefNo": {
+      "label": "No",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I12TaxReliefNo: '... No')."
+    },
+    "frm1600PT:rdoPg1I10CategoryofWthholdAgentPriv": {
+      "label": "Private",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I10CategoryofWthholdAgentPriv: '... Private')."
+    },
+    "frm1600PT:rdoPg1I10CategoryofWthholdAgentGovt": {
+      "label": "Government",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-pt-2018/writer-cells.json xbox_joins frm1600PT:rdoPg1I10CategoryofWthholdAgentGovt: '... Government')."
+    },
+    "frm1600PT:rdoPg1Pt1I6RDO": {
+      "kind": "hidden",
+      "evidence": "PR 3 (1600PT manual-1): html-frozen/1600-pt-2018/writer-cells.json not_joined: 'duplicate of frm1600PT:txtPg1I6RDO (same RDO), which prints in item 6'; form_1600pt.rs writes both from rdo_code, so item 6 shows one box."
+    },
+    "AtcCode1": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 1 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 1'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd1": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate1": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode2": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 2 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 2'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd2": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate2": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode3": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 3 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 3'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd3": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate3": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode4": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 4 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 4'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd4": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate4": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode5": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 5 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 5'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd5": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate5": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode6": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 6 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 6'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd6": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate6": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode7": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 7 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 7'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd7": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate7": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode8": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 8 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 8'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd8": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate8": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode9": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 9 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 9'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd9": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate9": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode10": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 10 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 10'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd10": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate10": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode11": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 11 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 11'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd11": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate11": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode12": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 12 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 12'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd12": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate12": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode13": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 13 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 13'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd13": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate13": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode14": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 14 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 14'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd14": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate14": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode15": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 15 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 15'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd15": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate15": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode16": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 16 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 16'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd16": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate16": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode17": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 17 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 17'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd17": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate17": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode18": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 18 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 18'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd18": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate18": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode19": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 19 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 19'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd19": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate19": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode20": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 20 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 20'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd20": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate20": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode21": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 21 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 21'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd21": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate21": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode22": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 22 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 22'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd22": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate22": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode23": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 23 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 23'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd23": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate23": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode24": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 24 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 24'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd24": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate24": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode25": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 25 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 25'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd25": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate25": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode26": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 26 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 26'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd26": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate26": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode27": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 27 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 27'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd27": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate27": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode28": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 28 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 28'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd28": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate28": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode29": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 29 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 29'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd29": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate29": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode30": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 30 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 30'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd30": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate30": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode31": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 31 (rules/forms/1600pt-v2018/fields.json label 'ATC selector slot 31'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600PT:txtAtcCd31": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600PT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600pt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600PT:txtPg1P2TaxRate31": {
+      "computed": true,
+      "evidence": "PR 3 (1600PT manual-2): the rate is the chosen ATC's (form_1600pt.rs Form1600PtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "frm1600PT:txtLOB": {
+      "label": "Line of Business",
+      "evidence": "PR 3 (R3): html-frozen/1600-pt-2018/writer-cells.json not_joined: 'not on the paper form: this sheet has no line-of-business box'."
+    },
+    "frm1600PT:txtTotalOtherTax": {
+      "label": "Tax withheld on the attached rows (in item 18)",
+      "evidence": "PR 3: html-frozen/1600-pt-2018/writer-cells.json not_joined: 'sum of the Other Selected ATC rows (sixth onward); the sheet has no box for it, Item 18 Total Taxes Withheld includes it'."
+    },
+    "layout": {
+      "evidence": "PR 3: show the printed sheet's parts and item numbers. Structure from html-frozen/1600-pt-2018/index.html (BIR Form 1600-PT January 2018: items 1-4, Part I 5-12A, Part II with the ATC rows 13-17 and items 18-27, and page 2's Schedule 1 – Monthly Alphalist of Payees, five rows and the total) and html-frozen/1600-pt-2018/writer-cells.json joins (which box prints at which item; the sixth ATC onward belongs on an attached sheet). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the month (MM/20YY)",
+              "k": [
+                "frm1600PT:txtPg1I1Month",
+                "frm1600PT:txtPg1I1Year"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1600PT:rdoPg1I2AmendedYes",
+                "frm1600PT:rdoPg1I2AmendedNo"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Any Tax Withheld?",
+              "k": [
+                "frm1600PT:rdoPg1I3TaxWithheldYes",
+                "frm1600PT:rdoPg1I3TaxWithheldNo"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1600PT:txtPg1I4NoOfSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1600PT:txtPg1TIN1",
+                "frm1600PT:txtPg1TIN2",
+                "frm1600PT:txtPg1TIN3",
+                "frm1600PT:txtPg1TIN4"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "RDO Code",
+              "k": [
+                "frm1600PT:txtPg1I6RDO"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individuals OR Registered Name for Non-Individuals)",
+              "k": [
+                "frm1600PT:txtPg1Pt1I7WithholdingAgentsName"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm1600PT:txtPg1Pt1I8RegisteredAddress",
+                "frm1600PT:txtPg1Pt1I8RegisteredAddress2"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1600PT:txPg1I8ZipCode"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "k": [
+                "frm1600PT:txtPg1Pt1I9ContactNumber"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1600PT:rdoPg1I10CategoryofWthholdAgentPriv",
+                "frm1600PT:rdoPg1I10CategoryofWthholdAgentGovt"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Email Address",
+              "k": [
+                "frm1600PT:txtPg1Pt1I11Email"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1600PT:rdoPg1I12TaxReliefYes",
+                "frm1600PT:rdoPg1I12TaxReliefNo"
+              ]
+            },
+            {
+              "no": "12A",
+              "l": "If Yes, specify",
+              "k": [
+                "frm1600PT:txtPg1Pt1I12TaxReliefSpec"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "13",
+              "l": "Items 13 to 17",
+              "grid": {
+                "cols": [
+                  "ATC",
+                  "Tax Base",
+                  "Tax Rate",
+                  "Tax Withheld"
+                ],
+                "keys": [
+                  [
+                    "frm1600PT:txtAtcCd1",
+                    "frm1600PT:txtPg1P2TaxBase1",
+                    "frm1600PT:txtPg1P2TaxRate1",
+                    "frm1600PT:txtPg1P2TaxWithheld1"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd2",
+                    "frm1600PT:txtPg1P2TaxBase2",
+                    "frm1600PT:txtPg1P2TaxRate2",
+                    "frm1600PT:txtPg1P2TaxWithheld2"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd3",
+                    "frm1600PT:txtPg1P2TaxBase3",
+                    "frm1600PT:txtPg1P2TaxRate3",
+                    "frm1600PT:txtPg1P2TaxWithheld3"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd4",
+                    "frm1600PT:txtPg1P2TaxBase4",
+                    "frm1600PT:txtPg1P2TaxRate4",
+                    "frm1600PT:txtPg1P2TaxWithheld4"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd5",
+                    "frm1600PT:txtPg1P2TaxBase5",
+                    "frm1600PT:txtPg1P2TaxRate5",
+                    "frm1600PT:txtPg1P2TaxWithheld5"
+                  ]
+                ],
+                "start": 13
+              }
+            },
+            {
+              "no": "18",
+              "l": "Total Taxes Withheld (Sum of Items 13 to 17)",
+              "k": [
+                "frm1600PT:txtPg1P2I18TotTaxWithheld"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Less: Taxes Remitted in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm1600PT:txtPg1P2I19TaxRemittedInRtrn"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Other Payments Made (attach proof)",
+              "k": [
+                "frm1600PT:txtPg1P2I20OthrPymntsMade"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Total Tax Payments Made (Sum of Items 19 & 20)",
+              "k": [
+                "frm1600PT:txtPg1P2I21TotTaxPymntsMade"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Tax Still Due /(Overremittance) (Item 18 Less Item 21)",
+              "k": [
+                "frm1600PT:txtPg1P2I22TaxStillDueOverremit"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Surcharge",
+              "k": [
+                "frm1600PT:txtPg1P2I23Surcharge"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Interest",
+              "k": [
+                "frm1600PT:txtPg1P2I24Interest"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Compromise",
+              "k": [
+                "frm1600PT:txtPg1P2I25Compromise"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Total Penalties (Sum of Items 23 to 25)",
+              "k": [
+                "frm1600PT:txtPg1P2I26TotPenalties"
+              ]
+            },
+            {
+              "no": "27",
+              "l": "TOTAL AMOUNT STILL DUE /(Overremittance) (Sum of Items 22 and 26)",
+              "k": [
+                "frm1600PT:txtPg1P2I27TotAmtStillDueOverremit"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 1 – Monthly Alphalist of Payees from Whom Taxes were Withheld",
+          "items": [
+            {
+              "no": "",
+              "l": "Seq. No. 1 to 5",
+              "grid": {
+                "cols": [
+                  "TIN",
+                  "Name of Payees",
+                  "ATC",
+                  "Amount of Income Payment",
+                  "Tax Rate",
+                  "Amount of Tax Withheld (5 x 6)"
+                ],
+                "keys": [
+                  [
+                    "frm1600PT:Pg2Sc1TIN1",
+                    "frm1600PT:Pg2Sc1Name1",
+                    "frm1600PT:Pg2Sc1ATC1",
+                    "frm1600PT:Pg2Sc1AmtOfIncPmt1",
+                    "frm1600PT:Pg2Sc1TaxRate1",
+                    "frm1600PT:Pg2Sc1AmtOfTxWthhld1"
+                  ],
+                  [
+                    "frm1600PT:Pg2Sc1TIN2",
+                    "frm1600PT:Pg2Sc1Name2",
+                    "frm1600PT:Pg2Sc1ATC2",
+                    "frm1600PT:Pg2Sc1AmtOfIncPmt2",
+                    "frm1600PT:Pg2Sc1TaxRate2",
+                    "frm1600PT:Pg2Sc1AmtOfTxWthhld2"
+                  ],
+                  [
+                    "frm1600PT:Pg2Sc1TIN3",
+                    "frm1600PT:Pg2Sc1Name3",
+                    "frm1600PT:Pg2Sc1ATC3",
+                    "frm1600PT:Pg2Sc1AmtOfIncPmt3",
+                    "frm1600PT:Pg2Sc1TaxRate3",
+                    "frm1600PT:Pg2Sc1AmtOfTxWthhld3"
+                  ],
+                  [
+                    "frm1600PT:Pg2Sc1TIN4",
+                    "frm1600PT:Pg2Sc1Name4",
+                    "frm1600PT:Pg2Sc1ATC4",
+                    "frm1600PT:Pg2Sc1AmtOfIncPmt4",
+                    "frm1600PT:Pg2Sc1TaxRate4",
+                    "frm1600PT:Pg2Sc1AmtOfTxWthhld4"
+                  ],
+                  [
+                    "frm1600PT:Pg2Sc1TIN5",
+                    "frm1600PT:Pg2Sc1Name5",
+                    "frm1600PT:Pg2Sc1ATC5",
+                    "frm1600PT:Pg2Sc1AmtOfIncPmt5",
+                    "frm1600PT:Pg2Sc1TaxRate5",
+                    "frm1600PT:Pg2Sc1AmtOfTxWthhld5"
+                  ]
+                ],
+                "start": 1
+              }
+            },
+            {
+              "no": "",
+              "l": "Total Taxes Withheld and Remitted",
+              "k": [
+                "frm1600PT:Pg2Sc1TotTxWthhldAndRmtted"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Other Selected ATC rows (attachment; the sheet prints five)",
+          "items": [
+            {
+              "no": "",
+              "l": "Rows 6 onward",
+              "grid": {
+                "cols": [
+                  "ATC",
+                  "Tax Base",
+                  "Tax Rate",
+                  "Tax Withheld"
+                ],
+                "keys": [
+                  [
+                    "frm1600PT:txtAtcCd6",
+                    "frm1600PT:txtPg1P2TaxBase6",
+                    "frm1600PT:txtPg1P2TaxRate6",
+                    "frm1600PT:txtPg1P2TaxWithheld6"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd7",
+                    "frm1600PT:txtPg1P2TaxBase7",
+                    "frm1600PT:txtPg1P2TaxRate7",
+                    "frm1600PT:txtPg1P2TaxWithheld7"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd8",
+                    "frm1600PT:txtPg1P2TaxBase8",
+                    "frm1600PT:txtPg1P2TaxRate8",
+                    "frm1600PT:txtPg1P2TaxWithheld8"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd9",
+                    "frm1600PT:txtPg1P2TaxBase9",
+                    "frm1600PT:txtPg1P2TaxRate9",
+                    "frm1600PT:txtPg1P2TaxWithheld9"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd10",
+                    "frm1600PT:txtPg1P2TaxBase10",
+                    "frm1600PT:txtPg1P2TaxRate10",
+                    "frm1600PT:txtPg1P2TaxWithheld10"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd11",
+                    "frm1600PT:txtPg1P2TaxBase11",
+                    "frm1600PT:txtPg1P2TaxRate11",
+                    "frm1600PT:txtPg1P2TaxWithheld11"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd12",
+                    "frm1600PT:txtPg1P2TaxBase12",
+                    "frm1600PT:txtPg1P2TaxRate12",
+                    "frm1600PT:txtPg1P2TaxWithheld12"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd13",
+                    "frm1600PT:txtPg1P2TaxBase13",
+                    "frm1600PT:txtPg1P2TaxRate13",
+                    "frm1600PT:txtPg1P2TaxWithheld13"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd14",
+                    "frm1600PT:txtPg1P2TaxBase14",
+                    "frm1600PT:txtPg1P2TaxRate14",
+                    "frm1600PT:txtPg1P2TaxWithheld14"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd15",
+                    "frm1600PT:txtPg1P2TaxBase15",
+                    "frm1600PT:txtPg1P2TaxRate15",
+                    "frm1600PT:txtPg1P2TaxWithheld15"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd16",
+                    "frm1600PT:txtPg1P2TaxBase16",
+                    "frm1600PT:txtPg1P2TaxRate16",
+                    "frm1600PT:txtPg1P2TaxWithheld16"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd17",
+                    "frm1600PT:txtPg1P2TaxBase17",
+                    "frm1600PT:txtPg1P2TaxRate17",
+                    "frm1600PT:txtPg1P2TaxWithheld17"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd18",
+                    "frm1600PT:txtPg1P2TaxBase18",
+                    "frm1600PT:txtPg1P2TaxRate18",
+                    "frm1600PT:txtPg1P2TaxWithheld18"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd19",
+                    "frm1600PT:txtPg1P2TaxBase19",
+                    "frm1600PT:txtPg1P2TaxRate19",
+                    "frm1600PT:txtPg1P2TaxWithheld19"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd20",
+                    "frm1600PT:txtPg1P2TaxBase20",
+                    "frm1600PT:txtPg1P2TaxRate20",
+                    "frm1600PT:txtPg1P2TaxWithheld20"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd21",
+                    "frm1600PT:txtPg1P2TaxBase21",
+                    "frm1600PT:txtPg1P2TaxRate21",
+                    "frm1600PT:txtPg1P2TaxWithheld21"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd22",
+                    "frm1600PT:txtPg1P2TaxBase22",
+                    "frm1600PT:txtPg1P2TaxRate22",
+                    "frm1600PT:txtPg1P2TaxWithheld22"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd23",
+                    "frm1600PT:txtPg1P2TaxBase23",
+                    "frm1600PT:txtPg1P2TaxRate23",
+                    "frm1600PT:txtPg1P2TaxWithheld23"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd24",
+                    "frm1600PT:txtPg1P2TaxBase24",
+                    "frm1600PT:txtPg1P2TaxRate24",
+                    "frm1600PT:txtPg1P2TaxWithheld24"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd25",
+                    "frm1600PT:txtPg1P2TaxBase25",
+                    "frm1600PT:txtPg1P2TaxRate25",
+                    "frm1600PT:txtPg1P2TaxWithheld25"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd26",
+                    "frm1600PT:txtPg1P2TaxBase26",
+                    "frm1600PT:txtPg1P2TaxRate26",
+                    "frm1600PT:txtPg1P2TaxWithheld26"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd27",
+                    "frm1600PT:txtPg1P2TaxBase27",
+                    "frm1600PT:txtPg1P2TaxRate27",
+                    "frm1600PT:txtPg1P2TaxWithheld27"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd28",
+                    "frm1600PT:txtPg1P2TaxBase28",
+                    "frm1600PT:txtPg1P2TaxRate28",
+                    "frm1600PT:txtPg1P2TaxWithheld28"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd29",
+                    "frm1600PT:txtPg1P2TaxBase29",
+                    "frm1600PT:txtPg1P2TaxRate29",
+                    "frm1600PT:txtPg1P2TaxWithheld29"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd30",
+                    "frm1600PT:txtPg1P2TaxBase30",
+                    "frm1600PT:txtPg1P2TaxRate30",
+                    "frm1600PT:txtPg1P2TaxWithheld30"
+                  ],
+                  [
+                    "frm1600PT:txtAtcCd31",
+                    "frm1600PT:txtPg1P2TaxBase31",
+                    "frm1600PT:txtPg1P2TaxRate31",
+                    "frm1600PT:txtPg1P2TaxWithheld31"
+                  ]
+                ],
+                "start": 6
+              }
+            },
+            {
+              "no": "",
+              "l": "Tax withheld on the attached rows (in item 18)",
+              "k": [
+                "frm1600PT:txtTotalOtherTax"
+              ]
+            }
+          ]
+        }
+      ],
+      "rest": "Not on the printed sheet"
+    },
+    "item:3:2": {
+      "label": "Line of Business",
+      "evidence": "PR 3: the extracted item that only holds the line of business, which this sheet does not print; under 'Not on the printed sheet' it reads as what it is (the printed item keeps its own caption in the layout)."
     }
   },
   "1600VT": {
     "frm1600VT:txtPg1I1Month": {
-      "kind": "int",
-      "evidence": "binding type whole; fields.json text/string"
+      "kind": "sel",
+      "options": [
+        "01 - January",
+        "02 - February",
+        "03 - March",
+        "04 - April",
+        "05 - May",
+        "06 - June",
+        "07 - July",
+        "08 - August",
+        "09 - September",
+        "10 - October",
+        "11 - November",
+        "12 - December"
+      ],
+      "evidence": "PR 3 (1600VT manual-5): display only. The draft keeps the month (binding /month, a whole number) and the field map writes it as MM; the box shows the month's name ('03 - March', as 0619E and 1601C do) instead of a bare number. html-frozen/1600-vt-2018/writer-cells.json: '1 For the month MM'."
     },
     "frm1600VT:txtPg1I1Year": {
-      "kind": "int",
-      "evidence": "binding type whole; fields.json text/string"
+      "kind": "sel",
+      "options": [
+        {
+          "value": "00",
+          "label": "2000"
+        },
+        {
+          "value": "01",
+          "label": "2001"
+        },
+        {
+          "value": "02",
+          "label": "2002"
+        },
+        {
+          "value": "03",
+          "label": "2003"
+        },
+        {
+          "value": "04",
+          "label": "2004"
+        },
+        {
+          "value": "05",
+          "label": "2005"
+        },
+        {
+          "value": "06",
+          "label": "2006"
+        },
+        {
+          "value": "07",
+          "label": "2007"
+        },
+        {
+          "value": "08",
+          "label": "2008"
+        },
+        {
+          "value": "09",
+          "label": "2009"
+        },
+        {
+          "value": "10",
+          "label": "2010"
+        },
+        {
+          "value": "11",
+          "label": "2011"
+        },
+        {
+          "value": "12",
+          "label": "2012"
+        },
+        {
+          "value": "13",
+          "label": "2013"
+        },
+        {
+          "value": "14",
+          "label": "2014"
+        },
+        {
+          "value": "15",
+          "label": "2015"
+        },
+        {
+          "value": "16",
+          "label": "2016"
+        },
+        {
+          "value": "17",
+          "label": "2017"
+        },
+        {
+          "value": "18",
+          "label": "2018"
+        },
+        {
+          "value": "19",
+          "label": "2019"
+        },
+        {
+          "value": "20",
+          "label": "2020"
+        },
+        {
+          "value": "21",
+          "label": "2021"
+        },
+        {
+          "value": "22",
+          "label": "2022"
+        },
+        {
+          "value": "23",
+          "label": "2023"
+        },
+        {
+          "value": "24",
+          "label": "2024"
+        },
+        {
+          "value": "25",
+          "label": "2025"
+        },
+        {
+          "value": "26",
+          "label": "2026"
+        },
+        {
+          "value": "27",
+          "label": "2027"
+        },
+        {
+          "value": "28",
+          "label": "2028"
+        },
+        {
+          "value": "29",
+          "label": "2029"
+        },
+        {
+          "value": "30",
+          "label": "2030"
+        },
+        {
+          "value": "31",
+          "label": "2031"
+        },
+        {
+          "value": "32",
+          "label": "2032"
+        },
+        {
+          "value": "33",
+          "label": "2033"
+        },
+        {
+          "value": "34",
+          "label": "2034"
+        },
+        {
+          "value": "35",
+          "label": "2035"
+        },
+        {
+          "value": "36",
+          "label": "2036"
+        },
+        {
+          "value": "37",
+          "label": "2037"
+        },
+        {
+          "value": "38",
+          "label": "2038"
+        },
+        {
+          "value": "39",
+          "label": "2039"
+        },
+        {
+          "value": "40",
+          "label": "2040"
+        },
+        {
+          "value": "41",
+          "label": "2041"
+        },
+        {
+          "value": "42",
+          "label": "2042"
+        },
+        {
+          "value": "43",
+          "label": "2043"
+        },
+        {
+          "value": "44",
+          "label": "2044"
+        },
+        {
+          "value": "45",
+          "label": "2045"
+        },
+        {
+          "value": "46",
+          "label": "2046"
+        },
+        {
+          "value": "47",
+          "label": "2047"
+        },
+        {
+          "value": "48",
+          "label": "2048"
+        },
+        {
+          "value": "49",
+          "label": "2049"
+        },
+        {
+          "value": "50",
+          "label": "2050"
+        },
+        {
+          "value": "51",
+          "label": "2051"
+        },
+        {
+          "value": "52",
+          "label": "2052"
+        },
+        {
+          "value": "53",
+          "label": "2053"
+        },
+        {
+          "value": "54",
+          "label": "2054"
+        },
+        {
+          "value": "55",
+          "label": "2055"
+        },
+        {
+          "value": "56",
+          "label": "2056"
+        },
+        {
+          "value": "57",
+          "label": "2057"
+        },
+        {
+          "value": "58",
+          "label": "2058"
+        },
+        {
+          "value": "59",
+          "label": "2059"
+        },
+        {
+          "value": "60",
+          "label": "2060"
+        },
+        {
+          "value": "61",
+          "label": "2061"
+        },
+        {
+          "value": "62",
+          "label": "2062"
+        },
+        {
+          "value": "63",
+          "label": "2063"
+        },
+        {
+          "value": "64",
+          "label": "2064"
+        },
+        {
+          "value": "65",
+          "label": "2065"
+        },
+        {
+          "value": "66",
+          "label": "2066"
+        },
+        {
+          "value": "67",
+          "label": "2067"
+        },
+        {
+          "value": "68",
+          "label": "2068"
+        },
+        {
+          "value": "69",
+          "label": "2069"
+        },
+        {
+          "value": "70",
+          "label": "2070"
+        },
+        {
+          "value": "71",
+          "label": "2071"
+        },
+        {
+          "value": "72",
+          "label": "2072"
+        },
+        {
+          "value": "73",
+          "label": "2073"
+        },
+        {
+          "value": "74",
+          "label": "2074"
+        },
+        {
+          "value": "75",
+          "label": "2075"
+        },
+        {
+          "value": "76",
+          "label": "2076"
+        },
+        {
+          "value": "77",
+          "label": "2077"
+        },
+        {
+          "value": "78",
+          "label": "2078"
+        },
+        {
+          "value": "79",
+          "label": "2079"
+        },
+        {
+          "value": "80",
+          "label": "2080"
+        },
+        {
+          "value": "81",
+          "label": "2081"
+        },
+        {
+          "value": "82",
+          "label": "2082"
+        },
+        {
+          "value": "83",
+          "label": "2083"
+        },
+        {
+          "value": "84",
+          "label": "2084"
+        },
+        {
+          "value": "85",
+          "label": "2085"
+        },
+        {
+          "value": "86",
+          "label": "2086"
+        },
+        {
+          "value": "87",
+          "label": "2087"
+        },
+        {
+          "value": "88",
+          "label": "2088"
+        },
+        {
+          "value": "89",
+          "label": "2089"
+        },
+        {
+          "value": "90",
+          "label": "2090"
+        },
+        {
+          "value": "91",
+          "label": "2091"
+        },
+        {
+          "value": "92",
+          "label": "2092"
+        },
+        {
+          "value": "93",
+          "label": "2093"
+        },
+        {
+          "value": "94",
+          "label": "2094"
+        },
+        {
+          "value": "95",
+          "label": "2095"
+        },
+        {
+          "value": "96",
+          "label": "2096"
+        },
+        {
+          "value": "97",
+          "label": "2097"
+        },
+        {
+          "value": "98",
+          "label": "2098"
+        },
+        {
+          "value": "99",
+          "label": "2099"
+        }
+      ],
+      "evidence": "PR 3 (1600VT manual-5): display only. The sheet prints the year's last two digits ('1 For the month 20YY', html-frozen/1600-vt-2018/writer-cells.json) and the field map writes them (form_1600vt.rs: year % 100); each option keeps that two-digit value and shows the whole year, so '26' reads 2026. Nothing saved changes."
     },
     "frm1600VT:txtPg1I4NoOfSheets": {
       "label": "No. of sheets attached",
@@ -667,7 +2787,8 @@
     },
     "frm1600VT:txtPg2RegisteredName": {
       "label": "Withholding Agent's Name",
-      "evidence": "painted form_1600vt_view.rs (local:name via binding /agent_name): \"Withholding Agent's Name\"; writer-cells printed caption: \"Page 2 Withholding Agent's Name\""
+      "kind": "hidden",
+      "evidence": "painted form_1600vt_view.rs (local:name via binding /agent_name). PR 3 (1600VT manual-3, R3): the page-2 header copy of item 7 (same binding /agent_name), not drawn again; html-frozen/1600-vt-2018/writer-cells.json joins it as 'Page 2 Withholding Agent's Name', which prints from the draft."
     },
     "frm1600VT:Pg2Sc1AmtOfIncPmt1": {
       "label": "Schedule 1 row 1 Amount of Income Payment",
@@ -731,19 +2852,23 @@
     },
     "frm1600VT:txtPg2TinC1": {
       "label": "Page 2 header TIN (part 1)",
-      "evidence": "P4: key frm1600VT:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600VT:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1. PR 3 (1600VT manual-3, R3): not drawn again; html-frozen/1600-vt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "frm1600VT:txtPg2TinC2": {
       "label": "Page 2 header TIN (part 2)",
-      "evidence": "P4: key frm1600VT:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600VT:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2. PR 3 (1600VT manual-3, R3): not drawn again; html-frozen/1600-vt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "frm1600VT:txtPg2TinC3": {
       "label": "Page 2 header TIN (part 3)",
-      "evidence": "P4: key frm1600VT:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600VT:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3. PR 3 (1600VT manual-3, R3): not drawn again; html-frozen/1600-vt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "frm1600VT:txtPg2TinC4": {
       "label": "Page 2 header TIN (part 4)",
-      "evidence": "P4: key frm1600VT:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4"
+      "kind": "hidden",
+      "evidence": "P4: key frm1600VT:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4. PR 3 (1600VT manual-3, R3): not drawn again; html-frozen/1600-vt-2018/writer-cells.json not_joined: 'page 2 TIN is one 14-slot comb (p2c5); it prints from derived:tin_digits'."
     },
     "BranchMask": {
       "kind": "hidden",
@@ -860,6 +2985,593 @@
     "AtcCode13": {
       "kind": "hidden",
       "evidence": "Item 3: rules/forms/1600vt-v2018/fields.json 'ATC selector slot 13 - Exists only in maximum ATC union': a popup checkbox for an ATC this return's popup does not list; hidden."
+    },
+    "frm1600VT:rdoPg1I2AmendedYes": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I2AmendedYes: '... Yes')."
+    },
+    "frm1600VT:rdoPg1I2AmendedNo": {
+      "label": "No",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I2AmendedNo: '... No')."
+    },
+    "frm1600VT:rdoPg1I3TaxWithheldYes": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I3TaxWithheldYes: '... Yes')."
+    },
+    "frm1600VT:rdoPg1I3TaxWithheldNo": {
+      "label": "No",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I3TaxWithheldNo: '... No')."
+    },
+    "frm1600VT:rdoPg1I12TaxReliefYes": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I12TaxReliefYes: '... Yes')."
+    },
+    "frm1600VT:rdoPg1I12TaxReliefNo": {
+      "label": "No",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I12TaxReliefNo: '... No')."
+    },
+    "frm1600VT:rdoPg1I10CategoryofWthholdAgentPriv": {
+      "label": "Private",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I10CategoryofWthholdAgentPriv: '... Private')."
+    },
+    "frm1600VT:rdoPg1I10CategoryofWthholdAgentGovt": {
+      "label": "Government",
+      "evidence": "PR 3 (R3): the printed option (html-frozen/1600-vt-2018/writer-cells.json xbox_joins frm1600VT:rdoPg1I10CategoryofWthholdAgentGovt: '... Government')."
+    },
+    "frm1600VT:rdoPg1Pt1I6RDO": {
+      "kind": "hidden",
+      "evidence": "PR 3 (1600VT manual-1): html-frozen/1600-vt-2018/writer-cells.json not_joined: 'duplicate of frm1600VT:txtPg1I6RDO (same RDO), which prints in item 6'; form_1600vt.rs writes both from rdo_code, so item 6 shows one box."
+    },
+    "AtcCode1": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 1 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 1'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd1": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate1": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode2": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 2 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 2'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd2": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate2": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode3": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 3 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 3'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd3": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate3": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode4": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 4 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 4'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd4": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate4": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode5": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 5 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 5'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd5": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate5": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode6": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 6 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 6'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd6": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate6": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode7": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 7 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 7'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd7": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate7": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode8": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 8 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 8'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd8": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate8": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode9": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 9 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 9'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd9": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate9": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode10": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 10 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 10'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd10": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate10": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode11": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 11 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 11'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd11": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate11": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "AtcCode12": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3): the official ATC popup's tick box for slot 12 (rules/forms/1600vt-v2018/fields.json label 'ATC selector slot 12'); the page chooses a Part II row's ATC in the row itself (rows_monthly.rs), so the popup slots are not drawn."
+    },
+    "frm1600VT:txtAtcCd12": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate12": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "frm1600VT:txtAtcCd13": {
+      "kind": "sel",
+      "evidence": "PR 3 (1600VT manual-2): a Part II row's ATC is chosen from the category's popup (form_1600vt.rs toggle_atc, popup order), which the host writes (rows_monthly.rs); the rate follows the ATC."
+    },
+    "frm1600VT:txtPg1P2TaxRate13": {
+      "computed": true,
+      "evidence": "PR 3 (1600VT manual-2): the rate is the chosen ATC's (form_1600vt.rs Form1600VtAtcRow rate_text, copied by toggle_atc); the host refuses a typed one (rows_monthly.rs)."
+    },
+    "frm1600VT:txtLOB": {
+      "label": "Line of Business",
+      "evidence": "PR 3 (R3): html-frozen/1600-vt-2018/writer-cells.json not_joined: 'not on the paper form: this sheet has no line-of-business box'."
+    },
+    "frm1600VT:txtTotalOtherTax": {
+      "label": "Tax withheld on the attached rows (in item 18)",
+      "evidence": "PR 3: html-frozen/1600-vt-2018/writer-cells.json not_joined: 'sum of the Other Selected ATC rows (sixth onward); the sheet has no box for it, Item 18 Total Taxes Withheld includes it'."
+    },
+    "layout": {
+      "evidence": "PR 3: show the printed sheet's parts and item numbers. Structure from html-frozen/1600-vt-2018/index.html (BIR Form 1600-VT January 2018: items 1-4, Part I 5-12A, Part II with the ATC rows 13-17 and items 18-27, and page 2's Schedule 1 – Monthly Alphalist of Payees, five rows and the total) and html-frozen/1600-vt-2018/writer-cells.json joins (which box prints at which item; the sixth ATC onward belongs on an attached sheet). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the month (MM/20YY)",
+              "k": [
+                "frm1600VT:txtPg1I1Month",
+                "frm1600VT:txtPg1I1Year"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1600VT:rdoPg1I2AmendedYes",
+                "frm1600VT:rdoPg1I2AmendedNo"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Any Tax Withheld?",
+              "k": [
+                "frm1600VT:rdoPg1I3TaxWithheldYes",
+                "frm1600VT:rdoPg1I3TaxWithheldNo"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1600VT:txtPg1I4NoOfSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1600VT:txtPg1TIN1",
+                "frm1600VT:txtPg1TIN2",
+                "frm1600VT:txtPg1TIN3",
+                "frm1600VT:txtPg1TIN4"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "RDO Code",
+              "k": [
+                "frm1600VT:txtPg1I6RDO"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individuals OR Registered Name for Non-Individuals)",
+              "k": [
+                "frm1600VT:txtPg1Pt1I7WithholdingAgentsName"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm1600VT:txtPg1Pt1I8RegisteredAddress",
+                "frm1600VT:txtPg1Pt1I8RegisteredAddress2"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1600VT:txPg1I8ZipCode"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "k": [
+                "frm1600VT:txtPg1Pt1I9ContactNumber"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1600VT:rdoPg1I10CategoryofWthholdAgentPriv",
+                "frm1600VT:rdoPg1I10CategoryofWthholdAgentGovt"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Email Address",
+              "k": [
+                "frm1600VT:txtPg1Pt1I11Email"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1600VT:rdoPg1I12TaxReliefYes",
+                "frm1600VT:rdoPg1I12TaxReliefNo"
+              ]
+            },
+            {
+              "no": "12A",
+              "l": "If Yes, specify",
+              "k": [
+                "frm1600VT:txtPg1Pt1I12TaxReliefSpec"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "13",
+              "l": "Items 13 to 17",
+              "grid": {
+                "cols": [
+                  "ATC",
+                  "Tax Base",
+                  "Tax Rate",
+                  "Tax Withheld"
+                ],
+                "keys": [
+                  [
+                    "frm1600VT:txtAtcCd1",
+                    "frm1600VT:txtPg1P2TaxBase1",
+                    "frm1600VT:txtPg1P2TaxRate1",
+                    "frm1600VT:txtPg1P2TaxWithheld1"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd2",
+                    "frm1600VT:txtPg1P2TaxBase2",
+                    "frm1600VT:txtPg1P2TaxRate2",
+                    "frm1600VT:txtPg1P2TaxWithheld2"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd3",
+                    "frm1600VT:txtPg1P2TaxBase3",
+                    "frm1600VT:txtPg1P2TaxRate3",
+                    "frm1600VT:txtPg1P2TaxWithheld3"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd4",
+                    "frm1600VT:txtPg1P2TaxBase4",
+                    "frm1600VT:txtPg1P2TaxRate4",
+                    "frm1600VT:txtPg1P2TaxWithheld4"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd5",
+                    "frm1600VT:txtPg1P2TaxBase5",
+                    "frm1600VT:txtPg1P2TaxRate5",
+                    "frm1600VT:txtPg1P2TaxWithheld5"
+                  ]
+                ],
+                "start": 13
+              }
+            },
+            {
+              "no": "18",
+              "l": "Total Taxes Withheld (Sum of Items 13 to 17)",
+              "k": [
+                "frm1600VT:txtPg1P2I18TotTaxWithheld"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Less: Taxes Remitted in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm1600VT:txtPg1P2I19TaxRemittedInRtrn"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Other Payments Made (attach proof)",
+              "k": [
+                "frm1600VT:txtPg1P2I20OthrPymntsMade"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Total Tax Payments Made (Sum of Items 19 & 20)",
+              "k": [
+                "frm1600VT:txtPg1P2I21TotTaxPymntsMade"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Tax Still Due /(Overremittance) (Item 18 Less Item 21)",
+              "k": [
+                "frm1600VT:txtPg1P2I22TaxStillDueOverremit"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Surcharge",
+              "k": [
+                "frm1600VT:txtPg1P2I23Surcharge"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Interest",
+              "k": [
+                "frm1600VT:txtPg1P2I24Interest"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Compromise",
+              "k": [
+                "frm1600VT:txtPg1P2I25Compromise"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Total Penalties (Sum of Items 23 to 25)",
+              "k": [
+                "frm1600VT:txtPg1P2I26TotPenalties"
+              ]
+            },
+            {
+              "no": "27",
+              "l": "TOTAL AMOUNT STILL DUE /(Overremittance) (Sum of Items 22 and 26)",
+              "k": [
+                "frm1600VT:txtPg1P2I27TotAmtStillDueOverremit"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 1 – Monthly Alphalist of Payees from Whom Taxes were Withheld",
+          "items": [
+            {
+              "no": "",
+              "l": "Seq. No. 1 to 5",
+              "grid": {
+                "cols": [
+                  "TIN",
+                  "Name of Payees",
+                  "ATC",
+                  "Amount of Income Payment",
+                  "Tax Rate",
+                  "Amount of Tax Withheld (5 x 6)"
+                ],
+                "keys": [
+                  [
+                    "frm1600VT:Pg2Sc1TIN1",
+                    "frm1600VT:Pg2Sc1Name1",
+                    "frm1600VT:Pg2Sc1ATC1",
+                    "frm1600VT:Pg2Sc1AmtOfIncPmt1",
+                    "frm1600VT:Pg2Sc1TaxRate1",
+                    "frm1600VT:Pg2Sc1AmtOfTxWthhld1"
+                  ],
+                  [
+                    "frm1600VT:Pg2Sc1TIN2",
+                    "frm1600VT:Pg2Sc1Name2",
+                    "frm1600VT:Pg2Sc1ATC2",
+                    "frm1600VT:Pg2Sc1AmtOfIncPmt2",
+                    "frm1600VT:Pg2Sc1TaxRate2",
+                    "frm1600VT:Pg2Sc1AmtOfTxWthhld2"
+                  ],
+                  [
+                    "frm1600VT:Pg2Sc1TIN3",
+                    "frm1600VT:Pg2Sc1Name3",
+                    "frm1600VT:Pg2Sc1ATC3",
+                    "frm1600VT:Pg2Sc1AmtOfIncPmt3",
+                    "frm1600VT:Pg2Sc1TaxRate3",
+                    "frm1600VT:Pg2Sc1AmtOfTxWthhld3"
+                  ],
+                  [
+                    "frm1600VT:Pg2Sc1TIN4",
+                    "frm1600VT:Pg2Sc1Name4",
+                    "frm1600VT:Pg2Sc1ATC4",
+                    "frm1600VT:Pg2Sc1AmtOfIncPmt4",
+                    "frm1600VT:Pg2Sc1TaxRate4",
+                    "frm1600VT:Pg2Sc1AmtOfTxWthhld4"
+                  ],
+                  [
+                    "frm1600VT:Pg2Sc1TIN5",
+                    "frm1600VT:Pg2Sc1Name5",
+                    "frm1600VT:Pg2Sc1ATC5",
+                    "frm1600VT:Pg2Sc1AmtOfIncPmt5",
+                    "frm1600VT:Pg2Sc1TaxRate5",
+                    "frm1600VT:Pg2Sc1AmtOfTxWthhld5"
+                  ]
+                ],
+                "start": 1
+              }
+            },
+            {
+              "no": "",
+              "l": "Total Taxes Withheld and Remitted",
+              "k": [
+                "frm1600VT:Pg2Sc1TotTxWthhldAndRmtted"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Other Selected ATC rows (attachment; the sheet prints five)",
+          "items": [
+            {
+              "no": "",
+              "l": "Rows 6 onward",
+              "grid": {
+                "cols": [
+                  "ATC",
+                  "Tax Base",
+                  "Tax Rate",
+                  "Tax Withheld"
+                ],
+                "keys": [
+                  [
+                    "frm1600VT:txtAtcCd6",
+                    "frm1600VT:txtPg1P2TaxBase6",
+                    "frm1600VT:txtPg1P2TaxRate6",
+                    "frm1600VT:txtPg1P2TaxWithheld6"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd7",
+                    "frm1600VT:txtPg1P2TaxBase7",
+                    "frm1600VT:txtPg1P2TaxRate7",
+                    "frm1600VT:txtPg1P2TaxWithheld7"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd8",
+                    "frm1600VT:txtPg1P2TaxBase8",
+                    "frm1600VT:txtPg1P2TaxRate8",
+                    "frm1600VT:txtPg1P2TaxWithheld8"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd9",
+                    "frm1600VT:txtPg1P2TaxBase9",
+                    "frm1600VT:txtPg1P2TaxRate9",
+                    "frm1600VT:txtPg1P2TaxWithheld9"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd10",
+                    "frm1600VT:txtPg1P2TaxBase10",
+                    "frm1600VT:txtPg1P2TaxRate10",
+                    "frm1600VT:txtPg1P2TaxWithheld10"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd11",
+                    "frm1600VT:txtPg1P2TaxBase11",
+                    "frm1600VT:txtPg1P2TaxRate11",
+                    "frm1600VT:txtPg1P2TaxWithheld11"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd12",
+                    "frm1600VT:txtPg1P2TaxBase12",
+                    "frm1600VT:txtPg1P2TaxRate12",
+                    "frm1600VT:txtPg1P2TaxWithheld12"
+                  ],
+                  [
+                    "frm1600VT:txtAtcCd13",
+                    "frm1600VT:txtPg1P2TaxBase13",
+                    "frm1600VT:txtPg1P2TaxRate13",
+                    "frm1600VT:txtPg1P2TaxWithheld13"
+                  ]
+                ],
+                "start": 6
+              }
+            },
+            {
+              "no": "",
+              "l": "Tax withheld on the attached rows (in item 18)",
+              "k": [
+                "frm1600VT:txtTotalOtherTax"
+              ]
+            }
+          ]
+        }
+      ],
+      "rest": "Not on the printed sheet"
+    },
+    "item:3:2": {
+      "label": "Line of Business",
+      "evidence": "PR 3: the extracted item that only holds the line of business, which this sheet does not print; under 'Not on the printed sheet' it reads as what it is (the printed item keeps its own caption in the layout)."
     }
   },
   "1600WP": {
@@ -1168,8 +3880,8 @@
       "evidence": "P4: same column as frm1600WP:dtSched:taxWithheld1 (writer-cells row 1 caption 'Tax Required to be Withheld'); continuation row 10"
     },
     "frm1600WP:dtSched:TotaltaxWithheld": {
-      "label": "Schedule 1.1 Total Tax Required to be Withheld",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1600WP.hta caption 'Total' under the tax-withheld column"
+      "label": "Total Tax Required to be Withheld",
+      "evidence": "PR 3 (1600WP manual-0): the attachment's TOTAL row (html-frozen/1600wp-2010/index.html 'TOTAL P P'); writer-cells.json not_joined: 'the 2010 sheet has no Schedule 1.1 total box; Part II items 14-16 carry the totals'."
     },
     "frm1600WP:txtTax12": {
       "label": "12 Tax Required to be Withheld and Remitted",
@@ -1242,6 +3954,327 @@
     "frm1600WP:SpecialLawSelect": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled at load (rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json: id frm1600WP:SpecialLawSelect, source line 833) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm1600WP:CategoryAgent_P": {
+      "label": "Private",
+      "evidence": "PR 3 (R3.1, 1600WP manual-3): the printed option (html-frozen/1600wp-2010/writer-cells.json xbox_joins frm1600WP:CategoryAgent_P: '7 Category Private')."
+    },
+    "frm1600WP:CategoryAgent_G": {
+      "label": "Government",
+      "evidence": "PR 3 (R3.1, 1600WP manual-3): the printed option (html-frozen/1600wp-2010/writer-cells.json xbox_joins frm1600WP:CategoryAgent_G: '7 Category Government')."
+    },
+    "AtcCd1": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3.0, R3.1): AtcCd1 is a slot of the official ATC popup (rules/forms/1600wp-v2010/fields.json label 'AtcCd1'), not a box on the paper form; Part II's ATC is chosen in its row (catalogs.rs atc_1600wp_row, toggle_atc), so the slot is not drawn."
+    },
+    "AtcCd2": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3.0, R3.1): AtcCd2 is a slot of the official ATC popup (rules/forms/1600wp-v2010/fields.json label 'AtcCd2'), not a box on the paper form; Part II's ATC is chosen in its row (catalogs.rs atc_1600wp_row, toggle_atc), so the slot is not drawn."
+    },
+    "SchedIIAtcCde1": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3.0, R3.1): SchedIIAtcCde1 is a slot of the official ATC popup (rules/forms/1600wp-v2010/fields.json label 'SchedIIAtcCde1'), not a box on the paper form; Part II's ATC is chosen in its row (catalogs.rs atc_1600wp_row, toggle_atc), so the slot is not drawn."
+    },
+    "SchedIIAtcCde2": {
+      "kind": "hidden",
+      "evidence": "PR 3 (R3.0, R3.1): SchedIIAtcCde2 is a slot of the official ATC popup (rules/forms/1600wp-v2010/fields.json label 'SchedIIAtcCde2'), not a box on the paper form; Part II's ATC is chosen in its row (catalogs.rs atc_1600wp_row, toggle_atc), so the slot is not drawn."
+    },
+    "txtEmail": {
+      "label": "Email Address",
+      "evidence": "PR 3 (R3): html-frozen/1600wp-2010/writer-cells.json not_joined: 'not on the paper form: the 2010 sheet has no email box'; the layout leaves it in 'Not on the printed sheet'."
+    },
+    "layout": {
+      "evidence": "PR 3: show the printed sheet's parts and item numbers. Structure from html-frozen/1600wp-2010/index.html (BIR Form 1600-WP January 2010: items 1-4, Part I 5-11, Part II's ATC table and items 12-16, and the attachment's Schedule 1.1 alphabetical list) and html-frozen/1600wp-2010/writer-cells.json joins. Item 11 has no box in the official program (SpecialLaw_1/2 and SpecialLawSelect disabled at load, rules/forms/1600wp-v2010/fixtures/runtime-control-inventory-v796.json), so it shows its printed caption with a note. Schedule 1.1 prints six rows; rows 7-10 go on an attached sheet (writer-cells not_joined). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Period – From (MM/DD/YYYY)",
+              "k": [
+                "frm1600WP:DateWithholdingMonth",
+                "frm1600WP:DateWithholdingDay",
+                "frm1600WP:DateWithholdingYear"
+              ]
+            },
+            {
+              "no": "1",
+              "l": "For the Period – To (MM/DD/YYYY)",
+              "k": [
+                "frm1600WP:DateWithholdingToMonth",
+                "frm1600WP:DateWithholdingToDay",
+                "frm1600WP:DateWithholdingToYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1600WP:AmendedReturn_1",
+                "frm1600WP:AmendedReturn_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "No. of Sheet/s Attached",
+              "k": [
+                "frm1600WP:txtSheets"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Any Taxes Withheld?",
+              "k": [
+                "frm1600WP:AnyTaxHeld_1",
+                "frm1600WP:AnyTaxHeld_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "TIN",
+              "k": [
+                "frm1600WP:txtTIN1",
+                "frm1600WP:txtTIN2",
+                "frm1600WP:txtTIN3",
+                "frm1600WP:txtBranchCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "RDO Code",
+              "k": [
+                "frm1600WP:txtRDOCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1600WP:CategoryAgent_P",
+                "frm1600WP:CategoryAgent_G"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individuals)/(Registered Name for Non-Individuals)",
+              "k": [
+                "frm1600WP:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address",
+              "k": [
+                "frm1600WP:txtAddress"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Zip Code",
+              "k": [
+                "frm1600WP:txtZipCode"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Are there payees availing of tax relief under Special Law or International Tax Treaty? (Yes/No; if yes, specify)",
+              "p": 1,
+              "note": "eBIRForms keeps this item disabled with No ticked, so this page has nothing to fill here."
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "table": "frm1600WP:txtAtcCode1"
+            },
+            {
+              "no": "12",
+              "l": "Tax Required to be Withheld and Remitted",
+              "k": [
+                "frm1600WP:txtTax12"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Less: Tax Remitted in Return Previously Filed, if this is an amended return",
+              "k": [
+                "frm1600WP:txtTax13"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Tax Still Due/(Overremittance)",
+              "k": [
+                "frm1600WP:txtTax14"
+              ]
+            },
+            {
+              "no": "15A",
+              "l": "Surcharge",
+              "k": [
+                "frm1600WP:txtTax15A"
+              ]
+            },
+            {
+              "no": "15B",
+              "l": "Interest",
+              "k": [
+                "frm1600WP:txtTax15B"
+              ]
+            },
+            {
+              "no": "15C",
+              "l": "Compromise",
+              "k": [
+                "frm1600WP:txtTax15C"
+              ]
+            },
+            {
+              "no": "15D",
+              "l": "Total Penalties",
+              "k": [
+                "frm1600WP:txtTax15D"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Total Amount Still Due / (Overremittance) (Sum of Items 14 & 15D)",
+              "k": [
+                "frm1600WP:txtTax16"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 1.1 – Alphabetical List of Payees from Whom Taxes Were Withheld",
+          "items": [
+            {
+              "no": "",
+              "l": "Seq. No. 1 to 10 (the attachment prints six rows; attach another sheet for rows 7 to 10)",
+              "grid": {
+                "cols": [
+                  "TIN (Including Branch Code)",
+                  "Individual/Corporation",
+                  "ATC",
+                  "Nature of Payment",
+                  "Amount",
+                  "Tax Rate",
+                  "Tax Required to be Withheld"
+                ],
+                "keys": [
+                  [
+                    "frm1600WP:dtSched:txtTin1",
+                    "frm1600WP:dtSched:txtFullname1",
+                    "frm1600WP:dtSched:drpAtcCode1",
+                    "frm1600WP:dtSched:naturePayment1",
+                    "frm1600WP:dtSched:amount1",
+                    "frm1600WP:dtSched:txtRatePercent1",
+                    "frm1600WP:dtSched:taxWithheld1"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin2",
+                    "frm1600WP:dtSched:txtFullname2",
+                    "frm1600WP:dtSched:drpAtcCode2",
+                    "frm1600WP:dtSched:naturePayment2",
+                    "frm1600WP:dtSched:amount2",
+                    "frm1600WP:dtSched:txtRatePercent2",
+                    "frm1600WP:dtSched:taxWithheld2"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin3",
+                    "frm1600WP:dtSched:txtFullname3",
+                    "frm1600WP:dtSched:drpAtcCode3",
+                    "frm1600WP:dtSched:naturePayment3",
+                    "frm1600WP:dtSched:amount3",
+                    "frm1600WP:dtSched:txtRatePercent3",
+                    "frm1600WP:dtSched:taxWithheld3"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin4",
+                    "frm1600WP:dtSched:txtFullname4",
+                    "frm1600WP:dtSched:drpAtcCode4",
+                    "frm1600WP:dtSched:naturePayment4",
+                    "frm1600WP:dtSched:amount4",
+                    "frm1600WP:dtSched:txtRatePercent4",
+                    "frm1600WP:dtSched:taxWithheld4"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin5",
+                    "frm1600WP:dtSched:txtFullname5",
+                    "frm1600WP:dtSched:drpAtcCode5",
+                    "frm1600WP:dtSched:naturePayment5",
+                    "frm1600WP:dtSched:amount5",
+                    "frm1600WP:dtSched:txtRatePercent5",
+                    "frm1600WP:dtSched:taxWithheld5"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin6",
+                    "frm1600WP:dtSched:txtFullname6",
+                    "frm1600WP:dtSched:drpAtcCode6",
+                    "frm1600WP:dtSched:naturePayment6",
+                    "frm1600WP:dtSched:amount6",
+                    "frm1600WP:dtSched:txtRatePercent6",
+                    "frm1600WP:dtSched:taxWithheld6"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin7",
+                    "frm1600WP:dtSched:txtFullname7",
+                    "frm1600WP:dtSched:drpAtcCode7",
+                    "frm1600WP:dtSched:naturePayment7",
+                    "frm1600WP:dtSched:amount7",
+                    "frm1600WP:dtSched:txtRatePercent7",
+                    "frm1600WP:dtSched:taxWithheld7"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin8",
+                    "frm1600WP:dtSched:txtFullname8",
+                    "frm1600WP:dtSched:drpAtcCode8",
+                    "frm1600WP:dtSched:naturePayment8",
+                    "frm1600WP:dtSched:amount8",
+                    "frm1600WP:dtSched:txtRatePercent8",
+                    "frm1600WP:dtSched:taxWithheld8"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin9",
+                    "frm1600WP:dtSched:txtFullname9",
+                    "frm1600WP:dtSched:drpAtcCode9",
+                    "frm1600WP:dtSched:naturePayment9",
+                    "frm1600WP:dtSched:amount9",
+                    "frm1600WP:dtSched:txtRatePercent9",
+                    "frm1600WP:dtSched:taxWithheld9"
+                  ],
+                  [
+                    "frm1600WP:dtSched:txtTin10",
+                    "frm1600WP:dtSched:txtFullname10",
+                    "frm1600WP:dtSched:drpAtcCode10",
+                    "frm1600WP:dtSched:naturePayment10",
+                    "frm1600WP:dtSched:amount10",
+                    "frm1600WP:dtSched:txtRatePercent10",
+                    "frm1600WP:dtSched:taxWithheld10"
+                  ]
+                ],
+                "start": 1
+              }
+            },
+            {
+              "no": "",
+              "l": "Total Tax Required to be Withheld",
+              "k": [
+                "frm1600WP:dtSched:TotaltaxWithheld"
+              ]
+            }
+          ]
+        }
+      ],
+      "rest": "Not on the printed sheet"
     }
   },
   "1601C": {
@@ -1336,6 +4369,303 @@
     "frm1601c:sched1:txtTotal1": {
       "label": "Total Adjustment",
       "evidence": "N04: official ebirforms-mirror/forms/BIR-Form1601Cv2018.hta caption 'Total Adjustment (Sum of Items 1 to 3) (To Part II, Item 26)'."
+    },
+    "txtTaxAgentNo": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id txtTaxAgentNo, source line 1042, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "txtDateIssue": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id txtDateIssue, source line 1055, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "txtDateExpiry": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id txtDateExpiry, source line 1068, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtAgency37": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtAgency37, source line 1110, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtNumber37": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtNumber37, source line 1111, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtDate37": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtDate37, source line 1112, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtAmount37": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtAmount37, source line 1113, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtAgency38": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtAgency38, source line 1117, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtNumber38": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtNumber38, source line 1118, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtDate38": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtDate38, source line 1119, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtAmount38": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtAmount38, source line 1120, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtNumber39": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtNumber39, source line 1124, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtDate39": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtDate39, source line 1125, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtAmount39": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtAmount39, source line 1126, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtParticular40": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtParticular40, source line 1132, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtAgency40": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtAgency40, source line 1133, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtNumber40": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtNumber40, source line 1134, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtDate40": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtDate40, source line 1135, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtAmount40": {
+      "kind": "hidden",
+      "evidence": "PR 3: the official control is disabled at load (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtAmount40, source line 1136, disabled true) and this app's field map writes it blank whatever the draft holds (agent form: 'written by the app without a draft field (a constant or the period)'), so it is never a box the filer fills; the layout shows its printed item with a note instead."
+    },
+    "frm1601c:txtPg2TIN1": {
+      "kind": "hidden",
+      "evidence": "PR 3 (rule 3): the page-2 header copy of items 6 and 8 (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtPg2TIN1, source line 1200, disabled true); html-frozen/1601c-2018/writer-cells.json prints the page-2 TIN from derived:tin_digits and the name from this key, both written from the draft's TIN and name, so the print keeps them."
+    },
+    "frm1601c:txtPg2TIN2": {
+      "kind": "hidden",
+      "evidence": "PR 3 (rule 3): the page-2 header copy of items 6 and 8 (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtPg2TIN2, source line 1201, disabled true); html-frozen/1601c-2018/writer-cells.json prints the page-2 TIN from derived:tin_digits and the name from this key, both written from the draft's TIN and name, so the print keeps them."
+    },
+    "frm1601c:txtPg2TIN3": {
+      "kind": "hidden",
+      "evidence": "PR 3 (rule 3): the page-2 header copy of items 6 and 8 (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtPg2TIN3, source line 1202, disabled true); html-frozen/1601c-2018/writer-cells.json prints the page-2 TIN from derived:tin_digits and the name from this key, both written from the draft's TIN and name, so the print keeps them."
+    },
+    "frm1601c:txtPg2BranchCode": {
+      "kind": "hidden",
+      "evidence": "PR 3 (rule 3): the page-2 header copy of items 6 and 8 (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtPg2BranchCode, source line 1203, disabled true); html-frozen/1601c-2018/writer-cells.json prints the page-2 TIN from derived:tin_digits and the name from this key, both written from the draft's TIN and name, so the print keeps them."
+    },
+    "frm1601c:txtPg2TaxpayerName": {
+      "kind": "hidden",
+      "evidence": "PR 3 (rule 3): the page-2 header copy of items 6 and 8 (rules/forms/1601c-v2018/fixtures/runtime-control-inventory-v796.json: id frm1601c:txtPg2TaxpayerName, source line 1206, disabled true); html-frozen/1601c-2018/writer-cells.json prints the page-2 TIN from derived:tin_digits and the name from this key, both written from the draft's TIN and name, so the print keeps them."
+    },
+    "frm1601c:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "PR 3 (1601C manual-0): page counter of the eBIRForms page ('Current form page'), not a box on the paper form (html-frozen/1601c-2018/writer-cells.json not_joined: 'page counter of the eBIRForms page, not a box on the paper form')."
+    },
+    "frm1601c:txtMaxPage": {
+      "kind": "hidden",
+      "evidence": "PR 3 (1601C manual-0): page counter of the eBIRForms page ('Maximum form page'), not a box on the paper form (html-frozen/1601c-2018/writer-cells.json not_joined: 'page counter of the eBIRForms page, not a box on the paper form')."
+    },
+    "frm1601c:TaxWithheld_1": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3.0): the printed option under its item (html-frozen/1601c-2018/writer-cells.json xbox_joins frm1601c:TaxWithheld_1: '... Yes')."
+    },
+    "frm1601c:TaxWithheld_2": {
+      "label": "No",
+      "evidence": "PR 3 (R3.0): the printed option under its item (html-frozen/1601c-2018/writer-cells.json xbox_joins frm1601c:TaxWithheld_2: '... No')."
+    },
+    "frm1601c:SpecialTax_1": {
+      "label": "Yes",
+      "evidence": "PR 3 (R3.0): the printed option under its item (html-frozen/1601c-2018/writer-cells.json xbox_joins frm1601c:SpecialTax_1: '... Yes')."
+    },
+    "frm1601c:SpecialTax_2": {
+      "label": "No",
+      "evidence": "PR 3 (R3.0): the printed option under its item (html-frozen/1601c-2018/writer-cells.json xbox_joins frm1601c:SpecialTax_2: '... No')."
+    },
+    "frm1601c:CatAgent_P": {
+      "label": "Private",
+      "evidence": "PR 3 (R3.0): the printed option (html-frozen/1601c-2018/writer-cells.json xbox_joins frm1601c:CatAgent_P: '11 Category of Withholding Agent Private')."
+    },
+    "frm1601c:CatAgent_G": {
+      "label": "Government",
+      "evidence": "PR 3 (R3.0): the printed option (html-frozen/1601c-2018/writer-cells.json xbox_joins frm1601c:CatAgent_G: '11 Category of Withholding Agent Government')."
+    },
+    "frm1601c:selTreaty": {
+      "label": "If yes, specify",
+      "options": [
+        {
+          "value": "Special Rate",
+          "label": "Special Rate"
+        },
+        {
+          "value": "International Tax Treaty",
+          "label": "International Tax Treaty"
+        },
+        {
+          "value": "Both",
+          "label": "Both"
+        }
+      ],
+      "evidence": "PR 3 (1601C manual-3): the draft keeps the relief's name (form_1601c.rs tax_relief_specification, checked by official_tax_relief_code), so each option's value is its name; the official blank code 0 (writer-cells not_joined: 'dropdown code (0 = none)') is no choice, so the page shows Choose... for it instead of a raw 0. Printed caption '13A If yes, specify' (writer-cells joins derived:line:tax_relief_specify)."
+    },
+    "frm1601c:txtLineBus": {
+      "label": "Line of Business",
+      "evidence": "PR 3 (1601C manual-2): html-frozen/1601c-2018/writer-cells.json not_joined: 'not on the paper form: the 1601-C (2018) sheet has no line-of-business box'; the layout leaves it in 'Not on the printed sheet'."
+    },
+    "layout": {
+      "evidence": "PR 3: show the printed sheet's parts and item numbers. Structure from html-frozen/1601c-2018/index.html (BIR Form 1601-C January 2018: items 1-5, Part I 6-13A, Part II 14-36, the tax agent line, Part III 37-40, and page 2's Part IV Schedule I with its item 4 total) and html-frozen/1601c-2018/writer-cells.json joins. The tax agent line and Part III have no box in the official program (each control disabled at load, runtime-control-inventory-v796.json), so they show their printed captions with a note. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1601c:txtTIN1",
+                "frm1601c:txtTIN2",
+                "frm1601c:txtTIN3",
+                "frm1601c:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm1601c:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Withholding Agent's Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm1601c:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm1601c:txtAddress",
+                "frm1601c:txtAddress2"
+              ]
+            },
+            {
+              "no": "9A",
+              "l": "ZIP Code",
+              "k": [
+                "frm1601c:txtZipCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Contact Number",
+              "k": [
+                "frm1601c:txtTelNum"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Category of Withholding Agent",
+              "k": [
+                "frm1601c:CatAgent_P",
+                "frm1601c:CatAgent_G"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Are there payees availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1601c:SpecialTax_1",
+                "frm1601c:SpecialTax_2"
+              ]
+            },
+            {
+              "no": "13A",
+              "l": "If yes, specify",
+              "k": [
+                "frm1601c:selTreaty"
+              ]
+            }
+          ]
+        },
+        {
+          "keep": 2
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable), Date of Issue and Date of Expiry",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "37",
+              "l": "Cash/Bank Debit Memo",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "38",
+              "l": "Check",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "39",
+              "l": "Tax Debit Memo",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            },
+            {
+              "no": "40",
+              "l": "Others (specify below)",
+              "p": 1,
+              "note": "eBIRForms keeps these boxes disabled, so this page has nothing to fill here."
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule",
+          "items": [
+            {
+              "table": "frm1601c:sched1:txtMonthYear0"
+            },
+            {
+              "no": "4",
+              "l": "Total Adjustment (Sum of Items 1 to 3) (To Part II, Item 26)",
+              "k": [
+                "frm1601c:sched1:txtTotal1"
+              ]
+            }
+          ]
+        }
+      ],
+      "rest": "Not on the printed sheet"
+    },
+    "item:1:2": {
+      "label": "Line of Business",
+      "evidence": "PR 3: the extracted item that only holds the line of business, which this sheet does not print; under 'Not on the printed sheet' it reads as what it is (the printed item keeps its own caption in the layout)."
     }
   },
   "1601EQ": {
