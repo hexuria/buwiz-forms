@@ -27995,6 +27995,8 @@ declare module "bir" {
       needs: Record<string, string>;
       /** A printed box the filer cannot fill here, while it shows blank: why, in the filer's words (the schema's reviewed `why`; shown in the box). */
       whys: Record<string, string>;
+      /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
+      waits: Record<string, string>;
       /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
       lock_notes: Record<string, string>;
       /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -28063,6 +28065,8 @@ declare module "bir" {
       pools: Record<string, string>;
       /** A sample's boxes still blank (null for a return). */
       blank?: string[] | null;
+      /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
+      removes?: { message: string; done: string; rows: number } | null;
   }
   export interface ScreenFormValidated {
       draft: object;

@@ -115,6 +115,7 @@ function withoutHidden(schema) {
       ...p,
       items: p.items
         .map((it) => (it.f ? { ...it, f: it.f.filter((f) => f.t !== "hidden") } : it))
+        // A printed item with no box in the official program keeps its note.
         .filter((it) => it.rows || (it.f && it.f.length) || it.note),
     }))
     .filter((p) => p.items.length);
@@ -428,6 +429,7 @@ export class FormPageActions {
     s.needs = r.needs || {};
     // A printed box the filer cannot fill says why while it is blank.
     s.whys = r.whys || {};
+    s.waits = r.waits || {};
     s.off = r.off || {};
     s.penalties = r.penalties || [];
     s.poolTexts = r.pools || {};
@@ -714,9 +716,122 @@ export class FormPageActions {
     }
     Object.assign(s.pending, edits);
     s.dirty = true;
+    // What the boxes showed, for an answer the filer then cancels.
+    s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k]]));
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
     // flush() syncs the preview from the host-applied draft.
     this.flush(cx);
+  }
+
+  /** Take what the host applied for `edits`. */
+  applyFill(r, edits) {
+    const s = this.state;
+    this.accepted(edits, r.rejected);
+    // The host says which of a sample's boxes are still blank.
+    if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
+    const before = s.values;
+    s.draft = r.draft;
+    s.values = this.shown(r.values);
+    s.options = r.options || {};
+    if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+    if (r.pools) s.poolTexts = r.pools;
+    this.syncComputed();
+    this.syncChanged(before, edits);
+    // The preview prints the draft the host just applied, never the
+    // page's optimistic values.
+    this.livePreview();
+    const rejected = Object.entries(r.rejected || {});
+    if (rejected.length) {
+      for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
+    }
+  }
+
+  /**
+   * An answer that removes rows the filer typed (the host's `removes`) is
+   * asked first: the page keeps its draft and shows the old answer until
+   * Continue (`confirmRemoval`); Cancel (`cancelRemoval`) leaves both.
+   */
+  holdRemoval(r, edits, cx) {
+    const s = this.state;
+    const chosen = s.chosenFrom || {};
+    for (const k of Object.keys(edits)) if (k in chosen) s.values[k] = chosen[k] ?? "";
+    // What was typed in the same batch is not the answer: Cancel keeps it.
+    const typed = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in chosen)));
+    s.removal = { r, edits, typed, draft: s.draft };
+    this.app.overlay = "removal";
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** Continue: the answer and its removal apply; Undo brings both back. */
+  confirmRemoval(cx) {
+    const s = this.state;
+    const held = s.removal;
+    if (!held) return;
+    s.removal = null;
+    this.app.overlay = null;
+    this.applyFill(held.r, held.edits);
+    s.dirty = true;
+    this.refreshRows();
+    this.validate(cx);
+    // Undo belongs to this return's page as it is now: another return, or
+    // any later edit here, retires it (it would bring back a stale draft).
+    const undo = (ucx) => this.undoRemoval(held.draft, s, undo, ucx);
+    this.removalUndo = { state: s, undo };
+    this.offerUndo(held.r.removes.done, undo, cx);
+    cx.notify();
+  }
+
+  /** Cancel: the old answer and the rows stay, and so does what was typed with it. */
+  cancelRemoval(cx) {
+    const s = this.state;
+    const held = s?.removal;
+    if (s) s.removal = null;
+    this.app.overlay = null;
+    if (held && Object.keys(held.typed).length) {
+      s.pending = { ...held.typed, ...s.pending };
+      this.flush(cx);
+    }
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** The removal question is on screen (main.js blocks Cmd+Z and cancels it before Cmd+K or New return). */
+  askingRemoval() {
+    return Boolean(this.state?.removal);
+  }
+
+  /** The app leaves this page (main.js `go`): a removal's Undo stays behind. */
+  leavingPage() {
+    this.retireRemovalUndo();
+  }
+
+  /** The removal's Undo, if still offered, goes (a later edit, another page). */
+  retireRemovalUndo() {
+    const held = this.removalUndo;
+    if (!held) return;
+    this.removalUndo = null;
+    if (this.app.toastState?.action?.run === held.undo) {
+      this.app.toastState = null;
+      this.app.invalidate?.();
+    }
+  }
+
+  /** Undo a removal: the draft from before the answer comes back, on the same page only. */
+  undoRemoval(draft, state, undo, cx) {
+    const s = this.state;
+    if (!s || s !== state || this.removalUndo?.undo !== undo) return;
+    this.removalUndo = null;
+    try {
+      const r = this.app.store.call("screen_form_fill", s.code, draft, {}, []);
+      this.applyFill(r, {});
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    s.dirty = true;
+    this.refreshRows();
+    this.validate(cx);
+    cx.notify();
   }
 
   /** Apply staged edits to the typed draft (fast, no database), then validate off-thread. */
@@ -726,26 +841,11 @@ export class FormPageActions {
     const edits = s.pending;
     s.pending = {};
     if (Object.keys(edits).length) {
+      this.retireRemovalUndo();
       try {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
-        this.accepted(edits, r.rejected);
-        // The host says which of a sample's boxes are still blank.
-        if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
-        const before = s.values;
-        s.draft = r.draft;
-        s.values = this.shown(r.values);
-        s.options = r.options || {};
-        if (Array.isArray(r.penalties)) s.penalties = r.penalties;
-        if (r.pools) s.poolTexts = r.pools;
-        this.syncComputed();
-        this.syncChanged(before, edits);
-        // The preview prints the draft the host just applied, never the
-        // page's optimistic values.
-        this.livePreview();
-        const rejected = Object.entries(r.rejected || {});
-        if (rejected.length) {
-          for (const [k, msg] of rejected) s.messages[this.itemIdForKey(k) || "form"] = msg;
-        }
+        if (r.removes) return this.holdRemoval(r, edits, cx);
+        this.applyFill(r, edits);
       } catch (e) {
         // The draft never took these edits: keep them staged (under anything
         // typed since) so the next flush or save sends them again.
@@ -1221,13 +1321,18 @@ export class FormPageActions {
     return notes;
   }
 
-  /** A sample's locked blank box: what it waits for, shown in its place. */
+  /**
+   * A locked blank box: what it waits for, shown in its place. A sample's
+   * held box says so (`needs`); a box the form fills from another box of
+   * its row says which (the host's `waits`: a rate waits for its ATC).
+   */
   reasonFor(k) {
     const s = this.state;
-    if (s.blank.has(k)) return s.needs?.[k] || "";
+    if (s.blank.has(k) && s.needs?.[k]) return s.needs[k];
     // A printed box the filer cannot fill says why in its place (the
-    // host's `whys`, from the schema's reviewed `why`).
-    return s.whys?.[k] || "";
+    // host's `whys`, from the schema's reviewed `why`); a box waiting for
+    // another box of its row says what it waits for.
+    return s.whys?.[k] || s.waits?.[k] || "";
   }
 
   /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */
@@ -1531,7 +1636,11 @@ export class FormPageActions {
     s.pending = {};
     try {
       if (Object.keys(edits).length) {
+        this.retireRemovalUndo();
         const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        // Rows this would remove are never saved without the question:
+        // ask, and save nothing until the filer answers.
+        if (f.removes) return this.holdRemoval(f, edits, cx);
         this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);
@@ -1790,7 +1899,8 @@ function choiceLabel(f) {
 /**
  * A one-answer group, drawn as the paper form's tick boxes. Ticking one
  * clears the others; the ticked box of a group of three or more unticks
- * (clears the answer), a yes/no pair keeps one answer.
+ * (clears the answer), a yes/no pair keeps one answer (picking it again
+ * sends it again).
  */
 function radioGroup(cx, ui, it, radios) {
   const s = ui.state;
@@ -1805,8 +1915,10 @@ function radioGroup(cx, ui, it, radios) {
     const locked = !s.editable || f.c || ui.isLocked(f.k);
     const pick = (cx) => {
       if (locked) return;
-      if (on) {
-        if (radios.length >= 3) ui.choose({ [f.k]: "false" }, cx);
+      // A pair's ticked answer given again runs again (1602Q item 13 "No"
+      // removes the Schedule 2 rows a legacy draft kept, after asking).
+      if (on && radios.length >= 3) {
+        ui.choose({ [f.k]: "false" }, cx);
         return;
       }
       const edits = {};
@@ -1865,15 +1977,20 @@ function scheduleTable(cx, ui, it, width) {
   const numW = 36;
   // A column an override hides (a row template another table now holds).
   const shown = it.cols.map((c, i) => (c.t === "hidden" ? -1 : i)).filter((i) => i >= 0);
-  const tableW = numW + shown.length * colW;
+  // The sheet's preprinted row captions (1603Q Schedule I's recipients).
+  const labels = it.row_labels || null;
+  const labelW = labels ? 220 : 0;
+  const tableW = numW + labelW + shown.length * colW;
   const head = div().flex().flex_row().items_end().bg(t.bg).border_b(1).border_color(t.border);
   head.child(div().w(numW).flex_none().py(SPACE[2]).flex().justify_center().child(Text(cx, "meta", "#", "fg3")));
+  if (labels) head.child(div().w(labelW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", labels.caption, "fg3").whitespace_normal()));
   for (const i of shown) head.child(div().w(colW).flex_none().py(SPACE[2]).px(SPACE[2]).child(Text(cx, "metaStrong", it.cols[i].l, "fg3").whitespace_normal()));
   const body = div().flex().flex_col();
   it.keys.forEach((row, r) => {
     const no = (it.start ?? 1) + r;
     const tr = div().flex().flex_row().items_center().when(r > 0, (el) => el.border_t(1).border_color(t.border));
     tr.child(div().w(numW).flex_none().flex().justify_center().child(Text(cx, "meta", String(no), "fg3")));
+    if (labels) tr.child(div().w(labelW).flex_none().py(6).px(SPACE[2]).child(Text(cx, "body", labels.rows[r] || "", "fg2").whitespace_normal()));
     row.forEach((k, c) => {
       const col = it.cols[c];
       if (col.t === "hidden") return;
@@ -2472,6 +2589,24 @@ export function renderExistingOffer(cx, app) {
     );
   }
   return Overlay(cx, "existing-offer", card, (cx) => ui.takeExisting("keep", cx), { width: 420 });
+}
+
+/** The question an answer that removes typed rows asks first. */
+export function renderRemovalConfirm(cx, app) {
+  const ui = app.formUi;
+  const held = ui.state?.removal;
+  if (!held) return div();
+  const card = div()
+    .flex()
+    .flex_col()
+    .items_stretch()
+    .w_full()
+    .gap(SPACE[3])
+    .p(SPACE[5])
+    .child(Text(cx, "title", held.r.removes.message).whitespace_normal())
+    .child(AppButton(cx, "removal-continue", "Continue", { variant: "primary", block: true, onClick: (_e, cx) => ui.confirmRemoval(cx) }))
+    .child(AppButton(cx, "removal-cancel", "Cancel", { variant: "secondary", block: true, onClick: (_e, cx) => ui.cancelRemoval(cx) }));
+  return Overlay(cx, "removal-confirm", card, (cx) => ui.cancelRemoval(cx), { width: 420 });
 }
 
 // ---------------------------------------------------------------- page

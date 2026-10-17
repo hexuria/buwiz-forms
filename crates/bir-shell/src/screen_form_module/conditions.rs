@@ -172,8 +172,21 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
     let Some(list) = conditions()[code].as_object() else {
         return off;
     };
+    // A box the host itself closes while its answer does not hold (it
+    // refuses what is typed there, rows_withholding.rs) is off whatever it
+    // shows: a legacy draft's value there is faded, not hidden.
+    let mut gated = std::collections::BTreeSet::new();
+    for (key, condition) in list {
+        if let Some(closed) = super::rows_withholding::gated(kind, draft, key) {
+            gated.insert(key);
+            if closed {
+                off.insert(key.clone(), label(code, key, condition));
+            }
+        }
+    }
     let blank: Vec<(&String, &Value, &str)> = list
         .iter()
+        .filter(|(key, _)| !gated.contains(key))
         .map(|(key, condition)| (key, condition, values[key].as_str().unwrap_or_default()))
         .filter(|(_, _, shown)| is_blank(shown))
         .collect();
@@ -196,7 +209,10 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             off.insert(key.clone(), label(code, key, condition));
         }
     }
-    off
+    // In the conditions' own order, gated boxes among the rest.
+    list.keys()
+        .filter_map(|key| off.remove(key).map(|tag| (key.clone(), tag)))
+        .collect()
 }
 
 #[cfg(test)]
@@ -257,9 +273,24 @@ pub(super) mod tests {
         keys
     }
 
+    /// Conditions the corpus leaves out although the box waits on an answer
+    /// (the corpus is read only; each entry carries its evidence). The
+    /// condition text is the corpus's own wording for the same gate on a
+    /// sibling form.
+    const CORPUS_GAPS: [(&str, &str, &str, &str); 1] = [(
+        "1601FQ",
+        "frm1601FQ:txtTax25",
+        "Enabled only when Amended Return Yes is selected.",
+        "the tracked inventory (rules/forms/1601fq-v2018/fixtures/\
+         runtime-control-inventory-v796.json) records txtTax25 disabled at load \
+         (source line 814), and this port's recompute (form_1601fq.rs) zeroes \
+         tax_remitted_previous unless the return is amended; 1601EQ's txtTax22 \
+         carries this text",
+    )];
+
     /// What `app/forms/conditions.json` should hold, read from the corpus:
     /// every box the page draws whose `enabled_when` names an answer,
-    /// computed boxes left out.
+    /// computed boxes left out, and the reviewed [`CORPUS_GAPS`].
     pub(crate) fn derived() -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
         let mut out = Map::new();
@@ -282,6 +313,11 @@ pub(super) mod tests {
                 };
                 let computed = def.box_def(key).is_some_and(|entry| entry.computed);
                 if shown.contains(key) && !computed && is_an_answer(condition) {
+                    keys.insert(key.to_string(), json!(condition));
+                }
+            }
+            for (form, key, condition, _evidence) in CORPUS_GAPS {
+                if form == code && shown.contains(key) {
                     keys.insert(key.to_string(), json!(condition));
                 }
             }

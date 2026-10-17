@@ -54,6 +54,47 @@ const USER_CHOSEN: &[(&str, &str)] = &[
     ),
 ];
 
+/// Amount boxes the rules corpus marks computed although the official page
+/// leaves them open for the filer to type (the corpus is read only, see
+/// [`USER_CHOSEN`]). Unlike a choice they keep the corpus's `optional`.
+/// 1601-FQ's corpus marks every Part II line 20-32 computed; the official
+/// runtime enables 23, 24 and 28-30 at load
+/// (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json:
+/// `disabled: false` for txtTax23, txtTax24, txtTax28-30; the inventory
+/// records 25 disabled at load, and this port's recompute keeps it only on an
+/// amended return), and
+/// form_1601fq.rs keeps them in `remittance_first_month`,
+/// `remittance_second_month`, `tax_remitted_previous` and the penalty
+/// overrides (`penalty_declaration`).
+const FILER_TYPED: &[(&str, &str)] = &[
+    (
+        "frm1601FQ:txtTax23",
+        "Item 23 Remittances Made, 1st Month: enabled at load (inventory source line 784)",
+    ),
+    (
+        "frm1601FQ:txtTax24",
+        "Item 24 2nd Month of the Quarter: enabled at load (inventory source line 803)",
+    ),
+    (
+        "frm1601FQ:txtTax25",
+        "Item 25 Tax Remitted in Return Previously Filed: the tracked inventory \
+         records it disabled at load (source line 814); form_1601fq.rs `recompute` \
+         zeroes it unless the return is amended",
+    ),
+    (
+        "frm1601FQ:txtTax28",
+        "Item 28 Surcharge: enabled at load (inventory source line 859)",
+    ),
+    (
+        "frm1601FQ:txtTax29",
+        "Item 29 Interest: enabled at load (inventory source line 880)",
+    ),
+    (
+        "frm1601FQ:txtTax30",
+        "Item 30 Compromise: enabled at load (inventory source line 901)",
+    ),
+];
+
 /// Boxes whose value only coincides with the sample profile's: the recorded
 /// samples put the property and the spouse in the filer's own RDO (039), so
 /// the probe would lock them as the profile's. They are the filer's answers.
@@ -197,16 +238,21 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
             let key = text(field, "field_key");
             let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
             let computed_by_form = COMPUTED_BY_FORM.iter().any(|(k, _)| *k == key);
+            let typed_by_user = FILER_TYPED.iter().any(|(k, _)| *k == key);
             BoxDef {
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
                 computed: computed_by_form
-                    || (!chosen_by_user && field["computed"].as_bool().unwrap_or(false)),
+                    || (!chosen_by_user
+                        && !typed_by_user
+                        && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()
                 } else if computed_by_form {
                     "computed".to_string()
+                } else if typed_by_user {
+                    "optional".to_string()
                 } else {
                     text(field, "required")
                 },

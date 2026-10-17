@@ -34,7 +34,7 @@ import { renderCalendar } from "./shell/calendar_page.js";
 import { renderFilings } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
-import { renderFormPage, renderFormSplit, renderExistingOffer, FormPageActions } from "./shell/form_page.js";
+import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { SecurityActions } from "./shell/security.js";
@@ -447,6 +447,8 @@ class BirApp extends View {
   }
 
   go(view, cx) {
+    // A removal's Undo is for the page it was offered on.
+    this.formUi?.leavingPage?.();
     if (view !== this.view) {
       this.history.push(this.view);
       this.forward = [];
@@ -515,6 +517,8 @@ class BirApp extends View {
   }
 
   openPalette(cx) {
+    // An open removal question is answered Cancel first, as Esc does.
+    if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
     // The palette replaces any stored-return offer on screen.
     this.existingOffer = null;
     this.overlay = "palette";
@@ -526,6 +530,8 @@ class BirApp extends View {
   closeOverlay(cx) {
     // Esc or a click outside the stored-return offer is "Keep this form".
     if (this.overlay === "existing" && this.existingOffer) return this.formUi.takeExisting("keep", cx);
+    // Esc on "this removes the rows you typed" is Cancel.
+    if (this.overlay === "removal") return this.formUi.cancelRemoval(cx);
     this.existingOffer = null;
     this.overlay = null;
     this.newReturn.periodOpen = false;
@@ -554,6 +560,8 @@ class BirApp extends View {
 
   /** The title-bar / sidebar "+": the start-a-return dialog for the branch's year. */
   startNewReturn(cx, code) {
+    // An open removal question is answered Cancel first, as Esc does.
+    if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
     const b = this.branch();
     if (!this.years().length) {
@@ -720,6 +728,8 @@ class BirApp extends View {
   undoLast(cx) {
     const st = this.toastState;
     if (!st || !st.action) return;
+    // Nothing is undone under the "this removes the rows you typed" question.
+    if (this.formUi?.askingRemoval?.()) return;
     if (this.textHasFocus()) return;
     this.toastState = null;
     st.action.run(cx);
@@ -1493,6 +1503,7 @@ class BirApp extends View {
     if (this.overlay === "palette") root.child(renderPalette(cx, this));
     if (this.overlay === "new") root.child(renderNewReturn(cx, this));
     if (this.overlay === "existing") root.child(renderExistingOffer(cx, this));
+    if (this.overlay === "removal") root.child(renderRemovalConfirm(cx, this));
     if (this.toastState) {
       const st = this.toastState;
       root.child(
