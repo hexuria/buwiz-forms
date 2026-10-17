@@ -27,12 +27,12 @@
   },
   "R3.3": {
    "reason": "\"eDST System\" is the option as the sheet prints it, not key text: html-frozen/2000-dst-2018/writer-cells.json xbox_joins prints frm2000:optMode_1 at \"13 Mode of Affixture: eDST System\" and html-frozen/2000-dst-2018/index.html reads \"13 Mode of Affixture eDST System Constructive Affixture Loose Stamps\" (screen_form_module::tests::dst_pt_vat::pr4_labels_read_as_printed asserts both and the label).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 4 review): html-frozen/2000-dst-2018/writer-cells.json xbox_joins prints frm2000:optMode_1 as \"13 Mode of Affixture: eDST System\", and html-frozen/2000-dst-2018/index.html reads \"13 Mode of Affixture eDST System Constructive Affixture Loose Stamps\"; pr4_labels_read_as_printed asserts both.",
    "status": "not_a_bug"
   },
   "R3.4": {
-   "reason": "Tax Agent Accreditation No., Date of Issue, Date of Expiry and Part III items 20-23 (Agency, Number, Date, Amount, Particulars) are disabled at load in the official runtime (rules/forms/2000-v2018/fixtures/runtime-control-inventory-v796.json: disabled true, source lines 964, 977, 990 and 1032-1059) and no handler in the tracked rule package names them (none of rules/forms/2000-v2018/workflow.json, validations.json or calculations.json does); this app's field map never writes them (crates/bir-core/data/agent-forms/2000-v2018.json unmapped: \"not written by this app's field map for any sample draft\"). The page shows Part III's printed items with a note instead of boxes that can never be filled, and the print leaves them blank as the program does (screen_form_module::tests::dst_pt_vat::pr4_part_iii_shows_each_printed_item_without_a_box).",
-   "reviewer": "",
+   "reason": "Tax Agent Accreditation No., Date of Issue, Date of Expiry and Part III items 20-23 (Agency, Number, Date, Amount, Particulars) are disabled at load in the official runtime (rules/forms/2000-v2018/fixtures/runtime-control-inventory-v796.json: disabled true, source lines 964, 977, 990 and 1032-1059) and no handler in the tracked rule package names them (none of rules/forms/2000-v2018/workflow.json, validations.json or calculations.json does); this app's field map never writes them (crates/bir-core/data/agent-forms/2000-v2018.json unmapped: \"not written by this app's field map for any sample draft\"). The page draws no box for them: the tax agent's three boxes show their printed caption (\"Tax Agent Accreditation No./Attorney's Roll No. (if applicable), Date of Issue and Date of Expiry\") with a note after item 19, where the sheet prints them, as PR 3 does for 1601C, and Part III's items 20-23 each show their caption with a note; the boxes stay on the schema, hidden, and the print leaves them blank as the program does (screen_form_module::tests::dst_pt_vat::pr4_form_2000_tax_agent_boxes_show_their_caption_and_a_note, screen_form_module::tests::dst_pt_vat::pr4_part_iii_shows_each_printed_item_without_a_box).",
+   "reviewer": "Agree (PR 4 review): rules/forms/2000-v2018/fixtures/runtime-control-inventory-v796.json source_line 964, 977, 990 and 1032-1059 are disabled: true; no workflow, validations or calculations file names them; the 2000 agent pin marks them unmapped; pr4_part_iii_shows_each_printed_item_without_a_box passes.",
    "status": "not_a_bug"
   },
   "R4.0": {
@@ -78,13 +78,13 @@
    "status": "fixed"
   },
   "manual-2": {
-   "reason": "The page shows exactly what the draft holds: for every item 11 answer the draft can hold (no, yes_unspecified, special_rate, international_tax_treaty) the page's OptSpecialTax1/2 and lstSpecialTax equal the field map's and the print map's (screen_form_module::tests::dst_pt_vat::pr4_form_2550m_item_11_shows_what_the_draft_holds). Yes with International Tax Treaty is what a draft holding international_tax_treaty shows (choosing it in the list answers Yes, binding /tax_relief), while a fresh open holds no and shows No, as the audit export did; the screenshot and the export were two different drafts.",
-   "reviewer": "",
+   "reason": "The page shows exactly what the draft holds: for every item 11 answer the draft can hold (no, yes_unspecified, special_rate, international_tax_treaty) the page's OptSpecialTax1/2 and lstSpecialTax equal the field map's and the print map's, and a fresh open holds no and shows OptSpecialTax2 true with lstSpecialTax 0, as the audit export does (screen_form_module::tests::dst_pt_vat::pr4_form_2550m_item_11_shows_what_the_draft_holds). Yes with International Tax Treaty is what a draft holding international_tax_treaty shows (choosing it in the list answers Yes, binding /tax_relief). The tracked files do not record which draft the screenshot came from.",
+   "reviewer": "Agree (PR 4 review): pr4_form_2550m_item_11_shows_what_the_draft_holds covers all four tax_relief states and a fresh open (OptSpecialTax2 true, lstSpecialTax 0); the tracked files do not show which draft the screenshot came from.",
    "status": "not_a_bug"
   },
   "manual-3": {
    "pr": "PR 4",
-   "proof": "bir-print frozen_html::tests::filled_document_2550m_prints_the_tin_and_one_character_per_box (item 4 prints the TIN's parts in the row's three 3-slot combs, newly joined in html-frozen/2550m-2007/writer-cells.json; items 3, 5 and 10, rows of one-character boxes, print one character per box, a longer value whole in the first box); screen_form_module::tests::dst_pt_vat::pr4_form_2550m_print_carries_the_tin_rdo_and_zip_of_the_draft (the page's values print in the joined cells); screen_form_module::combs::tests::print_cells_match_the_print_sheets",
+   "proof": "bir-print frozen_html::tests::filled_document_2550m_prints_the_tin_and_one_character_per_box (item 4 prints the TIN's three parts and the branch in the row's combs, joined in frozen_html.rs SHEET_JOINS because html-frozen stays as synced, so a branch such as 00001 prints instead of the sheet's 00000; items 3, 5 and 10, rows of one-character boxes, print one character per box, the writer's whole value kept on the first box only, a longer value whole in the first box); screen_form_module::tests::dst_pt_vat::pr4_form_2550m_print_carries_the_tin_rdo_and_zip_of_the_draft (the page's values, and a 00001 branch, print in those cells)",
    "status": "fixed"
   },
   "manual-4": {
@@ -94,7 +94,7 @@
   },
   "preview.0": {
    "reason": "frm2550m:txtAtcCde4 is not a constant: it is the draft's fourth Schedule 1 row (/sales_schedule/3/atc_code). The page writes it through the host (catalogs.rs atc_2550m_row, the official popup's row order), so it opens unlocked, and the field map and the print carry the same code; the audit called it a constant only because the probe binds no fixed row to it (the rows re-sort into popup order). screen_form_module::tests::dst_pt_vat::pr4_form_2550m_row_4_atc_is_the_drafts fills four ATCs on the page and finds the fourth in the draft, the page, the print map and the writer-cells \"Schedule 1 row 4 ATC\" cell.",
-   "reviewer": "",
+   "reviewer": "Agree (PR 4 review): frm2550m:txtAtcCde4 is written from sales_schedule[3]; the 2550M pin leaves it unbound; catalogs.rs fill_2550m_atc writes it; pr4_form_2550m_row_4_atc_is_the_drafts passes.",
    "status": "not_a_bug"
   }
  },
@@ -111,7 +111,7 @@
   },
   "R6.0": {
    "pr": "PR 4",
-   "proof": "screen_form_module::tests::dst_pt_vat::pr4_form_2553_item_13_list_waits_for_yes (while item 13 is No the list is off with \"Needs item 13 = Yes\" and takes nothing; Yes opens it blank, a relief is chosen and prints; No closes it; a stored Special Rate opens as it is); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (2553 plus 1: its item 13 list); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers",
+   "proof": "screen_form_module::tests::dst_pt_vat::pr4_form_2553_item_13_list_waits_for_yes (while item 13 is No the list is off with \"Needs item 13 = Yes\" and takes nothing; Yes opens it blank, a relief is chosen and prints; No closes it; a stored Special Rate opens as it is); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (2553 plus 1: its item 13 list); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::dst_pt_vat::pr4_form_2553_item_13_list_waits_for_yes also checks that No after a chosen relief asks first and offers Undo (removes)",
    "status": "fixed"
   },
   "manual-0": {
@@ -121,7 +121,7 @@
   },
   "manual-1": {
    "pr": "PR 4",
-   "proof": "screen_form_module::tests::dst_pt_vat::pr4_form_2553_rows_14_to_17_follow_the_printed_sheet (rows 14-17 show the sheet's printed classification, ATC and rate, read from html-frozen/2553-1999/index.html, and take only their amount (17 also the Others rate); the row then holds its printed ATC through Form2553Draft::set_atc and the tax due follows; row 18 chooses from the official list; a stored draft keeps its rows)",
+   "proof": "screen_form_module::tests::dst_pt_vat::pr4_form_2553_rows_14_to_17_follow_the_printed_sheet (a blank row 14-17 shows the sheet's printed classification, ATC and rate, read from html-frozen/2553-1999/index.html, as its default; typing its amount gives it that ATC through Form2553Draft::set_atc unless another row holds it (\"Choose this row's ATC; OT010 is already on row 18.\"); every row's ATC stays a choice from the official list, so a stored row 14 holding OT020 opens unchanged and can be changed or cleared; validation is the form's own)",
    "status": "fixed"
   },
   "manual-2": {
