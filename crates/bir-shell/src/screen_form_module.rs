@@ -82,8 +82,10 @@ export interface ScreenFormOpened {
     sample: boolean;
     /** A sample's boxes shown blank while its period is not set: its period parts and everything that follows the period. */
     blank: string[];
-    /** A blank box that cannot be typed, with what it waits for (shown in the box): a sample's held box, or a printed box the filer cannot fill here (the schema's `why`). */
+    /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
     needs: Record<string, string>;
+    /** A printed box the filer cannot fill here, while it shows blank: why, in the filer's words (the schema's reviewed `why`; shown in the box). */
+    whys: Record<string, string>;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
     /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -2339,12 +2341,13 @@ fn opened_json(
     blank_sample(&blank, &mut values, &mut errors);
     // A printed box the filer cannot fill says why while it is blank (the
     // schema's reviewed `why`).
+    let mut whys = Map::new();
     for (key, why) in schema_whys(code) {
         let blank = values[key.as_str()]
             .as_str()
             .is_none_or(|shown| shown.trim().is_empty());
         if blank && locks.contains_key(&key) && !needs.contains_key(&key) {
-            needs.insert(key, json!(why));
+            whys.insert(key, json!(why));
         }
     }
     let lock_notes: Map<String, Value> = locks
@@ -2400,6 +2403,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "whys": whys,
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -8649,7 +8653,8 @@ mod tests {
         let ticked = |key: &str| opened["values"][key].as_str() == Some("true");
         // A reason counts where the page draws it: in the box, beside a tick
         // box, under a radio group (form_page.js `reasonFor`).
-        let reason = |key: &str| opened["needs"].get(key).is_some();
+        let reason =
+            |key: &str| opened["needs"].get(key).is_some() || opened["whys"].get(key).is_some();
         let drawn = |key: &str| {
             opened["lock_notes"][key].as_str().is_some_and(|note| {
                 !note.is_empty()
@@ -10997,7 +11002,7 @@ mod tests {
                 "{key} is blank"
             );
             assert!(
-                opened["needs"][key]
+                opened["whys"][key]
                     .as_str()
                     .is_some_and(|why| !why.is_empty()),
                 "{key} says why"

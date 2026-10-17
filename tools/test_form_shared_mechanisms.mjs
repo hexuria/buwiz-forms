@@ -211,7 +211,7 @@ const offNow = () => (hostValues[K("amendY")] === "true" ? {} : { [K("prev")]: "
 let opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {},
   locks: { ...Object.fromEntries(PENALTY.map((k) => [k, "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to"])), [K("due")]: "computed by BIR's own formulas", [K("incorporated")]: "comes from the taxpayer profile; change it in the profile", [K("agentNo")]: "cannot be filled here: written by the app without a draft field" },
-  profile: [], profile_edit: [], sample: false, blank: [], needs: { [K("agentNo")]: "This app files it blank" }, off: offNow(), penalties: penaltyState(), pools: { ...poolStore }, errors: [],
+  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, whys: { [K("agentNo")]: "This app files it blank" }, off: offNow(), penalties: penaltyState(), pools: { ...poolStore }, errors: [],
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),

@@ -426,6 +426,8 @@ export class FormPageActions {
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
     s.needs = r.needs || {};
+    // A printed box the filer cannot fill says why while it is blank.
+    s.whys = r.whys || {};
     s.off = r.off || {};
     s.penalties = r.penalties || [];
     s.poolTexts = r.pools || {};
@@ -1003,6 +1005,7 @@ export class FormPageActions {
         lockNotes: s.lockNotes,
         blank: s.blank,
         needs: s.needs,
+        whys: s.whys,
         errors: s.errors,
         messages: s.messages,
         formErrors: s.formErrors,
@@ -1222,20 +1225,9 @@ export class FormPageActions {
   reasonFor(k) {
     const s = this.state;
     if (s.blank.has(k)) return s.needs?.[k] || "";
-    // A printed box the filer cannot fill (the schema's reviewed `why`)
-    // says why in its place whenever it is blank; the host lists it in
-    // `needs` too.
-    return this.whyFor(k) ? s.needs?.[k] || "" : "";
-  }
-
-  /** The schema's reviewed reason a printed box cannot be filled here. */
-  whyFor(k) {
-    const s = this.state;
-    if (!s.whys) {
-      s.whys = new Map();
-      for (const p of s.schema.parts) for (const it of p.items) for (const f of it.f || []) if (f.why) s.whys.set(f.k, f.why);
-    }
-    return s.whys.get(k) || "";
+    // A printed box the filer cannot fill says why in its place (the
+    // host's `whys`, from the schema's reviewed `why`).
+    return s.whys?.[k] || "";
   }
 
   /** Computed by the form (the schema's flag, or the host's lock): an amount shows 0.00 for zero. */

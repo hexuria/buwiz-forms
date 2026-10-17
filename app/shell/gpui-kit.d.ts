@@ -27991,8 +27991,10 @@ declare module "bir" {
       sample: boolean;
       /** A sample's boxes shown blank while its period is not set: its period parts and everything that follows the period. */
       blank: string[];
-      /** A blank box that cannot be typed, with what it waits for (shown in the box): a sample's held box, or a printed box the filer cannot fill here (the schema's `why`). */
+      /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
       needs: Record<string, string>;
+      /** A printed box the filer cannot fill here, while it shows blank: why, in the filer's words (the schema's reviewed `why`; shown in the box). */
+      whys: Record<string, string>;
       /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
       lock_notes: Record<string, string>;
       /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
