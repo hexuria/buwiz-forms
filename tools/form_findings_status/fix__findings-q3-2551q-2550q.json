@@ -1,0 +1,141 @@
+{
+  "2550Q": {
+    "R2.0": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (2550Q's Pg2TaxPayer, the last profile box left in an 'Additional details' group, is a page-2 repeat of item 9 and no longer drawn, rule 3); screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form; screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items",
+      "status": "fixed"
+    },
+    "R3.0": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (addSpecifyNo42/47/56 each under printed item 42/47/56; every box under the item number its writer-cells caption prints)",
+      "status": "fixed"
+    },
+    "R3.1": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (no 'Additional details' group; items in printed order 1-61 and Part V; no extracted control lost)",
+      "status": "fixed"
+    },
+    "R3.2": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (no 'Additional details' group; Part IV items 31-61 and their totals under their printed numbers)",
+      "status": "fixed"
+    },
+    "R3.3": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (no 'Additional details' group; Part IV items 31-61 under their printed numbers)",
+      "status": "fixed"
+    },
+    "R3.4": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (the schedule totals sit in Part V under their schedules; the page's own copies are hidden, the print prints the sched* boxes)",
+      "status": "fixed"
+    },
+    "R3.5": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (item 10 carries the whole printed caption, ending 'by using BIR Form No. 1905)')",
+      "status": "fixed"
+    },
+    "R4.0": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form (pins RtnPeriodFromNo4/RtnPeriodToNo4 as date boxes, locked on a return because they follow its quarter); tools/test_form_shared_mechanisms.mjs rule 4 (shownDate('3/31/2026') is 'Mar 31, 2026', the field map's unpadded Return Period) (just shell-ui-test)",
+      "status": "fixed"
+    },
+    "manual-0": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (item 7 is TIN1, TIN2, TIN3 then branch code)",
+      "status": "fixed"
+    },
+    "manual-1": {
+      "reason": "The app's print fills page 1's TIN from the draft: the field map writes frm2550qv2024:txtTIN1-3 and the sheet's stamped TIN inputs carry those names (screen_form_module::tests::page_one_tin_prints_from_the_draft_on_2551q_and_2550q prints 123/456/788 from a real draft; the 00000 is the sheet's preprinted branch). The blank boxes came from the worst-case render harness (crates/bir-shell/examples/print_render.rs), which filled only writer-cells joins and never the stamped TIN inputs; the harness now fills them too. No print-map change.",
+      "reviewer": "",
+      "status": "not_a_bug"
+    },
+    "manual-2": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (items 31-61 numbered in Part IV with columns A and B as printed; item 34 Total Sales & Output Tax Due in Part IV)",
+      "status": "fixed"
+    },
+    "manual-3": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items ('Part V · Schedules' after Part IV holds Schedule 1, its totals, Schedule 2, Schedule 3 and its totals, Schedule 4 and its total, in order); screen_form_module::tests::rows_2550q_schedules_and_popups_save",
+      "status": "fixed"
+    },
+    "manual-4": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items ('Part III · Details of Payment' after Part II, items 27-30, each saying the official program has no box for it); tools/test_form_shared_mechanisms.mjs (a printed item with no box is drawn with its caption and note) (just shell-ui-test)",
+      "status": "fixed"
+    },
+    "manual-5": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (item 14 'Are you availing of tax relief under Special Law or International Tax Treaty?' with Yes/No and item 14A; item 3 'Quarter'; item 4 From/To)",
+      "status": "fixed"
+    },
+    "manual-6": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2550q_boxes_sit_in_their_printed_parts_and_items (item 12 draws taxpayerEmailAddress only); screen_form_module::tests::page_one_tin_prints_from_the_draft_on_2551q_and_2550q (item 12 prints the profile email the page shows)",
+      "status": "fixed"
+    }
+  },
+  "2551Q": {
+    "R3.0": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2551q_boxes_sit_in_their_printed_parts_and_items (overpayment boxes right under item 24; tax agent accreditation in Part II after it; no 'Additional details' group)",
+      "status": "fixed"
+    },
+    "R3.1": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2551q_boxes_sit_in_their_printed_parts_and_items (Schedule 1 rows 1-6 as one open table of ATC, Taxable Amount, Tax Rate, Tax Due, then item 7); screen_form_module::tests::catalog_lists_have_unique_values_across_the_schema (each row's ATC list stays)",
+      "status": "fixed"
+    },
+    "R3.2": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2551q_boxes_sit_in_their_printed_parts_and_items (item 3 options read 1st, 2nd, 3rd, 4th)",
+      "status": "fixed"
+    },
+    "R3.3": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2551q_boxes_sit_in_their_printed_parts_and_items (item 17's text box reads 'Specify')",
+      "status": "fixed"
+    },
+    "R4.0": {
+      "reason": "Date of Issue and Expiry Date have no draft field: the 2551Q field map files them blank (form_2551q_xml.rs to_bir_field_map writes ''; rule 0 keeps the upload), so there is no date to type or show. They are date boxes (t=date) that would show any value as 'Mon D, YYYY', and blank they now say why (screen_form_module::tests::form_2551q_boxes_sit_in_their_printed_parts_and_items).",
+      "reviewer": "",
+      "status": "not_a_bug"
+    },
+    "R8.0": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2551q_penalties_are_computed_and_only_a_typed_one_overrides; screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form (2551Q now one group); bir-core forms::form_2551q::tests::an_entered_penalty_files_instead_and_the_others_keep_computing; bir-core forms::form_2551q::tests::a_manual_penalty_draft_keeps_its_amounts_as_overrides",
+      "status": "fixed"
+    },
+    "manual-0": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::library_sample_computes_no_penalty_on_any_form (its 2551Q check now reads the real keys txt20-txt24); screen_form_module::tests::form_2551q_penalties_are_computed_and_only_a_typed_one_overrides (a return that is not late shows no penalty; a late one is computed, locked, one Edit opens the three); bir-core forms::form_2551q::tests::a_return_that_is_not_late_computes_no_penalty",
+      "status": "fixed"
+    },
+    "manual-1": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2551q_boxes_sit_in_their_printed_parts_and_items (Schedule 1 rows 1-6 in one open table with the printed columns)",
+      "status": "fixed"
+    },
+    "manual-2": {
+      "pr": "PR 1",
+      "proof": "screen_form_module::tests::form_2551q_boxes_sit_in_their_printed_parts_and_items (the overpayment choice under item 24; 'Part III · Details of Payment' with items 25-28, each box saying why it is closed); tools/test_form_shared_mechanisms.mjs (a locked blank box shows the host's reason) (just shell-ui-test)",
+      "status": "fixed"
+    },
+    "manual-3": {
+      "reason": "The app's print fills page 1's TIN from the draft: the field map writes frm2551Qv2018:txtTIN1-3 and txtBranchCode and the sheet's stamped TIN inputs carry those names (screen_form_module::tests::page_one_tin_prints_from_the_draft_on_2551q_and_2550q prints 123/456/788/00000 from a real draft). The blank boxes came from the worst-case render harness (crates/bir-shell/examples/print_render.rs), which filled only writer-cells joins and never the stamped TIN inputs; the harness now fills them too. No print-map change.",
+      "reviewer": "",
+      "status": "not_a_bug"
+    },
+    "preview.0": {
+      "reason": "frm2551Qv2018:txtPg2TaxpayerName is the page 2 header's copy of item 8 (writer-cells: 'same name as item 8'); rule 3 does not show copies repeated on later pages again. The print fills it from the same draft field (/taxpayer_name) the page shows in item 8, so page and print agree.",
+      "reviewer": "",
+      "status": "not_a_bug"
+    },
+    "preview.1": {
+      "reason": "The four Quarter boxes are the return's own quarter (its identity), and the page shows exactly what the print prints; the tax agent number and dates are filed blank by the app (no draft field, rule 0), and the page shows them blank with why. screen_form_module::tests::form_2551q_page_and_print_agree_on_the_app_written_boxes checks page value = print value for all seven boxes.",
+      "reviewer": "",
+      "status": "not_a_bug"
+    }
+  }
+}
