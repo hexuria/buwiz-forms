@@ -67,7 +67,7 @@ const schema = {
     {
       n: "Schedule 1 · Payments",
       items: [
-        { no: "", l: "Payments", rows: 2, cols: [{ l: "Date paid", t: "date" }, { l: "Amount", t: "money" }], keys: [[K("paid0"), K("amount0")], [K("paid1"), K("amount1")]] },
+        { no: "", l: "Payments", rows: 2, calendar: true, cols: [{ l: "Date paid", t: "date" }, { l: "Amount", t: "money" }], keys: [[K("paid0"), K("amount0")], [K("paid1"), K("amount1")]] },
       ],
     },
   ],
@@ -366,6 +366,15 @@ assert.ok(clicks.has(`fp-date-${payments}-0`) && clicks.has(`fp-date-${payments}
 act(clicks.get(`fp-date-${payments}-1`).fn, {});
 ui.state.picker.cal.pick("2026-03-15");
 assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("checkDate")]: "03/15/2026" }), "the second calendar fills the second date");
+// A schedule's date box has its own calendar too, in a table the host marks
+// `calendar` (PR 4: 2000's Schedules 2-4).
+const paidRow = idOf(K("paid0"));
+frame();
+assert.ok(clicks.has(`fp-date-${paidRow}-0-0`) && clicks.has(`fp-date-${paidRow}-1-0`), "each table date box has its own calendar");
+act(clicks.get(`fp-date-${paidRow}-1-0`).fn, {});
+ui.state.picker.cal.pick("2026-02-14");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("paid1")]: "02/14/2026" }), "a table date's calendar fills its own box as MM/DD/YYYY");
+assert.equal(input(K("paid1")).value(), "Feb 14, 2026", "and shows it as Feb 14, 2026");
 console.log("PASS rule 4: dates show as Dec 10, 2020 and the calendar changes month and year.");
 
 // ---- Rule 5: character boxes only where the length is known.

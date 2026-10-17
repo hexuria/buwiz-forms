@@ -44,12 +44,39 @@ use std::sync::OnceLock;
 use bir_core::forms::agent::{AgentFormDef, AgentFormKind, Binding};
 use serde_json::{Map, Value, json};
 
-/// `app/forms/print-cells.json`: form code -> key -> `{slots?, date?, printed}`.
-fn print_cells() -> &'static Value {
+/// `app/forms/print-cells.json` as written from the frozen writer-cells.json
+/// files: form code -> key -> `{slots?, date?, printed}`.
+fn file_cells() -> &'static Value {
     static CELLS: OnceLock<Value> = OnceLock::new();
     CELLS.get_or_init(|| {
         serde_json::from_str(include_str!("../../../../app/forms/print-cells.json"))
             .expect("app/forms/print-cells.json is a JSON object")
+    })
+}
+
+/// What the page uses: [`file_cells`] plus the comb joins bir-print adds on
+/// the Rust side (`frozen_html::sheet_join_combs`, 2550M's item 4 TIN),
+/// from the one table the print fills them with; html-frozen and the
+/// generated file stay as synced.
+fn print_cells() -> &'static Value {
+    static CELLS: OnceLock<Value> = OnceLock::new();
+    CELLS.get_or_init(|| {
+        let mut cells = file_cells().clone();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let Some(slug) = crate::bir_module::print_slug_for(code) else {
+                continue;
+            };
+            for (key, slots, printed) in bir_print::frozen_html::sheet_join_combs(slug) {
+                if cells.get(code).is_none() {
+                    cells[code] = json!({});
+                }
+                if cells[code].get(&key).is_none() {
+                    cells[code][key] = json!({"slots": slots, "printed": printed});
+                }
+            }
+        }
+        cells
     })
 }
 
@@ -547,8 +574,11 @@ mod tests {
         ),
     ];
 
-    /// What `app/forms/print-cells.json` should hold, read from the sheets.
-    fn derived() -> Value {
+    /// What the print cells should hold, read from the sheets: from the
+    /// frozen writer-cells.json files alone (`merged` false: what
+    /// `app/forms/print-cells.json` holds), or with bir-print's Rust-side
+    /// joins merged in (`merged` true: what the page uses).
+    fn derived(merged: bool) -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
         let mut out = Map::new();
         for form in super::super::schema() {
@@ -558,11 +588,14 @@ mod tests {
             else {
                 continue;
             };
-            let cells: Value =
+            let cells: Value = if merged {
+                bir_print::frozen_html::merged_writer_cells_json(slug).unwrap_or(Value::Null)
+            } else {
                 std::fs::read_to_string(format!("{root}/html-frozen/{slug}/writer-cells.json"))
                     .ok()
                     .and_then(|raw| serde_json::from_str(&raw).ok())
-                    .unwrap_or(Value::Null);
+                    .unwrap_or(Value::Null)
+            };
             let combs = sheet_combs(&html);
             let mut keys = Map::new();
             for join in cells["joins"].as_array().into_iter().flatten() {
@@ -603,17 +636,29 @@ mod tests {
             "{}/../../app/forms/print-cells.json",
             env!("CARGO_MANIFEST_DIR")
         );
-        let text = serde_json::to_string(&derived()).expect("json") + "\n";
+        let text = serde_json::to_string(&derived(false)).expect("json") + "\n";
         std::fs::write(path, text).expect("print-cells.json");
     }
 
     #[test]
     fn print_cells_match_the_print_sheets() {
         assert_eq!(
-            print_cells(),
-            &derived(),
+            file_cells(),
+            &derived(false),
             "app/forms/print-cells.json is stale: run `cargo test -p bir-shell write_print_cells -- --ignored`"
         );
+        // What the page uses is the sheets with bir-print's Rust-side joins
+        // merged (SHEET_JOINS): covered, not passed by omission.
+        assert_eq!(print_cells(), &derived(true));
+        for (key, slots) in [
+            ("frm2550m:txtTIN1", 3),
+            ("frm2550m:txtTIN2", 3),
+            ("frm2550m:txtTIN3", 3),
+            ("frm2550m:txtBranchCode", 5),
+        ] {
+            assert_eq!(print_cells()["2550M"][key]["slots"], slots, "{key}");
+            assert!(file_cells()["2550M"].get(key).is_none(), "{key}");
+        }
     }
 
     #[test]

@@ -352,16 +352,12 @@ fn compare(form: &str, print: &str) -> &'static str {
 // ----------------------------------------------------------- print sheet
 
 /// `writer-cells.json` `not_joined`: writer key -> reviewed reason the sheet
-/// prints it nowhere.
+/// prints it nowhere, after bir-print's Rust-side joins (SHEET_JOINS), as
+/// the print fills it.
 fn not_joined(slug: &str) -> BTreeMap<String, String> {
-    let path = format!(
-        "{}/../../html-frozen/{slug}/writer-cells.json",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let Ok(raw) = std::fs::read_to_string(&path) else {
+    let Some(payload) = bir_print::frozen_html::merged_writer_cells_json(slug) else {
         return BTreeMap::new();
     };
-    let payload: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
     let mut out = BTreeMap::new();
     for row in payload["not_joined"].as_array().into_iter().flatten() {
         let reason = row["reason"].as_str().unwrap_or_default().to_string();
@@ -1807,11 +1803,14 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
     // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), less
-    // 2551Q's six Schedule 1 ATC lists (PR 1) and 1601FQ Schedule 1's ten
-    // Treaty Code and ATC lists (PR 2), table cells now: 82 - 6 - 10. Table
-    // cells are counted apart (the 36 2550M Schedule 1 ATC lists, N03;
-    // catalog_lists_have_unique_values_across_the_schema checks every one).
-    assert_eq!(supplied, 64, "catalog lists, dependent ones included");
+    // 2551Q's six Schedule 1 ATC lists (PR 1), 1601FQ Schedule 1's ten
+    // Treaty Code and ATC lists (PR 2) and 2000's three Schedule 1 ATC lists
+    // (PR 4), table cells now; less 1600PT's and 1600VT's mirrored item 6
+    // RDO list, hidden (PR 3); plus 2000's Item 5 RDO list (PR 4):
+    // 82 - 6 - 10 - 2 - 3 + 1. Table cells are counted apart (the 36 2550M
+    // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
+    // checks every one).
+    assert_eq!(supplied, 62, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and

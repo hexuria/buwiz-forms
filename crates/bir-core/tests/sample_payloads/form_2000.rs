@@ -161,5 +161,29 @@ fn form_2000_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_2000()).expect("sample serializes")]
+    // eDST System (Item 13): the only mode whose Schedule 3 (advance
+    // payments, Item 15C) the draft keeps, so the probe can bind its rows.
+    let mut edst = sample_2000();
+    edst.affixture_mode = Form2000AffixtureMode::Edst;
+    edst.schedule3 = vec![
+        Form2000PaymentRow {
+            date: "06/03/2025".into(),
+            receipt_number: "Adv2001".into(),
+            amount: 700.25,
+        },
+        Form2000PaymentRow {
+            date: "06/09/2025".into(),
+            receipt_number: "Adv2002".into(),
+            amount: 800.0,
+        },
+    ];
+    edst.recompute();
+    assert!(
+        edst.advance_payments > 0.0,
+        "the eDST seed keeps its Schedule 3"
+    );
+    vec![
+        serde_json::to_value(sample_2000()).expect("sample serializes"),
+        serde_json::to_value(edst).expect("eDST sample serializes"),
+    ]
 }

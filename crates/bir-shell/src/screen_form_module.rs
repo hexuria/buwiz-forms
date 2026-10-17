@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_dst_pt_vat;
 mod rows_monthly;
 mod rows_withholding;
 
@@ -279,6 +280,7 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            rows_dst_pt_vat::mark_calendar_tables(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -2489,11 +2491,13 @@ fn evaluate_here(
     } else {
         agent::validate(kind, &mut draft.clone())?
     };
-    Ok((
-        values_json(kind, draft)?,
-        errors_json(kind, &errors),
-        status,
-    ))
+    let mut errors = errors_json(kind, &errors);
+    // A page notice beside the form's own messages (PR 4: a stored 2553 row
+    // whose entry is not the one the sheet prints there).
+    if let Value::Array(list) = &mut errors {
+        list.extend(rows_dst_pt_vat::notices(kind, draft));
+    }
+    Ok((values_json(kind, draft)?, errors, status))
 }
 
 // --------------------------------------------------------- host functions
@@ -2806,6 +2810,7 @@ fn opened_json(
         Vec::new()
     });
     let mut locks = locks(kind, &from_profile);
+    rows_dst_pt_vat::relock(kind, &draft, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group; a
     // return with no due date computes none, and its boxes stay open.
     for group in penalties::computed_groups(kind) {
@@ -2908,6 +2913,7 @@ fn opened_json(
     // nothing for a form it does not own).
     let mut waits = rows_withholding::waits(kind);
     waits.extend(rows_monthly::waits(kind));
+    waits.extend(rows_dst_pt_vat::waits(kind));
     Ok(json!({
         "form_code": code,
         "year": year,
@@ -3750,6 +3756,9 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 4's forms; the integration merge chains the other form groups').
+    let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3762,7 +3771,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
         // Rows the filer typed that this edit removed: the page asks first.
         "removes": rows_withholding::removes(kind, &before, &draft, &edits)
-            .or_else(|| rows_monthly::removes(kind, &before, &draft, &edits)),
+            .or_else(|| rows_monthly::removes(kind, &before, &draft, &edits))
+            .or(removes),
     })))
 }
 
@@ -4907,6 +4917,9 @@ mod tests {
 
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
+
+    // PR 4: 2000, 2553 and 2550M against their printed sheets.
+    mod dst_pt_vat;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -7867,11 +7880,13 @@ mod tests {
     fn rows_2550m_schedules_2_to_8_save() {
         setup();
         let form = schema_entry("2550M").unwrap();
+        // Each schedule sits in its own part since PR 4's printed layout.
         let table = |first: &str| -> Value {
-            form["parts"][2]["items"]
+            form["parts"]
                 .as_array()
                 .unwrap()
                 .iter()
+                .flat_map(|part| part["items"].as_array().unwrap())
                 .find(|it| it["keys"][0][0] == first)
                 .unwrap_or_else(|| panic!("table starting {first}"))
                 .clone()
@@ -8002,9 +8017,10 @@ mod tests {
     /// Table cells whose dropdown list a catalog supplies: 1601FQ's 41 Part
     /// II ATC rows and Schedule 1's ten lists, 2550M's 36 Schedule 1 ATCs,
     /// 1601EQ's 30 Part II ATC rows, 1801's seven, 1600WP's two, 2551Q's
-    /// six Schedule 1 ATCs (PR 1), and 1600PT's 31 and 1600VT's 13 Part II
-    /// ATC rows (PR 3).
-    const CATALOG_TABLE_CELLS: usize = 51 + 36 + 30 + 7 + 2 + 6 + 31 + 13;
+    /// six Schedule 1 ATCs (PR 1), 1600PT's 31 and 1600VT's 13 Part II ATC
+    /// rows (PR 3), and 2000's three Schedule 1 ATCs and 2553's five row
+    /// ATCs, items 14B to 18B (PR 4).
+    const CATALOG_TABLE_CELLS: usize = 51 + 36 + 30 + 7 + 2 + 6 + 31 + 13 + 3 + 5;
 
     #[test]
     fn catalog_lists_have_unique_values_across_the_schema() {
@@ -8070,11 +8086,13 @@ mod tests {
         // 2551Q's six Schedule 1 ATC lists (PR 1) and 1601FQ Schedule 1's
         // ten Treaty Code and ATC lists (PR 2), table cells now, and less
         // 1600PT's and 1600VT's mirrored item 6 RDO list (rdoPg1Pt1I6RDO),
-        // hidden since PR 3: 82 - 6 - 10 - 2.
+        // hidden since PR 3, less 2000's three Schedule 1 ATC lists, table
+        // cells now, and plus 2000's Item 5 RDO list (PR 4):
+        // 82 - 6 - 10 - 2 - 3 + 1.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 64);
+        assert_eq!(supplied, 62);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
@@ -11241,10 +11259,6 @@ mod tests {
         "1707 frm1707:txtPg2RegisteredName",
         "1800 frm1800v2018:txtLineBus",
         "1800 frm1800v2018:txtPg2TaxpayerName",
-        "2000 frm2000:txtLineBus",
-        "2000 frm2000:txtPg2TaxpayerName",
-        "2000 frm2000:txtTelNum",
-        "2000 txtEmail",
         "2000OT frm2000OT:txtLineBus",
         "2200C frm2200C:txtLOB",
         "2200M frm2200M:txtPg2RegisteredName",
@@ -11914,6 +11928,10 @@ mod tests {
         }
         let mut locked = Vec::new();
         let (mut typed, mut refused) = (0, 0);
+        // 2000's Schedule 2-4 dates, closed until item 13 opens their
+        // schedule (PR 4, rows_dst_pt_vat.rs): each is typed once it is open
+        // (form_2000_schedule_dates_take_typed_dates_once_item_13_opens_them).
+        let mut closed = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -11938,6 +11956,12 @@ mod tests {
                 }
                 let filled = fill(code, &opened["draft"], json!({ &key: "12/10/2020" }));
                 if let Some(reason) = filled["rejected"][&key].as_str() {
+                    if code == "2000"
+                        && (2..=4).any(|n| reason == rows_dst_pt_vat::dst_schedule_closed(n))
+                    {
+                        closed.push(key.clone());
+                        continue;
+                    }
                     // Refused by its form's own rule (a later schedule row
                     // before the first, a schedule another answer turns
                     // off), never for the date.
@@ -11959,6 +11983,18 @@ mod tests {
             refused < 150,
             "{refused} date boxes refused for another rule"
         );
+        closed.sort();
+        let mut schedule_dates: Vec<String> = (0..3)
+            .flat_map(|row| {
+                [
+                    format!("frm2000:sched2:txtPaymentDate{row}"),
+                    format!("frm2000:sched3:txtPaymentDate{row}"),
+                    format!("frm2000:sched4:txtRemittanceDate{row}"),
+                ]
+            })
+            .collect();
+        schedule_dates.sort();
+        assert_eq!(closed, schedule_dates);
         let mut expected: Vec<&str> = DATE_BOXES_LOCKED_FOR_OTHER_REASONS.to_vec();
         expected.sort_unstable();
         locked.sort();
@@ -11983,18 +12019,6 @@ mod tests {
         "1707A frm1707Av2021:txtS1C1DateOfTransaction_1: cleared to \"\"",
         "1707A frm1707Av2021:txtS2C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1707A frm1707Av2021:txtS2C1DateOfTransaction_1: cleared to \"\"",
-        "2000 frm2000:sched2:txtPaymentDate0: cleared to \"\"",
-        "2000 frm2000:sched2:txtPaymentDate1: cleared to \"\"",
-        "2000 frm2000:sched2:txtPaymentDate2: cleared to \"\"",
-        "2000 frm2000:sched3:txtPaymentDate0: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2000 frm2000:sched3:txtPaymentDate1: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2000 frm2000:sched3:txtPaymentDate2: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2000 frm2000:sched4:txtRemittanceDate0: cleared to \"\"",
-        "2000 frm2000:sched4:txtRemittanceDate1: cleared to \"\"",
-        "2000 frm2000:sched4:txtRemittanceDate2: cleared to \"\"",
-        "2000 frm2000:txtDate20: cannot be filled here: not written by this app's field map for any sample draft",
-        "2000 frm2000:txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
-        "2000 frm2000:txtDate22: cannot be filled here: not written by this app's field map for any sample draft",
         "2000OT frm2000OT:txtTransactionDate: picks which return this is; reopen the form for another TIN or period",
         "2550Q frm2550qv2024:RtnPeriodFromNo4: cannot be filled here: derived by the app: changes with /return_period_from/day, /return_period_from/month, /return_period_from/year but never shows one field's value",
         "2550Q frm2550qv2024:RtnPeriodToNo4: cannot be filled here: derived by the app: changes with /return_period_to/day, /return_period_to/month, /return_period_to/year but never shows one field's value",
@@ -13366,6 +13390,11 @@ mod tests {
             ("2551Q", "frm2551Qv2018:registeredName", 40),
             ("1601C", "frm1601c:txtZipCode", 4),
             ("2552", "frm2552:txtPg1Pt1I7RegisteredAddress", 40),
+            // PR 4: 2550M item 4, joined on the Rust side (bir-print SHEET_JOINS).
+            ("2550M", "frm2550m:txtTIN1", 3),
+            ("2550M", "frm2550m:txtTIN2", 3),
+            ("2550M", "frm2550m:txtTIN3", 3),
+            ("2550M", "frm2550m:txtBranchCode", 5),
         ] {
             let field = schema_fields(code)
                 .into_iter()
@@ -13580,7 +13609,8 @@ mod tests {
                 ("2200M", 1),
                 ("2200P", 1),
                 ("2200T", 1),
-                ("2553", 1),
+                // PR 4: 2553 item 13's list waits for item 13 Yes too.
+                ("2553", 2),
             ])
         );
     }
