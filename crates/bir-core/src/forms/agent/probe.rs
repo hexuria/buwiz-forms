@@ -61,6 +61,17 @@ const USER_CHOSEN: &[(&str, &str)] = &[
          html-frozen/1702ex-2018/writer-cells.json joins it at \"49 Other \
          Tax Credits/Payments amount\", as it joins item 48's",
     ),
+    (
+        "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+        "Item 42 MCIT Due: rules/forms/1702rt-v2018c/calculations.json \
+         1702rt-item42-mcit records the official computeP2Pt4I42 as \"Before \
+         2020 and when IC 055 is selected, MCIT is 2% of gross; 2020+ leaves \
+         the enabled value user-controlled except nonpositive net forces \
+         zero\"; the page enables it once MCIT applies (enableMCITFields), and \
+         form_1702rt.rs keeps it as part_iv.item_42_mcit_due, an entry \
+         form_1702rt_official.rs recompute only clears while the return is not \
+         subject to MCIT",
+    ),
     ("frm1702EX:txtPg3Pt6I17OthersEAmt", SCHEDULE_ROW_1702EX),
     ("frm1702EX:txtPg3Pt6I17OthersFAmt", SCHEDULE_ROW_1702EX),
     ("frm1702EX:txtPg3Pt6I17OthersGAmt", SCHEDULE_ROW_1702EX),
@@ -77,6 +88,24 @@ const SCHEDULE_ROW_1702EX: &str = "1702EX Schedule 1 items 17e-17h and Schedule 
      computed with no calculation in calculations.json; the official page \
      keeps the row shut at load (runtime-control-inventory-v796.json) with \
      its description";
+
+/// Boxes the rules corpus lists as entries although the form computes them
+/// (the opposite of [`USER_CHOSEN`]): the projection marks them computed, so
+/// they are never bound to a draft field. The field map and the upload are
+/// unchanged.
+const COMPUTED_BY_FORM: &[(&str, &str)] = &[
+    ("frm1702RT:txtPg4Sc4I2C4", EXCESS_MCIT_1702RT),
+    ("frm1702RT:txtPg4Sc4I3C4", EXCESS_MCIT_1702RT),
+];
+
+const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
+     Normal Income Tax), rows 2 and 3: form_1702rt_official.rs recompute sets \
+     each row's excess_mcit to MCIT less normal income tax (floored at zero), \
+     and the official page disables the box at load \
+     (rules/forms/1702rt-v2018c/fixtures/runtime-control-inventory-v796.json \
+     source lines 3188 and 3215, like row 1's at 3161); the samples leave the \
+     normal income tax at zero, so probing saw the box echo the MCIT and bound \
+     it to /schedule_4/rows/N/mcit";
 
 /// Profile boxes the rules corpus marks computed: the official page fills
 /// them from the taxpayer's profile and shuts them at load, exactly as it
@@ -208,6 +237,12 @@ const GATED_ENTRY: &[(&str, &str)] = &[
     ("frm1702MX:txtPg7Sc9I1CA", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CB", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CF", MX_SCHEDULE_9_ROW_1),
+    (
+        "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+        "Item 42 MCIT Due: an entry (see USER_CHOSEN) that \
+         form_1702rt_official.rs recompute clears while the return is not \
+         subject to MCIT, which the taxable year decides",
+    ),
     ("frm1702RT:txtPg2Pt4I54C2", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg3Sc1I17iC2", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg3Sc2I4C3", RT_ADD_MORE_LINE),
@@ -253,15 +288,19 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
             let key = text(field, "field_key");
             let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
             let from_profile = PROFILE_NOT_COMPUTED.iter().any(|(k, _)| *k == key);
+            let computed_by_form = COMPUTED_BY_FORM.iter().any(|(k, _)| *k == key);
             BoxDef {
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
-                computed: !chosen_by_user
-                    && !from_profile
-                    && field["computed"].as_bool().unwrap_or(false),
+                computed: computed_by_form
+                    || (!chosen_by_user
+                        && !from_profile
+                        && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()
+                } else if computed_by_form {
+                    "computed".to_string()
                 } else {
                     text(field, "required")
                 },
