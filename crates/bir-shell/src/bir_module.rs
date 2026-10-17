@@ -604,17 +604,22 @@ const NOT_THE_ADMIN: &str =
     "That PIN or code is not the admin's. Type the current admin PIN or authenticator code.";
 
 /// The current admin's PIN (`pin`) or authenticator code (`code`), checked
-/// against the stored credentials of `mode`.
+/// against the stored credentials of `mode`. Wrong tries count against the
+/// admin's sign-in backoff, so this is no way around it.
 fn confirm_admin(
     db: &Database,
     mode: &AccessMode,
     pin: Option<&str>,
     code: Option<&str>,
 ) -> Result<(), HostError> {
-    let credentials = admin_credentials(db, mode)?;
-    let by_pin = pin.is_some_and(|pin| pin_matches(credentials.pin_hash.as_deref(), pin));
-    let by_code = code.is_some_and(|code| totp_matches(credentials.totp_secret.as_deref(), code));
-    if by_pin || by_code {
+    let matched = auth_limiter::guarded(auth_limiter::ADMIN, || {
+        let credentials = admin_credentials(db, mode)?;
+        let by_pin = pin.is_some_and(|pin| pin_matches(credentials.pin_hash.as_deref(), pin));
+        let by_code =
+            code.is_some_and(|code| totp_matches(credentials.totp_secret.as_deref(), code));
+        Ok(by_pin || by_code)
+    })?;
+    if matched {
         Ok(())
     } else {
         Err(HostError::new(NOT_THE_ADMIN))
@@ -2115,6 +2120,27 @@ mod tests {
         // The previous admin's recovery key is dead; the new one works once.
         assert!(!truthy(use_recovery_key(&args(vec![s(&old_key)]))));
         assert!(truthy(use_recovery_key(&args(vec![s(&new_key)]))));
+    }
+
+    #[test]
+    fn wrong_admin_codes_at_a_setup_change_count_toward_the_lockout() {
+        setup();
+        add_other_taxpayer();
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        set_taxpayer_pin(&args(vec![s(OTHER_ROOT), s("2468")])).unwrap();
+        let attempt = |pin: &str| change_owner(&args(vec![s(OTHER_ROOT), s(pin), null()]));
+        for _ in 0..5 {
+            assert!(message(attempt("1111")).contains("not the admin"));
+        }
+        assert!(message(attempt("1111")).contains("Too many wrong tries"));
+        // Locked: even the right PIN waits, and nothing changed.
+        assert!(message(attempt("0817")).contains("Too many wrong tries"));
+        assert!(
+            verify_admin_pin(&args(vec![s("0817")])).is_err(),
+            "admin sign-in shares the same count"
+        );
+        assert_eq!(state()["admin_root"], ROOT);
     }
 
     #[test]

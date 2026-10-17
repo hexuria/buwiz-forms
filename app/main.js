@@ -435,7 +435,7 @@ class BirApp extends View {
     if (view !== this.view) {
       this.history.push(this.view);
       this.forward = [];
-      this.enterView(view);
+      this.enterView(view, cx);
     }
     this.closeTransient();
     cx.notify();
@@ -444,7 +444,7 @@ class BirApp extends View {
   goBack(cx) {
     if (!this.history.length) return;
     this.forward.push(this.view);
-    this.enterView(this.history.pop());
+    this.enterView(this.history.pop(), cx);
     this.closeTransient();
     cx.notify();
   }
@@ -452,15 +452,19 @@ class BirApp extends View {
   goForward(cx) {
     if (!this.forward.length) return;
     this.history.push(this.view);
-    this.enterView(this.forward.pop());
+    this.enterView(this.forward.pop(), cx);
     this.closeTransient();
     cx.notify();
   }
 
   /** Switch views with the cleanup every way of leaving one needs. */
-  enterView(view) {
-    // A recovery key on screen is shown once: leaving Settings hides it for good.
-    if (this.view === "settings") this.security.leave();
+  enterView(view, cx) {
+    // A recovery key on screen is shown once: leaving Settings hides it for
+    // good. A finished Computer setup change also signs the old admin out.
+    if (this.view === "settings") {
+      this.security.leave();
+      this.setupChange.leave(cx);
+    }
     this.view = view;
     this.taxpayerUi.leaveView();
   }
