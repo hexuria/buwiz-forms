@@ -156,10 +156,25 @@ const TOTAL_REMITTED_1604E: &str = "1604E Part II Total Amount Remitted: form_16
      saw a row's total move with its penalties alone and bound it to \
      /scheduleN/k/penalties";
 
-/// Forms whose Part II date rows the samples date only in part (PR 6): a
+/// Part II date boxes the samples date only in part (PR 6, 1604C/E/F): a
 /// row path a second sample echoes as a whole MM/DD/YYYY date is that date,
 /// though the first sample, which leaves the row blank, echoed plain text.
-const DATED_ROWS_KEEP_THE_DATE: &[&str] = &["1604C", "1604E", "1604F"];
+/// Each entry is a box key stem; the rest of the key is the row number.
+const DATED_ROWS_KEEP_THE_DATE: &[&str] = &[
+    "frm1604c:txtSched1Date",
+    "frm1604e:txtSched1RemDate",
+    "frm1604e:txtSched2RemDate",
+    "frm1604f:txtSched1Date",
+    "frm1604f:txtSched2Date",
+    "frm1604f:txtSched3Date",
+];
+
+fn keeps_the_date(key: &str) -> bool {
+    DATED_ROWS_KEEP_THE_DATE.iter().any(|stem| {
+        key.strip_prefix(stem)
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    })
+}
 
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
@@ -215,6 +230,8 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                     || (!chosen_by_user && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()
+                } else if computed_by_form {
+                    "computed".to_string()
                 } else {
                     text(field, "required")
                 },
@@ -1600,10 +1617,9 @@ fn decide(
                     path.clone(),
                     // One path echoed as a whole date by one sample and as
                     // plain text by another (a row a sample leaves blank):
-                    // on the forms in DATED_ROWS_KEEP_THE_DATE it keeps the
-                    // date. Elsewhere the first echo stays, as before.
-                    DATED_ROWS_KEEP_THE_DATE.contains(&def.form_code.as_str())
-                        && matches!(value_kind, ValueKind::Text(None)),
+                    // a box of DATED_ROWS_KEEP_THE_DATE keeps the date.
+                    // Elsewhere the first echo stays, as before.
+                    keeps_the_date(key) && matches!(value_kind, ValueKind::Text(None)),
                 )
             })
             .cloned()
