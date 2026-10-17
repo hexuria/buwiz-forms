@@ -6,7 +6,8 @@ use super::FilingStatus;
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::forms::atc::{AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 use crate::penalties::{
-    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
+    PenaltyComponent, PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyOverrides,
+    PenaltyProfile, TaxpayerClass,
 };
 use crate::profile::{IncomeTaxElection, TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType};
 use chrono::{Datelike, Duration, NaiveDate};
@@ -270,6 +271,13 @@ pub struct Form2551QDraft {
     pub compromise: f64,
     #[serde(default)]
     pub total_penalties: f64,
+    /// Items 20-22 the filer entered in place of the computed ones (rule 8,
+    /// the shared model's per-component override): each set component files
+    /// instead of what [`Self::recompute`] computes, the others keep
+    /// computing. Stored under the same JSON keys as every other form's
+    /// (`penalty_overrides/{surcharge,interest,compromise}`).
+    #[serde(default)]
+    pub penalty_overrides: PenaltyOverrides,
     #[serde(default)]
     pub total_amount_payable: f64,
     #[serde(default)]
@@ -422,6 +430,7 @@ impl Form2551QDraft {
             interest: 0.0,
             compromise: 0.0,
             total_penalties: 0.0,
+            penalty_overrides: PenaltyOverrides::default(),
             total_amount_payable: 0.0,
             overpayment_disposition: OverpaymentDisposition::None,
             status: FilingStatus::Draft,
@@ -810,6 +819,7 @@ impl Form2551QDraft {
         //
         // We pass max(tax_payable, 0) as basic_tax_due so surcharge/interest
         // are computed on the positive amount only. Line 19 itself stays unclamped.
+        self.adopt_legacy_manual_penalties();
         if self.auto_compute_penalties && refresh_auto_penalties {
             if let Some(deadline) = self.filing_deadline() {
                 let today = chrono::Local::now().date_naive();
@@ -867,15 +877,34 @@ impl Form2551QDraft {
             }
         }
 
+        // Rule 8: an entered amount files instead of the computed one.
+        if self.auto_compute_penalties {
+            for (component, slot) in [
+                (PenaltyComponent::Surcharge, &mut self.surcharge),
+                (PenaltyComponent::Interest, &mut self.interest),
+                (PenaltyComponent::Compromise, &mut self.compromise),
+            ] {
+                if let Some(value) = self.penalty_overrides.get(component) {
+                    *slot = round_to_cents(value);
+                }
+            }
+        }
+
         // `2551q-tax-rate-eight-percent`: Item 13 = 8% on this return zeroes
-        // Items 20/21/22 along with the rest of the figures. Profile:
-        // official-match.
-        if self.auto_compute_penalties
-            && matches!(self.item_13_election, Item13Election::EightPercent)
-        {
-            self.surcharge = 0.0;
-            self.interest = 0.0;
-            self.compromise = 0.0;
+        // Items 20/21/22 along with the rest of the figures, and the
+        // official page disables them, so they take no override either.
+        // Profile: official-match. A legacy manual draft (never migrated,
+        // see `adopt_legacy_manual_penalties`) keeps the amounts it was
+        // saved with.
+        if matches!(self.item_13_election, Item13Election::EightPercent) {
+            for component in PenaltyComponent::ALL {
+                self.penalty_overrides.set(component, None);
+            }
+            if self.auto_compute_penalties {
+                self.surcharge = 0.0;
+                self.interest = 0.0;
+                self.compromise = 0.0;
+            }
         }
 
         // Line 23: Total Penalties
@@ -886,6 +915,33 @@ impl Form2551QDraft {
             ((self.tax_payable + self.total_penalties) * 100.0).round() / 100.0;
 
         self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Once, for a Draft saved with the manual switch (all three typed):
+    /// each typed amount becomes that component's override and the switch
+    /// turns off for good (it is the one-time flag), so the return files
+    /// what it filed before and a later blank computes again. A manual draft
+    /// with Item 13 = 8% stays manual (the 8% option takes no override),
+    /// keeping its amounts until its election changes. Returns whether the
+    /// draft changed. Runs before any write
+    /// ([`crate::forms::agent::prepare_for_writes`]) and in
+    /// [`Self::recompute`].
+    pub fn adopt_legacy_manual_penalties(&mut self) -> bool {
+        if self.auto_compute_penalties
+            || !matches!(self.status, FilingStatus::Draft)
+            || matches!(self.item_13_election, Item13Election::EightPercent)
+        {
+            return false;
+        }
+        for (component, value) in [
+            (PenaltyComponent::Surcharge, self.surcharge),
+            (PenaltyComponent::Interest, self.interest),
+            (PenaltyComponent::Compromise, self.compromise),
+        ] {
+            self.penalty_overrides.set(component, Some(value));
+        }
+        self.auto_compute_penalties = true;
+        true
     }
 
     fn submission_fingerprint(&self) -> String {
@@ -4399,5 +4455,146 @@ mod tests {
                 "expected an error for {field}: {errors:?}"
             );
         }
+    }
+
+    /// Rule 8 on 2551Q: Items 20-22 compute by default; a component the
+    /// filer enters files instead and the others keep computing; Items 23
+    /// and 24 add up what is filed; clearing it computes again.
+    #[test]
+    fn an_entered_penalty_files_instead_and_the_others_keep_computing() {
+        // Q1 2024 is long past its deadline: every component is due.
+        let computed = make_draft(500_000.0, 0.0, 2024, 1);
+        assert!(computed.surcharge > 0.0 && computed.interest > 0.0 && computed.compromise > 0.0);
+        assert_eq!(computed.penalty_overrides, PenaltyOverrides::default());
+
+        let mut entered = computed.clone();
+        entered.penalty_overrides.interest = Some(123.45);
+        entered.recompute(None);
+        assert_eq!(entered.interest, 123.45);
+        assert_eq!(entered.surcharge, computed.surcharge);
+        assert_eq!(entered.compromise, computed.compromise);
+        assert_eq!(
+            entered.total_penalties,
+            round_to_cents(computed.surcharge + 123.45 + computed.compromise)
+        );
+        assert_eq!(
+            entered.total_amount_payable,
+            round_to_cents(entered.tax_payable + entered.total_penalties)
+        );
+        assert!(entered.validate().iter().all(|(field, _)| {
+            !matches!(field.as_str(), "surcharge" | "interest" | "compromise")
+        }));
+        // The upload and the print carry what is filed.
+        let map = entered.to_bir_field_map();
+        assert_eq!(map["frm2551Qv2018:txt21"], "123.45");
+
+        entered.penalty_overrides.interest = None;
+        entered.recompute(None);
+        assert_eq!(
+            (entered.surcharge, entered.interest, entered.compromise),
+            (computed.surcharge, computed.interest, computed.compromise)
+        );
+    }
+
+    /// A return whose deadline has not come computes no penalty.
+    #[test]
+    fn a_return_that_is_not_late_computes_no_penalty() {
+        let next = u16::try_from(chrono::Local::now().year() + 1).unwrap();
+        let draft = make_draft(500_000.0, 0.0, next, 4);
+        assert_eq!(
+            (
+                draft.surcharge,
+                draft.interest,
+                draft.compromise,
+                draft.total_penalties
+            ),
+            (0.0, 0.0, 0.0, 0.0)
+        );
+        assert_eq!(draft.total_amount_payable, draft.tax_payable);
+    }
+
+    /// A draft saved with the manual switch files the same amounts: each
+    /// typed amount becomes that component's override.
+    #[test]
+    fn a_manual_penalty_draft_keeps_its_amounts_as_overrides() {
+        let mut draft = make_draft(500_000.0, 0.0, 2024, 1);
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 10.0;
+        draft.interest = 0.0;
+        draft.compromise = 1_000.0;
+        draft.recompute(None);
+        assert!(draft.auto_compute_penalties);
+        assert_eq!(
+            (draft.surcharge, draft.interest, draft.compromise),
+            (10.0, 0.0, 1_000.0)
+        );
+        assert_eq!(draft.penalty_overrides.surcharge, Some(10.0));
+        assert_eq!(draft.penalty_overrides.interest, Some(0.0));
+        assert_eq!(draft.penalty_overrides.compromise, Some(1_000.0));
+        assert_eq!(draft.total_penalties, 1_010.0);
+    }
+
+    /// A manual draft on Item 13 = 8% files what it filed before: the 8%
+    /// option takes no override, so it stays manual until its election
+    /// changes, and then adopts its amounts like any manual draft.
+    #[test]
+    fn a_manual_eight_percent_draft_keeps_its_amounts() {
+        let mut draft = make_draft(0.0, 0.0, 2024, 1);
+        draft.item_13_election = Item13Election::EightPercent;
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 10.0;
+        draft.interest = 0.0;
+        draft.compromise = 5.0;
+        draft.recompute(None);
+        assert!(!draft.auto_compute_penalties);
+        assert_eq!(
+            (draft.surcharge, draft.interest, draft.compromise),
+            (10.0, 0.0, 5.0)
+        );
+        assert_eq!(draft.penalty_overrides, PenaltyOverrides::default());
+        assert_eq!(draft.to_bir_field_map()["frm2551Qv2018:txt20"], "10.00");
+        draft.item_13_election = Item13Election::Graduated;
+        draft.recompute(None);
+        assert!(draft.auto_compute_penalties);
+        assert_eq!(draft.penalty_overrides.surcharge, Some(10.0));
+        assert_eq!(draft.penalty_overrides.compromise, Some(5.0));
+        assert_eq!((draft.surcharge, draft.compromise), (10.0, 5.0));
+    }
+
+    /// The migration runs once: a component blanked afterwards computes
+    /// again instead of coming back from the old manual amount.
+    #[test]
+    fn a_blank_after_the_migration_computes_again() {
+        let computed = make_draft(500_000.0, 0.0, 2024, 1);
+        let mut draft = computed.clone();
+        draft.auto_compute_penalties = false;
+        draft.interest = 31.5;
+        assert!(draft.adopt_legacy_manual_penalties());
+        assert!(!draft.adopt_legacy_manual_penalties(), "only once");
+        draft.penalty_overrides.interest = None;
+        draft.recompute(None);
+        assert_eq!(draft.interest, computed.interest);
+        assert_eq!(draft.penalty_overrides.interest, None);
+        assert_eq!(draft.surcharge, computed.surcharge);
+    }
+
+    /// Item 13 = 8% zeroes and disables Items 20-22 on the official page
+    /// (`taxRateOption()`): an override does not survive it.
+    #[test]
+    fn an_eight_percent_return_takes_no_penalty_override() {
+        let mut draft = make_draft(0.0, 0.0, 2024, 1);
+        draft.penalty_overrides.surcharge = Some(100.0);
+        draft.item_13_election = Item13Election::EightPercent;
+        draft.recompute(None);
+        assert_eq!(draft.penalty_overrides, PenaltyOverrides::default());
+        assert_eq!(
+            (
+                draft.surcharge,
+                draft.interest,
+                draft.compromise,
+                draft.total_penalties
+            ),
+            (0.0, 0.0, 0.0, 0.0)
+        );
     }
 }

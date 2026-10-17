@@ -25248,12 +25248,12 @@
       "evidence": "agent box label: 'Year Ended (MM/YYYY), YYYY'; writer-cells printed caption: 'Year Ended (MM/YYYY), YYYY'"
     },
     "frm2550qv2024:serviceInputTax": {
-      "label": "Services Rendered by Non-Residents, Input Tax",
-      "evidence": "agent box label: 'Services Rendered by Non-Residents, Input Tax'; writer-cells printed caption: 'Services Rendered by Non-Residents, Input Tax'"
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Services Rendered by Non-Residents, Input Tax'; writer-cells printed caption: 'Services Rendered by Non-Residents, Input Tax'"
     },
     "frm2550qv2024:servicesPurchase": {
-      "label": "Services Rendered by Non-Residents",
-      "evidence": "agent box label: 'Services Rendered by Non-Residents'; writer-cells printed caption: 'Services Rendered by Non-Residents'"
+      "label": "A. Purchases",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Services Rendered by Non-Residents'; writer-cells printed caption: 'Services Rendered by Non-Residents'"
     },
     "frm2550qv2024:OptQuarter1": {
       "label": "1st",
@@ -25272,28 +25272,30 @@
       "evidence": "agent box label minus group question: '4th'; binding /quarter='Fourth' when selected: 'Fourth'"
     },
     "frm2550qv2024:sched2AmountInputTax": {
-      "label": "Amount Input Tax",
-      "evidence": "agent box label: 'Amount Input Tax'"
+      "label": "Amount of Input Tax not directly attributable",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 2 formula | agent box label: 'Amount Input Tax'"
     },
     "frm2550qv2024:sched2InputTaxDirect": {
-      "label": "Input tax directly attributable to VAT Exempt Sale",
-      "evidence": "agent box label: 'Input tax directly attributable to VAT Exempt Sale'; writer-cells printed caption: 'Input tax directly attributable to VAT Exempt Sale'"
+      "label": "Input Tax directly attributable to VAT Exempt Sale",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 2 | agent box label: 'Input tax directly attributable to VAT Exempt Sale'; writer-cells printed caption: 'Input tax directly attributable to VAT Exempt Sale'"
     },
     "frm2550qv2024:sched2TotalAttr": {
-      "label": "Total Input Tax attributable to Exempt Sale",
-      "evidence": "agent box label: 'Total Input Tax attributable to Exempt Sale'; writer-cells printed caption: 'Total Input Tax attributable to Exempt Sale'"
+      "label": "Total Input Tax attributable to Exempt Sale (To Part IV, Item 53)",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 2 | agent box label: 'Total Input Tax attributable to Exempt Sale'; writer-cells printed caption: 'Total Input Tax attributable to Exempt Sale' | kind money: html-frozen/2550q-2024/writer-cells.json prints it in a peso and centavo comb",
+      "kind": "money"
     },
     "frm2550qv2024:sched2TotalRatable": {
-      "label": "Schedule 2 Add: Ratable portion of Input Tax not directly attributable",
-      "evidence": "agent box label: 'Schedule 2 Add: Ratable portion of Input Tax not directly attributable'; writer-cells printed caption: 'Schedule 2 Add: Ratable portion of Input Tax not directly attributable'"
+      "label": "Add: Ratable portion of Input Tax not directly attributable to any activity",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 2 | agent box label: 'Schedule 2 Add: Ratable portion of Input Tax not directly attributable'; writer-cells printed caption: 'Schedule 2 Add: Ratable portion of Input Tax not directly attributable' | kind money: html-frozen/2550q-2024/writer-cells.json prints it in a peso and centavo comb",
+      "kind": "money"
     },
     "frm2550qv2024:sched2TotalSales": {
       "label": "Total Sales",
-      "evidence": "agent box label: 'Total Sales'"
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 2 formula | agent box label: 'Total Sales'"
     },
     "frm2550qv2024:sched2VatExemptSale": {
-      "label": "Vat Exempt Sale",
-      "evidence": "agent box label: 'Vat Exempt Sale'"
+      "label": "VAT Exempt Sale",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 2 formula 'VAT Exempt Sale / Total Sales x Amount of Input Tax not directly attributable' | agent box label: 'Vat Exempt Sale'"
     },
     "frm2550qv2024:amendedReturnNo5": {
       "label": "No",
@@ -25304,16 +25306,16 @@
       "evidence": "agent group option: 'Yes'; agent box label minus group question: 'Yes'; binding /is_amended=True when selected: 'Yes'"
     },
     "frm2550qv2024:otherSpecify42": {
-      "label": "Others (Specify)",
-      "evidence": "agent box label: 'Others (Specify)'; writer-cells printed caption: 'Others (Specify)'"
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Others (Specify)'; writer-cells printed caption: 'Others (Specify)'"
     },
     "frm2550qv2024:otherSpecify47": {
-      "label": "Others (Specify)",
-      "evidence": "agent box label: 'Others (Specify)'; writer-cells printed caption: 'Others (Specify)'"
+      "label": "A. Purchases",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Others (Specify)'; writer-cells printed caption: 'Others (Specify)'"
     },
     "frm2550qv2024:otherSpecify56": {
-      "label": "Others (Specify)",
-      "evidence": "agent box label: 'Others (Specify)'; writer-cells printed caption: 'Others (Specify)'"
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Others (Specify)'; writer-cells printed caption: 'Others (Specify)'"
     },
     "frm2550qv2024:txtRDOCode": {
       "label": "RDO Code",
@@ -25326,7 +25328,8 @@
     },
     "frm2550qv2024:taxpayerAddress": {
       "kind": "text",
-      "evidence": "binding type text; fields.json text/decimal-money"
+      "evidence": "html-frozen/2550q-2024/index.html: item 10 'Registered Address' | binding type text; fields.json text/decimal-money",
+      "label": "Registered Address"
     },
     "frm2550qv2024:taxpayerZip": {
       "label": "ZIP Code",
@@ -25334,48 +25337,51 @@
       "kind": "text"
     },
     "frm2550qv2024:total43": {
-      "label": "Total (Sum of Items 38B to 42B)",
-      "evidence": "agent box label: 'Total (Sum of Items 38B to 42B)'; writer-cells printed caption: 'Total (Sum of Items 38B to 42B)'"
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Total (Sum of Items 38B to 42B)'; writer-cells printed caption: 'Total (Sum of Items 38B to 42B)' | kind money: html-frozen/2550q-2024/writer-cells.json prints it in a peso and centavo comb",
+      "kind": "money"
     },
     "frm2550qv2024:totalAdjOutput": {
-      "label": "Total Adjusted Output Tax Due",
-      "evidence": "agent box label: 'Total Adjusted Output Tax Due'; writer-cells printed caption: 'Total Adjusted Output Tax Due'"
+      "label": "B. Output Tax for the Quarter",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Total Adjusted Output Tax Due'; writer-cells printed caption: 'Total Adjusted Output Tax Due' | kind money: html-frozen/2550q-2024/writer-cells.json prints it in a peso and centavo comb",
+      "kind": "money"
     },
     "frm2550qv2024:totalCurPurchase": {
-      "label": "Total Current Purchases",
-      "evidence": "agent box label: 'Total Current Purchases'; writer-cells printed caption: 'Total Current Purchases'"
+      "label": "A. Purchases",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Total Current Purchases'; writer-cells printed caption: 'Total Current Purchases'"
     },
     "frm2550qv2024:taxpayerEmailAddress": {
       "kind": "text",
-      "evidence": "binding type text; fields.json text/decimal-money"
+      "evidence": "html-frozen/2550q-2024/writer-cells.json joins: printed '12 Email Address' | binding type text; fields.json text/decimal-money",
+      "label": "Email Address"
     },
     "frm2550qv2024:specifyInternationalTreaty": {
       "label": "If yes, specify",
       "evidence": "agent box label: 'If yes, specify'; writer-cells printed caption: 'If yes, specify'"
     },
     "frm2550qv2024:importPurchase": {
-      "label": "Importations",
-      "evidence": "agent box label: 'Importations'; writer-cells printed caption: 'Importations'"
+      "label": "A. Purchases",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Importations'; writer-cells printed caption: 'Importations'"
     },
     "frm2550qv2024:inputTaxAttr": {
-      "label": "Input Tax Attributable to VAT Exempt Sales",
-      "evidence": "agent box label: 'Input Tax Attributable to VAT Exempt Sales'; writer-cells printed caption: 'Input Tax Attributable to VAT Exempt Sales'"
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Input Tax Attributable to VAT Exempt Sales'; writer-cells printed caption: 'Input Tax Attributable to VAT Exempt Sales'"
     },
     "frm2550qv2024:domesticPurchase": {
-      "label": "Domestic Purchases",
-      "evidence": "agent box label: 'Domestic Purchases'; writer-cells printed caption: 'Domestic Purchases'"
+      "label": "A. Purchases",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Domestic Purchases'; writer-cells printed caption: 'Domestic Purchases'"
     },
     "frm2550qv2024:domesticPurchaseNoTax": {
-      "label": "Domestic Purchases with No Input Tax",
-      "evidence": "agent box label: 'Domestic Purchases with No Input Tax'; writer-cells printed caption: 'Domestic Purchases with No Input Tax'"
+      "label": "A. Purchases",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Domestic Purchases with No Input Tax'; writer-cells printed caption: 'Domestic Purchases with No Input Tax'"
     },
     "frm2550qv2024:advVatPayment": {
       "label": "Advance VAT Payments",
       "evidence": "agent box label: 'Advance VAT Payments'; writer-cells printed caption: 'Advance VAT Payments'"
     },
     "otherSpecify47B": {
-      "label": "Others (Specify), Input Tax",
-      "evidence": "agent box label: 'Others (Specify), Input Tax'; writer-cells printed caption: 'Others (Specify), Input Tax'"
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins '47B Others (Specify), Input Tax') | agent box label: 'Others (Specify), Input Tax'; writer-cells printed caption: 'Others (Specify), Input Tax'"
     },
     "txtEnroll": {
       "kind": "hidden",
@@ -25386,53 +25392,56 @@
       "evidence": "internal workflow/credential key txtFinalFlag (not a printed box)"
     },
     "txtNameOfTaxpayer41": {
-      "label": "Schedule 4 row 2 (C) Name of Taxpayer",
-      "evidence": "agent box label: 'Schedule 4 row 2 (C) Name of Taxpayer'; writer-cells printed caption: 'Schedule 4 row 2 (C) Name of Taxpayer' | binding type text; fields.json text/decimal-money",
+      "label": "(C) Name of Taxpayer",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 4 column heading '(C) Name of Taxpayer' (the column is keyed by its rows; a row-2 caption named the whole column) | agent box label: 'Schedule 4 row 2 (C) Name of Taxpayer'; writer-cells printed caption: 'Schedule 4 row 2 (C) Name of Taxpayer' | binding type text; fields.json text/decimal-money",
       "kind": "text"
     },
     "frm2550qv2024:addSpecifyNo19": {
-      "label": "Other Credits/Payment (Specify)",
-      "evidence": "agent box label: 'Other Credits/Payment (Specify)'; writer-cells printed caption: 'Other Credits/Payment (Specify)'"
+      "label": "Specify",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json joins: printed '19 Others (Specify)' / '19 Other Credits/Payment (Specify)': the description box | agent box label: 'Other Credits/Payment (Specify)'; writer-cells printed caption: 'Other Credits/Payment (Specify)'"
     },
     "frm2550qv2024:otherCreditsNo19": {
-      "label": "Other Credits/Payment",
-      "evidence": "agent box label: 'Other Credits/Payment'; writer-cells printed caption: 'Other Credits/Payment'"
+      "label": "Amount",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json money_joins: printed '19 Other Credits/Payment' | agent box label: 'Other Credits/Payment'; writer-cells printed caption: 'Other Credits/Payment'"
     },
     "frm2550qv2024:Pg2TaxPayer": {
-      "label": "Taxpayer's Last Name / Registered Name",
-      "evidence": "agent box label: \"Taxpayer's Last Name / Registered Name\"; writer-cells printed caption: \"Taxpayer's Last Name / Registered Name\""
+      "kind": "hidden",
+      "evidence": "Rule 3: the page 2 header repeats item 7 TIN and item 9 name (html-frozen/2550q-2024/writer-cells.json joins 'Page 2 TIN' from derived:tin_digits and 'Taxpayer's Last Name / Registered Name'); the print still prints them from the draft"
     },
     "frm2550qv2024:txtPg2TIN1": {
-      "label": "Page 2 header TIN (part 1)",
-      "evidence": "P4: html-frozen/2550q-2024/writer-cells.json 'the nine TIN digits of the page 2 header', segment 1"
+      "kind": "hidden",
+      "evidence": "Rule 3: the page 2 header repeats item 7 TIN and item 9 name (html-frozen/2550q-2024/writer-cells.json joins 'Page 2 TIN' from derived:tin_digits and 'Taxpayer's Last Name / Registered Name'); the print still prints them from the draft"
     },
     "frm2550qv2024:txtPg2TIN2": {
-      "label": "Page 2 header TIN (part 2)",
-      "evidence": "P4: html-frozen/2550q-2024/writer-cells.json 'the nine TIN digits of the page 2 header', segment 2"
+      "kind": "hidden",
+      "evidence": "Rule 3: the page 2 header repeats item 7 TIN and item 9 name (html-frozen/2550q-2024/writer-cells.json joins 'Page 2 TIN' from derived:tin_digits and 'Taxpayer's Last Name / Registered Name'); the print still prints them from the draft"
     },
     "frm2550qv2024:txtPg2TIN3": {
-      "label": "Page 2 header TIN (part 3)",
-      "evidence": "P4: html-frozen/2550q-2024/writer-cells.json 'the nine TIN digits of the page 2 header', segment 3"
+      "kind": "hidden",
+      "evidence": "Rule 3: the page 2 header repeats item 7 TIN and item 9 name (html-frozen/2550q-2024/writer-cells.json joins 'Page 2 TIN' from derived:tin_digits and 'Taxpayer's Last Name / Registered Name'); the print still prints them from the draft"
     },
     "sched1TotalBalNext": {
-      "label": "Part V Schedule 1 total, Column I",
-      "evidence": "agent box label: 'Part V Schedule 1 total, Column I'; writer-cells printed caption: 'Part V Schedule 1 total, Column I'"
+      "label": "Total, Column I (To Part IV, Item 52B)",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 1 '(Column I - To Part IV, Item 52B)' | agent box label: 'Part V Schedule 1 total, Column I'; writer-cells printed caption: 'Part V Schedule 1 total, Column I' | kind money: html-frozen/2550q-2024/writer-cells.json joins it to a peso amount cell",
+      "kind": "money"
     },
     "sched1TotalBalPrev": {
-      "label": "Part V Schedule 1 total, Column E",
-      "evidence": "agent box label: 'Part V Schedule 1 total, Column E'; writer-cells printed caption: 'Part V Schedule 1 total, Column E'"
+      "label": "Total, Column E (To Part IV, Item 39B)",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 1 'Total (Column E - To Part IV, Item 39B)' | agent box label: 'Part V Schedule 1 total, Column E'; writer-cells printed caption: 'Part V Schedule 1 total, Column E' | kind money: html-frozen/2550q-2024/writer-cells.json joins it to a peso amount cell",
+      "kind": "money"
     },
     "sched3TotalIncome": {
-      "label": "Schedule 3 Total, Column C (Income Payment)",
-      "evidence": "agent box label: 'Schedule 3 Total, Column C (Income Payment)'; writer-cells printed caption: 'Schedule 3 Total, Column C (Income Payment)'"
+      "label": "Total, Column C (Income Payment)",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json joins 'Schedule 3 Total, Column C (Income Payment)' | agent box label: 'Schedule 3 Total, Column C (Income Payment)'; writer-cells printed caption: 'Schedule 3 Total, Column C (Income Payment)' | kind money: html-frozen/2550q-2024/writer-cells.json joins it to a peso amount cell",
+      "kind": "money"
     },
     "sched3TotalTax": {
-      "label": "Schedule 3 Total, Column D",
-      "evidence": "agent box label: 'Schedule 3 Total, Column D'; writer-cells printed caption: 'Schedule 3 Total, Column D'"
+      "label": "Total, Column D (To Part II, Item 16)",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 3 'Total (Column D - To Part II, Item 16)' | agent box label: 'Schedule 3 Total, Column D'; writer-cells printed caption: 'Schedule 3 Total, Column D'"
     },
     "sched4AmountPaid": {
-      "label": "Schedule 4 Total (To Part II, Item 17)",
-      "evidence": "agent box label: 'Schedule 4 Total (To Part II, Item 17)'; writer-cells printed caption: 'Schedule 4 Total (To Part II, Item 17)'"
+      "label": "Total (To Part II, Item 17)",
+      "evidence": "html-frozen/2550q-2024/index.html Schedule 4 'Total (To Part II, Item 17)' | agent box label: 'Schedule 4 Total (To Part II, Item 17)'; writer-cells printed caption: 'Schedule 4 Total (To Part II, Item 17)'"
     },
     "txtAllowedInputTax10": {
       "computed": true,
@@ -25443,20 +25452,12 @@
       "evidence": "N04: preserved from the reviewed save, not typed (form_2550q.rs Form2550QCapitalGoodRow allowable_input_tax_for_period / balance_to_next_period: the evidence does not expose the months-in-use input)."
     },
     "frm2550qv2024:adjDeductions": {
-      "label": "Adjusted Deductions from Input Tax",
-      "evidence": "agent box label: 'Adjusted Deductions from Input Tax'; writer-cells printed caption: 'Adjusted Deductions from Input Tax'"
-    },
-    "move:frm2550qv2024:txtPg2BranchCode": {
-      "to": "3:1",
-      "evidence": "P4: html-frozen/2550q-2024/writer-cells.json not_joined [txtPg2BranchCode, branchCode]: 'the page 2 TIN comb preprints the branch slots' — the branch code is the page 2 header TIN's last segment, not printed item 7"
-    },
-    "item:3:1": {
-      "label": "Page 2 header TIN",
-      "evidence": "P4: html-frozen/2550q-2024/writer-cells.json not_joined txtPg2TIN1-3 'the nine TIN digits of the page 2 header'"
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | agent box label: 'Adjusted Deductions from Input Tax'; writer-cells printed caption: 'Adjusted Deductions from Input Tax'"
     },
     "frm2550qv2024:txtPg2BranchCode": {
-      "label": "Page 2 header TIN branch code",
-      "evidence": "P4: html-frozen/2550q-2024/writer-cells.json 'the page 2 TIN comb preprints the branch slots'"
+      "kind": "hidden",
+      "evidence": "Rule 3: the page 2 header repeats item 7 TIN and item 9 name (html-frozen/2550q-2024/writer-cells.json joins 'Page 2 TIN' from derived:tin_digits and 'Taxpayer's Last Name / Registered Name'); the print still prints them from the draft"
     },
     "table:2:sched1more": {
       "no": "",
@@ -25656,12 +25657,764 @@
       "evidence": "N04: these columns held the Items 42, 47 and 56 popup row templates; their rows are now each item's own table (table:3:item42more etc.), so the extracted Item 42 table hides them."
     },
     "frm2550qv2024:addSpecifyNo42": {
-      "label": "Description (specify)",
-      "evidence": "N04: the printed Items 42/47/56 'Others (Specify)' line: description box (addSpecifyNo<n>)."
+      "label": "Specify",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json joins: printed '42 Others (Specify)' / '42 Other Credits/Payment (Specify)': the description box | N04: the printed Items 42/47/56 'Others (Specify)' line: description box (addSpecifyNo<n>)."
     },
     "resultOtherCreditsNo42": {
-      "label": "Amount",
-      "evidence": "N04: the printed Items 42/47/56 'Others (Specify)' line: amount box (resultOtherCreditsNo<n>)."
+      "label": "Total of the added rows",
+      "evidence": "crates/bir-core/src/forms/form_2550q_xml.rs Form2550QSpecifyPopup: resultOtherCreditsNo42 is the subtotal of the item's '(Add more...)' rows; html-frozen/2550q-2024/writer-cells.json not_joined (the item's amount prints from its own box) | N04: the printed Items 42/47/56 'Others (Specify)' line: amount box (resultOtherCreditsNo<n>)."
+    },
+    "frm2550qv2024:RtnPeriodFromNo4": {
+      "label": "From",
+      "evidence": "html-frozen/2550q-2024/index.html: item 4 'Return Period (MM/DD/YYYY) From To'; html-frozen/2550q-2024/writer-cells.json date_joins '4 Return Period From'"
+    },
+    "frm2550qv2024:RtnPeriodToNo4": {
+      "label": "To",
+      "evidence": "html-frozen/2550q-2024/index.html: item 4 'Return Period (MM/DD/YYYY) From To'; html-frozen/2550q-2024/writer-cells.json date_joins '4 Return Period To'"
+    },
+    "frm2550qv2024:internationalTreatyYn": {
+      "label": "Yes",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json xbox_joins: printed '14 Yes'"
+    },
+    "frm2550qv2024:specialRateYn": {
+      "label": "No",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json xbox_joins: printed '14 No'"
+    },
+    "frm2550qv2024:taxpayerContactNumber": {
+      "label": "Contact Number",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json joins: printed '11 Contact Number'"
+    },
+    "txtEmail": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: 'duplicate of frm2550qv2024:taxpayerEmailAddress (same email), which prints in item 12'; the official save crates/bir-core/tests/sample-payloads/2550Q-122025Q1.official.xml carries taxpayerEmailAddress=<the email> and txtEmail= blank. The XML still writes whatever the draft holds"
+    },
+    "frm2550qv2024:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: page counter of the eBIRForms page, not a box on the paper form"
+    },
+    "frm2550qv2024:txtMaxPage": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: page counter of the eBIRForms page, not a box on the paper form"
+    },
+    "txtTotalAmountOfBalanceofInputTaxFromPrevious": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: 'the page's own copy of a schedule total; the same amount prints from sched1TotalBalPrev / sched1TotalBalNext / sched3TotalIncome / sched3TotalTax / sched4AmountPaid', which the page shows"
+    },
+    "txtTotalAmountOfBalanceofInputTaxToBeCarried": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: 'the page's own copy of a schedule total; the same amount prints from sched1TotalBalPrev / sched1TotalBalNext / sched3TotalIncome / sched3TotalTax / sched4AmountPaid', which the page shows"
+    },
+    "txtTotalAmountofIncomePayment": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: 'the page's own copy of a schedule total; the same amount prints from sched1TotalBalPrev / sched1TotalBalNext / sched3TotalIncome / sched3TotalTax / sched4AmountPaid', which the page shows"
+    },
+    "txtTotalAmoungOfTaxWithHeld": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: 'the page's own copy of a schedule total; the same amount prints from sched1TotalBalPrev / sched1TotalBalNext / sched3TotalIncome / sched3TotalTax / sched4AmountPaid', which the page shows"
+    },
+    "txtAmountPaidSched4": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json not_joined: 'the page's own copy of a schedule total; the same amount prints from sched1TotalBalPrev / sched1TotalBalNext / sched3TotalIncome / sched3TotalTax / sched4AmountPaid', which the page shows"
+    },
+    "frm2550qv2024:penalties": {
+      "computed": true,
+      "label": "Total Penalties",
+      "evidence": "html-frozen/2550q-2024/index.html: '25 Total Penalties (Sum of Items 22 to 24)'; crates/bir-core/src/forms/form_2550q.rs recompute sets item_25_total_penalties to the sum of Items 22-24, while the probe binds this box to /part_ii/item_22_surcharge, so typing a total there would overwrite the surcharge"
+    },
+    "frm2550qv2024:vatableSales": {
+      "label": "A. Sales for the Quarter (Exclusive of VAT)",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:outputVatSales": {
+      "label": "B. Output Tax for the Quarter",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:zeroRatedSales": {
+      "label": "A. Sales for the Quarter (Exclusive of VAT)",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:exemptSales": {
+      "label": "A. Sales for the Quarter (Exclusive of VAT)",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:totalSales": {
+      "label": "A. Sales for the Quarter (Exclusive of VAT)",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:outputTaxDue": {
+      "label": "B. Output Tax for the Quarter",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:lessOutputVat": {
+      "label": "B. Output Tax for the Quarter",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | kind money: html-frozen/2550q-2024/writer-cells.json prints it in a peso and centavo comb",
+      "kind": "money"
+    },
+    "frm2550qv2024:addOutputVat": {
+      "label": "B. Output Tax for the Quarter",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | kind money: html-frozen/2550q-2024/writer-cells.json prints it in a peso and centavo comb",
+      "kind": "money"
+    },
+    "frm2550qv2024:inputTaxCarried": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:inputTaxDeferred": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:transitionalInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:presumptiveInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:domesticInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:importInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins) | kind money: html-frozen/2550q-2024/writer-cells.json prints it in a peso and centavo comb",
+      "kind": "money"
+    },
+    "frm2550qv2024:vatExemptImports": {
+      "label": "A. Purchases",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:totalCurInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:totalAvailInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:importCapitalInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:vatRefund": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:inputVatUnpaid": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:totalDeductions": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:addInputVat": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:totalAllowInputTax": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "frm2550qv2024:netVatPayable": {
+      "label": "B. Input Tax",
+      "evidence": "html-frozen/2550q-2024/index.html Part IV column heading over the box (html-frozen/2550q-2024/writer-cells.json money_joins)"
+    },
+    "resultOtherCreditsNo19": {
+      "label": "Total of the added rows",
+      "evidence": "crates/bir-core/src/forms/form_2550q_xml.rs Form2550QSpecifyPopup: resultOtherCreditsNo19 is the subtotal of the item's '(Add more...)' rows; html-frozen/2550q-2024/writer-cells.json not_joined (the item's amount prints from its own box)"
+    },
+    "frm2550qv2024:addSpecifyNo47": {
+      "label": "Specify",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json joins: printed '47 Others (Specify)' / '47 Other Credits/Payment (Specify)': the description box"
+    },
+    "resultOtherCreditsNo47": {
+      "label": "Total of the added rows",
+      "evidence": "crates/bir-core/src/forms/form_2550q_xml.rs Form2550QSpecifyPopup: resultOtherCreditsNo47 is the subtotal of the item's '(Add more...)' rows; html-frozen/2550q-2024/writer-cells.json not_joined (the item's amount prints from its own box)"
+    },
+    "frm2550qv2024:addSpecifyNo56": {
+      "label": "Specify",
+      "evidence": "html-frozen/2550q-2024/writer-cells.json joins: printed '56 Others (Specify)' / '56 Other Credits/Payment (Specify)': the description box"
+    },
+    "resultOtherCreditsNo56": {
+      "label": "Total of the added rows",
+      "evidence": "crates/bir-core/src/forms/form_2550q_xml.rs Form2550QSpecifyPopup: resultOtherCreditsNo56 is the subtotal of the item's '(Add more...)' rows; html-frozen/2550q-2024/writer-cells.json not_joined (the item's amount prints from its own box)"
+    },
+    "layout": {
+      "evidence": "Rule 3 (screen order = paper order) from html-frozen/2550q-2024/index.html (BIR Form 2550Q April 2024: items 1-6, Part I 7-14A, Part II 15-26, Part III Details of Payment 27-30, page 2 Part IV 31-61 in columns A and B, Part V Schedules 1-4) and html-frozen/2550q-2024/writer-cells.json (which box prints at which item). Item 7 is TIN then branch code as printed. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the",
+              "k": [
+                "frm2550qv2024:calendarNo1",
+                "frm2550qv2024:fiscalNo1"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Year Ended (MM/YYYY)",
+              "k": [
+                "frm2550qv2024:selectedMonthNo2",
+                "frm2550qv2024:txtYearNo2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Quarter",
+              "k": [
+                "frm2550qv2024:OptQuarter1",
+                "frm2550qv2024:OptQuarter2",
+                "frm2550qv2024:OptQuarter3",
+                "frm2550qv2024:OptQuarter4"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Return Period (MM/DD/YYYY)",
+              "k": [
+                "frm2550qv2024:RtnPeriodFromNo4",
+                "frm2550qv2024:RtnPeriodToNo4"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Amended Return?",
+              "k": [
+                "frm2550qv2024:amendedReturnYesNo5",
+                "frm2550qv2024:amendedReturnNo5"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Short Period Return?",
+              "k": [
+                "frm2550qv2024:OptShortPrd1",
+                "frm2550qv2024:OptShortPrd2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "7",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2550qv2024:txtTIN1",
+                "frm2550qv2024:txtTIN2",
+                "frm2550qv2024:txtTIN3",
+                "frm2550qv2024:branchCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "RDO Code",
+              "k": [
+                "frm2550qv2024:txtRDOCode"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Taxpayer’s Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm2550qv2024:taxpayerName"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Registered Address (Indicate complete address. If branch, indicate the branch address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)",
+              "k": [
+                "frm2550qv2024:taxpayerAddress"
+              ]
+            },
+            {
+              "no": "10A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2550qv2024:taxpayerZip"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Contact Number (Landline/Cellphone No.)",
+              "k": [
+                "frm2550qv2024:taxpayerContactNumber"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Email Address",
+              "k": [
+                "frm2550qv2024:taxpayerEmailAddress",
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Taxpayer Classification",
+              "k": [
+                "frm2550qv2024:taxPayerClassification1",
+                "frm2550qv2024:taxPayerClassification2",
+                "frm2550qv2024:taxPayerClassification3",
+                "frm2550qv2024:taxPayerClassification4"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm2550qv2024:internationalTreatyYn",
+                "frm2550qv2024:specialRateYn"
+              ]
+            },
+            {
+              "no": "14A",
+              "l": "If yes, specify",
+              "k": [
+                "frm2550qv2024:specifyInternationalTreaty"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Total Tax Payable",
+          "items": [
+            {
+              "no": "15",
+              "l": "Net VAT Payable/(Excess Input Tax) (From Part IV, Item 61)",
+              "k": [
+                "frm2550qv2024:excessInputTax"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Creditable VAT Withheld (From Part V - Schedule 3, Column D)",
+              "k": [
+                "frm2550qv2024:creditableVat"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Advance VAT Payments (From Part V - Schedule 4)",
+              "k": [
+                "frm2550qv2024:advVatPayment"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "VAT paid in return previously filed, if this is an amended return",
+              "k": [
+                "frm2550qv2024:vatPaidReturn"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Other Credits/Payment (Specify)",
+              "k": [
+                "frm2550qv2024:addSpecifyNo19",
+                "frm2550qv2024:otherCreditsNo19",
+                "resultOtherCreditsNo19",
+                "frm2550qv2024:totalTaxPayableNo19Description{N>=0}",
+                "frm2550qv2024:totalTaxPayableNo19Amount{N>=0}"
+              ]
+            },
+            {
+              "table": "frm2550qv2024:totalTaxPayableNo19Description0"
+            },
+            {
+              "no": "20",
+              "l": "Total Tax Credits/Payment (Sum of Items 16 to 19)",
+              "k": [
+                "frm2550qv2024:totalTaxCredits"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Tax Still Payable/(Excess Credits) (Item 15 Less Item 20)",
+              "k": [
+                "frm2550qv2024:excessCredits"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Surcharge",
+              "k": [
+                "frm2550qv2024:surcharge"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Interest",
+              "k": [
+                "frm2550qv2024:interest"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Compromise",
+              "k": [
+                "frm2550qv2024:compromise"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "Total Penalties (Sum of Items 22 to 24)",
+              "k": [
+                "frm2550qv2024:penalties"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "TOTAL AMOUNT PAYABLE/(Excess Credits) (Sum of Items 21 and 25)",
+              "k": [
+                "frm2550qv2024:totalPayable"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "27",
+              "l": "Cash/Bank Debit Advice",
+              "k": [],
+              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "p": 1
+            },
+            {
+              "no": "28",
+              "l": "Check",
+              "k": [],
+              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "p": 1
+            },
+            {
+              "no": "29",
+              "l": "Tax Debit Memo",
+              "k": [],
+              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "p": 1
+            },
+            {
+              "no": "30",
+              "l": "Others (Specify below)",
+              "k": [],
+              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "p": 1
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Details of VAT Computation",
+          "items": [
+            {
+              "no": "31",
+              "l": "VATable Sales",
+              "k": [
+                "frm2550qv2024:vatableSales",
+                "frm2550qv2024:outputVatSales"
+              ]
+            },
+            {
+              "no": "32",
+              "l": "Zero-Rated Sales",
+              "k": [
+                "frm2550qv2024:zeroRatedSales"
+              ]
+            },
+            {
+              "no": "33",
+              "l": "Exempt Sales",
+              "k": [
+                "frm2550qv2024:exemptSales"
+              ]
+            },
+            {
+              "no": "34",
+              "l": "Total Sales & Output Tax Due (Sum of Items 31A to 33A) / (Item 31B)",
+              "k": [
+                "frm2550qv2024:totalSales",
+                "frm2550qv2024:outputTaxDue"
+              ]
+            },
+            {
+              "no": "35",
+              "l": "Less: Output VAT on Uncollected Receivables",
+              "k": [
+                "frm2550qv2024:lessOutputVat"
+              ]
+            },
+            {
+              "no": "36",
+              "l": "Add: Output VAT on Recovered Uncollected Receivables Previously Deducted",
+              "k": [
+                "frm2550qv2024:addOutputVat"
+              ]
+            },
+            {
+              "no": "37",
+              "l": "Total Adjusted Output Tax Due (Item 34B Less Item 35B Add Item 36B)",
+              "k": [
+                "frm2550qv2024:totalAdjOutput"
+              ]
+            },
+            {
+              "no": "38",
+              "l": "Less: Allowable Input Tax · Input Tax Carried Over from Previous Quarter",
+              "k": [
+                "frm2550qv2024:inputTaxCarried"
+              ]
+            },
+            {
+              "no": "39",
+              "l": "Input Tax Deferred on Capital Goods Exceeding P1 Million from Previous Quarter (From Part V - Schedule 1 Col E)",
+              "k": [
+                "frm2550qv2024:inputTaxDeferred"
+              ]
+            },
+            {
+              "no": "40",
+              "l": "Transitional Input Tax",
+              "k": [
+                "frm2550qv2024:transitionalInputTax"
+              ]
+            },
+            {
+              "no": "41",
+              "l": "Presumptive Input Tax",
+              "k": [
+                "frm2550qv2024:presumptiveInputTax"
+              ]
+            },
+            {
+              "no": "42",
+              "l": "Others (Specify)",
+              "k": [
+                "frm2550qv2024:addSpecifyNo42",
+                "resultOtherCreditsNo42",
+                "frm2550qv2024:totalTaxPayableNo42Description{N>=0}",
+                "frm2550qv2024:totalTaxPayableNo42Amount{N>=0}",
+                "frm2550qv2024:otherSpecify42"
+              ]
+            },
+            {
+              "table": "frm2550qv2024:totalTaxPayableNo42Description0"
+            },
+            {
+              "no": "43",
+              "l": "Total (Sum of Items 38B to 42B)",
+              "k": [
+                "frm2550qv2024:total43"
+              ]
+            },
+            {
+              "no": "44",
+              "l": "Current Transactions · Domestic Purchases",
+              "k": [
+                "frm2550qv2024:domesticPurchase",
+                "frm2550qv2024:domesticInputTax"
+              ]
+            },
+            {
+              "no": "45",
+              "l": "Services Rendered by Non-Residents",
+              "k": [
+                "frm2550qv2024:servicesPurchase",
+                "frm2550qv2024:serviceInputTax"
+              ]
+            },
+            {
+              "no": "46",
+              "l": "Importations",
+              "k": [
+                "frm2550qv2024:importPurchase",
+                "frm2550qv2024:importInputTax"
+              ]
+            },
+            {
+              "no": "47",
+              "l": "Others (Specify)",
+              "k": [
+                "frm2550qv2024:addSpecifyNo47",
+                "resultOtherCreditsNo47",
+                "frm2550qv2024:totalTaxPayableNo47Description{N>=0}",
+                "frm2550qv2024:totalTaxPayableNo47Amount{N>=0}",
+                "frm2550qv2024:otherSpecify47",
+                "otherSpecify47B"
+              ]
+            },
+            {
+              "table": "frm2550qv2024:totalTaxPayableNo47Description0"
+            },
+            {
+              "no": "48",
+              "l": "Domestic Purchases with No Input Tax",
+              "k": [
+                "frm2550qv2024:domesticPurchaseNoTax"
+              ]
+            },
+            {
+              "no": "49",
+              "l": "VAT-Exempt Importations",
+              "k": [
+                "frm2550qv2024:vatExemptImports"
+              ]
+            },
+            {
+              "no": "50",
+              "l": "Total Current Purchases/Input Tax (Sum of Items 44A to 49A)/(Sum of Items 44B to 47B)",
+              "k": [
+                "frm2550qv2024:totalCurPurchase",
+                "frm2550qv2024:totalCurInputTax"
+              ]
+            },
+            {
+              "no": "51",
+              "l": "Total Available Input Tax (Sum of Items 43B and 50B)",
+              "k": [
+                "frm2550qv2024:totalAvailInputTax"
+              ]
+            },
+            {
+              "no": "52",
+              "l": "Less: Adjustment/Deductions from Input Tax · Input Tax on Purchases/Importation of Capital Goods exceeding P1 Million deferred for the succeeding period (From Part V Schedule 1, Column I)",
+              "k": [
+                "frm2550qv2024:importCapitalInputTax"
+              ]
+            },
+            {
+              "no": "53",
+              "l": "Input Tax Attributable to VAT Exempt Sales (From Part V - Schedule 2)",
+              "k": [
+                "frm2550qv2024:inputTaxAttr"
+              ]
+            },
+            {
+              "no": "54",
+              "l": "VAT Refund/TCC Claimed",
+              "k": [
+                "frm2550qv2024:vatRefund"
+              ]
+            },
+            {
+              "no": "55",
+              "l": "Input VAT on Unpaid Payables",
+              "k": [
+                "frm2550qv2024:inputVatUnpaid"
+              ]
+            },
+            {
+              "no": "56",
+              "l": "Others (Specify)",
+              "k": [
+                "frm2550qv2024:addSpecifyNo56",
+                "resultOtherCreditsNo56",
+                "frm2550qv2024:totalTaxPayableNo56Description{N>=0}",
+                "frm2550qv2024:totalTaxPayableNo56Amount{N>=0}",
+                "frm2550qv2024:otherSpecify56"
+              ]
+            },
+            {
+              "table": "frm2550qv2024:totalTaxPayableNo56Description0"
+            },
+            {
+              "no": "57",
+              "l": "Total Deductions from Input Tax (Sum of Items 52B to 56B)",
+              "k": [
+                "frm2550qv2024:totalDeductions"
+              ]
+            },
+            {
+              "no": "58",
+              "l": "Add: Input VAT on Settled Unpaid Payables Previously Deducted",
+              "k": [
+                "frm2550qv2024:addInputVat"
+              ]
+            },
+            {
+              "no": "59",
+              "l": "Adjusted Deductions from Input Tax (Sum of Items 57B and 58B)",
+              "k": [
+                "frm2550qv2024:adjDeductions"
+              ]
+            },
+            {
+              "no": "60",
+              "l": "Total Allowable Input Tax (Item 51B Less Item 59B)",
+              "k": [
+                "frm2550qv2024:totalAllowInputTax"
+              ]
+            },
+            {
+              "no": "61",
+              "l": "Net VAT Payable/(Excess Input Tax) (Item 37B Less Item 60B) (To Part II, Item 15)",
+              "k": [
+                "frm2550qv2024:netVatPayable"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part V · Schedules",
+          "items": [
+            {
+              "table": "txtDatePurchase10"
+            },
+            {
+              "no": "",
+              "l": "Schedule 1 Total",
+              "k": [
+                "sched1TotalBalPrev",
+                "sched1TotalBalNext",
+                "txtTotalAmountOfBalanceofInputTaxFromPrevious",
+                "txtTotalAmountOfBalanceofInputTaxToBeCarried"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 – Input Tax Attributable to VAT Exempt Sales",
+              "k": [
+                "frm2550qv2024:sched2InputTaxDirect",
+                "frm2550qv2024:sched2VatExemptSale",
+                "frm2550qv2024:sched2TotalSales",
+                "frm2550qv2024:sched2AmountInputTax",
+                "frm2550qv2024:sched2TotalRatable",
+                "frm2550qv2024:sched2TotalAttr"
+              ]
+            },
+            {
+              "table": "txtDateCovered30"
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 Total",
+              "k": [
+                "sched3TotalIncome",
+                "sched3TotalTax",
+                "txtTotalAmountofIncomePayment",
+                "txtTotalAmoungOfTaxWithHeld"
+              ]
+            },
+            {
+              "table": "txtDate40"
+            },
+            {
+              "no": "",
+              "l": "Schedule 4 Total",
+              "k": [
+                "sched4AmountPaid",
+                "txtAmountPaidSched4"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "2551Q": {
@@ -25753,60 +26506,12 @@
       "evidence": "agent box label: 'TOTAL AMOUNT PAYABLE/(Overpayment)'; writer-cells printed caption: 'TOTAL AMOUNT PAYABLE/(Overpayment)'"
     },
     "frm2551Qv2018:overPayment1": {
-      "label": "refunded",
-      "evidence": "agent box label minus group question: 'refunded'; binding /overpayment_disposition='refund' when selected: 'Refund'"
+      "label": "To be refunded",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json xbox_joins: printed 'If overpayment: To be refunded'"
     },
     "frm2551Qv2018:overPayment2": {
-      "label": "issued a Tax Credit Certificate",
-      "evidence": "agent group option: 'issued a Tax Credit Certificate'; agent box label minus group question: 'issued a Tax Credit Certificate'; binding /overpayment_disposition='tax_credit_certificate' when selected: 'Tax credit certificate'"
-    },
-    "txtATCAmt1": {
-      "label": "Schedule 1 row 1 Taxable Amount",
-      "evidence": "agent box label: 'Schedule 1 row 1 Taxable Amount'; writer-cells printed caption: 'Schedule 1 row 1 Taxable Amount'"
-    },
-    "txtATCDue1": {
-      "label": "Schedule 1 row 1 Tax Due",
-      "evidence": "agent box label: 'Schedule 1 row 1 Tax Due'; writer-cells printed caption: 'Schedule 1 row 1 Tax Due'"
-    },
-    "txtATCAmt2": {
-      "label": "Schedule 1 row 2 Taxable Amount",
-      "evidence": "agent box label: 'Schedule 1 row 2 Taxable Amount'; writer-cells printed caption: 'Schedule 1 row 2 Taxable Amount'"
-    },
-    "txtATCDue2": {
-      "label": "Schedule 1 row 2 Tax Due",
-      "evidence": "agent box label: 'Schedule 1 row 2 Tax Due'; writer-cells printed caption: 'Schedule 1 row 2 Tax Due'"
-    },
-    "txtATCAmt3": {
-      "label": "Schedule 1 row 3 Taxable Amount",
-      "evidence": "agent box label: 'Schedule 1 row 3 Taxable Amount'; writer-cells printed caption: 'Schedule 1 row 3 Taxable Amount'"
-    },
-    "txtATCDue3": {
-      "label": "Schedule 1 row 3 Tax Due",
-      "evidence": "agent box label: 'Schedule 1 row 3 Tax Due'; writer-cells printed caption: 'Schedule 1 row 3 Tax Due'"
-    },
-    "txtATCAmt4": {
-      "label": "Schedule 1 row 4 Taxable Amount",
-      "evidence": "agent box label: 'Schedule 1 row 4 Taxable Amount'; writer-cells printed caption: 'Schedule 1 row 4 Taxable Amount'"
-    },
-    "txtATCDue4": {
-      "label": "Schedule 1 row 4 Tax Due",
-      "evidence": "agent box label: 'Schedule 1 row 4 Tax Due'; writer-cells printed caption: 'Schedule 1 row 4 Tax Due'"
-    },
-    "txtATCAmt5": {
-      "label": "Schedule 1 row 5 Taxable Amount",
-      "evidence": "agent box label: 'Schedule 1 row 5 Taxable Amount'; writer-cells printed caption: 'Schedule 1 row 5 Taxable Amount'"
-    },
-    "txtATCDue5": {
-      "label": "Schedule 1 row 5 Tax Due",
-      "evidence": "agent box label: 'Schedule 1 row 5 Tax Due'; writer-cells printed caption: 'Schedule 1 row 5 Tax Due'"
-    },
-    "txtATCAmt6": {
-      "label": "Schedule 1 row 6 Taxable Amount",
-      "evidence": "agent box label: 'Schedule 1 row 6 Taxable Amount'; writer-cells printed caption: 'Schedule 1 row 6 Taxable Amount'"
-    },
-    "txtATCDue6": {
-      "label": "Schedule 1 row 6 Tax Due",
-      "evidence": "agent box label: 'Schedule 1 row 6 Tax Due'; writer-cells printed caption: 'Schedule 1 row 6 Tax Due'"
+      "label": "To be issued a Tax Credit Certificate",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json xbox_joins: printed 'If overpayment: To be issued a Tax Credit Certificate'"
     },
     "txtTotalSched1": {
       "label": "Total Tax Due (Sum of Items 1 to 6)",
@@ -25848,72 +26553,335 @@
       "evidence": "Maintainer decision 2026-10-15: dropdown as in the official BIR-Form2551Qv2018.hta (option values 1 Special Rate, 2 International Tax Treaty); bir-core accepts the codes (validation::official_tax_relief_code)."
     },
     "frm2551Qv2018:txtAgency25": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency25, source line 1707) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Drawee Bank/Agency",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency25, source line 1707) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtNumber25": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber25, source line 1710) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Number",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber25, source line 1710) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtDate25": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate25, source line 1713) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Date",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate25, source line 1713) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtAmount25": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount25, source line 1716) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Amount",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount25, source line 1716) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtAgency26": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency26, source line 1726) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Drawee Bank/Agency",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency26, source line 1726) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtNumber26": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber26, source line 1729) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Number",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber26, source line 1729) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtDate26": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate26, source line 1732) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Date",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate26, source line 1732) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtAmount26": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount26, source line 1735) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Amount",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount26, source line 1735) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtAgency27": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency27, source line 1745) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Drawee Bank/Agency",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency27, source line 1745) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtNumber27": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber27, source line 1748) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Number",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber27, source line 1748) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtDate27": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate27, source line 1751) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Date",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate27, source line 1751) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtAmount27": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount27, source line 1754) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Amount",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount27, source line 1754) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtParticular28": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtParticular28, source line 1768) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Particulars",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtParticular28, source line 1768) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtAgency28": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency28, source line 1771) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Drawee Bank/Agency",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAgency28, source line 1771) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtNumber28": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber28, source line 1774) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Number",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtNumber28, source line 1774) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtDate28": {
-      "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate28, source line 1777) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "label": "Date",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtDate28, source line 1777) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "frm2551Qv2018:txtAmount28": {
+      "label": "Amount",
+      "why": "Filled in when the return is paid: the official program keeps this box closed",
+      "evidence": "Part III Details of Payment (html-frozen/2551q-2018/index.html: '25 Cash/Bank Debit Memo', '26 Check', '27 Tax Debit Memo', '28 Others (Specify below)' under 'Drawee Bank/Agency, Number, Date (MM/DD/YYYY), Amount'). Formerly hidden: Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount28, source line 1780) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm2551Qv2018:qtr_1": {
+      "label": "1st",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json xbox_joins: printed '3 Quarter 1st'"
+    },
+    "frm2551Qv2018:qtr_2": {
+      "label": "2nd",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json xbox_joins: printed '3 Quarter 2nd'"
+    },
+    "frm2551Qv2018:qtr_3": {
+      "label": "3rd",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json xbox_joins: printed '3 Quarter 3rd'"
+    },
+    "frm2551Qv2018:qtr_4": {
+      "label": "4th",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json xbox_joins: printed '3 Quarter 4th'"
+    },
+    "frm2551Qv2018:txt17Specify": {
+      "label": "Specify",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json joins: printed '17 Other Tax Credit/Payment (specify)'; the box is the (specify) text beside the amount"
+    },
+    "txtTaxAgentNo": {
+      "label": "Tax Agent Accreditation No./Attorney's Roll No.",
+      "why": "This app files it blank: it keeps no tax agent accreditation",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json joins: printed \"Tax Agent Accreditation No./Attorney's Roll No.\"; crates/bir-core/src/forms/form_2551q_xml.rs to_bir_field_map writes txtTaxAgentNo, txtDateIssue and txtDateExpiry as '' (no draft field; rule 0 keeps the upload); the official sample crates/bir-core/tests/sample-payloads/2551Q-122025Q1.official.xml carries them blank"
+    },
+    "txtDateIssue": {
+      "label": "Date of Issue",
+      "why": "This app files it blank: it keeps no tax agent accreditation",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json joins: printed 'Date of Issue (MM/DD/YYYY)'; crates/bir-core/src/forms/form_2551q_xml.rs to_bir_field_map writes txtTaxAgentNo, txtDateIssue and txtDateExpiry as '' (no draft field; rule 0 keeps the upload); the official sample crates/bir-core/tests/sample-payloads/2551Q-122025Q1.official.xml carries them blank"
+    },
+    "txtDateExpiry": {
+      "label": "Expiry Date",
+      "why": "This app files it blank: it keeps no tax agent accreditation",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json joins: printed 'Expiry Date (MM/DD/YYYY)'; crates/bir-core/src/forms/form_2551q_xml.rs to_bir_field_map writes txtTaxAgentNo, txtDateIssue and txtDateExpiry as '' (no draft field; rule 0 keeps the upload); the official sample crates/bir-core/tests/sample-payloads/2551Q-122025Q1.official.xml carries them blank"
+    },
+    "frm2551Qv2018:txtCurrentPage": {
       "kind": "hidden",
-      "evidence": "Item 3: the official control is disabled at load (rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json: id frm2551Qv2018:txtAmount28, source line 1780) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+      "evidence": "html-frozen/2551q-2018/writer-cells.json not_joined: page counter of the eBIRForms page, not a box on the paper form"
+    },
+    "frm2551Qv2018:txtMaxPage": {
+      "kind": "hidden",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json not_joined: page counter of the eBIRForms page, not a box on the paper form"
+    },
+    "txtATCRate1": {
+      "kind": "pct",
+      "evidence": "html-frozen/2551q-2018/writer-cells.json not_joined: the Tax Rate column prints the rate in percent ('%' printed in each row); the box holds the rate as the dropdown submits it (3.0)"
+    },
+    "table:3:sched1": {
+      "no": "",
+      "label": "Schedule 1 – Computation of Tax, Items 1 to 6",
+      "templates": [
+        "drpATC1",
+        "txtATCAmt1",
+        "txtATCRate1",
+        "txtATCDue1"
+      ],
+      "row_keys": {
+        "drpATC1": "drpATC{index}",
+        "txtATCAmt1": "txtATCAmt{index}",
+        "txtATCRate1": "txtATCRate{index}",
+        "txtATCDue1": "txtATCDue{index}"
+      },
+      "rows": [
+        1,
+        6
+      ],
+      "cols": [
+        "Alphanumeric Tax Code (ATC)",
+        "Taxable Amount",
+        "Tax Rate",
+        "Tax Due"
+      ],
+      "evidence": "html-frozen/2551q-2018/index.html page 2: Schedule 1 prints six numbered rows 1-6 under 'Alphanumeric Tax Code (ATC) | Taxable Amount | Tax Rate | Tax Due' (repeating_rows capacity 6); the rows are drpATC/txtATCAmt/txtATCRate/txtATCDue 1-6 (writer-cells money_joins 'Schedule 1 row n ...')"
+    },
+    "layout": {
+      "evidence": "Rule 3 (screen order = paper order) from html-frozen/2551q-2018/index.html (BIR Form 2551Q January 2018: items 1-5, Part I 6-13, Part II 14-24 with the overpayment boxes under item 24 and the tax agent accreditation below the declaration, Part III Details of Payment 25-28, page 2 Schedule 1 rows 1-6 and item 7) and html-frozen/2551q-2018/writer-cells.json (which box prints at which item). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "keep": 0
+        },
+        {
+          "keep": 1
+        },
+        {
+          "n": "Part II · Total Tax Payable",
+          "items": [
+            {
+              "no": "14",
+              "l": "Total Tax Due (From Schedule 1 Item 7)",
+              "k": [
+                "frm2551Qv2018:txt14"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Creditable Percentage Tax Withheld per BIR Form No. 2307",
+              "k": [
+                "frm2551Qv2018:txt15"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Tax Paid in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm2551Qv2018:txt16"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Other Tax Credit/Payment (specify)",
+              "k": [
+                "frm2551Qv2018:txt17Specify",
+                "frm2551Qv2018:txt17"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Total Tax Credits/Payments (Sum of Items 15 to 17)",
+              "k": [
+                "frm2551Qv2018:txt18"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Tax Still Payable/(Overpayment) (Item 14 Less Item 18)",
+              "k": [
+                "frm2551Qv2018:txt19"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Surcharge",
+              "k": [
+                "frm2551Qv2018:txt20"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Interest",
+              "k": [
+                "frm2551Qv2018:txt21"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Compromise",
+              "k": [
+                "frm2551Qv2018:txt22"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Total Penalties (Sum of Items 20 to 22)",
+              "k": [
+                "frm2551Qv2018:txt23"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "TOTAL AMOUNT PAYABLE/(Overpayment) (Sum of Items 19 and 23)",
+              "k": [
+                "frm2551Qv2018:txt24"
+              ]
+            },
+            {
+              "no": "",
+              "l": "If overpayment, mark one box only",
+              "k": [
+                "frm2551Qv2018:overPayment1",
+                "frm2551Qv2018:overPayment2"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable)",
+              "k": [
+                "txtTaxAgentNo",
+                "txtDateIssue",
+                "txtDateExpiry"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "25",
+              "l": "Cash/Bank Debit Memo",
+              "k": [
+                "frm2551Qv2018:txtAgency25",
+                "frm2551Qv2018:txtNumber25",
+                "frm2551Qv2018:txtDate25",
+                "frm2551Qv2018:txtAmount25"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Check",
+              "k": [
+                "frm2551Qv2018:txtAgency26",
+                "frm2551Qv2018:txtNumber26",
+                "frm2551Qv2018:txtDate26",
+                "frm2551Qv2018:txtAmount26"
+              ]
+            },
+            {
+              "no": "27",
+              "l": "Tax Debit Memo",
+              "k": [
+                "frm2551Qv2018:txtAgency27",
+                "frm2551Qv2018:txtNumber27",
+                "frm2551Qv2018:txtDate27",
+                "frm2551Qv2018:txtAmount27"
+              ]
+            },
+            {
+              "no": "28",
+              "l": "Others (Specify below)",
+              "k": [
+                "frm2551Qv2018:txtParticular28",
+                "frm2551Qv2018:txtAgency28",
+                "frm2551Qv2018:txtNumber28",
+                "frm2551Qv2018:txtDate28",
+                "frm2551Qv2018:txtAmount28"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 1 · Computation of Tax (Attach additional sheet/s, if necessary)",
+          "items": [
+            {
+              "table": "drpATC1"
+            },
+            {
+              "no": "7",
+              "l": "Total Tax Due (Sum of Items 1 to 6) (To Part II Item 14)",
+              "k": [
+                "txtTotalSched1"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "2552": {

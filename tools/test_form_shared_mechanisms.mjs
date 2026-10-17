@@ -45,6 +45,8 @@ const schema = {
         },
         { no: "7", l: "Email Address", f: [{ k: K("email"), t: "email", l: "Email Address" }] },
         { no: "25", l: "Payments", f: [{ k: K("cashDate"), t: "date", l: "Cash date" }, { k: K("checkDate"), t: "date", l: "Check date" }] },
+        { no: "", l: "Tax Agent Accreditation No.", f: [{ k: K("agentNo"), t: "text", l: "Tax Agent Accreditation No." }] },
+        { no: "27", l: "Cash/Bank Debit Advice", f: [], note: "Filled in when the return is paid." },
       ],
     },
     {
@@ -184,6 +186,7 @@ let hostValues = {
   [K("prev")]: "0.00",
   [K("cashDate")]: "",
   [K("checkDate")]: "",
+  [K("agentNo")]: "",
 };
 // The host reads a pooled address from the draft; its field map cuts the
 // first line at 40 characters, which the page must never show.
@@ -207,8 +210,8 @@ penaltyValues();
 const offNow = () => (hostValues[K("amendY")] === "true" ? {} : { [K("prev")]: "Needs Amended Return = Yes" });
 let opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {},
-  locks: { ...Object.fromEntries(PENALTY.map((k) => [k, "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to"])), [K("due")]: "computed by BIR's own formulas", [K("incorporated")]: "comes from the taxpayer profile; change it in the profile" },
-  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: offNow(), penalties: penaltyState(), pools: { ...poolStore }, errors: [],
+  locks: { ...Object.fromEntries(PENALTY.map((k) => [k, "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to"])), [K("due")]: "computed by BIR's own formulas", [K("incorporated")]: "comes from the taxpayer profile; change it in the profile", [K("agentNo")]: "cannot be filled here: written by the app without a draft field" },
+  profile: [], profile_edit: [], sample: false, blank: [], needs: {}, whys: { [K("agentNo")]: "This app files it blank" }, off: offNow(), penalties: penaltyState(), pools: { ...poolStore }, errors: [],
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
@@ -277,10 +280,19 @@ input(K("phone")).fire("blur");
 assert.equal(input(K("phone")).value(), "+639171234567", "a text box keeps exactly what was typed");
 console.log("PASS rule 7: only peso amounts look like money.");
 
+// ---- A box the filer cannot fill says why; a printed item with no box says so.
+assert.equal(ui.isLocked(K("agentNo")), true);
+assert.ok(texts.includes("This app files it blank"), "a locked, blank box on a return shows the host's reason in the box");
+const noteItem = schema.parts[0].items.findIndex((it) => it.note);
+assert.ok(ids.has(`fp-note-0:${noteItem}`), "a printed item with no box is drawn");
+assert.ok(texts.includes("Filled in when the return is paid.") && texts.includes("Cash/Bank Debit Advice"), "with its caption and its note");
+console.log("PASS a box the filer cannot fill says why, and a printed item with no box says so.");
+
 // ---- Rule 4: dates read like dates.
 assert.equal(formatLongDate({ y: 2020, m: 12, d: 10 }), "Dec 10, 2020");
 assert.equal(shownDate("12/10/2020"), "Dec 10, 2020");
 assert.equal(shownDate("2020-12-10"), "Dec 10, 2020");
+assert.equal(shownDate("3/31/2026"), "Mar 31, 2026", "a date the field map writes unpadded (2550Q Return Period) reads the same way");
 assert.equal(shownDate(""), "", "a blank date stays blank");
 assert.equal(shownDate("12/2020"), "12/2020", "what is not a whole date shows as it is");
 assert.equal(input(K("date")).value(), "Dec 10, 2020", "the draft's 12/10/2020 shows as Dec 10, 2020");

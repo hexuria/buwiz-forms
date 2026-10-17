@@ -293,6 +293,25 @@ pub fn compute(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
     })
 }
 
+/// Bring a stored draft to the current model before any box is written, so
+/// a write is never undone by a migration that runs later in the compute:
+/// a 2551Q draft saved before Items 20-22 took overrides adopts its manual
+/// amounts once ([`Form2551QDraft::adopt_legacy_manual_penalties`]). Every
+/// other form is unchanged.
+pub fn prepare_for_writes(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
+    if kind != AgentFormKind::Form2551Q {
+        return Ok(());
+    }
+    // A draft that does not parse yet is left to the write's own checks.
+    let Ok(mut typed) = parse::<Form2551QDraft>(kind, draft) else {
+        return Ok(());
+    };
+    if typed.adopt_legacy_manual_penalties() {
+        *draft = to_json(&typed)?;
+    }
+    Ok(())
+}
+
 /// The page's Validate: recompute `draft` in place, then run the form's
 /// checks. Errors are `(field, message)` exactly as the page shows them.
 pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, String)>, String> {
@@ -436,7 +455,17 @@ fn probe_eval(kind: AgentFormKind, draft: &Value) -> Option<(Value, BTreeMap<Str
         let mut typed: F = serde_json::from_value(draft.clone()).ok()?;
         catch_unwind(AssertUnwindSafe(|| {
             typed.seam_compute();
-            let map = typed.seam_field_map();
+            let mut map = typed.seam_field_map();
+            // A box keyed as the first occurrence of a control the field
+            // map writes once shows that control's value.
+            for (code, alias, _) in probe::FIRST_OCCURRENCE {
+                if *code == kind.form_code()
+                    && let Some((official, _)) = alias.split_once("#occurrence-")
+                    && let Some(value) = map.get(official).cloned()
+                {
+                    map.entry(alias.to_string()).or_insert(value);
+                }
+            }
             (serde_json::to_value(&typed).ok(), map)
         }))
         .ok()
@@ -819,6 +848,7 @@ fn fill_box(
     value: &Value,
     allowed: &[Lock],
 ) -> Result<(), String> {
+    prepare_for_writes(kind, draft)?;
     let def = kind.definition();
     let lock = def.bindings.get(key).and_then(|bound| bound.lock);
     let let_through = match lock {
