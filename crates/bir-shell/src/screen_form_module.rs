@@ -8702,17 +8702,45 @@ mod tests {
                     )
                 })
                 .collect();
-            // form_page.js `isTinItem`: three to five text boxes of a TIN.
+            // form_page.js `isTinItem`, on the boxes it draws (hidden ones
+            // left out, as `withoutHidden` does): three to five text or
+            // number boxes, the item's label matching /\bTIN\b|Identification/i
+            // or a box's `${label} ${key}` matching /\bTIN\d?\b|txtTIN/i.
             let tin_item = {
+                // `\b<word>\b` in a JavaScript regex: a token between
+                // non-word characters (word: ASCII letter, digit or `_`).
+                let tokens = |text: &str| -> Vec<String> {
+                    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                        .map(str::to_ascii_lowercase)
+                        .collect()
+                };
                 let label = item["l"].as_str().unwrap_or("");
-                let named = label
-                    .split(|c: char| !c.is_ascii_alphanumeric())
-                    .any(|w| w == "TIN")
-                    || label.contains("Identification")
-                    || fields.iter().any(|(k, _)| k.contains("txtTIN"));
+                let shown: Vec<&Value> = item["f"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|f| f["t"] != "hidden")
+                    .collect();
+                let box_named = |f: &Value| {
+                    let text = format!(
+                        "{} {}",
+                        f["l"].as_str().unwrap_or(""),
+                        f["k"].as_str().unwrap_or("")
+                    );
+                    text.to_ascii_lowercase().contains("txttin")
+                        || tokens(&text).iter().any(|w| {
+                            w == "tin"
+                                || (w.len() == 4
+                                    && w.starts_with("tin")
+                                    && w.as_bytes()[3].is_ascii_digit())
+                        })
+                };
+                let named = tokens(label).iter().any(|w| w == "tin")
+                    || label.to_ascii_lowercase().contains("identification")
+                    || shown.iter().any(|f| box_named(f));
                 named
-                    && (3..=5).contains(&fields.len())
-                    && fields.iter().all(|(_, t)| t == "text" || t == "int")
+                    && (3..=5).contains(&shown.len())
+                    && shown.iter().all(|f| f["t"] == "text" || f["t"] == "int")
             };
             // A radio group is one box: shut and blank when every radio is
             // locked and none is ticked.
