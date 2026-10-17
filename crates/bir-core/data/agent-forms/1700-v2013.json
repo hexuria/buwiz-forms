@@ -88,7 +88,7 @@
 "frm1700:txtPg2ISched1e_2TW": {"path":"/employers/1/withheld","type":"amount"},
 "frm1700:txtPg2TaxpayerName": {"path":"/taxpayer_name","type":"text"},
 "frm1700:txtRDOCode": {"lock":"profile","path":"/rdo_code","type":"text"},
-"frm1700:txtSpouseRDOCode": {"lock":"profile","path":"/spouse/rdo_code","type":"text"}
+"frm1700:txtSpouseRDOCode": {"path":"/spouse/rdo_code","type":"text"}
 },
 "boxes": [
 {"item":"1","key":"frm1700:txtYear","kind":"text","label":"Item 1","required":"required"},

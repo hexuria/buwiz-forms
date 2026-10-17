@@ -1797,9 +1797,12 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
-    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
-    // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
-    assert_eq!(supplied, 82, "catalog lists, dependent ones included");
+    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), less
+    // 1601FQ Schedule 1's ten Treaty Code and ATC lists, table cells since
+    // PR 2. Table cells are counted apart (the 36 2550M Schedule 1 ATC
+    // lists, N03; catalog_lists_have_unique_values_across_the_schema
+    // checks every one).
+    assert_eq!(supplied, 72, "catalog lists, dependent ones included");
 }
 
 #[test]
@@ -2414,7 +2417,13 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             .flat_map(|it| it["f"].as_array().into_iter().flatten());
         for field in fields {
             let key = field["k"].as_str().unwrap_or_default();
-            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) {
+            // A box the host refuses until its answer holds (1602Q's 13A
+            // until item 13 is Yes): its choices are taken once it holds
+            // (q3_withholding_item_13_is_answered_on_the_page_and_prints).
+            // Every other off box is still tried here.
+            let gated = rows_withholding::gated(kind_of(code).unwrap(), &opened["draft"], key)
+                == Some(true);
+            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) || gated {
                 continue;
             }
             for option in field["o"].as_array().into_iter().flatten() {

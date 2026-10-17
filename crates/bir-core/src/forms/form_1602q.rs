@@ -895,9 +895,15 @@ impl Form1602QDraft {
         if self.availing_tax_relief != Some(true)
             && self.schedule2 != <[Form1602QTreatyRow; 2]>::default()
         {
+            // The way out, in the filer's words: Yes keeps the rows, No
+            // (`set_availing_tax_relief`) removes them.
             err(
                 "schedule2",
-                "Schedule 2 applies only when Item 13 is \"Yes\".",
+                if self.availing_tax_relief == Some(false) {
+                    "Schedule 2 has amounts but item 13 is No. Answer item 13 Yes, or choose No again to remove them."
+                } else {
+                    "Schedule 2 applies only when Item 13 is \"Yes\"."
+                },
             );
         }
         for (index, rate) in self.bsp_rate.iter().enumerate() {

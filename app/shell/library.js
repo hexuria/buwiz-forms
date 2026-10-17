@@ -5,7 +5,6 @@
 
 import { div } from "gpui-kit";
 import { tokens, SPACE, RADIUS, Text, Icon, Chip, Segmented, TextField, PageHeader, EmptyRow } from "./ui.js";
-import { periodOptions } from "./periods.js";
 
 const FREQS = ["All", "Monthly", "Quarterly", "Annual", "As needed"];
 
@@ -35,10 +34,10 @@ function formCard(cx, app, f, width) {
     .accessibility_label(`Form ${f.c}: ${f.t}`)
     .on_click((_e, cx) => {
       if (app.isFresh()) return app.toast("Add a taxpayer first, then open a form for them.", cx);
+      // The library shows the form, not a return: a blank sample with no
+      // period, which reads and saves no stored return (rule 1).
       const b = app.branch();
-      const year = app.year() || new Date().getFullYear();
-      const options = periodOptions(f.c, f.freq, year);
-      app.openForm({ tin: b.tin, code: f.c, year, period: options.length ? options[0].value : 0 }, cx);
+      app.openForm({ tin: b.tin, code: f.c, year: app.year() || new Date().getFullYear(), period: 0, sample: true }, cx);
     })
     .child(top)
     .child(Text(cx, "control", f.t).line_height("18px").h(36).overflow_hidden().whitespace_normal())

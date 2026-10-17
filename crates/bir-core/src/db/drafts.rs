@@ -3004,6 +3004,21 @@ impl Database {
         Ok(summaries)
     }
 
+    /// The stored key of the saved return `draft_id`: its period column (a
+    /// month, a quarter, a transaction's `MMDD`), what opens exactly that
+    /// return. `None` when the row is gone or keeps no column.
+    pub fn draft_period_column(&self, draft_id: i64) -> Result<Option<i64>, DbError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT quarter FROM form_drafts WHERE id = ?1",
+                params![draft_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten())
+    }
+
     /// The total amount payable the saved return `draft_id` computed for
     /// itself (see [`crate::forms::calendar_status::amount_payable_from_json`]).
     /// `None` when the row is gone or its form has no readable total.
@@ -3156,6 +3171,29 @@ impl Database {
         // Also set the legacy quarter column for backward compatibility
         let quarter_val = legacy_slot_for_period(period);
 
+        // Only a row still in Draft is ever replaced: a queued, submitted,
+        // confirmed or paid return is the filed record, and saving over it
+        // would lose what reached BIR. A save then fails instead of writing.
+        let mut stored = self.conn.prepare(
+            "SELECT status FROM form_drafts
+             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 AND period_key = ?4",
+        )?;
+        let left_draft = stored
+            .query_map(params![tin, form_code, year as i64, &period_key], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|status| filing_status_from_db(&status))
+            .find(|status| *status != FilingStatus::Draft);
+        drop(stored);
+        if let Some(status) = left_draft {
+            return Err(DbError::Other(format!(
+                "The stored {form_code} return for this period is {}, no longer a draft; it cannot be saved over. Amend it instead.",
+                filing_status_to_db(&status).to_lowercase()
+            )));
+        }
+
         let rows_updated = self.conn.execute(
             "UPDATE form_drafts
              SET quarter = ?4,
@@ -3294,6 +3332,74 @@ mod tests {
         assert_eq!(db.draft_amount_payable(owing_id).unwrap(), Some(1_500.0));
 
         assert_eq!(db.draft_amount_payable(owing_id + 1_000).unwrap(), None);
+    }
+
+    /// A generic save replaces a stored row only while it is a Draft: a
+    /// return that left Draft (queued, submitted, confirmed, paid) is the
+    /// filed record and is never saved over. Draft saves keep working.
+    #[test]
+    fn a_generic_save_never_replaces_a_return_that_left_draft() {
+        let db = test_db();
+        let period = FilingPeriod::Quarterly(2);
+        let save = |value: i32| {
+            db.save_form_draft_v2(
+                "123456789000",
+                "2550Q",
+                2026,
+                &period,
+                &FilingStatus::Draft,
+                &TestDraft { value },
+            )
+        };
+        let id = save(1).expect("a new draft");
+        assert_eq!(save(2).expect("a draft saved again"), id);
+        let stored = |db: &Database| -> (String, String) {
+            db.conn
+                .query_row(
+                    "SELECT status, data_json FROM form_drafts WHERE id = ?1",
+                    params![id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap()
+        };
+        assert_eq!(stored(&db).1, r#"{"value":2}"#);
+        for status in ["Queued", "Submitted", "Confirmed", "Paid"] {
+            db.conn
+                .execute(
+                    "UPDATE form_drafts SET status = ?1, data_json = '{\"value\":2}' WHERE id = ?2",
+                    params![status, id],
+                )
+                .unwrap();
+            let error = save(3).expect_err(status).to_string();
+            assert!(error.contains("no longer a draft"), "{status}: {error}");
+            assert_eq!(
+                stored(&db),
+                (status.to_string(), r#"{"value":2}"#.to_string())
+            );
+            // The legacy entry point reaches the same guard.
+            assert!(
+                db.save_form_draft(
+                    "123456789000",
+                    "2550Q",
+                    2026,
+                    Some(2),
+                    &FilingStatus::Draft,
+                    &TestDraft { value: 4 }
+                )
+                .is_err(),
+                "{status}"
+            );
+            assert_eq!(stored(&db).1, r#"{"value":2}"#);
+        }
+        // Back in Draft (the user's revert), it saves again.
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Draft' WHERE id = ?1",
+                params![id],
+            )
+            .unwrap();
+        assert_eq!(save(5).expect("a draft again"), id);
+        assert_eq!(stored(&db).1, r#"{"value":5}"#);
     }
 
     fn test_db() -> Database {
