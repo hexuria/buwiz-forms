@@ -41,5 +41,24 @@ fn form_1604f_sample_payload_is_current() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_1604f()).expect("sample serializes")]
+    // Every quarter remitted (PR 6): the sample dates five of the twelve
+    // schedule rows, so probing could not see the other rows' Date of
+    // Remittance keep a whole MM/DD/YYYY date.
+    let mut every_quarter = sample_1604f();
+    for (s, schedule) in every_quarter.schedules.iter_mut().enumerate() {
+        for (q, row) in schedule.iter_mut().enumerate() {
+            let n = (s * 4 + q) as f64 + 1.0;
+            *row = remittance(
+                &format!("{:02}/25/2025", q * 3 + 3),
+                &format!("tra-{s}-{q}"),
+                100.0 * n,
+                n,
+            );
+        }
+    }
+    every_quarter.recompute();
+    vec![
+        serde_json::to_value(sample_1604f()).expect("sample serializes"),
+        serde_json::to_value(every_quarter).expect("every-quarter sample serializes"),
+    ]
 }

@@ -124,6 +124,43 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Boxes the rules corpus lists as entries although the form computes them
+/// (the opposite of [`USER_CHOSEN`]): the projection marks them computed, so
+/// they are never bound to a draft field. The field map and the upload are
+/// unchanged.
+const COMPUTED_BY_FORM: &[(&str, &str)] = &[
+    ("frm1604e:txtSched1TotRemAmt1", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmt2", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmt3", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmt4", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched1TotRemAmtTtl", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt1", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt2", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt3", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt4", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt5", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt6", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt7", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt8", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt9", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt10", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt11", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmt12", TOTAL_REMITTED_1604E),
+    ("frm1604e:txtSched2TotRemAmtTtl", TOTAL_REMITTED_1604E),
+];
+
+const TOTAL_REMITTED_1604E: &str = "1604E Part II Total Amount Remitted: form_1604e.rs \
+     compute_schedule (computeSched1/computeSched2) sets each row's \
+     total_remitted to taxes_withheld + penalties and the TOTAL row's to the \
+     sum of the rows; the sample leaves most rows' taxes at zero, so probing \
+     saw a row's total move with its penalties alone and bound it to \
+     /scheduleN/k/penalties";
+
+/// Forms whose Part II date rows the samples date only in part (PR 6): a
+/// row path a second sample echoes as a whole MM/DD/YYYY date is that date,
+/// though the first sample, which leaves the row blank, echoed plain text.
+const DATED_ROWS_KEEP_THE_DATE: &[&str] = &["1604C", "1604E", "1604F"];
+
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
 /// the other field closes a gate (no overpayment left) and `compute` empties
@@ -169,11 +206,13 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                 .find(|meaning| meaning["stored_value"] == "true");
             let key = text(field, "field_key");
             let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
+            let computed_by_form = COMPUTED_BY_FORM.iter().any(|(k, _)| *k == key);
             BoxDef {
                 label: text(field, "label"),
                 item: text(field, "item_number"),
                 kind: text(field, "control_kind"),
-                computed: !chosen_by_user && field["computed"].as_bool().unwrap_or(false),
+                computed: computed_by_form
+                    || (!chosen_by_user && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()
                 } else {
@@ -1552,13 +1591,19 @@ fn decide(
     if let Some(echoes) = echoes.filter(|echoes| !echoes.is_empty()) {
         let (path, value_kind, nullable) = echoes
             .into_iter()
-            .min_by_key(|(path, _, _)| {
+            .min_by_key(|(path, value_kind, _)| {
                 (
                     !evidence
                         .real_echoes
                         .contains(&(key.to_string(), path.clone())),
                     evidence.echo_count.get(path).copied(),
                     path.clone(),
+                    // One path echoed as a whole date by one sample and as
+                    // plain text by another (a row a sample leaves blank):
+                    // on the forms in DATED_ROWS_KEEP_THE_DATE it keeps the
+                    // date. Elsewhere the first echo stays, as before.
+                    DATED_ROWS_KEEP_THE_DATE.contains(&def.form_code.as_str())
+                        && matches!(value_kind, ValueKind::Text(None)),
                 )
             })
             .cloned()
