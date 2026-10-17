@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_dst_pt_vat;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -262,6 +263,7 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            rows_dst_pt_vat::mark_calendar_tables(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -2315,6 +2317,7 @@ fn opened_json(
         draft: from_profile_draft,
     };
     let mut locks = locks(kind, &from_profile);
+    rows_dst_pt_vat::relock(kind, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group.
     for group in penalties::groups(kind) {
         if !penalties::edited(&group, &draft) {
@@ -2421,6 +2424,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "waits": rows_dst_pt_vat::waits(kind),
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -3176,6 +3180,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3212,6 +3217,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        // Rows the filer typed that this edit removed: the page asks first.
+        "removes": rows_dst_pt_vat::removes(kind, &before, &draft, &edits),
     })))
 }
 
@@ -4131,6 +4138,9 @@ mod tests {
 
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
+
+    // PR 4: 2000, 2553 and 2550M against their printed sheets.
+    mod dst_pt_vat;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -5804,11 +5814,13 @@ mod tests {
     fn rows_2550m_schedules_2_to_8_save() {
         setup();
         let form = schema_entry("2550M").unwrap();
+        // Each schedule sits in its own part since PR 4's printed layout.
         let table = |first: &str| -> Value {
-            form["parts"][2]["items"]
+            form["parts"]
                 .as_array()
                 .unwrap()
                 .iter()
+                .flat_map(|part| part["items"].as_array().unwrap())
                 .find(|it| it["keys"][0][0] == first)
                 .unwrap_or_else(|| panic!("table starting {first}"))
                 .clone()
@@ -5982,7 +5994,9 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // Less 3 for 2000 (PR 4): its Schedule 1 ATC lists are table cells
+        // now; plus 1 for 2000 (PR 4): its Item 5 RDO list.
+        assert_eq!(supplied, 80);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8466,10 +8480,6 @@ mod tests {
         "1707 frm1707:txtPg2RegisteredName",
         "1800 frm1800v2018:txtLineBus",
         "1800 frm1800v2018:txtPg2TaxpayerName",
-        "2000 frm2000:txtLineBus",
-        "2000 frm2000:txtPg2TaxpayerName",
-        "2000 frm2000:txtTelNum",
-        "2000 txtEmail",
         "2000OT frm2000OT:txtLineBus",
         "2200C frm2200C:txtLOB",
         "2200M frm2200M:txtPg2RegisteredName",
@@ -9109,6 +9119,10 @@ mod tests {
         }
         let mut locked = Vec::new();
         let (mut typed, mut refused) = (0, 0);
+        // 2000's Schedule 2-4 dates, closed until item 13 opens their
+        // schedule (PR 4, rows_dst_pt_vat.rs): each is typed once it is open
+        // (form_2000_schedule_dates_take_typed_dates_once_item_13_opens_them).
+        let mut closed = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -9133,6 +9147,12 @@ mod tests {
                 }
                 let filled = fill(code, &opened["draft"], json!({ &key: "12/10/2020" }));
                 if let Some(reason) = filled["rejected"][&key].as_str() {
+                    if code == "2000"
+                        && (2..=4).any(|n| reason == rows_dst_pt_vat::dst_schedule_closed(n))
+                    {
+                        closed.push(key.clone());
+                        continue;
+                    }
                     // Refused by its form's own rule (a later schedule row
                     // before the first, a schedule another answer turns
                     // off), never for the date.
@@ -9154,6 +9174,18 @@ mod tests {
             refused < 150,
             "{refused} date boxes refused for another rule"
         );
+        closed.sort();
+        let mut schedule_dates: Vec<String> = (0..3)
+            .flat_map(|row| {
+                [
+                    format!("frm2000:sched2:txtPaymentDate{row}"),
+                    format!("frm2000:sched3:txtPaymentDate{row}"),
+                    format!("frm2000:sched4:txtRemittanceDate{row}"),
+                ]
+            })
+            .collect();
+        schedule_dates.sort();
+        assert_eq!(closed, schedule_dates);
         let mut expected: Vec<&str> = DATE_BOXES_LOCKED_FOR_OTHER_REASONS.to_vec();
         expected.sort_unstable();
         locked.sort();
@@ -9187,18 +9219,6 @@ mod tests {
         "1707A frm1707Av2021:txtS1C1DateOfTransaction_1: cleared to \"\"",
         "1707A frm1707Av2021:txtS2C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1707A frm1707Av2021:txtS2C1DateOfTransaction_1: cleared to \"\"",
-        "2000 frm2000:sched2:txtPaymentDate0: cleared to \"\"",
-        "2000 frm2000:sched2:txtPaymentDate1: cleared to \"\"",
-        "2000 frm2000:sched2:txtPaymentDate2: cleared to \"\"",
-        "2000 frm2000:sched3:txtPaymentDate0: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2000 frm2000:sched3:txtPaymentDate1: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2000 frm2000:sched3:txtPaymentDate2: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2000 frm2000:sched4:txtRemittanceDate0: cleared to \"\"",
-        "2000 frm2000:sched4:txtRemittanceDate1: cleared to \"\"",
-        "2000 frm2000:sched4:txtRemittanceDate2: cleared to \"\"",
-        "2000 frm2000:txtDate20: cannot be filled here: not written by this app's field map for any sample draft",
-        "2000 frm2000:txtDate21: cannot be filled here: not written by this app's field map for any sample draft",
-        "2000 frm2000:txtDate22: cannot be filled here: not written by this app's field map for any sample draft",
         "2000OT frm2000OT:txtTransactionDate: picks which return this is; reopen the form for another TIN or period",
         "2550Q frm2550qv2024:RtnPeriodFromNo4: cannot be filled here: derived by the app: changes with /return_period_from/day, /return_period_from/month, /return_period_from/year but never shows one field's value",
         "2550Q frm2550qv2024:RtnPeriodToNo4: cannot be filled here: derived by the app: changes with /return_period_to/day, /return_period_to/month, /return_period_to/year but never shows one field's value",
@@ -9725,7 +9745,8 @@ mod tests {
                 ("2200M", 1),
                 ("2200P", 1),
                 ("2200T", 1),
-                ("2553", 1),
+                // PR 4: 2553 item 13's list waits for item 13 Yes too.
+                ("2553", 2),
             ])
         );
     }

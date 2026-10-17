@@ -16920,8 +16920,8 @@
       "evidence": "month select (binding /month, whole number 1-12)"
     },
     "frm2000:txtYear": {
-      "label": "For the month of",
-      "evidence": "painted form_2000_view.rs (window via binding /taxable_year, line 921): 'For the month of'; writer-cells printed caption: 'For the month of (YYYY)' | binding type whole; fields.json text/period-component-string",
+      "label": "Year",
+      "evidence": "painted form_2000_view.rs (window via binding /taxable_year, line 921): 'For the month of'; writer-cells printed caption: 'For the month of (YYYY)' | binding type whole; fields.json text/period-component-string | PR 4 (2000 manual-2): item 1 holds the month and the year; html-frozen/2000-dst-2018/writer-cells.json joins txtMonth at \"For the month of (MM)\" and txtYear at \"For the month of (YYYY)\", so the year box reads Year.",
       "kind": "int"
     },
     "frm2000:txtSheets": {
@@ -16971,7 +16971,8 @@
     },
     "frm2000:txtPg2TaxpayerName": {
       "label": "Taxpayer's Name",
-      "evidence": "painted form_2000_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's Name\""
+      "evidence": "PR 4 (2000 R2.0, R3.2): the page 2 header copy of items 4 and 6. html-frozen/2000-dst-2018/writer-cells.json not_joined: it \"prints inside derived:page_header (TIN then name on the one page 2 header comb)\", which Form2000Draft::to_print_field_map builds from the draft's tin and taxpayer_name; the field map writes these boxes from the same fields, so items 4 and 6 are the boxes the filer sees.",
+      "kind": "hidden"
     },
     "chkSchedule1Delete{index}": {
       "kind": "hidden",
@@ -17059,7 +17060,8 @@
     },
     "frm2000:sched1:txtTaxRate0": {
       "label": "Tax Rate",
-      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins)"
+      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos.",
+      "kind": "text"
     },
     "frm2000:sched1:txtTaxDue0": {
       "label": "Tax Due (Schedule 1 row 1)",
@@ -17071,7 +17073,8 @@
     },
     "frm2000:sched1:txtTaxRate1": {
       "label": "Tax Rate",
-      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins)"
+      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos.",
+      "kind": "text"
     },
     "frm2000:sched1:txtTaxDue1": {
       "label": "Tax Due (Schedule 1 row 2)",
@@ -17083,7 +17086,8 @@
     },
     "frm2000:sched1:txtTaxRate2": {
       "label": "Tax Rate",
-      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins)"
+      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos.",
+      "kind": "text"
     },
     "frm2000:sched1:txtTaxDue2": {
       "label": "Tax Due (Schedule 1 row 3)",
@@ -17388,6 +17392,485 @@
     "ds132modNo": {
       "kind": "hidden",
       "evidence": "Item 3: the DS130-DS132 modal question. form_2000.rs does not offer DS130-DS132 ('their modals read the DS130 month field for every charter ATC and DS131/DS132 throw on newds130rate'), so the question never applies here; the upload sends the layout default (false). Hidden."
+    },
+    "frm2000:txtLineBus": {
+      "label": "Line of Business",
+      "evidence": "PR 4 (2000 R3.2): html-frozen/2000-dst-2018/writer-cells.json not_joined: \"not on the paper form: this sheet has no line-of-business box\"; the profile fills it (binding /line_of_business, lock profile) and the upload keeps it, so it is shown under Not on the printed sheet."
+    },
+    "frm2000:txtPg2TIN1": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R2.0, R3.2): the page 2 header copy of items 4 and 6. html-frozen/2000-dst-2018/writer-cells.json not_joined: it \"prints inside derived:page_header (TIN then name on the one page 2 header comb)\", which Form2000Draft::to_print_field_map builds from the draft's tin and taxpayer_name; the field map writes these boxes from the same fields, so items 4 and 6 are the boxes the filer sees."
+    },
+    "frm2000:txtPg2TIN2": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R2.0, R3.2): the page 2 header copy of items 4 and 6. html-frozen/2000-dst-2018/writer-cells.json not_joined: it \"prints inside derived:page_header (TIN then name on the one page 2 header comb)\", which Form2000Draft::to_print_field_map builds from the draft's tin and taxpayer_name; the field map writes these boxes from the same fields, so items 4 and 6 are the boxes the filer sees."
+    },
+    "frm2000:txtPg2TIN3": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R2.0, R3.2): the page 2 header copy of items 4 and 6. html-frozen/2000-dst-2018/writer-cells.json not_joined: it \"prints inside derived:page_header (TIN then name on the one page 2 header comb)\", which Form2000Draft::to_print_field_map builds from the draft's tin and taxpayer_name; the field map writes these boxes from the same fields, so items 4 and 6 are the boxes the filer sees."
+    },
+    "frm2000:txtPg2BranchCode": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R2.0, R3.2): the page 2 header copy of items 4 and 6. html-frozen/2000-dst-2018/writer-cells.json not_joined: it \"prints inside derived:page_header (TIN then name on the one page 2 header comb)\", which Form2000Draft::to_print_field_map builds from the draft's tin and taxpayer_name; the field map writes these boxes from the same fields, so items 4 and 6 are the boxes the filer sees."
+    },
+    "frm2000:txtAgency20": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R3.0, R3.4): Part III Details of Payment (this column of the items 20-22 table). rules/forms/2000-v2018/fixtures/runtime-control-inventory-v796.json records the control disabled: true at load (source lines 1032-1049) and this app's field map never writes it (crates/bir-core/data/agent-forms/2000-v2018.json unmapped: \"not written by this app's field map for any sample draft\"); the page shows its printed item with a note instead of a box that can never be filled."
+    },
+    "frm2000:txtNumber20": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R3.0, R3.4): Part III Details of Payment (this column of the items 20-22 table). rules/forms/2000-v2018/fixtures/runtime-control-inventory-v796.json records the control disabled: true at load (source lines 1032-1049) and this app's field map never writes it (crates/bir-core/data/agent-forms/2000-v2018.json unmapped: \"not written by this app's field map for any sample draft\"); the page shows its printed item with a note instead of a box that can never be filled."
+    },
+    "frm2000:txtDate20": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R3.0, R3.4): Part III Details of Payment (this column of the items 20-22 table). rules/forms/2000-v2018/fixtures/runtime-control-inventory-v796.json records the control disabled: true at load (source lines 1032-1049) and this app's field map never writes it (crates/bir-core/data/agent-forms/2000-v2018.json unmapped: \"not written by this app's field map for any sample draft\"); the page shows its printed item with a note instead of a box that can never be filled."
+    },
+    "frm2000:txtAmount20": {
+      "kind": "hidden",
+      "evidence": "PR 4 (2000 R3.0, R3.4): Part III Details of Payment (this column of the items 20-22 table). rules/forms/2000-v2018/fixtures/runtime-control-inventory-v796.json records the control disabled: true at load (source lines 1032-1049) and this app's field map never writes it (crates/bir-core/data/agent-forms/2000-v2018.json unmapped: \"not written by this app's field map for any sample draft\"); the page shows its printed item with a note instead of a box that can never be filled."
+    },
+    "add:1:0": {
+      "fields": [
+        {
+          "k": "frm2000:txtRDOCode",
+          "l": "RDO Code",
+          "t": "sel"
+        }
+      ],
+      "evidence": "PR 4 (2000 R2.2, preview.0, manual-0): the agent binds frm2000:txtRDOCode to /rdo_code with the profile lock (probe.rs PRINTED_NOT_IN_CORPUS: rules/forms/2000-v2018/validations.json 2000-val-006-rdo asks \"Please enter a valid RDO Code on Item 5.\" and html-frozen/2000-dst-2018/writer-cells.json joins it at \"5 RDO Code\"), but the extracted schema had no control for it; the layout puts it at item 5. The RDO list comes from the catalog."
+    },
+    "layout": {
+      "evidence": "PR 4: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/2000-dst-2018/index.html (BIR Form 2000-DST January 2018: items 1-3, Part I 4-13, Part II 14-19, Part III 20-23, page 2 Schedules 1-4 with three printed rows each) and html-frozen/2000-dst-2018/writer-cells.json joins (which box prints at which item and column; Schedule 4's columns left to right: RCO Code, Remittance Date, Agent Bank, Amount Remitted, From, To). Part III's boxes are disabled at load in the official program (runtime-control-inventory-v796.json) and never written by this app, so each printed item shows a note. Field keys, values, the official XML and the print map are unchanged.",
+      "rest": "Not drawn (the official program's own controls)",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the month of (MM/YYYY)",
+              "k": [
+                "frm2000:txtMonth",
+                "frm2000:txtYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm2000:AmendedRtn_1",
+                "frm2000:AmendedRtn_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm2000:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2000:txtTIN1",
+                "frm2000:txtTIN2",
+                "frm2000:txtTIN3",
+                "frm2000:txtBranchCode"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm2000:txtRDOCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Taxpayer’s Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm2000:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address",
+              "k": [
+                "frm2000:txtAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2000:txtZipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Contact Number (Landline/Cellphone No.)",
+              "k": [
+                "frm2000:txtTelNum"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Other Party to the transaction",
+              "k": [
+                "frm2000:optParty_1",
+                "frm2000:optParty_2",
+                "frm2000:optParty_3"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Name (Last Name, First Name, Middle Name for Individual OR Registered Name for Non-Individual)",
+              "k": [
+                "frm2000:txtOtherName"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "TIN",
+              "k": [
+                "frm2000:txtOtherTIN"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Mode of Affixture",
+              "k": [
+                "frm2000:optMode_1",
+                "frm2000:optMode_2",
+                "frm2000:optMode_3"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Payable",
+          "items": [
+            {
+              "no": "14",
+              "l": "Tax Due for the Month (From Schedule 1)",
+              "k": [
+                "frm2000:txtTax14"
+              ]
+            },
+            {
+              "no": "15A",
+              "l": "Less: Balance Carried Over from Previous Return",
+              "k": [
+                "frm2000:txtTax15A"
+              ]
+            },
+            {
+              "no": "15B",
+              "l": "Payment thru Constructive Affixture (From Schedule 2)",
+              "k": [
+                "frm2000:txtTax15B"
+              ]
+            },
+            {
+              "no": "15C",
+              "l": "Advance Payment during the month (From Schedule 3)",
+              "k": [
+                "frm2000:txtTax15C"
+              ]
+            },
+            {
+              "no": "15D",
+              "l": "Total (Sum of Items 15A to 15C)",
+              "k": [
+                "frm2000:txtTax15D"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Net Tax Payable/(Overpayment)/(Balance to be carried over to the Next Return) (Item 14 Less Item 15D)",
+              "k": [
+                "frm2000:txtTax16"
+              ]
+            },
+            {
+              "no": "17A",
+              "l": "Add: Penalties: Surcharge",
+              "k": [
+                "frm2000:txtTax17A"
+              ]
+            },
+            {
+              "no": "17B",
+              "l": "Interest",
+              "k": [
+                "frm2000:txtTax17B"
+              ]
+            },
+            {
+              "no": "17C",
+              "l": "Compromise",
+              "k": [
+                "frm2000:txtTax17C"
+              ]
+            },
+            {
+              "no": "17D",
+              "l": "Total Penalties (Sum of Items 17A to 17C)",
+              "k": [
+                "frm2000:txtTax17D"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Total Amount Payable/(Overpayment)/(Balance to be carried over to the next return) (Sum of Items 16 & 17D)",
+              "k": [
+                "frm2000:txtTax18"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Total Amount of Documentary Stamps Sold for the Month (From Schedule 4)",
+              "k": [
+                "frm2000:txtTax19"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "20",
+              "l": "Cash/Bank Debit Memo",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+            },
+            {
+              "no": "21",
+              "l": "Check",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+            },
+            {
+              "no": "22",
+              "l": "Tax Debit Memo",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+            },
+            {
+              "no": "23",
+              "l": "Others (specify)",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+            }
+          ]
+        },
+        {
+          "n": "Schedule 1 – Summary of Computation of Taxes Due for the Month",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1",
+              "grid": {
+                "cols": [
+                  "ATC",
+                  "Tax Base",
+                  "Tax Rate",
+                  "Tax Due"
+                ],
+                "keys": [
+                  [
+                    "drpATCCode0",
+                    "frm2000:sched1:txtTaxBase0",
+                    "frm2000:sched1:txtTaxRate0",
+                    "frm2000:sched1:txtTaxDue0"
+                  ],
+                  [
+                    "drpATCCode1",
+                    "frm2000:sched1:txtTaxBase1",
+                    "frm2000:sched1:txtTaxRate1",
+                    "frm2000:sched1:txtTaxDue1"
+                  ],
+                  [
+                    "drpATCCode2",
+                    "frm2000:sched1:txtTaxBase2",
+                    "frm2000:sched1:txtTaxRate2",
+                    "frm2000:sched1:txtTaxDue2"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL TAX DUE (To Item 14)",
+              "k": [
+                "frm2000:sched1:txtTotalDue1"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 2 – Summary of Constructive Affixture for the Month",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 2",
+              "grid": {
+                "cols": [
+                  "Payment Date/s (MM/DD/YYYY)",
+                  "Revenue Official Receipt No. (if payment is made to RCO)",
+                  "Amount Paid"
+                ],
+                "keys": [
+                  [
+                    "frm2000:sched2:txtPaymentDate0",
+                    "frm2000:sched2:txtReceipt0",
+                    "frm2000:sched2:txtAmountPaid0"
+                  ],
+                  [
+                    "frm2000:sched2:txtPaymentDate1",
+                    "frm2000:sched2:txtReceipt1",
+                    "frm2000:sched2:txtAmountPaid1"
+                  ],
+                  [
+                    "frm2000:sched2:txtPaymentDate2",
+                    "frm2000:sched2:txtReceipt2",
+                    "frm2000:sched2:txtAmountPaid2"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL PAYMENT/S (To Item 15B)",
+              "k": [
+                "frm2000:sched2:txtTotalPayment1"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 3 – Summary of DST Payments/Purchases for the Month",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 3",
+              "grid": {
+                "cols": [
+                  "Payment Date/s (MM/DD/YYYY)",
+                  "Payment Reference No. (if paid thru eFPS) / Revenue Official Receipt No. (if payment is made to RCO)",
+                  "Amount Paid"
+                ],
+                "keys": [
+                  [
+                    "frm2000:sched3:txtPaymentDate0",
+                    "frm2000:sched3:txtReceipt0",
+                    "frm2000:sched3:txtAmountPaid0"
+                  ],
+                  [
+                    "frm2000:sched3:txtPaymentDate1",
+                    "frm2000:sched3:txtReceipt1",
+                    "frm2000:sched3:txtAmountPaid1"
+                  ],
+                  [
+                    "frm2000:sched3:txtPaymentDate2",
+                    "frm2000:sched3:txtReceipt2",
+                    "frm2000:sched3:txtAmountPaid2"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL PAYMENT/S (To Item 15C)",
+              "k": [
+                "frm2000:sched3:txtTotalPayment1"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 4 – Summary of Remittance from Collection on Sale of Loose Documentary Stamps",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 4",
+              "grid": {
+                "cols": [
+                  "RCO Code",
+                  "Remittance Date/s (MM/DD/YYYY)",
+                  "Authorized Agent Bank",
+                  "Amount Remitted",
+                  "Inclusive Numbers of Loose Stamps: From",
+                  "To"
+                ],
+                "keys": [
+                  [
+                    "frm2000:sched4:txtRCOCode0",
+                    "frm2000:sched4:txtRemittanceDate0",
+                    "frm2000:sched4:txtBank0",
+                    "frm2000:sched4:txtAmountRemitted0",
+                    "frm2000:sched4:txtNumberFrom0",
+                    "frm2000:sched4:txtNumberTo0"
+                  ],
+                  [
+                    "frm2000:sched4:txtRCOCode1",
+                    "frm2000:sched4:txtRemittanceDate1",
+                    "frm2000:sched4:txtBank1",
+                    "frm2000:sched4:txtAmountRemitted1",
+                    "frm2000:sched4:txtNumberFrom1",
+                    "frm2000:sched4:txtNumberTo1"
+                  ],
+                  [
+                    "frm2000:sched4:txtRCOCode2",
+                    "frm2000:sched4:txtRemittanceDate2",
+                    "frm2000:sched4:txtBank2",
+                    "frm2000:sched4:txtAmountRemitted2",
+                    "frm2000:sched4:txtNumberFrom2",
+                    "frm2000:sched4:txtNumberTo2"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "",
+              "l": "TOTAL REMITTANCE (To Item 19)",
+              "k": [
+                "frm2000:sched4:txtTotalRemittance1"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business",
+              "k": [
+                "frm2000:txtLineBus"
+              ]
+            },
+            {
+              "no": "",
+              "l": "DS106 (Schedule 1): Is the term of the debt instrument less than a year?",
+              "k": [
+                "ds106modYes",
+                "ds106modNo"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "2000OT": {
@@ -24859,8 +25342,8 @@
       "evidence": "item 26: painted: 'Total amount payable/(overpayment)'; paper: 'Total Amount Payable/(Overpayment) (Sum of Item 24 and 25D) 26'"
     },
     "frm2550m:txtYear": {
-      "label": "For the month of",
-      "evidence": "painted form_2550m_view.rs (window via binding /taxable_year, line 1267): 'For the month of'; writer-cells printed caption: 'For the Month of YYYY'"
+      "label": "Year",
+      "evidence": "PR 4 (2550M manual-0): html-frozen/2550m-2007/writer-cells.json joins frm2550m:txtYear (binding /taxable_year) at \"1 For the Month of YYYY\"."
     },
     "frm2550m:txtTaxPayerName": {
       "label": "Taxpayer's Name",
@@ -24922,7 +25405,8 @@
           "label": "International Tax Treaty"
         }
       ],
-      "evidence": "D10: options as in the official BIR-Form2550M.hta select (0 blank, 1 Special Rate, 2 International Tax Treaty); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 special_rate, 2 international_tax_treaty."
+      "evidence": "D10: options as in the official BIR-Form2550M.hta select (0 blank, 1 Special Rate, 2 International Tax Treaty); the blank official 0 is labelled None. Binding /tax_relief: 0 no, 1 special_rate, 2 international_tax_treaty.",
+      "label": "If yes, specify"
     },
     "item:2:14": {
       "label": "Domestic Purchase of Services",
@@ -25201,6 +25685,774 @@
     "chxSched8{N>=0}": {
       "kind": "hidden",
       "evidence": "Item 1: the official row tick box only selects a row for the modal's Delete button; it is never saved (schedule_row_controls writes 'false'). Clearing every box of a row removes it here."
+    },
+    "frm2550m:RtnYear": {
+      "label": "Month",
+      "evidence": "PR 4 (2550M manual-0): html-frozen/2550m-2007/writer-cells.json joins frm2550m:RtnYear (binding /month) at \"1 For the Month of MM\"."
+    },
+    "frm2550m:OptSpecialTax1": {
+      "label": "Yes",
+      "evidence": "html-frozen/2550m-2007/writer-cells.json xbox_joins prints it at \"11 Tax relief Yes\"."
+    },
+    "frm2550m:OptSpecialTax2": {
+      "label": "No",
+      "evidence": "html-frozen/2550m-2007/writer-cells.json xbox_joins prints it at \"11 Tax relief No\"."
+    },
+    "layout": {
+      "evidence": "PR 4 (2550M manual-1, manual-4): show the printed sheet's captions. Structure and captions from html-frozen/2550m-2007/index.html (BIR Form 2550M February 2007: items 1-3, Part I 4-11, Part II 12-26, Part III 29-32, page 2 Schedules 1-8) and html-frozen/2550m-2007/writer-cells.json joins (the schedule totals' printed captions: \"Schedule 1 Total Amount (to Item 12A)\", ...). Each schedule's totals sit under its table. The official program has no control for Part III (rules/forms/2550m-v2007/fixtures/runtime-control-inventory-v796.json lists none), so each Part III item shows a note. Field keys, values, the official XML and the print map are unchanged.",
+      "rest": "Not drawn (the official program's own controls)",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the Month of (MM/YYYY)",
+              "k": [
+                "frm2550m:RtnYear",
+                "frm2550m:txtYear"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm2550m:OptAmendedYN1",
+                "frm2550m:OptAmendedYN2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Number of sheets attached",
+              "k": [
+                "frm2550m:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "TIN",
+              "k": [
+                "frm2550m:txtTIN1",
+                "frm2550m:txtTIN2",
+                "frm2550m:txtTIN3",
+                "frm2550m:txtBranchCode"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm2550m:txtRDOCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Line of Business",
+              "k": [
+                "frm2550m:txtLineBus"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Taxpayer's Name (For Individual) Last Name, First Name, Middle Name/(For Non-individual) Registered Name",
+              "k": [
+                "frm2550m:txtTaxPayerName"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Telephone Number",
+              "k": [
+                "frm2550m:txtTelephoneNum"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Registered Address",
+              "k": [
+                "frm2550m:txtAddress"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Zip Code",
+              "k": [
+                "frm2550m:txtZipCode"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm2550m:OptSpecialTax1",
+                "frm2550m:OptSpecialTax2",
+                "frm2550m:lstSpecialTax"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax (Attach additional sheets, if necessary)",
+          "items": [
+            {
+              "no": "12A",
+              "l": "Vatable Sales/Receipt- Private (Sch.1): Sales/Receipts for the Month (Exclusive of VAT)",
+              "k": [
+                "frm2550m:txtTax12A"
+              ]
+            },
+            {
+              "no": "12B",
+              "l": "Vatable Sales/Receipt- Private (Sch.1): Output Tax Due for the Month",
+              "k": [
+                "frm2550m:txtTax12B"
+              ]
+            },
+            {
+              "no": "13A",
+              "l": "Sales to Government: Sales/Receipts for the Month (Exclusive of VAT)",
+              "k": [
+                "frm2550m:txtTax13A"
+              ]
+            },
+            {
+              "no": "13B",
+              "l": "Sales to Government: Output Tax Due for the Month",
+              "k": [
+                "frm2550m:txtTax13B"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Zero Rated Sales/Receipts",
+              "k": [
+                "frm2550m:txtTax14"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Exempt Sales/Receipts",
+              "k": [
+                "frm2550m:txtTax15"
+              ]
+            },
+            {
+              "no": "16A",
+              "l": "Total Sales/Receipts and Output Tax Due: Sales/Receipts",
+              "k": [
+                "frm2550m:txtTax16A"
+              ]
+            },
+            {
+              "no": "16B",
+              "l": "Total Sales/Receipts and Output Tax Due: Output Tax Due",
+              "k": [
+                "frm2550m:txtTax16B"
+              ]
+            },
+            {
+              "no": "17A",
+              "l": "Less: Allowable Input Tax: Input Tax Carried Over from Previous Period",
+              "k": [
+                "frm2550m:txtTax17A"
+              ]
+            },
+            {
+              "no": "17B",
+              "l": "Input Tax Deferred on Capital Goods Exceeding P1Million from Previous Period",
+              "k": [
+                "frm2550m:txtTax17B"
+              ]
+            },
+            {
+              "no": "17C",
+              "l": "Transitional Input Tax",
+              "k": [
+                "frm2550m:txtTax17C"
+              ]
+            },
+            {
+              "no": "17D",
+              "l": "Presumptive Input Tax",
+              "k": [
+                "frm2550m:txtTax17D"
+              ]
+            },
+            {
+              "no": "17E",
+              "l": "Allowable Input Tax: Others",
+              "k": [
+                "frm2550m:txtTax17E"
+              ]
+            },
+            {
+              "no": "17F",
+              "l": "Total (Sum of Item 17A,17B,17C,17D &17E)",
+              "k": [
+                "frm2550m:txtTax17F"
+              ]
+            },
+            {
+              "no": "18A",
+              "l": "Current Transactions: Purchase of Capital Goods not exceeding P1Million (see sch.2): Purchases",
+              "k": [
+                "frm2550m:txtTax18A"
+              ]
+            },
+            {
+              "no": "18B",
+              "l": "Purchase of Capital Goods not exceeding P1Million (see sch.2): Input Tax",
+              "k": [
+                "frm2550m:txtTax18B"
+              ]
+            },
+            {
+              "no": "18C",
+              "l": "Purchase of Capital Goods exceeding P1Million (see sch.3): Purchases",
+              "k": [
+                "frm2550m:txtTax18C"
+              ]
+            },
+            {
+              "no": "18D",
+              "l": "Purchase of Capital Goods exceeding P1Million (see sch.3): Input Tax",
+              "k": [
+                "frm2550m:txtTax18D"
+              ]
+            },
+            {
+              "no": "18E",
+              "l": "Domestic Purchases of Goods Other than Capital Goods: Purchases",
+              "k": [
+                "frm2550m:txtTax18E"
+              ]
+            },
+            {
+              "no": "18F",
+              "l": "Domestic Purchases of Goods Other than Capital Goods: Input Tax",
+              "k": [
+                "frm2550m:txtTax18F"
+              ]
+            },
+            {
+              "no": "18G",
+              "l": "Importation of Goods Other than Capital Goods: Purchases",
+              "k": [
+                "frm2550m:txtTax18G"
+              ]
+            },
+            {
+              "no": "18H",
+              "l": "Importation of Goods Other than Capital Goods: Input Tax",
+              "k": [
+                "frm2550m:txtTax18H"
+              ]
+            },
+            {
+              "no": "18I",
+              "l": "Domestic Purchase of Services: Purchases",
+              "k": [
+                "frm2550m:txtTax18I"
+              ]
+            },
+            {
+              "no": "18J",
+              "l": "Domestic Purchase of Services: Input Tax",
+              "k": [
+                "frm2550m:txtTax18J"
+              ]
+            },
+            {
+              "no": "18K",
+              "l": "Services rendered by Non-residents: Purchases",
+              "k": [
+                "frm2550m:txtTax18K"
+              ]
+            },
+            {
+              "no": "18L",
+              "l": "Services rendered by Non-residents: Input Tax",
+              "k": [
+                "frm2550m:txtTax18L"
+              ]
+            },
+            {
+              "no": "18M",
+              "l": "Purchases Not Qualified for Input Tax",
+              "k": [
+                "frm2550m:txtTax18M"
+              ]
+            },
+            {
+              "no": "18N",
+              "l": "Current Transactions, Others: Purchases",
+              "k": [
+                "frm2550m:txtTax18N"
+              ]
+            },
+            {
+              "no": "18O",
+              "l": "Current Transactions, Others: Input Tax",
+              "k": [
+                "frm2550m:txtTax18O"
+              ]
+            },
+            {
+              "no": "18P",
+              "l": "Total Current Purchases (Sum of Item 18A,18C,18E,18G,18I,18K,18M&18N)",
+              "k": [
+                "frm2550m:txtTax18P"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Total Available Input Tax (Sum of Item 17F,18B,18D,18F,18H,18J,18L & 18O)",
+              "k": [
+                "frm2550m:txtTax19"
+              ]
+            },
+            {
+              "no": "20A",
+              "l": "Less: Deductions from Input Tax: Input Tax on Purchases of Capital Goods exceeding P1Million deferred for the succeeding period (Sch.3)",
+              "k": [
+                "frm2550m:txtTax20A"
+              ]
+            },
+            {
+              "no": "20B",
+              "l": "Input Tax on Sale to Govt. closed to expense (Sch.4)",
+              "k": [
+                "frm2550m:txtTax20B"
+              ]
+            },
+            {
+              "no": "20C",
+              "l": "Input Tax allocable to Exempt Sales (Sch.5)",
+              "k": [
+                "frm2550m:txtTax20C"
+              ]
+            },
+            {
+              "no": "20D",
+              "l": "VAT Refund/TCC claimed",
+              "k": [
+                "frm2550m:txtTax20D"
+              ]
+            },
+            {
+              "no": "20E",
+              "l": "Deductions from Input Tax: Others",
+              "k": [
+                "frm2550m:txtTax20E"
+              ]
+            },
+            {
+              "no": "20F",
+              "l": "Total (Sum of Item 20A,20B,20C,20D & 20E)",
+              "k": [
+                "frm2550m:txtTax20F"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Total Allowable Input Tax (Item 19 less Item 20F)",
+              "k": [
+                "frm2550m:txtTax21"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Net VAT Payable (Item 16B less Item 21)",
+              "k": [
+                "frm2550m:txtTax22"
+              ]
+            },
+            {
+              "no": "23A",
+              "l": "Less: Tax Credits/Payments: Creditable Value-Added Tax Withheld (Sch. 6)",
+              "k": [
+                "frm2550m:txtTax23A"
+              ]
+            },
+            {
+              "no": "23B",
+              "l": "Advance Payments for Sugar and Flour Industries (Sch.7)",
+              "k": [
+                "frm2550m:txtTax23B"
+              ]
+            },
+            {
+              "no": "23C",
+              "l": "VAT withheld on Sales to Government (Sch.8)",
+              "k": [
+                "frm2550m:txtTax23C"
+              ]
+            },
+            {
+              "no": "23D",
+              "l": "VAT paid in return previously filed, if this is an amended return",
+              "k": [
+                "frm2550m:txtTax23D"
+              ]
+            },
+            {
+              "no": "23E",
+              "l": "Advance Payments made (please attach proof of payments - BIR Form No. 0605)",
+              "k": [
+                "frm2550m:txtTax23E"
+              ]
+            },
+            {
+              "no": "23F",
+              "l": "Tax Credits/Payments: Others",
+              "k": [
+                "frm2550m:txtTax23F"
+              ]
+            },
+            {
+              "no": "23G",
+              "l": "Total Tax Credits/Payments (Sum of Item 23A,23B,23C, 23D, 23E & 23F)",
+              "k": [
+                "frm2550m:txtTax23G"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Tax Still Payable/(Overpayment) (Item 22 less Item 23G)",
+              "k": [
+                "frm2550m:txtTax24"
+              ]
+            },
+            {
+              "no": "25A",
+              "l": "Add: Penalties: Surcharge",
+              "k": [
+                "frm2550m:txtTax25A"
+              ]
+            },
+            {
+              "no": "25B",
+              "l": "Interest",
+              "k": [
+                "frm2550m:txtTax25B"
+              ]
+            },
+            {
+              "no": "25C",
+              "l": "Compromise",
+              "k": [
+                "frm2550m:txtTax25C"
+              ]
+            },
+            {
+              "no": "25D",
+              "l": "Total Penalties",
+              "k": [
+                "frm2550m:txtTax25D"
+              ]
+            },
+            {
+              "no": "26",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Item 24 and 25D)",
+              "k": [
+                "frm2550m:txtTax26"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "29",
+              "l": "Cash/Bank Debit Memo",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            },
+            {
+              "no": "30",
+              "l": "Check",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            },
+            {
+              "no": "31",
+              "l": "Tax Debit Memo",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            },
+            {
+              "no": "32",
+              "l": "Others",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            }
+          ]
+        },
+        {
+          "n": "Schedule 1 – Schedule of Sales/Receipts and Output Tax",
+          "items": [
+            {
+              "table": "frm2550m:txtAtcCde1"
+            },
+            {
+              "no": "",
+              "l": "Total (To Item 12A/B)",
+              "k": [
+                "frm2550M:txtmodaltxtTotal12A",
+                "frm2550M:txtmodaltxtTotal12B"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 2 – Purchases/Importation of Capital Goods (Aggregate Amount Not Exceeding P1 Million)",
+          "items": [
+            {
+              "table": "txtDatePurchased0"
+            },
+            {
+              "no": "",
+              "l": "Total (To Item 18A/B)",
+              "k": [
+                "txtmodalTotalAmt",
+                "txtmodalTotalInputTax"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 3 – Purchases/Importation of Capital Goods (Aggregate Amount Exceeds P1 Million)",
+          "items": [
+            {
+              "table": "txtDatePurchased3A0"
+            },
+            {
+              "no": "",
+              "l": "A) Total (To Item 18C/D)",
+              "k": [
+                "txtmodalTotalAmountSched3",
+                "txtmodalTotalInputTaxSched3",
+                "txtmodalTotalBalanceSched3A"
+              ]
+            },
+            {
+              "table": "txtDatePurchased3B0"
+            },
+            {
+              "no": "",
+              "l": "B) Total",
+              "k": [
+                "txtmodalTotalBalanceSched3B"
+              ]
+            },
+            {
+              "no": "",
+              "l": "C) Total Input Tax Deferred for future period from current and previous purchases (To Item 20A)",
+              "k": [
+                "txtmodalTotalInputTax20ASched3"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 4 – Input Tax Attributable to Sale to Government",
+          "items": [
+            {
+              "no": "",
+              "l": "Input Tax directly attributable to sale to government",
+              "k": [
+                "txtinputtaxSched4"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Add: Ratable portion of Input Tax not directly attributable to any activity: Taxable sales to government (Item 13A) x Amount of Input Tax not directly attributable / Total Sales (Item 16A)",
+              "k": [
+                "txtTaxableSaleSched4",
+                "txtInputTaxnotDirectSched4",
+                "txtTotalSaleSched4",
+                "txtTotalInputTaxnotDirectSched4"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Total Input Tax attributable to sale to government",
+              "k": [
+                "txtTotalInputSaletoGovernmentSched4"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Less: Standard Input Tax to sale to government",
+              "k": [
+                "txtlessStdTaxSched4"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Input Tax on Sale to Govt. closed to expense (To Item 20B)",
+              "k": [
+                "txtTotal20BSched4"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 5 – Input Tax Attributable to Exempt Sales",
+          "items": [
+            {
+              "no": "",
+              "l": "Input Tax directly attributable to exempt sale",
+              "k": [
+                "txtinputtaxSched5"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Add: Ratable portion of Input Tax not directly attributable to any activity: Taxable exempt sale (Item 15) x Amount of Input Tax not directly attributable / Total Sales (Item 16A)",
+              "k": [
+                "txtTotSaleSched5",
+                "txtAmountInputnotDirectSched5",
+                "txtSumTotalSaleSched5",
+                "txtProductnotDirectSched5"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Total Input Tax attributable to exempt sale (To Item 20C)",
+              "k": [
+                "txtTotal20CSched5"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 6 – Tax Withheld Claimed as Tax Credit",
+          "items": [
+            {
+              "table": "txtPeriodCovered0"
+            },
+            {
+              "no": "",
+              "l": "Total (To Item 23A)",
+              "k": [
+                "txtmodalTotal23A",
+                "txtmodalTotalSched6AppliedCurrent"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 7 – Schedule of Advance Payment",
+          "items": [
+            {
+              "table": "txtPeriodCoveredSch70"
+            },
+            {
+              "no": "",
+              "l": "Total (To Item 23B)",
+              "k": [
+                "txtmodalTotal23B",
+                "txtmodalTotalSched7AppliedCurrent"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Schedule 8 – VAT Withheld on Sales to Government",
+          "items": [
+            {
+              "table": "txtPeriodCoveredSch80"
+            },
+            {
+              "no": "",
+              "l": "Total (To Item 23C)",
+              "k": [
+                "txtmodalTotal23C",
+                "txtmodalTotalSched8AppliedCurrent"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "txtmodalTotalAmt": {
+      "label": "Schedule 2 Total Amount (to Item 18A)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalAmt at \"Schedule 2 Total Amount (to Item 18A)\"."
+    },
+    "txtmodalTotalInputTax": {
+      "label": "Schedule 2 Total Input Tax (to Item 18B)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalInputTax at \"Schedule 2 Total Input Tax (to Item 18B)\"."
+    },
+    "txtmodalTotalAmountSched3": {
+      "label": "Schedule 3A Total Amount (to Item 18C)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalAmountSched3 at \"Schedule 3A Total Amount (to Item 18C)\"."
+    },
+    "txtmodalTotalInputTaxSched3": {
+      "label": "Schedule 3A Total Input Tax (to Item 18D)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalInputTaxSched3 at \"Schedule 3A Total Input Tax (to Item 18D)\"."
+    },
+    "txtmodalTotalInputTax20ASched3": {
+      "label": "Schedule 3C Total Input Tax Deferred (to Item 20A)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalInputTax20ASched3 at \"Schedule 3C Total Input Tax Deferred (to Item 20A)\"."
+    },
+    "txtinputtaxSched4": {
+      "label": "Schedule 4 Input Tax directly attributable",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtinputtaxSched4 at \"Schedule 4 Input Tax directly attributable\"."
+    },
+    "txtTotalInputTaxnotDirectSched4": {
+      "label": "Schedule 4 Ratable portion of Input Tax not directly attributable",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtTotalInputTaxnotDirectSched4 at \"Schedule 4 Ratable portion of Input Tax not directly attributable\"."
+    },
+    "txtTotalInputSaletoGovernmentSched4": {
+      "label": "Schedule 4 Total Input Tax attributable to sale to government",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtTotalInputSaletoGovernmentSched4 at \"Schedule 4 Total Input Tax attributable to sale to government\"."
+    },
+    "txtlessStdTaxSched4": {
+      "label": "Schedule 4 Less: Standard Input Tax",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtlessStdTaxSched4 at \"Schedule 4 Less: Standard Input Tax\"."
+    },
+    "txtinputtaxSched5": {
+      "label": "Schedule 5 Input Tax directly attributable",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtinputtaxSched5 at \"Schedule 5 Input Tax directly attributable\"."
+    },
+    "txtmodalTotalSched6AppliedCurrent": {
+      "label": "Schedule 6 Total Applied (to Item 23A)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalSched6AppliedCurrent at \"Schedule 6 Total Applied (to Item 23A)\"."
+    },
+    "txtmodalTotalSched7AppliedCurrent": {
+      "label": "Schedule 7 Total Applied (to Item 23B)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalSched7AppliedCurrent at \"Schedule 7 Total Applied (to Item 23B)\"."
+    },
+    "txtmodalTotalSched8AppliedCurrent": {
+      "label": "Schedule 8 Total Applied (to Item 23C)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json joins txtmodalTotalSched8AppliedCurrent at \"Schedule 8 Total Applied (to Item 23C)\"."
+    },
+    "txtTaxableSaleSched4": {
+      "label": "Taxable sales to government (Item 13A)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json not_joined: \"Schedule 4/5 formula operand of the page; the 2007 sheet prints those formulas as text\"; html-frozen/2550m-2007/index.html prints the formula \"Taxable sales to government\" in Schedules 4 and 5; form_2550m.rs writes it from the draft field named in brackets."
+    },
+    "txtInputTaxnotDirectSched4": {
+      "label": "Amount of Input Tax not directly attributable",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json not_joined: \"Schedule 4/5 formula operand of the page; the 2007 sheet prints those formulas as text\"; html-frozen/2550m-2007/index.html prints the formula \"Amount of Input Tax not directly attributable\" in Schedules 4 and 5; form_2550m.rs writes it from the draft field named in brackets."
+    },
+    "txtTotalSaleSched4": {
+      "label": "Total Sales (Item 16A)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json not_joined: \"Schedule 4/5 formula operand of the page; the 2007 sheet prints those formulas as text\"; html-frozen/2550m-2007/index.html prints the formula \"Total Sales\" in Schedules 4 and 5; form_2550m.rs writes it from the draft field named in brackets."
+    },
+    "txtTotSaleSched5": {
+      "label": "Taxable exempt sale (Item 15)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json not_joined: \"Schedule 4/5 formula operand of the page; the 2007 sheet prints those formulas as text\"; html-frozen/2550m-2007/index.html prints the formula \"Taxable exempt sale\" in Schedules 4 and 5; form_2550m.rs writes it from the draft field named in brackets."
+    },
+    "txtAmountInputnotDirectSched5": {
+      "label": "Amount of Input Tax not directly attributable",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json not_joined: \"Schedule 4/5 formula operand of the page; the 2007 sheet prints those formulas as text\"; html-frozen/2550m-2007/index.html prints the formula \"Amount of Input Tax not directly attributable\" in Schedules 4 and 5; form_2550m.rs writes it from the draft field named in brackets."
+    },
+    "txtSumTotalSaleSched5": {
+      "label": "Total Sales (Item 16A)",
+      "evidence": "PR 4 (2550M manual-1): html-frozen/2550m-2007/writer-cells.json not_joined: \"Schedule 4/5 formula operand of the page; the 2007 sheet prints those formulas as text\"; html-frozen/2550m-2007/index.html prints the formula \"Total Sales\" in Schedules 4 and 5; form_2550m.rs writes it from the draft field named in brackets."
     }
   },
   "2550Q": {
@@ -26733,6 +27985,384 @@
     "item:2:13": {
       "label": "Tax due",
       "evidence": "P4: item heading from its fields' sourced captions"
+    },
+    "frm2553:optAmended_1": {
+      "label": "Yes",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"4 Amended Return Yes\"; the item heading carries the question."
+    },
+    "frm2553:optAmended_2": {
+      "label": "No",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"4 Amended Return No\"; the item heading carries the question."
+    },
+    "frm2553:optTreaty_1": {
+      "label": "Yes",
+      "evidence": "PR 4 (2553 R3.0, manual-3): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"13 Tax relief Yes\"; the item heading carries the question."
+    },
+    "frm2553:optTreaty_2": {
+      "label": "No",
+      "evidence": "PR 4 (2553 R3.0, manual-3): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"13 Tax relief No\"; the item heading carries the question."
+    },
+    "frm2553:ifoverpay_1": {
+      "label": "To be Refunded",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"23 To be Refunded\"; html-frozen/2553-1999/index.html: \"If overpayment, mark one box only: To be Refunded\"."
+    },
+    "frm2553:ifoverpay_2": {
+      "label": "To be issued a Tax Credit Certificate",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"23 To be issued a Tax Credit Certificate\"."
+    },
+    "frm2553:itemYearEndMonth": {
+      "label": "Month",
+      "evidence": "PR 4: html-frozen/2553-1999/writer-cells.json joins it at \"2 Year Ended MM\"."
+    },
+    "frm2553:txtYearEnded": {
+      "label": "Year",
+      "evidence": "PR 4: html-frozen/2553-1999/writer-cells.json joins it at \"2 Year Ended YYYY\"."
+    },
+    "frm2553:lstTaxTreaty": {
+      "label": "If yes, specify",
+      "kind": "sel",
+      "options": [
+        {
+          "value": "1",
+          "label": "Special Rate"
+        },
+        {
+          "value": "2",
+          "label": "International Tax Treaty"
+        }
+      ],
+      "evidence": "PR 4 (2553 manual-3, R6.0): the official select's codes (fields.json enum_values 0, 1, 2; binding /tax_treaty 1 special_rate, 2 international_tax_treaty) with the relief names the print uses (print_map::tax_relief_label: SPECIAL RATE, INTERNATIONAL TAX TREATY); its blank 0 (item 13 not Yes) is no choice, so the page shows Choose... for it. fields.json enabled_when: \"Item 13 Yes is selected.\""
+    },
+    "frm2553:txt18B": {
+      "kind": "sel",
+      "evidence": "PR 4 (2553 manual-0, manual-1): row 18's ATC comes from the official popup (BIR-Form2553.hta getATCCode: the four atcCodes.xml entries of Form2553Draft's FORM_2553_ATC_OPTIONS); the host lists them (rows_dst_pt_vat.rs) and writes the row through Form2553Draft::set_atc, whose duplicate check is the official one."
+    },
+    "txtEmail": {
+      "label": "Email Address",
+      "evidence": "PR 4 (2553 R3): html-frozen/2553-1999/writer-cells.json not_joined: \"not on the paper form: the 1999 sheet has no email box\"; validate() asks for it (\"Enter the email address BIR sends the filing confirmation to.\"), so it is shown under Not on the printed sheet."
+    },
+    "layout": {
+      "evidence": "PR 4: show the printed sheet's parts and item numbers. Structure and captions from html-frozen/2553-1999/index.html (BIR Form 2553 July 1999: items 1-5, Part I 6-13, Part II 14-23, Part III 26-29) and html-frozen/2553-1999/writer-cells.json joins. Rows 14-17 print their classification, ATC and rate on the sheet (the print fills only their amounts, writer-cells rule) and row 18 is typed. The official program has no control for Part III (rules/forms/2553-v1999/fixtures/runtime-control-inventory-v796.json lists none), so each Part III item shows a note. Field keys, values, the official XML and the print map are unchanged.",
+      "rest": "Not drawn (the official program's own controls)",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the (Calendar / Fiscal year)",
+              "k": [
+                "frm2553:itemFiscalStartMonth:_1",
+                "frm2553:itemFiscalStartMonth:_2"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Year Ended (MM/YYYY)",
+              "k": [
+                "frm2553:itemYearEndMonth",
+                "frm2553:txtYearEnded"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Quarter",
+              "k": [
+                "frm2553:optQtr:_1",
+                "frm2553:optQtr:_2",
+                "frm2553:optQtr:_3",
+                "frm2553:optQtr:_4"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Amended Return?",
+              "k": [
+                "frm2553:optAmended_1",
+                "frm2553:optAmended_2"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Number of sheets attached",
+              "k": [
+                "frm2553:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "6",
+              "l": "TIN",
+              "k": [
+                "frm2553:txtTIN1",
+                "frm2553:txtTIN2",
+                "frm2553:txtTIN3",
+                "frm2553:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "RDO Code",
+              "k": [
+                "frm2553:txtRDOCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Line of Business/Occupation",
+              "k": [
+                "frm2553:txtDescription"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Taxpayer's Name (For Individual) Last Name, First Name, Middle Name/(For Non-individual) Registered Name",
+              "k": [
+                "frm2553:txtTPName"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Telephone Number",
+              "k": [
+                "frm2553:txtTelNum"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Registered Address",
+              "k": [
+                "frm2553:txtAddress"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Zip Code",
+              "k": [
+                "frm2553:txtZipCode"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm2553:optTreaty_1",
+                "frm2553:optTreaty_2",
+                "frm2553:lstTaxTreaty"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "14",
+              "l": "Rows 14 to 17 (the form prints each row's classification, ATC and rate)",
+              "grid": {
+                "cols": [
+                  "Taxable Transaction/Industry Classification",
+                  "ATC",
+                  "Taxable Amount",
+                  "Tax Rate",
+                  "Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2553:txt14A",
+                    "frm2553:txt14B",
+                    "frm2553:txt14C",
+                    "frm2553:txt14D",
+                    "frm2553:txt14E"
+                  ],
+                  [
+                    "frm2553:txt15A",
+                    "frm2553:txt15B",
+                    "frm2553:txt15C",
+                    "frm2553:txt15D",
+                    "frm2553:txt15E"
+                  ],
+                  [
+                    "frm2553:txt16A",
+                    "frm2553:txt16B",
+                    "frm2553:txt16C",
+                    "frm2553:txt16D",
+                    "frm2553:txt16E"
+                  ],
+                  [
+                    "frm2553:txt17A",
+                    "frm2553:txt17B",
+                    "frm2553:txt17C",
+                    "frm2553:txt17D",
+                    "frm2553:txt17E"
+                  ]
+                ],
+                "start": 14
+              }
+            },
+            {
+              "no": "18",
+              "l": "Row 18",
+              "grid": {
+                "cols": [
+                  "Taxable Transaction/Industry Classification",
+                  "ATC",
+                  "Taxable Amount",
+                  "Tax Rate",
+                  "Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2553:txt18A",
+                    "frm2553:txt18B",
+                    "frm2553:txt18C",
+                    "frm2553:txt18D",
+                    "frm2553:txt18E"
+                  ]
+                ],
+                "start": 18
+              }
+            },
+            {
+              "no": "19",
+              "l": "Total Tax Due",
+              "k": [
+                "frm2553:txt19"
+              ]
+            },
+            {
+              "no": "20A",
+              "l": "Less: Tax Credits/Payments: Tax Paid in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm2553:txt20A"
+              ]
+            },
+            {
+              "no": "20B",
+              "l": "Creditable Tax Withheld Per BIR Form 2307",
+              "k": [
+                "frm2553:txt20B"
+              ]
+            },
+            {
+              "no": "20C",
+              "l": "Total Tax Credits/Payments (Sum of Items 20A & 20B)",
+              "k": [
+                "frm2553:txt20C"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Tax Payable/(Overpayment) (Item 19 less Item 20C)",
+              "k": [
+                "frm2553:txt21"
+              ]
+            },
+            {
+              "no": "22A",
+              "l": "Add: Penalties: Surcharge",
+              "k": [
+                "frm2553:txt22A"
+              ]
+            },
+            {
+              "no": "22B",
+              "l": "Interest",
+              "k": [
+                "frm2553:txt22B"
+              ]
+            },
+            {
+              "no": "22C",
+              "l": "Compromise",
+              "k": [
+                "frm2553:txt22C"
+              ]
+            },
+            {
+              "no": "22D",
+              "l": "Total Penalties",
+              "k": [
+                "frm2553:txt22D"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Items 21 & 22D); if overpayment, mark one box only",
+              "k": [
+                "frm2553:txt23",
+                "frm2553:ifoverpay_1",
+                "frm2553:ifoverpay_2"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "26",
+              "l": "Cash/Bank Debit Memo",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            },
+            {
+              "no": "27",
+              "l": "Check",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            },
+            {
+              "no": "28",
+              "l": "Tax Debit Memo",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            },
+            {
+              "no": "29",
+              "l": "Others",
+              "note": "The official eBIRForms program has no box for this item, so it has none here; it stays blank on the printed return."
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Email Address (where BIR sends the filing confirmation)",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "frm2553:itemFiscalStartMonth:_1": {
+      "label": "Calendar",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"1 For the Calendar\"."
+    },
+    "frm2553:itemFiscalStartMonth:_2": {
+      "label": "Fiscal",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/writer-cells.json xbox_joins prints the box at \"1 For the Fiscal\"."
+    },
+    "frm2553:optQtr:_1": {
+      "label": "1st",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/index.html prints item 3's boxes \"1st 2nd 3rd 4th\"; writer-cells.json xbox_joins joins this one at \"3 Quarter 1\"."
+    },
+    "frm2553:optQtr:_2": {
+      "label": "2nd",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/index.html prints item 3's boxes \"1st 2nd 3rd 4th\"; writer-cells.json xbox_joins joins this one at \"3 Quarter 2\"."
+    },
+    "frm2553:optQtr:_3": {
+      "label": "3rd",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/index.html prints item 3's boxes \"1st 2nd 3rd 4th\"; writer-cells.json xbox_joins joins this one at \"3 Quarter 3\"."
+    },
+    "frm2553:optQtr:_4": {
+      "label": "4th",
+      "evidence": "PR 4 (2553 R3.0): html-frozen/2553-1999/index.html prints item 3's boxes \"1st 2nd 3rd 4th\"; writer-cells.json xbox_joins joins this one at \"3 Quarter 4\"."
     }
   }
 }

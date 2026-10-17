@@ -113,6 +113,9 @@ function withoutHidden(schema) {
     .map((p) => ({
       ...p,
       items: p.items
+        // A table whose every column is hidden (2000's Part III, which the
+        // official program keeps shut) is not drawn; its boxes stay in the schema.
+        .filter((it) => !it.rows || it.cols.some((c) => c.t !== "hidden"))
         .map((it) => (it.f ? { ...it, f: it.f.filter((f) => f.t !== "hidden") } : it))
         // A printed item with no box in the official program keeps its note.
         .filter((it) => it.rows || (it.f && it.f.length) || it.note),
@@ -2000,6 +2003,13 @@ function scheduleTable(cx, ui, it, width) {
         const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : ""), col.w) : col.t === "date" ? shownDate(value) : value;
         const hint = !shown ? ui.reasonFor(k) : "";
         cell = lockedBox(cx, shown || hint, colW - 16, { right: !hint && col.t === "money", hint: Boolean(hint) });
+      } else if (col.t === "date" && it.calendar) {
+        // Rule 4: a schedule's date box has its own calendar too, in the
+        // tables the host marks (2000's Schedules 2-4); typing works as in
+        // any date box.
+        const row = ui.itemIdForKey(k);
+        const box = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 52 }).h(30);
+        cell = div().flex().flex_row().items_center().gap(SPACE[1]).child(box).child(datePicker(cx, ui, `${row}-${r}-${c}`, { single: { k, l: col.l, t: "date" } }, row));
       } else {
         cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 16 }).h(30);
       }
