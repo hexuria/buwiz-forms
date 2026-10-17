@@ -28008,6 +28008,10 @@ declare module "bir" {
       confirmed_at: string | null;
       /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
       amends?: ScreenFormStatus;
+      /** Boxes another answer turns off right now, each with what turns it on (the page fades them). */
+      off: Record<string, string>;
+      /** Each party's Surcharge, Interest and Compromise boxes: locked at the computed amounts until Edit penalties opens them (sent as `unlocked`). */
+      penalties: ScreenFormPenalties[];
       errors: ScreenFormError[];
   }
   export interface ScreenFormPeriodPart {
@@ -28038,11 +28042,19 @@ declare module "bir" {
       /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`); null: start it with New return. */
       opens?: { year: number; period: number; key: number | null; new_key?: number | null } | null;
   }
+  export interface ScreenFormPenalties {
+      keys: string[];
+      /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
+      edited: boolean;
+      /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
+      applies: boolean;
+  }
   export interface ScreenFormFilled {
       draft: object;
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       rejected: Record<string, string>;
+      penalties: ScreenFormPenalties[];
       /** A sample's boxes still blank (null for a return). */
       blank?: string[] | null;
   }
@@ -28051,6 +28063,9 @@ declare module "bir" {
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       errors: ScreenFormError[];
+      /** Boxes another answer turns off right now, each with what turns it on. */
+      off: Record<string, string>;
+      penalties: ScreenFormPenalties[];
       /** A sample's boxes still blank (null for a return). */
       blank?: string[] | null;
   }

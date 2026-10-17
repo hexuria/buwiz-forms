@@ -137,6 +137,8 @@ export interface ScreenFormPenalties {
     keys: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
+    /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
+    applies: boolean;
 }
 export interface ScreenFormFilled {
     draft: object;
