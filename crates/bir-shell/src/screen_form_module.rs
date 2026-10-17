@@ -10525,11 +10525,7 @@ mod tests {
             let whole: Vec<&str> = parts.iter().map(|(t, _)| t.as_str()).collect();
             assert_eq!(whole.join(" "), text, "{len}: the whole address, in order");
             let sizes: Vec<f64> = parts.iter().map(|(_, size)| size.unwrap()).collect();
-            assert!(
-                sizes
-                    .iter()
-                    .all(|s| *s == sizes[0] && *s <= 9.0)
-            );
+            assert!(sizes.iter().all(|s| *s == sizes[0] && *s <= 9.0));
             let room: f64 = lines
                 .iter()
                 .map(|cell| (cell_width(slug, cell) - 2.0) / (0.58 * 9.0))
@@ -11146,6 +11142,7 @@ mod tests {
     fn a_long_pooled_address_prints_whole_on_every_pooled_form() {
         setup();
         let mut forms = Vec::new();
+        let mut refusals = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let Some(slug) = crate::bir_module::print_slug_for(code) else {
@@ -11170,12 +11167,24 @@ mod tests {
                         .map(|cell| bir_print::frozen_html::printed_cell(&document, cell))
                         .collect();
                     let text: String = printed.iter().map(|(t, _)| t.as_str()).collect();
-                    // The return files the address (never silently drops
-                    // it): as typed, or, where the form's own field map
-                    // cuts it (1600PT/VT, 2200C/M/P and 2552 keep 160
-                    // characters, as the official form does), that much.
-                    assert!(!kept.is_empty(), "{code} {len}: the XML files the address");
-                    let expected = if kept.len() < squeezed(&typed).len() {
+                    // The return files the address: as typed, or, where the
+                    // form's own field map cuts it (1600PT/VT, 2200C/M/P and
+                    // 2552 keep 160 characters, as the official form does),
+                    // that much. 0619E and 0619F file nothing when BIR's own
+                    // cut at character 127 lands inside an escape: the
+                    // check refuses the return and says why.
+                    let refused = kept.is_empty() && {
+                        let errors = validated(code, draft)["errors"].to_string();
+                        assert!(
+                            ["0619E", "0619F"].contains(&code)
+                                && errors
+                                    .contains("BIR's program splits this address at character 127"),
+                            "{code} {len}: the XML files no address and nothing says why: {errors}"
+                        );
+                        refusals.push(format!("{code} {len}"));
+                        true
+                    };
+                    let expected = if !refused && kept.len() < squeezed(&typed).len() {
                         kept.clone()
                     } else {
                         squeezed(&typed)
@@ -11213,6 +11222,12 @@ mod tests {
                 }
             }
         }
+        refusals.sort_unstable();
+        assert_eq!(
+            refusals,
+            ["0619E 200", "0619F 200"],
+            "refused where the cut lands in an escape"
+        );
         forms.sort_unstable();
         assert_eq!(
             forms,
