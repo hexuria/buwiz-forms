@@ -152,8 +152,8 @@ const app = {
         const year = parts[K("txtYear")];
         // The host counts a year only with all four digits.
         if (!/^\d{4}$/.test(year || "") || !quarter) return Promise.resolve({ complete: false });
-        const key = 100 + quarter; // the stored key the host answers (a number)
-        if (year !== "2024") return Promise.resolve({ complete: true, opens: { year: Number(year), period: quarter, key: null }, sample: freshSample(Number(year), quarter) });
+        const key = quarter; // a quarterly return's stored key is its quarter
+        if (year !== "2024") return Promise.resolve({ complete: true, opens: { year: Number(year), period: quarter, key: null, new_key: quarter }, sample: freshSample(Number(year), quarter) });
         const s = stored[quarter];
         return Promise.resolve({
           complete: true,
@@ -259,14 +259,14 @@ await tick(1);
 offer();
 await press("existing-load");
 assert.notEqual(ui.state, sample, "the saved draft is open");
-assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, returnKey: 101 }));
+assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, returnKey: 1 }));
 // The sidebar draws the loaded return in Recent (a headed run crashed here:
 // the stored key had taken the Recent entry's own text id).
-assert.equal(app.recent[0].key, "12345678800000|2551Q|2024|1|101", "Recent's id stays text");
-assert.equal(app.recent[0].returnKey, 101);
+assert.equal(app.recent[0].key, "12345678800000|2551Q|2024|1|1", "Recent's id stays text");
+assert.equal(app.recent[0].returnKey, 1);
 chrome.namespace.renderSidebar(cx, app);
-assert.equal(json(recentMod.namespace.recentOpenOptions(app.recent[0])), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, returnKey: 101 }), "Recent reopens that very return");
-assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 1, 101]), "opened by its stored key");
+assert.equal(json(recentMod.namespace.recentOpenOptions(app.recent[0])), json({ tin: "12345678800000", code: "2551Q", year: 2024, period: 1, returnKey: 1 }), "Recent reopens that very return");
+assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 1, 1, null]), "opened by its stored key");
 assert.match(app.undos.at(-1), /Loaded your saved Q1 2024 draft/);
 await undo();
 assert.equal(ui.state, sample, "Undo restores the very same sample");
@@ -284,7 +284,7 @@ assert.equal(json(o.buttons), json(["existing-view", "existing-keep"]));
 assert.ok(!checkboxes.has("existing-fast-lane"), "only drafts offer the fast lane");
 await press("existing-view");
 assert.notEqual(ui.state, sample);
-assert.equal(lastOpen()[5], 102);
+assert.equal(lastOpen()[5], 2);
 await undo();
 assert.equal(ui.state, sample);
 
@@ -301,7 +301,7 @@ assert.ok(o.texts.includes("New amended return. The filed version is kept in thi
 assert.ok(!o.texts.some((t) => /stays as filed/.test(t)), "no wording says the original stays as filed");
 await press("existing-amend");
 const amendCall = calls.filter((c) => c[0] === "screen_form_amend").at(-1);
-assert.equal(json(amendCall.slice(1)), json(["12345678800000", "2551Q", 2024, 3, 103]), "a new amended return of that very return");
+assert.equal(json(amendCall.slice(1)), json(["12345678800000", "2551Q", 2024, 3, 3]), "a new amended return of that very return");
 assert.equal(ui.state.amends, "Submitted");
 // D3: print preview of an amendment not saved yet prints from the page and
 // saves nothing.
@@ -477,9 +477,22 @@ ui.choose({ [K("txtYear")]: "2031" }, cx);
 await settle();
 assert.equal(yearInput.value(), "2031", "the year box shows the year set");
 
+// F4: Start a return pressed during the pause before the ask asks now and
+// acts on that answer (a new return started under the typed period's key),
+// never New return for a period that is complete.
+const newReturnsBefore = calls.filter((c) => c[0] === "startNewReturn").length;
+ui.choose({ [quarterKeys[1]]: "true" }, cx);
+assert.equal(sample.opens, null, "the answer is pending");
+ui.startReturn(cx);
+assert.equal(calls.filter((c) => c[0] === "startNewReturn").length, newReturnsBefore, "not New return");
+await settle();
+assert.equal(calls.filter((c) => c[0] === "startNewReturn").length, newReturnsBefore);
+assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2031, period: 2, newKey: 2 }));
+assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2031, 2, null, 2]), "a new return under the typed key");
+
 // D4: an amended return names its filed original; View the filed original
 // opens it read-only from the history, with a strip saying what it is.
-ui.open({ code: "2551Q", tin: "12345678800000", year: 2024, period: 3, returnKey: 103 }, cx);
+ui.open({ code: "2551Q", tin: "12345678800000", year: 2024, period: 3, returnKey: 3 }, cx);
 await settle();
 assert.equal(ui.state.filedOriginal.id, 5);
 ui.openFiledOriginal(cx);
@@ -493,7 +506,7 @@ assert.equal(
 );
 ui.backToAmendment(cx);
 await settle();
-assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 3, 103]), "back to the amendment");
+assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2024, 3, 3, null]), "back to the amendment");
 assert.equal(mod.namespace.FILED_KEPT, "The filed version is kept in this return's history.");
 
 // No grey box without a visible reason: a shut box that shows blank draws

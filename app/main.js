@@ -202,9 +202,11 @@ class BirApp extends View {
       // Compact form sections for this run only; Settings is what saves it.
       else if (key === "compact") this.prefs = { ...this.prefs, compactFormNav: value !== "0" };
       else if (key === "form") {
-        const [code, year, period] = value.split("/");
+        // form=CODE/YEAR/PERIOD[/KEY]: KEY opens exactly that stored return.
+        const [code, year, period, key] = value.split("/");
         const b = this.branch();
-        if (b) this.openForm({ tin: b.tin, code, year: Number(year), period: Number(period) }, cx);
+        const exact = key !== undefined && key !== "" ? { returnKey: Number(key) } : {};
+        if (b) this.openForm({ tin: b.tin, code, year: Number(year), period: Number(period), ...exact }, cx);
       } else if (key === "part") this.formUi.jumpTo(Number(value), cx);
       else if (key === "open") this.taxpayerUi.open[value] = true;
       else if (key === "edit") this.taxpayerUi.startEdit(value, cx);

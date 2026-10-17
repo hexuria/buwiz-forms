@@ -28035,9 +28035,8 @@ declare module "bir" {
       existing?: ScreenFormExisting;
       /** No stored return: a fresh sample built for exactly this period. */
       sample?: ScreenFormOpened;
-      /** The year and period `screen_form_open` takes for it. */
-      /** What `screen_form_open` takes for it: year, period and the exact stored key (null: start it with New return). */
-      opens?: { year: number; period: number; key: number | null } | null;
+      /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`); null: start it with New return. */
+      opens?: { year: number; period: number; key: number | null; new_key?: number | null } | null;
   }
   export interface ScreenFormFilled {
       draft: object;
@@ -28069,8 +28068,8 @@ declare module "bir" {
   }
   export function screen_form_schema(form_code: string): object;
   export function screen_forms_index(): ScreenFormIndexEntry[];
-  /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter), else the latest of the period. */
-  export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null): Promise<ScreenFormOpened>;
+  /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter; gone, the open fails), else the latest of the period. `new_key`: no stored return, a new one started under that key (the typed date). */
+  export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null, new_key?: number | null): Promise<ScreenFormOpened>;
   /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
   export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
   /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
@@ -28110,6 +28109,8 @@ declare module "bir" {
       /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
       status: string;
       draft_id: number | null;
+      /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
+      return_key: number | null;
   }
   export function deadlines_between(from: string, to: string): DeadlineRow[];
   export interface ReturnRow {
@@ -28126,6 +28127,8 @@ declare module "bir" {
       period_label: string;
       status: string;
       updated_at: string;
+      /** The return's stored key (`screen_form_open`'s `key`): opens exactly this return. */
+      return_key: number | null;
   }
   export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 }

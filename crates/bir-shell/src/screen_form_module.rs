@@ -123,9 +123,8 @@ export interface ScreenFormSamplePeriod {
     existing?: ScreenFormExisting;
     /** No stored return: a fresh sample built for exactly this period. */
     sample?: ScreenFormOpened;
-    /** The year and period `screen_form_open` takes for it. */
-    /** What `screen_form_open` takes for it: year, period and the exact stored key (null: start it with New return). */
-    opens?: { year: number; period: number; key: number | null } | null;
+    /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`); null: start it with New return. */
+    opens?: { year: number; period: number; key: number | null; new_key?: number | null } | null;
 }
 export interface ScreenFormFilled {
     draft: object;
@@ -157,8 +156,8 @@ export interface ScreenFormSaved {
 }
 export function screen_form_schema(form_code: string): object;
 export function screen_forms_index(): ScreenFormIndexEntry[];
-/** `key`: the exact stored return (a transaction's MMDD, 2553's quarter), else the latest of the period. */
-export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null): Promise<ScreenFormOpened>;
+/** `key`: the exact stored return (a transaction's MMDD, 2553's quarter; gone, the open fails), else the latest of the period. `new_key`: no stored return, a new one started under that key (the typed date). */
+export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null, new_key?: number | null): Promise<ScreenFormOpened>;
 /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
 export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
 /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
@@ -970,6 +969,10 @@ fn month_or(period: u8, fallback: u8) -> u8 {
     }
 }
 
+/// An exact-key open or amend whose return is gone.
+const NO_LONGER_STORED: &str =
+    "That return is no longer stored. Open the form again from its period or New return.";
+
 /// The draft each painted page opens for `(profile, year, period)`: the
 /// stored one, else a new one from the profile. `fresh` (a Form library
 /// sample) always builds the new one and reads no stored return.
@@ -986,6 +989,9 @@ fn load_draft(
     let tin = profile.tin.full();
     let tin = tin.as_str();
     let store = (!fresh).then_some(db);
+    // Opened by its stored key, the return must still be stored: a miss is
+    // an error, never another return of the period or a new one.
+    let exact = exact.filter(|_| store.is_some());
     let queueable = match kind {
         AgentFormKind::Form1601C => {
             let month = period.clamp(1, 12);
@@ -996,6 +1002,7 @@ fn load_draft(
                 .flatten()
             {
                 Some(draft) => draft,
+                None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
                 None => {
                     form_1601c::Form1601CDraft::new_unanswered_from_profile(profile, year, month)
                 }
@@ -1011,6 +1018,7 @@ fn load_draft(
                 .flatten()
             {
                 Some(draft) => draft,
+                None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
                 None => form_2551q::Form2551QDraft::new_from_profile(profile, year, quarter),
             };
             return serde_json::to_value(draft).map_err(|error| error.to_string());
@@ -1028,9 +1036,7 @@ fn load_draft(
                 None => None,
             }
         });
-        if let Some(found) = found {
-            return Ok(found);
-        }
+        return found.ok_or_else(|| NO_LONGER_STORED.to_string());
     }
     let column = i64::from(period);
     macro_rules! simple {
@@ -1042,7 +1048,7 @@ fn load_draft(
     match queueable {
         QueueableKind::Form2550Q => {
             let quarter = period.clamp(1, 4);
-            let mut draft = store
+            let draft = store
                 .map(|db| {
                     db.get_form_draft::<form_2550q::Form2550QDraft>(
                         tin,
@@ -1053,10 +1059,13 @@ fn load_draft(
                 })
                 .transpose()
                 .map_err(|error| read_error("2550Q", error))?
-                .flatten()
-                .unwrap_or_else(|| {
-                    form_2550q::Form2550QDraft::new_from_profile(profile, year, quarter)
-                });
+                .flatten();
+            if draft.is_none() && exact.is_some() {
+                return Err(NO_LONGER_STORED.to_string());
+            }
+            let mut draft = draft.unwrap_or_else(|| {
+                form_2550q::Form2550QDraft::new_from_profile(profile, year, quarter)
+            });
             bir_core::form_rules::prepare_form_2550q_live_row_identities(&mut draft)
                 .map_err(|error| format!("the 2550Q draft's row identities are unsafe: {error}"))?;
             serde_json::to_value(draft).map_err(|error| error.to_string())
@@ -1817,11 +1826,16 @@ fn open_screen_form(
         )
     };
     // The exact stored return to open (an offer's `opens.key`): a
-    // transaction's `MMDD`, 2553's quarter.
-    let exact = if sample {
-        None
+    // transaction's `MMDD`, 2553's quarter; gone, the open fails. Or the key
+    // a new return is started under (`opens.new_key`: the typed date of a
+    // sample with no stored return).
+    let (exact, new_key) = if sample {
+        (None, None)
     } else {
-        arguments.get(4).and_then(|key| to_json(key).as_i64())
+        (
+            arguments.get(4).and_then(|key| to_json(key).as_i64()),
+            arguments.get(5).and_then(|key| to_json(key).as_i64()),
+        )
     };
     // The draft to show; the one the profile alone makes for this period
     // (what decides whether the profile filled a box); and for a sample, one
@@ -1838,8 +1852,9 @@ fn open_screen_form(
         } else {
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?
         };
-        // Nothing stored under that key: a new return for the date it names.
-        if let Some(key) = exact
+        // A new return started for the date its key names.
+        if let Some(key) = new_key
+            && exact.is_none()
             && draft["id"].is_null()
         {
             let parts = sample_period_parts(kind);
@@ -1882,14 +1897,41 @@ struct SampleBuild {
     other: Option<Value>,
 }
 
-/// What `screen_form_open`, `screen_form_sample` and a rebuilt sample answer.
 /// Under a locked box the page shows blank (`lock_notes`), why it is shut,
 /// in the filer's words: never a key name or the app's internal reason.
 const NOTE_COMPUTED: &str = "Computed by the form.";
 const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
-const NOTE_NOT_YET: &str = "Can't be filled on this page yet. It will be added for this form.";
+const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
+/// Only for a box a form group is assigned to open (the pinned list).
+const NOTE_ASSIGNED: &str = "Can't be filled on this page yet. It will be added for this form.";
+
+/// Shut boxes each assigned to the form group that opens them
+/// (`CODE key…: reason | group`), the same list the locked-and-blank
+/// invariant pins.
+const ASSIGNED_SHUT_BOXES: &str = include_str!("screen_form_module/locked_and_blank.txt");
+
+/// Whether a form group is assigned to open `code`'s box `key`.
+fn assigned_to_open(code: &str, key: &str) -> bool {
+    ASSIGNED_SHUT_BOXES
+        .lines()
+        .filter(|line| !line.starts_with('#') && line.contains(" | "))
+        .any(|line| {
+            let mut words = line.split(' ');
+            words.next() == Some(code)
+                && words.next().map(|word| word.trim_end_matches(':')) == Some(key)
+        })
+}
+
+/// A lock's reason as a filer reads it (see the NOTE_* texts), for
+/// `code`'s box `key`.
+fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
+    match lock_note(reason) {
+        NOTE_NOT_YET if assigned_to_open(code, key) => NOTE_ASSIGNED,
+        note => note,
+    }
+}
 
 /// A lock's reason as a filer reads it (see the NOTE_* texts).
 fn lock_note(reason: &str) -> &'static str {
@@ -1909,6 +1951,7 @@ fn lock_note(reason: &str) -> &'static str {
     }
 }
 
+/// What `screen_form_open`, `screen_form_sample` and a rebuilt sample answer.
 fn opened_json(
     kind: AgentFormKind,
     year: u16,
@@ -1968,7 +2011,12 @@ fn opened_json(
     blank_sample(&blank, &mut values, &mut errors);
     let lock_notes: Map<String, Value> = locks
         .iter()
-        .map(|(key, reason)| (key.clone(), json!(lock_note(reason.as_str().unwrap_or("")))))
+        .map(|(key, reason)| {
+            (
+                key.clone(),
+                json!(lock_note_for(code, key, reason.as_str().unwrap_or(""))),
+            )
+        })
         .collect();
     let stored_period = if sample.is_some() {
         None
@@ -2075,7 +2123,7 @@ fn screen_form_sample_period(
                     let opens = if numbered {
                         Value::Null
                     } else {
-                        json!({ "year": year, "period": period, "key": stored_period(kind, &draft) })
+                        json!({ "year": year, "period": period, "key": null, "new_key": stored_period(kind, &draft) })
                     };
                     Answer::Fresh(draft, year, period, opens)
                 }
@@ -2513,12 +2561,15 @@ fn read_typed_period(
             PeriodPart::Year => {
                 // All four digits, or both of a two-digit box: "2", "20" and
                 // "202" are a year still being typed, never 2002 or 2020.
+                // Only a two-digit box's year is in this century ("24" is
+                // 2024); four digits are the year as typed, so "0020" is
+                // year 20, out of range, never 2020.
                 let digits = value.chars().filter(char::is_ascii_digit).count();
-                let short = field_length(code, key) == Some(2);
-                let whole = digits == 4 || (short && digits == 2);
+                let short = field_length(code, key) == Some(2) && digits == 2;
+                let whole = digits == 4 || short;
                 period.year = number(&value)
                     .filter(|_| whole && value.chars().all(|c| c.is_ascii_digit()))
-                    .map(|year| if year < 100 { year + 2000 } else { year })
+                    .map(|year| if short { year + 2000 } else { year })
                     .filter(|year| (1900..=2100).contains(year))
                     .and_then(|year| u16::try_from(year).ok());
             }
@@ -6948,9 +6999,55 @@ mod tests {
                 json(opens["year"].clone()),
                 json(opens["period"].clone()),
                 json(opens["key"].clone()),
+                json(opens["new_key"].clone()),
             ],
         )
         .unwrap_or_else(|error| panic!("{code} opens {opens}: {error}"))
+    }
+
+    #[test]
+    fn an_exact_key_that_is_no_longer_stored_fails() {
+        setup();
+        // Nothing is stored for 2031: the open and the amend by key fail and
+        // never fall back to a period scan or a new return.
+        for (code, period, key) in [
+            ("0619E", 3, 3),
+            ("2551Q", 2, 2),
+            ("1601C", 4, 4),
+            ("2550Q", 1, 1),
+            ("1606", 3, 315),
+        ] {
+            for function in ["screen_form_open", "screen_form_amend"] {
+                let error = call_async(
+                    function,
+                    vec![
+                        TIN.into(),
+                        code.into(),
+                        2031_i64.into(),
+                        i64::from(period).into(),
+                        i64::from(key).into(),
+                    ],
+                )
+                .expect_err(&format!("{code} {function} by a missing key"));
+                assert!(
+                    error
+                        .to_string()
+                        .contains("That return is no longer stored"),
+                    "{code} {function}: {error}"
+                );
+            }
+            // Without a key the period opens (a new return).
+            call_async(
+                "screen_form_open",
+                vec![
+                    TIN.into(),
+                    code.into(),
+                    2031_i64.into(),
+                    i64::from(period).into(),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("{code}: {error}"));
+        }
     }
 
     #[test]
@@ -7007,7 +7104,9 @@ mod tests {
     #[test]
     fn a_year_counts_only_with_all_its_digits() {
         setup();
-        for year in ["2", "20", "202", "20x4"] {
+        // A four-digit year is the year typed: "0020" and "0099" are out of
+        // range, never 2020 or 2099.
+        for year in ["2", "20", "202", "20x4", "0020", "0099", "0024"] {
             let answer = sample_period(
                 TIN,
                 "2551Q",
@@ -7135,6 +7234,38 @@ mod tests {
         draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
         let identity = agent::identity(kind_of("0605").unwrap(), &draft).unwrap();
         assert_eq!(identity.period, FilingPeriod::OpenEnded(1), "entry 1");
+    }
+
+    #[test]
+    fn a_donation_or_death_date_is_its_returns_period() {
+        // 1800's date of donation and 1801's date of death are those
+        // returns' periods. They are bound by their own month, day and year
+        // fields, not as parts of one date field, so the refund-date rule
+        // (a part of a date other than /transaction_date) never applies.
+        for (code, expected) in [
+            (
+                "1800",
+                [
+                    "frm1800v2018:txtMonth=month",
+                    "frm1800v2018:txtDate=day",
+                    "frm1800v2018:txtYear=year",
+                ],
+            ),
+            (
+                "1801",
+                [
+                    "frm1801v2018:txtDateMonth=month",
+                    "frm1801v2018:txtDateDay=day",
+                    "frm1801v2018:txtDateYear=year",
+                ],
+            ),
+        ] {
+            let parts: Vec<String> = sample_period_parts(kind_of(code).unwrap())
+                .into_iter()
+                .map(|(key, part)| format!("{key}={}", part.name()))
+                .collect();
+            assert_eq!(parts, expected, "{code}");
+        }
     }
 
     #[test]
@@ -8189,10 +8320,40 @@ mod tests {
             ),
             NOTE_NOT_YET
         );
+        // "It will be added" only where a form group is assigned to open
+        // the box: 2551Q's repeated email is (PR 1).
+        assert!(assigned_to_open("2551Q", "txtEmail#occurrence-1"));
+        assert!(assigned_to_open("0605", "itemQuarter_1"));
+        assert!(!assigned_to_open("2551Q", "txtEmail"));
+        assert!(!assigned_to_open("0619E", "txtEmail#occurrence-1"));
+        assert_eq!(
+            lock_note_for(
+                "2551Q",
+                "txtEmail#occurrence-1",
+                "repeats the official field `txtEmail`, which this page cannot write"
+            ),
+            NOTE_ASSIGNED
+        );
+        assert_eq!(
+            lock_note_for(
+                "0619E",
+                "frm0619E:txtNowhere",
+                "repeats the official field `txtX`, which this page cannot write"
+            ),
+            NOTE_NOT_YET
+        );
+        assert_eq!(
+            lock_note_for(
+                "2551Q",
+                "txtEmail#occurrence-1",
+                "computed by BIR's own formulas"
+            ),
+            NOTE_COMPUTED
+        );
         // 2551Q's repeated email: shut, blank, and now saying why.
         setup();
         let opened = open_for(TIN, "2551Q", YEAR, page_period_of("2551Q"));
-        assert_eq!(opened["lock_notes"]["txtEmail#occurrence-1"], NOTE_NOT_YET);
+        assert_eq!(opened["lock_notes"]["txtEmail#occurrence-1"], NOTE_ASSIGNED);
     }
 
     #[test]

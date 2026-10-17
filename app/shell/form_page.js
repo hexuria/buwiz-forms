@@ -290,7 +290,7 @@ export class FormPageActions {
             ? await app.store.call("screen_form_filed_original", opts.code, opts.filedOriginal)
             : opts.amend
               ? await app.store.call("screen_form_amend", opts.tin, opts.code, opts.year, opts.period, key)
-              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key);
+              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key, opts.newKey ?? null);
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
@@ -335,7 +335,7 @@ export class FormPageActions {
     s.options = r.options || {};
     s.locks = r.locks;
     s.lockNotes = r.lock_notes || {};
-    s.profile =new Set(r.profile || []);
+    s.profile = new Set(r.profile || []);
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
     s.needs = r.needs || {};
@@ -694,16 +694,27 @@ export class FormPageActions {
   askPeriod(asked, cx) {
     const s = this.state;
     const token = this.token;
+    s.periodInFlight = asked;
     cx.spawn(async (acx) => {
       let r;
       try {
         r = await this.app.store.call("screen_form_sample_period", s.tin, s.code, JSON.parse(asked));
       } catch (e) {
+        if (s.periodInFlight === asked) s.periodInFlight = null;
+        s.startAfterAnswer = false;
         if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
         return;
       }
+      if (s.periodInFlight === asked) s.periodInFlight = null;
       if (token !== this.token || asked !== this.state.periodAsked) return;
+      s.periodAnswered = asked;
       this.takePeriod(r, acx);
+      // Start a return pressed while this answer was pending acts on it now
+      // (an existing return was offered by the answer itself).
+      if (s.startAfterAnswer) {
+        s.startAfterAnswer = false;
+        if (this.state === s && !s.existing) this.startReturn(acx);
+      }
     });
   }
 
@@ -964,10 +975,23 @@ export class FormPageActions {
    */
   startReturn(cx) {
     const s = this.state;
+    // A period change still waiting for its answer (the pause before the
+    // ask): ask now, and act once the answer is in.
+    if (s.periodAsked && s.periodAnswered !== s.periodAsked && Object.keys(s.periodValues || {}).length) {
+      s.startAfterAnswer = true;
+      if (s.periodInFlight !== s.periodAsked) {
+        s.periodSeq = (s.periodSeq || 0) + 1;
+        this.askPeriod(s.periodAsked, cx);
+      }
+      return;
+    }
     if (!s.opens) return this.app.startNewReturn(cx, s.code);
     if (s.existing) return this.offerExisting(s.existing, cx);
-    const { year, period, key } = s.opens;
-    this.app.openForm({ tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : {}) }, cx);
+    const { year, period, key, new_key: newKey } = s.opens;
+    this.app.openForm(
+      { tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : newKey != null ? { newKey } : {}) },
+      cx,
+    );
   }
 
   /** Computed and locked boxes follow the draft; user boxes keep what was typed. */

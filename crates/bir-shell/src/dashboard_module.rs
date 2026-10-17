@@ -35,6 +35,8 @@ export interface DeadlineRow {
     /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
     status: string;
     draft_id: number | null;
+    /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
+    return_key: number | null;
 }
 export function deadlines_between(from: string, to: string): DeadlineRow[];
 export interface ReturnRow {
@@ -51,6 +53,8 @@ export interface ReturnRow {
     period_label: string;
     status: string;
     updated_at: string;
+    /** The return's stored key (`screen_form_open`'s `key`): opens exactly this return. */
+    return_key: number | null;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 "#;
@@ -220,6 +224,11 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                     ),
                 );
                 row.insert("draft_id".into(), json!(draft.map(|d| d.id)));
+                let key = match draft {
+                    Some(draft) => db.draft_period_column(draft.id).map_err(error)?,
+                    None => None,
+                };
+                row.insert("return_key".into(), json!(key));
                 rows.push(Value::Object(row));
             }
         }
@@ -288,6 +297,10 @@ fn return_rows(db: &Database, which: &str) -> Result<Vec<Value>, HostError> {
         row.insert("period_label".into(), json!(summary_label(&summary)));
         row.insert("status".into(), json!(status_name(&summary.status)));
         row.insert("updated_at".into(), json!(summary.updated_at));
+        row.insert(
+            "return_key".into(),
+            json!(db.draft_period_column(summary.id).map_err(error)?),
+        );
         rows.push(Value::Object(row));
     }
     rows.sort_by(|a, b| b["updated_at"].as_str().cmp(&a["updated_at"].as_str()));
@@ -367,10 +380,12 @@ mod tests {
             .find(|r| r["taxable_year"] == 2026 && r["period"] == 1)
             .expect("January 2026 1601C deadline");
         assert_eq!(january["status"], "Draft");
+        assert_eq!(january["return_key"], 1, "the saved return opens exactly");
         assert_eq!(january["period_label"], "January 2026");
         assert_eq!(january["taxpayer_name"], "Example Trading Corp");
         let february = rows.iter().find(|r| r["period"] == 2).unwrap();
         assert_eq!(february["status"], "Not started");
+        assert!(february["return_key"].is_null());
         let dates: Vec<&str> = rows
             .iter()
             .map(|r| r["due_date"].as_str().unwrap())
@@ -396,6 +411,10 @@ mod tests {
         assert_eq!(saved[0]["form_code"], "1601C");
         assert_eq!(saved[0]["status"], "Draft");
         assert_eq!(saved[0]["period_label"], "January 2026");
+        assert_eq!(
+            saved[0]["return_key"], 1,
+            "a 1601C return's stored key is its month"
+        );
         let filed = to_json(&list_returns(&args(&["filed"])).unwrap());
         assert!(filed.as_array().unwrap().is_empty());
         let all = to_json(&list_returns(&args(&["all"])).unwrap());
