@@ -10023,6 +10023,736 @@ mod tests {
             .unwrap()
     }
 
+    /// Every comb cell of a filled sheet, page by page in cell order, as it
+    /// prints (`printed_cell`): its boxes, or the plain line over them.
+    fn printed_cells_in_order(slug: &str, document: &str) -> String {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/index.html",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let html = std::fs::read_to_string(path).unwrap();
+        let mut cells: Vec<(u32, u32, String)> = html
+            .split("<div id=\"")
+            .skip(1)
+            .filter_map(|rest| {
+                let id = &rest[..rest.find('"')?];
+                let tag = &rest[..rest.find('>')?];
+                if !tag.contains("data-field-kind=\"comb\"") {
+                    return None;
+                }
+                let (page, cell) = id.strip_prefix('p')?.split_once('c')?;
+                Some((page.parse().ok()?, cell.parse().ok()?, id.to_string()))
+            })
+            .collect();
+        cells.sort();
+        let printed = bir_print::frozen_html::printed_cells(document);
+        cells
+            .iter()
+            .map(|(_, _, id)| printed.get(id).map(|(text, _)| text.as_str()).unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// A sheet's comb cells and their boxes, read from its HTML.
+    fn comb_slots(slug: &str) -> BTreeMap<String, usize> {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/index.html",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let html = std::fs::read_to_string(path).unwrap();
+        html.split("<div id=\"")
+            .skip(1)
+            .filter_map(|rest| {
+                let tag = &rest[..rest.find('>')?];
+                if !tag.contains("data-field-kind=\"comb\"") {
+                    return None;
+                }
+                let id = &tag[..tag.find('"')?];
+                let at = tag.find("data-comb-slots=\"")? + "data-comb-slots=\"".len();
+                let slots = tag[at..].split('"').next()?.parse().ok()?;
+                Some((id.to_string(), slots))
+            })
+            .collect()
+    }
+
+    /// Nothing the print map carries is cut on the sheet: every text join
+    /// whose value runs past its comb's boxes prints whole there (an item
+    /// over stacked lines, across its lines). Returns what was cut.
+    fn cut_on_the_sheet(
+        slug: &str,
+        fields: &BTreeMap<String, String>,
+        document: &str,
+    ) -> Vec<String> {
+        let path = format!(
+            "{}/../../html-frozen/{slug}/writer-cells.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cells: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let slots = comb_slots(slug);
+        let stacked = bir_print::frozen_html::stacked_lines(slug).unwrap();
+        let mut key_of: BTreeMap<String, String> = BTreeMap::new();
+        let mut cut = Vec::new();
+        for join in cells["joins"].as_array().unwrap() {
+            let key = join["writer_key"].as_str().unwrap();
+            let ids = join["html_id"].as_str().into_iter().chain(
+                join["html_ids"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str),
+            );
+            for id in ids {
+                key_of.insert(id.to_string(), key.to_string());
+            }
+        }
+        let value = |cell: &str| {
+            key_of
+                .get(cell)
+                .and_then(|key| fields.get(key))
+                .cloned()
+                .unwrap_or_default()
+        };
+        let all = bir_print::frozen_html::printed_cells(document);
+        let printed = |cell: &str| {
+            all.get(cell)
+                .map(|(text, _)| text.clone())
+                .unwrap_or_default()
+        };
+        let over = |cell: &str| {
+            slots
+                .get(cell)
+                .is_some_and(|n| value(cell).chars().count() > *n)
+        };
+        for lines in &stacked {
+            if lines.iter().any(|cell| over(cell)) {
+                let want: String = lines.iter().map(|cell| value(cell)).collect();
+                let got: String = lines.iter().map(|cell| printed(cell)).collect();
+                if squeezed(&got) != squeezed(&want) {
+                    cut.push(format!("{lines:?}: {want:?} printed {got:?}"));
+                }
+            }
+        }
+        for cell in key_of.keys() {
+            if stacked.iter().flatten().any(|c| c == cell) || !over(cell) {
+                continue;
+            }
+            if squeezed(&printed(cell)) != squeezed(&value(cell)) {
+                cut.push(format!(
+                    "{cell}: {:?} printed {:?}",
+                    value(cell),
+                    printed(cell)
+                ));
+            }
+        }
+        cut
+    }
+
+    /// The boxes the form review found growing text printed into fixed
+    /// character boxes, or taking more characters than the boxes hold
+    /// (docs/form-findings R5 "print in fixed char boxes" and "accept more
+    /// characters than their printed boxes"), as the review listed them.
+    /// Each is typed as long as the page takes it (with the answers that
+    /// put it on the return), saved through the draft and printed through
+    /// the form's own print map: since rules page question 4 (decided
+    /// 2026-10-17) the whole text prints, in its boxes while it fits and as
+    /// plain type over them past that, and nothing else the map carries is
+    /// cut either (the later pages' repeats of a name included). The boxes
+    /// the page never types say what prints them instead.
+    #[test]
+    fn every_reviewed_long_box_prints_whole_past_its_boxes() {
+        setup();
+        let reviewed: &[(&str, &[&str])] = &[
+            (
+                "0619E",
+                &[
+                    "frm0619E:txtTaxpayerName",
+                    "frm0619E:txtAddress",
+                    "frm0619E:txtAddress2",
+                    "txtEmail",
+                ],
+            ),
+            (
+                "0619F",
+                &[
+                    "frm0619F:txtTaxpayerName",
+                    "frm0619F:txtAddress",
+                    "frm0619F:txtAddress2",
+                    "txtEmail",
+                ],
+            ),
+            (
+                "1600PT",
+                &[
+                    "frm1600PT:txtPg1Pt1I7WithholdingAgentsName",
+                    "frm1600PT:txtPg1Pt1I8RegisteredAddress",
+                    "frm1600PT:txtPg1Pt1I8RegisteredAddress2",
+                    "frm1600PT:txtPg1Pt1I11Email",
+                    "frm1600PT:txtPg1Pt1I12TaxReliefSpec",
+                    "frm1600PT:txtPg2RegisteredName",
+                ],
+            ),
+            (
+                "1600VT",
+                &[
+                    "frm1600VT:txtPg1Pt1I7WithholdingAgentsName",
+                    "frm1600VT:txtPg1Pt1I8RegisteredAddress",
+                    "frm1600VT:txtPg1Pt1I8RegisteredAddress2",
+                    "frm1600VT:txtPg1Pt1I11Email",
+                    "frm1600VT:txtPg1Pt1I12TaxReliefSpec",
+                    "frm1600VT:txtPg2RegisteredName",
+                ],
+            ),
+            (
+                "1601C",
+                &[
+                    "frm1601c:txtTaxpayerName",
+                    "txtEmail",
+                    "frm1601c:txtParticular40",
+                    "frm1601c:txtPg2TaxpayerName",
+                ],
+            ),
+            ("1601EQ", &["frm1601EQ:txtTaxpayerName", "txtEmail"]),
+            (
+                "1601FQ",
+                &[
+                    "frm1601FQ:txtTaxpayerName",
+                    "txtEmail",
+                    "frm1601FQ:txtPg2TaxpayerName",
+                ],
+            ),
+            (
+                "1602Q",
+                &[
+                    "frm1602Q:txtTaxpayerName",
+                    "txtEmail",
+                    "frm1602Q:txtPage2Agent",
+                    "frm1602Q:txtPage3Agent",
+                ],
+            ),
+            (
+                "1603Q",
+                &[
+                    "frm1603Q:txtTaxpayerName",
+                    "txtEmail",
+                    "frm1603Q:txtPg2TaxpayerName",
+                ],
+            ),
+            ("1604C", &["frm1604c:registeredName", "txtEmail"]),
+            (
+                "1604E",
+                &[
+                    "frm1604e:txtWthhldngAgntsNme",
+                    "txtEmail",
+                    "frm1604e:txtPg2TaxpayerName",
+                ],
+            ),
+            (
+                "1604F",
+                &[
+                    "frm1604f:registeredName",
+                    "frm1604f:email",
+                    "frm1604f:txtPg2TaxpayerName",
+                ],
+            ),
+            (
+                "1700",
+                &[
+                    "frm1700:txtPg1I7TaxpayerName",
+                    "frm1700:txtPg1I10Email",
+                    "frm1700:txtPg1I21SpouseName",
+                ],
+            ),
+            (
+                "1701",
+                &[
+                    "frm1701:txtPg1I8TaxpayerName",
+                    "frm1701:txtPg1I9Address",
+                    "frm1701:txtPg1I9Address2",
+                    "txtEmail",
+                    "frm1701:txtPg2TaxpayerName",
+                    "frm1701:txtPg2I5SpouseName",
+                    "frm1701:txtPg3TaxpayerName",
+                    "frm1701:txtPg3IShed3_27A",
+                    "frm1701:txtPg3IShed3_27B",
+                    "frm1701:txtPg3IShed5_1Desc",
+                    "frm1701:txtPg3IShed5_2Desc",
+                    "frm1701:txtPg3IShed5_4Desc",
+                ],
+            ),
+            (
+                "1701A",
+                &[
+                    "frm1701A:txtTaxpayerName",
+                    "txtEmail",
+                    "frm1701A:txtPg2TaxpayerName",
+                    "frm1701A:txtSpouseName",
+                ],
+            ),
+            (
+                "1701Q",
+                &[
+                    "frm1701q:txtTaxpayerName",
+                    "frm1701q:txtAddress",
+                    "txtEmail",
+                    "frm1701q:txtSpouseName",
+                ],
+            ),
+            (
+                "1702EX",
+                &[
+                    "frm1702EX:txtPg1Pt1I12Email",
+                    "frm1702EX:txtPg2RegisteredName",
+                    "frm1702EX:txtPg3RegisteredName",
+                    "frm1702EX:txtPg3Pt6S2I1Description",
+                    "frm1702EX:txtPg3Pt6S2I2Description",
+                    "frm1702EX:txtPg3Pt6S2I3Description",
+                    "frm1702EX:txtPg3Pt6S2I4Description",
+                    "frm1702EX:txtPg3Pt6S3I2NonDeductExpenseOtherIncomeDesc",
+                    "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+                    "frm1702EX:txtPg3Pt6S3I5NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+                    "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+                    "frm1702EX:txtPg3Pt6S3I7SpecialDeductDesc",
+                    "frm1702EX:txtPg3Pt6S3I8SpecialDeductDesc",
+                ],
+            ),
+            (
+                "1702MX",
+                &[
+                    "frm1702MX:txtPg1Pt1I9RegisteredName",
+                    "frm1702MX:txtPg1Pt1I9RegisteredName2",
+                    "frm1702MX:txtPg1Pt1I9RegisteredName3",
+                    "frm1702MX:txtPg1Pt1I10RegisteredAddress",
+                    "frm1702MX:txtPg1Pt1I10RegisteredAddress2",
+                    "frm1702MX:txtPg1Pt1I10RegisteredAddress3",
+                    "frm1702MX:txtPg1Pt1I12Email",
+                    "frm1702MX:txtPg2RegisteredName",
+                    "frm1702MX:txtPg3RegisteredName",
+                    "frm1702MX:txtPg4RegisteredName",
+                ],
+            ),
+            (
+                "1702Q",
+                &[
+                    "txtEmail",
+                    "frm1702q:txtPg2TaxpayerName",
+                    "frm1702q:Sched4:txtOthrTxCrdts0",
+                    "frm1702q:Sched4:txtOthrTxCrdts1",
+                ],
+            ),
+            (
+                "1702RT",
+                &[
+                    "frm1702RT:txtPg1Pt1I8Name1",
+                    "frm1702RT:txtPg1Pt1I8Name2",
+                    "frm1702RT:txtPg1Pt1I8Name3",
+                    "frm1702RT:txtPg1Pt1I9Address1",
+                    "frm1702RT:txtPg1Pt1I9Address2",
+                    "frm1702RT:txtPg1Pt1I9Address3",
+                    "frm1702RT:txtPg1Pt1I12Email",
+                    "frm1702RT:txtPg1Pt3I26Others",
+                    "frm1702RT:txtPg2RegisteredName",
+                    "frm1702RT:txtPg2Pt4I53C1",
+                    "frm1702RT:txtPg2Pt4I53C2",
+                    "frm1702RT:txtPg2Pt4I54C1",
+                    "frm1702RT:txtPg2Pt4I54C2",
+                ],
+            ),
+            ("1706", &["frm1706:txtOthers21"]),
+            (
+                "1707",
+                &[
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock1",
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock2",
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock3",
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock4",
+                    "frm1707:txtPg2P4Sch3Particulars1",
+                    "frm1707:txtPg2P4Sch3Particulars2",
+                    "frm1707:txtPg2P4Sch3Particulars3",
+                    "frm1707:txtPg2P4Sch3Particulars4",
+                    "frm1707:txtPg2RegisteredName",
+                ],
+            ),
+            (
+                "1707A",
+                &[
+                    "frm1707Av2021:txtI8RegisteredName",
+                    "frm1707Av2021:txtI8RegisteredNameP2",
+                ],
+            ),
+            (
+                "1800",
+                &[
+                    "frm1800v2018:txtDonorName",
+                    "frm1800v2018:txtRegAddress",
+                    "frm1800v2018:txtResAddress",
+                    "frm1800v2018:txtEmail",
+                    "frm1800v2018:txtPg2TaxpayerName",
+                ],
+            ),
+            (
+                "1801",
+                &[
+                    "frm1801v2018:registeredName_1",
+                    "frm1801v2018:registeredName_2",
+                    "frm1801v2018:registeredAddress_1",
+                    "frm1801v2018:adminName",
+                    "frm1801v2018:txtEmail",
+                ],
+            ),
+            (
+                "2000",
+                &[
+                    "frm2000:txtTaxpayerName",
+                    "frm2000:txtAddress",
+                    "frm2000:txtOtherName",
+                ],
+            ),
+            (
+                "2000OT",
+                &[
+                    "frm2000OT:txtRDOCode",
+                    "frm2000OT:txtTaxpayerName",
+                    "frm2000OT:txtAddress",
+                    "txtEmail",
+                    "frm2000OT:txtOtherName",
+                    "frm2000OT:txtRealLocation",
+                    "frm2000OT:txtPg2TaxpayerName",
+                ],
+            ),
+            (
+                "2200A",
+                &[
+                    "frm2200Av2020:registeredName",
+                    "frm2200Av2020:treatyY",
+                    "frm2200Av2020:paymentOther",
+                    "frm2200Av2020:othersDetails",
+                ],
+            ),
+            (
+                "2200AN",
+                &[
+                    "frm2200ANv2018:txtTaxpayerName",
+                    "frm2200ANv2018:txtAddress",
+                    "txtEmail",
+                    "frm2200ANv2018:lstSpecialTax",
+                    "frm2200ANv2018:MannerOfPaymentOthers",
+                    "frm2200ANv2018:txtPage2Taxpayer",
+                ],
+            ),
+            (
+                "2200C",
+                &[
+                    "frm2200C:txtPg1Pt1I7RegisteredName",
+                    "frm2200C:txtPg1Pt1I8RegisteredAddress",
+                    "frm2200C:txtPg1Pt1I8RegisteredAddress2",
+                    "frm2200C:txtPg1I12TaxReliefSpecify",
+                    "frm2200C:txtPg1Pt2MOPOtherDesc",
+                ],
+            ),
+            (
+                "2200M",
+                &[
+                    "frm2200M:txtPg1Pt1I6RegisteredName",
+                    "frm2200M:txtPg1Pt1I7RegisteredAddress",
+                    "frm2200M:txtPg1Pt1I7RegisteredAddress2",
+                    "frm2200M:txtPg1Pt1I9Email",
+                    "frm2200M:txtPg1I12TaxReliefSpecify",
+                    "frm2200M:txtPg1Pt2MOPOtherDesc",
+                    "frm2200M:txtPg2RegisteredName",
+                ],
+            ),
+            (
+                "2200P",
+                &[
+                    "frm2200P:txtPg1Pt1I6RegisteredName",
+                    "frm2200P:txtPg1Pt1I7RegisteredAddress",
+                    "frm2200P:txtPg1Pt1I7RegisteredAddress2",
+                    "frm2200P:txtPg1I12TaxReliefSpecify",
+                    "frm2200P:txtPg1Pt2MOPOtherDesc",
+                ],
+            ),
+            (
+                "2200S",
+                &[
+                    "frm2200S:taxpayerName",
+                    "txtEmail",
+                    "frm2200S:txtOthMannerofPymnt",
+                ],
+            ),
+            (
+                "2200T",
+                &[
+                    "frm2200Tv2020:registeredName",
+                    "frm2200Tv2020:txtEmail",
+                    "frm2200Tv2020:othersDetails",
+                    "frm2200Tv2020:registeredName_2",
+                    "frm2200Tv2020:registeredName_3",
+                ],
+            ),
+            (
+                "2550Q",
+                &[
+                    "frm2550qv2024:taxpayerName",
+                    "frm2550qv2024:taxpayerEmailAddress",
+                    "frm2550qv2024:specifyInternationalTreaty",
+                    "frm2550qv2024:Pg2TaxPayer",
+                ],
+            ),
+            ("2551Q", &["frm2551Qv2018:registeredName"]),
+            (
+                "2552",
+                &[
+                    "frm2552:txtPg1Pt1I6Name",
+                    "frm2552:txtPg1Pt1I7RegisteredAddress",
+                    "frm2552:txtPg1Pt1I7RegisteredAddress2",
+                    "frm2552:txtPg1Pt1I9Email",
+                    "frm2552:txtPg1Pt1I10TaxReliefSpec",
+                ],
+            ),
+        ];
+        // The answers that put a box on the return.
+        let married_1700: &[&str] = &[
+            "frm1700:rdoPg1I15CivilStatusM",
+            "frm1700:rdoPg1I16SpouseHasIncomeY",
+            "frm1700:rdoPg1I17FilingStatusJ",
+        ];
+        let married_1701a: &[&str] = &[
+            "frm1701A:optCivilStatus_2",
+            "frm1701A:optSpouseIncome_1",
+            "frm1701A:optFilingStatus_1",
+        ];
+        let itemized_1701: &[&str] = &[
+            "frm1701:rdoPg1I21TaxRateG",
+            "frm1701:rdoPg1I21AMethodDeductionI",
+        ];
+        let itemized_spouse_1701: &[&str] = &[
+            "frm1701:rdoPg1I16CivilStatusM",
+            "frm1701:rdoPg1I17SpouseIncomeYes",
+            "frm1701:rdoPg1I18FilingStatusJ",
+            "frm1701:rdoPg2I12TaxRateG",
+            "frm1701:rdoPg2I12AMethodDeductionI",
+        ];
+        let answers: BTreeMap<&str, &[&str]> = BTreeMap::from([
+            (
+                "frm1600PT:txtPg1Pt1I12TaxReliefSpec",
+                &["frm1600PT:rdoPg1I12TaxReliefYes"][..],
+            ),
+            (
+                "frm1600VT:txtPg1Pt1I12TaxReliefSpec",
+                &["frm1600VT:rdoPg1I12TaxReliefYes"][..],
+            ),
+            ("frm1700:txtPg1I21SpouseName", married_1700),
+            ("frm1701:txtPg3IShed5_1Desc", itemized_1701),
+            ("frm1701:txtPg3IShed5_2Desc", itemized_1701),
+            ("frm1701:txtPg3IShed5_4Desc", itemized_spouse_1701),
+            ("frm1701A:txtSpouseName", married_1701a),
+            ("frm2000:txtOtherName", &["frm2000:optParty_1"][..]),
+            (
+                "frm2000OT:txtRealLocation",
+                &["frm2000OT:rbTransNature_2"][..],
+            ),
+            ("frm2200Av2020:treatyY", &["frm2200Av2020:optTreaty_1"][..]),
+            (
+                "frm2200Av2020:paymentOther",
+                &["frm2200Av2020:optPayment_3"][..],
+            ),
+            (
+                "frm2200ANv2018:lstSpecialTax",
+                &["frm2200ANv2018:OptSpecialTax1"][..],
+            ),
+            (
+                "frm2200ANv2018:MannerOfPaymentOthers",
+                &["frm2200ANv2018:MannerOfPayment3"][..],
+            ),
+            (
+                "frm2200C:txtPg1I12TaxReliefSpecify",
+                &["frm2200C:rdoPg1I12TaxReliefYes"][..],
+            ),
+            (
+                "frm2200C:txtPg1Pt2MOPOtherDesc",
+                &["frm2200C:rdoPg1Pt2MOPOther"][..],
+            ),
+            (
+                "frm2200M:txtPg1I12TaxReliefSpecify",
+                &["frm2200M:rdoPg1I12TaxReliefYes"][..],
+            ),
+            (
+                "frm2200M:txtPg1Pt2MOPOtherDesc",
+                &["frm2200M:rdoPg1Pt2MOPOther"][..],
+            ),
+            (
+                "frm2200P:txtPg1I12TaxReliefSpecify",
+                &["frm2200P:rdoPg1I12TaxReliefYes"][..],
+            ),
+            (
+                "frm2200P:txtPg1Pt2MOPOtherDesc",
+                &["frm2200P:rdoPg1Pt2MOPOther"][..],
+            ),
+            (
+                "frm2552:txtPg1Pt1I10TaxReliefSpec",
+                &["frm2552:rdoPg1I10TaxReliefYes"][..],
+            ),
+        ]);
+        // Boxes the page does not type, and what prints them.
+        let printed_from: BTreeMap<&str, &str> = BTreeMap::from([
+            (
+                "frm0619E:txtAddress2",
+                "the pooled address, typed in frm0619E:txtAddress",
+            ),
+            (
+                "frm0619F:txtAddress2",
+                "the pooled address, typed in frm0619F:txtAddress",
+            ),
+            (
+                "frm1600PT:txtPg1Pt1I8RegisteredAddress2",
+                "the pooled address, typed in its first line",
+            ),
+            (
+                "frm1600VT:txtPg1Pt1I8RegisteredAddress2",
+                "the pooled address, typed in its first line",
+            ),
+            (
+                "frm1701:txtPg1I9Address2",
+                "the pooled address, typed in frm1701:txtPg1I9Address",
+            ),
+            (
+                "frm2200C:txtPg1Pt1I8RegisteredAddress2",
+                "the pooled address, typed in its first line",
+            ),
+            (
+                "frm2200M:txtPg1Pt1I7RegisteredAddress2",
+                "the pooled address, typed in its first line",
+            ),
+            (
+                "frm2200P:txtPg1Pt1I7RegisteredAddress2",
+                "the pooled address, typed in its first line",
+            ),
+            (
+                "frm2552:txtPg1Pt1I7RegisteredAddress2",
+                "the pooled address, typed in its first line",
+            ),
+            (
+                "frm1602Q:txtPage2Agent",
+                "the agent's name repeated (page 2 header)",
+            ),
+            (
+                "frm1602Q:txtPage3Agent",
+                "the agent's name repeated (page 3 header)",
+            ),
+            (
+                "frm1601c:txtParticular40",
+                "the app writes it (no draft field)",
+            ),
+            ("frm1701:txtPg3IShed3_27A", "an amount"),
+            ("frm1701:txtPg3IShed3_27B", "an amount"),
+            (
+                "frm1702EX:txtPg3Pt6S2I4Description",
+                "the app writes it (no draft field)",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+                "the app writes it (no draft field)",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+                "the app writes it (no draft field)",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S3I8SpecialDeductDesc",
+                "the app writes it (no draft field)",
+            ),
+            (
+                "frm1702q:Sched4:txtOthrTxCrdts0",
+                "derived from the row's description and ATC",
+            ),
+            (
+                "frm1702q:Sched4:txtOthrTxCrdts1",
+                "derived from the row's description and ATC",
+            ),
+            ("frm1702RT:txtPg2Pt4I53C2", "a whole number"),
+            (
+                "frm1702RT:txtPg2Pt4I54C2",
+                "derived from the item's amounts",
+            ),
+            (
+                "frm1707:txtPg2P4Sch2NameOfCorpStock4",
+                "derived from the transaction type",
+            ),
+            (
+                "frm1707:txtPg2P4Sch3Particulars4",
+                "derived from the transaction type",
+            ),
+            (
+                "frm2200S:txtOthMannerofPymnt",
+                "the app writes it (no draft field)",
+            ),
+        ]);
+        // Typed whole, filed whole, but printed from elsewhere: 1702MX's
+        // first address line is the whole address while its print reads the
+        // address lines (combs: not pooled), so typing it does not reach
+        // the sheet. Not a cut by the print; its finding stays open.
+        let print_reads_elsewhere = ["frm1702MX:txtPg1Pt1I10RegisteredAddress"];
+        let mut whole = 0;
+        for (code, keys) in reviewed {
+            let kind = kind_of(code).unwrap();
+            let slug = crate::bir_module::print_slug_for(code).unwrap();
+            let opened = open(code, page_period_of(code));
+            for key in *keys {
+                let length = field_length(code, key).map_or(90, |m| m as usize).min(150);
+                let text = if key.to_ascii_lowercase().contains("mail") {
+                    format!("{}@example.com", "q".repeat(length.saturating_sub(12)))
+                } else {
+                    address_of(length).replace("UNIT", "ZQXJ")
+                };
+                let mut draft = opened["draft"].clone();
+                for answer in answers.get(key).copied().unwrap_or_default() {
+                    let on = fill(code, &draft, json!({ *answer: "true" }));
+                    assert_eq!(on["rejected"], json!({}), "{code} {answer}");
+                    draft = on["draft"].clone();
+                }
+                // A schedule row files its description with an amount and
+                // a legal basis.
+                let mut edits = Map::new();
+                if key.contains("Shed5") {
+                    let row = key.trim_end_matches("Desc");
+                    edits.insert(format!("{row}Amt"), json!("1000"));
+                    edits.insert(format!("{row}Legal"), json!("RA 0000"));
+                }
+                edits.insert(key.to_string(), json!(text));
+                let unlocked: Vec<String> = edits.keys().cloned().collect();
+                let unlocked: Vec<&str> = unlocked.iter().map(String::as_str).collect();
+                let filled = fill_unlocked(code, &draft, Value::Object(edits), &unlocked);
+                if let Some(why) = printed_from.get(key) {
+                    assert!(
+                        filled["rejected"].get(*key).is_some(),
+                        "{code} {key}: {why}"
+                    );
+                    continue;
+                }
+                assert_eq!(filled["rejected"], json!({}), "{code} {key}");
+                let (fields, _) =
+                    with_database(|db| print_map(db, kind, &filled["draft"])).unwrap();
+                let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
+                let printed = squeezed(&printed_cells_in_order(slug, &document));
+                if print_reads_elsewhere.contains(key) {
+                    assert!(
+                        !printed.contains(&squeezed(&text)),
+                        "{code} {key}: now reaches the sheet; close its finding"
+                    );
+                    continue;
+                }
+                assert!(
+                    printed.contains(&squeezed(&text)),
+                    "{code} {key}: the whole {length} characters print"
+                );
+                let cut = cut_on_the_sheet(slug, &fields, &document);
+                assert!(cut.is_empty(), "{code} {key}: {cut:#?}");
+                whole += 1;
+            }
+        }
+        assert_eq!(whole, 158, "boxes typed long and printed whole");
+    }
+
     /// Rules page question 4, decided 2026-10-17, end to end on every pooled
     /// address: typed on the page, saved in the draft, through the form's
     /// print map onto its sheet. Within the boxes the lines fill them; past

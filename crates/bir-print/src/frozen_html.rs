@@ -2034,6 +2034,64 @@ fn overflow_input(html: &str, cell: &str, text: &str, size: f64) -> Option<(usiz
     ))
 }
 
+/// [`printed_cell`] for every comb cell a filled document has, read in one
+/// pass: cell id -> what prints over it and the plain line's type size.
+pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> {
+    let tags = input_tags(document);
+    let grouped = grouped_input_indices(&tags);
+    let mut out: BTreeMap<String, (String, Option<f64>)> = BTreeMap::new();
+    for (name, indices) in &grouped {
+        if !indices.iter().any(|&index| tags[index].slot.is_some()) {
+            continue;
+        }
+        let boxes: String = ordered_comb_indices(&tags, indices)
+            .into_iter()
+            .map(|index| attr(tags[index].tag, "value").unwrap_or(""))
+            .collect();
+        out.insert((*name).to_string(), (boxes, None));
+    }
+    let needle = " data-overflow-of=\"";
+    let mut from = 0;
+    while let Some(at) = document[from..].find(needle) {
+        let at = from + at;
+        let start = document[..at].rfind("<input").unwrap_or(0);
+        let end = at + document[at..].find('>').unwrap_or(0);
+        let tag = &document[start..=end];
+        from = end + 1;
+        let Some(cell) = attr(tag, "data-overflow-of") else {
+            continue;
+        };
+        let entry = out.entry(cell.to_string()).or_default();
+        if !entry.0.trim().is_empty() {
+            continue;
+        }
+        let text = attr(tag, "value")
+            .unwrap_or("")
+            .replace("&quot;", "\"")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&");
+        let size = tag
+            .find("font-size:")
+            .and_then(|at| tag[at + "font-size:".len()..].split("pt").next())
+            .and_then(|size| size.parse().ok());
+        *entry = (text, size);
+    }
+    out
+}
+
+/// The cells of each item `slug`'s sheet prints over stacked comb lines (a
+/// two-line address, a three-line registered name), each item's lines in
+/// order: what an overflowing item is laid across.
+pub fn stacked_lines(slug: &str) -> Result<Vec<Vec<String>>, String> {
+    let loaded = bundle(slug).ok_or_else(|| format!("no frozen HTML bundle for {slug}"))?;
+    let cells = writer_cells(slug)?;
+    Ok(line_groups(loaded.html, &cells)
+        .into_iter()
+        .map(|group| group.into_iter().map(|line| line.cell).collect())
+        .collect())
+}
+
 /// What a filled document prints over comb cell `cell`: its boxes'
 /// characters in slot order, or, where every box is empty, the plain line
 /// laid over the cell (`data-overflow-of`) with its type size.
