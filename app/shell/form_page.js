@@ -198,7 +198,36 @@ function isDateField(f) {
 
 function itemKeys(it) {
   if (it.rows) return it.keys.flat();
-  return (it.f || []).map((f) => f.k);
+  // A pooled address line is drawn by its pool's first line.
+  return (it.f || []).flatMap((f) => (f.pool ? f.pool.keys : [f.k]));
+}
+
+/**
+ * Lay `text` over stacked lines of `slots` character boxes (rule 5): each
+ * line but the last ends at the last space that fits (provisional: the
+ * findings rules page, question 5), the last takes the rest. One string per
+ * line; a line can come out longer than its boxes.
+ */
+export function splitLines(text, slots) {
+  const lines = [];
+  let rest = String(text ?? "").trim();
+  slots.forEach((n, i) => {
+    if (i === slots.length - 1 || rest.length <= n) {
+      lines.push(rest);
+      rest = "";
+      return;
+    }
+    let cut = rest.lastIndexOf(" ", n);
+    if (cut <= 0) cut = n;
+    lines.push(rest.slice(0, cut).trimEnd());
+    rest = rest.slice(cut).trimStart();
+  });
+  return lines;
+}
+
+/** Whether `text` fits the boxes of `slots`: boxes until it no longer fits. */
+export function fitsBoxes(text, slots) {
+  return splitLines(text, slots).every((line, i) => line.length <= slots[i]);
 }
 
 /**
@@ -404,7 +433,9 @@ export class FormPageActions {
         (s.inputKinds ||= new Map()).set(k, t);
         return;
       }
-      input.on("change", (_e, cx) => this.edit(k, input.value(), cx));
+      const pool = this.poolOf(k);
+      if (pool) input.set_value(this.poolText({ pool }));
+      input.on("change", (_e, cx) => (pool ? this.editPool(pool, input.value(), cx) : this.edit(k, input.value(), cx)));
       input.on("blur", (_e, cx) => {
         if (t === "money") input.set_value(formatMoney(input.value(), this.isWhole(k)));
         // Leaving an edited profile item keeps the value on this return and
@@ -1024,9 +1055,39 @@ export class FormPageActions {
     const s = this.state;
     for (const [k, input] of s.inputs) {
       if (!(this.isLocked(k) || this.isComputed(k))) continue;
-      const v = s.inputKinds?.get(k) === "date" ? shownDate(s.values[k]) : String(s.values[k] ?? "");
+      const pool = this.poolOf(k);
+      const v = pool ? this.poolText({ pool }) : s.inputKinds?.get(k) === "date" ? shownDate(s.values[k]) : String(s.values[k] ?? "");
       if (input.value() !== v) input.set_value(v);
     }
+  }
+
+  /** The pool (rule 5) whose first line is `k`, if any. */
+  poolOf(k) {
+    const s = this.state;
+    if (!s.pools) {
+      s.pools = new Map();
+      for (const p of s.schema.parts) for (const it of p.items) for (const f of it.f || []) if (f.pool) s.pools.set(f.k, f.pool);
+    }
+    return s.pools.get(k) || null;
+  }
+
+  /** A pooled address as one text: its lines as the draft holds them. */
+  poolText(f, values = this.state.values) {
+    return f.pool.keys.map((k) => String(values[k] ?? "").trim()).filter(Boolean).join(" ");
+  }
+
+  /**
+   * Stage a pooled address: the whole text to its first line when that is
+   * the only line with a field of its own (its form's print splits it), else
+   * split over those lines at the last space that fits, the last taking the
+   * rest (provisional: rules page question 5). The saved fields keep their
+   * shape.
+   */
+  editPool(pool, text, cx) {
+    if (pool.write.length === 1) return this.edit(pool.write[0], text, cx);
+    const slots = pool.write.map((k) => pool.slots[pool.keys.indexOf(k)]);
+    const parts = splitLines(text, slots);
+    pool.write.forEach((k, i) => this.edit(k, parts[i] ?? "", cx));
   }
 
   /**
@@ -1038,6 +1099,13 @@ export class FormPageActions {
     const s = this.state;
     for (const [k, input] of s.inputs) {
       if (k in edits) continue;
+      const pool = this.poolOf(k);
+      if (pool) {
+        if (pool.keys.some((key) => key in edits)) continue;
+        const was = this.poolText({ pool }, before), now = this.poolText({ pool });
+        if (was !== now && input.value() !== now) input.set_value(now);
+        continue;
+      }
       const was = before[k] ?? "";
       const now = s.values[k] ?? "";
       if (was === now) continue;
@@ -1518,7 +1586,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const width = controlWidth(f, available);
   const showSub = multi && f.l && f.l !== itemLabel && !/^\d+[A-Z]?$/.test(f.l);
   const locked = !s.editable || f.c || ui.isLocked(f.k);
-  const value = s.values[f.k] ?? "";
+  const value = f.pool ? ui.poolText(f) : s.values[f.k] ?? "";
   let el;
   if (f.t === "sel") {
     el = selectBox(cx, ui, f.k, f.l, f.o, value, locked, width);
@@ -1570,7 +1638,38 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0);
   if (showSub) wrap.child(Text(cx, "meta", f.l, "fg2").max_w(width).whitespace_normal());
   void t;
-  return wrap.child(el);
+  wrap.child(el);
+  // Rule 5: the printed boxes, while the text fits them.
+  const slots = f.pool ? f.pool.slots : f.slots ? [f.slots] : null;
+  const text = f.pool ? ui.poolText(f) : value;
+  if (slots && fitsBoxes(text, slots)) wrap.child(charBoxes(cx, f.k, splitLines(text, slots), slots));
+  return wrap;
+}
+
+/** Rows of character boxes, one character each, as the paper prints them. */
+function charBoxes(cx, k, lines, slots) {
+  const t = tokens(cx);
+  const rows = div().id(`fp-boxes-${k}`).flex().flex_col().gap(2).accessibility_label(`${slots.join(" + ")} character boxes`);
+  lines.forEach((line, i) => {
+    const row = div().flex().flex_row().flex_wrap();
+    for (let c = 0; c < slots[i]; c++) {
+      row.child(
+        div()
+          .flex()
+          .items_center()
+          .justify_center()
+          .w(14)
+          .h(18)
+          .border_l(c ? 0 : 1)
+          .border_r(1)
+          .border_y(1)
+          .border_color(t.border)
+          .child(Text(cx, "cap", line[c] || "", "fg2")),
+      );
+    }
+    rows.child(row);
+  });
+  return rows;
 }
 
 /** BIR's own words for the income-tax ATCs the forms list as bare codes. */

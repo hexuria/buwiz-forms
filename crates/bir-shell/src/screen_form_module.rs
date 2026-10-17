@@ -38,6 +38,7 @@ use serde_json::{Map, Value, json};
 use crate::bir_module::{json, to_json, with_database};
 
 mod catalogs;
+mod combs;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
@@ -234,6 +235,7 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            combs::apply_combs(form, &code);
         }
         forms
     })
@@ -8810,6 +8812,257 @@ mod tests {
         "2552 frm2552:txtPg2Pt5Sch2Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
         "2552 frm2552:txtPg2Pt5Sch3Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
     ];
+
+    /// Every field of a form with its schema entry (hidden ones too).
+    fn schema_fields(code: &str) -> Vec<&'static Value> {
+        schema_entry(code).unwrap()["parts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten())
+            .flat_map(|item| item["f"].as_array().into_iter().flatten())
+            .collect()
+    }
+
+    /// Rule 5: a printed address that runs over stacked lines is one pool on
+    /// the page. The oracle is the list of two-line addresses the form review
+    /// found (docs/form-findings, R5 "Two-line address"), plus 1702MX and
+    /// 1702RT's three-line ones; the review's 1601C, 1701A, 1702EX and 1707
+    /// print their address through the print map's own lines, so the sheet
+    /// gives their boxes no slots and they keep two boxes for their groups.
+    #[test]
+    fn a_printed_address_over_stacked_lines_is_one_pool() {
+        setup();
+        let expected: BTreeMap<&str, (Vec<&str>, Vec<u64>)> = BTreeMap::from([
+            (
+                "0619E",
+                (
+                    vec!["frm0619E:txtAddress", "frm0619E:txtAddress2"],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "0619F",
+                (
+                    vec!["frm0619F:txtAddress", "frm0619F:txtAddress2"],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "1600PT",
+                (
+                    vec![
+                        "frm1600PT:txtPg1Pt1I8RegisteredAddress",
+                        "frm1600PT:txtPg1Pt1I8RegisteredAddress2",
+                    ],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "1600VT",
+                (
+                    vec![
+                        "frm1600VT:txtPg1Pt1I8RegisteredAddress",
+                        "frm1600VT:txtPg1Pt1I8RegisteredAddress2",
+                    ],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "1701",
+                (
+                    vec!["frm1701:txtPg1I9Address", "frm1701:txtPg1I9Address2"],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "1702MX",
+                (
+                    vec![
+                        "frm1702MX:txtPg1Pt1I10RegisteredAddress",
+                        "frm1702MX:txtPg1Pt1I10RegisteredAddress2",
+                        "frm1702MX:txtPg1Pt1I10RegisteredAddress3",
+                    ],
+                    vec![38, 38, 30],
+                ),
+            ),
+            (
+                "1702RT",
+                (
+                    vec![
+                        "frm1702RT:txtPg1Pt1I9Address1",
+                        "frm1702RT:txtPg1Pt1I9Address2",
+                        "frm1702RT:txtPg1Pt1I9Address3",
+                    ],
+                    vec![38, 38, 30],
+                ),
+            ),
+            (
+                "2200C",
+                (
+                    vec![
+                        "frm2200C:txtPg1Pt1I8RegisteredAddress",
+                        "frm2200C:txtPg1Pt1I8RegisteredAddress2",
+                    ],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "2200M",
+                (
+                    vec![
+                        "frm2200M:txtPg1Pt1I7RegisteredAddress",
+                        "frm2200M:txtPg1Pt1I7RegisteredAddress2",
+                    ],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "2200P",
+                (
+                    vec![
+                        "frm2200P:txtPg1Pt1I7RegisteredAddress",
+                        "frm2200P:txtPg1Pt1I7RegisteredAddress2",
+                    ],
+                    vec![40, 31],
+                ),
+            ),
+            (
+                "2552",
+                (
+                    vec![
+                        "frm2552:txtPg1Pt1I7RegisteredAddress",
+                        "frm2552:txtPg1Pt1I7RegisteredAddress2",
+                    ],
+                    vec![40, 31],
+                ),
+            ),
+        ]);
+        let mut found = BTreeMap::new();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let def = kind.definition();
+            for field in schema_fields(code) {
+                // Email is always a plain field; amounts and dates have no slots.
+                if !matches!(
+                    field["t"].as_str(),
+                    Some("text" | "phone" | "int" | "hidden")
+                ) {
+                    assert!(field["slots"].is_null(), "{code}: {} has slots", field["k"]);
+                }
+                let pool = &field["pool"];
+                if pool.is_null() {
+                    continue;
+                }
+                let keys: Vec<String> = pool["keys"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|k| k.as_str().unwrap().to_string())
+                    .collect();
+                let slots: Vec<u64> = pool["slots"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|n| n.as_u64().unwrap())
+                    .collect();
+                let write: Vec<String> = pool["write"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|k| k.as_str().unwrap().to_string())
+                    .collect();
+                // The later lines are part of the pool, not boxes of their own.
+                for key in &keys[1..] {
+                    let line = schema_fields(code)
+                        .into_iter()
+                        .find(|f| f["k"] == key.as_str())
+                        .unwrap();
+                    assert_eq!(line["t"], "hidden", "{code}: {key}");
+                    assert_eq!(line["pooled"], keys[0].as_str(), "{code}: {key}");
+                }
+                // The page writes exactly the lines with a text field of their own.
+                let bound: Vec<String> = keys
+                    .iter()
+                    .filter(|k| {
+                        matches!(
+                            def.bindings.get(*k).map(|b| &b.binding),
+                            Some(Binding::Text { .. })
+                        )
+                    })
+                    .cloned()
+                    .collect();
+                assert_eq!(write, bound, "{code}");
+                assert_eq!(write[0], keys[0], "{code}: the first line is written");
+                // What the page sends reaches each written line as sent, and the
+                // lines it does not write keep the form's own value.
+                let opened = open(code, page_period_of(code));
+                let address = "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY";
+                let parts: Vec<&str> = if write.len() == 1 {
+                    vec![address]
+                } else {
+                    vec![
+                        "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER",
+                        "PASEO DE ROXAS, MAKATI CITY",
+                        "",
+                    ]
+                };
+                let edits: Map<String, Value> = write
+                    .iter()
+                    .zip(&parts)
+                    .map(|(k, v)| (k.clone(), json!(v)))
+                    .collect();
+                let refs: Vec<&str> = write.iter().map(String::as_str).collect();
+                let filled = fill_unlocked(code, &opened["draft"], Value::Object(edits), &refs);
+                assert_eq!(filled["rejected"], json!({}), "{code}");
+                for (key, part) in write.iter().zip(&parts) {
+                    assert_eq!(filled["values"][key], *part, "{code}: {key}");
+                }
+                for key in keys.iter().filter(|k| !write.contains(k)) {
+                    assert_eq!(
+                        filled["values"][key], opened["values"][key],
+                        "{code}: {key}"
+                    );
+                }
+                found.insert(code, (keys, slots));
+            }
+        }
+        let found: BTreeMap<&str, (Vec<&str>, Vec<u64>)> = found
+            .iter()
+            .map(|(code, (keys, slots))| {
+                (
+                    *code,
+                    (keys.iter().map(String::as_str).collect(), slots.clone()),
+                )
+            })
+            .collect();
+        assert_eq!(found, expected);
+    }
+
+    /// Rule 5: fixed formats keep their printed boxes; the oracle is a few
+    /// boxes read off the sheets by hand.
+    #[test]
+    fn fixed_formats_keep_their_printed_boxes() {
+        for (code, key, slots) in [
+            ("2551Q", "frm2551Qv2018:zipCode", 4),
+            ("2551Q", "frm2551Qv2018:telNo", 12),
+            ("2551Q", "frm2551Qv2018:registeredName", 40),
+            ("1601C", "frm1601c:txtZipCode", 4),
+            ("2552", "frm2552:txtPg1Pt1I7RegisteredAddress", 40),
+        ] {
+            let field = schema_fields(code)
+                .into_iter()
+                .find(|f| f["k"] == key)
+                .unwrap_or_else(|| panic!("{code}: {key}"));
+            assert_eq!(field["slots"], slots, "{code}: {key}");
+        }
+        let emails = AgentFormKind::all()
+            .into_iter()
+            .flat_map(|kind| schema_fields(kind.form_code()))
+            .filter(|f| f["t"] == "email")
+            .count();
+        assert!(emails > 20, "{emails} email boxes, none with slots");
+    }
 
     #[test]
     fn an_escaped_official_value_shows_as_typed() {

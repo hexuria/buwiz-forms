@@ -24,6 +24,19 @@ const schema = {
         { no: "1", l: "Contact Number", f: [{ k: K("phone"), t: "text", l: "Contact Number" }] },
         { no: "2", l: "Date of Transaction", f: [{ k: K("date"), t: "date", l: "Date of Transaction" }] },
         { no: "3", l: "Date of Incorporation", f: [{ k: K("incorporated"), t: "date", l: "Date of Incorporation" }] },
+        { no: "4", l: "Registered Name", f: [{ k: K("name"), t: "text", slots: 40, l: "Registered Name" }] },
+        {
+          no: "5", l: "Registered Address",
+          f: [
+            { k: K("addr1"), t: "text", slots: 40, l: "Registered Address", pool: { keys: [K("addr1"), K("addr2")], slots: [40, 31], write: [K("addr1")] } },
+            { k: K("zip"), t: "text", slots: 4, l: "ZIP Code" },
+          ],
+        },
+        {
+          no: "6", l: "Registered Address (three lines)",
+          f: [{ k: K("line1"), t: "text", slots: 38, l: "Registered Address", pool: { keys: [K("line1"), K("line2"), K("line3")], slots: [38, 38, 30], write: [K("line1"), K("line2"), K("line3")] } }],
+        },
+        { no: "7", l: "Email Address", f: [{ k: K("email"), t: "email", l: "Email Address" }] },
       ],
     },
     {
@@ -47,7 +60,7 @@ const itemOf = (key) => schema.parts[partOf(key)].items.findIndex((it) => (it.f 
 const idOf = (key) => `${partOf(key)}:${itemOf(key)}`;
 
 const entities = [], tasks = [], texts = [], timers = [];
-const clicks = new Map(), opacity = new Map();
+const clicks = new Map(), opacity = new Map(), ids = new Set();
 const calls = [];
 let owner = null;
 class View {}
@@ -74,7 +87,7 @@ function element() {
   const el = new Proxy(target, { get(o, k) {
     if (k === "then") return undefined;
     return (...args) => {
-      if (k === "id") o.id = args[0];
+      if (k === "id") { o.id = args[0]; ids.add(o.id); }
       if (k === "on_click") clicks.set(o.id, { fn: args[0], entity: creationOwner });
       if (k === "opacity") opacity.set(o.id, args[0]);
       if (k === "when" && args[0]) args[1](el);
@@ -120,7 +133,7 @@ const periods = mock("./periods.js", { periodLabel: () => "October 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
 await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
 await mod.evaluate();
-const { FormPageActions, renderFormPage, formatMoney, formatLongDate, shownDate, moveCalendar } = mod.namespace;
+const { FormPageActions, renderFormPage, formatMoney, formatLongDate, shownDate, moveCalendar, splitLines, fitsBoxes } = mod.namespace;
 
 // The host: values as the field map writes them; a fill takes edits as given.
 let hostValues = {
@@ -134,6 +147,14 @@ let hostValues = {
   [K("amount0")]: "100",
   [K("paid1")]: "",
   [K("amount1")]: "",
+  [K("name")]: "EXAMPLE TRADING CORP",
+  [K("addr1")]: "1 EXAMPLE STREET, QUEZON CITY",
+  [K("addr2")]: "",
+  [K("zip")]: "1100",
+  [K("line1")]: "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER",
+  [K("line2")]: "PASEO DE ROXAS",
+  [K("line3")]: "",
+  [K("email")]: "books@example.com",
 };
 let opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {},
@@ -164,7 +185,7 @@ app.formUi = new FormPageActions(app);
 const ui = app.formUi;
 const cx = context();
 async function settle() { while (tasks.length) await Promise.all(tasks.splice(0)); }
-function frame() { owner = null; texts.length = 0; opacity.clear(); renderFormPage(cx, app, 1056); }
+function frame() { owner = null; texts.length = 0; ids.clear(); opacity.clear(); for (const e of entities) e.dirty = true; renderFormPage(cx, app, 1056); }
 const lastFill = () => calls.filter((c) => c[0] === "screen_form_fill").at(-1);
 async function openAll() {
   ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 10 }, cx);
@@ -245,3 +266,43 @@ cal.pick("1985-03-07");
 assert.equal(lastFill()[3][K("date")], "03/07/1985", "a picked day reaches the draft as MM/DD/YYYY");
 assert.equal(input(K("date")).value(), "Mar 7, 1985", "and shows as Mar 7, 1985");
 console.log("PASS rule 4: dates show as Dec 10, 2020 and the calendar changes month and year.");
+
+// ---- Rule 5: character boxes only where the length is known.
+const long = "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI"; // 61
+assert.equal(JSON.stringify(splitLines(long, [40, 31])), JSON.stringify(["UNIT 5 BLDG A, 123 AYALA AVENUE CORNER", "PASEO DE ROXAS, MAKATI"]), "line 1 ends at the last space before character 40");
+assert.ok(fitsBoxes(long, [40, 31]));
+assert.ok(!fitsBoxes(`${long} CITY 1226 METRO MANILA`, [40, 31]), "past 71 the boxes no longer fit");
+assert.equal(JSON.stringify(splitLines("A".repeat(45), [40, 31])), JSON.stringify(["A".repeat(40), "A".repeat(5)]), "a word longer than the line is cut at the boxes");
+assert.ok(!fitsBoxes("A".repeat(41), [40]));
+frame();
+assert.ok(ids.has(`fp-boxes-${K("zip")}`), "a ZIP code keeps its four boxes");
+assert.ok(ids.has(`fp-boxes-${K("name")}`), "a name shows boxes while it fits");
+assert.ok(!ids.has(`fp-boxes-${K("email")}`), "an email is always a plain field");
+assert.ok(!ids.has(`fp-boxes-${K("phone")}`) && !ids.has(`fp-boxes-${K("sales")}`), "no boxes where the sheet gives none");
+input(K("name")).type("EXAMPLE TRADING AND GENERAL MERCHANDISE CORP");
+input(K("name")).fire("blur");
+await settle(); frame();
+assert.equal(ui.state.values[K("name")], "EXAMPLE TRADING AND GENERAL MERCHANDISE CORP", "the name is kept whole");
+assert.ok(!ids.has(`fp-boxes-${K("name")}`), "past its 40 boxes the name is a plain field");
+// A two-line address is one box over 40 + 31 slots; its print splits it.
+assert.equal(ui.state.inputs.has(K("addr2")), false, "the second line has no box of its own");
+assert.equal(input(K("addr1")).value(), "1 EXAMPLE STREET, QUEZON CITY");
+input(K("addr1")).type(long);
+input(K("addr1")).fire("blur");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("addr1")]: long }), "the whole address goes to the line with the field, as before");
+await settle(); frame();
+assert.ok(ids.has(`fp-boxes-${K("addr1")}`), "71 slots hold 61 characters");
+const longer = `${long} CITY 1226 METRO MANILA`;
+input(K("addr1")).type(longer);
+input(K("addr1")).fire("blur");
+await settle(); frame();
+assert.equal(ui.state.values[K("addr1")], longer, "never cut");
+assert.ok(!ids.has(`fp-boxes-${K("addr1")}`), "past 71 both lines are one plain field");
+// Three lines, each a field of its own: the text is split over them.
+assert.equal(input(K("line1")).value(), "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS", "the lines read as one address");
+input(K("line1")).type("UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226");
+input(K("line1")).fire("blur");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("line1")]: "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER", [K("line2")]: "PASEO DE ROXAS, MAKATI CITY 1226", [K("line3")]: "" }), "split at the last space that fits each line");
+await settle(); frame();
+assert.equal(input(K("line1")).value(), "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226", "the box keeps what was typed");
+console.log("PASS rule 5: boxes until the text no longer fits; an address is one pool.");
