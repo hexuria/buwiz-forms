@@ -191,6 +191,15 @@ const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 1201202
  */
 const SAMPLE_NOTE = "A sample from the Form library is not saved. To start a return, choose Start a return, or New return (the + button or Cmd/Ctrl+N).";
 
+/**
+ * The note at the top of a stored draft whose boxes followed a later
+ * tax-profile change (the host lists each: "RDO 050 → 043"). Boxes edited
+ * on the return keep the edit and are not listed.
+ */
+export function profileUpdatesNote(updates) {
+  return `Updated from your tax profile: ${updates.join("; ")}`;
+}
+
 /** How faded a box another answer turns off is (rule 6). */
 const OFF_OPACITY = 0.45;
 
@@ -428,6 +437,8 @@ export class FormPageActions {
     s.off = r.off || {};
     s.penalties = r.penalties || [];
     s.poolTexts = r.pools || {};
+    // A stored draft that followed a later tax-profile change: what moved.
+    s.profileUpdates = r.profile_updates || [];
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -2591,6 +2602,8 @@ function formContent(cx, app, width) {
 
   const page = div().flex().flex_col().child(head).child(bar);
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
+  // A draft whose untouched profile boxes followed a later profile change.
+  if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
   // An amended return says where its filed version is; that version, opened
   // from its history, says what it is.
   if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());

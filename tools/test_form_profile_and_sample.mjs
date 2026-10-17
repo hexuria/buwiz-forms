@@ -286,6 +286,21 @@ ui.state.locks[K("txtSheets")] = "computed by BIR's own formulas";
 assert.equal(ui.unlockedFor({ [K("txtSheets")]: "1" }).length, 0);
 console.log("PASS: library sample blank and unsaved; profile boxes fold, show Edit on hover or focus, keep the edit on this return.");
 
+// ---- A stored draft that followed a later profile change says what moved.
+{
+  const plain = app.store.call;
+  app.store.call = (name, ...args) =>
+    name === "screen_form_open" ? Promise.resolve({ ...opened(false), profile_updates: ["RDO 050 → 043", "ZIP 1100 → 1200"] }) : plain.call(app.store, name, ...args);
+  ui.open({ code: "2551Q", tin: "12345678800000", year: 2026, period: 3 }, cx);
+  await settle(); frame();
+  assert.ok(texts.includes("Updated from your tax profile: RDO 050 → 043; ZIP 1100 → 1200"), "the note lists what changed");
+  app.store.call = plain;
+  ui.open({ code: "2551Q", tin: "12345678800000", year: 2026, period: 3 }, cx);
+  await settle(); frame();
+  assert.ok(!texts.some((t) => t.startsWith("Updated from your tax profile")), "nothing moved: no note");
+  console.log("PASS: a draft that followed the tax profile says what changed at the top.");
+}
+
 // ---- A sample's period (option B): page inputs, a host answer once complete.
 // The page asks about a period a moment after its last change (timers).
 async function settleAll() { for (;;) { runTimers(); if (!tasks.length) break; await settle(); } }

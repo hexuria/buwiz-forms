@@ -65,6 +65,11 @@ pub struct SubmissionLifecycle {
     pub submission_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_retry_at: Option<String>,
+    /// Profile boxes the filer edited on this return (their on-screen
+    /// keys). They keep the edit when the tax profile changes; every other
+    /// profile box of a Draft follows the profile. Never filed or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_edits: Vec<String>,
 }
 
 impl Default for SubmissionLifecycle {
@@ -88,6 +93,7 @@ impl Default for SubmissionLifecycle {
             submission_attempts: 0,
             submission_error: None,
             next_retry_at: None,
+            profile_edits: Vec::new(),
         }
     }
 }

@@ -105,6 +105,8 @@ export interface ScreenFormOpened {
     penalties: ScreenFormPenalties[];
     /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
     pools: Record<string, string>;
+    /** A stored Draft whose profile boxes the filer did not edit followed a later tax-profile change (saved): what changed ("RDO 050 → 043"). Empty when nothing moved. */
+    profile_updates?: string[];
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -1768,6 +1770,162 @@ fn profile_edit_keys(kind: AgentFormKind, from_profile: &FromProfile) -> Vec<Str
         .collect()
 }
 
+/// Where a draft keeps the profile boxes the filer edited on this return:
+/// in its lifecycle, or at the top level of 1601C and 2551Q drafts.
+fn profile_edits_pointer(draft: &Value) -> &'static str {
+    if draft["lifecycle"].is_object() {
+        "/lifecycle/profile_edits"
+    } else {
+        "/profile_edits"
+    }
+}
+
+/// The profile boxes the filer edited on this return.
+fn profile_edits(draft: &Value) -> BTreeSet<String> {
+    draft
+        .pointer(profile_edits_pointer(draft))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|key| key.as_str().map(str::to_string))
+        .collect()
+}
+
+/// Record that the filer edited profile box `key` on this return.
+fn mark_profile_edit(draft: &mut Value, key: &str) {
+    let mut keys = profile_edits(draft);
+    if keys.insert(key.to_string()) {
+        let pointer = profile_edits_pointer(draft);
+        set_draft_path(draft, pointer, json!(keys));
+    }
+}
+
+/// How a profile box's change reads in the note at the top of a draft:
+/// its item's caption without the parenthetical or a trailing "code"
+/// ("RDO Code" reads "RDO"), and what the page showed before and after.
+fn profile_change_note(code: &str, key: &str, before: &Value, after: &Value) -> Option<String> {
+    let form = schema_entry(code)?;
+    let (item, field) = form["parts"]
+        .as_array()?
+        .iter()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        .find_map(|item| {
+            item["f"]
+                .as_array()?
+                .iter()
+                .find(|field| field["k"] == key)
+                .map(|field| (item, field))
+        })?;
+    let caption = item["l"].as_str().unwrap_or_default();
+    let caption = caption.split(" (").next().unwrap_or(caption).trim();
+    let caption = caption
+        .strip_suffix(" Code")
+        .or_else(|| caption.strip_suffix(" code"))
+        .unwrap_or(caption);
+    let text = |values: &Value| values[key].as_str().unwrap_or_default().trim().to_string();
+    let (was, now) = (text(before), text(after));
+    if matches!(field["t"].as_str(), Some("radio" | "chk")) {
+        // A radio reads as the choice it moved to.
+        if now != "true" {
+            return None;
+        }
+        let picked = field["l"].as_str().unwrap_or(key);
+        return Some(format!("{caption} → {picked}"));
+    }
+    let shown = |text: &str| {
+        if text.is_empty() {
+            "blank".to_string()
+        } else {
+            text.to_string()
+        }
+    };
+    Some(format!("{caption} {} → {}", shown(&was), shown(&now)))
+}
+
+/// A stored Draft follows the current tax profile in every profile box the
+/// filer did not edit on it (`profile_edits`): each such box's draft fields
+/// take what the profile alone makes now (`from_profile`). Returns what
+/// changed, in the filer's words, for the note at the top of the page
+/// ("RDO 050 → 043"); `None` when nothing moved, always on a return that
+/// left Draft. The profile is only read, never written.
+fn follow_profile(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    from_profile: &Value,
+) -> Result<Option<Vec<String>>, String> {
+    if agent::identity(kind, draft)?.status != FilingStatus::Draft {
+        return Ok(None);
+    }
+    let code = kind.form_code();
+    let def = kind.definition();
+    let edits = profile_edits(draft);
+    // A pooled address is one box: an edit to it keeps all its lines.
+    let pools = combs::pools(code);
+    let edited = |key: &str| {
+        edits.contains(key)
+            || pools.values().any(|pool| {
+                pool.keys.iter().any(|k| k == key) && pool.keys.iter().any(|k| edits.contains(k))
+            })
+            || def.box_def(key).is_some_and(|entry| {
+                entry.group.as_deref().is_some_and(|group| {
+                    edits.contains(group)
+                        || def
+                            .box_def(group)
+                            .is_some_and(|group| group.members.iter().any(|m| edits.contains(m)))
+                })
+            })
+    };
+    let profile_boxes: Vec<&String> = def
+        .boxes
+        .iter()
+        .filter(|entry| is_profile_box(def, entry))
+        .map(|entry| &entry.key)
+        .collect();
+    let kept: BTreeSet<&str> = profile_boxes
+        .iter()
+        .filter(|key| edited(key))
+        .flat_map(|key| bound_paths(def, key))
+        .collect();
+    let follow: BTreeSet<&str> = profile_boxes
+        .iter()
+        .filter(|key| !edited(key))
+        .flat_map(|key| bound_paths(def, key))
+        .filter(|path| !kept.contains(path) && !is_period_path(path))
+        .collect();
+    let mut next = draft.clone();
+    let mut moved = false;
+    for path in follow {
+        let Some(want) = from_profile.pointer(path) else {
+            continue;
+        };
+        if next.pointer(path) != Some(want) {
+            set_draft_path(&mut next, path, want.clone());
+            moved = true;
+        }
+    }
+    if !moved {
+        return Ok(None);
+    }
+    let mut before = draft.clone();
+    agent::compute(kind, &mut before)?;
+    let before = values_json(kind, &before)?;
+    agent::compute(kind, &mut next)?;
+    let after = values_json(kind, &next)?;
+    let mut notes: Vec<String> = Vec::new();
+    for key in profile_boxes {
+        if before[key.as_str()] == after[key.as_str()] {
+            continue;
+        }
+        if let Some(note) = profile_change_note(code, key, &before, &after)
+            && !notes.contains(&note)
+        {
+            notes.push(note);
+        }
+    }
+    *draft = next;
+    Ok(Some(notes))
+}
+
 /// On-screen keys that repeat an official control id (`txtEmail#occurrence-2`,
 /// the rules corpus's name for the same `serialized_key` placed again on the
 /// official form) and have no binding of their own, each with that official
@@ -2085,7 +2243,7 @@ fn open_screen_form(
     // The draft to show; the one the profile alone makes for this period
     // (what decides whether the profile filled a box); and for a sample, one
     // for another year and period (what tells which boxes follow the period).
-    let (draft, from_profile, build, filed_original) = with_database(|db| {
+    let (draft, from_profile, build, filed_original, followed) = with_database(|db| {
         let profile = db
             .get_profile_by_tin(&tin)
             .map_err(|error| host_error(error.to_string()))?
@@ -2107,6 +2265,22 @@ fn open_screen_form(
             write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
             write_typed_period(kind, &parts, &typed, &mut from_profile).map_err(host_error)?;
         }
+        // A stored Draft follows the tax profile in every box the filer did
+        // not edit on it, saved quietly; the page says what changed.
+        let followed = if sample {
+            None
+        } else {
+            follow_profile(kind, &mut draft, &from_profile).map_err(host_error)?
+        };
+        if followed.is_some()
+            && stored_return(db, kind, &draft)
+                .map_err(host_error)?
+                .is_some()
+        {
+            refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
+            agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
+        }
+        let followed = followed.unwrap_or_default();
         let build = if sample {
             let period = page_period(code, 2).map_err(host_error)?;
             Some(SampleBuild {
@@ -2123,7 +2297,7 @@ fn open_screen_form(
         } else {
             filed_original(db, kind, &draft).map_err(host_error)?
         };
-        Ok((draft, from_profile, build, filed_original))
+        Ok((draft, from_profile, build, filed_original, followed))
     })?;
     Ok(async move {
         let mut opened =
@@ -2131,6 +2305,7 @@ fn open_screen_form(
                 .and_then(|result| result)
                 .map_err(host_error)?;
         opened["filed_original"] = filed_original;
+        opened["profile_updates"] = json!(followed);
         Ok(json(opened))
     })
 }
@@ -3227,7 +3402,17 @@ fn apply_screen_edits(
             }
         };
         match result {
-            Ok(()) => *draft = next,
+            Ok(()) => {
+                // A profile box edited here keeps the edit when the profile
+                // changes later (`follow_profile`).
+                if def
+                    .box_def(&key)
+                    .is_some_and(|entry| is_profile_box(def, entry))
+                {
+                    mark_profile_edit(&mut next, &key);
+                }
+                *draft = next;
+            }
             Err(message) => {
                 rejected.insert(key.clone(), Value::String(message));
             }
@@ -8308,6 +8493,151 @@ mod tests {
         } else {
             "EDITED ON THIS RETURN".to_string()
         }
+    }
+
+    /// The test profile changed later: a new RDO, address, ZIP, phone and
+    /// email, as the filer changes them in the profile editor.
+    fn change_profile() -> Value {
+        with_database(|db| {
+            let mut profile = db
+                .get_profile_by_tin(TIN)
+                .map_err(|error| HostError::new(error.to_string()))?
+                .expect("profile");
+            profile.rdo_code = "043".into();
+            profile.registered_address = "2 New Street, Makati City".into();
+            profile.zip_code = "1200".into();
+            profile.phone = "0287654321".into();
+            profile.email = "accounts@example.com".into();
+            db.save_profile(profile)
+                .map(|saved| serde_json::to_value(saved).unwrap())
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap()
+    }
+
+    /// Decided 2026-10-17: a stored Draft follows the current tax profile in
+    /// every profile box the filer did not edit on it, quietly, when it
+    /// opens. On every form: nothing moves while the profile is unchanged;
+    /// after a change each profile box of the reopened draft shows what a
+    /// brand-new return shows (the oracle), the change is saved, and the
+    /// page lists what changed.
+    #[test]
+    fn a_stored_draft_follows_a_later_profile_change_on_every_form() {
+        setup();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            save(code, &open(code, page_period_of(code))["draft"]);
+            let again = open(code, page_period_of(code));
+            assert_eq!(again["profile_updates"], json!([]), "{code}: nothing moved");
+        }
+        change_profile();
+        let mut followed = 0;
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let reopened = open(code, page_period_of(code));
+            let fresh = open_for(TIN, code, YEAR + 1, page_period_of(code));
+            assert!(fresh["draft"]["id"].is_null(), "{code}: a brand-new return");
+            for key in strings(&fresh["profile"]) {
+                assert_eq!(
+                    reopened["values"][&key], fresh["values"][&key],
+                    "{code}: {key} follows the profile"
+                );
+            }
+            let notes = strings(&reopened["profile_updates"]);
+            if notes.iter().any(|note| note.starts_with("RDO 039 → 043")) {
+                followed += 1;
+            }
+            // Saved: opening it once more changes nothing further.
+            let third = open(code, page_period_of(code));
+            assert_eq!(third["profile_updates"], json!([]), "{code}: saved");
+            assert_eq!(third["values"], reopened["values"], "{code}");
+        }
+        assert!(followed >= 30, "{followed} forms say RDO 039 → 043");
+    }
+
+    /// A box the filer edited on the return keeps the edit when the profile
+    /// changes; the unedited ones follow, the note says what changed, and
+    /// the profile never takes the return's edit (Rule 0). A queued return
+    /// never changes.
+    #[test]
+    fn a_profile_change_keeps_the_returns_own_edits_and_never_moves_a_queued_return() {
+        setup();
+        let code = "1601C";
+        let (address, rdo, email) = ("frm1601c:txtAddress", "frm1601c:txtRDOCode", "txtEmail");
+        let opened = open(code, 3);
+        assert_eq!(opened["values"][rdo], "039");
+        let edited = "9 EDITED ROAD, PASIG CITY";
+        let filled = fill_unlocked(
+            code,
+            &opened["draft"],
+            json!({ address: edited }),
+            &[address],
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(
+            profile_edits(&filled["draft"]),
+            BTreeSet::from([address.to_string()]),
+            "the Edit is recorded on the return"
+        );
+        save(code, &filled["draft"]);
+        // A queued return, from before the profile changes.
+        let queued = open("0619E", 4);
+        let queued_id = store_filed("0619E", &queued["draft"], "Queued");
+        let queued_row = raw_row(queued_id);
+
+        let profile = change_profile();
+        let reopened = open(code, 3);
+        assert_eq!(reopened["values"][rdo], "043", "the unedited RDO follows");
+        assert_eq!(reopened["values"][email], "accounts@example.com");
+        assert!(
+            reopened["values"][address]
+                .as_str()
+                .is_some_and(|shown| shown.eq_ignore_ascii_case(edited)),
+            "the edited address is kept: {}",
+            reopened["values"][address]
+        );
+        let notes = strings(&reopened["profile_updates"]);
+        assert!(notes.contains("RDO 039 → 043"), "{notes:?}");
+        assert!(
+            notes.contains("Email address books@example.com → accounts@example.com"),
+            "{notes:?}"
+        );
+        assert!(
+            !notes
+                .iter()
+                .any(|note| note.starts_with("Registered Address")),
+            "{notes:?}"
+        );
+        // Saved quietly: the stored row has it, and the edit is still marked.
+        let stored = call(
+            "get_form_draft",
+            vec![TIN.into(), code.into(), YEAR.into(), 3.into()],
+        )
+        .unwrap();
+        assert_eq!(stored["rdo_code"], "043", "{stored}");
+        assert_eq!(stored["profile_edits"], json!([address]));
+        // Rule 0: the profile keeps its own address.
+        assert_eq!(profile["registered_address"], "2 New Street, Makati City");
+        let after = with_database(|db| {
+            db.get_profile_by_tin(TIN)
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(after.registered_address, "2 New Street, Makati City");
+        // The queued return: untouched, row and page alike.
+        let shown = open("0619E", 4);
+        assert_eq!(shown["status"], "Queued");
+        assert_eq!(
+            shown["values"]["frm0619E:txtRDOCode"], "039",
+            "a queued return never changes"
+        );
+        assert_eq!(shown["profile_updates"], json!([]));
+        assert_eq!(
+            raw_row(queued_id),
+            queued_row,
+            "its stored row is unchanged"
+        );
     }
 
     #[test]

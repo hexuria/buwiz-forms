@@ -332,6 +332,11 @@ pub struct Form2551QDraft {
     pub next_retry_at: Option<String>,
     #[serde(default)]
     pub last_error: Option<String>,
+    /// Profile boxes the filer edited on this return (their on-screen
+    /// keys). They keep the edit when the tax profile changes; every other
+    /// profile box of a Draft follows the profile. Never filed or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_edits: Vec<String>,
 
     /// Set to true when this draft was pre-filled from a previous quarter.
     /// UI shows a "Pre-filled from Q{n} {year}" banner when true.
@@ -445,6 +450,7 @@ impl Form2551QDraft {
             submission_attempts: 0,
             next_retry_at: None,
             last_error: None,
+            profile_edits: Vec::new(),
             carried_forward_from: None,
             payment_receipt_path: None,
         };
