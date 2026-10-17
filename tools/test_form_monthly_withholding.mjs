@@ -198,19 +198,37 @@ console.log("PASS 1600WP item 1 is two dates, From with its calendar.");
 // ---- A picked date on a two-digit year list (1600PT/1600VT item 1).
 {
   const months = ["01 - January", "02 - February", "03 - March"];
-  const years = [{ value: "25", label: "2025" }, { value: "26", label: "2026" }];
-  const date = { month: { k: K("pm"), t: "sel", o: months }, day: null, year: { k: K("py"), t: "sel", o: years } };
-  const sent = () => calls.filter((c) => c[0] === "screen_form_fill").at(-1)[3];
+  // As the host lists them: "00"-"99" labelled 2000-2099.
+  const years = Array.from({ length: 100 }, (_x, y) => ({ value: String(y).padStart(2, "0"), label: String(2000 + y) }));
+  const date = { month: { k: K("pm"), t: "sel", o: months }, day: { k: K("pd"), t: "int", l: "day" }, year: { k: K("py"), t: "sel", o: years } };
+  const fills = () => calls.filter((c) => c[0] === "screen_form_fill");
+  const toasts = [];
+  const toast = app.toast;
+  app.toast = (msg) => toasts.push(msg);
   ui.pickDate(date, "2026-03-16", cx);
   ui.flush(cx);
-  assert.equal(sent()[K("py")], "26", "the year list takes 2026 as its 26");
-  assert.equal(sent()[K("pm")], "03", "the month list its 03");
-  ui.pickDate(date, "2027-02-01", cx);
+  const sent = fills().at(-1)[3];
+  assert.equal(sent[K("py")], "26", "the year list takes 2026 as its 26");
+  assert.equal(sent[K("pm")], "03", "the month list its 03");
+  assert.equal(sent[K("pd")], "16");
+  for (const iso of ["2100-02-01", "1999-02-01", "2026-04-01"]) {
+    const before = fills().length;
+    ui.flush(cx);
+    ui.pickDate(date, iso, cx);
+    ui.flush(cx);
+    assert.equal(fills().length, before, `${iso}: nothing is written, not even the parts the list holds`);
+    assert.ok(!(K("pm") in ui.state.pending) && !(K("pd") in ui.state.pending), `${iso}: no part is staged`);
+    assert.equal(toasts.at(-1), "That date is not on this form's list.", `${iso}: and the page says why`);
+  }
+  // A select with no listed choices takes the pick, as before.
+  const open = { month: { k: K("om"), t: "sel", o: [] }, day: null, year: { k: K("oy"), t: "sel", o: [] } };
+  ui.pickDate(open, "2031-07-09", cx);
   ui.flush(cx);
-  assert.ok(!(K("py") in sent()), "a year the list does not offer is not written");
-  assert.equal(sent()[K("pm")], "02");
+  assert.equal(fills().at(-1)[3][K("om")], "07");
+  assert.equal(fills().at(-1)[3][K("oy")], "2031");
+  app.toast = toast;
 }
-console.log("PASS a picked date writes a two-digit year list's own value and skips what it does not offer.");
+console.log("PASS a picked date writes a year list's own value by its whole year, and a pick the lists cannot hold writes nothing.");
 
 
 // ---- A rate that waits for its ATC.
