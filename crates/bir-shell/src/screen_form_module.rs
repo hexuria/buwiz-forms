@@ -8682,7 +8682,7 @@ mod tests {
     /// was built for. A sample rebuilt for a complete period saves as a
     /// return: a_library_sample_saves_as_its_periods_return_on_every_form.
     #[test]
-    fn a_library_sample_is_never_saved_queued_or_printed() {
+    fn a_placeholder_sample_is_refused_by_save_queue_and_print() {
         setup();
         let year = sample_year();
         for code in ["1601C", "0619E"] {
