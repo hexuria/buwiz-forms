@@ -847,10 +847,24 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
 }
 
 fn writer_cells(slug: &str) -> Result<WriterCells, String> {
-    match writer_cells_json(slug) {
-        Some(json) => parse_writer_cells(json),
-        None => Ok(WriterCells::empty()),
+    let mut cells = match writer_cells_json(slug) {
+        Some(json) => parse_writer_cells(json)?,
+        None => WriterCells::empty(),
+    };
+    for (sheet, joins) in SHEET_JOINS {
+        if *sheet != slug {
+            continue;
+        }
+        for (key, cell) in *joins {
+            cells.not_joined.remove(*key);
+            cells
+                .joins
+                .entry((*key).to_string())
+                .or_default()
+                .push((*cell).to_string());
+        }
     }
+    Ok(cells)
 }
 
 fn grouped_input_indices<'a>(tags: &[InputTag<'a>]) -> BTreeMap<&'a str, Vec<usize>> {
@@ -1369,6 +1383,23 @@ fn fill_bundle(
     ))
 }
 
+/// Text joins a frozen sheet's writer-cells.json leaves out although the
+/// sheet has the cell (html-frozen is synced from upstream and never edited
+/// here), per sheet: `(writer key, cell)`. 2550M (2007) item 4: the TIN's
+/// three 3-slot combs and the 5-slot branch comb of the item 4 row
+/// (data-row 7: p1c127, p1c9, p1c11, p1c13), which writer-cells lists as
+/// not joined. The branch comb's inputs carry the sheet's 00000 as values;
+/// the join writes the draft's branch over them.
+const SHEET_JOINS: &[(&str, &[(&str, &str)])] = &[(
+    "2550m-2007",
+    &[
+        ("frm2550m:txtTIN1", "p1c127"),
+        ("frm2550m:txtTIN2", "p1c9"),
+        ("frm2550m:txtTIN3", "p1c11"),
+        ("frm2550m:txtBranchCode", "p1c13"),
+    ],
+)];
+
 /// Text cells drawn as a row of one-character inputs that are not a comb
 /// (no `data-slot-index`), per sheet, each with how a code shorter than its
 /// boxes sits in them. A text join writes its whole value into every input
@@ -1410,7 +1441,11 @@ fn split_single_character_cells(slug: &str, html: &str) -> String {
         let chars: Vec<char> = value.chars().collect();
         let boxes = indices.len();
         let fits = chars.len() <= boxes && chars.iter().all(char::is_ascii_alphanumeric);
-        let pad = if fits && *right { boxes - chars.len() } else { 0 };
+        let pad = if fits && *right {
+            boxes - chars.len()
+        } else {
+            0
+        };
         for (offset, &index) in indices.iter().enumerate() {
             // Not fitting, the first box keeps the whole value as written.
             if !fits && offset == 0 {
@@ -1425,14 +1460,34 @@ fn split_single_character_cells(slug: &str, html: &str) -> String {
                     .map(char::to_string)
                     .unwrap_or_default()
             };
+            // The writer's whole value stays on the first box only, as a
+            // comb keeps it on its first slot.
+            let tag = if offset == 0 {
+                tags[index].tag.to_string()
+            } else {
+                without_writer_value(tags[index].tag)
+            };
             replacements.push((
                 tags[index].start,
                 tags[index].end,
-                set_value(tags[index].tag, &shown, None),
+                set_value(&tag, &shown, None),
             ));
         }
     }
     apply_replacements(html, replacements)
+}
+
+/// `tag` without its `data-writer-value` attribute.
+fn without_writer_value(tag: &str) -> String {
+    let needle = " data-writer-value=\"";
+    let Some(at) = tag.find(needle) else {
+        return tag.to_string();
+    };
+    let rest = &tag[at + needle.len()..];
+    match rest.find('"') {
+        Some(close) => format!("{}{}", &tag[..at], &rest[close + 1..]),
+        None => tag.to_string(),
+    }
 }
 
 /// Writer keys in `fields` holding a value that `slug`'s sheet prints
@@ -3296,9 +3351,10 @@ mod tests {
         assert_eq!(named_values(&html, "p1c25"), vec!["X".to_string()]);
     }
 
-    /// PR 4 (2550M manual-3): item 4 prints the TIN's three parts in the
-    /// row's three 3-slot combs (p1c127, p1c9, p1c11; the branch comb
-    /// p1c13 is the sheet's preprinted read-only 00000), and items 3, 5 and
+    /// PR 4 (2550M manual-3): item 4 prints the TIN's three parts and the
+    /// branch in the row's combs (p1c127, p1c9, p1c11, p1c13; frozen_html.rs
+    /// SHEET_JOINS, since the frozen writer-cells.json leaves them out),
+    /// and items 3, 5 and
     /// 10, rows of one-character boxes, print one character per box: never
     /// the whole value in each.
     #[test]
@@ -3314,6 +3370,14 @@ mod tests {
         assert_eq!(comb_text(&html, "p1c9"), tin[3..6]);
         assert_eq!(comb_text(&html, "p1c11"), tin[6..9]);
         assert_eq!(comb_text(&html, "p1c13"), "00000");
+        // Each box of a split cell keeps only its own character; the
+        // writer's whole value stays on the first box alone.
+        let writer_values: Vec<Option<String>> = input_tags(&html)
+            .into_iter()
+            .filter(|tag| tag.name == "p1c130")
+            .map(|tag| attr(tag.tag, "data-writer-value").map(str::to_string))
+            .collect();
+        assert_eq!(writer_values, vec![Some("039".to_string()), None, None]);
         let boxes = |name: &str| named_values(&html, name);
         let one_each = |value: &str| value.chars().map(String::from).collect::<Vec<_>>();
         assert_eq!(boxes("p1c130"), one_each(&fields["frm2550m:txtRDOCode"]));
@@ -3329,8 +3393,21 @@ mod tests {
         let html = filled_document("2550m-2007", &long).unwrap();
         assert_eq!(
             named_values(&html, "p1c21"),
-            vec!["123456".to_string(), String::new(), String::new(), String::new()]
+            vec![
+                "123456".to_string(),
+                String::new(),
+                String::new(),
+                String::new()
+            ]
         );
+        // A branch other than 00000 prints over the sheet's 00000 (the
+        // comb's inputs carry 0s as values; the html-frozen file is not
+        // edited).
+        let mut branch = draft.clone();
+        branch.tin = "12345678800001".into();
+        let html = filled_document("2550m-2007", &branch.to_bir_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c13"), "00001");
+        assert_eq!(comb_text(&html, "p1c127"), "123");
     }
 
     #[test]
