@@ -344,6 +344,11 @@ export class FormPageActions {
       }
     }
     if (cx) {
+      // So is the part's "From tax profile" fold (Enter or Space unfolds it).
+      const fold = `fold-${partIndex}`;
+      if (cx.focus_handle && !s.editFocus.has(fold) && this.tuckedItems(partIndex).length) {
+        s.editFocus.set(fold, cx.focus_handle());
+      }
       part.items.forEach((it, ii) => {
         const id = `${partIndex}:${ii}`;
         // The Edit button of a profile item is a tab stop (Tab, then Enter).
@@ -664,6 +669,12 @@ export class FormPageActions {
   startProfileEdit(keys, cx) {
     const s = this.state;
     if (!s.editable) return;
+    const id = keys.length ? this.itemIdForKey(keys[0]) : null;
+    this.endProfileEdit([...s.editing].filter((k) => this.itemIdForKey(k) !== id));
+    if (id) {
+      const [pi, ii] = id.split(":").map(Number);
+      if (s.schema.parts[pi].items[ii].l === "Additional details") s.moreOpen.add(id);
+    }
     for (const k of keys) {
       if (!s.profileEdit.has(k)) continue;
       s.editing.add(k);
@@ -682,8 +693,15 @@ export class FormPageActions {
     return (s.schema.parts[pi].items[ii].f || []).map((f) => f.k).filter((key) => s.profileEdit.has(key));
   }
 
+  /**
+   * A box took focus. An item still open with Edit elsewhere (a select or
+   * radio item has no box to blur) goes back to its profile look.
+   */
   enterBox(k) {
-    this.state.focusKey = k;
+    const s = this.state;
+    s.focusKey = k;
+    const here = this.itemIdForKey(k);
+    this.endProfileEdit([...s.editing].filter((key) => this.itemIdForKey(key) !== here));
   }
 
   /**
@@ -888,6 +906,7 @@ export class FormPageActions {
 
   queue(cx) {
     const s = this.state;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
     if (!this.ensureSaved(cx)) return;
     try {
       if (this.usesPeriodPath()) this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
@@ -901,6 +920,7 @@ export class FormPageActions {
 
   cancelQueue(cx) {
     const s = this.state;
+    if (s.sample) return this.app.toast(SAMPLE_NOTE, cx);
     try {
       if (this.usesPeriodPath()) this.app.store.write("cancel_queued", s.tin, s.code, s.year, s.period || null);
       else this.app.store.write("screen_form_cancel_queue", s.code, s.draft);
@@ -1340,6 +1360,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
       .px(SPACE[2])
       .rounded(RADIUS.ctl)
       .opacity(shown ? 1 : 0)
+      .border(1)
+      .border_color("#00000000")
+      .focus((st) => st.opacity(1).border_color(t.primary))
       .accessibility_label(editingHere ? `${it.l}: editing on this return` : `Edit ${it.l} on this return`)
       .child(Icon(cx, "pencil", { size: 12, color: "fg2" }))
       .child(Text(cx, "meta", "Edit", "fg2"));
@@ -1347,7 +1370,6 @@ function itemRow(cx, ui, it, pi, ii, width) {
       edit
         .cursor_pointer()
         .hover((st) => st.bg(t.hover))
-        .focus((st) => st.opacity(1).bg(t.hover))
         .tooltip("Change it on this return only")
         .on_click((_e, cx) => ui.startProfileEdit(editKeys, cx));
     }
@@ -1480,7 +1502,13 @@ function profileGroup(cx, ui, pi, tucked, border) {
   const filled = items.reduce((n, it) => n + boxes(it), 0);
   const flagged = tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors?.[`${pi}:${ii}`]).length;
   const label = `From tax profile · ${filled} filled box${filled === 1 ? "" : "es"}`;
-  return div()
+  const toggle = (cx) => {
+    if (s.profileOpen.has(pi)) s.profileOpen.delete(pi);
+    else s.profileOpen.add(pi);
+    ui.refreshRows();
+    cx.notify();
+  };
+  const header = div()
     .id(`fp-profile-${pi}`)
     .flex()
     .flex_row()
@@ -1492,17 +1520,23 @@ function profileGroup(cx, ui, pi, tucked, border) {
     .cursor_pointer()
     .when(border, (el) => el.border_t(1).border_color(t.border))
     .bg(t.bg)
+    .hover((st) => st.bg(t.hover))
+    .focus((st) => st.bg(t.selected))
     .accessibility_label(open ? `${label}, shown` : `${label}, folded`)
-    .on_click((_e, cx) => {
-      if (open) s.profileOpen.delete(pi);
-      else s.profileOpen.add(pi);
-      ui.refreshRows();
-      cx.notify();
-    })
+    .on_click((_e, cx) => toggle(cx))
     .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
     .child(Icon(cx, "user", { size: 14, color: "fg3" }))
     .child(Text(cx, "metaStrong", label, "fg2"))
     .when(flagged > 0, (el) => el.child(Text(cx, "meta", `· ${flagged} need${flagged === 1 ? "s" : ""} attention`, "danger")));
+  const focus = s.editFocus.get(`fold-${pi}`);
+  if (focus) {
+    header.track_focus(focus).tab_index(0).on_key_down((e, cx) => {
+      if (e.key !== "enter" && e.key !== "space") return;
+      toggle(cx);
+      cx.stop_propagation();
+    });
+  }
+  return header;
 }
 
 // ---------------------------------------------------------------- page

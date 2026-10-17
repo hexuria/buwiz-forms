@@ -173,8 +173,8 @@ await settle(); frame();
 assert.equal(ui.state.values[K("rtnMonth")], "06", "an accepted edit shows");
 
 // Save, Queue and Print never write a stored return from a sample.
-const writes = () => calls.filter((c) => ["screen_form_save", "screen_form_queue", "queue_form_draft", "screen_form_print"].includes(c[0])).length;
-ui.save(cx); ui.queue(cx); ui.print(cx);
+const writes = () => calls.filter((c) => ["screen_form_save", "screen_form_queue", "queue_form_draft", "screen_form_print", "cancel_queued", "screen_form_cancel_queue"].includes(c[0])).length;
+ui.save(cx); ui.queue(cx); ui.print(cx); ui.cancelQueue(cx);
 assert.equal(writes(), 0, "a sample is never saved, queued or printed");
 assert.ok(toasts.at(-1).includes("New return"), "the refusal says how to start a return");
 
@@ -205,6 +205,12 @@ press(hovers, `fp-item-${BG}:${addr}`, false);
 frame();
 assert.equal(opacity.get(ADDR), 0, "Edit hides when the pointer leaves");
 
+// The fold is a tab stop: Enter unfolds it, as a click does.
+assert.ok(focusTracked.has(`fp-profile-${BG}`) && focusStyled.has(`fp-profile-${BG}`), "the fold takes the keyboard and shows it");
+press(keys, `fp-profile-${BG}`, { key: "enter" });
+assert.ok(ui.state.profileOpen.has(BG), "Enter unfolds");
+press(clicks, `fp-profile-${BG}`);
+assert.ok(!ui.state.profileOpen.has(BG), "a click folds it again");
 press(clicks, `fp-profile-${BG}`);
 traces.length = 0; frame();
 assert.ok(traces.includes(`fp-item-${BG}:${tel}`), "the unfolded group draws its items");
@@ -231,6 +237,7 @@ assert.ok(!calls.some((c) => /profile/.test(c[0])), "nothing writes the profile"
 
 // Keyboard: Enter on the focused Edit opens the item's boxes.
 await settle(); frame();
+frame();
 press(keys, ADDR, { key: "enter" });
 assert.equal(ui.isLocked(K("registeredAddress")), false, "Enter on Edit opens the box");
 frame();
@@ -246,6 +253,19 @@ assert.equal(ui.isLocked(K("registeredAddress")), true, "leaving the item gives 
 // A box the profile left blank is typed like any other and sent open.
 ui.edit(K("zipCode"), "1100", cx); ui.flush(cx);
 assert.equal(json(calls.filter((c) => c[0] === "screen_form_fill").at(-1)[4]), json([K("zipCode")]));
+// Focus landing in another item's box closes an item opened with Edit (a
+// select or radio item has no box of its own to blur).
+press(keys, `fp-edit-${BG}:${rdo}`, { key: "enter" });
+assert.equal(ui.isLocked(K("txtRDOCode")), false, "the RDO select is open");
+zip.fire("focus");
+assert.equal(ui.isLocked(K("txtRDOCode")), true, "focus in the address item closes the RDO item");
+// Edit on one item closes another still open.
+press(keys, `fp-edit-${BG}:${rdo}`, { key: "enter" });
+frame();
+press(keys, ADDR, { key: "enter" });
+assert.equal(ui.isLocked(K("txtRDOCode")), true, "opening the address closes the RDO");
+assert.equal(ui.isLocked(K("registeredAddress")), false);
+ui.endProfileEdit([K("registeredAddress")]);
 // A box locked for any other reason is never sent as unlocked.
 ui.state.locks[K("txtSheets")] = "computed by BIR's own formulas";
 assert.equal(ui.unlockedFor({ [K("txtSheets")]: "1" }).length, 0);

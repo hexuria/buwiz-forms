@@ -321,9 +321,10 @@
  },
  "1702EX": {
   "R1.0": {
-   "reason": "Every period box in this finding (ddlPg1I2Date, txtPg1I2YearEnd, rdoPg1I4ShortPeriodNo) is blank in a library sample (PR 0, screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form). The remaining key, txtPg2Pt4I42PriorYearExcessCr, is Item 42 'Prior Year's Excess Credits', an amount bound to /prior_year_excess: the check matched 'Year' in its name. An amount box keeps 0.00 in a sample like every other amount.",
-   "reviewer": "",
-   "status": "not_a_bug"
+   "note": "txtPg2Pt4I42PriorYearExcessCr (Item 42 Prior Year's Excess Credits, an amount bound to /prior_year_excess) is not a period box and rightly keeps 0.00 in a sample; every period box of the finding is blank.",
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form",
+   "status": "fixed"
   },
   "R2.1": {
    "pr": "PR 0",
@@ -372,9 +373,10 @@
  },
  "1702RT": {
   "R1.0": {
-   "reason": "Every period box in this finding (ddlPg1I2Month, txtPg1I2Year, rdoPg1I4ShortPeriodNo) is blank in a library sample (PR 0, screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form). The remaining key, txtPg1Pt1I10, is Item 10 'Date of Incorporation/Organization', the taxpayer's own date from the profile, not the return's period; it keeps its value in a sample (asserted in the same test).",
-   "reviewer": "",
-   "status": "not_a_bug"
+   "note": "txtPg1Pt1I10 (Item 10 Date of Incorporation, the profile's business start date) is the taxpayer's own date, not the return's period, and rightly keeps its value in a sample; every period box of the finding is blank.",
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form",
+   "status": "fixed"
   },
   "R2.0": {
    "pr": "PR 0",
@@ -406,9 +408,10 @@
  },
  "1707": {
   "R1.0": {
-   "reason": "The period box in this finding (txtPg1I1Year) is blank in a library sample (PR 0, screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form). The remaining key, txtPg2P4Sch1I9TotCollection, is Schedule 1 Item 9 'Total Collection', an amount bound to /installment/total_collection: the check matched its name. An amount box keeps 0.00 in a sample like every other amount.",
-   "reviewer": "",
-   "status": "not_a_bug"
+   "note": "txtPg2P4Sch1I9TotCollection (Schedule 1 Item 9 Total Collection, an amount bound to /installment/total_collection) is not a period box and rightly keeps 0.00 in a sample; the period box of the finding is blank.",
+   "pr": "PR 0",
+   "proof": "screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form",
+   "status": "fixed"
   },
   "R2.1": {
    "pr": "PR 0",
