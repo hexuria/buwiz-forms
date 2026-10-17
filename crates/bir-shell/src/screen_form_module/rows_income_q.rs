@@ -392,7 +392,11 @@ fn closed(cell: Cell, form: &Form1701QDraft) -> Option<(&'static str, &'static s
 /// [`closed`] on a draft of either form.
 fn closed_on(cell: Cell, draft: &Value) -> Option<(&'static str, &'static str)> {
     if let Cell::Gated1702Q(gate) = cell {
-        let form: Form1702qDraft = serde_json::from_value(draft.clone()).ok()?;
+        // Read on the recomputed draft: within one batch the stored totals
+        // may lag what the batch typed (item 15 reads the regular tax and
+        // the MCIT).
+        let mut form: Form1702qDraft = serde_json::from_value(draft.clone()).ok()?;
+        form.recompute();
         return (!gate.holds(&form)).then_some((gate.tag(), gate.tag()));
     }
     closed(cell, &typed(draft).ok()?)
@@ -520,6 +524,59 @@ pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Stri
     }
 }
 
+/// The lock of a 1701Q penalty column that still holds the filer's own
+/// amounts (a draft stored, or a save file imported, before the penalty
+/// model: penalty_model_version 0); "computed from the due date" would be
+/// wrong there.
+pub(crate) const KEPT_AS_ENTERED: &str =
+    "kept as entered before penalties were computed; choose Edit penalties to change them.";
+
+/// The penalty declaration and stored state version of a 1701Q penalty box.
+fn penalty_column(kind: AgentFormKind, draft: &Value, key: &str) -> Option<(usize, u8)> {
+    if !is_1701q(kind) {
+        return None;
+    }
+    let form = typed(draft).ok()?;
+    Form1701QDraft::penalty_declarations()
+        .iter()
+        .enumerate()
+        .find(|(_, items)| items.controls.contains(&key))
+        .map(|(n, items)| (n, (items.state)(&form).penalty_model_version))
+}
+
+/// [`KEPT_AS_ENTERED`] for a penalty box of a column still on its typed
+/// amounts, `None` for every other box.
+pub(super) fn penalty_lock(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
+    penalty_column(kind, draft, key)
+        .filter(|(_, version)| *version < bir_core::forms::penalty_items::PENALTY_MODEL_VERSION)
+        .map(|_| KEPT_AS_ENTERED)
+}
+
+/// Whether a penalty group's column holds the filer's own amounts: the page
+/// offers "Use the computed amounts" as soon as Edit opens it.
+pub(super) fn kept_as_entered(kind: AgentFormKind, keys: &[String], draft: &Value) -> bool {
+    keys.first()
+        .is_some_and(|key| penalty_lock(kind, draft, key).is_some())
+}
+
+/// A blank written to a column still on its typed amounts ("Use the
+/// computed amounts") joins the model, so the computed amounts file.
+pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
+    let Some((n, version)) = penalty_column(kind, draft, key) else {
+        return;
+    };
+    if version >= bir_core::forms::penalty_items::PENALTY_MODEL_VERSION {
+        return;
+    }
+    let Ok(mut form) = typed(draft) else {
+        return;
+    };
+    let items = &Form1701QDraft::penalty_declarations()[n];
+    (items.state_mut)(&mut form).penalty_model_version =
+        bir_core::forms::penalty_items::PENALTY_MODEL_VERSION;
+    let _ = store(draft, &form);
+}
+
 /// The spouse's penalty boxes (64B-66B) while their column is not part of
 /// the return: rule 6 fades them with what opens them (`gated` or the
 /// form's own clearing), so no penalty lock stands beside the tag.
@@ -577,7 +634,12 @@ fn typed_entries(kind: AgentFormKind, draft: &Value) -> BTreeMap<String, String>
             binding,
             Some(Binding::Amount { .. } | Binding::Whole { .. } | Binding::Text { .. })
         ) && def.box_def(key).is_some_and(|entry| !entry.computed);
-        bound || matches!(cell(kind, key), Some(Cell::SpouseTin(_)))
+        // A box its gate closes holds nothing the filer typed: it is
+        // cleared, or derived (1702Q's Schedule 2 item 6 under OSD).
+        let gated_closed = cell(kind, key).is_some_and(|cell| {
+            matches!(cell, Cell::Gated1702Q(_)) && closed_on(cell, draft).is_some()
+        });
+        !gated_closed && (bound || matches!(cell(kind, key), Some(Cell::SpouseTin(_))))
     };
     map.into_iter()
         .filter(|(key, _)| typed_box(key))
@@ -619,31 +681,45 @@ fn spouse_entries_removed(before: &Value, after: &Value) -> usize {
         ]
         .map(|value| !says_nothing(&json!(value)))
     };
+    // What the filer chose: item 20 is the recompute's own for a
+    // compensation earner only (II011), and item 25 whenever the ATC sets it.
     let choices = |form: &Form1701QDraft| {
+        let atc_chosen = form.spouse_atc.is_some()
+            && !(form.spouse_type
+                == Some(bir_core::forms::form_1701q::Form1701QSpouseType::CompensationEarner)
+                && form.spouse_atc == Some(Form1701QAtc::Ii011));
+        let rate_chosen = form.spouse_tax_rate.is_some()
+            && form.spouse_atc.and_then(Form1701QAtc::tax_rate) != form.spouse_tax_rate;
         [
             form.spouse_type.is_some(),
-            form.spouse_atc.is_some(),
+            atc_chosen,
             form.spouse_claims_foreign_tax_credits.is_some(),
-            form.spouse_tax_rate.is_some(),
+            rate_chosen,
             form.spouse_deduction_method.is_some(),
         ]
     };
+    // Typed amounts; items 64B-66B are typed while the spouse's column is
+    // still on the typed boxes (penalty_model_version 0: a stored or
+    // imported draft), computed (not counted) once on the model.
     let amounts = |form: &Form1701QDraft| -> Vec<bool> {
+        let typed_penalties = form.spouse_penalty.penalty_model_version
+            < bir_core::forms::penalty_items::PENALTY_MODEL_VERSION;
         USER_ENTERED_AMOUNT_ITEMS
             .iter()
-            .filter(|item| !(64..=66).contains(*item))
+            .filter(|item| typed_penalties || !(64..=66).contains(*item))
             .map(|item| {
                 form.amount(*item, Form1701QParty::Spouse)
                     .is_some_and(|value| value != 0.0)
             })
             .collect()
     };
+    // An override is what the filer typed, a zero too.
     let overrides = |form: &Form1701QDraft| {
         bir_core::penalties::PenaltyComponent::ALL.map(|component| {
             form.spouse_penalty
                 .penalty_overrides
                 .get(component)
-                .is_some_and(|value| value != 0.0)
+                .is_some()
         })
     };
     let gone =
@@ -684,19 +760,35 @@ pub(super) fn removes(
     }
     let had = typed_entries(kind, before);
     let has = typed_entries(kind, after);
-    // An answer (a choice) can also replace a typed amount with a computed
-    // one (1702Q's item 12 OSD over Schedule 2 item 6): that is lost too.
+    // What each box shows after the edit, typed or not: an answer (a
+    // choice) can replace a typed amount with a computed one (1702Q's item
+    // 12 OSD over Schedule 2 item 6), which is lost too.
+    let shown = agent::field_map(kind, after).unwrap_or_default();
     let answered = edits.keys().any(|key| is_answer(kind, key));
-    let cleared: Vec<&String> = had
-        .keys()
-        .filter(|key| !edits.contains_key(*key) && !has.contains_key(*key))
-        .collect();
     let replaced: Vec<&String> = had
         .iter()
         .filter(|(key, was)| {
-            answered && !edits.contains_key(*key) && has.get(*key).is_some_and(|now| now != *was)
+            answered
+                && !edits.contains_key(*key)
+                && !has.contains_key(*key)
+                && shown
+                    .get(*key)
+                    .is_some_and(|now| !says_nothing(&json!(now)) && now != *was)
         })
         .map(|(key, _)| key)
+        .collect();
+    let cleared: Vec<&String> = had
+        .keys()
+        .filter(|key| {
+            !edits.contains_key(*key) && !has.contains_key(*key) && !replaced.contains(key)
+        })
+        .collect();
+    let replaced: Vec<&String> = replaced
+        .into_iter()
+        .chain(had.iter().filter_map(|(key, was)| {
+            (answered && !edits.contains_key(key) && has.get(key).is_some_and(|now| now != was))
+                .then_some(key)
+        }))
         .collect();
     let lost: Vec<&String> = had
         .keys()

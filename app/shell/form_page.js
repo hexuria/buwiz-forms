@@ -1437,7 +1437,9 @@ export class FormPageActions {
   usePenaltyComputed(group, cx) {
     const s = this.state;
     for (const k of group.keys) s.penaltyOpen.delete(k);
-    if (group.edited) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
+    // A column kept as entered before penalties were computed (1701Q) goes
+    // to the computed amounts the same way.
+    if (group.edited || group.kept) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
     this.refreshRows();
     cx.notify();
   }
@@ -1694,10 +1696,11 @@ export class FormPageActions {
         if (Array.isArray(f.penalties)) s.penalties = f.penalties;
         edits = {};
       }
-      // A save is the return's new state: a removal's Undo offered before
-      // it would bring back a draft older than what is saved, so it goes.
-      this.retireRemovalUndo();
       const r = this.app.store.write("screen_form_save", s.code, s.draft);
+      // Saved, the return has a new state: a removal's Undo offered before
+      // would bring back a draft older than what is saved, so it goes (a
+      // save that failed leaves it).
+      this.retireRemovalUndo();
       s.draft = r.draft;
       s.status = r.status;
       s.dirty = false;

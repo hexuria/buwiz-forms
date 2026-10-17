@@ -142,6 +142,8 @@ export interface ScreenFormPenalties {
     keys: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
+    /** The amounts are kept as entered before penalties were computed (1701Q): "Use the computed amounts" works once Edit opens them. */
+    kept?: boolean;
     /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
     applies: boolean;
 }
@@ -2254,6 +2256,8 @@ const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
 const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
+/// 1701Q's penalties kept as the filer entered them (PR 5).
+const NOTE_KEPT: &str = "Kept as entered before penalties were computed.";
 /// Only for a box a form group is assigned to open (the pinned list).
 const NOTE_ASSIGNED: &str = "Can't be filled on this page yet. It will be added for this form.";
 
@@ -2294,6 +2298,8 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_IDENTITY
     } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
         NOTE_REPEAT
+    } else if reason == rows_income_q::KEPT_AS_ENTERED {
+        NOTE_KEPT
     } else {
         // Unmapped, derived, written by the app, or a field this page
         // cannot write: shut until the form's own work opens it.
@@ -2328,6 +2334,10 @@ fn opened_json(
                 penalties::NOT_ON_RETURN
             };
             for key in &group.keys {
+                // A 1701Q column still on the filer's typed amounts (PR 5).
+                let reason = rows_income_q::penalty_lock(kind, &draft, key)
+                    .filter(|_| reason == penalties::LOCK)
+                    .unwrap_or(reason);
                 locks.insert(key.clone(), json!(reason));
             }
         }
@@ -3315,16 +3325,18 @@ fn apply_screen_edits(
             .find(|(group, _)| group.keys.contains(&key))
         {
             if !unlocked.contains(&key) && !edited {
-                rejected.insert(
-                    key.clone(),
-                    json!(format!("`{key}` is {}", penalties::LOCK)),
-                );
+                let lock =
+                    rows_income_q::penalty_lock(kind, draft, &key).unwrap_or(penalties::LOCK);
+                rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
                 continue;
             }
             if let (ChoiceStep::Fill(value), Some(path)) = (&step, penalties::path_of(kind, &key))
                 && (value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty()))
             {
                 set_draft_path(&mut next, &path, Value::Null);
+                // "Use the computed amounts" on a 1701Q column still on its
+                // typed amounts joins the model (PR 5).
+                rows_income_q::join_model(kind, &mut next, &key);
                 *draft = next;
                 continue;
             }
@@ -9761,9 +9773,9 @@ mod tests {
                 // and so are items 43 and 48's "(specify)" boxes, which the
                 // host closes (rows_income_q.rs).
                 ("1701Q", 57),
-                // New entry, 1702Q with 32 (PR 5): its schedules wait for
-                // item 5's ATC (CORPUS_GAPS_PR5), 13A for item 13, 15 for
-                // the MCIT; before PR 5 it had no conditional box.
+                // 1702Q, 32 (PR 5): its schedules wait for item 5's ATC
+                // (CORPUS_GAPS_PR5), 13A for item 13, 15 for the MCIT; at
+                // pr0b-push 1702Q had no conditional box and no entry here.
                 ("1702Q", 32),
                 ("1800", 1),
                 ("1801", 1),
@@ -10224,10 +10236,18 @@ mod tests {
                     not_on_return.push(format!("{code} {}", keys[0]));
                     continue;
                 }
+                // A 1701Q column still on the filer's typed amounts
+                // (penalty_model_version 0, PR 5) says so; every other
+                // locked penalty is computed from the due date.
+                let kept = group["kept"] == true;
                 for key in &keys {
                     assert_eq!(
                         opened["locks"][key],
-                        penalties::LOCK,
+                        if kept {
+                            rows_income_q::KEPT_AS_ENTERED
+                        } else {
+                            penalties::LOCK
+                        },
                         "{code}: {key} is locked"
                     );
                 }

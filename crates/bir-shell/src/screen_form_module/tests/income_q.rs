@@ -1290,8 +1290,9 @@ fn form_1701q_leaving_married_counts_the_spouse_answers() {
         &answered["draft"],
         json!({ rows_income_q::CIVIL_STATUS: "Single" }),
     );
-    // Item 19, item 20, item 25 (which the ATC sets) and item 25A.
-    assert_eq!(left["removes"]["rows"], 4, "{}", left["removes"]);
+    // Item 19, item 20 and item 25A, which the filer chose; item 25 is the
+    // recompute's own (the ATC sets it), so it is not counted.
+    assert_eq!(left["removes"]["rows"], 3, "{}", left["removes"]);
     for key in [
         "spouse_type",
         "spouse_atc",
@@ -1343,6 +1344,11 @@ fn form_1702q_osd_asks_before_it_replaces_typed_deductions() {
         "This answer replaces what you typed in Schedule 2 item 6. Continue?"
     );
     assert_eq!(osd["removes"]["rows"], 1);
+    // Undo refills the draft from before the answer (form_page.js
+    // undoRemoval): item 6 is 50,000 again, exactly.
+    let undone = fill(C, &typed["draft"], json!({}));
+    assert_eq!(undone["values"]["frm1702q:Sched2:txtTax6"], "50,000.00");
+    assert_eq!(undone["draft"]["deductions"], typed["draft"]["deductions"]);
     // Typing another amount under OSD replaces nothing typed: no question.
     let more = fill(
         C,
@@ -1410,4 +1416,170 @@ fn form_1702q_a_gated_box_refuses_a_write_with_what_it_needs() {
     // files nothing either way.
     let cleared = fill(C, &opened["draft"], json!({"frm1702q:Sched2:txtTax1": "0"}));
     assert_eq!(cleared["rejected"], json!({}));
+}
+
+/// The stored JSON of a 1701Q draft saved before this review (faf62fe4's
+/// serializer wrote `penalty` and `spouse_penalty` on every save, at their
+/// default for a column it never computed; the struct's field order is the
+/// same), with typed items 64A-66A of 125.00, 0.00 and 1,000.00.
+const BASE_ERA: &str = include_str!("fixtures/1701q-base-era.json");
+
+/// Review round 2 (F4): that row opens and saves back byte-identically:
+/// the keys it had stay, at their default, and nothing else moves.
+#[test]
+fn form_1701q_a_base_era_row_saves_back_byte_identically() {
+    use bir_core::forms::form_1701q::Form1701QDraft;
+    setup();
+    let fixture = BASE_ERA.trim_end();
+    let typed: Form1701QDraft = serde_json::from_str(fixture).unwrap();
+    assert_eq!(
+        serde_json::to_string(&typed).unwrap(),
+        fixture,
+        "reads and writes back as stored"
+    );
+    let id = with_database(|db| {
+        db.save_queueable_draft(&typed)
+            .map_err(|e| HostError::new(e.to_string()))
+    })
+    .unwrap();
+    assert_eq!(Some(id), typed.id, "the fixture's own row id");
+    let opened = open(Q, 1);
+    for (key, shown) in [
+        ("frm1701q:txt64A", "125.00"),
+        ("frm1701q:txt65A", "0.00"),
+        ("frm1701q:txt66A", "1,000.00"),
+    ] {
+        assert_eq!(opened["values"][key], shown, "{key} files as stored");
+    }
+    save(Q, &opened["draft"]);
+    let stored = with_database(|db| {
+        db.get_queueable_draft::<Form1701QDraft>(TIN, 2026, 1)
+            .map_err(|e| HostError::new(e.to_string()))
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(serde_json::to_string(&stored).unwrap(), fixture);
+    let raw = with_database(|db| {
+        db.get_form_draft::<Value>(TIN, Q, 2026, Some(1))
+            .map_err(|e| HostError::new(e.to_string()))
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(raw, serde_json::from_str::<Value>(fixture).unwrap());
+    assert_eq!(
+        raw["penalty"],
+        json!({"penalty_model_version": 0, "penalty_overrides": {}})
+    );
+}
+
+/// Review round 2 (F3): a column still on the filer's typed amounts says so
+/// ("kept as entered ..."), and "Use the computed amounts" (blanks with the
+/// boxes opened) gives the computed amounts at once.
+#[test]
+fn form_1701q_penalties_kept_as_entered_say_so_and_go_computed_in_one_step() {
+    use bir_core::forms::form_1701q::Form1701QDraft;
+    setup();
+    let typed: Form1701QDraft = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    with_database(|db| {
+        db.save_queueable_draft(&typed)
+            .map(|_| ())
+            .map_err(|e| HostError::new(e.to_string()))
+    })
+    .unwrap();
+    let opened = open(Q, 1);
+    let keys = ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"];
+    for key in keys {
+        assert_eq!(
+            opened["locks"][key],
+            "kept as entered before penalties were computed; choose Edit penalties to change them.",
+            "{key}"
+        );
+        assert_eq!(
+            opened["lock_notes"][key],
+            "Kept as entered before penalties were computed."
+        );
+    }
+    let group = opened["penalties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["keys"][0] == keys[0])
+        .unwrap();
+    assert_eq!(group["kept"], true);
+    assert_eq!(group["edited"], false);
+    let refused = fill(Q, &opened["draft"], json!({ keys[0]: "500" }));
+    assert_eq!(
+        refused["rejected"][keys[0]],
+        "`frm1701q:txt64A` is kept as entered before penalties were computed; choose Edit penalties to change them."
+    );
+    // Use the computed amounts: the three blanks, the boxes opened.
+    let computed = fill_unlocked(
+        Q,
+        &opened["draft"],
+        json!({ keys[0]: "", keys[1]: "", keys[2]: "" }),
+        &keys,
+    );
+    assert_eq!(computed["rejected"], json!({}));
+    assert_eq!(computed["draft"]["penalty"]["penalty_model_version"], 1);
+    let due = amount(&computed["values"], "frm1701q:txt63A");
+    assert_eq!(
+        amount(&computed["values"], keys[0]),
+        (due * 0.25).round(),
+        "the computed surcharge"
+    );
+    let group = computed["penalties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["keys"][0] == keys[0])
+        .unwrap();
+    assert_eq!(group["kept"], false);
+}
+
+/// Review round 2 (F1): leaving Married counts the spouse's typed penalty
+/// amounts of a column still on its typed boxes: a stored draft whose only
+/// spouse entry is 64B = 500 asks before it goes.
+#[test]
+fn form_1701q_leaving_married_counts_a_typed_spouse_penalty() {
+    use bir_core::forms::form_1701q::{Form1701QDraft, Form1701QParty};
+    setup();
+    let mut legacy: Form1701QDraft = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    legacy.has_spouse = true;
+    legacy.set_amount(64, Form1701QParty::Spouse, Some(500.0));
+    legacy.recompute();
+    assert_eq!(legacy.spouse_penalty.penalty_model_version, 0);
+    let draft = serde_json::to_value(&legacy).unwrap();
+    assert_eq!(
+        field_map(Q, &draft)["frm1701q:txt64B"],
+        "500.00",
+        "it files"
+    );
+    let left = fill(Q, &draft, json!({ rows_income_q::CIVIL_STATUS: "Single" }));
+    assert_eq!(left["removes"]["rows"], 1, "{}", left["removes"]);
+    assert_eq!(field_map(Q, &left["draft"])["frm1701q:txt64B"], "0.00");
+}
+
+/// Review round 2 (F10): a batch that raises the sales and types item 15
+/// is read on its recomputed draft: item 15 opens with the regular tax the
+/// batch makes, not the totals stored before it.
+#[test]
+fn form_1702q_a_batch_that_opens_item_15_takes_it() {
+    setup();
+    let opened = open(C, 2);
+    let with_atc = fill(
+        C,
+        &opened["draft"],
+        json!({"frm1702q:cbATC_2": "IC010_25%", "frm1702q:rbATC_2": "true", "frm1702q:rbMthdOfDdctns_1": "true"}),
+    );
+    assert_eq!(
+        with_atc["values"]["frm1702q:txtTax14"], "0.00",
+        "no regular tax before the batch"
+    );
+    let batch = fill(
+        C,
+        &with_atc["draft"],
+        json!({"frm1702q:Sched2:txtTax1": "1000000", "frm1702q:txtTax15": "1000"}),
+    );
+    assert_eq!(batch["rejected"], json!({}), "{}", batch["rejected"]);
+    assert_eq!(amount(&batch["values"], "frm1702q:txtTax15"), 1_000.0);
 }

@@ -277,20 +277,21 @@ pub(super) mod tests {
     /// crates/bir-core/src/forms/form_1702q.rs `recompute` while its
     /// condition does not hold:
     /// - Item 5's ATC, Schedules 1, 2 and 4: the port clears them with no ATC
-    ///   ("ATCEnableDisableSchedules: no ATC closes Schedules 1, 2 and 4"),
-    ///   the gate the tracked rules/forms/1702q-v2018c/validations.json
-    ///   1702q-change-007 records ("Schedule 1A-only, Schedule 1B-only, or
-    ///   combined Schedules 1-4 are enabled according to the exact ATC
-    ///   switch").
+    ///   ("ATCEnableDisableSchedules: no ATC closes Schedules 1, 2 and 4");
+    ///   tracked rule record (rules/forms/1702q-v2018c/validations.json
+    ///   1702q-change-007) of the untracked official HTA runtime: "Schedule
+    ///   1A-only, Schedule 1B-only, or combined Schedules 1-4 are enabled
+    ///   according to the exact ATC switch".
     /// - Item 13A: the port clears it while item 13 is No (`if
-    ///   !self.tax_relief`); validations.json 1702q-validate-020 asks for
-    ///   it when Yes ("Please specify Special Law/International Tax Treaty
-    ///   on Item 13A.").
+    ///   !self.tax_relief`); tracked rule record
+    ///   (rules/forms/1702q-v2018c/validations.json 1702q-validate-020) of
+    ///   the untracked official HTA runtime: "Please specify Special
+    ///   Law/International Tax Treaty on Item 13A."
     /// - Schedule 4 item 6: the port zeroes it unless amended (`if
-    ///   !self.previously_filed_open()`); validations.json
-    ///   1702q-change-009 records the same reset, citing
-    ///   official-hta-runtime#ProcessAmended, the untracked
-    ///   ebirforms-mirror HTA.
+    ///   !self.previously_filed_open()`); tracked rule record
+    ///   (rules/forms/1702q-v2018c/validations.json 1702q-change-009) of the
+    ///   untracked official HTA runtime: "Schedule 4 Item 6 is reset to 0.00
+    ///   and disabled."
     /// - Port behaviour only, not an official rule the tracked corpus
     ///   records: Schedule 1 items 8A/8B, Schedule 2 item 8 and Schedule 4
     ///   items 2-4 are cleared before the 2nd quarter (`if !previous`, from
