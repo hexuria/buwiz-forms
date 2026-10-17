@@ -13,6 +13,8 @@ use bir_core::forms::FORM_REGISTRY;
 use bir_core::forms::queueable::QueueableForm as _;
 use gpui_shell::{HostError, HostModule, HostObject, HostResult, HostValue};
 
+use crate::auth_limiter;
+
 thread_local! {
     static DATABASE: RefCell<Option<Database>> = const { RefCell::new(None) };
 }
@@ -437,25 +439,25 @@ fn set_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
 fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
     let pin = arguments.string(1)?;
-    with_database(|db| {
-        let credentials = taxpayer_credentials(db, &tin_root)?;
-        Ok(HostValue::Bool(pin_matches(
-            credentials.pin_hash.as_deref(),
-            pin,
-        )))
-    })
+    let ok = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+        with_database(|db| {
+            let credentials = taxpayer_credentials(db, &tin_root)?;
+            Ok(pin_matches(credentials.pin_hash.as_deref(), pin))
+        })
+    })?;
+    Ok(HostValue::Bool(ok))
 }
 
 fn verify_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
     let token = arguments.string(1)?;
-    with_database(|db| {
-        let credentials = taxpayer_credentials(db, &tin_root)?;
-        Ok(HostValue::Bool(totp_matches(
-            credentials.totp_secret.as_deref(),
-            token,
-        )))
-    })
+    let ok = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+        with_database(|db| {
+            let credentials = taxpayer_credentials(db, &tin_root)?;
+            Ok(totp_matches(credentials.totp_secret.as_deref(), token))
+        })
+    })?;
+    Ok(HostValue::Bool(ok))
 }
 
 /// Legacy per-branch entry point: a branch TIN's PIN is its taxpayer's.
@@ -483,24 +485,30 @@ fn set_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let pin = arguments.string(0)?;
-    with_database(|db| {
-        let ok = match access_mode(db)? {
-            Some(mode) => pin_matches(admin_credentials(db, &mode)?.pin_hash.as_deref(), pin),
-            None => false,
-        };
-        Ok(HostValue::Bool(ok))
-    })
+    let ok = auth_limiter::guarded(auth_limiter::ADMIN, || {
+        with_database(|db| {
+            Ok(match access_mode(db)? {
+                Some(mode) => pin_matches(admin_credentials(db, &mode)?.pin_hash.as_deref(), pin),
+                None => false,
+            })
+        })
+    })?;
+    Ok(HostValue::Bool(ok))
 }
 
 fn verify_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
     let token = arguments.string(0)?;
-    with_database(|db| {
-        let ok = match access_mode(db)? {
-            Some(mode) => totp_matches(admin_credentials(db, &mode)?.totp_secret.as_deref(), token),
-            None => false,
-        };
-        Ok(HostValue::Bool(ok))
-    })
+    let ok = auth_limiter::guarded(auth_limiter::ADMIN, || {
+        with_database(|db| {
+            Ok(match access_mode(db)? {
+                Some(mode) => {
+                    totp_matches(admin_credentials(db, &mode)?.totp_secret.as_deref(), token)
+                }
+                None => false,
+            })
+        })
+    })?;
+    Ok(HostValue::Bool(ok))
 }
 
 const KEEP_ONE_WAY_IN: &str = "The admin must keep at least one way to sign in. Set up the other one (PIN or authenticator) before removing this one.";
@@ -729,13 +737,16 @@ fn create_recovery_key() -> HostResult {
 /// spaces do not matter.
 fn use_recovery_key(arguments: &gpui_shell::HostArguments) -> HostResult {
     let typed = bir_core::crypto::hash_recovery_key(arguments.string(0)?);
-    with_database(|db| {
-        let matches = setting(db, RECOVERY_KEY_HASH)?.is_some_and(|stored| stored == typed);
-        if matches {
-            db.delete_setting(RECOVERY_KEY_HASH).map_err(db_error)?;
-        }
-        Ok(HostValue::Bool(matches))
-    })
+    let matches = auth_limiter::guarded(auth_limiter::RECOVERY_KEY, || {
+        with_database(|db| {
+            let matches = setting(db, RECOVERY_KEY_HASH)?.is_some_and(|stored| stored == typed);
+            if matches {
+                db.delete_setting(RECOVERY_KEY_HASH).map_err(db_error)?;
+            }
+            Ok(matches)
+        })
+    })?;
+    Ok(HostValue::Bool(matches))
 }
 
 fn mac_login_available() -> bool {
@@ -1992,6 +2003,24 @@ mod tests {
             s(ROOT),
             s("2222")
         ]))));
+    }
+
+    #[test]
+    fn six_wrong_pins_make_even_the_right_one_wait() {
+        setup();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        for _ in 0..5 {
+            assert!(!truthy(verify_taxpayer_pin(&args(vec![
+                s(ROOT),
+                s("1111")
+            ]))));
+        }
+        let sixth = verify_taxpayer_pin(&args(vec![s(ROOT), s("1111")])).unwrap_err();
+        assert!(
+            sixth.to_string().contains("Too many wrong tries"),
+            "{sixth}"
+        );
+        assert!(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).is_err());
     }
 
     #[test]
