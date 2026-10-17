@@ -775,6 +775,39 @@ pub(super) fn gated(kind: AgentFormKind, draft: &Value, key: &str) -> bool {
     is_mine(kind) && gate_of(kind, key).is_some_and(|gate| !holds(kind, draft, gate))
 }
 
+/// Whether rule 6 has nothing more to ask of an open gated box: its
+/// condition is the gate alone (Married, a spouse with income, a joint
+/// return), so once the gate holds the box is on. A box whose condition
+/// needs more (a foreign tax number its Yes) is still tried the ordinary
+/// way. 1701's Compensation Earner tick is set by the page's own steps, not
+/// by its probed binding, so trying it the ordinary way would misread it.
+pub(super) fn open_by_gate(kind: AgentFormKind, draft: &Value, key: &str) -> bool {
+    if !is_mine(kind) {
+        return false;
+    }
+    let code = kind.form_code();
+    GATED
+        .iter()
+        .find(|(form, gated, _, _)| *form == code && *gated == key)
+        .is_some_and(|(_, _, gate, condition)| {
+            [
+                C1700_MARRIED,
+                C1700_INCOME,
+                C1700_JOINT,
+                C1701_MARRIED,
+                C1701_INCOME,
+                C1701_JOINT,
+                C1701A_MARRIED,
+                C1701A_INCOME,
+                C1701A_JOINT,
+                C1701MS_MARRIED,
+                C1701MS_JOINT,
+            ]
+            .contains(condition)
+                && holds(kind, draft, *gate)
+        })
+}
+
 /// The refusal of a write to a closed spouse part (`None` for every other
 /// write). The page's fill asks it before any other lock of the box.
 pub(super) fn closed_refusal(
@@ -980,6 +1013,23 @@ pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Stri
         && let Ok(form) = serde_json::from_value::<Form1700Draft>(draft.clone())
     {
         map.insert("frm1700:txtPg1I10Email".to_string(), form.email.clone());
+        // Item 18, the spouse's TIN, as the draft holds the digits on a
+        // joint return (the field map writes a box only once it is whole).
+        if form.is_joint() {
+            let digits: String = form
+                .spouse
+                .tin
+                .chars()
+                .filter(char::is_ascii_digit)
+                .collect();
+            for (part, key) in ["TIN1", "TIN2", "TIN3", "BranchCode"].iter().enumerate() {
+                let (from, to) = [(0, 3), (3, 6), (6, 9), (9, digits.len().max(9))][part];
+                let shown = digits
+                    .get(from.min(digits.len())..to.min(digits.len()))
+                    .unwrap_or("");
+                map.insert(format!("frm1700:txtPg1I18S{key}"), shown.to_string());
+            }
+        }
         let rdo = if form.is_joint() {
             form.spouse.rdo_code.trim().to_string()
         } else {

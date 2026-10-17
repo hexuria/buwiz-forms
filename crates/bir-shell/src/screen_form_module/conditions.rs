@@ -180,6 +180,8 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         if super::rows_annual_individual::gated(kind, draft, key) {
             gated.insert(key);
             off.insert(key.clone(), label(code, key, condition));
+        } else if super::rows_annual_individual::open_by_gate(kind, draft, key) {
+            gated.insert(key);
         }
     }
     let blank: Vec<(&String, &Value, &str)> = list

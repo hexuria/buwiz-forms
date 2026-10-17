@@ -10000,6 +10000,97 @@ mod tests {
                 vec!["frm2200Av2020:treatyY"],
                 Box::new(by(json!({"frm2200Av2020:optTreaty_1": "true"}))),
             ),
+            // PR 7: the annual individual returns' spouse part comes alive
+            // with its civil status, step by step (rows_annual_individual.rs
+            // GATED).
+            (
+                "1700",
+                vec!["frm1700:rdoPg1I16SpouseHasIncomeY"],
+                Box::new(by(json!({"frm1700:rdoPg1I15CivilStatusM": "true"}))),
+            ),
+            (
+                "1700",
+                vec!["frm1700:rdoPg1I17FilingStatusJ"],
+                Box::new(by(json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                }))),
+            ),
+            (
+                "1700",
+                vec![
+                    "frm1700:txtPg1I21SpouseName",
+                    "frm1700:txtPg1I23SpouseCitizenship",
+                    "frm1700:txtSpouseRDOCode",
+                    "frm1700:rdoPg1I20SpouseTaxpayerTypeE",
+                    "frm1700:txtPg1I18STIN1",
+                ],
+                Box::new(by(json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                    "frm1700:rdoPg1I17FilingStatusJ": "true",
+                }))),
+            ),
+            (
+                "1701",
+                vec!["frm1701:rdoPg1I17SpouseIncomeYes"],
+                Box::new(by(json!({"frm1701:rdoPg1I16CivilStatusM": "true"}))),
+            ),
+            (
+                "1701",
+                vec![
+                    "frm1701:txtPg2I5SpouseName",
+                    "frm1701:txtPg2I7Citizenship",
+                    "frm1701:txtPg2I6TelNum",
+                    "frm1701:txtPg2I2SpouseRDOCode",
+                    "frm1701:rdoPg2I3SpouseTypeS",
+                    "frm1701:txtPg2I1TIN1",
+                ],
+                Box::new(by(json!({
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                }))),
+            ),
+            (
+                "1701A",
+                vec!["frm1701A:optSpouseIncome_1"],
+                Box::new(by(json!({"frm1701A:optCivilStatus_2": "true"}))),
+            ),
+            (
+                "1701A",
+                vec![
+                    "frm1701A:txtSpouseName",
+                    "frm1701A:txtSpouseCitizenship",
+                    "frm1701A:txtSpouseRDOCode",
+                    "frm1701A:optSpouseTaxType_1",
+                    "frm1701A:txtSpouseTIN1",
+                ],
+                Box::new(by(json!({
+                    "frm1701A:optCivilStatus_2": "true",
+                    "frm1701A:optSpouseIncome_1": "true",
+                    "frm1701A:optFilingStatus_1": "true",
+                }))),
+            ),
+            (
+                "1701MS",
+                vec!["frm1701MS:txtIfMarriedJointlyNo5"],
+                Box::new(by(json!({"frm1701MS:civilStatus": "Married"}))),
+            ),
+            (
+                "1701MS",
+                vec![
+                    "frm1701MS:txtTaxpayerNo8b",
+                    "frm1701MS:txtTelNum10b",
+                    "frm1701MS:txtRDOCodeb",
+                    "frm1701MS:txtTaxpayerNo11a1",
+                    "frm1701MS:txtPg2TIN1Spouse",
+                ],
+                Box::new(by(json!({
+                    "frm1701MS:civilStatus": "Married",
+                    "frm1701MS:txtIfMarriedJointlyNo5": "true",
+                }))),
+            ),
         ];
         for (code, keys, turn_on) in cases {
             let opened = open(code, page_period_of(code));
@@ -10059,6 +10150,81 @@ mod tests {
             (
                 "1701Q",
                 json!({"frm1701q:optType_1": "true", "frm1701q:txtSpouseName": "JUAN DELA CRUZ"}),
+            ),
+            // PR 7: the annual individual returns' spouse part through each
+            // answer that opens or closes a part of it.
+            ("1700", json!({"frm1700:rdoPg1I15CivilStatusM": "true"})),
+            (
+                "1700",
+                json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                    "frm1700:rdoPg1I17FilingStatusS": "true",
+                }),
+            ),
+            (
+                "1700",
+                json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                    "frm1700:rdoPg1I17FilingStatusJ": "true",
+                    "frm1700:rdoPg1I24SpouseForeignTaxCreditsYes": "true",
+                }),
+            ),
+            ("1701", json!({"frm1701:rdoPg1I16CivilStatusS": "true"})),
+            (
+                "1701",
+                json!({
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                    "frm1701:rdoPg2I4ATC_II012": "true",
+                }),
+            ),
+            (
+                "1701",
+                json!({
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                    "frm1701:rdoPg2I4ATC_II016": "true",
+                    "frm1701:rdoPg2I8ForeignTaxCreditsYes": "true",
+                }),
+            ),
+            (
+                "1701A",
+                json!({"frm1701A:optCivilStatus_2": "true", "frm1701A:optSpouseIncome_2": "true"}),
+            ),
+            (
+                "1701A",
+                json!({
+                    "frm1701A:optCivilStatus_2": "true",
+                    "frm1701A:optSpouseIncome_1": "true",
+                    "frm1701A:optFilingStatus_1": "true",
+                    "frm1701A:optSpouseFTC_1": "true",
+                }),
+            ),
+            (
+                "1701MS",
+                json!({"frm1701MS:civilStatus": "Married", "frm1701MS:txtIfMarriedSeparatelyNo5": "true"}),
+            ),
+            (
+                "1701MS",
+                json!({
+                    "frm1701MS:civilStatus": "Married",
+                    "frm1701MS:txtIfMarriedJointlyNo5": "true",
+                    "frm1701MS:txtTaxpayerNo11a1": "true",
+                    "frm1701MS:txtTaxpayerNo12e1": "true",
+                }),
+            ),
+            (
+                "1701MS",
+                json!({
+                    "frm1701MS:civilStatus": "Married",
+                    "frm1701MS:txtIfMarriedJointlyNo5": "true",
+                    "frm1701MS:txtTaxpayerNo11b1": "true",
+                    "frm1701MS:txtTaxpayerNo12b1": "true",
+                }),
             ),
             ("2000OT", json!({"frm2000OT:rbTransNature_2": "true"})),
             ("2200A", json!({"frm2200Av2020:optTreaty_1": "true"})),
