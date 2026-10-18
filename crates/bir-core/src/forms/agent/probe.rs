@@ -329,43 +329,27 @@ const COMPUTED_BY_FORM: &[(&str, &str)] = &[
     ),
     (
         "frm1701:txtPg4IPart8_3A",
-        "Part VIII item 3A Sub-Total - Tax Relief (Sum of Items 1 and 2): `self.put(PartViii, 3, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
-    ),
-    (
-        "frm1701:txtPg4IPart8_3B",
-        "Part VIII item 3B Sub-Total - Tax Relief (Sum of Items 1 and 2): `self.put(PartViii, 3, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+        "Part VIII item 3A Sub-Total - Tax Relief (Sum of Items 1 and 2): `self.put(PartViii, 3, party, ..)`; \
+         an output of rules/forms/1701-v2018/calculations.json 1701-part8-running-totals, \
+         its operator the printed caption's",
     ),
     (
         "frm1701:txtPg4IPart8_5A",
-        "Part VIII item 5A Tax Relief Availment Before Special Tax Credit (Item 3 Less Item 4): `self.put(PartViii, 5, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
-    ),
-    (
-        "frm1701:txtPg4IPart8_5B",
-        "Part VIII item 5B Tax Relief Availment Before Special Tax Credit (Item 3 Less Item 4): `self.put(PartViii, 5, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+        "Part VIII item 5A Tax Relief Availment Before Special Tax Credit (Item 3 Less Item 4): `self.put(PartViii, 5, party, ..)`; \
+         an output of rules/forms/1701-v2018/calculations.json 1701-part8-running-totals, \
+         its operator the printed caption's",
     ),
     (
         "frm1701:txtPg4IPart8_7A",
-        "Part VIII item 7A Total Tax Relief Availment - SPECIAL (Sum of Items 5 and 6): `self.put(PartViii, 7, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
-    ),
-    (
-        "frm1701:txtPg4IPart8_7B",
-        "Part VIII item 7B Total Tax Relief Availment - SPECIAL (Sum of Items 5 and 6): `self.put(PartViii, 7, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+        "Part VIII item 7A Total Tax Relief Availment - SPECIAL (Sum of Items 5 and 6): `self.put(PartViii, 7, party, ..)`; \
+         an output of rules/forms/1701-v2018/calculations.json 1701-part8-running-totals, \
+         its operator the printed caption's",
     ),
     (
         "frm1701:txtPg4IPart8_10A",
-        "Part VIII item 10A Total Tax Relief Availment - EXEMPT (Sum of Items 8 and 9): `self.put(PartViii, 10, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
-    ),
-    (
-        "frm1701:txtPg4IPart8_10B",
-        "Part VIII item 10B Total Tax Relief Availment - EXEMPT (Sum of Items 8 and 9): `self.put(PartViii, 10, party, ..)`, \
-         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+        "Part VIII item 10A Total Tax Relief Availment - EXEMPT (Sum of Items 8 and 9): `self.put(PartViii, 10, party, ..)`; \
+         an output of rules/forms/1701-v2018/calculations.json 1701-part8-running-totals, \
+         its operator the printed caption's",
     ),
     (
         "frm1701:txtPg4IPart9_10B",
@@ -463,6 +447,29 @@ mod choice_list_tests {
         }
     }
 }
+
+/// Boxes the official page keeps disabled from load, with no tracked
+/// source that enables them: the field map writes their page default and
+/// the page shows it shut with this reason. `(form code, key)`. 1701 Part
+/// VIII column B: rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json
+/// records all ten `disabled: true` (source lines 3363, 3373, 3379, 3389,
+/// 3395, 3405, 3411, 3431, 3441 and 3447), unlike Part VII and Part IX
+/// column B; form_1701_official.rs files them 0.00 (PR 7 review).
+const SHUT_ON_OFFICIAL_PAGE: &[(&str, &str)] = &[
+    ("1701", "frm1701:txtPg4IPart8_1B"),
+    ("1701", "frm1701:txtPg4IPart8_2B"),
+    ("1701", "frm1701:txtPg4IPart8_3B"),
+    ("1701", "frm1701:txtPg4IPart8_4B"),
+    ("1701", "frm1701:txtPg4IPart8_5B"),
+    ("1701", "frm1701:txtPg4IPart8_6B"),
+    ("1701", "frm1701:txtPg4IPart8_7B"),
+    ("1701", "frm1701:txtPg4IPart8_8B"),
+    ("1701", "frm1701:txtPg4IPart8_9B"),
+    ("1701", "frm1701:txtPg4IPart8_10B"),
+];
+
+/// The unmapped reason of a [`SHUT_ON_OFFICIAL_PAGE`] box.
+pub const SHUT_REASON: &str = "shut on the official page from load (its runtime-control inventory: disabled), filed as its 0.00";
 
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
@@ -1989,6 +1996,12 @@ fn decide(
         return Err(
             "a row family pattern, not a box: each row is its own numbered key".to_string(),
         );
+    }
+    if SHUT_ON_OFFICIAL_PAGE
+        .iter()
+        .any(|(form, shut)| *form == def.form_code && *shut == key)
+    {
+        return Err(SHUT_REASON.to_string());
     }
     Err(if !evidence.present.contains(key) {
         "not written by this app's field map for any sample draft".to_string()

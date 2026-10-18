@@ -14,7 +14,9 @@
 //! Supported: taxpayer and joint-filing spouse columns without exempt or
 //! special-rate income. Part X (consolidated schedules) and the attachment
 //! pages are only used with exempt/special-rate income, so they keep the
-//! page's defaults; such a return does not validate here.
+//! page's defaults; such a return does not validate here. Part VIII (Tax
+//! Relief Availment) is filed on every return: column A as the filer types
+//! it, with its totals, column B 0.00 (shut on the official page).
 //!
 //! The submission is the `saveEncryptedProfile` loop over the page's
 //! controls, including the two RDO selects `getRdo()` creates
@@ -571,18 +573,30 @@ impl Form1701Draft {
             let credits = peso(credits);
             self.put(PartVii, 10, party, credits);
 
-            // Part VIII, Tax Relief Availment (PR 7, preview.1): the official
-            // page opens items 1, 2, 4, 6, 8 and 9 for the filer (column A
-            // at load, column B with the spouse;
-            // rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json
-            // `disabled: false`, source lines 3362-3440) and computes items
-            // 3, 5, 7 and 10 (calculations.json 1701-part8-running-totals),
-            // as the sheet prints them: 3 = 1 + 2, 5 = 3 - 4, 7 = 5 + 6,
-            // 10 = 8 + 9. They were all written 0.00 before, which dropped
-            // what the filer typed; a stored draft holds zeros there, so it
-            // files as before.
+            // Part VIII, Tax Relief Availment (PR 7, preview.1). The tracked
+            // runtime inventory
+            // (rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json)
+            // records column A's items 1, 2, 4, 6, 8 and 9 enabled at load
+            // (`disabled: false`, source lines 3362-3440) and every column B
+            // control disabled at load (`disabled: true`, lines 3363-3447),
+            // with no tracked source that enables them: column A takes the
+            // filer's amounts, column B stays 0.00 on every return. Items 3,
+            // 5, 7 and 10 are computed (calculations.json
+            // 1701-part8-running-totals lists them as outputs of the items
+            // before them); the operators are the printed captions'
+            // (html-frozen/1701-2018 writer-cells and sheet: "Sum of Items 1
+            // and 2", "Item 3 Less Item 4", "Sum of Items 5 and 6", "Sum of
+            // Items 8 and 9"), rounded to whole pesos as the module's
+            // official sums are. Item 6 "(From Part VII Item 8)" stays typed:
+            // the inventory records no function that copies Part VII item 8
+            // into it. The inventory's source hash (debd0a57...) is not the
+            // local mirror's HTA, so the Part VIII function bodies cannot be
+            // checked here. Before PR 7 every item was written 0.00: drafts
+            // this app created hold zeros there and file as before; an
+            // imported return now files its imported Part VIII column A
+            // (form_1701_xml.rs keeps it), which was dropped before.
             let viii = |this: &mut Self, item: u8| {
-                if active {
+                if party == Form1701Party::Taxpayer {
                     this.typed(PartViii, item, party)
                 } else {
                     this.put(PartViii, item, party, 0.0);
@@ -590,14 +604,19 @@ impl Form1701Draft {
                 }
             };
             let (i1, i2) = (viii(self, 1), viii(self, 2));
-            let i3 = cents(i1 + i2);
+            let i3 = peso(i1 + i2);
             let i4 = viii(self, 4);
-            let i5 = cents(i3 - i4);
+            let i5 = peso(i3 - i4);
             let i6 = viii(self, 6);
-            let i7 = cents(i5 + i6);
+            let i7 = peso(i5 + i6);
             let (i8, i9) = (viii(self, 8), viii(self, 9));
-            let i10 = cents(i8 + i9);
+            let i10 = peso(i8 + i9);
             for (item, value) in [(3, i3), (5, i5), (7, i7), (10, i10)] {
+                let value = if party == Form1701Party::Taxpayer {
+                    value
+                } else {
+                    0.0
+                };
                 self.put(PartViii, item, party, value);
             }
 
