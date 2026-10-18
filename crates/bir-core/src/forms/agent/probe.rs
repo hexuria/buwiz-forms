@@ -141,6 +141,66 @@ const PRINTED_NOT_IN_CORPUS: &[(&str, &str, &str, &str)] = &[(
      has no row for it",
 )];
 
+/// Choice options whose probed draft value is overruled, with evidence:
+/// `(form code, key, option value, draft path, value it sets, evidence)`,
+/// scoped by form (PR 7's list for 1701MS joins this one at the
+/// integration merge). PR 9: 1606's and 1706's item 11 Yes (rdTreaty) is
+/// "yes, with nothing picked from the list yet" (`YesUnspecified`, the
+/// official `enableSelTreaty` opens the list blank), but the samples answer
+/// it with special law, so the probe bound Yes to `special_law`: Yes alone
+/// then filed special-law relief and the official "Please select a tax
+/// relief" check could never fire. The list still picks the relief.
+const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str, &str)] = &[
+    (
+        "1606",
+        "frm1606:rdTreaty",
+        "1",
+        "/tax_relief",
+        "yes_unspecified",
+        "1606 item 11 Yes: form_1606.rs Form1606TaxRelief::YesUnspecified",
+    ),
+    (
+        "1606",
+        "frm1606:rdTreaty:_1",
+        "true",
+        "/tax_relief",
+        "yes_unspecified",
+        "1606 item 11 Yes: form_1606.rs Form1606TaxRelief::YesUnspecified",
+    ),
+    (
+        "1606",
+        "frm1606:rdTreaty:_2",
+        "false",
+        "/tax_relief",
+        "yes_unspecified",
+        "1606 item 11 No unticked is Yes: Form1606TaxRelief::YesUnspecified",
+    ),
+    (
+        "1706",
+        "frm1706:rdTreaty",
+        "1",
+        "/tax_relief",
+        "yes_unspecified",
+        "1706 item 11 Yes: form_1706.rs Form1706TaxRelief::YesUnspecified",
+    ),
+    (
+        "1706",
+        "frm1706:rdTreaty:_1",
+        "true",
+        "/tax_relief",
+        "yes_unspecified",
+        "1706 item 11 Yes: form_1706.rs Form1706TaxRelief::YesUnspecified",
+    ),
+    (
+        "1706",
+        "frm1706:rdTreaty:_2",
+        "false",
+        "/tax_relief",
+        "yes_unspecified",
+        "1706 item 11 No unticked is Yes: Form1706TaxRelief::YesUnspecified",
+    ),
+];
+
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
 /// the other field closes a gate (no overpayment left) and `compute` empties
@@ -1614,7 +1674,18 @@ fn decide(
         return Ok(BoundBox { binding, lock });
     }
     let choice_box = def.box_def(key).is_some_and(is_choice_box);
-    if let Some(options) = choice_binding(evidence, key, choice_box)? {
+    if let Some(mut options) = choice_binding(evidence, key, choice_box)? {
+        let ours = |form: &str, k: &str| form == def.form_code && k == key;
+        for (_, _, value, path, set, _) in CHOICE_OPTION_SETS
+            .iter()
+            .filter(|(form, k, ..)| ours(form, k))
+        {
+            if let Some(option) = options.iter_mut().find(|option| option.value == *value) {
+                option
+                    .set
+                    .insert((*path).to_string(), Value::String((*set).to_string()));
+            }
+        }
         let paths: BTreeSet<&str> = options
             .iter()
             .flat_map(|option| option.set.keys().map(String::as_str))
