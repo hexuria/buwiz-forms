@@ -45,6 +45,7 @@ mod rows_1604;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_annual_corporate;
 mod rows_dst_pt_vat;
 mod rows_income_q;
 mod rows_monthly;
@@ -169,6 +170,9 @@ export interface ScreenFormFilled {
     blank?: string[] | null;
     /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
     removes?: { message: string; done: string; rows: number } | null;
+    /** Locks this fill opened or shut (a folded item, a box an answer shuts): the reason, or null to open the box; `relock_notes` holds each one's note. */
+    relocks?: Record<string, string | null>;
+    relock_notes?: Record<string, string | null>;
 }
 export interface ScreenFormValidated {
     draft: object;
@@ -286,6 +290,7 @@ fn schema() -> &'static [Value] {
             retype_by_binding(form, &code);
             rows_dst_pt_vat::mark_calendar_tables(form, &code);
             rows_income_q::mark_one_date(form, &code);
+            rows_annual_corporate::mark_whole_pesos(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -2473,6 +2478,9 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
             map.insert(key.clone(), text.to_string());
         }
     }
+    // What the page shows where the field map's value is not what the box
+    // holds (PR 8: 1702EX's whole name and address, an untyped count).
+    rows_annual_corporate::shown(kind, draft, &mut map);
     // 1702RT Item 5: the official select keeps IC010 even while "Other" is
     // not selected (the upload keeps that raw default); the page shows the
     // election, as the print does.
@@ -2535,16 +2543,20 @@ fn evaluate_here(
     draft: &mut Value,
 ) -> Result<(Value, Value, FilingStatus), String> {
     let status = agent::identity(kind, draft)?.status;
-    let errors = if status == FilingStatus::Draft {
+    let mut errors = if status == FilingStatus::Draft {
         agent::validate(kind, draft)?
     } else {
         agent::validate(kind, &mut draft.clone())?
     };
+    // A message naming another item number than the printed one reads the
+    // printed number (D6; PR 8's forms).
+    rows_annual_corporate::printed_item_numbers(kind, &mut errors);
     let mut errors = errors_json(kind, &errors);
     // A page notice beside the form's own messages (PR 4: a stored 2553 row
     // whose entry is not the one the sheet prints there).
     if let Value::Array(list) = &mut errors {
         list.extend(rows_dst_pt_vat::notices(kind, draft));
+        list.extend(rows_annual_corporate::notices(kind, draft));
     }
     Ok((values_json(kind, draft)?, errors, status))
 }
@@ -2806,6 +2818,9 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     if rows_withholding::preprinted(code, key) {
         return rows_withholding::PREPRINTED;
     }
+    if let Some(note) = rows_annual_corporate::live_lock_note(reason) {
+        return note;
+    }
     match lock_note(reason) {
         NOTE_NOT_YET if assigned_to_open(code, key) => NOTE_ASSIGNED,
         note => note,
@@ -2864,6 +2879,7 @@ fn opened_json(
     });
     let mut locks = locks(kind, &from_profile);
     rows_dst_pt_vat::relock(kind, &draft, &mut locks);
+    rows_annual_corporate::relock(kind, &draft, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group; a
     // return with no due date computes none, and its boxes stay open.
     for group in penalties::computed_groups(kind) {
@@ -2974,6 +2990,7 @@ fn opened_json(
     let mut waits = rows_withholding::waits(kind);
     waits.extend(rows_monthly::waits(kind));
     waits.extend(rows_dst_pt_vat::waits(kind));
+    waits.extend(rows_annual_corporate::waits(kind));
     Ok(json!({
         "form_code": code,
         "year": year,
@@ -3817,11 +3834,24 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's, PR 5's and PR 6's forms; the integration merge chains PR 2's and
+    // 4's, PR 5's, PR 6's and PR 8's forms; the integration merge chains PR 2's and
     // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
         .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_1604::removes(kind, &before, &draft, &edits));
+        .or_else(|| rows_1604::removes(kind, &before, &draft, &edits))
+        .or_else(|| rows_annual_corporate::removes(kind, &before, &draft, &edits));
+    // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42),
+    // each with its note; `null` opens the box.
+    let relocks = rows_annual_corporate::live_locks(kind, &draft);
+    let relock_notes: Map<String, Value> = relocks
+        .iter()
+        .map(|(key, lock)| {
+            let note = lock.as_str().map_or(Value::Null, |reason| {
+                json!(lock_note_for(kind.form_code(), key, reason))
+            });
+            (key.clone(), note)
+        })
+        .collect();
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3836,6 +3866,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "removes": rows_withholding::removes(kind, &before, &draft, &edits)
             .or_else(|| rows_monthly::removes(kind, &before, &draft, &edits))
             .or(removes),
+        "relocks": relocks,
+        "relock_notes": relock_notes,
     })))
 }
 
@@ -5006,6 +5038,8 @@ mod tests {
     mod income_q;
     // PR 6: 1604C, 1604F and 1604E against their printed sheets.
     mod annual_1604;
+    // PR 8: 1702RT, 1702MX, 1702EX and 1707A against their printed sheets.
+    mod annual_corporate;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -7893,8 +7927,15 @@ mod tests {
     fn rows_1707a_continuation_tables_save() {
         setup();
         let form = schema_entry("1707A").unwrap();
+        // Both schedules' tables sit in "Part IV · Schedules", as the sheet
+        // prints them, since PR 8's printed layout.
         let table = |first: &str| -> Value {
-            form["parts"][3]["items"]
+            form["parts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|part| part["n"] == "Part IV · Schedules")
+                .expect("1707A has Part IV")["items"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -8174,11 +8215,13 @@ mod tests {
         // 1600PT's and 1600VT's mirrored item 6 RDO list (rdoPg1Pt1I6RDO),
         // hidden since PR 3, less 2000's three Schedule 1 ATC lists, table
         // cells now, and plus 2000's Item 5 RDO list (PR 4), and plus 3 for
-        // 1604C, 1604E and 1604F (PR 6, item 5 RDO): 82 - 6 - 10 - 2 - 3 + 1 + 3.
+        // 1604C, 1604E and 1604F (PR 6, item 5 RDO), and plus 4 for 1702RT,
+        // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now
+        // drawn): 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 65);
+        assert_eq!(supplied, 69);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
@@ -11329,9 +11372,6 @@ mod tests {
         "1701MS frm1701MS:Pg2TaxPayer",
         "1701MS frm1701MS:txtRDOCodea",
         "1701MS frm1701MS:txtTelNum10a",
-        "1702EX frm1702EX:txtLOB",
-        "1702EX frm1702EX:txtPg2RegisteredName",
-        "1702EX frm1702EX:txtPg3RegisteredName",
         "1707 frm1707:ProfileAddress1",
         "1707 frm1707:ProfileContactNum",
         "1707 frm1707:ProfileEmailAddr",
@@ -12091,15 +12131,12 @@ mod tests {
         "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16b1: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1701MS frm1701MS:txtTaxpayerNo16b: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1702RT frm1702RT:txtPg1Pt1I10: cannot be filled here: derived by the app: changes with /incorporation_date/day, /incorporation_date/month, /incorporation_date/year but never shows one field's value",
-        "1702RT frm1702RT:txtPg1Pt3I23DebitMemoC3Date: cannot be filled here: derived by the app: changes with /payment_details/0/date/day, /payment_details/0/date/month, /payment_details/0/date/year but never shows one field's value",
-        "1702RT frm1702RT:txtPg1Pt3I24CheckC3Date: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1702RT frm1702RT:txtPg1Pt3I25TaxDebitDate: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1702RT frm1702RT:txtPg1Pt3I26OthersC3Date: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1707 frm1707:txtPg2P4Sch1I8DateCollection: cleared to \"\"",
-        "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        // PR 8: 1707A's printed row 4 says the form computes it (from the
+        // continuation rows), with what it waits for.
+        "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: computed by BIR's own formulas",
         "1707A frm1707Av2021:txtS1C1DateOfTransaction_1: cleared to \"\"",
-        "1707A frm1707Av2021:txtS2C1DateOfTransactionI4: cannot be filled here: written by the app without a draft field (a constant or the period)",
+        "1707A frm1707Av2021:txtS2C1DateOfTransactionI4: computed by BIR's own formulas",
         "1707A frm1707Av2021:txtS2C1DateOfTransaction_1: cleared to \"\"",
         "2000OT frm2000OT:txtTransactionDate: picks which return this is; reopen the form for another TIN or period",
         "2550Q frm2550qv2024:RtnPeriodFromNo4: cannot be filled here: derived by the app: changes with /return_period_from/day, /return_period_from/month, /return_period_from/year but never shows one field's value",

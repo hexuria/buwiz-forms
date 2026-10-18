@@ -52,6 +52,32 @@ const USER_CHOSEN: &[(&str, &str)] = &[
          checkCarriedOver), enabled on an over-remittance; form_1601eq.rs \
          `over_remittance`",
     ),
+    (
+        "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt",
+        "Item 49 Other Tax Credits/Payments amount: the second of the two \
+         other-credit lines (items 48 and 49) the filer types; \
+         form_1702ex.rs keeps it as other_credits[1].amount, which the \
+         field map writes and total_credits sums into item 50, and \
+         html-frozen/1702ex-2018/writer-cells.json joins it at \"49 Other \
+         Tax Credits/Payments amount\", as it joins item 48's",
+    ),
+    (
+        "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+        "Item 42 MCIT Due: rules/forms/1702rt-v2018c/calculations.json \
+         1702rt-item42-mcit records the official computeP2Pt4I42 as \"Before \
+         2020 and when IC 055 is selected, MCIT is 2% of gross; 2020+ leaves \
+         the enabled value user-controlled except nonpositive net forces \
+         zero\"; the page enables it once MCIT applies (enableMCITFields), and \
+         form_1702rt.rs keeps it as part_iv.item_42_mcit_due, an entry \
+         form_1702rt_official.rs recompute only clears while the return is not \
+         subject to MCIT",
+    ),
+    ("frm1702EX:txtPg3Pt6I17OthersEAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6I17OthersFAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6I17OthersGAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6I17OthersHAmt", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6S2I2Amount", SCHEDULE_ROW_1702EX),
+    ("frm1702EX:txtPg3Pt6S2I3Amount", SCHEDULE_ROW_1702EX),
 ];
 
 /// Amount boxes the rules corpus marks computed although the official page
@@ -94,6 +120,39 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "Item 30 Compromise: enabled at load (inventory source line 901)",
     ),
 ];
+
+const SCHEDULE_ROW_1702EX: &str = "1702EX Schedule 1 items 17e-17h and Schedule 2 rows 2-3: \
+     the amount of a row whose description (and legal basis) the filer types \
+     and the probe binds; form_1702ex.rs keeps it as that row's amount \
+     (other_deductions / special_rows), which the field map writes and the \
+     schedule total sums. rules/forms/1702ex-v2018c/fields.json marks it \
+     computed with no calculation in calculations.json; the official page \
+     keeps the row shut at load (runtime-control-inventory-v796.json) with \
+     its description";
+
+const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
+     Normal Income Tax), rows 2 and 3: form_1702rt_official.rs recompute sets \
+     each row's excess_mcit to MCIT less normal income tax (floored at zero), \
+     and the official page disables the box at load \
+     (rules/forms/1702rt-v2018c/fixtures/runtime-control-inventory-v796.json \
+     source lines 3188 and 3215, like row 1's at 3161); the samples leave the \
+     normal income tax at zero, so probing saw the box echo the MCIT and bound \
+     it to /schedule_4/rows/N/mcit";
+
+/// Profile boxes the rules corpus marks computed: the official page fills
+/// them from the taxpayer's profile and shuts them at load, exactly as it
+/// does the profile boxes beside them that the corpus leaves uncomputed, so
+/// the projection treats them as those (still `required` as the corpus
+/// says). Their bindings, and their profile lock, are derived by probing.
+const PROFILE_NOT_COMPUTED: &[(&str, &str)] = &[(
+    "frm1702EX:txtPg1Pt1I11ContactNumber",
+    "Item 11 Contact Number: rules/forms/1702ex-v2018c/fields.json marks it \
+     computed, but rules/forms/1702ex-v2018c/fixtures/\
+     runtime-control-inventory-v796.json records it disabled at load (source \
+     line 697) like the item 8, 9, 9A and 12 profile boxes (source lines \
+     592-711), and form_1702ex.rs writes it from the draft's contact_number, \
+     which new_from_profile fills from the profile's phone",
+)];
 
 /// Boxes whose value only coincides with the sample profile's: the recorded
 /// samples put the property and the spouse in the filer's own RDO (039), so
@@ -195,6 +254,8 @@ const COMPUTED_BY_FORM: &[(&str, &str)] = &[
     ("frm1604e:txtSched2TotRemAmt11", TOTAL_REMITTED_1604E),
     ("frm1604e:txtSched2TotRemAmt12", TOTAL_REMITTED_1604E),
     ("frm1604e:txtSched2TotRemAmtTtl", TOTAL_REMITTED_1604E),
+    ("frm1702RT:txtPg4Sc4I2C4", EXCESS_MCIT_1702RT),
+    ("frm1702RT:txtPg4Sc4I3C4", EXCESS_MCIT_1702RT),
 ];
 
 const TOTAL_REMITTED_1604E: &str = "1604E Part II Total Amount Remitted: form_1604e.rs \
@@ -331,6 +392,45 @@ const GATED_ENTRY: &[(&str, &str)] = &[
     ("frm1702q:Sched4:txtOthrTxCrdts1", GATED_1702Q_SCHEDULE),
     ("frm1702q:Sched4:txtOthrTxCrdtAmnt0", GATED_1702Q_SCHEDULE),
     ("frm1702q:Sched4:txtOthrTxCrdtAmnt1", GATED_1702Q_SCHEDULE),
+    (
+        "frm1702RT:txtPg4Sc4I1C1",
+        "Schedule IV item 1 Year: typed by the filer like items 2 and 3; \
+         form_1702rt_official.rs recompute clears every Schedule IV row \
+         while the return is not subject to MCIT (enableMCITFields(false)), \
+         which the taxable year decides",
+    ),
+    (
+        "frm1702RT:txtPg4Sc4I1C2",
+        "Schedule IV item 1 A) Normal Income Tax as Adjusted: typed by the \
+         filer; cleared with its row while the return is not subject to MCIT",
+    ),
+    (
+        "frm1702RT:txtPg4Sc4I1C3",
+        "Schedule IV item 1 B) MCIT: typed by the filer; cleared with its \
+         row while the return is not subject to MCIT",
+    ),
+    ("frm1702MX:txtPg7Sc9I1", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg7Sc9I1CA", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg7Sc9I1CB", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg7Sc9I1CF", MX_SCHEDULE_9_ROW_1),
+    (
+        "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+        "Item 42 MCIT Due: an entry (see USER_CHOSEN) that \
+         form_1702rt_official.rs recompute clears while the return is not \
+         subject to MCIT, which the taxable year decides",
+    ),
+    ("frm1702RT:txtPg2Pt4I54C2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg3Sc1I17iC2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg3Sc2I4C3", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg4Sc5I3C2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg4Sc5I6C2", RT_ADD_MORE_LINE),
+    ("frm1702RT:txtPg4Sc5I8C2", RT_ADD_MORE_LINE),
+    (
+        "frm1702RT:txtPg4Sc4I1C7",
+        "Schedule IV item 1 F) Excess MCIT Applied this Current Taxable \
+         Year: typed by the filer; cleared with its row while the return is \
+         not subject to MCIT",
+    ),
 ];
 
 /// Why each 1702Q schedule entry is in [`GATED_ENTRY`].
@@ -341,6 +441,17 @@ const GATED_1702Q_SCHEDULE: &str = "1702Q schedule entry the filer types once it
      (tracked rule record rules/forms/1702q-v2018c/validations.json 1702q-change-007 of \
      the untracked official HTA runtime) and Schedule 3 while `mcit_open` does not \
      hold, and overwrites Schedule 2 item 6 under OSD (port behaviour)";
+
+const MX_SCHEDULE_9_ROW_1: &str = "1702MX Schedule 9 item 1 (Year, A, B and F): typed by \
+     the filer like items 2 and 3; form_1702mx_official.rs recompute clears \
+     every Schedule 9 row while the return is not subject to MCIT \
+     (enableMCITFields), which the incorporation date decides";
+
+const RT_ADD_MORE_LINE: &str = "1702RT: the amount of an item with an \"(Add more...)\" \
+     table (Part IV item 54, Schedule I item 17i, Schedule II item 4, Schedule V \
+     items 3, 6 and 8), typed by the filer like its description; once the table \
+     holds two or more rows, form_1702rt_official.rs recompute writes OTHERS and \
+     the table's subtotal there (FORM_1702RT_MODALS, saveModalTable)";
 
 /// Project `fields.json` onto the boxes the assistant needs.
 pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
@@ -363,6 +474,7 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
             let chosen_by_user = USER_CHOSEN.iter().any(|(k, _)| *k == key);
             let computed_by_form = COMPUTED_BY_FORM.iter().any(|(k, _)| *k == key);
             let typed_by_user = FILER_TYPED.iter().any(|(k, _)| *k == key);
+            let from_profile = PROFILE_NOT_COMPUTED.iter().any(|(k, _)| *k == key);
             BoxDef {
                 label: text(field, "label"),
                 item: text(field, "item_number"),
@@ -370,6 +482,7 @@ pub fn catalog(fields_json: &str) -> Result<Vec<BoxDef>, String> {
                 computed: computed_by_form
                     || (!chosen_by_user
                         && !typed_by_user
+                        && !from_profile
                         && field["computed"].as_bool().unwrap_or(false)),
                 required: if chosen_by_user {
                     "conditional".to_string()

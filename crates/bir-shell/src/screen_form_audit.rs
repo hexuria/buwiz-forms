@@ -1807,11 +1807,12 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // Treaty Code and ATC lists (PR 2) and 2000's three Schedule 1 ATC lists
     // (PR 4), table cells now; less 1600PT's and 1600VT's mirrored item 6
     // RDO list, hidden (PR 3); plus 2000's Item 5 RDO list (PR 4) and plus
-    // 3 for 1604C, 1604E and 1604F (PR 6, item 5 RDO):
-    // 82 - 6 - 10 - 2 - 3 + 1 + 3. Table cells are counted apart (the 36 2550M
+    // 3 for 1604C, 1604E and 1604F (PR 6, item 5 RDO); plus 4 for 1702RT,
+    // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now drawn):
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4. Table cells are counted apart (the 36 2550M
     // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
     // checks every one).
-    assert_eq!(supplied, 65, "catalog lists, dependent ones included");
+    assert_eq!(supplied, 69, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and

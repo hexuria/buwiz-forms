@@ -11,8 +11,8 @@ use bir_core::reference;
 use serde_json::{Map, Value, json};
 
 use super::{
-    rows_1700, rows_2550m, rows_2550q, rows_dst_pt_vat, rows_income_q, rows_monthly,
-    rows_withholding, schema_entry,
+    rows_1700, rows_2550m, rows_2550q, rows_annual_corporate, rows_dst_pt_vat, rows_income_q,
+    rows_monthly, rows_withholding, schema_entry,
 };
 
 fn option(value: &str, label: &str) -> Value {
@@ -162,6 +162,9 @@ pub(super) fn fill(
     }) {
         return done;
     }
+    if let Some(done) = rows_annual_corporate::fill(kind, draft, key, value) {
+        return done;
+    }
     if let Some(row) = atc_2000_row(kind, key)
         && let Some(choice) = value
             .as_str()
@@ -286,6 +289,7 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     atc_2550m_row(kind, key).is_some()
         || rows_dst_pt_vat::host_writes(kind, key)
         || rows_income_q::host_writes(kind, key)
+        || rows_annual_corporate::host_writes(kind, key)
         || sales_2550m_row(kind, key).is_some()
         || rows_2550m::cell(kind, key).is_some()
         || month_year_1601c_row(kind, key).is_some()

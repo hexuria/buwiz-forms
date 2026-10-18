@@ -832,6 +832,19 @@ export class FormPageActions {
     s.options = r.options || {};
     if (Array.isArray(r.penalties)) s.penalties = r.penalties;
     if (r.pools) s.poolTexts = r.pools;
+    // Locks this fill opened or shut (a folded item, a box an answer shuts)
+    // take effect at once, not on the next opening.
+    for (const [k, lock] of Object.entries(r.relocks || {})) {
+      s.lockNotes ||= {};
+      if (lock == null) {
+        delete s.locks[k];
+        delete s.lockNotes[k];
+      } else {
+        s.locks[k] = lock;
+        const note = r.relock_notes?.[k];
+        if (note) s.lockNotes[k] = note;
+      }
+    }
     this.syncComputed();
     this.syncChanged(before, edits);
     // The preview prints the draft the host just applied, never the
@@ -879,15 +892,38 @@ export class FormPageActions {
     cx.notify();
   }
 
-  /** Cancel: the old answer and the rows stay, and so does what was typed with it. */
+  /**
+   * Cancel: the old answer and the rows stay, and so does what was typed
+   * with it. A typed box that is itself the answer (a date that ends MCIT,
+   * an amount that ends an overpayment) would only ask again: it goes back
+   * to what the draft holds.
+   */
   cancelRemoval(cx) {
     const s = this.state;
     const held = s?.removal;
     if (s) s.removal = null;
     this.app.overlay = null;
     if (held && Object.keys(held.typed).length) {
-      s.pending = { ...held.typed, ...s.pending };
-      this.flush(cx);
+      const typed = held.typed;
+      let r = null;
+      try {
+        r = this.app.store.call("screen_form_fill", s.code, s.draft, typed, this.unlockedFor(typed));
+        if (r.removes) {
+          r = null;
+          // Each typed box shows what the draft holds again ("\0" never
+          // equals a shown value, so syncChanged resets every one).
+          const was = { ...s.values };
+          for (const k of Object.keys(typed)) was[k] = "\0";
+          this.syncChanged(was, {});
+        } else {
+          this.applyFill(r, typed);
+          s.dirty = true;
+        }
+      } catch (e) {
+        s.pending = { ...typed, ...s.pending };
+        this.app.toast(message(e), cx, "triangle-alert");
+      }
+      if (r) this.validate(cx);
     }
     this.refreshRows();
     cx.notify();
