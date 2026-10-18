@@ -1,0 +1,334 @@
+{
+ "0605": {
+  "R2.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_boxes_off_the_sheet_are_named_and_labelled (the email, the one profile box the 1999 sheet does not print, is in its own labelled item under Not on the printed sheet and offers Edit); screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (0605's line removed from PROFILE_BOXES_NOT_YET_PLACED); screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers"
+  },
+  "R3.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_boxes_off_the_sheet_are_named_and_labelled (txtEmail under Not on the printed sheet; html-frozen/0605-1999/writer-cells.json not_joined lists it); screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers (no drawn box in an Additional details group)"
+  },
+  "R3.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_labels_read_as_printed (item 1 reads 'For the', its options 'Calendar' and 'Fiscal', matching writer-cells.json '1 For the Calendar' / '1 Fiscal')"
+  },
+  "R3.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_labels_read_as_printed (item 3 'Quarter' with options 1st-4th, each the end of its writer-cells.json caption '3 Quarter: 1st' ...)"
+  },
+  "R3.3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_labels_read_as_printed (item 21 reads 'Total Amount Payable (Sum of Items 19 & 20D)'; no drawn heading ends with its own number)"
+  },
+  "R6.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_others_box_waits_for_others (item 17's Others box, now bound to /other_manner_description by a probe seed, is off with 'Needs item 17 = Others' and keeps and prints what is typed once Others is the manner); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (0605 count 3 -> 4); bir-core sample_payloads_test form_0605_sample_payload_is_current (payload unchanged)"
+  },
+  "preview.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_quarter_boxes_are_the_drafts_quarter (item 3's boxes are the draft's quarter, written by the host; the page and the print map tick the same box for every quarter, and unticking clears it)"
+  },
+  "manual-0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_labels_read_as_printed (item 2 'Year Ended (MM/YYYY)', item 13 'Taxpayer's Name ...', item 15 'Registered Address')"
+  },
+  "manual-1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_labels_read_as_printed (item 11's options 'I - Individual' and 'N - Non-Individual', the sheet's legend)"
+  },
+  "manual-2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_boxes_off_the_sheet_are_named_and_labelled (the approval pair is its own item under Not on the printed sheet, labelled 'Pre-approved by Investigating Office' / 'Not approved by Investigating Office' after form_0605.rs Form0605ApprovalSelection; writer-cells.json not_joined: 'approval radio of the eBIRForms page, not on the paper form')"
+  }
+ },
+ "1606": {
+  "R3.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_off_the_sheet_are_not_printed (every box under Not on the printed sheet is in html-frozen/1606-2018/writer-cells.json not_joined; the FMV-basis tick boxes say what ticks them)"
+  },
+  "R5.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_party_tins_are_one_comb_and_typed_box_by_box (rows 7A and 8A each hold the party's name, address and a TIN item of four boxes, drawn as one comb; the seller's TIN is typed box by box into seller_tin and prints whole at derived:seller_tin)"
+  },
+  "R6.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list is off with 'Needs item 11 = Yes', takes nothing while off and keeps a choice once Yes); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1606 count 2 -> 5); screen_form_module::audit::p1_relief_dropdowns_offer_each_forms_official_choices (answers item 11 Yes before the list)"
+  },
+  "R6.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (Schedule 1's Others classification box off until Others)"
+  },
+  "R6.3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (Schedule 2's specification off until Exempt or Others)"
+  },
+  "validation.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_messages_name_the_printed_item_numbers (decision D6: each official message in rows_as_needed::PRINTED_MESSAGES is the validator's own text and its rewrite names only drawn item numbers; a fresh 1606 shows 'Please select an option for Item 9.' and 'Item 6.')"
+  },
+  "manual-1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_options_read_as_printed (Yes/No, Private/Government, the Schedule 2 transactions and classifications without their question; each label ends its writer-cells.json caption)"
+  },
+  "manual-2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_party_tins_are_one_comb_and_typed_box_by_box"
+  }
+ },
+ "1706": {
+  "R3.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_options_read_as_printed (items 8, 9, 18 and the classifications and Schedule 4 lines without their question or prefix)"
+  },
+  "R3.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_off_the_sheet_are_not_printed (every box under Not on the printed sheet is in html-frozen/1706-2018/writer-cells.json not_joined)"
+  },
+  "R5.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_party_tins_are_one_comb_and_typed_box_by_box (rows 6A and 7A; the buyer's TIN typed box by box into buyer_tin, a whole TIN pasted into the first box fills the comb, and it prints at derived:buyer_tin)"
+  },
+  "R6.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (items 8 and 9 off until item 3 is the individual seller's ATC); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1706 count 0 -> 8)"
+  },
+  "R6.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 18's boxes, bound by an overpaid probe seed, off with 'Needs item 18 below zero (an over-remittance)'); bir-core sample_payloads_test form_1706_sample_payload_is_current (payload unchanged)"
+  },
+  "R6.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list off until Yes)"
+  },
+  "R6.3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (Schedule 2's specification off until Exempt or Others)"
+  },
+  "validation.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_messages_name_the_printed_item_numbers (decision D6; a fresh 1706 shows 'Please select an option for Item 3.')"
+  },
+  "manual-0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1706_item_3_shows_the_printed_atc (item 3 shows WI 450-Individual / WC 450-Corporation as printed; the II420/IC420 the official program uploads, in crates/bir-core/tests/sample-payloads/1706-03152025_T123456.official.xml, is not drawn and still uploads)"
+  },
+  "manual-3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_party_tins_are_one_comb_and_typed_box_by_box"
+  }
+ },
+ "1707": {
+  "R2.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_item_5_rdo_is_drawn_and_prints; screen_form_module::tests::as_needed::pr9_1707_items_read_as_printed (the profile copies the sheet does not print are in a labelled item under Not on the printed sheet); screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (1707's seven lines removed from PROFILE_BOXES_NOT_YET_PLACED)"
+  },
+  "R2.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_item_5_rdo_is_drawn_and_prints (item 5, bound by probe.rs PRINTED_NOT_IN_CORPUS, shows the profile's RDO, offers Edit and prints what it shows)"
+  },
+  "R3.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers; screen_form_module::tests::as_needed::pr9_1707_items_read_as_printed"
+  },
+  "R3.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers (Line of Business under Not on the printed sheet; no Additional details group)"
+  },
+  "R3.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_schedules_2_and_3_rows_a_to_d_are_open (rows A-D are tables of their printed columns, every box open and printed)"
+  },
+  "R3.3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_item_8_no_asks_before_it_clears_8a (item 8 reads Yes / No and writes the draft's tax relief); screen_form_module::tests::as_needed::pr9_yes_and_no_boxes_write_what_they_say"
+  },
+  "R3.5": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_items_read_as_printed (the pop-up row counts are not drawn; writer-cells.json not_joined: 'pop-up row count of the page, not on the paper form')"
+  },
+  "R3.6": {
+   "status": "not_a_bug",
+   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry are disabled at load in the official program (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue, txtPg1Pt4DateOfExpiry disabled: true) and this app's field map writes them for no draft; the page shows their printed caption with a note saying so (screen_form_module::tests::as_needed::pr9_1707_printed_rates_and_disabled_parts_are_notes).",
+   "reviewer": ""
+  },
+  "R4.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_schedule_1_date_is_a_date (item 8 is one date box that keeps and prints a typed MM/DD/YYYY date on an installment sale; item 9 is an amount)"
+  },
+  "R5.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_profile_address_shows_the_whole_address (the box shows the whole draft address; the upload's cut second line is not drawn; the field map is unchanged)"
+  },
+  "R5.3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_items_read_as_printed (the page's TIN copy is one TIN item under Not on the printed sheet; the page 2 header copy is not drawn)"
+  },
+  "preview.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_item_5_rdo_is_drawn_and_prints"
+  },
+  "preview.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_item_8_no_asks_before_it_clears_8a (item 8's boxes are written from and show the draft's tax relief; the print ticks the same box)"
+  },
+  "manual-0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_items_read_as_printed (items 6 and 7: Name | Registered Address | TIN on rows 6A-6C and 7A-7C, each cell's writer-cells.json caption naming its row and column)"
+  },
+  "manual-2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_item_5_rdo_is_drawn_and_prints"
+  },
+  "manual-3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_printed_rates_and_disabled_parts_are_notes (items 13 and Schedule 1 item 6 show the preprinted 15%)"
+  },
+  "manual-4": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_1707_schedules_2_and_3_rows_a_to_d_are_open; screen_form_module::tests::as_needed::pr9_1707_printed_rates_and_disabled_parts_are_notes (Part III 20-23)"
+  }
+ },
+ "2000OT": {
+  "R2.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2000ot_schedules_are_part_iv_and_the_header_copy_is_not_drawn (Line of Business under Not on the printed sheet with Edit; the page 2 header copy is not drawn); screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order"
+  },
+  "R3.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2000ot_schedules_are_part_iv_and_the_header_copy_is_not_drawn (the page 2 TIN copy is not drawn; the print writes derived:pg2_tin)"
+  },
+  "R3.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2000ot_schedules_are_part_iv_and_the_header_copy_is_not_drawn; screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers"
+  },
+  "R3.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2000ot_labels_read_as_printed (item 3 DO 102/122/125 and item 12's natures from writer-cells.json captions)"
+  },
+  "R4.0": {
+   "status": "not_a_bug",
+   "reason": "Item 1 is the return's identity: maintainer decision 10 matches a 2000OT return to its stored one by its exact date, so the date is chosen where the return is started (the sample's date period part, screen_form_sample_period, or New return's typed date) and is locked on the return, where form_page.js `control` shows a locked date box as 'Dec 10, 2020' (shownDate). A return opened without a date now says in the box what sets it (rows_as_needed waits; screen_form_module::tests::as_needed::pr9_2000ot_item_1_date_says_what_sets_it).",
+   "reviewer": ""
+  },
+  "manual-0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2000ot_labels_read_as_printed (item 12's printed natures, item 6 'RDO Code of Location of the Property', no '●' bullet in any heading)"
+  },
+  "manual-1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2000ot_schedules_are_part_iv_and_the_header_copy_is_not_drawn ('Part IV · Schedules' with Schedules 1.A, 1.B and 2; the page 2 header copy not drawn, still printed)"
+  },
+  "manual-2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2000ot_item_16_shows_the_atcs_rate (item 16 is a text box showing the ATC's rate as the official SelectedATC writes it, never a peso amount; page and print agree)"
+  }
+ },
+ "2552": {
+  "R2.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers; screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (2552's line removed from PROFILE_BOXES_NOT_YET_PLACED)"
+  },
+  "R3.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers (the overpayment boxes under item 25)"
+  },
+  "R3.1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_boxes_sit_under_their_printed_item_numbers (Line of Business under Not on the printed sheet; the page counter not drawn)"
+  },
+  "R3.2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part V Schedules 1-3 tables of their eight printed columns, rows 1-5)"
+  },
+  "R3.3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_yes_and_no_boxes_write_what_they_say (item 10's Yes and No)"
+  },
+  "R4.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (each Part V and Part VI table's date column is a date column with its own calendar, calendar: true); screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form (every drawn Part V date waits only for item 11)"
+  },
+  "R7.0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Number of Shares columns are whole numbers in Part V and Part VI)"
+  },
+  "manual-0": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part IV its own part, one table of five rows); screen_form_module::tests::as_needed::pr9_2552_part_iv_rows_take_their_amounts (rows 2-5's amounts typed and printed)"
+  },
+  "manual-1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts; screen_form_module::tests::as_needed::pr9_2552_item_11_asks_before_it_clears_part_v_and_row_5_fills (row 5 typed like rows 1-4; changing item 11 asks before it clears the rows typed)"
+  },
+  "manual-3": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_item_12_takes_whole_numbers_of_shares"
+  },
+  "manual-4": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part III items 26-29 with a note; the inventory keeps them disabled)"
+  }
+ }
+}
