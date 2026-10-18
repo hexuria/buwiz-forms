@@ -966,19 +966,26 @@ impl Database {
     /// - each (date, code) is offered once, recorded under
     ///   [`HOLIDAY_SEED_LEDGER_KEY`] as `YYYY-MM-DD|CODE`, so a re-run adds
     ///   only new years, dates and codes, and a seed the user deleted is not
-    ///   brought back;
+    ///   brought back. A pair the user's own override covers is recorded as
+    ///   offered too, so deleting that override later does not restore the
+    ///   holiday for it. A ledger entry of the earlier format (`YYYY-MM-DD`
+    ///   alone) counts as offered for every form on that date;
     /// - what is left for a date is appended as one override.
     ///
     /// Stored overrides are never modified, removed or re-identified: the
     /// stored JSON text is kept byte for byte (unknown keys included) and
     /// the new entries are appended to it. Overrides or a ledger that do
-    /// not parse stop the seeding. The two settings are written in one
-    /// transaction.
+    /// not parse stop the seeding. Both settings are read and written in one
+    /// immediate transaction.
     pub fn seed_holidays_from(
         &self,
         years: &[crate::official_holidays::HolidayYear],
     ) -> Result<usize, DbError> {
         use std::collections::BTreeSet;
+        let tx = rusqlite::Transaction::new_unchecked(
+            &self.conn,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
         let stored = self.get_setting("deadline_overrides")?;
         let existing: Vec<serde_json::Value> = match stored.as_deref() {
             None => Vec::new(),
@@ -1026,9 +1033,10 @@ impl Database {
         let mut appended = Vec::new();
         for mut seed in crate::official_holidays::holiday_overrides(years) {
             let date = seed.original_deadline.to_string();
+            let legacy = ledger.contains(&date);
             seed.affected_form_codes.retain(|code| {
-                offered.insert(format!("{date}|{code}"))
-                    && !covered.contains(&(date.clone(), code.clone()))
+                let new = offered.insert(format!("{date}|{code}"));
+                new && !legacy && !covered.contains(&(date.clone(), code.clone()))
             });
             if seed.affected_form_codes.is_empty() {
                 continue;
@@ -1045,7 +1053,6 @@ impl Database {
         if appended.is_empty() && offered == ledger {
             return Ok(0);
         }
-        let tx = self.conn.unchecked_transaction()?;
         if !appended.is_empty() {
             let json = append_json_entries(stored.as_deref(), existing.is_empty(), &appended)?;
             self.set_setting("deadline_overrides", &json)?;
@@ -1084,12 +1091,14 @@ fn append_json_entries<T: serde::Serialize>(
     let Some(stored) = stored else {
         return Ok(format!("[{items}]"));
     };
-    let head = stored
-        .trim_end()
-        .strip_suffix(']')
+    // The array's closing bracket is its last one (only whitespace can
+    // follow it in JSON that parsed); the bytes after it are kept too.
+    let close = stored
+        .rfind(']')
         .ok_or_else(|| DbError::Other("stored deadline overrides are not an array".into()))?;
+    let (head, tail) = (&stored[..close], &stored[close + 1..]);
     let separator = if stored_is_empty { "" } else { "," };
-    Ok(format!("{head}{separator}{items}]"))
+    Ok(format!("{head}{separator}{items}]{tail}"))
 }
 
 // =========================================================================
@@ -1644,8 +1653,60 @@ mod tests {
         assert!(db.seed_official_holidays().unwrap() > 0);
         let after = db.get_setting("deadline_overrides").unwrap().unwrap();
         assert!(after.starts_with("[ {\"id\":\"x\", \"note\": \"from a newer build\", \"original_deadline\":\"2026-03-03\",\"affected_form_codes\":[\"1601C\"]} ,{"));
+        assert!(after.ends_with("]\n"), "the bytes after the array are kept");
         let parsed: serde_json::Value = serde_json::from_str(&after).unwrap();
         assert_eq!(parsed[0]["note"], "from a newer build");
+    }
+
+    /// Round 2, item 4: a ledger of the earlier format (dates alone) counts
+    /// a date as offered for every form, so a seed deleted under it stays
+    /// deleted, and a date it never offered is still seeded.
+    #[test]
+    fn a_legacy_ledger_date_keeps_a_deleted_seed_deleted() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.set_setting(HOLIDAY_SEED_LEDGER_KEY, r#"["2026-06-12"]"#)
+            .unwrap();
+        db.seed_official_holidays().unwrap();
+        let overrides = db.get_deadline_overrides();
+        assert!(
+            overrides
+                .iter()
+                .all(|o| o.original_deadline != ymd(2026, 6, 12)),
+            "Independence Day stays deleted"
+        );
+        assert!(
+            overrides
+                .iter()
+                .any(|o| o.original_deadline == ymd(2026, 12, 25))
+        );
+        let ledger: std::collections::BTreeSet<String> =
+            serde_json::from_str(&db.get_setting(HOLIDAY_SEED_LEDGER_KEY).unwrap().unwrap())
+                .unwrap();
+        assert!(ledger.contains("2026-06-12"), "the old entry is kept");
+        assert!(ledger.contains("2026-06-12|1601C"));
+        assert_eq!(db.seed_official_holidays().unwrap(), 0);
+    }
+
+    /// Round 2, item 13: a pair covered by the user's own override is
+    /// recorded as offered, so deleting that override later does not bring
+    /// the holiday back for that form.
+    #[test]
+    fn deleting_a_users_own_override_does_not_restore_the_holiday() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.set_setting(
+            "deadline_overrides",
+            r#"[{"id":"mine","title":"Mine","source_reference":"RMC","affected_form_codes":["2551Q"],"original_deadline":"2026-01-01","adjusted_deadline":"2026-01-05","affected_regions":[],"affected_taxpayer_types":[],"effective_from":null,"effective_until":null,"expires_at":null}]"#,
+        )
+        .unwrap();
+        db.seed_official_holidays().unwrap();
+        let mut overrides = db.get_deadline_overrides();
+        overrides.retain(|o| o.id != "mine");
+        db.set_deadline_overrides(&overrides).unwrap();
+        assert_eq!(db.seed_official_holidays().unwrap(), 0);
+        assert!(db.get_deadline_overrides().iter().all(|o| {
+            o.original_deadline != ymd(2026, 1, 1)
+                || !o.affected_form_codes.iter().any(|c| c == "2551Q")
+        }));
     }
 
     #[test]
