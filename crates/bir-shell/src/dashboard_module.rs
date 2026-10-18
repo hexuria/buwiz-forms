@@ -219,7 +219,19 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
         // The profile's own deadline overrides apply on top of the stored
         // global ones, as the Google Calendar sync and the desktop
         // dashboard apply them.
-        let profile = db.get_profile(&branch.tin).map_err(error)?;
+        // A profile that cannot be read costs that branch its profile
+        // overrides only, never the other branches' rows.
+        let profile = match db.get_profile(&branch.tin) {
+            Ok(profile) => profile,
+            Err(read_error) => {
+                tracing::warn!(
+                    tin = %branch.tin,
+                    error = %read_error,
+                    "deadline feed: profile unreadable; its own deadline overrides are skipped"
+                );
+                None
+            }
+        };
         // As-needed returns of any taxable year whose due date falls in the
         // window (an estate's year-later deadline, a return filed under
         // another year).
@@ -878,6 +890,48 @@ mod tests {
         assert_eq!(synced(":1600WP:return-"), "2026-11-03");
         assert_eq!(home("1601C", "September"), "2026-10-20");
         assert_eq!(synced("2026:1601C:m09"), "2026-10-20");
+    }
+
+    /// Round 3, item 5: a profile row that cannot be read skips that
+    /// branch's profile overrides only; the feed still lists every branch.
+    #[test]
+    fn an_unreadable_profile_does_not_empty_the_feed() {
+        setup();
+        with_database(|db| {
+            db.create_taxpayer(NewTaxpayer {
+                tin_root: "987654321".into(),
+                name: "Second Example Inc".into(),
+                taxpayer_type: TaxpayerType::Corporation,
+                birth_date: None,
+                head_office: BranchFacts {
+                    rdo_code: "040".into(),
+                    registered_address: "2 Example Street, Pasig".into(),
+                    zip_code: "1600".into(),
+                    phone: "0280000001".into(),
+                    email: "second@example.com".into(),
+                },
+            })
+            .unwrap();
+            db.set_yearly_forms("98765432100000", 2026, &["1601C"])
+                .unwrap();
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE profiles SET data_json = '{not json' WHERE tin = ?1",
+                    [HEAD],
+                )
+                .unwrap();
+            assert!(db.get_profile(HEAD).is_err(), "the row is unreadable");
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-10-01", "2026-10-31"])).unwrap());
+        let tins: std::collections::BTreeSet<&str> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["tin"].as_str().unwrap())
+            .collect();
+        assert!(tins.contains("98765432100000"), "{rows}");
     }
 
     /// The field names `interface <name>` declares in DECLARATIONS, sorted.

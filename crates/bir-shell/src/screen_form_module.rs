@@ -2101,17 +2101,29 @@ fn mark_trigger_date(kind: AgentFormKind, draft: &mut Value, key: &str) {
     }
 }
 
+/// A draft's own trigger date, as the host records it: form, TIN, the
+/// draft's `created_at` (unique to each draft the host builds, kept by every
+/// save, so a never-saved sample and the real return it resembles are two
+/// drafts) and the date fields as JSON.
+type TriggerPrint = (String, String, String, String);
+
 thread_local! {
-    /// The trigger dates this host wrote from the page's own typed writes
-    /// (form, TIN, the date fields as JSON). The flag a client sends back
-    /// is never trusted: a save keeps it only for a date in here, or for
-    /// the stored return's own flagged date (`settle_trigger_flag`).
-    static TYPED_TRIGGERS: std::cell::RefCell<BTreeSet<(String, String, String)>> =
+    /// The trigger dates this host wrote from the page's own typed writes,
+    /// per draft. The flag a client sends back is never trusted: a save
+    /// keeps it only for a draft and date in here, or for the stored
+    /// return's own flagged date (`settle_trigger_flag`).
+    static TYPED_TRIGGERS: std::cell::RefCell<BTreeSet<TriggerPrint>> =
+        const { std::cell::RefCell::new(BTreeSet::new()) };
+    /// The `MMDD` keys `screen_form_sample_period` offered from a day the
+    /// filer typed (form, TIN, year, key): only these date the new return
+    /// `open_screen_form` starts under them.
+    static ISSUED_DATE_KEYS: std::cell::RefCell<BTreeSet<(String, String, u16, i64)>> =
         const { std::cell::RefCell::new(BTreeSet::new()) };
 }
 
-/// What identifies a draft's trigger date: its form, TIN and date fields.
-fn trigger_fingerprint(kind: AgentFormKind, draft: &Value) -> Option<(String, String, String)> {
+/// What identifies a draft's trigger date (see [`TriggerPrint`]); `None` for
+/// a form without one.
+fn trigger_fingerprint(kind: AgentFormKind, draft: &Value) -> Option<TriggerPrint> {
     let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
     if fields.is_empty() {
         return None;
@@ -2123,31 +2135,34 @@ fn trigger_fingerprint(kind: AgentFormKind, draft: &Value) -> Option<(String, St
     Some((
         kind.form_code().to_string(),
         draft["tin"].as_str().unwrap_or_default().to_string(),
+        created_at(draft).unwrap_or_default().to_string(),
         serde_json::to_string(&values).ok()?,
     ))
 }
 
-/// Before a save: `trigger_date_entered` is what the host knows, never
-/// what the client sent. It stays set only when this host wrote the date
-/// from a typed write, or the stored return already held exactly this date
-/// with the flag; otherwise it is removed, so a crafted payload cannot
-/// date a pre-filled return.
+/// Before any write of a client's draft (save, queue, cancel):
+/// `trigger_date_entered` is what the host knows, never what the client
+/// sent. It stays set only when this host wrote this draft's date from a
+/// typed write, or the stored return already held exactly this date with
+/// the flag; otherwise it is removed, on every form, so a crafted payload
+/// cannot date a pre-filled return and no client flag is ever stored.
 fn settle_trigger_flag(
     db: &Database,
     kind: AgentFormKind,
     draft: &mut Value,
 ) -> Result<(), String> {
-    let Some(print) = trigger_fingerprint(kind, draft) else {
-        return Ok(());
+    let entered = match trigger_fingerprint(kind, draft) {
+        None => false,
+        Some(print) => {
+            TYPED_TRIGGERS.with(|typed| typed.borrow().contains(&print))
+                || stored_return(db, kind, draft)?.is_some_and(|stored| {
+                    stored.get("trigger_date_entered") == Some(&Value::Bool(true))
+                        && trigger_fingerprint(kind, &stored).as_ref() == Some(&print)
+                })
+        }
     };
-    let typed = TYPED_TRIGGERS.with(|typed| typed.borrow().contains(&print));
-    let kept = !typed
-        && stored_return(db, kind, draft)?.is_some_and(|stored| {
-            stored.get("trigger_date_entered") == Some(&Value::Bool(true))
-                && trigger_fingerprint(kind, &stored).as_ref() == Some(&print)
-        });
     let pointer = lifecycle_pointer(draft, "trigger_date_entered");
-    if typed || kept {
+    if entered {
         set_draft_path(draft, &pointer, json!(true));
     } else if let Some((parent, leaf)) = pointer.rsplit_once('/')
         && let Some(Value::Object(object)) = draft.pointer_mut(parent)
@@ -2807,10 +2822,16 @@ fn open_screen_form(
             let typed = typed_from_key(year, key);
             write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
             write_typed_period(kind, &parts, &typed, &mut from_profile).map_err(host_error)?;
-            // A key that names a day (`MMDD`) is the date the filer typed
-            // for the sample this return starts from: where it is the
-            // trigger date, the return is dated (D8c).
-            if typed.day.is_some() {
+            // A key that names a day (`MMDD`) dates the return only when
+            // this host offered it from a day the filer typed for a sample
+            // (`screen_form_sample_period`); a key the client sends alone
+            // never does (D8c).
+            let issued = ISSUED_DATE_KEYS.with(|issued| {
+                issued
+                    .borrow()
+                    .contains(&(code.to_string(), tin.clone(), year, key))
+            });
+            if typed.day.is_some() && issued {
                 for (part_key, _) in &parts {
                     mark_trigger_date(kind, &mut draft, part_key);
                 }
@@ -3192,10 +3213,25 @@ fn screen_form_sample_period(
                 // Start a return opens a new return for that period; for an
                 // entry-numbered form, New return.
                 None => {
+                    // A stored key that names a day (`MMDD`, 101 or more)
+                    // is offered only when the filer typed that day: an
+                    // untyped day is the constructor's, and the return it
+                    // would start must stay undated (D8c). The host records
+                    // the keys it offers from a typed day; only those date
+                    // the return they open.
+                    let new_key =
+                        stored_period(kind, &draft).filter(|key| *key < 101 || typed.day.is_some());
+                    if let Some(key) = new_key.filter(|key| *key >= 101) {
+                        ISSUED_DATE_KEYS.with(|issued| {
+                            issued
+                                .borrow_mut()
+                                .insert((code.to_string(), tin.clone(), year, key))
+                        });
+                    }
                     let opens = if numbered {
                         Value::Null
                     } else {
-                        json!({ "year": year, "period": period, "key": null, "new_key": stored_period(kind, &draft) })
+                        json!({ "year": year, "period": period, "key": null, "new_key": new_key })
                     };
                     Answer::Fresh(draft, year, period, opens)
                 }
@@ -5106,6 +5142,7 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
         )));
     };
     with_database(|db| {
+        settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let mut typed: F = serde_json::from_value(draft.clone())
                 .map_err(|error| host_error(error.to_string()))?;
@@ -5143,6 +5180,7 @@ fn screen_form_cancel_queue(arguments: &HostArguments) -> HostResult {
         )));
     };
     with_database(|db| {
+        settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let typed: F = serde_json::from_value(draft.clone())
                 .map_err(|error| host_error(error.to_string()))?;
@@ -5472,24 +5510,84 @@ mod tests {
         .unwrap();
     }
 
-    /// Round 2, item 1: a monthly form's sample period is complete with
-    /// month and year alone; its day is then the constructor's, so the
-    /// saved return is undated: no dated row, listed with no date yet.
+    /// The monthly forms whose constructor pre-fills the trigger date.
+    const MONTHLY_PREFILLED: [&str; 7] = [
+        "2200A", "2200AN", "2200M", "2200P", "2200S", "2200T", "1600WP",
+    ];
+
+    /// A sample period of `code` typed with month 09 and year 2026, and the
+    /// day too when `day` is given.
+    fn typed_month(code: &str, day: Option<&str>) -> Value {
+        let mut parts = Map::new();
+        for (key, part) in sample_period_parts(kind_of(code).unwrap()) {
+            match part {
+                PeriodPart::Year => parts.insert(key, json!("2026")),
+                PeriodPart::Month => parts.insert(key, json!("09")),
+                PeriodPart::Day => day.and_then(|day| parts.insert(key, json!(day))),
+                PeriodPart::Date => {
+                    day.and_then(|day| parts.insert(key, json!(format!("09/{day}/2026"))))
+                }
+                other => panic!("{code}: unexpected period part {other:?}"),
+            };
+        }
+        Value::Object(parts)
+    }
+
+    /// Open what a sample answer's `opens` names, as the page's Start a
+    /// return does.
+    fn open_from(code: &str, opens: &Value) -> Value {
+        call_async(
+            "screen_form_open",
+            vec![
+                TIN.into(),
+                code.into(),
+                opens["year"].as_i64().unwrap().into(),
+                opens["period"].as_i64().unwrap().into(),
+                json(opens["key"].clone()),
+                json(opens["new_key"].clone()),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("{code} opens from {opens}: {error}"))
+    }
+
+    fn assert_undated_and_listed(code: &str, id: i64) {
+        assert_eq!(stored_trigger(id), None, "{code}: undated");
+        let rows = call(
+            "deadlines_between",
+            vec!["2026-01-01".into(), "2027-12-31".into()],
+        )
+        .unwrap();
+        assert!(
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["form_code"] != code),
+            "{code}: no dated row"
+        );
+        let listed = call("as_needed_forms", vec![2026_i64.into()]).unwrap();
+        assert_eq!(listed[0]["form_code"], code);
+        assert!(
+            listed[0]["undated"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|r| r["draft_id"] == id),
+            "{code}: listed undated"
+        );
+    }
+
+    /// Rounds 2 and 3, items 1 and 2: a monthly form's sample period is
+    /// complete with month and year alone; its day is then the
+    /// constructor's, so the return is undated, whether the sample is saved
+    /// or Start a return opens the answer's `opens` (whose `new_key` names
+    /// no untyped day). Also: a `new_key` with a day the client sends
+    /// alone dates nothing, and one the host offered from a typed day does.
     #[test]
     fn a_month_and_year_sample_period_does_not_date_a_prefilled_return() {
-        for code in ["2200A", "2200M", "2200P", "2200T", "1600WP"] {
+        for code in MONTHLY_PREFILLED {
+            // The sample saved.
             setup_taxpayer_filing(&[code]);
-            let kind = kind_of(code).unwrap();
-            let mut parts = Map::new();
-            for (key, part) in sample_period_parts(kind) {
-                match part {
-                    PeriodPart::Year => parts.insert(key, json!("2026")),
-                    PeriodPart::Month => parts.insert(key, json!("09")),
-                    PeriodPart::Day | PeriodPart::Date => None,
-                    other => panic!("{code}: unexpected period part {other:?}"),
-                };
-            }
-            let answer = sample_period(TIN, code, Value::Object(parts));
+            let answer = sample_period(TIN, code, typed_month(code, None));
             assert_eq!(
                 answer["complete"], true,
                 "{code}: month and year complete it"
@@ -5500,27 +5598,101 @@ mod tests {
                 "{code}: {sample}"
             );
             let saved = save(code, &sample);
-            let id = saved["id"].as_i64().unwrap();
-            assert_eq!(stored_trigger(id), None, "{code}: undated");
-            let rows = call(
-                "deadlines_between",
-                vec!["2026-01-01".into(), "2027-12-31".into()],
+            assert_undated_and_listed(code, saved["id"].as_i64().unwrap());
+
+            // Start a return from the same answer.
+            setup_taxpayer_filing(&[code]);
+            let answer = sample_period(TIN, code, typed_month(code, None));
+            let new_key = &answer["opens"]["new_key"];
+            assert!(
+                new_key.as_i64().is_none_or(|key| key < 101),
+                "{code}: no untyped day in new_key: {new_key}"
+            );
+            let opened = open_from(code, &answer["opens"]);
+            let started = save(code, &opened["draft"]);
+            assert_undated_and_listed(code, stored_id(&started));
+
+            // A day key the client sends alone.
+            setup_taxpayer_filing(&[code]);
+            let opened = call_async(
+                "screen_form_open",
+                vec![
+                    TIN.into(),
+                    code.into(),
+                    YEAR.into(),
+                    9.into(),
+                    HostValue::Null,
+                    930.into(),
+                ],
             )
             .unwrap();
             assert!(
-                rows.as_array()
-                    .unwrap()
-                    .iter()
-                    .all(|r| r["form_code"] != code),
-                "{code}: no dated row"
+                opened["draft"].get("trigger_date_entered").is_none(),
+                "{code}"
             );
-            let listed = call("as_needed_forms", vec![2026_i64.into()]).unwrap();
-            assert_eq!(listed[0]["form_code"], code);
+            let crafted = save(code, &opened["draft"]);
+            assert_undated_and_listed(code, stored_id(&crafted));
+        }
+        // A day the filer typed: the key the host offers dates the return.
+        for code in ["2200AN", "2200S"] {
+            setup_taxpayer_filing(&[code]);
+            let answer = sample_period(TIN, code, typed_month(code, Some("14")));
+            assert_eq!(answer["opens"]["new_key"], 914, "{code}");
+            let opened = open_from(code, &answer["opens"]);
+            let dated = save(code, &opened["draft"]);
             assert_eq!(
-                listed[0]["undated"][0]["draft_id"], id,
-                "{code}: listed undated"
+                stored_trigger(stored_id(&dated)),
+                chrono::NaiveDate::from_ymd_opt(2026, 9, 14),
+                "{code}"
             );
         }
+    }
+
+    /// Round 3, item 6: a date typed on a never-saved sample does not date
+    /// a different draft that happens to hold the same date (the record is
+    /// per draft, by its own `created_at`).
+    #[test]
+    fn a_sample_s_typed_date_does_not_date_the_real_return() {
+        setup_taxpayer_filing(&["2200A"]);
+        // September 2026 is past, so a new return pre-fills the month's
+        // last day; the sample types that same day.
+        let answer = sample_period(TIN, "2200A", typed_month("2200A", Some("30")));
+        assert_eq!(answer["sample"]["draft"]["trigger_date_entered"], true);
+        let opened = open("2200A", 9);
+        assert_eq!(opened["draft"]["day"], 30, "the same date, untyped");
+        let saved = save("2200A", &opened["draft"]);
+        assert_undated_and_listed("2200A", stored_id(&saved));
+    }
+
+    /// Round 3, item 3: a crafted flag sent through queue, then cancel,
+    /// does not date a draft whose date was never typed.
+    #[test]
+    fn a_crafted_flag_through_queue_and_cancel_dates_nothing() {
+        setup_taxpayer_filing(&["1600WP"]);
+        let mut draft = open("1600WP", 9)["draft"].clone();
+        draft["taxes_withheld"] = json!(false);
+        draft["agent_category"] = json!("private");
+        let saved = save("1600WP", &draft);
+        let id = stored_id(&saved);
+        let mut crafted = saved["draft"].clone();
+        crafted["trigger_date_entered"] = json!(true);
+        call("screen_form_queue", vec!["1600WP".into(), json(crafted)])
+            .unwrap_or_else(|error| panic!("queues: {error}"));
+        let (_, queued_json) = raw_row(id);
+        assert!(
+            !queued_json.contains("trigger_date_entered"),
+            "{queued_json}"
+        );
+        let mut queued: Value = serde_json::from_str(&queued_json).unwrap();
+        queued["trigger_date_entered"] = json!(true);
+        call(
+            "screen_form_cancel_queue",
+            vec!["1600WP".into(), json(queued)],
+        )
+        .unwrap_or_else(|error| panic!("cancels: {error}"));
+        let (_, cancelled) = raw_row(id);
+        assert!(!cancelled.contains("trigger_date_entered"), "{cancelled}");
+        assert_eq!(stored_trigger(id), None, "a Draft again, undated");
     }
 
     /// Round 2, item 12: `PREFILLED_TRIGGER_FORMS` is kept by hand, so

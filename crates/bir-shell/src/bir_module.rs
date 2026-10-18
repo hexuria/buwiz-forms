@@ -992,6 +992,41 @@ fn overlay_fields<T: serde::Serialize + serde::de::DeserializeOwned>(
     serde_json::from_value(merged).map_err(|error| HostError::new(error.to_string()))
 }
 
+/// A generic save never stores a client's `trigger_date_entered` (D8c):
+/// the stored return's flag is kept when it held exactly these trigger
+/// fields; otherwise the flag is removed.
+fn keep_stored_trigger_flag(
+    db: &Database,
+    tin: &str,
+    form_code: &str,
+    year: u16,
+    quarter: Option<u8>,
+    data: &mut serde_json::Value,
+) -> Result<(), HostError> {
+    let Some(object) = data.as_object_mut() else {
+        return Ok(());
+    };
+    let fields = bir_core::forms::event_trigger::trigger_paths(form_code);
+    let stored: Option<serde_json::Value> = if fields.is_empty() {
+        None
+    } else {
+        db.get_form_draft(tin, form_code, year, quarter)
+            .map_err(|error| HostError::new(error.to_string()))?
+    };
+    let keep = stored.is_some_and(|stored| {
+        stored.get("trigger_date_entered") == Some(&serde_json::Value::Bool(true))
+            && fields
+                .iter()
+                .all(|field| stored.get(*field) == object.get(*field))
+    });
+    if keep {
+        object.insert("trigger_date_entered".into(), serde_json::Value::Bool(true));
+    } else {
+        object.remove("trigger_date_entered");
+    }
+    Ok(())
+}
+
 fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin = arguments.string(0)?.to_owned();
     let form_code = arguments.string(1)?.to_owned();
@@ -1031,10 +1066,13 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     .map(|id| HostValue::Number(id as f64))
                     .map_err(|error| HostError::new(error.to_string()))
             }
-            _ => db
-                .save_form_draft(&tin, &form_code, year, quarter, &status, &data)
-                .map(|id| HostValue::Number(id as f64))
-                .map_err(|error| HostError::new(error.to_string())),
+            _ => {
+                let mut data = data;
+                keep_stored_trigger_flag(db, &tin, &form_code, year, quarter, &mut data)?;
+                db.save_form_draft(&tin, &form_code, year, quarter, &status, &data)
+                    .map(|id| HostValue::Number(id as f64))
+                    .map_err(|error| HostError::new(error.to_string()))
+            }
         }
     })
 }
@@ -1900,6 +1938,64 @@ mod tests {
 
     fn args(values: Vec<HostValue>) -> HostArguments {
         HostArguments::new(values)
+    }
+
+    /// Round 3, item 4: the generic save never stores a client's
+    /// `trigger_date_entered`; a stored flag for the same date is kept.
+    #[test]
+    fn the_generic_save_keeps_only_the_stored_trigger_flag() {
+        setup();
+        let save = |data: serde_json::Value| {
+            save_form_draft(&args(vec![
+                TIN.into(),
+                "1800".into(),
+                2026_i64.into(),
+                1_i64.into(),
+                "Draft".into(),
+                json(data),
+            ]))
+            .unwrap()
+        };
+        let stored = |field: &str| {
+            with_database(|db| {
+                Ok(db
+                    .get_form_draft::<serde_json::Value>(TIN, "1800", 2026, Some(1))
+                    .unwrap()
+                    .unwrap()[field]
+                    .clone())
+            })
+            .unwrap()
+        };
+        let gift = serde_json::json!({
+            "donation_month": 9, "donation_day": 15, "donation_year": 2026,
+            "trigger_date_entered": true,
+        });
+        save(gift.clone());
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
+        // A flag stored for this date (as the page's own save leaves it) is
+        // kept on a generic save of the same date, and dropped when the
+        // date changes.
+        with_database(|db| {
+            let mut flagged = gift.clone();
+            flagged["trigger_date_entered"] = serde_json::json!(true);
+            db.save_form_draft(
+                TIN,
+                "1800",
+                2026,
+                Some(1),
+                &bir_core::forms::FilingStatus::Draft,
+                &flagged,
+            )
+            .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        save(gift.clone());
+        assert_eq!(stored("trigger_date_entered"), true);
+        let mut moved = gift;
+        moved["donation_day"] = serde_json::json!(16);
+        save(moved);
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
     }
 
     fn has_totp() -> bool {
