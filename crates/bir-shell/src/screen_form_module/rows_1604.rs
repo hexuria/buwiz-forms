@@ -181,37 +181,138 @@ pub(super) fn legacy_total_notice(row: usize) -> String {
     format!("Row {row} may hold an amount typed as the total; check it before you file.")
 }
 
+/// When PR 6 (a7b9e47e, which unbound the Total boxes) reached integration:
+/// the merge a2beb40b, 2026-10-18T06:58:15+08:00. A 1604E draft created
+/// after it was never typed through a bound Total box.
+pub(super) const PR6_REACHED_INTEGRATION: &str = "2026-10-17T22:58:15+00:00";
+
+/// Whether `draft` was created before [`PR6_REACHED_INTEGRATION`]. The
+/// stored draft carries no trace of the box an amount was typed in (the
+/// old binding wrote the very path the Penalties box writes, and the form
+/// recomputes the Total from it either way), so its creation stamp is the
+/// only sound discriminator: a draft without a readable `created_at` counts
+/// as created before.
+fn created_before_pr6(draft: &Value) -> bool {
+    let Ok(cutoff) = chrono::DateTime::parse_from_rfc3339(PR6_REACHED_INTEGRATION) else {
+        return true;
+    };
+    draft["created_at"]
+        .as_str()
+        .and_then(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok())
+        .is_none_or(|created| created < cutoff)
+}
+
+/// The settings key that records the filer marked a 1604E row's D5 notice
+/// checked, for the stored return `id`. App state, never the return: the
+/// return's bytes do not change.
+pub(super) fn checked_key(id: i64, token: &str) -> String {
+    format!("notice_checked:1604e_total_row:{id}:{token}")
+}
+
+/// A row's notice token: `"<schedule>:<0-based row>"`.
+fn row_token(schedule: u8, index: usize) -> String {
+    format!("{schedule}:{index}")
+}
+
+/// The tokens of the rows of stored return `draft` whose notice the filer
+/// marked checked (read on the host's own thread, before an evaluation).
+pub(super) fn checked_rows(
+    db: &bir_core::db::Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let Some(id) = draft["id"].as_i64().filter(|_| kind.form_code() == "1604E") else {
+        return out;
+    };
+    for (schedule, rows) in LEGACY_TOTAL_ROWS {
+        for &index in rows {
+            let token = row_token(schedule, index);
+            if db
+                .get_setting(&checked_key(id, &token))
+                .ok()
+                .flatten()
+                .is_some()
+            {
+                out.insert(token);
+            }
+        }
+    }
+    out
+}
+
 /// Notices beside the form's own messages; nothing is changed and the
 /// stored bytes stay (D5). 1604E: an amount typed into one of the
 /// [`LEGACY_TOTAL_ROWS`]' Total Amount Remitted boxes was saved as the
 /// row's penalties, so it files as penalties and the form adds the tax
 /// withheld to it. A stored draft cannot tell which box it was typed in;
 /// the binding wrote nothing else, so a row whose penalties are zero holds
-/// none, and each of those rows holding penalties says so under its
-/// Penalties and Total boxes.
-pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
-    if kind.form_code() != "1604E" {
+/// none. Each of those rows holding penalties says so under its Penalties
+/// and Total boxes, while the return is a Draft created before PR 6
+/// reached integration and the filer has not marked the row checked
+/// (`checked`, [`checked_rows`]); the notice carries the token the page's
+/// "Checked" sends back (`screen_form_check_notice`).
+pub(super) fn notices(
+    kind: AgentFormKind,
+    draft: &Value,
+    checked: &std::collections::BTreeSet<String>,
+) -> Vec<Value> {
+    if kind.form_code() != "1604E"
+        || !super::is_draft_return(kind, draft)
+        || !created_before_pr6(draft)
+    {
         return Vec::new();
     }
+    let dismissible = draft["id"].as_i64().is_some();
     let mut out = Vec::new();
     for (schedule, rows) in LEGACY_TOTAL_ROWS {
         for &index in rows {
             let penalties = &draft[format!("schedule{schedule}")][index]["penalties"];
-            if penalties.as_f64().is_none_or(|amount| amount == 0.0) {
+            let token = row_token(schedule, index);
+            if penalties.as_f64().is_none_or(|amount| amount == 0.0) || checked.contains(&token) {
                 continue;
             }
             let row = index + 1;
-            out.push(json!({
+            let mut notice = json!({
                 "field": format!("schedule{schedule}[{index}].penalties"),
                 "message": legacy_total_notice(row),
                 "keys": [
                     format!("frm1604e:txtSched{schedule}Penalties{row}"),
                     format!("frm1604e:txtSched{schedule}TotRemAmt{row}"),
                 ],
-            }));
+            });
+            if dismissible {
+                notice["dismiss"] = json!(token);
+                notice["dismiss_label"] = json!(format!("Checked: Schedule {schedule} row {row}"));
+            }
+            out.push(notice);
         }
     }
     out
+}
+
+/// Record that the filer checked the row `token` of stored 1604E return
+/// `draft`: only a row whose notice `draft` shows now. Nothing on the
+/// return changes.
+pub(super) fn check_notice(
+    db: &bir_core::db::Database,
+    kind: AgentFormKind,
+    draft: &Value,
+    token: &str,
+) -> Result<(), String> {
+    let id = draft["id"]
+        .as_i64()
+        .ok_or("save the return before marking a row checked")?;
+    let shown = notices(kind, draft, &checked_rows(db, kind, draft))
+        .iter()
+        .any(|notice| notice["dismiss"] == token);
+    if !shown {
+        return Err(format!(
+            "no notice `{token}` to mark checked on this return"
+        ));
+    }
+    db.set_setting(&checked_key(id, token), "1")
+        .map_err(|error| error.to_string())
 }
 
 /// Messages that name another item number than the one the printed sheet

@@ -917,6 +917,18 @@ impl Database {
         Ok(())
     }
 
+    /// Set a global setting only if it is not set yet, atomically; whether
+    /// this call set it (a one-time notice's seen flag: of two callers, one
+    /// gets `true`).
+    pub fn insert_setting_if_absent(&self, key: &str, value: &str) -> Result<bool, DbError> {
+        let inserted = self.conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO NOTHING",
+            params![key, value],
+        )?;
+        Ok(inserted == 1)
+    }
+
     /// Delete a global setting value.
     pub fn delete_setting(&self, key: &str) -> Result<(), DbError> {
         self.conn

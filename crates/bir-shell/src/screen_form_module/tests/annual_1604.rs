@@ -1798,5 +1798,124 @@ fn d5_old_1604e_rows_typed_through_a_total_are_flagged() {
     // The other 1604 returns have no such rows.
     let fresh = open("1604C", 0);
     assert!(flagged(&fresh["errors"]).is_empty());
-    assert!(rows_1604::notices(kind_of("1604C").unwrap(), &json!({})).is_empty());
+    assert!(rows_1604::notices(kind_of("1604C").unwrap(), &json!({}), &BTreeSet::new()).is_empty());
+}
+
+/// The D5 notices' tokens on a stored draft: `(field, dismiss token)`.
+fn d5_notices(errors: &Value) -> Vec<(String, String)> {
+    errors
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| {
+            e["message"].as_str().is_some_and(|m| {
+                m.ends_with("may hold an amount typed as the total; check it before you file.")
+            })
+        })
+        .map(|e| {
+            (
+                e["field"].as_str().unwrap().to_string(),
+                e["dismiss"].as_str().unwrap_or_default().to_string(),
+            )
+        })
+        .collect()
+}
+
+/// `PRE_PR6_1604E` stored as row 1 with `edit` applied to it; its id.
+fn store_1604e(edit: impl FnOnce(&mut Value)) -> (i64, String) {
+    setup();
+    let id = save("1604E", &open("1604E", 0)["draft"])["id"]
+        .as_i64()
+        .unwrap();
+    let mut stored: Value = serde_json::from_str(PRE_PR6_1604E).unwrap();
+    edit(&mut stored);
+    let text = serde_json::to_string(&stored).unwrap();
+    let status = stored["status"].as_str().unwrap().to_string();
+    raw_exec(
+        "UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = ?3",
+        &[&status, &text, &id.to_string()],
+    );
+    (id, raw_row(id).1)
+}
+
+/// Review fixes for D5. A row's notice shows only on a Draft created
+/// before PR 6 reached integration (the creation stamp is the only sound
+/// discriminator: the stored draft holds the same penalties whichever box
+/// they were typed in), and the filer can mark it checked without changing
+/// the amount; the mark is app state (a settings key per return and row),
+/// so the return's bytes stay.
+#[test]
+fn d5_notices_show_on_old_drafts_only_and_can_be_marked_checked() {
+    assert_eq!(
+        rows_1604::PR6_REACHED_INTEGRATION,
+        "2026-10-17T22:58:15+00:00"
+    );
+    // A draft created after PR 6 reached integration: never flagged.
+    let (_, _) = store_1604e(|d| {
+        d["created_at"] = json!("2026-10-17T22:58:16+00:00");
+    });
+    assert!(d5_notices(&open("1604E", 0)["errors"]).is_empty());
+    // A filed return: never flagged, so Check counts nothing.
+    for status in ["Queued", "Submitted", "Confirmed"] {
+        let (_, _) = store_1604e(|d| d["status"] = json!(status));
+        let opened = open("1604E", 0);
+        assert!(d5_notices(&opened["errors"]).is_empty(), "{status}");
+        assert!(
+            d5_notices(&validate("1604E", &opened["draft"])["errors"]).is_empty(),
+            "{status}"
+        );
+    }
+    // The old Draft: both rows, each with its token; one marked checked.
+    let (id, bytes) = store_1604e(|_| {});
+    let opened = open("1604E", 0);
+    assert_eq!(
+        d5_notices(&opened["errors"]),
+        vec![
+            ("schedule1[2].penalties".to_string(), "1:2".to_string()),
+            ("schedule2[2].penalties".to_string(), "2:2".to_string()),
+        ]
+    );
+    let label = opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["dismiss"] == "2:2")
+        .unwrap()["dismiss_label"]
+        .clone();
+    assert_eq!(label, "Checked: Schedule 2 row 3");
+    let check = |token: &str| {
+        call(
+            "screen_form_check_notice",
+            vec!["1604E".into(), json(opened["draft"].clone()), token.into()],
+        )
+    };
+    check("2:2").unwrap();
+    // A row with no notice, or another form's, cannot be marked.
+    assert!(check("2:5").is_err());
+    let key = rows_1604::checked_key(id, "2:2");
+    assert_eq!(key, format!("notice_checked:1604e_total_row:{id}:2:2"));
+    assert_eq!(
+        with_database(|db| db
+            .get_setting(&key)
+            .map_err(|e| HostError::new(e.to_string())))
+        .unwrap()
+        .as_deref(),
+        Some("1")
+    );
+    assert_eq!(raw_row(id).1, bytes, "marking checked changes nothing");
+    let again = open("1604E", 0);
+    assert_eq!(
+        d5_notices(&again["errors"]),
+        vec![("schedule1[2].penalties".to_string(), "1:2".to_string())]
+    );
+    assert_eq!(
+        d5_notices(&validate("1604E", &again["draft"])["errors"]),
+        vec![("schedule1[2].penalties".to_string(), "1:2".to_string())]
+    );
+    assert_eq!(
+        amount(&again["values"], "frm1604e:txtSched2Penalties3"),
+        10250.0,
+        "the amount stays"
+    );
+    assert_eq!(raw_row(id).1, bytes);
 }

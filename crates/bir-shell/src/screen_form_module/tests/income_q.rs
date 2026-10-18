@@ -907,12 +907,17 @@ fn form_1701q_penalties_are_computed_and_a_typed_one_overrides() {
 }
 
 /// Maintainer decision D3 (2026-10-18): a filed third-quarter 1701Q whose
-/// penalties were charged under the old October 15 deadline shows a note
-/// once: on the first opening only, recorded as seen in app state (the
-/// settings table), never in the return, whose stored bytes and filed
-/// amounts stay exactly as filed. A filed Q3 return measured from the
-/// November deadline, the same return still a Draft, and a filed return
-/// of another quarter show none.
+/// penalties the app charged under the old October 15 deadline shows a
+/// note once. The opening offers it (`notes`, key and text) without writing
+/// anything; the page records it seen once it has the opening
+/// (`screen_form_notes_seen`, an atomic insert-if-absent) and shows it only
+/// if that call recorded it. So a failed opening offers it again, of two
+/// simultaneous openings only one shows it, and once recorded no opening
+/// offers it. The flag is app state (the settings table), never the
+/// return, whose stored bytes and filed amounts stay exactly as filed. A
+/// filed Q3 return measured from the November deadline, one with no stored
+/// due date (its penalties were typed, not charged by the app), the same
+/// return still a Draft, and a filed return of another quarter show none.
 #[test]
 fn form_1701q_a_q3_return_filed_under_october_15_says_so_once() {
     setup();
@@ -953,6 +958,24 @@ fn form_1701q_a_q3_return_filed_under_october_15_says_so_once() {
     };
     file(&stored);
     assert_eq!(open_for(TIN, Q, year, 3)["notes"], json!([]));
+    // Filed with no stored due date (penalties the filer typed before PR 5
+    // computed them): no note.
+    let mut typed = stored.clone();
+    typed["penalty"]
+        .as_object_mut()
+        .unwrap()
+        .remove("penalty_due_date");
+    typed["penalty"]
+        .as_object_mut()
+        .unwrap()
+        .remove("computed_penalties");
+    file(&typed);
+    assert_eq!(open_for(TIN, Q, year, 3)["notes"], json!([]));
+    let kind = kind_of(Q).unwrap();
+    assert!(!rows_income_q::q3_charged_under_october(
+        kind,
+        &with_status(&typed, "Submitted")
+    ));
     // Filed as the app filed it before PR 5: penalties measured from
     // October 15.
     let mut october = stored.clone();
@@ -961,6 +984,7 @@ fn form_1701q_a_q3_return_filed_under_october_15_says_so_once() {
     october["penalty"]["computed_penalties"]["inputs"]["due_date"] = old_due;
     let bytes = file(&october);
     let key = format!("notice_seen:1701q_q3_due_nov15:{id}");
+    assert_eq!(key, rows_income_q::q3_note_seen_key(id));
     let seen = || {
         with_database(|db| {
             db.get_setting(&key)
@@ -968,26 +992,37 @@ fn form_1701q_a_q3_return_filed_under_october_15_says_so_once() {
         })
         .unwrap()
     };
-    assert_eq!(seen(), None);
-    let first = open_for(TIN, Q, year, 3);
-    assert_eq!(first["notes"], json!([rows_income_q::Q3_DEADLINE_NOTE]));
+    let note = json!([{"key": key, "text": rows_income_q::Q3_DEADLINE_NOTE}]);
     assert_eq!(
         rows_income_q::Q3_DEADLINE_NOTE,
-        "The third-quarter 1701Q is now due November 15, not October 15. This return's penalties were counted from October 15: any charged for October 16 to November 15 may need checking."
+        "The third-quarter 1701Q is now due November 15, or the next business day when that falls on a weekend or holiday; it was October 15. This return's penalties were counted from October 15: any charged for the days from October 16 to that due date may need checking."
     );
+    // Offered, and nothing written by the opening: an opening the page
+    // never showed offers it again.
+    let first = open_for(TIN, Q, year, 3);
+    assert_eq!(first["notes"], note);
+    assert_eq!(seen(), None);
+    let second = open_for(TIN, Q, year, 3);
+    assert_eq!(second["notes"], note);
+    // The page records it: the first call records it (show), the second,
+    // as from a simultaneous opening, does not (do not show).
+    let record = || call("screen_form_notes_seen", vec![json(json!([key]))]).unwrap();
+    assert_eq!(record(), json!([key]));
+    assert_eq!(record(), json!([]));
     assert_eq!(seen().as_deref(), Some("1"));
+    // Only one-time note keys are written.
+    assert!(call("screen_form_notes_seen", vec![json(json!(["access_mode"]))]).is_err());
     // Nothing on the return changes: its bytes and its filed amounts.
     assert_eq!(raw_row(id), ("Submitted".to_string(), bytes.clone()));
     assert_eq!(amount(&first["values"], "frm1701q:txt64A"), surcharge);
     assert_eq!(first["editable"], false);
-    // Once per return: the next opening says nothing.
+    // Once recorded, no opening offers it.
     assert_eq!(open_for(TIN, Q, year, 3)["notes"], json!([]));
     assert_eq!(raw_row(id).1, bytes);
     // Another quarter filed under an October deadline says nothing.
     let october = with_status(&october, "Submitted");
     let mut first_quarter = october.clone();
     first_quarter["quarter"] = json!(1);
-    let kind = kind_of(Q).unwrap();
     assert!(rows_income_q::q3_charged_under_october(kind, &october));
     assert!(!rows_income_q::q3_charged_under_october(
         kind,

@@ -67,6 +67,9 @@ export interface ScreenFormError {
     field: string;
     message: string;
     keys: string[];
+    /** A notice the filer may mark checked without changing anything: the token `screen_form_check_notice` takes, and its button's label. */
+    dismiss?: string;
+    dismiss_label?: string;
 }
 export type ScreenFormStatus = "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
 export interface ScreenFormOpened {
@@ -120,6 +123,8 @@ export interface ScreenFormOpened {
     profile_updates?: string[];
     /** A Draft saved before it recorded its profile baseline (or reverted to Draft): its unedited profile boxes that differ from the profile now ("RDO 039 (profile 043)"), not changed; `screen_form_use_profile` applies them. */
     profile_differs?: string[];
+    /** One-time notes this opening offers (`key`, `text`); show the ones `screen_form_notes_seen` records. */
+    notes?: { key: string; text: string }[];
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -232,6 +237,10 @@ export function screen_form_preview_sync(form_code: string, draft: object, edits
 export function screen_form_queue(form_code: string, draft: object): number;
 /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
 export function screen_form_cancel_queue(form_code: string, draft: object): null;
+/** Record one-time notes (`ScreenFormOpened.notes` keys) as seen, each only if not yet recorded; the keys this call recorded, which are the notes to show. */
+export function screen_form_notes_seen(keys: string[]): string[];
+/** Mark a notice (`ScreenFormError.dismiss`) of a saved draft checked; the return is not changed. */
+export function screen_form_check_notice(form_code: string, draft: object, token: string): null;
 "#;
 
 pub fn register(module: HostModule) -> HostModule {
@@ -251,6 +260,52 @@ pub fn register(module: HostModule) -> HostModule {
         .function("screen_form_preview_sync", screen_form_preview_sync)
         .function("screen_form_queue", screen_form_queue)
         .function("screen_form_cancel_queue", screen_form_cancel_queue)
+        .function("screen_form_notes_seen", screen_form_notes_seen)
+        .function("screen_form_check_notice", screen_form_check_notice)
+}
+
+/// Record the one-time notes an opening offered as seen (D3), each by an
+/// atomic insert-if-absent, and answer the keys this call recorded: the
+/// notes the page shows. Called by the page once the opening is shown, so
+/// a failed opening offers the note again, and of two simultaneous
+/// openings only one shows it. Only one-time note keys are written.
+fn screen_form_notes_seen(arguments: &HostArguments) -> HostResult {
+    let keys: Vec<String> = match to_json(arguments.value(0)?) {
+        Value::Array(keys) => keys
+            .iter()
+            .filter_map(|key| key.as_str().map(str::to_string))
+            .collect(),
+        _ => return Err(host_error("keys must be a list")),
+    };
+    if let Some(key) = keys
+        .iter()
+        .find(|key| !key.starts_with(rows_income_q::NOTE_SEEN_PREFIX))
+    {
+        return Err(host_error(format!("`{key}` is not a one-time note")));
+    }
+    let recorded = with_database(|db| {
+        let mut recorded = Vec::new();
+        for key in keys {
+            if db
+                .insert_setting_if_absent(&key, "1")
+                .map_err(|error| host_error(error.to_string()))?
+            {
+                recorded.push(key);
+            }
+        }
+        Ok(recorded)
+    })?;
+    Ok(json(json!(recorded)))
+}
+
+/// Mark a saved draft's notice checked (D5: a 1604E row), as app state;
+/// the return is not changed.
+fn screen_form_check_notice(arguments: &HostArguments) -> HostResult {
+    let kind = kind_of(arguments.string(0)?)?;
+    let draft = draft_argument(arguments, 1)?;
+    let token = arguments.string(2)?.to_owned();
+    with_database(|db| rows_1604::check_notice(db, kind, &draft, &token).map_err(host_error))?;
+    Ok(HostValue::Null)
 }
 
 fn host_error(message: impl Into<String>) -> HostError {
@@ -2519,6 +2574,13 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     ))
 }
 
+/// Whether `draft` is still a Draft. A notice that asks the filer to check
+/// something before filing (D5's 1604E rows, PR 8's 1702RT Schedule IV)
+/// shows only then: on a return that left Draft it could never clear.
+fn is_draft_return(kind: AgentFormKind, draft: &Value) -> bool {
+    agent::identity(kind, draft).is_ok_and(|identity| identity.status == FilingStatus::Draft)
+}
+
 fn status_name(status: &FilingStatus) -> String {
     format!("{status:?}")
 }
@@ -2546,10 +2608,13 @@ fn on_large_stack<T: Send + 'static>(
 }
 
 /// Recompute and validate an editable draft in place; a filed return is
-/// validated on a copy so it keeps the values it was filed with.
+/// validated on a copy so it keeps the values it was filed with. `checked`:
+/// the 1604E rows whose D5 notice the filer marked checked
+/// (`rows_1604::checked_rows`, read on the host thread beforehand).
 fn evaluate_here(
     kind: AgentFormKind,
     draft: &mut Value,
+    checked: &BTreeSet<String>,
 ) -> Result<(Value, Value, FilingStatus), String> {
     let status = agent::identity(kind, draft)?.status;
     let mut errors = if status == FilingStatus::Draft {
@@ -2569,7 +2634,7 @@ fn evaluate_here(
         list.extend(rows_dst_pt_vat::notices(kind, draft));
         list.extend(rows_annual_corporate::notices(kind, draft));
         list.extend(rows_annual_individual::notices(kind, draft));
-        list.extend(rows_1604::notices(kind, draft));
+        list.extend(rows_1604::notices(kind, draft, checked));
     }
     Ok((values_json(kind, draft)?, errors, status))
 }
@@ -2708,88 +2773,103 @@ fn open_screen_form(
     // The draft to show; the one the profile alone makes for this period
     // (what decides whether the profile filled a box); and for a sample, one
     // for another year and period (what tells which boxes follow the period).
-    let (draft, from_profile, build, filed_original, followed, notes) = with_database(|db| {
-        let profile = db
-            .get_profile_by_tin(&tin)
-            .map_err(|error| host_error(error.to_string()))?
-            .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
-        let mut draft =
-            load_draft(db, kind, &profile, year, period, sample, exact).map_err(host_error)?;
-        let mut from_profile = if sample {
-            draft.clone()
-        } else {
-            load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?
-        };
-        // A new return started for the date its key names.
-        if let Some(key) = new_key
-            && exact.is_none()
-            && draft["id"].is_null()
-        {
-            let parts = sample_period_parts(kind);
-            let typed = typed_from_key(year, key);
-            write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
-            write_typed_period(kind, &parts, &typed, &mut from_profile).map_err(host_error)?;
-        }
-        // A stored Draft follows the tax profile in every box the filer did
-        // not edit on it, saved quietly; the page says what changed.
-        // Never in the way of opening it: a follow or save that fails leaves
-        // the draft open as it is (or as followed, in memory).
-        let followed = if sample {
-            None
-        } else {
-            follow_profile(kind, &mut draft, &from_profile).unwrap_or_else(|error| {
-                tracing::warn!("{code}: following the tax profile failed: {error}");
-                None
-            })
-        };
-        let stored = match followed.as_ref().map(|_| stored_return(db, kind, &draft)) {
-            Some(Ok(stored)) => stored.is_some(),
-            Some(Err(error)) => {
-                tracing::warn!("{code}: reading the stored return to save it failed: {error}");
-                false
-            }
-            None => false,
-        };
-        if stored {
-            let mut saved = draft.clone();
-            match refuse_replacing_a_stored_return(db, kind, &saved)
-                .and_then(|()| agent::save_draft(kind, db, &mut saved))
+    let (draft, from_profile, build, filed_original, followed, notes, checked) =
+        with_database(|db| {
+            let profile = db
+                .get_profile_by_tin(&tin)
+                .map_err(|error| host_error(error.to_string()))?
+                .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
+            let mut draft =
+                load_draft(db, kind, &profile, year, period, sample, exact).map_err(host_error)?;
+            let mut from_profile = if sample {
+                draft.clone()
+            } else {
+                load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?
+            };
+            // A new return started for the date its key names.
+            if let Some(key) = new_key
+                && exact.is_none()
+                && draft["id"].is_null()
             {
-                Ok(_) => draft = saved,
-                Err(error) => tracing::warn!("{code}: saving the followed draft failed: {error}"),
+                let parts = sample_period_parts(kind);
+                let typed = typed_from_key(year, key);
+                write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
+                write_typed_period(kind, &parts, &typed, &mut from_profile).map_err(host_error)?;
             }
-        }
-        let followed = followed.unwrap_or_default();
-        let build = if sample {
-            let period = page_period(code, 2).map_err(host_error)?;
-            Some(SampleBuild {
-                other: Some(
-                    load_draft(db, kind, &profile, year + 1, period, true, None)
-                        .map_err(host_error)?,
-                ),
-            })
-        } else {
-            None
-        };
-        let filed_original = if sample {
-            Value::Null
-        } else {
-            filed_original(db, kind, &draft).map_err(host_error)?
-        };
-        // A note a stored return shows once (D3: a filed third-quarter
-        // 1701Q charged under October 15), recorded as seen in app state.
-        let notes = if sample {
-            Vec::new()
-        } else {
-            rows_income_q::once_notes(db, kind, &draft)
-        };
-        Ok((draft, from_profile, build, filed_original, followed, notes))
-    })?;
+            // A stored Draft follows the tax profile in every box the filer did
+            // not edit on it, saved quietly; the page says what changed.
+            // Never in the way of opening it: a follow or save that fails leaves
+            // the draft open as it is (or as followed, in memory).
+            let followed = if sample {
+                None
+            } else {
+                follow_profile(kind, &mut draft, &from_profile).unwrap_or_else(|error| {
+                    tracing::warn!("{code}: following the tax profile failed: {error}");
+                    None
+                })
+            };
+            let stored = match followed.as_ref().map(|_| stored_return(db, kind, &draft)) {
+                Some(Ok(stored)) => stored.is_some(),
+                Some(Err(error)) => {
+                    tracing::warn!("{code}: reading the stored return to save it failed: {error}");
+                    false
+                }
+                None => false,
+            };
+            if stored {
+                let mut saved = draft.clone();
+                match refuse_replacing_a_stored_return(db, kind, &saved)
+                    .and_then(|()| agent::save_draft(kind, db, &mut saved))
+                {
+                    Ok(_) => draft = saved,
+                    Err(error) => {
+                        tracing::warn!("{code}: saving the followed draft failed: {error}")
+                    }
+                }
+            }
+            let followed = followed.unwrap_or_default();
+            let build = if sample {
+                let period = page_period(code, 2).map_err(host_error)?;
+                Some(SampleBuild {
+                    other: Some(
+                        load_draft(db, kind, &profile, year + 1, period, true, None)
+                            .map_err(host_error)?,
+                    ),
+                })
+            } else {
+                None
+            };
+            let filed_original = if sample {
+                Value::Null
+            } else {
+                filed_original(db, kind, &draft).map_err(host_error)?
+            };
+            // A note a stored return shows once (D3: a filed third-quarter
+            // 1701Q charged under October 15), offered until the page records it
+            // seen (`screen_form_notes_seen`).
+            let notes = if sample {
+                Vec::new()
+            } else {
+                rows_income_q::once_notes(db, kind, &draft)
+            };
+            // The 1604E rows the filer marked checked (D5).
+            let checked = rows_1604::checked_rows(db, kind, &draft);
+            Ok((
+                draft,
+                from_profile,
+                build,
+                filed_original,
+                followed,
+                notes,
+                checked,
+            ))
+        })?;
     Ok(async move {
-        let mut opened =
-            on_large_stack(move || opened_json(kind, year, period, draft, from_profile, build))
-                .and_then(|result| result)
-                .map_err(host_error)?;
+        let mut opened = on_large_stack(move || {
+            opened_json(kind, year, period, draft, from_profile, build, checked)
+        })
+        .and_then(|result| result)
+        .map_err(host_error)?;
         opened["filed_original"] = filed_original;
         opened["profile_updates"] = json!(followed);
         opened["notes"] = json!(notes);
@@ -2885,9 +2965,10 @@ fn opened_json(
     mut draft: Value,
     from_profile: Value,
     sample: Option<SampleBuild>,
+    checked: BTreeSet<String>,
 ) -> Result<Value, String> {
     let code = kind.form_code();
-    let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
+    let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &checked)?;
     let mut from_profile_draft = from_profile;
     agent::compute(kind, &mut from_profile_draft)?;
     let from_profile = FromProfile {
@@ -3127,7 +3208,15 @@ fn screen_form_sample_period(
                 let build = SampleBuild { other: None };
                 let from_profile = draft.clone();
                 let mut sample = on_large_stack(move || {
-                    opened_json(kind, year, period, draft, from_profile, Some(build))
+                    opened_json(
+                        kind,
+                        year,
+                        period,
+                        draft,
+                        from_profile,
+                        Some(build),
+                        BTreeSet::new(),
+                    )
                 })
                 .and_then(|result| result)
                 .map_err(host_error)?;
@@ -4347,10 +4436,12 @@ fn screen_form_validate(
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
     let amendment = take_amendment_mark(&mut draft);
+    // Read here, on the host's thread: the evaluation runs on its own.
+    let rows_checked = with_database(|db| Ok(rows_1604::checked_rows(db, kind, &draft)))?;
     Ok(async move {
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
-            let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
+            let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &rows_checked)?;
             if let Some(mark) = &sample {
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
@@ -4810,10 +4901,19 @@ fn screen_form_amend(
         Ok((amended, from_profile, status, updated_at))
     })?;
     Ok(async move {
-        let mut opened =
-            on_large_stack(move || opened_json(kind, year, period, amended, from_profile, None))
-                .and_then(|result| result)
-                .map_err(host_error)?;
+        let mut opened = on_large_stack(move || {
+            opened_json(
+                kind,
+                year,
+                period,
+                amended,
+                from_profile,
+                None,
+                BTreeSet::new(),
+            )
+        })
+        .and_then(|result| result)
+        .map_err(host_error)?;
         put_amendment_mark(
             &mut opened["draft"],
             Some(json!({ "status": status_name(&status), "updated_at": updated_at })),
@@ -4869,10 +4969,19 @@ fn screen_form_filed_original(
         u8::try_from(bir_core::forms::queueable::period_column(&identity.period)).unwrap_or(0);
     Ok(async move {
         let from_profile = draft.clone();
-        let mut opened =
-            on_large_stack(move || opened_json(kind, year, period, draft, from_profile, None))
-                .and_then(|result| result)
-                .map_err(host_error)?;
+        let mut opened = on_large_stack(move || {
+            opened_json(
+                kind,
+                year,
+                period,
+                draft,
+                from_profile,
+                None,
+                BTreeSet::new(),
+            )
+        })
+        .and_then(|result| result)
+        .map_err(host_error)?;
         // Never a draft: what was filed, kept as it was.
         opened["editable"] = Value::Bool(false);
         opened["filed_original_view"] = json!({

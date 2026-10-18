@@ -1077,7 +1077,8 @@ pub(super) fn rt_column_c_notice(row: usize) -> String {
 /// holding an MCIT says so (as the maintainer's D5 does for 1604E's
 /// changed rows); its stored bytes stay as they are.
 pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
-    if kind.form_code() != "1702RT" {
+    // Only on a Draft: a return that left Draft could never clear it.
+    if kind.form_code() != "1702RT" || !super::is_draft_return(kind, draft) {
         return Vec::new();
     }
     let mut out = Vec::new();

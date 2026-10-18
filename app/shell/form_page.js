@@ -471,9 +471,18 @@ export class FormPageActions {
     // A draft saved before it kept its profile baseline: its boxes that
     // differ from the profile now, never changed by opening it.
     s.profileDiffers = r.profile_differs || [];
-    // A note a stored return shows once (the host records it as seen in
-    // app state: a filed third-quarter 1701Q charged under October 15).
-    s.notes = r.notes || [];
+    // A note a stored return shows once (a filed third-quarter 1701Q
+    // charged under October 15): recorded seen now that this opening has
+    // it, and shown only if this call recorded it (another opening did not).
+    s.notes = [];
+    if (r.notes?.length) {
+      try {
+        const recorded = this.app.store.call("screen_form_notes_seen", r.notes.map((n) => n.key));
+        s.notes = r.notes.filter((n) => recorded.includes(n.key)).map((n) => n.text);
+      } catch (_) {
+        s.notes = [];
+      }
+    }
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -618,7 +627,7 @@ export class FormPageActions {
     const keys = itemKeys(it);
     const picker = s.picker?.row === id ? s.picker.cal : null;
     return JSON.stringify([
-      width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
+      width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id), s.checkable?.[id] || [],
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
@@ -1734,6 +1743,7 @@ export class FormPageActions {
     // The host holds back what a sample's blank period cannot judge.
     s.errors = errors || [];
     s.messages = {};
+    s.checkable = {};
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
     const words = (t) => String(t).toLowerCase().match(/[a-z]{4,}/g) || [];
@@ -1767,7 +1777,21 @@ export class FormPageActions {
       }
       id = id || (items[0] && items[0].id);
       if (id) s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
+      // A notice the filer may mark checked without changing anything.
+      if (id && e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
     }
+  }
+
+  /** Mark a notice checked (the host records it; the return is not changed), then check again. */
+  markChecked(token, cx) {
+    const s = this.state;
+    if (!s || !s.draft) return;
+    try {
+      this.app.store.call("screen_form_check_notice", s.code, s.draft, token);
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    this.validate(cx);
   }
 
   check(cx) {
@@ -2785,7 +2809,13 @@ function itemRow(cx, ui, it, pi, ii, width) {
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
         // Reserved 18 px validation line, present with or without a message.
-        .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " "))),
+        .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " ")))
+        // A notice the filer may mark checked: one button each, nothing on the return changes.
+        .children(
+          (s.editable ? s.checkable?.[id] || [] : []).map((c) =>
+            div().mt(SPACE[1]).child(AppButton(cx, `fp-checked-${c.token}`, c.label, { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.markChecked(c.token, cx) })),
+          ),
+        ),
     );
 }
 
