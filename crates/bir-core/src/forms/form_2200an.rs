@@ -213,6 +213,10 @@ fn put_row(fields: &mut BTreeMap<String, String>, prefix: &str, row: &Form2200AN
     put("TaxDue", official_amount(row.tax_due));
 }
 
+fn is_zero_sheets(sheets: &u16) -> bool {
+    *sheets == 0
+}
+
 fn last_day_of_month(year: u16, month: u8) -> u8 {
     use chrono::Datelike;
     let (next_year, next_month) = if month >= 12 {
@@ -237,6 +241,11 @@ pub struct Form2200ANDraft {
     pub year: u16,
     /// Item 2.
     pub is_amended: bool,
+    /// Item 3, Number of Sheet/s Attached: the official `txtSheets` is an
+    /// open box (`maxlength="2"`, default `0`). Left out of a stored draft
+    /// while it is 0, so a draft saved before it existed keeps its shape.
+    #[serde(default, skip_serializing_if = "is_zero_sheets")]
+    pub number_of_attached_sheets: u16,
     /// Item 5: 9-digit TIN then the 5-digit branch code.
     pub tin: String,
     /// Item 6.
@@ -351,12 +360,13 @@ impl Form2200ANDraft {
             last_day_of_month(year, month)
         };
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             month,
             day,
             year,
             is_amended: false,
+            number_of_attached_sheets: 0,
             tin: profile.tin.full(),
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
@@ -528,7 +538,7 @@ impl Form2200ANDraft {
         put("txtYear", self.year.to_string());
         put("AmendedRtn1", flag(self.is_amended));
         put("AmendedRtn2", flag(!self.is_amended));
-        put("txtSheets", "0".to_string());
+        put("txtSheets", self.number_of_attached_sheets.to_string());
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
         put("txtPage2TIN", format!("{tin1}-{tin2}-{tin3}-{branch}"));
         put("txtTIN1", tin1);
@@ -824,6 +834,15 @@ impl Form2200ANDraft {
             ],
             state: penalty,
             basic_tax_due: "Item 20", |d| d.tax_still_due,
+            // Decision D8 (2026-10-18): due on removal, so the penalties run
+            // from Item 1, the removal date the filer types.
+            typed_due_date: Some(|d: &Self| {
+                chrono::NaiveDate::from_ymd_opt(
+                    i32::from(d.year),
+                    u32::from(d.month),
+                    u32::from(d.day),
+                )
+            }),
         )
     }
 }

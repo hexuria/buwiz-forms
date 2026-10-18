@@ -1813,11 +1813,13 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // spouse's, 1701 Part IV item 2 and 1701A item 67, drawn now):
     // less 1 for 2552 (PR 9: its item 5 runtime RDO select is a hidden copy
     // of the printed item 5 box) and plus 1 for 1707 (PR 9: its item 5 RDO
-    // list, now a box of its printed item):
-    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1. Table cells are counted apart (the 36 2550M
+    // list, now a box of its printed item); less 3 for 2200C, 2200M and 2200P
+    // (PR 11: their second RDO select, rdoPg1Pt1I6RDO, repeats the item's
+    // RDO box and is not drawn):
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3. Table cells are counted apart (the 36 2550M
     // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
     // checks every one).
-    assert_eq!(supplied, 73, "catalog lists, dependent ones included");
+    assert_eq!(supplied, 70, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and

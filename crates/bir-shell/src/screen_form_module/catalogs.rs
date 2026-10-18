@@ -12,7 +12,7 @@ use serde_json::{Map, Value, json};
 
 use super::{
     rows_1700, rows_2550m, rows_2550q, rows_annual_corporate, rows_annual_individual,
-    rows_as_needed, rows_donor_estate, rows_dst_pt_vat, rows_income_q, rows_monthly,
+    rows_as_needed, rows_donor_estate, rows_dst_pt_vat, rows_excise, rows_income_q, rows_monthly,
     rows_withholding, schema_entry,
 };
 
@@ -89,6 +89,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
         return order;
     }
     if let Some(order) = rows_donor_estate::edit_order(kind, key) {
+        return order;
+    }
+    if let Some(order) = rows_excise::edit_order(kind, key) {
         return order;
     }
     location(kind, key).map_or(0, |(_, level)| level + 1)

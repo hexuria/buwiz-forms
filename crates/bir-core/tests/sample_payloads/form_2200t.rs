@@ -66,18 +66,37 @@ fn form_2200t_sample_payload_is_current() {
     );
 }
 
-/// Event-based: the calendar has no 2200-T deadline.
+/// Due per removal (decision D8): the penalties run from Item 1, the
+/// removal date; the calendar has no 2200-T deadline.
 #[test]
 fn form_2200t_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_2200t,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Decision D8 (2026-10-18): the removal date the sample types (Item 1, 03/14/2025).
+        Deadline::Typed {
+            due: day(2025, 3, 14),
         },
     );
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_2200t()).expect("sample serializes")]
+    // PR 11: the sample's last typed row is xt090, and recompute drops the
+    // zero rows after it, so the probe never saw Schedule 1's last six fixed
+    // rows (xt100 ... xt200) echo. A seed with the last fixed row typed
+    // holds them all; its payload is never written.
+    let mut all_rows = sample_2200t();
+    let row = all_rows.row_by_key_mut("xt200").unwrap();
+    row.taxable = 1.0;
+    row.tax_due = 0.01;
+    all_rows.recompute();
+    assert_eq!(
+        all_rows.schedule.len(),
+        bir_core::forms::form_2200t::FORM_2200T_FIXED_ROW_COUNT,
+        "the all-rows seed holds every fixed row"
+    );
+    vec![
+        serde_json::to_value(sample_2200t()).expect("sample serializes"),
+        serde_json::to_value(all_rows).expect("all-rows sample serializes"),
+    ]
 }

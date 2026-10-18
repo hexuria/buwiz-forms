@@ -50,6 +50,7 @@ mod rows_annual_individual;
 mod rows_as_needed;
 mod rows_donor_estate;
 mod rows_dst_pt_vat;
+mod rows_excise;
 mod rows_income_q;
 mod rows_monthly;
 mod rows_withholding;
@@ -2417,9 +2418,10 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
                 // The printed item numbers where BIR's message names its
-                // program's own (decision D6; PR 9's and PR 10's forms).
+                // program's own (decision D6; PR 9's, PR 10's and PR 11's forms).
                 let message = rows_as_needed::printed_message(kind, message)
                     .or_else(|| rows_donor_estate::printed_message(kind, message))
+                    .or_else(|| rows_excise::printed_message(kind, message))
                     .unwrap_or(message);
                 // The annual individual returns draw a message under the
                 // item it cites (PR 7, rows_annual_individual.rs).
@@ -2918,10 +2920,12 @@ fn opened_json(
         if !penalties::edited(&group, &draft) {
             for key in &group.keys {
                 let reason = penalties::lock_reason(kind, &group, &draft, key);
-                // A 1701Q (PR 5) or 1701 (PR 7) column still on the filer's
+                // A 1701Q (PR 5) or 1701 (PR 7) column, or an excise return
+                // stored before decision D8 (PR 11), still on the filer's
                 // typed amounts.
                 let reason = rows_income_q::penalty_lock(kind, &draft, key)
                     .or_else(|| rows_annual_individual::penalty_lock(kind, &draft, key))
+                    .or_else(|| rows_excise::penalty_lock(kind, &draft, key))
                     .filter(|_| reason == penalties::LOCK)
                     .unwrap_or(reason);
                 locks.insert(key.clone(), json!(reason));
@@ -3875,7 +3879,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's and PR 10's forms; the integration merge chains PR 2's and
+    // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms; the integration merge chains PR 2's and
     // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
         .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
@@ -3883,10 +3887,13 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         .or_else(|| rows_annual_corporate::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_annual_individual::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_as_needed::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_donor_estate::removes(kind, &before, &draft, &edits));
-    // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42),
+        .or_else(|| rows_donor_estate::removes(kind, &before, &draft, &edits))
+        .or_else(|| rows_excise::removes(kind, &before, &draft, &edits));
+    // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42;
+    // PR 11: an excise return's penalties kept as entered, then computed),
     // each with its note; `null` opens the box.
-    let relocks = rows_annual_corporate::live_locks(kind, &draft);
+    let mut relocks = rows_annual_corporate::live_locks(kind, &draft);
+    relocks.extend(rows_excise::live_locks(kind, &draft));
     let relock_notes: Map<String, Value> = relocks
         .iter()
         .map(|(key, lock)| {
@@ -3951,6 +3958,13 @@ fn apply_screen_edits(
     // penalties).
     agent::prepare_for_writes(kind, draft).map_err(host_error)?;
     let mut rejected = Map::new();
+    // The boxes this batch blanks (an excise return joins decision D8 only
+    // when a whole penalty group is blanked, PR 11).
+    let blanked: Vec<String> = edits
+        .iter()
+        .filter(|(_, v)| v.is_null() || v.as_str().is_some_and(|text| text.trim().is_empty()))
+        .map(|(k, _)| k.clone())
+        .collect();
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
     // 2551Q's penalty boxes come last, so they are judged on the batch's
@@ -4022,7 +4036,7 @@ fn apply_screen_edits(
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
         // override, so the computed amount files again (rule 8).
-        if let Some((_, edited)) = penalty_groups
+        if let Some((group, edited)) = penalty_groups
             .iter()
             .find(|(group, _)| group.keys.contains(&key))
         {
@@ -4054,9 +4068,17 @@ fn apply_screen_edits(
                 }
                 continue;
             }
+            // A group not on the return opens with nothing (PR 11's forms).
+            if let ChoiceStep::Fill(value) = &step
+                && let Some(lock) = rows_excise::closed_penalty(kind, draft, group, value)
+            {
+                rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
+                continue;
+            }
             if !unlocked.contains(&key) && !edited {
                 let lock = rows_income_q::penalty_lock(kind, draft, &key)
                     .or_else(|| rows_annual_individual::penalty_lock(kind, draft, &key))
+                    .or_else(|| rows_excise::penalty_lock(kind, draft, &key))
                     .unwrap_or(penalties::LOCK);
                 rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
                 continue;
@@ -4087,6 +4109,11 @@ fn apply_screen_edits(
             *draft = next;
             continue;
         }
+        // What the batch wrote, for PR 11's host refusals below.
+        let written = match &step {
+            ChoiceStep::Fill(value) => Some(value.clone()),
+            ChoiceStep::Set(_) => None,
+        };
         let result = match step {
             // A pooled address (rule 5) comes as one text on its first line.
             ChoiceStep::Fill(value) if pools.contains_key(&key) => {
@@ -4102,6 +4129,13 @@ fn apply_screen_edits(
                 Ok(())
             }
         };
+        // A box the form would clear (its answer does not hold) or past its
+        // official length is refused with its reason (PR 11's forms).
+        let result = result.and_then(|()| {
+            written
+                .and_then(|value| rows_excise::refusal(kind, &next, &key, &value))
+                .map_or(Ok(()), Err)
+        });
         match result {
             Ok(()) => {
                 // A profile box edited here keeps the edit when the profile
@@ -4119,6 +4153,11 @@ fn apply_screen_edits(
             }
         }
     }
+    // "Use the computed amounts" on an excise return stored before decision
+    // D8 puts it on the typed due date (PR 11).
+    let groups: Vec<penalties::Group> =
+        penalty_groups.into_iter().map(|(group, _)| group).collect();
+    rows_excise::join_if_group_blanked(kind, draft, &groups, &blanked, &rejected);
     Ok(rejected)
 }
 
@@ -4360,10 +4399,21 @@ fn plan_choice_edits(
                 if rows_as_needed::untick_keeps_the_answer(kind, &key) {
                     continue;
                 }
+                // 2200S item 17 is a tick box of its own (PR 11): unticking
+                // it writes its false option, not the group's blank.
+                if rows_excise::untick_writes_its_option(kind, &key) {
+                    plain.push((key, ChoiceStep::Fill(value)));
+                    continue;
+                }
                 if members >= 3 {
+                    // An excise return's manner item ends unanswered, the
+                    // value its field holds then, not `null` (PR 11).
                     let sets = true_option_paths(def, &key)
                         .into_iter()
-                        .map(|path| (path, Value::Null))
+                        .map(|path| {
+                            let blank = rows_excise::unanswered(kind, &path).unwrap_or(Value::Null);
+                            (path, blank)
+                        })
                         .collect();
                     plain.push((key, ChoiceStep::Set(sets)));
                 } else {
@@ -5128,6 +5178,9 @@ mod tests {
     mod as_needed;
     // PR 10: 1800 and 1801 against their printed sheets.
     mod donor_estate;
+    // PR 11: 2200A, 2200AN, 2200C, 2200M, 2200P, 2200S and 2200T against
+    // their printed sheets, and decision D8.
+    mod excise;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -5864,10 +5917,12 @@ mod tests {
     fn rows_2200p_added_rows_save() {
         setup();
         let form = schema_entry("2200P").unwrap();
-        let table = form["parts"][4]["items"]
+        // In whichever part the layout puts it (PR 11: Part V Schedule 1).
+        let table = form["parts"]
             .as_array()
             .unwrap()
             .iter()
+            .flat_map(|part| part["items"].as_array().unwrap())
             .find(|it| it["keys"][0][0] == "frm2200P:txtSched1ATC28")
             .expect("added rows table")
             .clone();
@@ -8316,12 +8371,14 @@ mod tests {
         // item 5 and the spouse's, 1701 Part IV item 2 and 1701A item 67,
         // drawn now), less 1 for 2552 (PR 9: its item 5 runtime RDO select is
         // a hidden copy of the printed item 5 box) and plus 1 for 1707 (PR 9:
-        // its item 5 RDO list, now a box of its printed item):
-        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1.
+        // its item 5 RDO list, now a box of its printed item), less 3 for
+        // 2200C, 2200M and 2200P (PR 11: their second RDO select,
+        // rdoPg1Pt1I6RDO, repeats the item's RDO box and is not drawn):
+        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 73);
+        assert_eq!(supplied, 70);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
@@ -11462,16 +11519,7 @@ mod tests {
     /// for 1701, 1701A and 1701MS (PR 7): their layouts place items 5, 7 and
     /// 10 where the sheet prints them, hide the later pages' header copies
     /// and put Line of Business in Not on the printed sheet.
-    const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
-        "2200C frm2200C:txtLOB",
-        "2200M frm2200M:txtPg2RegisteredName",
-        "2200P frm2200P:txtLOB",
-        "2200P frm2200P:txtPg1Pt1I8ContactNumber",
-        "2200P frm2200P:txtPg1Pt1I9Email",
-        "2200P frm2200P:txtPg2RegisteredName",
-        "2200T frm2200Tv2020:registeredName_2",
-        "2200T frm2200Tv2020:registeredName_3",
-    ];
+    const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[];
 
     #[test]
     fn every_filled_profile_box_is_folded_or_offers_edit_in_paper_order() {
@@ -11789,8 +11837,18 @@ mod tests {
         // the box: 0605's quarter boxes were (PR 9 opened them), and 2551Q's
         // repeated email was (PR 1). 2200A's Schedule 1 tick box is still
         // assigned (PR 11).
+        // With every form group (PR 1 to PR 11) merged, the pinned list
+        // assigns no box to a group any more, so no box says "It will be
+        // added": 2200A's Schedule 1 tick box, the last example, was opened
+        // by PR 11 and now reads as not yet fillable.
+        assert!(
+            !ASSIGNED_SHUT_BOXES
+                .lines()
+                .any(|line| !line.starts_with('#') && line.contains(" | ")),
+            "no box is still assigned to a form group"
+        );
         assert!(!assigned_to_open("2551Q", "txtEmail#occurrence-1"));
-        assert!(assigned_to_open(
+        assert!(!assigned_to_open(
             "2200A",
             "frm2200Av2020:txtSched1_xa_others1_Check"
         ));
@@ -11803,7 +11861,7 @@ mod tests {
                 "frm2200Av2020:txtSched1_xa_others1_Check",
                 "cannot be filled here: written by the app without a draft field (a constant or the period)"
             ),
-            NOTE_ASSIGNED
+            NOTE_NOT_YET
         );
         assert_eq!(
             lock_note_for(
@@ -12091,7 +12149,9 @@ mod tests {
                 "frm2200M:txtSched1_LocallyExtractedTaxRateE13",
                 "money",
             ),
-            ("2200P", "frm2200P:txtSched1ApplicableRate1", "money"),
+            // Rows 1-25 print their rate (PR 11 does not draw those
+            // boxes); the Others row's is typed.
+            ("2200P", "frm2200P:txtSched1ApplicableRate26", "money"),
             ("1602Q", "frm1602Q:txtSched1Rate13", "money"),
             // Zero-rated sales are an amount.
             ("2550Q", "frm2550qv2024:zeroRatedSales", "money"),
@@ -13809,6 +13869,12 @@ mod tests {
     /// box (PR 10) are off, whatever they show, while the draft does not
     /// hold their corpus condition: the host refuses what is typed there,
     /// so probing cannot tell, and the host's own refusal is no oracle.
+    /// The excise returns' boxes (PR 11 host gates, which their corpus gives
+    /// no condition) are judged the same way on their host condition's tag,
+    /// a probe the box cannot take at all (text in an amount) saying nothing;
+    /// `tests::excise::pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut`
+    /// checks every key of every host gate against the form's own `compute`,
+    /// shut and open.
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         const WP_SCHEDULE: [&str; 4] = [
             "frm1600WP:dtSched:txtTin",
@@ -13839,6 +13905,14 @@ mod tests {
         let hand = hand_gates_2552(code, &checked["draft"]);
         for (key, tag, _) in &hand {
             keys.push((key.clone(), String::new(), tag.clone()));
+        }
+        let excise = code.starts_with("2200");
+        let mut excise_gated = BTreeSet::new();
+        for key in schema_keys(code) {
+            if let Some(tag) = rows_excise::host_condition(code, key) {
+                excise_gated.insert(key.clone());
+                keys.push((key.clone(), String::new(), tag));
+            }
         }
         let draft = &checked["draft"];
         let relief = !draft["tax_relief"].is_null();
@@ -13910,6 +13984,10 @@ mod tests {
                                 taken.push(cleared);
                             }
                         }
+                        // On the excise returns (PR 11), a box that cannot
+                        // take the probe at all (text in an amount) says
+                        // nothing either way.
+                        Some(why) if why != tag && (excise || excise_gated.contains(key)) => {}
                         Some(why) => refused.push(why == tag),
                     }
                 }
@@ -13993,7 +14071,10 @@ mod tests {
                 let host = hand_gates_2552(code, &opened["draft"])
                     .into_iter()
                     .find(|(k, _, _)| k == key)
-                    .map(|(_, tag, _)| tag);
+                    .map(|(_, tag, _)| tag)
+                    // The excise returns' PR 11 host gates have no corpus
+                    // condition either: their tag is the host's.
+                    .or_else(|| rows_excise::host_condition(code, key));
                 let condition = corpus[code][key]
                     .as_str()
                     .or(host.as_deref())
@@ -14081,12 +14162,20 @@ mod tests {
                 // while 15D is not Yes.
                 ("1801", 7),
                 ("2000OT", 2),
-                ("2200A", 2),
-                ("2200AN", 1),
-                ("2200C", 1),
-                ("2200M", 1),
-                ("2200P", 1),
-                ("2200T", 1),
+                // PR 11's host gates on the excise returns (rows_excise.rs):
+                // plus 1 for 2200A (item 15), plus 2 each for 2200AN,
+                // 2200M, 2200P and 2200T (items 12A and 15), plus 72 for
+                // 2200C (items 12A and 15 and Part V's 70 typed cells while
+                // item 13 or 15 is not ticked), and 94 for 2200S (items 17
+                // and 21 and Schedule 1's 92 boxes off a payment on actual
+                // removal).
+                ("2200A", 3),
+                ("2200AN", 3),
+                ("2200C", 73),
+                ("2200M", 3),
+                ("2200P", 3),
+                ("2200S", 94),
+                ("2200T", 3),
                 // 10 for 2552 (PR 9): items 12A and 12B and Part IV rows
                 // 2-5's two boxes, which the official runtime keeps shut.
                 ("2552", 10),
@@ -14720,6 +14809,8 @@ mod tests {
             ("2200C", 1),
             ("2200M", 1),
             ("2200P", 1),
+            // Plus 2200S (PR 11): Items 23A-23C are bound to the overrides.
+            ("2200S", 1),
             ("2200T", 1),
             ("2550M", 1),
             ("2551Q", 1),
@@ -14897,7 +14988,8 @@ mod tests {
             }
         }
         assert_eq!(found, expected);
-        // The spouse's column on these returns with no spouse.
+        // The spouse's column on these returns with no spouse, and 2200S's
+        // Items 23A-23C while the return is not a prepayment (PR 11).
         not_on_return.sort();
         assert_eq!(
             not_on_return,
@@ -14907,6 +14999,7 @@ mod tests {
                 "1701A frm1701A:txt25B",
                 "1701MS frm1701MS:txtCompromise28b",
                 "1701Q frm1701q:txt64B",
+                "2200S frm2200S:txtTax21A",
             ]
         );
     }

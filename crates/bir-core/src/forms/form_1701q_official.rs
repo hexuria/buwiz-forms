@@ -894,6 +894,9 @@ impl Form1701QDraft {
         }
         let common = PenaltyItems::<Self> {
             form_code: super::form_1701q::FORM_CODE,
+            // The calendar's deadline, not a typed trigger date (PR 11's D8
+            // is for the excise returns only).
+            typed_due_date: None,
             party: Some("Taxpayer/Filer"),
             applies: |_| true,
             schedule: crate::penalties::PenaltyProfile::StandardFiling,

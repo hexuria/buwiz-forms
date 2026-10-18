@@ -110,10 +110,16 @@ fn label(code: &str, key: &str, condition: &Value) -> Value {
 }
 
 /// The tag of `code`'s box `key` when the corpus gives it a condition
-/// (PR 9's host gates refuse a write with it).
+/// (PR 9's and PR 11's host gates refuse a write with it).
 pub(super) fn tag(code: &str, key: &str) -> Option<String> {
     let condition = conditions()[code].get(key)?;
     label(code, key, condition).as_str().map(str::to_string)
+}
+
+/// Whether the form clears the first probe value typed into `key` alone
+/// (PR 11's host gates).
+pub(super) fn cleared(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> bool {
+    off_alone(kind, draft, key, shown)
 }
 
 /// Fill `edits` on a copy of `draft` the way the page does, recompute, and
@@ -184,8 +190,10 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         off.insert(key, json!(tag));
     }
     let Some(list) = conditions()[code].as_object() else {
-        // A form without corpus conditions may still have PR 9 host gates.
+        // A form without corpus conditions may still have PR 9 or PR 11
+        // host gates.
         off.extend(super::rows_as_needed::off(kind, draft, values));
+        off.extend(super::rows_excise::off(kind, draft, values));
         return off;
     };
     // A box the host itself closes while its answer does not hold (it
@@ -243,6 +251,10 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
     // PR 9's host gates refuse a write while shut (the probe above sees a
     // refusal, not a clearing): rows_as_needed.rs says which are off.
     off.extend(super::rows_as_needed::off(kind, draft, values));
+    // PR 11's host gates (rows_excise.rs), where the corpus names none.
+    for (key, tag) in super::rows_excise::off(kind, draft, values) {
+        off.entry(key).or_insert(tag);
+    }
     // In the conditions' own order, gated boxes among the rest; a host-gated
     // box the conditions do not list (PR 9's group keys) follows them.
     let mut ordered: Map<String, Value> = list

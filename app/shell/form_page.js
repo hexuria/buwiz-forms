@@ -1554,10 +1554,11 @@ export class FormPageActions {
   /** Use the computed amounts: the group's overrides are cleared. */
   usePenaltyComputed(group, cx) {
     const s = this.state;
-    // A column kept as entered before penalties were computed (1701Q, 1701)
-    // goes to the computed amounts the same way. The blanks are sent while the
-    // group is still open, so the host takes them (a kept column is not
-    // `edited`); replacing typed amounts asks first (the host's `removes`).
+    // A column kept as entered before penalties were computed (1701Q, 1701,
+    // the excise returns stored before decision D8) goes to the computed
+    // amounts the same way. The blanks are sent while the group is still
+    // open, so the host takes them (a kept column is not `edited`);
+    // replacing typed amounts asks first (the host's `removes`).
     if (group.edited || group.kept) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
     for (const k of group.keys) s.penaltyOpen.delete(k);
     this.refreshRows();
