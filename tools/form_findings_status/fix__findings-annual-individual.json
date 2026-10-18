@@ -1,0 +1,330 @@
+{
+ "1700": {
+  "R2.2": {
+   "reason": "txtPg2I3PartVIEmployerName1 is Schedule 1 row 3's 'a. Name of Employer' (html-frozen/1700-2018/writer-cells.json: 'Schedule 1 Item 3a Name of Employer'), the employer's name, a different fact from the profile's own name; the filer types it and it files and prints (screen_form_module::tests::annual_individual::form_1700_rows_3_and_4_mark_their_party_from_the_draft).",
+   "reviewer": "Agree (PR 7 review): txtPg2I3PartVIEmployerName1 is Schedule 1 row 3's 'a. Name of Employer' (html-frozen/1700-2018/writer-cells.json 'Schedule 1 Item 3a Name of Employer'); a per-row filer entry; proof form_1700_rows_3_and_4_mark_their_party_from_the_draft.",
+   "status": "not_a_bug"
+  },
+  "R2.3": {
+   "reason": "txtPg2I4PartVIEmployerName1 is Schedule 1 row 4's 'a. Name of Employer' (html-frozen/1700-2018/writer-cells.json: 'Schedule 1 Item 4a Name of Employer'), the employer's name, a different fact from the profile's own name; the filer types it and it files and prints (screen_form_module::tests::annual_individual::form_1700_rows_3_and_4_mark_their_party_from_the_draft).",
+   "reviewer": "Agree (PR 7 review): txtPg2I4PartVIEmployerName1 is Schedule 1 row 4's 'a. Name of Employer' (writer-cells 'Schedule 1 Item 4a Name of Employer'); a per-row filer entry, as R2.2.",
+   "status": "not_a_bug"
+  },
+  "manual-0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_open_the_spouse_part_from_the_printed_civil_status; screen_form_module::tests::annual_individual::closing_the_spouse_part_asks_first_on_every_annual_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1700_shows_what_was_typed_and_blank_defaults",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "reason": "Rows 3 and 4's Taxpayer/Spouse marks are not constants: rows_1700.rs writes each row's mark from the row's for_spouse flag, and the page and the print show the same mark for each row's for_spouse (screen_form_module::tests::annual_individual::form_1700_rows_3_and_4_mark_their_party_from_the_draft). The probe saw one value because no sample draft has a spouse's employer in rows 3 and 4.",
+   "reviewer": "Agree (PR 7 review): rows 3 and 4 Taxpayer/Spouse marks follow each row's for_spouse flag (rows_1700.rs), so page and print agree per row; proof form_1700_rows_3_and_4_mark_their_party_from_the_draft.",
+   "status": "not_a_bug"
+  },
+  "validation.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites; screen_form_module::tests::annual_individual::annual_messages_cite_printed_item_numbers",
+   "status": "fixed"
+  }
+ },
+ "1701": {
+  "R2.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_profile_boxes_offer_edit_or_are_copies; screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form",
+   "status": "fixed"
+  },
+  "R2.2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_spouse_rdo_agrees_on_page_print_and_upload",
+   "status": "fixed"
+  },
+  "R2.3": {
+   "reason": "txtPg2I6TelNum is Part IV item 6, the spouse's contact number (html-frozen/1701-2018/writer-cells.json joins it under Part IV), a different fact from the profile's own phone. It is the filer's entry now (probe.rs FILER_TYPED; it was locked as computed), open on a joint return and filed (screen_form_module::tests::annual_individual::form_1701_spouse_contact_is_typed; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds).",
+   "reviewer": "Agree (PR 7 review): txtPg2I6TelNum is Part IV item 6, the spouse's contact number, not the profile phone; now a filer entry; the upload writes spouse.contact_number on a joint return; proof form_1701_spouse_contact_is_typed.",
+   "status": "not_a_bug"
+  },
+  "R2.4": {
+   "reason": "txtZIP is the official program's hidden workflow control, not a box of the sheet: rules/forms/1701-v2018/fields.json (a tracked rule record of the untracked official HTA runtime) records it with no page and no item, html-frozen/1701-2018/writer-cells.json prints nothing from it, and app/forms/schema-overrides.json keeps it hidden. The profile's ZIP shows, files and prints in item 9A (txtPg1I9AZipCode) (screen_form_module::tests::annual_individual::annual_zip_shows_in_item_9a_not_the_hidden_control).",
+   "reviewer": "Agree (PR 7 review): txtZIP has page and item null in rules/forms/1701-v2018/fields.json, is absent from html-frozen/1701-2018/writer-cells.json and hidden in schema-overrides.json; the profile ZIP is item 9A; proof annual_zip_shows_in_item_9a_not_the_hidden_control.",
+   "status": "not_a_bug"
+  },
+  "R3.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.10": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions; screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.11": {
+   "reason": "The sixteen boxes are Part III, Details of Payment (items 34-37), which the official program disables at load (rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json: disabled true, source lines 934-960), so the upload files them blank as the official program does. The page shows each printed item with its caption and a note instead of a box (screen_form_module::tests::annual_individual::form_1701_details_of_payment_show_a_note), as PR 8 does for 1702MX's Part III.",
+   "reviewer": "Agree (PR 7 review): the 16 boxes txtPg1I34-37 sit at source lines 934-960 of rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json, all disabled:true; proof form_1701_details_of_payment_show_a_note.",
+   "status": "not_a_bug"
+  },
+  "R3.2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups; screen_form_module::tests::annual_individual::annual_tins_are_one_comb_each",
+   "status": "fixed"
+  },
+  "R3.4": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups; screen_form_module::tests::annual_individual::form_1701_parts_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "R3.5": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups; screen_form_module::tests::annual_individual::form_1701_parts_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "R3.6": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups; screen_form_module::tests::annual_individual::form_1701_parts_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "R3.7": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "R3.8": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "R3.9": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions; screen_form_module::tests::annual_individual::form_1701_schedule_1_is_one_table_of_employers",
+   "status": "fixed"
+  },
+  "R4.1": {
+   "reason": "the official form stores the period split (txtPg1I1Month beside txtPg1I1Year; the 2018 sheet prints the year only, so the month is drawn under 'Not on the printed sheet'); rule 4 keeps the split, and a library opening shows it blank (screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form), as PR 0b found for 1701A and 1701MS R4.1.",
+   "reviewer": "Agree (PR 7 review): the split period (month beside year) is kept as the official form stores it; PR 0b recorded the same for 1701A and 1701MS R4.1.",
+   "status": "not_a_bug"
+  },
+  "R5.3": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_tins_are_one_comb_each",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_penalties_are_computed_and_kept_ones_say_so; screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_penalty_items_follow_the_shared_model; screen_form_module::tests::annual_individual::form_1701_legacy_draft_takes_a_typed_penalty; screen_form_module::tests::annual_individual::using_the_computed_penalties_asks_first; screen_form_module::tests::annual_individual::a_1701_draft_stored_before_pr7_saves_back_byte_for_byte; screen_form_module::tests::annual_individual::make_room_leaves_a_current_penalty_state_alone",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_open_the_spouse_part_from_the_printed_civil_status; screen_form_module::tests::annual_individual::closing_the_spouse_part_asks_first_on_every_annual_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_schedule_1_is_one_table_of_employers; screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_parts_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_parts_hold_only_their_own_boxes; screen_form_module::tests::annual_individual::form_1701_current_year_nolco_waits_for_a_loss",
+   "status": "fixed"
+  },
+  "manual-5": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_parts_hold_only_their_own_boxes",
+   "status": "fixed"
+  },
+  "manual-6": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_spouse_rdo_agrees_on_page_print_and_upload; screen_form_module::tests::annual_individual::an_imported_1701_spouse_rdo_off_the_filing_has_a_notice",
+   "status": "fixed"
+  },
+  "validation.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites; screen_form_module::tests::annual_individual::annual_messages_cite_printed_item_numbers",
+   "status": "fixed"
+  }
+ },
+ "1701A": {
+  "R2.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_profile_boxes_offer_edit_or_are_copies; screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form",
+   "status": "fixed"
+  },
+  "R2.2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills",
+   "status": "fixed"
+  },
+  "R2.3": {
+   "reason": "txtZIP is the official program's hidden workflow control, not a box of the sheet: rules/forms/1701a-v2018/fields.json (a tracked rule record of the untracked official HTA runtime) records it with no page and no item, html-frozen/1701a-2018/writer-cells.json prints nothing from it, and app/forms/schema-overrides.json keeps it hidden. The profile's ZIP shows, files and prints in item 9A (txtZipCode) (screen_form_module::tests::annual_individual::annual_zip_shows_in_item_9a_not_the_hidden_control).",
+   "reviewer": "Agree (PR 7 review): frm1701A:txtZIP has page and item null in rules/forms/1701a-v2018/fields.json, is absent from writer-cells and hidden in schema-overrides.json; the profile ZIP is item 9A; proof annual_zip_shows_in_item_9a_not_the_hidden_control.",
+   "status": "not_a_bug"
+  },
+  "R3.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "R3.4": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "R3.5": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "R5.2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_and_1701a_items_follow_the_printed_sheet; screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_open_the_spouse_part_from_the_printed_civil_status; screen_form_module::tests::annual_individual::closing_the_spouse_part_asks_first_on_every_annual_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills",
+   "status": "fixed"
+  },
+  "validation.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites; screen_form_module::tests::annual_individual::annual_messages_cite_printed_item_numbers",
+   "status": "fixed"
+  }
+ },
+ "1701MS": {
+  "R2.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_profile_boxes_offer_edit_or_are_copies; screen_form_module::tests::profile_boxes_lock_only_with_a_value_and_open_with_edit_on_every_form",
+   "status": "fixed"
+  },
+  "R3.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups; screen_form_module::tests::annual_individual::annual_tins_are_one_comb_each",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups",
+   "status": "fixed"
+  },
+  "R3.3": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_have_no_additional_details_groups; screen_form_module::tests::annual_individual::form_1701ms_amounts_sit_under_the_items_they_print_in",
+   "status": "fixed"
+  },
+  "R3.4": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "R3.5": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "R4.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701ms_emails_rates_and_dates_are_typed; screen_form_module::tests::every_open_date_box_takes_a_typed_date_on_every_form",
+   "status": "fixed"
+  },
+  "R5.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_tins_are_one_comb_each",
+   "status": "fixed"
+  },
+  "R7.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701ms_names_are_text; screen_form_module::tests::a_text_box_the_schema_typed_as_money_is_text_on_every_form",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701ms_penalties_are_computed; screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; screen_form_module::tests::annual_individual::using_the_computed_penalties_asks_first_on_every_annual_form",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701ms_amounts_sit_under_the_items_they_print_in",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_read_the_printed_captions",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701ms_names_are_text",
+   "status": "fixed"
+  },
+  "manual-4": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_open_the_spouse_part_from_the_printed_civil_status; screen_form_module::tests::annual_individual::closing_the_spouse_part_asks_first_on_every_annual_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::annual_individual::form_1701ms_column_b_and_item_20_follow_their_answers; screen_form_module::tests::annual_individual::form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return; screen_form_module::tests::annual_individual::form_1701ms_tax_rates_follow_item_12; screen_form_module::tests::annual_individual::form_1701ms_item_20_opens_within_one_batch; host locks, not validation (lesson 15): column B off a joint return, item 16 off an exempt or special rate and item 20 while item 19 is not above zero are refused as writes in the host (rows_annual_individual.rs closed_refusal) and faded by rule 6; no validation message is added and the checks the form files with are unchanged",
+   "status": "fixed"
+  }
+ }
+}

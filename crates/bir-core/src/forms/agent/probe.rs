@@ -82,7 +82,9 @@ const USER_CHOSEN: &[(&str, &str)] = &[
 
 /// Amount boxes the rules corpus marks computed although the official page
 /// leaves them open for the filer to type (the corpus is read only, see
-/// [`USER_CHOSEN`]). Unlike a choice they keep the corpus's `optional`.
+/// [`USER_CHOSEN`]). The projection marks them not computed and
+/// `optional`, although the corpus says computed (a choice of
+/// [`USER_CHOSEN`] becomes `conditional`).
 /// 1601-FQ's corpus marks every Part II line 20-32 computed; the official
 /// runtime enables 23, 24 and 28-30 at load
 /// (rules/forms/1601fq-v2018/fixtures/runtime-control-inventory-v796.json:
@@ -92,6 +94,13 @@ const USER_CHOSEN: &[(&str, &str)] = &[
 /// form_1601fq.rs keeps them in `remittance_first_month`,
 /// `remittance_second_month`, `tax_remitted_previous` and the penalty
 /// overrides (`penalty_declaration`).
+/// PR 7: 1701's corpus marks Schedule 3 items 8, 9 and 11, Schedule 4 items 3
+/// and 6-13, Schedule 6's NOLCO rows 6, 7B and 9-12B and Part IV item 6
+/// computed, although no rules/forms/1701-v2018/calculations.json calculation
+/// outputs them and form_1701_official.rs keeps each as the filer enters it;
+/// 1701MS's marks Part IV item 2 computed, an input of its own item 3
+/// calculation. The probe never bound them, so the page could not type a
+/// 1701 filer's sales or most of Schedule 4.
 const FILER_TYPED: &[(&str, &str)] = &[
     (
         "frm1601FQ:txtTax23",
@@ -118,6 +127,154 @@ const FILER_TYPED: &[(&str, &str)] = &[
     (
         "frm1601FQ:txtTax30",
         "Item 30 Compromise: enabled at load (inventory source line 901)",
+    ),
+    (
+        "frm1701:txtPg2IShed3_8A",
+        "Schedule 3 item 8A Sales/Revenues/Receipts/Fees: `self.typed(Schedule3, 8, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_9A",
+        "Schedule 3 item 9A Less: Sales Returns, Allowances and Discounts: `self.typed(Schedule3, 9, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_11A",
+        "Schedule 3 item 11A Less: Cost of Sales/Services: `self.typed(Schedule3, 11, party)`",
+    ),
+    (
+        "frm1701:txtPg3IShed4_3A",
+        "Schedule 4 item 3A Charitable and Other Contributions: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_6A",
+        "Schedule 4 item 6A Entertainment, Amusement and Recreation: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_7A",
+        "Schedule 4 item 7A Fringe Benefits: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_8A",
+        "Schedule 4 item 8A Interest: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_9A",
+        "Schedule 4 item 9A Losses: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_10A",
+        "Schedule 4 item 10A Pension Trusts: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_11A",
+        "Schedule 4 item 11A Rental: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_12A",
+        "Schedule 4 item 12A Research and Development: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_13A",
+        "Schedule 4 item 13A Salaries, Wages and Allowances: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg2IShed3_8B",
+        "Schedule 3 item 8B Sales/Revenues/Receipts/Fees: `self.typed(Schedule3, 8, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_9B",
+        "Schedule 3 item 9B Less: Sales Returns, Allowances and Discounts: `self.typed(Schedule3, 9, party)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_11B",
+        "Schedule 3 item 11B Less: Cost of Sales/Services: `self.typed(Schedule3, 11, party)`",
+    ),
+    (
+        "frm1701:txtPg3IShed4_3B",
+        "Schedule 4 item 3B Charitable and Other Contributions: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_6B",
+        "Schedule 4 item 6B Entertainment, Amusement and Recreation: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_7B",
+        "Schedule 4 item 7B Fringe Benefits: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_8B",
+        "Schedule 4 item 8B Interest: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_9B",
+        "Schedule 4 item 9B Losses: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_10B",
+        "Schedule 4 item 10B Pension Trusts: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_11B",
+        "Schedule 4 item 11B Rental: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_12B",
+        "Schedule 4 item 12B Research and Development: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed4_13B",
+        "Schedule 4 item 13B Salaries, Wages and Allowances: `self.typed(Schedule4, item, party)` for items 1 to 16",
+    ),
+    (
+        "frm1701:txtPg3IShed6_6A",
+        "Schedule 6 item 6A, the third NOLCO row's amount (row index 2): `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg3IShed6_6B",
+        "Schedule 6 item 6B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg3IShed6_7B",
+        "Schedule 6 item 7B, the current year's row's NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_9A",
+        "Schedule 6 item 9A, the spouse's first NOLCO row's amount: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_9B",
+        "Schedule 6 item 9B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_10A",
+        "Schedule 6 item 10A, the spouse's second row's amount: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_10B",
+        "Schedule 6 item 10B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_11A",
+        "Schedule 6 item 11A, the spouse's third row's amount: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_11B",
+        "Schedule 6 item 11B, its NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg4IShed6_12B",
+        "Schedule 6 item 12B, the spouse's current-year row's NOLCO applied in previous years: `recompute_nolco_official` keeps what the row holds (only the current-year row's amount, items 7A and 12A, is computed)",
+    ),
+    (
+        "frm1701:txtPg2I6TelNum",
+        "Part IV item 6, the spouse's contact number: `to_official_field_map` writes spouse.contact_number there on a joint return",
+    ),
+    (
+        "frm1701MS:txtLessNonTaxablea",
+        "Part IV item 2A Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
+    ),
+    (
+        "frm1701MS:txtLessNonTaxableb",
+        "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
 ];
 
@@ -256,6 +413,45 @@ const COMPUTED_BY_FORM: &[(&str, &str)] = &[
     ("frm1604e:txtSched2TotRemAmtTtl", TOTAL_REMITTED_1604E),
     ("frm1702RT:txtPg4Sc4I2C4", EXCESS_MCIT_1702RT),
     ("frm1702RT:txtPg4Sc4I3C4", EXCESS_MCIT_1702RT),
+    // PR 7: 1701's totals. form_1701_official.rs `official_recompute` puts
+    // each from the items it sums, so a value typed there was overwritten;
+    // the probe, which saw them move with one of those items, had bound them
+    // to that item (16A wrote Schedule 4 item 1, 14A Schedule 5 item 1's
+    // amount, 15A and 8D the first NOLCO row's current-year application,
+    // Part IX 10B item 6B).
+    (
+        "frm1701:txtPg2IShed3_14A",
+        "Schedule 3 item 14A Special Allowable Itemized Deductions (From Schedule 5 \
+         Item 3): `self.put(Schedule3, 14, party, i14)` with i14 the Schedule 5 total",
+    ),
+    (
+        "frm1701:txtPg2IShed3_15A",
+        "Schedule 3 item 15A NOLCO (From Schedule 6 Item 8): \
+         `self.put(Schedule3, 15, party, i15)` with i15 the Schedule 6 total",
+    ),
+    (
+        "frm1701:txtPg2IShed3_16A",
+        "Schedule 3 item 16A Total Allowable Itemized Deductions (Sum of Items 13 to \
+         15): `self.put(Schedule3, 16, party, item_16)`",
+    ),
+    (
+        "frm1701:txtPg2IShed3_22B",
+        "Schedule 3 item 22B Total Other Non-Operating Income (Sum of Items 19 to 21): \
+         `self.put(Schedule3, 22, party, item_22)`",
+    ),
+    (
+        "frm1701:txtPg3IShed6_8D",
+        "Schedule 6 item 8D Total NOLCO - Taxpayer/Filer (Sum of Items 4D to 7D): \
+         `recompute_nolco_official` sets schedule_6_total_taxpayer to the sum",
+    ),
+    (
+        "frm1701:txtPg4IPart9_10A",
+        "Part IX item 10A Total (Sum of Items 6 to 9): `self.put(PartIx, 10, party, ix_10)`",
+    ),
+    (
+        "frm1701:txtPg4IPart9_10B",
+        "Part IX item 10B Total (Sum of Items 6 to 9): `self.put(PartIx, 10, party, ix_10)`",
+    ),
 ];
 
 const TOTAL_REMITTED_1604E: &str = "1604E Part II Total Amount Remitted: form_1604e.rs \
@@ -337,6 +533,97 @@ const PRINTED_NOT_IN_CORPUS: &[(&str, &str, &str, &str)] = &[(
      html-frozen/2000-dst-2018/writer-cells.json joins it at \"5 RDO Code\", and \
      form_2000.rs writes it from the draft's rdo_code; fields.json has no row for it",
 )];
+
+/// Text boxes the form's own page upper-cases when another field is typed,
+/// so the probe sees them change with that field and would call them a
+/// combination: 1701MS's `capital(this, event)` on Part V items 7 and 9
+/// upper-cases every text control (form_1701ms.rs `part_v_capitalizes`).
+/// They are bound to the one path they echo; the field map, the upload and
+/// the print are unchanged.
+const CASE_FOLLOWS_ANOTHER_FIELD: &[(&str, &str)] = &[
+    (
+        "frm1701MS:txtEmaila",
+        "Item 9A Email Address: the field map writes /email, upper-cased once \
+         Part V items 7 or 9 are typed (part_v_capitalizes)",
+    ),
+    (
+        "frm1701MS:txtEmailb",
+        "Item 9B the spouse's Email Address: the field map writes \
+         /spouse_info/email on a joint return, upper-cased as item 9A",
+    ),
+];
+
+/// Choice options whose probed draft value is overruled, with evidence:
+/// `(key, option value, draft path, value it sets, evidence)`. 1701MS's ATC
+/// II012 is "Business Income-Graduated IT Rates" (html-frozen/1701ms-2024/
+/// guide.html ATC table; rules/forms/1701ms-v2024/fields.json lists it among
+/// the item 18 options), but the ATC is the same code for
+/// a business taxpayer on special rates, so a seed on special rates showed
+/// the probe II012 with `tax_option = special` and it bound the code to
+/// special: a special rate left at 0 then files the business tax as 0. The
+/// code sets graduated, as II013 and II014 do; item 12 still chooses
+/// special (PR 7 review).
+///
+/// `(form code, key, option value, draft path, value it sets, evidence)`:
+/// scoped by form, so another form's `taxCodeDropdown` never inherits it.
+const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str, &str)] = &[
+    (
+        "1701MS",
+        "taxCodeDropdown",
+        "II012",
+        "/taxpayer/tax_option",
+        "graduated",
+        "1701MS item 18 column A: II012 Business Income - Graduated IT Rates",
+    ),
+    (
+        "1701MS",
+        "taxCodeDropdownSpouse",
+        "II012",
+        "/spouse/tax_option",
+        "graduated",
+        "1701MS item 18 column B: II012 Business Income - Graduated IT Rates",
+    ),
+];
+
+/// Choices whose options may set only draft fields under a prefix, with
+/// evidence: `(form code, key, path prefix, evidence)`. 1701MS item 18 column B, the
+/// spouse's ATC, is open only on a joint return (form_1701ms.rs `recompute`
+/// resets the spouse column off one, as the official marriedJointly /
+/// toggleLine5 do), so every seed that answers it is a joint one and the
+/// probe tied each code to `/civil_status = married` and `/filing =
+/// jointly`, and the blank option to `single`: clearing the spouse's ATC
+/// made the return Single and wiped column B. Its options set the spouse's
+/// own fields only (PR 7 review).
+const CHOICE_PATHS_WITHIN: &[(&str, &str, &str, &str)] = &[(
+    "1701MS",
+    "taxCodeDropdownSpouse",
+    "/spouse/",
+    "1701MS item 18 column B sets the spouse's source and tax option only",
+)];
+
+#[cfg(test)]
+mod choice_list_tests {
+    use super::{CHOICE_OPTION_SETS, CHOICE_PATHS_WITHIN};
+
+    /// Every scoped entry names 1701MS (its only reviewed form) and a key
+    /// that form's pin binds, so no other form's same-named box is touched.
+    #[test]
+    fn choice_overrides_are_scoped_to_their_form() {
+        let pin = include_str!("../../../data/agent-forms/1701ms-v2024.json");
+        let keys = CHOICE_OPTION_SETS
+            .iter()
+            .map(|(form, key, ..)| (*form, *key))
+            .chain(
+                CHOICE_PATHS_WITHIN
+                    .iter()
+                    .map(|(form, key, ..)| (*form, *key)),
+            );
+        for (form, key) in keys {
+            assert_eq!(form, "1701MS");
+            assert!(pin.contains(&format!("\"{key}\": {{")), "{key}");
+        }
+    }
+}
 
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
@@ -430,6 +717,14 @@ const GATED_ENTRY: &[(&str, &str)] = &[
         "Schedule IV item 1 F) Excess MCIT Applied this Current Taxable \
          Year: typed by the filer; cleared with its row while the return is \
          not subject to MCIT",
+    ),
+    (
+        "frm1701MS:txtShareOfOtherNo20b",
+        "Item 20B Less: Share of Other Government Agency (PR 7): typed by the \
+         filer as item 20A is (bound to /taxpayer/share_of_other_agencies); \
+         form_1701ms.rs `compute` clears it while `share_open` does not hold \
+         (item 19B, the spouse's income tax due, is not above zero), which \
+         the probe saw move with the spouse's sales",
     ),
 ];
 
@@ -1886,6 +2181,7 @@ fn decide(
         // or a combination (Total Remitted = Tax + Penalty), not an entry,
         // unless the other field only clears it (`GATED_ENTRY`).
         if !GATED_ENTRY.iter().any(|(k, _)| *k == key)
+            && !CASE_FOLLOWS_ANOTHER_FIELD.iter().any(|(k, _)| *k == key)
             && let Some((_, other)) = evidence
                 .misses
                 .iter()
@@ -1922,7 +2218,26 @@ fn decide(
         return Ok(BoundBox { binding, lock });
     }
     let choice_box = def.box_def(key).is_some_and(is_choice_box);
-    if let Some(options) = choice_binding(evidence, key, choice_box)? {
+    if let Some(mut options) = choice_binding(evidence, key, choice_box)? {
+        let ours = |form: &str, k: &str| form == def.form_code && k == key;
+        for (_, _, value, path, set, _) in CHOICE_OPTION_SETS
+            .iter()
+            .filter(|(form, k, ..)| ours(form, k))
+        {
+            if let Some(option) = options.iter_mut().find(|option| option.value == *value) {
+                option
+                    .set
+                    .insert((*path).to_string(), Value::String((*set).to_string()));
+            }
+        }
+        for (_, _, prefix, _) in CHOICE_PATHS_WITHIN
+            .iter()
+            .filter(|(form, k, ..)| ours(form, k))
+        {
+            for option in &mut options {
+                option.set.retain(|path, _| path.starts_with(prefix));
+            }
+        }
         let paths: BTreeSet<&str> = options
             .iter()
             .flat_map(|option| option.set.keys().map(String::as_str))

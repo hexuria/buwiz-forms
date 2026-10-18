@@ -40,6 +40,36 @@
    "Item 20 is Exempt or Others.": "Needs Schedule 2 = Exempt or Others",
    "Item 36 is negative.": "Needs item 18 below zero (an over-remittance)"
   },
+  "1700": {
+   "Item 15 Civil Status is Married.": "Needs item 15 = Married",
+   "Item 15 is Married and Item 16 is Yes.": "Needs item 15 = Married and item 16 = Yes",
+   "A joint return: Item 15 Married, Item 16 Yes and Item 17 Joint Filing.": "Needs item 15 = Married, item 16 = Yes and item 17 = Joint Filing",
+   "A joint return (Items 15 to 17) and Item 24 Yes.": "Needs a joint return (items 15 to 17) and item 24 = Yes"
+  },
+  "1701": {
+   "Item 16 Civil Status is Married.": "Needs item 16 = Married",
+   "Item 16 is Married and Item 17 is Yes.": "Needs item 16 = Married and item 17 = Yes",
+   "A joint return: Item 16 Married, Item 17 Yes and Item 18 Joint Filing.": "Needs item 16 = Married, item 17 = Yes and item 18 = Joint Filing",
+   "A joint return (Items 16 to 18) and Part IV Item 8 Yes.": "Needs a joint return (items 16 to 18) and Part IV item 8 = Yes",
+   "A joint return (Items 16 to 18) and Part IV Item 12 Graduated Rates.": "Needs a joint return (items 16 to 18) and Part IV item 12 = Graduated Rates",
+   "A joint return (Items 16 to 18) and Part IV Item 4 II011, II013 or II016.": "Needs a joint return (items 16 to 18) and Part IV item 4 = II011, II013 or II016"
+  },
+  "1701A": {
+   "Item 16 Civil Status is Married.": "Needs item 16 = Married",
+   "Item 16 is Married and Item 17 is Yes.": "Needs item 16 = Married and item 17 = Yes",
+   "A joint return: Item 16 Married, Item 17 Yes and Item 18 Joint Filing.": "Needs item 16 = Married, item 17 = Yes and item 18 = Joint Filing",
+   "A joint return (Items 16 to 18) and Item 73 Yes.": "Needs a joint return (items 16 to 18) and item 73 = Yes"
+  },
+  "1701MS": {
+   "Item 4 Civil Status is Married.": "Needs item 4 = Married",
+   "A joint return: Item 4 Married and Item 5 Jointly.": "Needs item 4 = Married and item 5 = Jointly",
+   "A joint return (Items 4 and 5) and Item 12 column B Exempt or Special/Preferential Rate.": "Needs a joint return and, in column B, item 12 = Exempt or Special/Preferential Rate",
+   "A joint return (Items 4 and 5) and, in column B, Item 12 Graduated Income Tax Rates with business income at Item 11.": "Needs a joint return and, in column B, item 12 = Graduated with business income at item 11",
+   "Item 19 column A, Income Tax Due at the Special/Preferential Rate, is more than zero.": "Needs a special-rate income tax due above zero in column A",
+   "A joint return (Items 4 and 5) and Item 19 column B, Income Tax Due at the Special/Preferential Rate, is more than zero.": "Needs a joint return and a special-rate income tax due above zero in column B",
+   "A joint return (Items 4 and 5), and in column B the answers that open the same box of column A.": "Needs a joint return and, in column B, the answers that open it",
+   "Item 12 column A Exempt or Special/Preferential Rate.": "Needs item 12 = Exempt or Special/Preferential Rate in column A"
+  },
   "1701Q": {
    "Base spouse branch is enabled for taxpayer type Single Proprietor or Professional and disabled/reset for Estate or Trust.": "Needs item 7 = Single Proprietor or Professional",
    "Within the spouse branch, spouse-type changes reset ATCs. Compensation Earner selects II011 and disables other ATCs; if multiple spouse types are selected, only II013 and II016 are re-enabled.": "Needs item 19 = Single Proprietor or Professional",

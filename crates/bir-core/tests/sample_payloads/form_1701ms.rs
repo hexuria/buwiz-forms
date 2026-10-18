@@ -112,10 +112,59 @@ fn form_1701ms_penalty_items_follow_the_shared_model() {
     penalty_items::check(sample_1701ms, Deadline::Calendar(day(2026, 4, 15)));
 }
 
+/// Married, filing jointly, with the spouse's column on the entries the
+/// samples above leave blank: business income at a special rate (Items
+/// 13B-16B, cost of sales, itemized, special and NOLCO deductions, the share
+/// of another government agency). For the agent-form probe only (PR 7):
+/// without it the probe saw those spouse boxes blank on every sample and
+/// could not bind them.
+fn sample_1701ms_joint_special() -> Form1701MsDraft {
+    let mut draft = sample_1701ms();
+    draft.spouse = Form1701MsColumn {
+        source: Form1701MsSource::Business,
+        tax_option: Form1701MsTaxOption::Special,
+        legal_basis: "Spouse legal basis".to_string(),
+        promotion_agency: "Spouse agency".to_string(),
+        registered_activity: "Spouse activity 002".to_string(),
+        effectivity_from: "02/01/2021".to_string(),
+        effectivity_to: "01/31/2031".to_string(),
+        sales: 900_000.0,
+        cost_of_sales: 200_000.0,
+        itemized_deductions: 40_000.0,
+        special_allowable_deductions: 10_000.0,
+        nolco: 5_000.0,
+        special_rate: 3.0,
+        share_of_other_agencies: 1_000.0,
+        quarterly_payments: 2_000.0,
+        ..Form1701MsColumn::default()
+    };
+    draft.keep_entered_penalties();
+    draft.recompute();
+    draft
+}
+
+/// Married, filing jointly, the spouse on the 8% rate (Items 19B and 20B).
+/// For the agent-form probe only (PR 7), as above.
+fn sample_1701ms_joint_eight() -> Form1701MsDraft {
+    let mut draft = sample_1701ms();
+    draft.spouse = Form1701MsColumn {
+        source: Form1701MsSource::Profession,
+        tax_option: Form1701MsTaxOption::EightPercent,
+        eight_sales: 1_200_000.0,
+        eight_other_income: 30_000.0,
+        ..Form1701MsColumn::default()
+    };
+    draft.keep_entered_penalties();
+    draft.recompute();
+    draft
+}
+
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![
         serde_json::to_value(sample_1701ms()).expect("sample serializes"),
         serde_json::to_value(sample_1701ms_special()).expect("sample serializes"),
+        serde_json::to_value(sample_1701ms_joint_special()).expect("sample serializes"),
+        serde_json::to_value(sample_1701ms_joint_eight()).expect("sample serializes"),
     ]
 }

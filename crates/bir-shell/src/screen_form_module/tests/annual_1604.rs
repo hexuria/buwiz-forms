@@ -962,12 +962,13 @@ fn pr6_a_grid_of_loose_fields_is_unchanged_by_table_cells() {
         .collect();
     // The forms whose layout has a grid: loose-field grids from PR 2, PR 3
     // and PR 4 (their grids name no table cell, so they build what they
-    // built, as the case above shows) and PR 6's 1604 Part II tables.
+    // built, as the case above shows), PR 6's 1604 Part II tables and PR 7's
+    // 1701 schedule tables.
     assert_eq!(
         with_grid,
         [
             "1600PT", "1600VT", "1600WP", "1601FQ", "1602Q", "1603Q", "1604C", "1604E", "1604F",
-            "2000", "2553"
+            "1701", "2000", "2553"
         ]
     );
 }

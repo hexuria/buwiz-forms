@@ -251,7 +251,8 @@ pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
                     // A kept 8% amount opens with Edit so a blank can clear it.
                     "applies": applies(kind, group, draft)
                         || group.keys.iter().any(|key| kept_amount_path(kind, draft, key).is_some()),
-                    "kept": super::rows_income_q::kept_as_entered(kind, &group.keys, draft),
+                    "kept": super::rows_income_q::kept_as_entered(kind, &group.keys, draft)
+                        || super::rows_annual_individual::kept_as_entered(kind, &group.keys, draft),
                 })
             })
             .collect(),

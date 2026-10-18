@@ -173,9 +173,11 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         return off;
     };
     // A box the host itself closes while its answer does not hold (it
-    // refuses what is typed there: rows_withholding.rs, rows_monthly.rs and
-    // rows_income_q.rs, 1701Q's spouse part and 1702Q's schedules) is off
-    // whatever it shows: a legacy draft's value there is faded, not hidden.
+    // refuses what is typed there: rows_withholding.rs, rows_monthly.rs,
+    // rows_income_q.rs (1701Q's spouse part and 1702Q's schedules) and
+    // rows_annual_individual.rs (PR 7: the annual individual returns' spouse
+    // part)) is off whatever it shows: a legacy draft's value there is
+    // faded, not hidden.
     let mut gated = std::collections::BTreeSet::new();
     for (key, condition) in list {
         if let Some(closed) = super::rows_withholding::gated(kind, draft, key)
@@ -188,6 +190,11 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         } else if let Some(tag) = super::rows_income_q::gated(kind, draft, key) {
             gated.insert(key);
             off.insert(key.clone(), json!(tag));
+        } else if super::rows_annual_individual::gated(kind, draft, key) {
+            gated.insert(key);
+            off.insert(key.clone(), label(code, key, condition));
+        } else if super::rows_annual_individual::open_by_gate(kind, draft, key) {
+            gated.insert(key);
         }
     }
     let blank: Vec<(&String, &Value, &str)> = list
@@ -422,6 +429,20 @@ pub(super) mod tests {
                     keys.insert(key.to_string(), json!(condition));
                 }
             }
+            // PR 7: the annual individual returns' spouse part, which the
+            // corpus records no condition for (1700's 2018 keys are not in its
+            // 2013 corpus; 1701, 1701A and 1701MS's spouse boxes carry
+            // none). Each is the form's own rule: 1700, 1701A and 1701MS's
+            // `recompute` clears the spouse part unless the return is joint
+            // (`is_joint`), item 16/17 unless Married, the filing status
+            // unless the spouse has income; 1701's field map writes Part IV
+            // only while `spouse_column_active` and items 17-18 only for a
+            // married filer (form_1701_official.rs `to_official_field_map`).
+            for (form, key, condition) in super::super::rows_annual_individual::corpus_gaps() {
+                if form == code && shown.contains(key) {
+                    keys.insert(key.to_string(), json!(condition));
+                }
+            }
             if !keys.is_empty() {
                 out.insert(code.to_string(), Value::Object(keys));
             }
@@ -451,7 +472,7 @@ pub(super) mod tests {
 
     /// The items a form's print sheet prints ("31", "15B"), read from its
     /// writer-cells captions.
-    fn printed_items(code: &str) -> std::collections::BTreeSet<String> {
+    pub(crate) fn printed_items(code: &str) -> std::collections::BTreeSet<String> {
         let slug = super::super::schema_entry(code).unwrap()["s"]
             .as_str()
             .unwrap()

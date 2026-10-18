@@ -471,15 +471,16 @@ pub fn check_import<F: QueueableForm>(sample: fn() -> F, import: Import<F>) {
 }
 
 /// Every form that declares penalty items has this check, and every form
-/// listed here declares them. 1701Q (PR 5) runs its own version of the
-/// check (crates/bir-core/tests/sample_payloads/form_1701q.rs
-/// `form_1701q_penalty_items_follow_the_shared_model`):
-/// its items are kept by item number, not by a field named after them.
+/// listed here declares them. 1701Q (PR 5) and 1701 (PR 7) run their own
+/// version of the check (crates/bir-core/tests/sample_payloads/form_1701q.rs
+/// `form_1701q_penalty_items_follow_the_shared_model` and form_1701.rs
+/// `form_1701_penalty_items_follow_the_shared_model`): their items are kept
+/// by item number, not by a field named after them.
 pub const WIRED: &[&str] = &[
     "0605", "0619E", "0619F", "1600PT", "1600VT", "1600WP", "1601EQ", "1601FQ", "1602Q", "1603Q",
-    "1606", "1700", "1701A", "1701MS", "1701Q", "1702MX", "1702Q", "1702RT", "1706", "1707",
-    "1707A", "1800", "1801", "2000", "2000OT", "2200A", "2200AN", "2200C", "2200M", "2200P",
-    "2200S", "2200T", "2550M", "2552", "2553",
+    "1606", "1700", "1701", "1701A", "1701MS", "1701Q", "1702MX", "1702Q", "1702RT", "1706",
+    "1707", "1707A", "1800", "1801", "2000", "2000OT", "2200A", "2200AN", "2200C", "2200M",
+    "2200P", "2200S", "2200T", "2550M", "2552", "2553",
 ];
 
 #[test]

@@ -46,6 +46,7 @@ mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
 mod rows_annual_corporate;
+mod rows_annual_individual;
 mod rows_dst_pt_vat;
 mod rows_income_q;
 mod rows_monthly;
@@ -153,7 +154,7 @@ export interface ScreenFormPenalties {
     keys: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
-    /** The amounts are kept as entered before penalties were computed (1701Q): "Use the computed amounts" works once Edit opens them. */
+    /** The amounts are kept as entered before penalties were computed (1701Q, 1701): "Use the computed amounts" works once Edit opens them. */
     kept?: boolean;
     /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
     applies: boolean;
@@ -292,6 +293,8 @@ fn schema() -> &'static [Value] {
             rows_income_q::mark_one_date(form, &code);
             rows_annual_corporate::mark_whole_pesos(form, &code);
             combs::apply_combs(form, &code);
+            // 1701A's item 9, printed from `derived:` lines (PR 7).
+            rows_annual_individual::mark_pools(form, &code);
         }
         forms
     })
@@ -2405,6 +2408,9 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                // The annual individual returns draw a message under the
+                // item it cites (PR 7, rows_annual_individual.rs).
+                rows_annual_individual::cited_keys(kind, message, &mut keys);
                 json!({"field": field, "message": message, "keys": keys})
             })
             .collect(),
@@ -2503,6 +2509,9 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     }
     // 1701Q's Civil Status, a page box with no official key (PR 5).
     rows_income_q::values(kind, draft, &mut map);
+    // 1700, 1701, 1701A and 1701MS: the spouse's TIN boxes and 1700's
+    // display fixes (PR 7, rows_annual_individual.rs).
+    rows_annual_individual::values(kind, draft, &mut map);
     Ok(Value::Object(
         map.into_iter()
             .map(|(key, value)| (key, Value::String(value)))
@@ -2557,6 +2566,7 @@ fn evaluate_here(
     if let Value::Array(list) = &mut errors {
         list.extend(rows_dst_pt_vat::notices(kind, draft));
         list.extend(rows_annual_corporate::notices(kind, draft));
+        list.extend(rows_annual_individual::notices(kind, draft));
     }
     Ok((values_json(kind, draft)?, errors, status))
 }
@@ -2790,7 +2800,7 @@ const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
 const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
-/// 1701Q's penalties kept as the filer entered them (PR 5).
+/// 1701Q's (PR 5) and 1701's (PR 7) penalties kept as the filer entered them.
 const NOTE_KEPT: &str = "Kept as entered before penalties were computed.";
 /// Only for a box a form group is assigned to open (the pinned list).
 const NOTE_ASSIGNED: &str = "Can't be filled on this page yet. It will be added for this form.";
@@ -2845,7 +2855,9 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_IDENTITY
     } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
         NOTE_REPEAT
-    } else if reason == rows_income_q::KEPT_AS_ENTERED {
+    } else if reason == rows_income_q::KEPT_AS_ENTERED
+        || reason == rows_annual_individual::KEPT_AS_ENTERED
+    {
         NOTE_KEPT
     } else {
         // Unmapped, derived, written by the app, or a field this page
@@ -2886,8 +2898,10 @@ fn opened_json(
         if !penalties::edited(&group, &draft) {
             for key in &group.keys {
                 let reason = penalties::lock_reason(kind, &group, &draft, key);
-                // A 1701Q column still on the filer's typed amounts (PR 5).
+                // A 1701Q (PR 5) or 1701 (PR 7) column still on the filer's
+                // typed amounts.
                 let reason = rows_income_q::penalty_lock(kind, &draft, key)
+                    .or_else(|| rows_annual_individual::penalty_lock(kind, &draft, key))
                     .filter(|_| reason == penalties::LOCK)
                     .unwrap_or(reason);
                 locks.insert(key.clone(), json!(reason));
@@ -2991,6 +3005,7 @@ fn opened_json(
     waits.extend(rows_monthly::waits(kind));
     waits.extend(rows_dst_pt_vat::waits(kind));
     waits.extend(rows_annual_corporate::waits(kind));
+    waits.extend(rows_annual_individual::waits(kind));
     Ok(json!({
         "form_code": code,
         "year": year,
@@ -3834,12 +3849,13 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's, PR 5's, PR 6's and PR 8's forms; the integration merge chains PR 2's and
+    // 4's, PR 5's, PR 6's, PR 7's and PR 8's forms; the integration merge chains PR 2's and
     // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
         .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_1604::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_annual_corporate::removes(kind, &before, &draft, &edits));
+        .or_else(|| rows_annual_corporate::removes(kind, &before, &draft, &edits))
+        .or_else(|| rows_annual_individual::removes(kind, &before, &draft, &edits));
     // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42),
     // each with its note; `null` opens the box.
     let relocks = rows_annual_corporate::live_locks(kind, &draft);
@@ -3915,6 +3931,8 @@ fn apply_screen_edits(
         let groups = penalties::groups(kind);
         edits.sort_by_key(|(key, _)| groups.iter().any(|group| group.keys.contains(key)));
     }
+    // What each box was sent, for a gate that reads the write itself.
+    let sent: BTreeMap<String, Value> = edits.iter().cloned().collect();
     let shown = values_json(kind, draft).map_err(host_error)?;
     let pools = combs::pools(kind.form_code());
     // Whether each penalty group was edited before this batch: an amount in
@@ -3962,6 +3980,16 @@ fn apply_screen_edits(
             rejected.insert(key.clone(), json!(why));
             continue;
         }
+        // The annual individual returns' spouse part while it is closed says
+        // what opens it, for a radio or its group box alike, read on the
+        // draft as this batch has left it (PR 7, rows_annual_individual.rs).
+        if let Some(why) = sent
+            .get(&key)
+            .and_then(|value| rows_annual_individual::closed_refusal(kind, draft, &key, value))
+        {
+            rejected.insert(key.clone(), json!(why));
+            continue;
+        }
         let mut next = draft.clone();
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
@@ -3999,8 +4027,9 @@ fn apply_screen_edits(
                 continue;
             }
             if !unlocked.contains(&key) && !edited {
-                let lock =
-                    rows_income_q::penalty_lock(kind, draft, &key).unwrap_or(penalties::LOCK);
+                let lock = rows_income_q::penalty_lock(kind, draft, &key)
+                    .or_else(|| rows_annual_individual::penalty_lock(kind, draft, &key))
+                    .unwrap_or(penalties::LOCK);
                 rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
                 continue;
             }
@@ -4011,9 +4040,15 @@ fn apply_screen_edits(
                 // "Use the computed amounts" on a 1701Q column still on its
                 // typed amounts joins the model (PR 5).
                 rows_income_q::join_model(kind, &mut next, &key);
+                // "Use the computed amounts" on a 1701 column still on its
+                // typed amounts joins the model (PR 7).
+                rows_annual_individual::join_model(kind, &mut next, &key);
                 *draft = next;
                 continue;
             }
+            // A 1701 column with no penalty state yet takes the amount as
+            // its override (PR 7).
+            rows_annual_individual::make_room(kind, &mut next, &key);
         }
         // A Part II date cleared on the page clears the draft's date (PR 6;
         // the whole-date binding takes only MM/DD/YYYY text).
@@ -8217,11 +8252,13 @@ mod tests {
         // cells now, and plus 2000's Item 5 RDO list (PR 4), and plus 3 for
         // 1604C, 1604E and 1604F (PR 6, item 5 RDO), and plus 4 for 1702RT,
         // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now
-        // drawn): 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4.
+        // drawn), and plus 4 for 1701 and 1701A (PR 7: their RDO lists,
+        // item 5 and the spouse's, 1701 Part IV item 2 and 1701A item 67,
+        // drawn now): 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 69);
+        assert_eq!(supplied, 73);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
@@ -9697,7 +9734,9 @@ mod tests {
             let mut built = answer["sample"]["draft"].clone();
             // The first amount box that takes a typed amount and keeps it
             // through the form's own computation (an off or recomputed box
-            // does not).
+            // does not), among the first 40: since PR 7 1700's and 1701's
+            // first amount boxes are penalties (locked until Edit) or
+            // totals the form computes, so the first 12 no longer reach one.
             let def = kind.definition();
             let open_amount = def
                 .fillable()
@@ -9708,7 +9747,7 @@ mod tests {
                             Some(Binding::Amount { .. })
                         )
                 })
-                .take(12)
+                .take(40)
                 .find_map(|entry| {
                     let typed = fill(code, &built, json!({ &entry.key: "1234.00" }));
                     (typed["rejected"].get(&entry.key).is_none()
@@ -11356,22 +11395,12 @@ mod tests {
 
     /// Profile boxes the page still leaves in an "Additional details" group,
     /// out of paper order: placing them is each form's own fix (rule 3),
-    /// so those forms' R2.0 stays open. A new one fails this test.
+    /// so those forms' R2.0 stays open. A new one fails this test. Less 13
+    /// for 1701, 1701A and 1701MS (PR 7): their layouts place items 5, 7 and
+    /// 10 where the sheet prints them, hide the later pages' header copies
+    /// and put Line of Business in Not on the printed sheet.
     const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
         "0605 txtEmail",
-        "1701 frm1701:txtLineBus",
-        "1701 frm1701:txtPg1mTaxpayerName",
-        "1701 frm1701:txtPg2mTaxpayerName",
-        "1701 frm1701:txtPg2TaxpayerName",
-        "1701 frm1701:txtPg3mTaxpayerName",
-        "1701 frm1701:txtPg3TaxpayerName",
-        "1701 frm1701:txtPg4mTaxpayerName",
-        "1701 frm1701:txtPg4TaxpayerName",
-        "1701A frm1701A:txtLineBus",
-        "1701A frm1701A:txtPg2TaxpayerName",
-        "1701MS frm1701MS:Pg2TaxPayer",
-        "1701MS frm1701MS:txtRDOCodea",
-        "1701MS frm1701MS:txtTelNum10a",
         "1707 frm1707:ProfileAddress1",
         "1707 frm1707:ProfileContactNum",
         "1707 frm1707:ProfileEmailAddr",
@@ -11783,10 +11812,11 @@ mod tests {
     /// Email boxes a profile without an email still leaves shut, and why:
     /// none of them is a profile lock (those open when the profile is
     /// blank); each is a lock of its own form's, for its group to fix.
-    const EMAIL_BOXES_SHUT_FOR_OTHER_REASONS: &[&str] = &[
-        "1701MS frm1701MS:txtEmaila: cannot be filled here: derived by the app: shows /email combined with /foreign_tax_credits_description",
-        "1701MS frm1701MS:txtEmailb: cannot be filled here: derived by the app: shows /spouse_info/email combined with /foreign_tax_credits_description",
-    ];
+    ///
+    /// Less 2 for 1701MS (PR 7): items 9A and 9B are bound to the email
+    /// fields now (agent::probe CASE_FOLLOWS_ANOTHER_FIELD), so a blank
+    /// profile email leaves 9A open.
+    const EMAIL_BOXES_SHUT_FOR_OTHER_REASONS: &[&str] = &[];
 
     #[test]
     fn an_email_box_the_profile_leaves_blank_is_open_on_every_form() {
@@ -12054,6 +12084,9 @@ mod tests {
         // schedule (PR 4, rows_dst_pt_vat.rs): each is typed once it is open
         // (form_2000_schedule_dates_take_typed_dates_once_item_13_opens_them).
         let mut closed = Vec::new();
+        // PR 7: date boxes the annual individual returns' spouse gate
+        // refuses on a fresh return (no joint return yet), each by hand.
+        let mut gated = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -12077,6 +12110,13 @@ mod tests {
                     continue;
                 }
                 let filled = fill(code, &opened["draft"], json!({ &key: "12/10/2020" }));
+                if let Some(reason) = filled["rejected"][&key]
+                    .as_str()
+                    .filter(|reason| rows_annual_individual::is_gate_refusal(code, reason))
+                {
+                    gated.push(format!("{code} {key}: {reason}"));
+                    continue;
+                }
                 if let Some(reason) = filled["rejected"][&key].as_str() {
                     if code == "2000"
                         && (2..=4).any(|n| reason == rows_dst_pt_vat::dst_schedule_closed(n))
@@ -12121,16 +12161,28 @@ mod tests {
         expected.sort_unstable();
         locked.sort();
         assert_eq!(locked, expected, "{locked:#?}");
+        // 1701MS item 16B, the spouse's effectivity dates: bound now (PR 7,
+        // the probe's joint special-rate sample), and closed until the
+        // return is joint (Items 4 and 5).
+        gated.sort();
+        let joint_first = "Column B of Part I is for a joint return: choose Married at item 4 and Jointly at item 5 first.";
+        assert_eq!(
+            gated,
+            vec![
+                format!("1701MS frm1701MS:txtTaxpayerNo16b1: {joint_first}"),
+                format!("1701MS frm1701MS:txtTaxpayerNo16b: {joint_first}"),
+            ]
+        );
     }
 
     /// Date boxes a return opens locked (unbound, derived, or the return's
     /// own identity) or whose typed date its form clears (a schedule another
-    /// answer turns off): each for its form's group, not for rule 4.
+    /// answer turns off): each for its form's group, not for rule 4. Less 2
+    /// for 1701MS (PR 7): item 16B's From and To are bound now and refused
+    /// with the spouse gate's words until the return is joint.
     const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
         "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
         "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
-        "1701MS frm1701MS:txtTaxpayerNo16b1: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "1701MS frm1701MS:txtTaxpayerNo16b: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "1707 frm1707:txtPg2P4Sch1I8DateCollection: cleared to \"\"",
         // PR 8: 1707A's printed row 4 says the form computes it (from the
         // continuation rows), with what it waits for.
@@ -12262,6 +12314,16 @@ mod tests {
                 "1701",
                 (
                     vec!["frm1701:txtPg1I9Address", "frm1701:txtPg1I9Address2"],
+                    vec![40, 31],
+                ),
+            ),
+            // PR 7 (R5.2): 1701A's item 9, printed over the derived:
+            // address_line1/2 combs (rows_annual_individual.rs
+            // DERIVED_POOLS).
+            (
+                "1701A",
+                (
+                    vec!["frm1701A:txtAddress", "frm1701A:txtAddress2"],
                     vec![40, 31],
                 ),
             ),
@@ -13286,6 +13348,19 @@ mod tests {
                     assert_eq!(married["rejected"], json!({}), "{code} Married");
                     draft = married["draft"].clone();
                 }
+                // 1701's Part IV (the spouse) is for a joint return: Married,
+                // the spouse has income, joint filing (PR 7).
+                if *code == "1701" && key.starts_with("frm1701:txtPg2I") {
+                    for answer in [
+                        "frm1701:rdoPg1I16CivilStatusM",
+                        "frm1701:rdoPg1I17SpouseIncomeYes",
+                        "frm1701:rdoPg1I18FilingStatusJ",
+                    ] {
+                        let on = fill(code, &draft, json!({ answer: "true" }));
+                        assert_eq!(on["rejected"], json!({}), "{code} {answer}");
+                        draft = on["draft"].clone();
+                    }
+                }
                 for answer in answers.get(key).copied().unwrap_or_default() {
                     let on = fill(code, &draft, json!({ *answer: "true" }));
                     assert_eq!(on["rejected"], json!({}), "{code} {answer}");
@@ -13354,7 +13429,21 @@ mod tests {
             }
             for (head, pool) in combs::pools(code) {
                 forms.push(code);
-                let cells = print_cells_of(slug, &pool.keys);
+                // 1701A's address pool (PR 7) prints through the print map's
+                // `derived:address_line1` / `derived:address_line2` cells,
+                // not a join of its field keys (rows_annual_individual.rs
+                // DERIVED_POOLS); the sheet cells are those two.
+                let cells = if code == "1701A" {
+                    print_cells_of(
+                        slug,
+                        &[
+                            "derived:address_line1".to_string(),
+                            "derived:address_line2".to_string(),
+                        ],
+                    )
+                } else {
+                    print_cells_of(slug, &pool.keys)
+                };
                 let capacity: usize = pool.slots.iter().sum();
                 for len in [capacity - 10, 90, 200] {
                     let typed = address_of(len);
@@ -13435,9 +13524,11 @@ mod tests {
         forms.sort_unstable();
         assert_eq!(
             forms,
+            // Plus 1701A (PR 7): its item 9 address is one pool over both
+            // combs.
             [
-                "0619E", "0619F", "1600PT", "1600VT", "1701", "1702RT", "2200C", "2200M", "2200P",
-                "2552"
+                "0619E", "0619F", "1600PT", "1600VT", "1701", "1701A", "1702RT", "2200C", "2200M",
+                "2200P", "2552"
             ],
             "every pooled form"
         );
@@ -13633,6 +13724,10 @@ mod tests {
     /// draft's item 4 is not Yes, which is their corpus condition ("Item 4
     /// Yes."): the form's computation keeps what is typed there, so probing
     /// cannot tell, and the host's own refusal is no oracle.
+    /// A probe the host refuses because the annual individual returns'
+    /// spouse part is closed (PR 7) is judged by the form itself: written
+    /// past the page's gate (the form's own `fill_as_user`, a TIN straight
+    /// into its draft field), recomputed, its official box shows nothing.
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         const WP_SCHEDULE: [&str; 4] = [
             "frm1600WP:dtSched:txtTin",
@@ -13671,6 +13766,26 @@ mod tests {
                                     || rows_income_q::is_gate_refusal(why) =>
                             {
                                 Some(true)
+                            }
+                            Some(why) if rows_annual_individual::is_gate_refusal(code, why) => {
+                                let kind = kind_of(code).unwrap();
+                                let mut draft = checked["draft"].clone();
+                                rows_annual_individual::write_past_gate(
+                                    kind, &mut draft, key, &probe,
+                                )
+                                .ok()?;
+                                agent::compute(kind, &mut draft).ok()?;
+                                // A rate box's field map always shows a
+                                // rate; the draft says whether it was kept.
+                                if let Some(kept) =
+                                    rows_annual_individual::kept_past_gate(kind, &draft, key)
+                                {
+                                    return Some(shows_nothing(&json!(kept.to_string())));
+                                }
+                                let map = agent::field_map(kind, &draft).ok()?;
+                                Some(shows_nothing(&json!(
+                                    map.get(key).cloned().unwrap_or_default()
+                                )))
                             }
                             Some(_) => None,
                         }
@@ -13758,6 +13873,19 @@ mod tests {
                 // (CORPUS_GAPS_PR5), 13A for item 13, 15 for the MCIT; at
                 // pr0b-push 1702Q had no conditional box and no entry here.
                 ("1702Q", 32),
+                // PR 7: the spouse part of the annual individual returns
+                // (rows_annual_individual.rs GATED), off on a fresh return
+                // with no civil status: 1700 items 16-25 (17), 1701 items
+                // 17-18, Part IV and Schedule 1's Spouse marks (35), 1701A
+                // items 17-18 and Part V (17), 1701MS item 5 and column B of
+                // Part I items 6-17 (26), plus 24 for 1701MS (PR 7 review):
+                // item 18 column B, column B's amounts and item 20 of each
+                // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
+                // rate in each column. At pr0b-push none had an entry.
+                ("1700", 17),
+                ("1701", 35),
+                ("1701A", 17),
+                ("1701MS", 52),
                 ("1800", 1),
                 ("1801", 1),
                 ("2000OT", 2),
@@ -14010,6 +14138,97 @@ mod tests {
                     json!({"frm1702q:cbATC_2": "IC010_25%", "frm1702q:rbATC_2": "true"}),
                 )),
             ),
+            // PR 7: the annual individual returns' spouse part comes alive
+            // with its civil status, step by step (rows_annual_individual.rs
+            // GATED).
+            (
+                "1700",
+                vec!["frm1700:rdoPg1I16SpouseHasIncomeY"],
+                Box::new(by(json!({"frm1700:rdoPg1I15CivilStatusM": "true"}))),
+            ),
+            (
+                "1700",
+                vec!["frm1700:rdoPg1I17FilingStatusJ"],
+                Box::new(by(json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                }))),
+            ),
+            (
+                "1700",
+                vec![
+                    "frm1700:txtPg1I21SpouseName",
+                    "frm1700:txtPg1I23SpouseCitizenship",
+                    "frm1700:txtSpouseRDOCode",
+                    "frm1700:rdoPg1I20SpouseTaxpayerTypeE",
+                    "frm1700:txtPg1I18STIN1",
+                ],
+                Box::new(by(json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                    "frm1700:rdoPg1I17FilingStatusJ": "true",
+                }))),
+            ),
+            (
+                "1701",
+                vec!["frm1701:rdoPg1I17SpouseIncomeYes"],
+                Box::new(by(json!({"frm1701:rdoPg1I16CivilStatusM": "true"}))),
+            ),
+            (
+                "1701",
+                vec![
+                    "frm1701:txtPg2I5SpouseName",
+                    "frm1701:txtPg2I7Citizenship",
+                    "frm1701:txtPg2I6TelNum",
+                    "frm1701:txtPg2I2SpouseRDOCode",
+                    "frm1701:rdoPg2I3SpouseTypeS",
+                    "frm1701:txtPg2I1TIN1",
+                ],
+                Box::new(by(json!({
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                }))),
+            ),
+            (
+                "1701A",
+                vec!["frm1701A:optSpouseIncome_1"],
+                Box::new(by(json!({"frm1701A:optCivilStatus_2": "true"}))),
+            ),
+            (
+                "1701A",
+                vec![
+                    "frm1701A:txtSpouseName",
+                    "frm1701A:txtSpouseCitizenship",
+                    "frm1701A:txtSpouseRDOCode",
+                    "frm1701A:optSpouseTaxType_1",
+                    "frm1701A:txtSpouseTIN1",
+                ],
+                Box::new(by(json!({
+                    "frm1701A:optCivilStatus_2": "true",
+                    "frm1701A:optSpouseIncome_1": "true",
+                    "frm1701A:optFilingStatus_1": "true",
+                }))),
+            ),
+            (
+                "1701MS",
+                vec!["frm1701MS:txtIfMarriedJointlyNo5"],
+                Box::new(by(json!({"frm1701MS:civilStatus": "Married"}))),
+            ),
+            (
+                "1701MS",
+                vec![
+                    "frm1701MS:txtTaxpayerNo8b",
+                    "frm1701MS:txtTelNum10b",
+                    "frm1701MS:txtRDOCodeb",
+                    "frm1701MS:txtTaxpayerNo11a1",
+                    "frm1701MS:txtPg2TIN1Spouse",
+                ],
+                Box::new(by(json!({
+                    "frm1701MS:civilStatus": "Married",
+                    "frm1701MS:txtIfMarriedJointlyNo5": "true",
+                }))),
+            ),
         ];
         for (code, keys, turn_on) in cases {
             let opened = open(code, page_period_of(code));
@@ -14125,6 +14344,81 @@ mod tests {
                     "frm1702q:rbAmendedRtn_1": "true",
                 }),
             ),
+            // PR 7: the annual individual returns' spouse part through each
+            // answer that opens or closes a part of it.
+            ("1700", json!({"frm1700:rdoPg1I15CivilStatusM": "true"})),
+            (
+                "1700",
+                json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                    "frm1700:rdoPg1I17FilingStatusS": "true",
+                }),
+            ),
+            (
+                "1700",
+                json!({
+                    "frm1700:rdoPg1I15CivilStatusM": "true",
+                    "frm1700:rdoPg1I16SpouseHasIncomeY": "true",
+                    "frm1700:rdoPg1I17FilingStatusJ": "true",
+                    "frm1700:rdoPg1I24SpouseForeignTaxCreditsYes": "true",
+                }),
+            ),
+            ("1701", json!({"frm1701:rdoPg1I16CivilStatusS": "true"})),
+            (
+                "1701",
+                json!({
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                    "frm1701:rdoPg2I4ATC_II012": "true",
+                }),
+            ),
+            (
+                "1701",
+                json!({
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                    "frm1701:rdoPg2I4ATC_II016": "true",
+                    "frm1701:rdoPg2I8ForeignTaxCreditsYes": "true",
+                }),
+            ),
+            (
+                "1701A",
+                json!({"frm1701A:optCivilStatus_2": "true", "frm1701A:optSpouseIncome_2": "true"}),
+            ),
+            (
+                "1701A",
+                json!({
+                    "frm1701A:optCivilStatus_2": "true",
+                    "frm1701A:optSpouseIncome_1": "true",
+                    "frm1701A:optFilingStatus_1": "true",
+                    "frm1701A:optSpouseFTC_1": "true",
+                }),
+            ),
+            (
+                "1701MS",
+                json!({"frm1701MS:civilStatus": "Married", "frm1701MS:txtIfMarriedSeparatelyNo5": "true"}),
+            ),
+            (
+                "1701MS",
+                json!({
+                    "frm1701MS:civilStatus": "Married",
+                    "frm1701MS:txtIfMarriedJointlyNo5": "true",
+                    "frm1701MS:txtTaxpayerNo11a1": "true",
+                    "frm1701MS:txtTaxpayerNo12e1": "true",
+                }),
+            ),
+            (
+                "1701MS",
+                json!({
+                    "frm1701MS:civilStatus": "Married",
+                    "frm1701MS:txtIfMarriedJointlyNo5": "true",
+                    "frm1701MS:txtTaxpayerNo11b1": "true",
+                    "frm1701MS:txtTaxpayerNo12b1": "true",
+                }),
+            ),
             ("2000OT", json!({"frm2000OT:rbTransNature_2": "true"})),
             ("2200A", json!({"frm2200Av2020:optTreaty_1": "true"})),
             ("2553", json!({"frm2553:txt13_1": "true"})),
@@ -14167,6 +14461,9 @@ mod tests {
             ("1603Q", 1),
             ("1606", 1),
             ("1700", 2),
+            // PR 7 (R8.0): 1701's items 27-29, columns A and B, joined the
+            // model.
+            ("1701", 2),
             ("1701A", 2),
             ("1701MS", 2),
             // PR 5: 1701Q's items 64-66, columns A and B, joined the model.
@@ -14369,6 +14666,7 @@ mod tests {
             not_on_return,
             [
                 "1700 frm1700:txtPg1I31B",
+                "1701 frm1701:txtPg1I27B",
                 "1701A frm1701A:txt25B",
                 "1701MS frm1701MS:txtCompromise28b",
                 "1701Q frm1701q:txt64B",
@@ -15735,6 +16033,8 @@ mod tests {
         }
     }
 
+    /// PR 7: 1700, 1701, 1701A and 1701MS.
+    mod annual_individual;
     /// PR 3: the monthly withholding forms.
     mod monthly;
 }

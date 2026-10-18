@@ -11,8 +11,8 @@ use bir_core::reference;
 use serde_json::{Map, Value, json};
 
 use super::{
-    rows_1700, rows_2550m, rows_2550q, rows_annual_corporate, rows_dst_pt_vat, rows_income_q,
-    rows_monthly, rows_withholding, schema_entry,
+    rows_1700, rows_2550m, rows_2550q, rows_annual_corporate, rows_annual_individual,
+    rows_dst_pt_vat, rows_income_q, rows_monthly, rows_withholding, schema_entry,
 };
 
 fn option(value: &str, label: &str) -> Value {
@@ -79,6 +79,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
         return order;
     }
     if let Some(order) = rows_income_q::edit_order(kind, key) {
+        return order;
+    }
+    if let Some(order) = rows_annual_individual::edit_order(kind, key) {
         return order;
     }
     location(kind, key).map_or(0, |(_, level)| level + 1)
@@ -163,6 +166,9 @@ pub(super) fn fill(
         return done;
     }
     if let Some(done) = rows_annual_corporate::fill(kind, draft, key, value) {
+        return done;
+    }
+    if let Some(done) = rows_annual_individual::fill(kind, draft, key, value) {
         return done;
     }
     if let Some(row) = atc_2000_row(kind, key)
@@ -302,6 +308,7 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || rows_1700::cell(kind, key).is_some()
         || rows_withholding::host_writes(kind, key)
         || rows_monthly::host_writes(kind, key)
+        || rows_annual_individual::host_writes(kind, key)
 }
 
 /// 1701A "(add more...)" spouse cell `frm1701A:txtmodalPartIV<A|B>_<n>C3`:

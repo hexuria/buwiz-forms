@@ -1808,11 +1808,13 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // (PR 4), table cells now; less 1600PT's and 1600VT's mirrored item 6
     // RDO list, hidden (PR 3); plus 2000's Item 5 RDO list (PR 4) and plus
     // 3 for 1604C, 1604E and 1604F (PR 6, item 5 RDO); plus 4 for 1702RT,
-    // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now drawn):
-    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4. Table cells are counted apart (the 36 2550M
+    // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now drawn);
+    // plus 4 for 1701 and 1701A (PR 7: their RDO lists, item 5 and the
+    // spouse's, 1701 Part IV item 2 and 1701A item 67, drawn now):
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4. Table cells are counted apart (the 36 2550M
     // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
     // checks every one).
-    assert_eq!(supplied, 69, "catalog lists, dependent ones included");
+    assert_eq!(supplied, 73, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and
@@ -2453,17 +2455,24 @@ fn page_option_value(option: &Value) -> Option<String> {
 }
 
 /// Every choice a schema dropdown lists, sent the way the page sends it,
-/// is one the host accepts (unless the page shows the field locked).
+/// is one the host accepts (unless the page shows the field locked, or the
+/// host refuses it while its part is closed: PR 7's
+/// `rows_annual_individual::gated`, 1701MS item 18 column B off a joint
+/// return, whose choices
+/// `annual_individual::form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return`
+/// sends on a joint return). A box rule 6 only fades is still sent.
 #[test]
 fn every_listed_dropdown_choice_is_accepted_by_the_host() {
     seed_fictional_profile();
     let mut refused = Vec::new();
+    let mut sent = BTreeSet::new();
     for form in schema() {
         let code = form["c"].as_str().unwrap_or_default();
         let Ok(opened) = open(code, page_period_for(code)) else {
             continue;
         };
         let locks = opened["locks"].as_object().cloned().unwrap_or_default();
+        let kind = AgentFormKind::from_code(code).expect("schema form is an agent form");
         let fields = form["parts"]
             .as_array()
             .into_iter()
@@ -2478,9 +2487,15 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             // Every other off box is still tried here.
             let gated = rows_withholding::gated(kind_of(code).unwrap(), &opened["draft"], key)
                 == Some(true);
-            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) || gated {
+            if field["t"] != "sel"
+                || field["c"] == 1
+                || locks.contains_key(key)
+                || gated
+                || rows_annual_individual::gated(kind, &opened["draft"], key)
+            {
                 continue;
             }
+            sent.insert(format!("{code} {key}"));
             for option in field["o"].as_array().into_iter().flatten() {
                 let Some(value) = page_option_value(option) else {
                     continue;
@@ -2525,6 +2540,22 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                 }
             }
         }
+    }
+    // Selects rule 6 fades on a fresh return but the host takes: still sent.
+    // (1602Q's lstSpecialTax is not among them since PR 2: the host refuses
+    // it until item 13 is Yes, and the rows_withholding gate above skips it;
+    // q3_withholding_item_13_is_answered_on_the_page_and_prints sends its
+    // choices once item 13 holds.)
+    for key in [
+        "1601C frm1601c:selTreaty",
+        "1604C frm1604c:txtRefMonth",
+        "1604C frm1604c:select13",
+        "1606 frm1606:selTreaty",
+        "1701Q frm1701q:txtSpouseRDOCode",
+        "1706 frm1706:selTreaty",
+        "2553 frm2553:lstTaxTreaty",
+    ] {
+        assert!(sent.contains(key), "{key} is sent");
     }
     // N03 (fixed): 2550M's Schedule 1 ATC selects list the form's own ATC
     // popup and the host writes them through the typed draft.
