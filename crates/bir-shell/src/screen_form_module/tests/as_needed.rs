@@ -338,57 +338,57 @@ fn pr9_0605_boxes_off_the_sheet_are_named_and_labelled() {
     assert!(strings(&opened["profile_edit"]).contains("txtEmail"));
 }
 
-/// 0605 preview.0 and the locked quarter boxes: item 3's four tick boxes
-/// are the draft's quarter (form_0605.rs `quarter`, written one tick box
-/// per quarter by the field map). Ticking one sets it, the print map ticks
-/// the same box, and unticking it clears the quarter; the page and the
-/// print agree for every quarter.
+/// 0605 preview.0 and review F5: item 3's four tick boxes are the draft's
+/// quarter (form_0605.rs `quarter`, written one tick box per quarter by the
+/// field map), which is the return's period identity (agent
+/// `PERIOD_FIELDS`). On an opened return they are locked as its identity,
+/// say what sets them, and refuse a write; they show the draft's quarter as
+/// the print does, for every quarter. (PR 9 first let the page change it;
+/// this replaces that assertion with the identity rule.) A sample's period
+/// part sets it: a_0605_quarter_is_its_quarter.
 #[test]
 fn pr9_0605_quarter_boxes_are_the_drafts_quarter() {
     setup();
     let opened = open("0605", 1);
     for key in QUARTERS_0605 {
-        assert!(opened["locks"][key].is_null(), "{key} is open");
-    }
-    let mut draft = opened["draft"].clone();
-    for (n, key) in QUARTERS_0605.iter().enumerate() {
-        let filled = fill("0605", &draft, pick(&QUARTERS_0605, key));
-        assert!(
-            filled["rejected"].as_object().unwrap().is_empty(),
-            "{}",
-            filled["rejected"]
+        assert_eq!(
+            opened["locks"][key],
+            agent::Lock::Identity.reason(),
+            "{key}"
         );
-        draft = filled["draft"].clone();
-        assert_eq!(draft["quarter"], n as u64 + 1);
+        assert_eq!(
+            opened["waits"][key],
+            rows_as_needed::QUARTER_FROM_THE_PERIOD
+        );
+    }
+    let refused = fill(
+        "0605",
+        &opened["draft"],
+        pick(&QUARTERS_0605, "itemQuarter_2"),
+    );
+    assert_eq!(
+        refused["rejected"]["itemQuarter_2"],
+        rows_as_needed::QUARTER_FROM_THE_PERIOD
+    );
+    assert_eq!(refused["draft"]["quarter"], opened["draft"]["quarter"]);
+    for n in 1..=4u64 {
+        let mut draft = opened["draft"].clone();
+        draft["quarter"] = json!(n);
+        let shown = fill("0605", &draft, json!({}));
         let map = printed("0605", &draft);
-        for (m, other) in QUARTERS_0605.iter().enumerate() {
-            let on = if m == n { "true" } else { "false" };
-            assert_eq!(filled["values"][*other], on, "page {other}");
-            assert_eq!(map[*other], on, "print {other}");
+        for (m, key) in QUARTERS_0605.iter().enumerate() {
+            let on = if m as u64 + 1 == n { "true" } else { "false" };
+            assert_eq!(shown["values"][*key], on, "page {key}");
+            assert_eq!(map[*key], on, "print {key}");
         }
     }
-    // Unticking the ticked quarter clears it; another box's untick does not.
-    let kept = fill("0605", &draft, json!({ "itemQuarter_1": "false" }));
-    assert_eq!(kept["draft"]["quarter"], 4);
-    let cleared = fill("0605", &draft, json!({ "itemQuarter_4": "false" }));
-    assert_eq!(cleared["draft"]["quarter"], 0);
-    assert!(
-        QUARTERS_0605
-            .iter()
-            .all(|key| cleared["values"][*key] == "false")
-    );
-    // The upload carries it: the field map is the print's.
-    let typed: bir_core::forms::form_0605::Form0605Draft = serde_json::from_value(
-        fill("0605", &draft, pick(&QUARTERS_0605, "itemQuarter_2"))["draft"].clone(),
-    )
-    .unwrap();
-    assert_eq!(typed.quarter, 2);
 }
 
-/// 0605 R6.1: item 17's Others (Specify) box is off with what turns it on
+/// 0605 R6.1, review F10: item 17's Others box is off with what turns it on
 /// until Others is the manner (the official `disabletxtOthers()`, which
-/// form_0605_official.rs keeps: any other manner clears it); then it keeps
-/// what is typed, which prints in its item 17 cell.
+/// form_0605_official.rs keeps: any other manner clears it), and refuses
+/// what is typed meanwhile with that tag instead of taking it and erasing
+/// it; then it keeps what is typed, which prints in its item 17 cell.
 #[test]
 fn pr9_0605_others_box_waits_for_others() {
     setup();
@@ -396,13 +396,19 @@ fn pr9_0605_others_box_waits_for_others() {
     let opened = open("0605", 1);
     assert!(opened["locks"][key].is_null());
     assert_eq!(opened["off"][key], "Needs item 17 = Others");
-    let others = fill(
+    let shut = fill("0605", &opened["draft"], json!({ key: "Bank transfer" }));
+    assert_eq!(shut["rejected"][key], "Needs item 17 = Others");
+    // The manner and the text in one batch: the manner first.
+    let typed = fill(
         "0605",
         &opened["draft"],
-        json!({ "frm0605:itemMannerOfPayment:_5": "true" }),
+        json!({ "frm0605:itemMannerOfPayment:_5": "true", key: "Bank transfer" }),
     );
-    let typed = fill("0605", &others["draft"], json!({ key: "Bank transfer" }));
-    assert!(typed["rejected"].as_object().unwrap().is_empty());
+    assert!(
+        typed["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        typed["rejected"]
+    );
     assert_eq!(typed["draft"]["other_manner_description"], "Bank transfer");
     assert_eq!(printed("0605", &typed["draft"])[key], "Bank transfer");
     let checked = call_async(
@@ -759,9 +765,11 @@ fn pr9_1606_1706_boxes_off_the_sheet_are_not_printed() {
     }
 }
 
-/// 1606 R6.1-R6.3, 1706 R6.0-R6.3: boxes the official page opens only on
-/// another answer (fields.json `enabled_when`) are off with what turns them
-/// on, take nothing while off, and keep what is typed once on.
+/// 1606 R6.1-R6.3, 1706 R6.0-R6.3 and review F1, F10, F12: boxes the
+/// official page opens only on another answer (fields.json `enabled_when`)
+/// are off with what turns them on and refuse any write but a blank with
+/// that tag, judged on the batch's draft as recomputed so far; once on they
+/// keep what is typed.
 #[test]
 fn pr9_1606_1706_boxes_wait_for_their_answer() {
     setup();
@@ -826,26 +834,110 @@ fn pr9_1606_1706_boxes_wait_for_their_answer() {
         let condition = corpus[code][key]
             .as_str()
             .unwrap_or_else(|| panic!("{code} {key} has a corpus condition"));
-        assert_eq!(
-            opened["off"][key], tags["conditions"][code][condition],
-            "{code} {key}"
-        );
+        let tag = &tags["conditions"][code][condition];
+        assert_eq!(opened["off"][key], *tag, "{code} {key}");
         let closed = fill(code, &opened["draft"], json!({ key: value }));
         assert_eq!(
-            closed["values"][key], opened["values"][key],
-            "{code} {key} takes nothing while off"
+            closed["rejected"][key], *tag,
+            "{code} {key} refused while off"
         );
-        let on = fill(code, &opened["draft"], answer.clone());
-        let kept = fill(code, &on["draft"], json!({ key: value }));
-        assert!(kept["rejected"].as_object().unwrap().is_empty());
+        assert_eq!(closed["values"][key], opened["values"][key]);
+        // The answer and the box in one batch: the answer runs first.
+        let mut batch = answer.clone();
+        batch[key] = value.clone();
+        let kept = fill(code, &opened["draft"], batch);
+        assert!(
+            kept["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            kept["rejected"]
+        );
         assert_eq!(kept["values"][key], shown, "{code} {key} once {answer}");
     }
-    // 1706 item 18's boxes, now bound: off until item 18 is below zero.
-    let opened = open("1706", 1);
-    assert_eq!(
-        opened["off"]["frm1706:opt37:_1"],
-        "Needs item 18 below zero (an over-remittance)"
+    // F1 (a): item 11 No and the list in one batch: refused.
+    let opened = open("1606", 1);
+    let yes = fill(
+        "1606",
+        &opened["draft"],
+        json!({"frm1606:rdTreaty:_1": "true"}),
     );
+    let no_and_list = fill(
+        "1606",
+        &yes["draft"],
+        json!({"frm1606:rdTreaty:_2": "true", "frm1606:rdTreaty:_1": "false", "frm1606:selTreaty": "1"}),
+    );
+    assert_eq!(
+        no_and_list["rejected"]["frm1606:selTreaty"],
+        "Needs item 11 = Yes"
+    );
+    assert_eq!(no_and_list["draft"]["tax_relief"], "no");
+    // A group key is refused alike.
+    let opened = open("1706", 1);
+    let group = fill("1706", &opened["draft"], json!({"frm1706:j_id392": "1"}));
+    assert!(group["rejected"]["frm1706:j_id392"].is_string());
+    // F10: 1706 item 18's boxes, bound by the overpaid seed, refuse a tick
+    // until item 18 is below zero (recompute would erase it).
+    let tag = "Needs item 18 below zero (an over-remittance)";
+    assert_eq!(opened["off"]["frm1706:opt37:_1"], tag);
+    let refused = fill(
+        "1706",
+        &opened["draft"],
+        json!({"frm1706:opt37:_1": "true"}),
+    );
+    assert_eq!(refused["rejected"]["frm1706:opt37:_1"], tag);
+    // F12: the conditions the gates read, as the corpus words them.
+    assert_eq!(
+        corpus["1606"]["frm1606:selTreaty"],
+        "Item 19 indicates treaty or special-law relief."
+    );
+    assert_eq!(
+        corpus["1706"]["frm1706:selTreaty"],
+        "Item 20 indicates tax-treaty relief."
+    );
+}
+
+/// Review F6: 1606's and 1706's item 11 No clears the relief chosen from
+/// its list, so the page asks first (`removes`) and offers Undo; No with
+/// nothing chosen asks nothing.
+#[test]
+fn pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief() {
+    setup();
+    for (code, list, choice) in [
+        ("1606", "frm1606:selTreaty", "0"),
+        ("1706", "frm1706:selTreaty", "1"),
+    ] {
+        let yes_key = format!("frm{code}:rdTreaty:_1");
+        let no_key = format!("frm{code}:rdTreaty:_2");
+        let opened = open(code, 1);
+        let chosen = fill(
+            code,
+            &opened["draft"],
+            json!({ &yes_key: "true", list: choice }),
+        );
+        assert_eq!(
+            chosen["draft"]["tax_relief"], "international_tax_treaty",
+            "{code}"
+        );
+        let no = fill(
+            code,
+            &chosen["draft"],
+            json!({ &no_key: "true", &yes_key: "false" }),
+        );
+        assert!(
+            no["removes"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("International Tax Treaty"),
+            "{code}: {}",
+            no["removes"]
+        );
+        assert_eq!(no["draft"]["tax_relief"], "no");
+        let plain = fill(
+            code,
+            &opened["draft"],
+            json!({ &no_key: "true", &yes_key: "false" }),
+        );
+        assert!(plain["removes"].is_null(), "{code}");
+    }
 }
 
 /// 1706 manual-0: item 3 shows the sheet's printed ATC captions (WI 450 /
@@ -1088,74 +1180,170 @@ fn pr9_2552_page_2_is_its_printed_parts() {
     assert!(part_iii.iter().all(|c| c["disabled"] == true));
 }
 
-/// 2552 manual-0: Part IV rows 2-5's amounts, which the corpus marks
-/// computed, are typed by the filer into their row (form_2552.rs
-/// exempt_transactions) and print in the row's Amount Involved cell.
+/// 2552 manual-0 and review F8: Part IV rows 2-5, which the corpus marks
+/// computed and the official runtime keeps disabled until the row before is
+/// used (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json
+/// txtPg2P4I2Amount..I5Amount disabled: true), are off with "Needs Part IV
+/// row N-1" and refuse a write until it is used; then they are typed into
+/// their row (form_2552.rs exempt_transactions) and print in the row's
+/// Amount Involved cell.
 #[test]
 fn pr9_2552_part_iv_rows_take_their_amounts() {
     setup();
+    let inventory = inventory_2552();
+    for n in 2..=5 {
+        for stem in ["Amount", "TransClass"] {
+            let key = format!("frm2552:txtPg2P4I{n}{stem}");
+            assert!(
+                inventory
+                    .iter()
+                    .any(|c| c["id"] == key.as_str() && c["disabled"] == true),
+                "{key}"
+            );
+        }
+    }
     let opened = open("2552", 1);
     for n in 2..=5 {
         let key = format!("frm2552:txtPg2P4I{n}Amount");
         assert!(opened["locks"][&key].is_null(), "{key}");
+        assert_eq!(opened["off"][&key], format!("Needs Part IV row {}", n - 1));
         assert_eq!(
             printed_caption("2552-2018", &key).unwrap(),
             format!("Part IV row {n} Amount Involved")
         );
     }
+    let early = fill(
+        "2552",
+        &opened["draft"],
+        json!({"frm2552:txtPg2P4I3Amount": "1500"}),
+    );
+    assert_eq!(
+        early["rejected"]["frm2552:txtPg2P4I3Amount"],
+        "Needs Part IV row 2"
+    );
     let filled = fill(
         "2552",
         &opened["draft"],
         json!({
+            "frm2552:txtPg2P4I1TransClass": "Gift",
+            "frm2552:txtPg2P4I2TransClass": "Swap",
             "frm2552:txtPg2P4I3TransClass": "Gift",
             "frm2552:txtPg2P4I3Amount": "1500",
         }),
     );
-    assert!(filled["rejected"].as_object().unwrap().is_empty());
+    assert!(
+        filled["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        filled["rejected"]
+    );
     assert_eq!(filled["draft"]["exempt_transactions"][2]["amount"], 1500.0);
     assert_eq!(
         printed("2552", &filled["draft"])["frm2552:txtPg2P4I3Amount"],
         "1,500.00"
     );
-    let cleared = fill(
-        "2552",
-        &filled["draft"],
-        json!({"frm2552:txtPg2P4I3TransClass": "", "frm2552:txtPg2P4I3Amount": ""}),
-    );
-    assert_eq!(cleared["draft"]["exempt_transactions"], json!([]));
 }
 
-/// 2552 manual-3: 12B is the filer's whole number of shares (form_2552.rs
-/// outstanding_shares), typed for an initial public offering and printed
-/// in its cell; 12A alike.
+/// The 2552 official runtime controls (rules/forms/2552-v2018/fixtures).
+fn inventory_2552() -> Vec<Value> {
+    let inventory: Value = serde_json::from_str(
+        &std::fs::read_to_string(format!(
+            "{}/../../rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    inventory["controls"]
+        .as_array()
+        .or(inventory["static_controls"].as_array())
+        .unwrap()
+        .clone()
+}
+
+/// 2552 manual-3 and review F3: 12A and 12B are the filer's whole numbers
+/// of shares (form_2552.rs shares_sold, outstanding_shares), which the
+/// official runtime keeps disabled until item 11 is an offering (inventory:
+/// txtPg1Pt1I12NumOfShare and txtPg1Pt1I12TotShare disabled: true) and
+/// recompute clears otherwise: refused with the tag before, typed and
+/// printed after item 11 Primary.
 #[test]
 fn pr9_2552_item_12_takes_whole_numbers_of_shares() {
     setup();
-    assert_eq!(placed("2552", "frm2552:txtPg1Pt1I12TotShare").t, "int");
-    assert_eq!(placed("2552", "frm2552:txtPg1Pt1I12NumOfShare").t, "int");
+    let inventory = inventory_2552();
+    for key in [
+        "frm2552:txtPg1Pt1I12TotShare",
+        "frm2552:txtPg1Pt1I12NumOfShare",
+    ] {
+        assert!(
+            inventory
+                .iter()
+                .any(|c| c["id"] == key && c["disabled"] == true),
+            "{key}"
+        );
+        assert_eq!(placed("2552", key).t, "int");
+    }
     let opened = open("2552", 1);
-    assert!(opened["locks"]["frm2552:txtPg1Pt1I12TotShare"].is_null());
+    assert_eq!(
+        opened["off"]["frm2552:txtPg1Pt1I12TotShare"],
+        rows_as_needed::OFFERING_2552
+    );
+    let early = fill(
+        "2552",
+        &opened["draft"],
+        json!({"frm2552:txtPg1Pt1I12TotShare": "250000"}),
+    );
+    assert_eq!(
+        early["rejected"]["frm2552:txtPg1Pt1I12TotShare"],
+        rows_as_needed::OFFERING_2552
+    );
     let ipo = fill(
         "2552",
         &opened["draft"],
-        pick(
-            &[
-                "frm2552:rdoPg1I11TransactionLSE",
-                "frm2552:rdoPg1I11TransactionPrimary",
-                "frm2552:rdoPg1I11TransactionSecondary",
-            ],
-            "frm2552:rdoPg1I11TransactionPrimary",
-        ),
+        pick(&ITEM_11_2552, "frm2552:rdoPg1I11TransactionPrimary"),
     );
     let typed = fill(
         "2552",
         &ipo["draft"],
         json!({"frm2552:txtPg1Pt1I12TotShare": "250000", "frm2552:txtPg1Pt1I12NumOfShare": "1000"}),
     );
+    assert!(
+        typed["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        typed["rejected"]
+    );
     assert_eq!(typed["draft"]["outstanding_shares"], "250000");
     let map = printed("2552", &typed["draft"]);
     assert_eq!(map["frm2552:txtPg1Pt1I12TotShare"], "250000");
     assert_eq!(map["frm2552:txtPg1Pt1I12NumOfShare"], "1000");
+}
+
+/// Review F2: ticking 2552's selected item 11 answer again (the page sends
+/// "false" for it in a group of three) keeps the answer, so the draft stays
+/// a 2552 draft: another box then fills and the return saves.
+#[test]
+fn pr9_2552_item_11_untick_keeps_the_answer() {
+    setup();
+    let opened = open("2552", 1);
+    let lse = fill(
+        "2552",
+        &opened["draft"],
+        pick(&ITEM_11_2552, ITEM_11_2552[0]),
+    );
+    let again = fill("2552", &lse["draft"], json!({ ITEM_11_2552[0]: "false" }));
+    assert!(again["rejected"].as_object().unwrap().is_empty());
+    assert_eq!(again["draft"]["transaction"], "local_stock_exchange");
+    let next = fill(
+        "2552",
+        &again["draft"],
+        json!({"frm2552:txtPg1I3NoOfSheets": "2"}),
+    );
+    assert!(
+        next["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        next["rejected"]
+    );
+    let saved = save("2552", &next["draft"]);
+    assert!(saved["id"].is_number(), "{saved}");
 }
 
 const ITEM_11_2552: [&str; 3] = [
@@ -1225,6 +1413,85 @@ fn pr9_2552_item_11_asks_before_it_clears_part_v_and_row_5_fills() {
         rows_as_needed::ROW5_FOLDED
     );
     assert_eq!(refused["values"]["frm2552:txtPg2Pt5Sch1Seller5"], "OTHERS");
+}
+
+/// Review F13: a Schedule 2 row holding only its typed rate is a typed row,
+/// and item 11 asks before it clears the old schedule's rows even when the
+/// same batch types a row under the new one. Review F15: row 5's date takes
+/// what rows 1-4's does (MM/DD/YYYY; a blank clears) and refuses text that
+/// is not a date.
+#[test]
+fn pr9_2552_item_11_counts_every_typed_row_and_row_5_dates_like_rows_1_to_4() {
+    setup();
+    let opened = open("2552", 1);
+    let primary = fill(
+        "2552",
+        &opened["draft"],
+        pick(&ITEM_11_2552, ITEM_11_2552[1]),
+    );
+    let rate_only = fill(
+        "2552",
+        &primary["draft"],
+        json!({"frm2552:txtPg2Pt5Sch2TaxRate1": "1"}),
+    );
+    assert_eq!(rate_only["draft"]["schedule"][0]["tax_rate"], 1.0);
+    let to_lse = fill(
+        "2552",
+        &rate_only["draft"],
+        pick(&ITEM_11_2552, ITEM_11_2552[0]),
+    );
+    assert_eq!(to_lse["removes"]["rows"], 1, "{}", to_lse["removes"]);
+    // A row typed under Schedule 1, then Primary with a new Schedule 2 row.
+    let lse = fill(
+        "2552",
+        &opened["draft"],
+        pick(&ITEM_11_2552, ITEM_11_2552[0]),
+    );
+    let typed = fill(
+        "2552",
+        &lse["draft"],
+        json!({"frm2552:txtPg2Pt5Sch1Seller1": "A"}),
+    );
+    let mut batch = pick(&ITEM_11_2552, ITEM_11_2552[1]);
+    batch["frm2552:txtPg2Pt5Sch2Seller1"] = json!("B");
+    let switched = fill("2552", &typed["draft"], batch);
+    assert_eq!(switched["removes"]["rows"], 1, "{}", switched["removes"]);
+    assert_eq!(switched["draft"]["schedule"][0]["seller"], "B");
+    // Row 5's date, as rows 1-4's.
+    let key = "frm2552:txtPg2Pt5Sch1Date5";
+    let dated = fill("2552", &lse["draft"], json!({ key: "3/5/2026" }));
+    assert!(
+        dated["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        dated["rejected"]
+    );
+    assert_eq!(dated["draft"]["schedule"][4]["date"], "03/05/2026");
+    let row_1 = fill(
+        "2552",
+        &lse["draft"],
+        json!({"frm2552:txtPg2Pt5Sch1Date1": "3/5/2026"}),
+    );
+    assert_eq!(row_1["draft"]["schedule"][0]["date"], "03/05/2026");
+    let bad = fill("2552", &lse["draft"], json!({ key: "soon" }));
+    assert!(
+        bad["rejected"][key]
+            .as_str()
+            .unwrap()
+            .contains("MM/DD/YYYY")
+    );
+    let bad_1 = fill(
+        "2552",
+        &lse["draft"],
+        json!({"frm2552:txtPg2Pt5Sch1Date1": "soon"}),
+    );
+    assert!(
+        bad_1["rejected"]["frm2552:txtPg2Pt5Sch1Date1"]
+            .as_str()
+            .unwrap()
+            .contains("MM/DD/YYYY")
+    );
+    let cleared = fill("2552", &dated["draft"], json!({ key: "" }));
+    assert!(cleared["rejected"].as_object().unwrap().is_empty());
 }
 
 // ------------------------------------------------------------------ 1707
@@ -1490,7 +1757,7 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
     let cells = [
         ("frm1707:txtPg2P4Sch2NameOfCorpStock1", "Example Corp"),
         ("frm1707:txtPg2P4Sch2NoOfShares1", "1000"),
-        ("frm1707:txtPg2P4Sch2StockCertNo4", "C-4"),
+        ("frm1707:txtPg2P4Sch2StockCertNo4", "4004"),
         ("frm1707:txtPg2P4Sch2NameOfCorpStock4", "Fourth Corp"),
         ("frm1707:txtPg2P4Sch2TaxBaseSellPrice4", "5000"),
         ("frm1707:txtPg2P4Sch3Particulars4", "Broker fee"),
@@ -1513,7 +1780,7 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
         filled["rejected"]
     );
     assert_eq!(filled["draft"]["shares"][0]["number_of_shares"], 1000.0);
-    assert_eq!(filled["draft"]["shares"][3]["certificate_number"], "C-4");
+    assert_eq!(filled["draft"]["shares"][3]["certificate_number"], "4004");
     assert_eq!(filled["draft"]["expenses"][3]["amount"], 250.0);
     let map = printed("1707", &filled["draft"]);
     assert_eq!(map["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000.000");
@@ -1525,7 +1792,7 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
     let refused = fill(
         "1707",
         &folded,
-        json!({"frm1707:txtPg2P4Sch2StockCertNo4": "C-5"}),
+        json!({"frm1707:txtPg2P4Sch2StockCertNo4": "4005"}),
     );
     assert_eq!(
         refused["rejected"]["frm1707:txtPg2P4Sch2StockCertNo4"],

@@ -1907,8 +1907,8 @@ function radioGroup(cx, ui, it, radios) {
     const locked = !s.editable || f.c || ui.isLocked(f.k);
     const pick = (cx) => {
       if (locked) return;
-      // A pair's ticked answer given again runs again (1602Q item 13 "No"
-      // removes the Schedule 2 rows a legacy draft kept, after asking).
+      // A pair's ticked answer given again runs again, so a removal it
+      // causes (rows_as_needed.rs `removes`) asks again.
       if (on && radios.length >= 3) {
         ui.choose({ [f.k]: "false" }, cx);
         return;

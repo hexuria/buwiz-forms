@@ -6,19 +6,25 @@
 //! what the filer typed.
 //!
 //! - 0605 Item 3: one tick box per quarter, all four the draft's `quarter`
-//!   (form_0605_xml.rs `insert_one_of_four`). Ticking one sets the quarter;
-//!   unticking the ticked one clears it (the official page opens with none
-//!   ticked).
+//!   (form_0605_xml.rs `insert_one_of_four`), which is the return's period
+//!   identity (agent `PERIOD_FIELDS`): the boxes show it, set where the
+//!   return is started (a sample's period part), and refuse a write on an
+//!   opened return, saying what sets them.
 //! - 1606 item 8C and 1706 item 7C: the other party's TIN, one draft field
 //!   (`seller_tin`, `buyer_tin`) shown as three boxes and a branch code;
 //!   the boxes fill in order (rows_1700.rs `with_tin_part`).
-//! - Boxes the official page enables only on another answer (rules/forms
-//!   fields.json `enabled_when`) take nothing while it does not hold, so
-//!   rule 6 shows them off with what turns them on: 1606's relief list
-//!   (item 11 Yes), Schedule 1 "Others" classification and Schedule 2
-//!   "Exempt or Others" specification; 1706's items 8 and 9 (an individual
-//!   seller at item 3), relief list (item 11 Yes) and Schedule 2
-//!   specification. A blank (clearing) always goes through.
+//! - Boxes the official page enables only on another answer refuse every
+//!   write but a blank while that answer does not hold, with the tag the
+//!   page shows on them ([`off`], rule 6), judged on the draft as the batch
+//!   has recomputed it so far: 0605's item 17 Others box; 1606's relief list
+//!   (item 11 Yes), Schedule 1 "Others" classification, Schedule 2
+//!   specification and item 18's boxes (an over-remittance); 1706's items 8
+//!   and 9 (an individual seller at item 3), relief list, Schedule 2
+//!   specification and item 18's boxes (all rules/forms fields.json
+//!   `enabled_when`); 2552's items 12A and 12B (an initial public offering
+//!   at item 11) and Part IV rows 2-5 (the row before them used), which
+//!   rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json
+//!   keeps disabled at load. A blank (clearing) always goes through.
 //! - 2552 item 11 picks the Part V schedule, and all three schedules keep
 //!   their rows in the one draft list (form_2552.rs `schedule`): the
 //!   binding alone would move the rows typed under one schedule into the
@@ -59,6 +65,8 @@ use super::rows_1700::with_tin_part;
 pub(super) enum Cell {
     /// 0605 Item 3, quarter 1-4.
     Quarter0605(u8),
+    /// 0605 item 17's Others (Specify) box.
+    Others0605,
     /// 1606 item 8C: seller TIN box 0-2, or 3 (branch code).
     SellerTin1606(usize),
     /// 1706 item 7C: buyer TIN box 0-2.
@@ -117,6 +125,25 @@ pub(super) enum Gate {
     Relief1706,
     /// 1706 Schedule 2 specification: Exempt or Others.
     Transaction1706,
+    /// 1606 and 1706 item 18's boxes: item 18 below zero.
+    Overpaid,
+    /// 2552 items 12A and 12B: item 11 an initial public offering.
+    Offering2552,
+    /// 2552 Part IV row `.0` (index 1-4): the row before it used.
+    PartIvRow2552(usize),
+    /// 0605 item 17's Others box: Others is the manner.
+    Others0605,
+}
+
+/// The tag of a 2552 gate (2552's corpus records no `enabled_when`; the
+/// official runtime keeps these boxes disabled at load, rules/forms/
+/// 2552-v2018/fixtures/runtime-control-inventory-v796.json).
+pub(super) const OFFERING_2552: &str =
+    "Needs item 11 = Initial Public Offering (Primary or Secondary)";
+
+/// The tag of 2552's Part IV row `row` (1-based, 2-5).
+pub(super) fn part_iv_tag(row: usize) -> String {
+    format!("Needs Part IV row {}", row - 1)
 }
 
 pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
@@ -128,6 +155,9 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
     };
     match kind.form_code() {
         "0605" => {
+            if key == "frm0605:txtOthersName" {
+                return Some(Cell::Others0605);
+            }
             let n: u8 = key.strip_prefix("itemQuarter_")?.parse().ok()?;
             (1..=4).contains(&n).then_some(Cell::Quarter0605(n))
         }
@@ -136,11 +166,17 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
             "frm1606:selTreaty" => Some(Cell::Gate(Gate::Relief1606)),
             "frm1606:j_id393_7" => Some(Cell::Gate(Gate::ClassOther1606)),
             "frm1606:txtOthers20" => Some(Cell::Gate(Gate::Transaction1606)),
+            "frm1606:opt37" | "frm1606:opt37:_1" | "frm1606:opt37:_2" => {
+                Some(Cell::Gate(Gate::Overpaid))
+            }
             _ => tin_part(key.strip_prefix("frm1606:txtTINS")?).map(Cell::SellerTin1606),
         },
         "1706" => match key {
-            "frm1706:j_id392:_1" | "frm1706:j_id392:_2" | "frm1706:j_id393:_1"
-            | "frm1706:j_id393:_2" => Some(Cell::Gate(Gate::Individual1706)),
+            "frm1706:j_id392" | "frm1706:j_id392:_1" | "frm1706:j_id392:_2" | "frm1706:j_id393"
+            | "frm1706:j_id393:_1" | "frm1706:j_id393:_2" => Some(Cell::Gate(Gate::Individual1706)),
+            "frm1706:opt37" | "frm1706:opt37:_1" | "frm1706:opt37:_2" => {
+                Some(Cell::Gate(Gate::Overpaid))
+            }
             "frm1706:selTreaty" => Some(Cell::Gate(Gate::Relief1706)),
             "frm1706:txtOthers21" => Some(Cell::Gate(Gate::Transaction1706)),
             _ => tin_part(key.strip_prefix("frm1706:txtTINB")?).map(Cell::BuyerTin1706),
@@ -181,7 +217,17 @@ fn cell_2552(key: &str) -> Option<Cell> {
         "rdoPg1I11TransactionPrimary" => return Some(Cell::Transaction2552(2)),
         "rdoPg1I11TransactionSecondary" => return Some(Cell::Transaction2552(3)),
         "txtPg1Pt1I12TotShare" => return Some(Cell::OutstandingShares2552),
+        "txtPg1Pt1I12NumOfShare" => return Some(Cell::Gate(Gate::Offering2552)),
         _ => {}
+    }
+    if let Some(n) = rest
+        .strip_prefix("txtPg2P4I")
+        .and_then(|r| r.strip_suffix("TransClass"))
+        .and_then(|n| n.parse::<usize>().ok())
+    {
+        return (2..=FORM_2552_ROWS)
+            .contains(&n)
+            .then_some(Cell::Gate(Gate::PartIvRow2552(n - 1)));
     }
     if let Some(n) = rest
         .strip_prefix("txtPg2P4I")
@@ -219,6 +265,8 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
         // Item 8's answer before its 8A text in one batch.
         Cell::TaxRelief1707(_) => Some(0),
         Cell::Shares1707(..) | Cell::ExpenseD1707(_) => Some(1),
+        // Item 17's manner before its Others text in one batch.
+        Cell::Others0605 => Some(1),
         Cell::Quarter0605(_) => None,
     }
 }
@@ -258,27 +306,172 @@ pub(super) fn fill(
     value: &Value,
     ordinary: impl FnOnce(&mut Value) -> Result<(), String>,
 ) -> Option<Result<(), String>> {
-    Some(match cell(kind, key)? {
-        Cell::Quarter0605(quarter) => fill_0605_quarter(draft, quarter, value),
+    let cell = cell(kind, key)?;
+    // A gated box is judged on the draft the batch has made so far, as the
+    // form recomputes it (item 18's over-remittance is a computed total).
+    if let Some(gate) = gate_of(cell)
+        && !blank(value)
+        && !open(gate, &recomputed(kind, draft))
+    {
+        return Some(Err(gate_tag(kind, gate, key)));
+    }
+    Some(match cell {
+        Cell::Quarter0605(_) => Err(QUARTER_FROM_THE_PERIOD.to_string()),
+        Cell::Others0605 => fill_0605_others(draft, value),
         Cell::SellerTin1606(part) => fill_1606_seller_tin(draft, part, value),
         Cell::BuyerTin1706(part) => fill_1706_buyer_tin(draft, part, value),
         Cell::Transaction2552(schedule) => fill_2552_transaction(draft, schedule, value),
         Cell::PartIvAmount2552(row) => fill_2552_part_iv(draft, row, value),
         Cell::OutstandingShares2552 => fill_2552_outstanding(draft, value),
-        Cell::Row5_2552(_, column) => fill_2552_row5(draft, column, value),
+        Cell::Row5_2552(_, column) => fill_2552_row5(draft, key, column, value),
         Cell::TaxRelief1707(yes) => fill_1707_tax_relief(draft, yes, value),
         Cell::Shares1707(row, column) => fill_1707_shares(draft, row, column, value),
         Cell::ExpenseD1707(column) => fill_1707_expense_d(draft, column, value),
         Cell::Gate(gate) => {
-            if blank(value) || open(gate, draft) {
-                ordinary(draft)
-            } else {
-                // Shut until its answer holds: the page shows it off with
-                // what turns it on, and nothing is kept.
+            // Unticking a box of a shut pair writes nothing: its binding's
+            // "false" would set the other answer.
+            if !open(gate, &recomputed(kind, draft)) && text(value) == "false" {
                 Ok(())
+            } else {
+                ordinary(draft)
             }
         }
     })
+}
+
+/// What 0605's quarter boxes say: the quarter is the return's period.
+pub(super) const QUARTER_FROM_THE_PERIOD: &str =
+    "Set by the quarter you give when you start this return.";
+
+/// `draft` as the form recomputes it (unchanged when it cannot).
+fn recomputed(kind: AgentFormKind, draft: &Value) -> Value {
+    let mut copy = draft.clone();
+    if bir_core::forms::agent::compute(kind, &mut copy).is_err() {
+        return draft.clone();
+    }
+    copy
+}
+
+/// The gate a box waits behind, if any.
+fn gate_of(cell: Cell) -> Option<Gate> {
+    match cell {
+        Cell::Gate(gate) => Some(gate),
+        Cell::OutstandingShares2552 => Some(Gate::Offering2552),
+        Cell::Others0605 => Some(Gate::Others0605),
+        Cell::PartIvAmount2552(row) => Some(Gate::PartIvRow2552(row)),
+        _ => None,
+    }
+}
+
+/// What a shut gate says, on the page (`off`) and in a refusal: the
+/// corpus condition's reviewed tag (app/forms/condition-labels.json), or
+/// 2552's own.
+fn gate_tag(kind: AgentFormKind, gate: Gate, key: &str) -> String {
+    match gate {
+        Gate::Offering2552 => OFFERING_2552.to_string(),
+        Gate::PartIvRow2552(row) => part_iv_tag(row + 1),
+        _ => super::conditions::tag(kind.form_code(), key)
+            .unwrap_or_else(|| "Needs another answer on this form".to_string()),
+    }
+}
+
+/// Every gated box of `kind`, with its gate.
+fn gated_keys(kind: AgentFormKind) -> Vec<(String, Gate)> {
+    let keys: Vec<String> = match kind.form_code() {
+        "0605" => vec!["frm0605:txtOthersName".into()],
+        "1606" => [
+            "selTreaty",
+            "j_id393_7",
+            "txtOthers20",
+            "opt37:_1",
+            "opt37:_2",
+        ]
+        .iter()
+        .map(|k| format!("frm1606:{k}"))
+        .collect(),
+        "1706" => [
+            "j_id392:_1",
+            "j_id392:_2",
+            "j_id393:_1",
+            "j_id393:_2",
+            "selTreaty",
+            "txtOthers21",
+            "opt37:_1",
+            "opt37:_2",
+        ]
+        .iter()
+        .map(|k| format!("frm1706:{k}"))
+        .collect(),
+        "2552" => {
+            let mut keys = vec![
+                "frm2552:txtPg1Pt1I12NumOfShare".to_string(),
+                "frm2552:txtPg1Pt1I12TotShare".to_string(),
+            ];
+            for n in 2..=FORM_2552_ROWS {
+                keys.push(format!("frm2552:txtPg2P4I{n}TransClass"));
+                keys.push(format!("frm2552:txtPg2P4I{n}Amount"));
+            }
+            keys
+        }
+        _ => Vec::new(),
+    };
+    keys.into_iter()
+        .filter_map(|key| {
+            let gate = gate_of(cell(kind, &key)?)?;
+            Some((key, gate))
+        })
+        .collect()
+}
+
+/// A value shown as nothing (conditions.rs `is_blank`).
+fn shows_nothing(shown: &str) -> bool {
+    let shown = shown.trim();
+    shown == "false" || shown.chars().all(|c| matches!(c, '0' | '.' | ',' | '-'))
+}
+
+/// The host gates that are shut on `draft` right now, each with its tag,
+/// for the boxes that show nothing (rule 6; conditions.rs `off_boxes`
+/// takes these, since its probe sees a refusal rather than a clearing).
+pub(super) fn off(kind: AgentFormKind, draft: &Value, values: &Value) -> Map<String, Value> {
+    let gated = gated_keys(kind);
+    if gated.is_empty() {
+        return Map::new();
+    }
+    let seen = recomputed(kind, draft);
+    gated
+        .into_iter()
+        .filter(|(key, gate)| {
+            shows_nothing(values[key.as_str()].as_str().unwrap_or_default()) && !open(*gate, &seen)
+        })
+        .map(|(key, gate)| {
+            let tag = gate_tag(kind, gate, &key);
+            (key, Value::from(tag))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+/// The condition text of a 2552 host gate (2552's corpus has none), for
+/// the shared rule-6 tests: `(key, condition)`.
+pub(super) fn host_condition(code: &str, key: &str) -> Option<String> {
+    let kind = AgentFormKind::from_code(code)?;
+    if code != "2552" {
+        return None;
+    }
+    gated_keys(kind)
+        .into_iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, gate)| gate_tag(kind, gate, key))
+}
+
+/// 0605 item 17's Others box: written while Others is the manner
+/// (form_0605_official.rs clears it otherwise, as `disabletxtOthers()`).
+#[inline(never)]
+fn fill_0605_others(draft: &mut Value, value: &Value) -> Result<(), String> {
+    let mut form: Form0605Draft = typed(draft)?;
+    form.other_manner_description = text(value);
+    form.recompute();
+    store(draft, &form)
 }
 
 /// Whether a gated box's answer holds on `draft`.
@@ -289,7 +482,19 @@ fn open(gate: Gate, draft: &Value) -> bool {
             .and_then(Value::as_str)
             .is_some_and(|v| values.contains(&v))
     };
+    let below_zero = |path: &str| {
+        draft
+            .pointer(path)
+            .and_then(Value::as_f64)
+            .is_some_and(|n| n < 0.0)
+    };
     match gate {
+        // fields.json enabled_when, frm1606:selTreaty "Item 19 indicates
+        // treaty or special-law relief." and frm1706:selTreaty "Item 20
+        // indicates tax-treaty relief.": item 19/20 is the old numbering of
+        // item 11, whose Yes answers "tax relief under an International Tax
+        // Treaty or Special Law" (the printed question); the list then
+        // picks which. So Yes opens it on both forms.
         Gate::Relief1606 | Gate::Relief1706 => {
             !is("/tax_relief", &["no"]) && draft.pointer("/tax_relief").is_some()
         }
@@ -297,21 +502,22 @@ fn open(gate: Gate, draft: &Value) -> bool {
         Gate::Transaction1606 => is("/transaction", &["exempt", "others"]),
         Gate::Individual1706 => is("/seller_type", &["individual"]),
         Gate::Transaction1706 => is("/transaction_type", &["exempt", "others"]),
+        // fields.json "Item 36 is negative.": 1606's total_amount_due,
+        // 1706's total_amount_payable.
+        Gate::Overpaid => below_zero("/total_amount_due") || below_zero("/total_amount_payable"),
+        Gate::Others0605 => is("/manner_of_payment", &["Others"]),
+        Gate::Offering2552 => is("/transaction", &["primary_offering", "secondary_offering"]),
+        Gate::PartIvRow2552(row) => {
+            draft["exempt_transactions"]
+                .get(row - 1)
+                .is_some_and(|before| {
+                    before["classification"]
+                        .as_str()
+                        .is_some_and(|c| !c.trim().is_empty())
+                        || before["amount"].as_f64().is_some_and(|a| a != 0.0)
+                })
+        }
     }
-}
-
-#[inline(never)]
-fn fill_0605_quarter(draft: &mut Value, quarter: u8, value: &Value) -> Result<(), String> {
-    let mut form: Form0605Draft = typed(draft)?;
-    if ticked(value) {
-        form.quarter = quarter;
-    } else if form.quarter == quarter {
-        form.quarter = 0;
-    } else {
-        return Ok(());
-    }
-    form.recompute();
-    store(draft, &form)
 }
 
 #[inline(never)]
@@ -396,11 +602,33 @@ fn fill_2552_outstanding(draft: &mut Value, value: &Value) -> Result<(), String>
     store(draft, &form)
 }
 
+/// A typed date as rows 1-4's binding takes it (agent `reformat_date`,
+/// MM/DD/YYYY): blank stays blank, anything else must read as a date.
+fn mdy(text: &str) -> Option<String> {
+    if text.trim().is_empty() {
+        return Some(String::new());
+    }
+    let parts: Vec<&str> = text
+        .trim()
+        .split(['/', '-', '.'])
+        .filter(|part| !part.is_empty())
+        .collect();
+    let (year, month, day) = match parts.as_slice() {
+        [y, m, d] if y.len() == 4 => (*y, *m, *d),
+        [m, d, y] if y.len() == 4 => (*y, *m, *d),
+        _ => return None,
+    };
+    let year: u16 = year.parse().ok()?;
+    let month: u8 = month.parse().ok().filter(|m| (1..=12).contains(m))?;
+    let day: u8 = day.parse().ok().filter(|d| (1..=31).contains(d))?;
+    Some(format!("{month:02}/{day:02}/{year:04}"))
+}
+
 /// What a 2552 row 5 box says once the add-more rows hold row 5 onward.
 pub(super) const ROW5_FOLDED: &str = "Row 5 reads OTHERS while the add-more rows hold row 5 onward: change it in the add-more table.";
 
 #[inline(never)]
-fn fill_2552_row5(draft: &mut Value, column: Row5, value: &Value) -> Result<(), String> {
+fn fill_2552_row5(draft: &mut Value, key: &str, column: Row5, value: &Value) -> Result<(), String> {
     let mut form: Form2552Draft = typed(draft)?;
     if form.schedule_is_folded() {
         return Err(ROW5_FOLDED.to_string());
@@ -421,7 +649,10 @@ fn fill_2552_row5(draft: &mut Value, column: Row5, value: &Value) -> Result<(), 
     }
     let row = &mut form.schedule[at];
     match column {
-        Row5::Date => row.date = shown,
+        Row5::Date => {
+            row.date = mdy(&shown)
+                .ok_or_else(|| format!("`{key}` must be a date as MM/DD/YYYY (got `{shown}`)"))?
+        }
         Row5::Seller => row.seller = shown,
         Row5::Buyer => row.buyer = shown,
         Row5::Corp => row.issuing_corporation = shown,
@@ -488,6 +719,17 @@ fn fill_1707_shares(
         }
         form.shares.resize(row + 1, Form1707Shares::default());
     }
+    // The official boxes' limits (form_1707.rs validate: corporation names
+    // hold 100 characters, certificate numbers up to 40 digits).
+    match column {
+        0 if shown.chars().count() > 100 => {
+            return Err("Corporation names hold at most 100 characters.".to_string());
+        }
+        2 if shown.len() > 40 || !shown.chars().all(|c| c.is_ascii_digit()) => {
+            return Err("Certificate numbers hold up to 40 digits.".to_string());
+        }
+        _ => {}
+    }
     let entry = &mut form.shares[row];
     match column {
         0 => entry.corporation = shown,
@@ -524,6 +766,9 @@ fn fill_1707_expense_d(draft: &mut Value, column: usize, value: &Value) -> Resul
             return Ok(());
         }
         form.expenses.resize(row + 1, Form1707Expense::default());
+    }
+    if column == 0 && shown.chars().count() > 100 {
+        return Err("Particulars hold at most 100 characters.".to_string());
     }
     if column == 1 {
         form.expenses[row].amount = amount(value)?;
@@ -564,6 +809,17 @@ pub(super) fn values(
 /// form_2552.rs `recompute` computes (the probe saw them change with the
 /// item 11 answer and called them derived), and the add-more subtotals.
 pub(super) fn relock(kind: AgentFormKind, locks: &mut Map<String, Value>) {
+    // 0605's quarter is the return's period identity: an opened return
+    // keeps it (a sample's period parts open again in opened_json).
+    if kind.form_code() == "0605" {
+        for n in 1..=4 {
+            locks.insert(
+                format!("itemQuarter_{n}"),
+                Value::from(bir_core::forms::agent::Lock::Identity.reason()),
+            );
+        }
+        return;
+    }
     if kind.form_code() != "2552" {
         return;
     }
@@ -668,6 +924,14 @@ pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
         })
     };
     match kind.form_code() {
+        "0605" => {
+            for n in 1..=4 {
+                out.insert(
+                    format!("itemQuarter_{n}"),
+                    Value::from(QUARTER_FROM_THE_PERIOD),
+                );
+            }
+        }
         "2000OT" => {
             // Item 1 is the return's identity (decision 10: matched by its
             // exact date); a return opened without one says what sets it.
@@ -804,7 +1068,7 @@ pub(super) const PRINTED_MESSAGES: &[(&str, &str, &str)] = &[
     (
         "1606",
         "Item 17 Others holds at most 25 characters.",
-        "The Others description holds at most 25 characters.",
+        "The Others description (the older layout's item 17; the 2018 sheet prints no box for it, see Not on the printed sheet) holds at most 25 characters.",
     ),
     (
         "1606",
@@ -910,7 +1174,7 @@ pub(super) const PRINTED_MESSAGES: &[(&str, &str, &str)] = &[
     (
         "1706",
         "Item 16 Others holds at most 25 characters.",
-        "The Others description holds at most 25 characters.",
+        "The Others description (the older layout's item 16; the 2018 sheet prints no box for it, see Not on the printed sheet) holds at most 25 characters.",
     ),
     (
         "1706",
@@ -984,6 +1248,41 @@ pub(super) fn printed_message(kind: AgentFormKind, message: &str) -> Option<&'st
         .map(|(_, _, printed)| *printed)
 }
 
+/// 1606 and 1706 item 11 No clears the relief chosen from its list.
+fn removes_relief(
+    kind: AgentFormKind,
+    before: &Value,
+    after: &Value,
+    edits: &Map<String, Value>,
+) -> Option<Value> {
+    let code = kind.form_code();
+    if !edits
+        .keys()
+        .any(|key| key.starts_with(&format!("frm{code}:rdTreaty")))
+    {
+        return None;
+    }
+    let held = match before["tax_relief"].as_str()? {
+        "international_tax_treaty" => "International Tax Treaty",
+        "special_law" => "Special Law",
+        _ => return None,
+    };
+    (after["tax_relief"] == "no").then(|| {
+        serde_json::json!({
+            "message": format!("Answering No at item 11 clears the relief chosen there ({held}). Continue?"),
+            "done": "Cleared item 11's relief",
+            "rows": 1,
+        })
+    })
+}
+
+/// 2552 item 11: unticking its answer keeps it (the draft has no
+/// unanswered value to go back to once answered; the official radios never
+/// untick).
+pub(super) fn untick_keeps_the_answer(kind: AgentFormKind, key: &str) -> bool {
+    matches!(cell(kind, key), Some(Cell::Transaction2552(_)))
+}
+
 /// 1707 item 8 No clears what 8A held.
 fn removes_1707(before: &Value, after: &Value, edits: &Map<String, Value>) -> Option<Value> {
     if !edits.contains_key("frm1707:rdoPg1I8TaxReliefNo") {
@@ -1013,6 +1312,9 @@ pub(super) fn removes(
     if kind.form_code() == "1707" {
         return removes_1707(before, after, edits);
     }
+    if matches!(kind.form_code(), "1606" | "1706") {
+        return removes_relief(kind, before, after, edits);
+    }
     if kind.form_code() != "2552"
         || !edits
             .keys()
@@ -1020,27 +1322,33 @@ pub(super) fn removes(
     {
         return None;
     }
-    let typed_rows = |draft: &Value| {
-        draft["schedule"].as_array().map_or(0, |rows| {
-            rows.iter()
-                .filter(|row| {
-                    row.as_object().is_some_and(|fields| {
-                        fields.iter().any(|(field, value)| match value {
-                            Value::String(text) => !text.trim().is_empty(),
-                            // The rate and tax due follow the schedule.
-                            Value::Number(n) => {
-                                !matches!(field.as_str(), "tax_rate" | "tax_due")
-                                    && n.as_f64().is_some_and(|n| n != 0.0)
-                            }
-                            _ => false,
-                        })
+    // Item 11 picks another schedule: `set_transaction` clears every row
+    // of the old one, so each row typed before goes, whatever the batch
+    // types under the new schedule.
+    if before["transaction"] == after["transaction"] {
+        return None;
+    }
+    // A rate the filer types (Schedules 2 and 3) counts; Schedule 1's fixed
+    // rate and every row's tax due are the form's.
+    let typed_rate = before["transaction"] != "local_stock_exchange";
+    let rows = before["schedule"].as_array().map_or(0, |rows| {
+        rows.iter()
+            .filter(|row| {
+                row.as_object().is_some_and(|fields| {
+                    fields.iter().any(|(field, value)| match value {
+                        Value::String(text) => !text.trim().is_empty(),
+                        Value::Number(n) => {
+                            field != "tax_due"
+                                && (field != "tax_rate" || typed_rate)
+                                && n.as_f64().is_some_and(|n| n != 0.0)
+                        }
+                        _ => false,
                     })
                 })
-                .count()
-        })
-    };
-    let (had, has) = (typed_rows(before), typed_rows(after));
-    if had == 0 || has >= had {
+            })
+            .count()
+    });
+    if rows == 0 {
         return None;
     }
     let schedule = match before["transaction"].as_str() {
@@ -1048,7 +1356,6 @@ pub(super) fn removes(
         Some("primary_offering") => "Schedule 2",
         _ => "Schedule 3",
     };
-    let rows = had - has;
     let plural = if rows == 1 { "" } else { "s" };
     Some(serde_json::json!({
         "message": format!(

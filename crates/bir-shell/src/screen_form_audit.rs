@@ -1799,9 +1799,9 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
     // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
     // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
-    // Less 1 for 2552 (PR 9): its item 5 runtime RDO select is a hidden
-    // copy of the printed item 5 box; plus 1 for 1707 (PR 9): its item 5
-    // RDO list, now a box of its printed item.
+    // 82 = 82 less 1 for 2552 (PR 9: its item 5 runtime RDO select is a
+    // hidden copy of the printed item 5 box) plus 1 for 1707 (PR 9: its
+    // item 5 RDO list, now a box of its printed item).
     assert_eq!(supplied, 82, "catalog lists, dependent ones included");
 }
 
@@ -2245,6 +2245,26 @@ fn p1_relief_dropdowns_offer_each_forms_official_choices() {
             assert_eq!(printed, *value, "{code} {key}: {label} in print");
         }
     }
+    // PR 9: with item 11 No the lists are shut: a choice is refused with the
+    // tag the page shows on them, and the draft keeps no relief.
+    for (code, key, value) in [
+        ("1606", "frm1606:selTreaty", "0"),
+        ("1706", "frm1706:selTreaty", "1"),
+    ] {
+        seed_fictional_profile();
+        let opened = open(code, page_period_for(code)).expect("opens");
+        let shut = call(
+            "screen_form_fill",
+            vec![
+                code.into(),
+                json(opened["draft"].clone()),
+                json(json!({ format!("frm{code}:rdTreaty:_2"): "true", key: value })),
+            ],
+        )
+        .expect("fill runs");
+        assert_eq!(shut["rejected"][key], "Needs item 11 = Yes", "{code}");
+        assert_eq!(shut["draft"]["tax_relief"], "no", "{code}");
+    }
     // 1606's blank official choice is the page's empty choice: it means no
     // relief, and 0 (International Tax Treaty) is not turned into it.
     seed_fictional_profile();
@@ -2424,7 +2444,13 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             .flat_map(|it| it["f"].as_array().into_iter().flatten());
         for field in fields {
             let key = field["k"].as_str().unwrap_or_default();
-            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) {
+            // A box another answer turns off is shut on the page too
+            // (form_page.js `isLocked`; PR 9's host refuses it with the tag).
+            if field["t"] != "sel"
+                || field["c"] == 1
+                || locks.contains_key(key)
+                || opened["off"].get(key).is_some()
+            {
                 continue;
             }
             for option in field["o"].as_array().into_iter().flatten() {

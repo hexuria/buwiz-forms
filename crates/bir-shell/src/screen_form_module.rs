@@ -3572,6 +3572,11 @@ fn plan_choice_edits(
                 {
                     continue;
                 }
+                // 2552 item 11 has no unanswered state to go back to (PR 9):
+                // unticking its answer keeps it.
+                if rows_as_needed::untick_keeps_the_answer(kind, &key) {
+                    continue;
+                }
                 if members >= 3 {
                     let sets = true_option_paths(def, &key)
                         .into_iter()
@@ -5183,11 +5188,16 @@ mod tests {
         for s in 1..=3 {
             let first = format!("frm2552:txtPg2Pt5Sch{s}_1Col1");
             // Part V is its own part since PR 9's printed layout.
-            let table = form["parts"]
+            let part = form["parts"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .flat_map(|part| part["items"].as_array().unwrap())
+                .find(|part| part["n"] == "Part V · Details of Taxable Transactions")
+                .expect("2552 Part V");
+            let table = part["items"]
+                .as_array()
+                .unwrap()
+                .iter()
                 .find(|it| it["keys"][0][0] == first.as_str())
                 .unwrap_or_else(|| panic!("2552 Schedule {s} table"))
                 .clone();
@@ -6008,9 +6018,9 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        // Less 1 for 2552 (PR 9): its item 5 runtime RDO select is a hidden
-        // copy of the printed item 5 box; plus 1 for 1707 (PR 9): its item 5
-        // RDO list, now a box of its printed item.
+        // 82 = 82 less 1 for 2552 (PR 9: its item 5 runtime RDO select is
+        // a hidden copy of the printed item 5 box) plus 1 for 1707 (PR 9:
+        // its item 5 RDO list, now a box of its printed item).
         assert_eq!(supplied, 82);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
@@ -9673,40 +9683,71 @@ mod tests {
 
     /// The boxes the host reports off.
     fn off_keys(checked: &Value) -> Vec<String> {
-        checked["off"]
+        // Sorted: PR 9's host gates join the batched check's own list.
+        let mut keys: Vec<String> = checked["off"]
             .as_object()
             .unwrap()
             .keys()
             .cloned()
-            .collect()
+            .collect();
+        keys.sort();
+        keys
     }
 
     /// The boxes off by the test's own probing of each conditional box
-    /// alone: blank now, at least one probe taken, and every probe taken
-    /// cleared by the form through the page's own fill.
+    /// alone: blank now, and either at least one probe taken and every
+    /// probe taken cleared by the form through the page's own fill, or
+    /// (PR 9's host gates) every probe refused with exactly the box's
+    /// reviewed tag (app/forms/condition-labels.json for a corpus condition;
+    /// 2552's boxes, which its corpus gives none, its host condition, which
+    /// rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json
+    /// backs: tests::as_needed).
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         let corpus = conditions::tests::derived();
-        corpus[code]
+        let tags: Value =
+            serde_json::from_str(include_str!("../../../app/forms/condition-labels.json")).unwrap();
+        let mut keys: Vec<(String, String)> = corpus[code]
             .as_object()
             .into_iter()
             .flatten()
-            .map(|(key, _)| key.clone())
-            .filter(|key| {
+            .map(|(key, condition)| {
+                let tag = tags["keys"][code][key]
+                    .as_str()
+                    .or_else(|| tags["conditions"][code][condition.as_str().unwrap_or("")].as_str())
+                    .unwrap_or("")
+                    .to_string();
+                (key.clone(), tag)
+            })
+            .collect();
+        for key in schema_keys(code) {
+            if let Some(tag) = rows_as_needed::host_condition(code, key) {
+                keys.push((key.clone(), tag));
+            }
+        }
+        let mut off: Vec<String> = keys
+            .into_iter()
+            .filter(|(key, tag)| {
                 if !shows_nothing(&checked["values"][key]) {
                     return false;
                 }
-                let taken: Vec<bool> = test_probes(checked, code, key)
-                    .into_iter()
-                    .filter_map(|probe| {
-                        let filled = fill(code, &checked["draft"], json!({ key: probe }));
-                        filled["rejected"][key]
-                            .is_null()
-                            .then(|| shows_nothing(&filled["values"][key]))
-                    })
-                    .collect();
-                !taken.is_empty() && taken.iter().all(|cleared| *cleared)
+                let (mut taken, mut refused) = (Vec::new(), Vec::new());
+                for probe in test_probes(checked, code, key) {
+                    let filled = fill(code, &checked["draft"], json!({ key: probe }));
+                    match filled["rejected"][key].as_str() {
+                        None => taken.push(shows_nothing(&filled["values"][key])),
+                        Some(why) => refused.push(why == tag),
+                    }
+                }
+                if taken.is_empty() {
+                    !refused.is_empty() && refused.iter().all(|same| *same)
+                } else {
+                    taken.iter().all(|cleared| *cleared)
+                }
             })
-            .collect()
+            .map(|(key, _)| key)
+            .collect();
+        off.sort();
+        off
     }
 
     /// Rule 6: a box another answer turns off is faded with what turns it
@@ -9726,12 +9767,18 @@ mod tests {
             let code = kind.form_code();
             let opened = open(code, page_period_of(code));
             for (key, why) in opened["off"].as_object().unwrap() {
+                // 2552's PR 9 host gates have no corpus condition: their
+                // tag is the host's (tests::as_needed checks the official
+                // inventory keeps those boxes disabled).
+                let host = rows_as_needed::host_condition(code, key);
                 let condition = corpus[code][key]
                     .as_str()
+                    .or(host.as_deref())
                     .unwrap_or_else(|| panic!("{code}: {key}"));
                 let tag = tags["keys"][code][key]
                     .as_str()
-                    .or_else(|| tags["conditions"][code][condition].as_str());
+                    .or_else(|| tags["conditions"][code][condition].as_str())
+                    .or(host.as_deref());
                 assert_eq!(why.as_str(), tag, "{code}: {key} says what turns it on");
                 assert!(
                     opened["locks"][key].is_null(),
@@ -9772,6 +9819,9 @@ mod tests {
                 ("2200M", 1),
                 ("2200P", 1),
                 ("2200T", 1),
+                // 10 for 2552 (PR 9): items 12A and 12B and Part IV rows
+                // 2-5's two boxes, which the official runtime keeps shut.
+                ("2552", 10),
                 ("2553", 1),
             ])
         );
