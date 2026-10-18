@@ -635,8 +635,9 @@ fn tax_treaty_refusal() -> String {
     )
 }
 
-/// A fill value as text, as `agent::fill` reads it (its `value_text`): a
-/// string as is, null as blank, any other scalar as its JSON text (`1`).
+/// A fill value as text to compare with the list's answers: a string
+/// trimmed, null as blank, any other scalar as its JSON text (`1`), as
+/// `agent::fill`'s `value_text` reads it (which does not trim).
 fn fill_text(value: &Value) -> String {
     match value {
         Value::String(text) => text.trim().to_string(),

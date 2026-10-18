@@ -1919,3 +1919,55 @@ fn d5_notices_show_on_old_drafts_only_and_can_be_marked_checked() {
     );
     assert_eq!(raw_row(id).1, bytes);
 }
+
+/// Review round 2: a D5 notice on a draft not saved yet (an amended copy in
+/// memory, no id) has no return to record a Checked mark on. It says to
+/// save first and carries no token; once the draft is saved, the same
+/// notice reads as before and offers Checked.
+#[test]
+fn d5_an_unsaved_draft_says_to_save_before_marking_checked() {
+    setup();
+    let mut unsaved: Value = serde_json::from_str(PRE_PR6_1604E).unwrap();
+    unsaved["id"] = Value::Null;
+    let errors = validate("1604E", &unsaved)["errors"].clone();
+    let notices: Vec<&Value> = errors
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["field"] == "schedule2[2].penalties")
+        .collect();
+    assert_eq!(notices.len(), 1, "{errors}");
+    assert_eq!(
+        notices[0]["message"],
+        format!(
+            "{} {}",
+            rows_1604::legacy_total_notice(3),
+            rows_1604::SAVE_TO_CHECK
+        )
+    );
+    assert_eq!(
+        rows_1604::SAVE_TO_CHECK,
+        "Save the return to mark it checked."
+    );
+    assert!(notices[0].get("dismiss").is_none());
+    // A token for an unsaved draft is refused.
+    assert!(
+        call(
+            "screen_form_check_notice",
+            vec!["1604E".into(), json(unsaved.clone()), "2:2".into()],
+        )
+        .is_err()
+    );
+    // Saved, it offers Checked.
+    let (_, _) = store_1604e(|_| {});
+    let opened = open("1604E", 0);
+    let saved = opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["field"] == "schedule2[2].penalties")
+        .cloned()
+        .unwrap();
+    assert_eq!(saved["message"], rows_1604::legacy_total_notice(3));
+    assert_eq!(saved["dismiss"], "2:2");
+}

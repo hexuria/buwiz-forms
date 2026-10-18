@@ -181,6 +181,10 @@ pub(super) fn legacy_total_notice(row: usize) -> String {
     format!("Row {row} may hold an amount typed as the total; check it before you file.")
 }
 
+/// What a D5 notice adds on a draft not saved yet, which cannot be marked
+/// checked until it is.
+pub(super) const SAVE_TO_CHECK: &str = "Save the return to mark it checked.";
+
 /// When PR 6 (a7b9e47e, which unbound the Total boxes) reached integration:
 /// the merge a2beb40b, 2026-10-18T06:58:15+08:00. A 1604E draft created
 /// after it was never typed through a bound Total box.
@@ -191,7 +195,9 @@ pub(super) const PR6_REACHED_INTEGRATION: &str = "2026-10-17T22:58:15+00:00";
 /// old binding wrote the very path the Penalties box writes, and the form
 /// recomputes the Total from it either way), so its creation stamp is the
 /// only sound discriminator: a draft without a readable `created_at` counts
-/// as created before.
+/// as created before. Residual: a build from before the merge, still used
+/// after the cut-off, stamps its new drafts after it while still binding
+/// the Totals, and such a draft is not flagged.
 fn created_before_pr6(draft: &Value) -> bool {
     let Ok(cutoff) = chrono::DateTime::parse_from_rfc3339(PR6_REACHED_INTEGRATION) else {
         return true;
@@ -204,7 +210,8 @@ fn created_before_pr6(draft: &Value) -> bool {
 
 /// The settings key that records the filer marked a 1604E row's D5 notice
 /// checked, for the stored return `id`. App state, never the return: the
-/// return's bytes do not change.
+/// return's bytes do not change. The mark is permanent for that return and
+/// row: it stays even if the row's penalties change later.
 pub(super) fn checked_key(id: i64, token: &str) -> String {
     format!("notice_checked:1604e_total_row:{id}:{token}")
 }
@@ -251,7 +258,10 @@ pub(super) fn checked_rows(
 /// and Total boxes, while the return is a Draft created before PR 6
 /// reached integration and the filer has not marked the row checked
 /// (`checked`, [`checked_rows`]); the notice carries the token the page's
-/// "Checked" sends back (`screen_form_check_notice`).
+/// "Checked" sends back (`screen_form_check_notice`). A draft not saved
+/// yet (an amended copy in memory) has no return to record the mark on:
+/// its notice says to save first ([`SAVE_TO_CHECK`]), and offers Checked
+/// once it is saved.
 pub(super) fn notices(
     kind: AgentFormKind,
     draft: &Value,
@@ -273,9 +283,14 @@ pub(super) fn notices(
                 continue;
             }
             let row = index + 1;
+            let message = if dismissible {
+                legacy_total_notice(row)
+            } else {
+                format!("{} {SAVE_TO_CHECK}", legacy_total_notice(row))
+            };
             let mut notice = json!({
                 "field": format!("schedule{schedule}[{index}].penalties"),
-                "message": legacy_total_notice(row),
+                "message": message,
                 "keys": [
                     format!("frm1604e:txtSched{schedule}Penalties{row}"),
                     format!("frm1604e:txtSched{schedule}TotRemAmt{row}"),
