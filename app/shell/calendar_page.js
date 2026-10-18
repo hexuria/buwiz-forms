@@ -1,5 +1,6 @@
-// Calendar: every deadline for the forms the taxpayers file, grouped by
-// month, from today through the next twelve months.
+// Calendar: every deadline for the forms the taxpayers file, and every
+// as-needed return that holds its trigger date (a removal, a withholding),
+// grouped by month, from today through the next twelve months.
 
 import { div } from "gpui-kit";
 import { ListGroup, EmptyRow, PageHeader, SectionTitle, Segmented } from "./ui.js";

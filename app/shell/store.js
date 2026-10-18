@@ -186,6 +186,10 @@ export class Store {
     }
     return (index.get(`${tin}|${code}|${year}`) || []).filter((d) => this.canSee(d.tin_root));
   }
+  /** The as-needed forms each branch files in `year`, with their returns that hold no trigger date yet. */
+  asNeeded(year) {
+    return this.read(`as_needed:${year}`, "as_needed_forms", [year], []).filter((f) => this.canSee(f.tin_root));
+  }
   returns(which) {
     return this.read(`returns:${which}`, "list_returns", [which], []).filter((r) => this.canSee(r.tin_root));
   }
