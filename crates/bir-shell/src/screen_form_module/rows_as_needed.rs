@@ -89,6 +89,106 @@ pub(super) enum Cell {
     ExpenseD1707(usize),
     /// 1606 and 1706 item 11 Yes.
     ReliefYes,
+    /// A part of a one-date box (1706 Schedule 2 item 7, 1707 item 1).
+    DatePart(DatePart),
+}
+
+/// Which part of a date a one-date box's key holds.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum DatePart {
+    Month,
+    Day,
+    Year,
+}
+
+/// The month, day and year keys of each one-date box (PR 5's page box,
+/// form_page.js `oneDate`): `(form, [month, day, year])`.
+const ONE_DATES: [(&str, [&str; 3]); 3] = [
+    (
+        "1706",
+        [
+            "frm1706:txtDateMonthI",
+            "frm1706:txtDateDayI",
+            "frm1706:txtDateYearI",
+        ],
+    ),
+    (
+        "1707",
+        [
+            "frm1707:txtPg1I1Month",
+            "frm1707:txtPg1I1Day",
+            "frm1707:txtPg1I1Year",
+        ],
+    ),
+    (
+        "2552",
+        [
+            "frm2552:txtPg1I1Month",
+            "frm2552:txtPg1I1Day",
+            "frm2552:txtPg1I1Year",
+        ],
+    ),
+];
+
+fn date_part(code: &str, key: &str) -> Option<DatePart> {
+    let (_, keys) = ONE_DATES.iter().find(|(form, _)| *form == code)?;
+    let at = keys.iter().position(|k| *k == key)?;
+    Some([DatePart::Month, DatePart::Day, DatePart::Year][at])
+}
+
+/// Rule 4 for the one-date boxes: their item is marked `one_date`, so the
+/// page shows the three boxes as one date ("Mar 15, 2026"), typed or picked,
+/// and sends the three parts together; the draft keeps them split.
+pub(super) fn mark_one_date(form: &mut Value, code: &str) {
+    let Some((_, keys)) = ONE_DATES.iter().find(|(form, _)| *form == code) else {
+        return;
+    };
+    let items = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
+    for item in items {
+        let mut fields: Vec<&str> = item["f"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|field| field["k"].as_str())
+            .collect();
+        fields.sort_unstable();
+        let mut wanted = keys.to_vec();
+        wanted.sort_unstable();
+        if fields == wanted {
+            item["one_date"] = Value::Bool(true);
+        }
+    }
+}
+
+/// Write a whole-number box's blank, 0.
+fn fill_whole_zero(kind: AgentFormKind, draft: &mut Value, key: &str) -> Result<(), String> {
+    bir_core::forms::agent::fill_as_user(kind, draft, key, &Value::from("0"))
+}
+
+/// Lesson 13 on a one-date box's part: blank clears it; anything else is
+/// the part of a MM/DD/YYYY date (a month 01-12, a day 01-31, a 4-digit
+/// year), as the page sends it.
+fn date_part_refusal(part: DatePart, value: &Value) -> Option<String> {
+    let shown = text(value);
+    if shown.is_empty() {
+        return None;
+    }
+    let number: Option<u32> = shown
+        .chars()
+        .all(|c| c.is_ascii_digit())
+        .then(|| shown.parse().ok())
+        .flatten();
+    let fits = match (part, number) {
+        (DatePart::Month, Some(n)) => shown.len() <= 2 && (1..=12).contains(&n),
+        (DatePart::Day, Some(n)) => shown.len() <= 2 && (1..=31).contains(&n),
+        (DatePart::Year, Some(_)) => shown.len() == 4,
+        _ => false,
+    };
+    (!fits).then(|| "Type the date as MM/DD/YYYY.".to_string())
 }
 
 /// A column of 2552's Part V row 5.
@@ -149,6 +249,12 @@ pub(super) fn part_iv_tag(row: usize) -> String {
 }
 
 pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
+    // 2552's item 1 is the return's identity: its fill keeps that lock.
+    if kind.form_code() != "2552"
+        && let Some(part) = date_part(kind.form_code(), key)
+    {
+        return Some(Cell::DatePart(part));
+    }
     let tin_part = |suffix: &str| match suffix {
         "1" => Some(0),
         "2" => Some(1),
@@ -254,7 +360,8 @@ fn cell_2552(key: &str) -> Option<Cell> {
 /// Whether the host writes `key` itself (its "cannot be filled here" lock
 /// does not apply on the page). A gated box keeps its own binding.
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
-    cell(kind, key).is_some_and(|cell| !matches!(cell, Cell::Gate(_) | Cell::ReliefYes))
+    cell(kind, key)
+        .is_some_and(|cell| !matches!(cell, Cell::Gate(_) | Cell::ReliefYes | Cell::DatePart(_)))
 }
 
 /// A batch fills a TIN's boxes left to right, and a gated box after the
@@ -271,7 +378,7 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
         Cell::Shares1707(..) | Cell::ExpenseD1707(_) => Some(1),
         // Item 17's manner before its Others text in one batch.
         Cell::Others0605 => Some(1),
-        Cell::Quarter0605(_) | Cell::ReliefYes => None,
+        Cell::Quarter0605(_) | Cell::ReliefYes | Cell::DatePart(_) => None,
     }
 }
 
@@ -348,6 +455,15 @@ pub(super) fn fill(
                 ordinary(draft)
             }
         }
+        Cell::DatePart(part) => match date_part_refusal(part, value) {
+            Some(why) => Err(why),
+            // 1707's parts are whole numbers: a cleared part is the official
+            // blank 0 (`00`), which the page shows as no date.
+            None if kind.form_code() == "1707" && text(value).is_empty() => {
+                fill_whole_zero(kind, draft, key)
+            }
+            None => ordinary(draft),
+        },
         Cell::ReliefYes => {
             // Yes again keeps the relief chosen from the list (Yes is "yes,
             // unspecified": probe.rs CHOICE_OPTION_SETS).
@@ -833,6 +949,18 @@ pub(super) fn values(
     draft: &Value,
     map: &mut std::collections::BTreeMap<String, String>,
 ) {
+    // A one-date box whose month and day are both still the official blank
+    // `00` (a return not yet dated) shows no date at all, never "00/00/2026".
+    if let Some((_, [month, day, year])) =
+        ONE_DATES.iter().find(|(form, _)| *form == kind.form_code())
+    {
+        let unset = |key: &str| map.get(key).is_some_and(|v| v.trim() == "00");
+        if unset(month) && unset(day) {
+            for key in [month, day, year] {
+                map.insert((*key).to_string(), String::new());
+            }
+        }
+    }
     if kind.form_code() == "1707"
         && let Some(address) = draft["registered_address"].as_str()
         && map.contains_key("frm1707:ProfileAddress1")
@@ -927,6 +1055,33 @@ fn order_1707_sellers(form: &mut Value) {
     }
 }
 
+/// The error keys of a PR 9 form's message, those drawn under its printed
+/// items first: the page draws a message under the first key's item
+/// (form_page.js `setErrors`), so 1707's "ATC Code on Page 1 Item 3 is
+/// required." (bound, with item 3's boxes, to the page's own domestic/
+/// foreign question under Not on the printed sheet) sits under item 3.
+pub(super) fn order_error_keys(kind: AgentFormKind, keys: &mut [String]) {
+    if !matches!(
+        kind.form_code(),
+        "0605" | "1606" | "1706" | "1707" | "2000OT" | "2552"
+    ) {
+        return;
+    }
+    let Some(form) = super::schema_entry(kind.form_code()) else {
+        return;
+    };
+    let off_sheet: std::collections::BTreeSet<String> = form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|part| part["n"] == "Not on the printed sheet")
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        .flat_map(|item| item["f"].as_array().into_iter().flatten())
+        .filter_map(|field| field["k"].as_str().map(str::to_string))
+        .collect();
+    keys.sort_by_key(|key| off_sheet.contains(key));
+}
+
 /// What Schedule 1's add-more rate shows while its row is blank.
 pub(super) const LSE_RATE_WAITS: &str = "Schedule 1's rate is 6/10 of 1%.";
 
@@ -971,6 +1126,10 @@ pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
             }
         }
         "2552" => {
+            // Item 1 is the return's identity, set where it is started.
+            for key in ONE_DATES[2].1 {
+                out.insert(key.to_string(), Value::from(DATE_FROM_NEW_RETURN));
+            }
             for n in 1..=9 {
                 out.insert(
                     format!("frm2552:txtPg2Pt5Sch1_{n}Col7"),

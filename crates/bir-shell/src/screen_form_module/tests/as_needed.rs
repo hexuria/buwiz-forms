@@ -2074,3 +2074,283 @@ fn pr9_1707_schedule_1_date_is_a_date() {
         "03/15/2026"
     );
 }
+
+// ------------------------------------------------------- one-date boxes
+
+/// The one-date boxes (PR 5's page box): `(form, item, [month, day, year])`.
+const ONE_DATE_BOXES: [(&str, &str, [&str; 3]); 3] = [
+    (
+        "1706",
+        "7",
+        [
+            "frm1706:txtDateMonthI",
+            "frm1706:txtDateDayI",
+            "frm1706:txtDateYearI",
+        ],
+    ),
+    (
+        "1707",
+        "1",
+        [
+            "frm1707:txtPg1I1Month",
+            "frm1707:txtPg1I1Day",
+            "frm1707:txtPg1I1Year",
+        ],
+    ),
+    (
+        "2552",
+        "1",
+        [
+            "frm2552:txtPg1I1Month",
+            "frm2552:txtPg1I1Day",
+            "frm2552:txtPg1I1Year",
+        ],
+    ),
+];
+
+/// 1706 manual-2, 1707 manual-1, 2552 manual-2: each date the sheet prints
+/// as MM/DD/YYYY over three stored boxes is one date box on the page
+/// (`one_date`, form_page.js `oneDate`: shown "Mar 15, 2026", typed or
+/// picked, sent as the three parts); the draft keeps them split. A return
+/// not yet dated shows no date, never "00/00/2026". Lesson 13: a blank
+/// clears the parts, anything else must be a MM/DD/YYYY date's parts with a
+/// 4-digit year; 2552's item 1 is the return's identity and says what sets
+/// it.
+#[test]
+fn pr9_dates_over_three_boxes_are_one_date_box() {
+    setup();
+    for (code, no, keys) in ONE_DATE_BOXES {
+        let items = items_numbered(code, no);
+        let item = items
+            .iter()
+            .find(|it| it["one_date"] == true)
+            .unwrap_or_else(|| panic!("{code} item {no} is one date box"));
+        let mut fields: Vec<&str> = item["f"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["k"].as_str().unwrap())
+            .collect();
+        fields.sort_unstable();
+        let mut want = keys.to_vec();
+        want.sort_unstable();
+        assert_eq!(fields, want, "{code}");
+        // form_page.js `dateParts` finds the parts by their labels.
+        for (key, word) in keys.iter().zip(["month", "day", "year"]) {
+            let label = placed(code, key).label.to_ascii_lowercase();
+            assert!(label.contains(word), "{code} {key}: {label}");
+        }
+    }
+    // A return not yet dated: no "00" anywhere in item 1.
+    for code in ["1707", "2552"] {
+        let opened = open(code, 1);
+        let keys = ONE_DATE_BOXES
+            .iter()
+            .find(|(c, _, _)| *c == code)
+            .unwrap()
+            .2;
+        for key in keys {
+            assert_eq!(opened["values"][key], "", "{code} {key}");
+        }
+        assert_eq!(
+            agent::field_map(kind_of(code).unwrap(), &opened["draft"]).unwrap()[keys[1]],
+            "00",
+            "{code}: the upload keeps the official blank day"
+        );
+    }
+    let opened = open("2552", 1);
+    for key in ONE_DATE_BOXES[2].2 {
+        assert_eq!(opened["waits"][key], rows_as_needed::DATE_FROM_NEW_RETURN);
+        assert!(opened["locks"][key].is_string());
+    }
+    // Lesson 13 on 1706's and 1707's boxes, as the page sends them.
+    for (code, _, keys) in &ONE_DATE_BOXES[..2] {
+        let opened = open(code, 1);
+        let date = fill(
+            code,
+            &opened["draft"],
+            json!({ keys[0]: "03", keys[1]: "15", keys[2]: "2026" }),
+        );
+        assert!(
+            date["rejected"].as_object().unwrap().is_empty(),
+            "{code}: {}",
+            date["rejected"]
+        );
+        let map = printed(code, &date["draft"]);
+        assert_eq!(
+            (
+                map[keys[0]].as_str(),
+                map[keys[1]].as_str(),
+                map[keys[2]].as_str()
+            ),
+            ("03", "15", "2026"),
+            "{code}"
+        );
+        for bad in [
+            json!({ keys[0]: "13" }),
+            json!({ keys[1]: "32" }),
+            json!({ keys[2]: "26" }),
+            json!({ keys[0]: "March" }),
+        ] {
+            let refused = fill(code, &date["draft"], bad.clone());
+            let (key, _) = bad.as_object().unwrap().iter().next().unwrap();
+            assert_eq!(
+                refused["rejected"][key], "Type the date as MM/DD/YYYY.",
+                "{code} {bad}"
+            );
+        }
+        let cleared = fill(
+            code,
+            &date["draft"],
+            json!({ keys[0]: "", keys[1]: "", keys[2]: "" }),
+        );
+        assert!(
+            cleared["rejected"].as_object().unwrap().is_empty(),
+            "{code}: {}",
+            cleared["rejected"]
+        );
+        assert!(
+            keys.iter().all(|k| cleared["values"][*k] == ""),
+            "{code}: {}",
+            cleared["values"]
+        );
+    }
+}
+
+/// Lesson 13 and 6 on the one-date boxes: a stored draft from pr0b-push
+/// (literal fixtures, each holding a legacy partial or short date: 1706's
+/// installment date "3"/"5"/"26", 1707's and 2552's month 3 with day 0)
+/// opens and saves unchanged, byte for byte, until its filer edits it.
+#[test]
+fn pr9_stored_one_dates_open_and_save_unchanged() {
+    for (code, fixture) in [
+        ("1706", include_str!("fixtures/pr9_legacy_1706.json")),
+        ("1707", include_str!("fixtures/pr9_legacy_1707.json")),
+        ("2552", include_str!("fixtures/pr9_legacy_2552.json")),
+    ] {
+        setup();
+        let stored: Value = serde_json::from_str(fixture).unwrap();
+        // A row of the form for the fixture's period, then its bytes in it.
+        let mut seed = stored.clone();
+        seed["id"] = Value::Null;
+        let first = save(code, &seed);
+        assert_eq!(first["id"], 1, "{code}");
+        with_database(|db| {
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET data_json = ?1 WHERE id = 1",
+                    [fixture],
+                )
+                .map(|_| ())
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap();
+        let opened = open(code, 1);
+        // The host hands numbers to the page as f64 (`1` and `1.0` alike).
+        fn same(a: &Value, b: &Value) -> bool {
+            match (a, b) {
+                (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
+                (Value::Object(x), Value::Object(y)) => {
+                    x.len() == y.len()
+                        && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same(v, w)))
+                }
+                (Value::Array(x), Value::Array(y)) => {
+                    x.len() == y.len() && x.iter().zip(y).all(|(v, w)| same(v, w))
+                }
+                _ => a == b,
+            }
+        }
+        assert!(same(&opened["draft"], &stored), "{code}: opens unchanged");
+        let filed = |draft: &Value| agent::field_map(kind_of(code).unwrap(), draft).unwrap();
+        assert_eq!(
+            filed(&opened["draft"]),
+            filed(&stored),
+            "{code}: files unchanged"
+        );
+        save(code, &opened["draft"]);
+        let raw: String = with_database(|db| {
+            db.conn_for_tests()
+                .query_row("SELECT data_json FROM form_drafts WHERE id = 1", [], |r| {
+                    r.get(0)
+                })
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap();
+        assert_eq!(raw, fixture, "{code}: saved byte for byte");
+    }
+}
+
+/// 1707 manual-1: item 3 reads its printed ATC options, and the "ATC Code
+/// on Page 1 Item 3 is required." message names item 3's boxes, so the page
+/// draws it under item 3, which no Additional details group holds.
+#[test]
+fn pr9_1707_item_3_message_sits_under_item_3() {
+    setup();
+    assert_eq!(
+        labels_of("1707", "3"),
+        ["II030 Individual", "IC110 Corporation"]
+    );
+    let opened = open("1707", 1);
+    let error = opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["message"] == "ATC Code on Page 1 Item 3 is required.")
+        .expect("item 3's message on a fresh return");
+    let keys: Vec<&str> = error["keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|k| k.as_str().unwrap())
+        .collect();
+    // The page draws a message under its first key's item.
+    let at = placed("1707", keys[0]);
+    assert_eq!(
+        (at.no.as_str(), at.part.as_str()),
+        ("3", "Page 1"),
+        "{keys:?}"
+    );
+    assert!(
+        keys.iter()
+            .all(|key| placed("1707", key).item != "Additional details")
+    );
+}
+
+/// 2552 manual-2: item 5 is one RDO box (the runtime selector stays a
+/// hidden copy); items 11 and 12 carry their printed headings and 11A's
+/// caption is the printed one (html-frozen/2552-2018/index.html).
+#[test]
+fn pr9_2552_items_5_11_and_12_read_as_printed() {
+    let sheet = sheet_text("2552-2018");
+    let five: Vec<String> = items_numbered("2552", "5")
+        .iter()
+        .flat_map(|it| it["f"].as_array().cloned().unwrap_or_default())
+        .filter(|f| f["t"] != "hidden")
+        .map(|f| f["k"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(five, ["frm2552:txtPg1I5RDO"]);
+    assert!(
+        !drawn("2552")
+            .iter()
+            .any(|d| d.key == "frm2552:rdoPg1Pt1I5RDO")
+    );
+    assert!(schema_keys("2552").contains("frm2552:rdoPg1Pt1I5RDO"));
+    assert_eq!(item("2552", "11")["l"], "Kinds of Transaction");
+    assert!(sheet.contains("11 Kinds of Transaction"));
+    let lse = placed("2552", "frm2552:rdoPg1I11TransactionLSE");
+    assert_eq!(
+        lse.label,
+        "11A Shares of Stocks Listed and Traded through the LSE"
+    );
+    assert!(sheet.contains("11A Shares of Stocks Listed and Traded through the LSE"));
+    assert!(sheet.contains("12 For Initial Public Offering"));
+    for no in ["12A", "12B"] {
+        assert!(
+            item("2552", no)["l"]
+                .as_str()
+                .unwrap()
+                .starts_with("For Initial Public Offering: "),
+            "{no}"
+        );
+    }
+}

@@ -264,6 +264,7 @@ fn schema() -> &'static [Value] {
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
             rows_as_needed::mark_calendar_tables(form, &code);
+            rows_as_needed::mark_one_date(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -1918,6 +1919,7 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                rows_as_needed::order_error_keys(kind, &mut keys);
                 // The printed item numbers where BIR's message names its
                 // program's own (decision D6; PR 9's forms).
                 let message = rows_as_needed::printed_message(kind, message).unwrap_or(message);
