@@ -8,14 +8,18 @@
 //! `#[serde(default, skip_serializing_if = "KeptText::is_absent")]`), the
 //! way [`super::form_1701q::PenaltySlot`] keeps 1701Q's penalty keys.
 //!
-//! A value the app assigns is present: [`From`] and [`Deserialize`] mark it
-//! so (the desktop views assign the boxes they read with `.into()`), and
-//! only the missing key's default is absent. An edit in place through
-//! [`DerefMut`] (`push_str`, `clear`, `*text = ...`) keeps the presence
-//! the value had: a missing box typed that way still files whenever it
-//! holds text, since only a blank absent value is left out. A present
-//! value serializes as the plain string, byte for byte what a `String`
-//! field wrote.
+//! The rule: a value is left out on save only while it is blank and absent.
+//! It is absent when the stored draft lacked the key (the serde default)
+//! and nothing replaced it whole through [`From`]; a key read from the
+//! store ([`Deserialize`]) and a value built with [`From`] (a new draft from
+//! the profile) are present, and stay so. Editing in place through
+//! [`DerefMut`] (`*text = ...`, `push_str`, `clear`; what the desktop
+//! editor's `set_typed_part_i` does on every change) keeps the presence the
+//! value had, so a missing box files as soon as it holds text and stays out
+//! while it is blank. (The page's fill writes the draft's JSON key, which
+//! is then read back, so a box the filer edits on the page is present.) A
+//! present value serializes as the plain string, byte for byte what a
+//! `String` field wrote.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;

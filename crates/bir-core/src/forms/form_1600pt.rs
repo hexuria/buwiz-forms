@@ -481,6 +481,26 @@ fn split_address(address: &str) -> (String, String) {
 impl Form1600PtDraft {
     pub const FORM_CODE: &'static str = "1600PT";
 
+    /// Part I's text boxes as the desktop editor types them (name, address,
+    /// ZIP, contact number, email), written in place so each keeps the
+    /// presence it was read with ([`KeptText`]): a box the stored draft
+    /// lacked stays absent while it is blank, and files once it holds text
+    /// (P2-4: a save writes back no key it did not read).
+    pub fn set_typed_part_i(
+        &mut self,
+        name: String,
+        address: String,
+        zip: String,
+        contact: String,
+        email: String,
+    ) {
+        *self.agent_name = name;
+        *self.registered_address = address;
+        *self.zip_code = zip;
+        *self.contact_number = contact;
+        *self.email = email;
+    }
+
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
         let mut draft = Self {
             penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
@@ -1254,6 +1274,56 @@ mod tests {
         draft.keep_entered_penalties();
         draft.recompute();
         draft
+    }
+
+    /// P2-4 through the desktop editor's save path: `sync_from_inputs`
+    /// writes Part I with `set_typed_part_i` on every change, and the save
+    /// stores the draft with `save_queueable_draft`. A draft stored without
+    /// `contact_number`, edited in another box and saved, still lacks the
+    /// key; once a contact number is typed and saved, it holds it.
+    #[test]
+    fn the_desktop_editor_keeps_a_missing_box_out_until_typed() {
+        let db = crate::db::Database::open_ephemeral().unwrap();
+        let mut value = serde_json::to_value(sample()).unwrap();
+        value.as_object_mut().unwrap().remove("contact_number");
+        let stored: Form1600PtDraft = serde_json::from_value(value).unwrap();
+        db.save_queueable_draft(&stored).unwrap();
+        let load = || {
+            db.get_queueable_draft::<Form1600PtDraft>(
+                &stored.tin,
+                stored.year,
+                i64::from(stored.month),
+            )
+            .unwrap()
+            .expect("stored")
+        };
+        let type_part_i = |draft: &mut Form1600PtDraft, contact: &str, email: &str| {
+            let (name, address, zip) = (
+                draft.agent_name.to_string(),
+                draft.registered_address.to_string(),
+                draft.zip_code.to_string(),
+            );
+            draft.set_typed_part_i(name, address, zip, contact.to_string(), email.to_string());
+        };
+        let mut opened = load();
+        assert!(
+            serde_json::to_value(&opened)
+                .unwrap()
+                .get("contact_number")
+                .is_none()
+        );
+        type_part_i(&mut opened, "", "new.agent@example.com");
+        db.save_queueable_draft(&opened).unwrap();
+        let saved = serde_json::to_value(load()).unwrap();
+        assert!(saved.get("contact_number").is_none(), "{saved}");
+        assert_eq!(saved["email"], "new.agent@example.com");
+        let mut opened = load();
+        type_part_i(&mut opened, "0281234567", "new.agent@example.com");
+        db.save_queueable_draft(&opened).unwrap();
+        assert_eq!(
+            serde_json::to_value(load()).unwrap()["contact_number"],
+            "0281234567"
+        );
     }
 
     fn messages(draft: &Form1600PtDraft) -> Vec<String> {

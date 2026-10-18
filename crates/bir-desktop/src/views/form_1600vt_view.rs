@@ -380,11 +380,14 @@ impl Form1600VtView {
             schedule.pop();
         }
         draft.schedule = schedule;
-        draft.agent_name = self.input_text("name", cx).into();
-        draft.registered_address = self.input_text("address", cx).into();
-        draft.zip_code = self.input_text("zip", cx).trim().to_string().into();
-        draft.contact_number = self.input_text("phone", cx).trim().to_string().into();
-        draft.email = self.input_text("email", cx).trim().to_string().into();
+        // In place: a box the stored draft lacked stays out while blank.
+        draft.set_typed_part_i(
+            self.input_text("name", cx),
+            self.input_text("address", cx),
+            self.input_text("zip", cx).trim().to_string(),
+            self.input_text("phone", cx).trim().to_string(),
+            self.input_text("email", cx).trim().to_string(),
+        );
         draft.tax_relief_specify = self.input_text("relief_spec", cx);
         // An empty penalty box means "use computed"; any amount overrides it.
         parse_errors.extend(penalty_section::apply_overrides(
