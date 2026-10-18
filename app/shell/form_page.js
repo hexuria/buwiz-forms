@@ -2305,8 +2305,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
   const req = fs.some((x) => x.r);
   const tin = isTinItem(it);
   // The host says which boxes the profile fills (the schema's auto flag is
-  // only the extractor's guess).
-  const fromProfile = tin || fs.some((x) => s.profile.has(x.k));
+  // only the extractor's guess). A TIN the host marks `typed_tin` (1801's
+  // executor) is the filer's to type, not the profile's.
+  const fromProfile = (tin && !it.typed_tin) || fs.some((x) => s.profile.has(x.k));
   // Profile boxes keep the profile mark, which turns into Edit while the
   // pointer is over the item or the keyboard is on the button (Tab, then
   // Enter): the edit stays on this return, never in the profile (rule 2).

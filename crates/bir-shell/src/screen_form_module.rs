@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_donor_estate;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -262,6 +263,7 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            rows_donor_estate::mark_schema(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -1908,6 +1910,8 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 }
                 // A 2550M schedule row has no draft binding of its own.
                 keys.extend(rows_2550m::error_keys(kind, field));
+                // 1800/1801 boxes the host writes (PR 10, rows_donor_estate.rs).
+                keys.extend(rows_donor_estate::error_keys(kind, field));
                 // A penalty item's message names the model's field.
                 if keys.is_empty() {
                     keys.extend(penalties::error_keys(kind, field));
@@ -1916,6 +1920,9 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                // The printed item numbers where BIR's message names its
+                // program's own (decision D6; PR 10's forms).
+                let message = rows_donor_estate::printed_message(kind, message).unwrap_or(message);
                 json!({"field": field, "message": message, "keys": keys})
             })
             .collect(),
@@ -2002,6 +2009,9 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
             atc.elected_other_code(),
         );
     }
+    // PR 10's forms: what the draft keeps where the field map shows it
+    // otherwise (display only).
+    rows_donor_estate::values(kind, draft, &mut map);
     for (key, official) in occurrence_aliases(kind) {
         if !map.contains_key(key)
             && let Some(value) = map.get(official).cloned()
@@ -3176,6 +3186,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3202,6 +3213,10 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 10's forms, rows_donor_estate.rs; the integration merge chains the
+    // other form groups' removes here).
+    let removes = rows_donor_estate::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3212,6 +3227,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        // Rows the filer typed that this edit removed: the page asks first.
+        "removes": removes,
     })))
 }
 
@@ -8464,8 +8481,6 @@ mod tests {
         "1707 frm1707:ProfileZipCode",
         "1707 frm1707:txtLOB",
         "1707 frm1707:txtPg2RegisteredName",
-        "1800 frm1800v2018:txtLineBus",
-        "1800 frm1800v2018:txtPg2TaxpayerName",
         "2000 frm2000:txtLineBus",
         "2000 frm2000:txtPg2TaxpayerName",
         "2000 frm2000:txtTelNum",
@@ -9643,14 +9658,34 @@ mod tests {
     /// The boxes off by the test's own probing of each conditional box
     /// alone: blank now, at least one probe taken, and every probe taken
     /// cleared by the form through the page's own fill.
+    ///
+    /// 1800's and 1801's tax relief, installment frequency and its Others
+    /// box (PR 10) are off, whatever they show, while the draft does not
+    /// hold their corpus condition: the host refuses what is typed there,
+    /// so probing cannot tell, and the host's own refusal is no oracle.
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         let corpus = conditions::tests::derived();
+        let draft = &checked["draft"];
+        let relief = !draft["tax_relief"].is_null();
+        let installment = draft["installment_granted"] == json!(true);
+        let others = draft["installment_frequency"] == json!("others");
         corpus[code]
             .as_object()
             .into_iter()
             .flatten()
-            .map(|(key, _)| key.clone())
-            .filter(|key| {
+            .filter(|(key, condition)| {
+                let held = match (code, condition.as_str()) {
+                    ("1800", Some("Item 13 Yes.")) | ("1801", Some("Item 14 Yes.")) => Some(relief),
+                    ("1801", Some("Item 15D Yes.")) => Some(installment),
+                    ("1801", Some("Item 15B Yes and frequency Others.")) => {
+                        Some(installment && others)
+                    }
+                    _ => None,
+                };
+                if let Some(held) = held {
+                    return !held;
+                }
+                let key = key.as_str();
                 if !shows_nothing(&checked["values"][key]) {
                     return false;
                 }
@@ -9665,6 +9700,7 @@ mod tests {
                     .collect();
                 !taken.is_empty() && taken.iter().all(|cleared| *cleared)
             })
+            .map(|(key, _)| key.clone())
             .collect()
     }
 
@@ -9716,8 +9752,12 @@ mod tests {
                 ("1604F", 1),
                 ("1606", 2),
                 ("1701Q", 39),
-                ("1800", 1),
-                ("1801", 1),
+                // Plus 1 for 1800 (PR 10): item 13A while item 13 is No.
+                ("1800", 2),
+                // Plus 6 for 1801 (PR 10): item 14A while item 14 is No,
+                // item 15D's four frequency boxes and its Others (specify)
+                // while 15D is not Yes.
+                ("1801", 7),
                 ("2000OT", 2),
                 ("2200A", 2),
                 ("2200AN", 1),
@@ -9904,6 +9944,36 @@ mod tests {
                 vec!["frm2200Av2020:treatyY"],
                 Box::new(by(json!({"frm2200Av2020:optTreaty_1": "true"}))),
             ),
+            // PR 10: 1800 item 13A, 1801 item 14A, item 15D's frequency and
+            // its Others (specify).
+            (
+                "1800",
+                vec!["frm1800v2018:TaxTreaty"],
+                Box::new(by(json!({"frm1800v2018:TaxTreatyYN_Y": "true"}))),
+            ),
+            (
+                "1801",
+                vec!["frm1801v2018:treatyY"],
+                Box::new(by(json!({"frm1801v2018:optTreaty_1": "true"}))),
+            ),
+            (
+                "1801",
+                vec![
+                    "frm1801v2018:freq_Mon",
+                    "frm1801v2018:freq_Qtr",
+                    "frm1801v2018:freq_Semi",
+                    "frm1801v2018:freq_Other",
+                ],
+                Box::new(by(json!({"frm1801v2018:instGranted_1": "true"}))),
+            ),
+            (
+                "1801",
+                vec!["frm1801v2018:freqOtherInput"],
+                Box::new(by(json!({
+                    "frm1801v2018:instGranted_1": "true",
+                    "frm1801v2018:freq_Other": "true",
+                }))),
+            ),
         ];
         for (code, keys, turn_on) in cases {
             let opened = open(code, page_period_of(code));
@@ -9967,6 +10037,18 @@ mod tests {
             ("2000OT", json!({"frm2000OT:rbTransNature_2": "true"})),
             ("2200A", json!({"frm2200Av2020:optTreaty_1": "true"})),
             ("2553", json!({"frm2553:txt13_1": "true"})),
+            // PR 10's answers.
+            ("1800", json!({"frm1800v2018:TaxTreatyYN_Y": "true"})),
+            ("1801", json!({"frm1801v2018:optTreaty_1": "true"})),
+            ("1801", json!({"frm1801v2018:instGranted_1": "true"})),
+            (
+                "1801",
+                json!({"frm1801v2018:instGranted_1": "true", "frm1801v2018:freq_Semi": "true"}),
+            ),
+            (
+                "1801",
+                json!({"frm1801v2018:instGranted_1": "true", "frm1801v2018:freq_Other": "true"}),
+            ),
         ];
         for (code, edits) in states {
             let opened = open(code, page_period_of(code));

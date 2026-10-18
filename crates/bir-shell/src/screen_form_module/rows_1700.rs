@@ -136,7 +136,7 @@ fn row_name(row: Row) -> String {
 /// The TIN with one box replaced. The draft keeps one digit string, so the
 /// boxes fill in order (three digits, three, three, then the branch code);
 /// a whole TIN typed or pasted into the first box fills them all.
-fn with_tin_part(tin: &str, part: usize, text: &str) -> Result<String, String> {
+pub(super) fn with_tin_part(tin: &str, part: usize, text: &str) -> Result<String, String> {
     let text = text.trim();
     if text
         .chars()

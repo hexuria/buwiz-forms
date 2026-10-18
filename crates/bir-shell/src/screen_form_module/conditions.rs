@@ -169,11 +169,19 @@ fn off_alone(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> bool
 pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> Map<String, Value> {
     let mut off = Map::new();
     let code = kind.form_code();
+    // 1800 and 1801 (PR 10, rows_donor_estate.rs): boxes the host itself
+    // closes while their answer does not hold (it refuses what is typed
+    // there) are off whatever they show, with their own tag.
+    let gated = super::rows_donor_estate::gated_keys(kind);
+    for (key, tag) in super::rows_donor_estate::closed(kind, draft) {
+        off.insert(key, json!(tag));
+    }
     let Some(list) = conditions()[code].as_object() else {
         return off;
     };
     let blank: Vec<(&String, &Value, &str)> = list
         .iter()
+        .filter(|(key, _)| !gated.contains(key))
         .map(|(key, condition)| (key, condition, values[key].as_str().unwrap_or_default()))
         .filter(|(_, _, shown)| is_blank(shown))
         .collect();
@@ -196,7 +204,10 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             off.insert(key.clone(), label(code, key, condition));
         }
     }
-    off
+    // In the conditions' own order, gated boxes among the rest.
+    list.keys()
+        .filter_map(|key| off.remove(key).map(|tag| (key.clone(), tag)))
+        .collect()
 }
 
 #[cfg(test)]
@@ -257,9 +268,25 @@ pub(super) mod tests {
         keys
     }
 
+    /// 1801's gates the corpus leaves out (PR 10): `(form, key, condition)`.
+    /// Item 15D's frequency boxes have no `enabled_when` in
+    /// rules/forms/1801-v2018/fields.json, but the tracked function
+    /// inventory of the untracked official HTA runtime
+    /// (rules/forms/1801-v2018/fixtures/calculation-function-inventory-v796.json
+    /// `installmentGranted`) lists them with `frm1801v2018:instGranted_1`,
+    /// 15D's Yes, and this port's `Form1801Draft::set_installment_granted`
+    /// clears the frequency on No. The condition is worded as the corpus
+    /// words item 14's ("Item 14 Yes.").
+    const CORPUS_GAPS_PR10: &[(&str, &str, &str)] = &[
+        ("1801", "frm1801v2018:freq_Mon", "Item 15D Yes."),
+        ("1801", "frm1801v2018:freq_Qtr", "Item 15D Yes."),
+        ("1801", "frm1801v2018:freq_Semi", "Item 15D Yes."),
+        ("1801", "frm1801v2018:freq_Other", "Item 15D Yes."),
+    ];
+
     /// What `app/forms/conditions.json` should hold, read from the corpus:
     /// every box the page draws whose `enabled_when` names an answer,
-    /// computed boxes left out.
+    /// computed boxes left out, and the reviewed [`CORPUS_GAPS_PR10`].
     pub(crate) fn derived() -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
         let mut out = Map::new();
@@ -282,6 +309,11 @@ pub(super) mod tests {
                 };
                 let computed = def.box_def(key).is_some_and(|entry| entry.computed);
                 if shown.contains(key) && !computed && is_an_answer(condition) {
+                    keys.insert(key.to_string(), json!(condition));
+                }
+            }
+            for (form, key, condition) in CORPUS_GAPS_PR10 {
+                if *form == code && shown.contains(*key) {
                     keys.insert(key.to_string(), json!(condition));
                 }
             }
