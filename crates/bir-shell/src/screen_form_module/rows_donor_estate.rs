@@ -675,11 +675,8 @@ pub(super) fn removes(
     after: &Value,
     edits: &Map<String, Value>,
 ) -> Option<Value> {
-    let touched = |cells: &dyn Fn(Cell) -> bool| {
-        edits
-            .keys()
-            .any(|key| cell(kind, key).is_some_and(cells))
-    };
+    let touched =
+        |cells: &dyn Fn(Cell) -> bool| edits.keys().any(|key| cell(kind, key).is_some_and(cells));
     let typed_text = |draft: &Value, field: &str| {
         draft[field]
             .as_str()
