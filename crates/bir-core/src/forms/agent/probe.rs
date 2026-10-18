@@ -362,8 +362,12 @@ const CASE_FOLLOWS_ANOTHER_FIELD: &[(&str, &str)] = &[
 /// special: a special rate left at 0 then files the business tax as 0. The
 /// code sets graduated, as II013 and II014 do; item 12 still chooses
 /// special (PR 7 review).
-const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str)] = &[
+///
+/// `(form code, key, option value, draft path, value it sets, evidence)`:
+/// scoped by form, so another form's `taxCodeDropdown` never inherits it.
+const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str, &str)] = &[
     (
+        "1701MS",
         "taxCodeDropdown",
         "II012",
         "/taxpayer/tax_option",
@@ -371,6 +375,7 @@ const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str)] = &[
         "1701MS item 18 column A: II012 Business Income - Graduated IT Rates",
     ),
     (
+        "1701MS",
         "taxCodeDropdownSpouse",
         "II012",
         "/spouse/tax_option",
@@ -380,7 +385,7 @@ const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str)] = &[
 ];
 
 /// Choices whose options may set only draft fields under a prefix, with
-/// evidence: `(key, path prefix, evidence)`. 1701MS item 18 column B, the
+/// evidence: `(form code, key, path prefix, evidence)`. 1701MS item 18 column B, the
 /// spouse's ATC, is open only on a joint return (form_1701ms.rs `recompute`
 /// resets the spouse column off one, as the official marriedJointly /
 /// toggleLine5 do), so every seed that answers it is a joint one and the
@@ -388,11 +393,36 @@ const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str)] = &[
 /// jointly`, and the blank option to `single`: clearing the spouse's ATC
 /// made the return Single and wiped column B. Its options set the spouse's
 /// own fields only (PR 7 review).
-const CHOICE_PATHS_WITHIN: &[(&str, &str, &str)] = &[(
+const CHOICE_PATHS_WITHIN: &[(&str, &str, &str, &str)] = &[(
+    "1701MS",
     "taxCodeDropdownSpouse",
     "/spouse/",
     "1701MS item 18 column B sets the spouse's source and tax option only",
 )];
+
+#[cfg(test)]
+mod choice_list_tests {
+    use super::{CHOICE_OPTION_SETS, CHOICE_PATHS_WITHIN};
+
+    /// Every scoped entry names 1701MS (its only reviewed form) and a key
+    /// that form's pin binds, so no other form's same-named box is touched.
+    #[test]
+    fn choice_overrides_are_scoped_to_their_form() {
+        let pin = include_str!("../../../data/agent-forms/1701ms-v2024.json");
+        let keys = CHOICE_OPTION_SETS
+            .iter()
+            .map(|(form, key, ..)| (*form, *key))
+            .chain(
+                CHOICE_PATHS_WITHIN
+                    .iter()
+                    .map(|(form, key, ..)| (*form, *key)),
+            );
+        for (form, key) in keys {
+            assert_eq!(form, "1701MS");
+            assert!(pin.contains(&format!("\"{key}\": {{")), "{key}");
+        }
+    }
+}
 
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
@@ -1886,14 +1916,21 @@ fn decide(
     }
     let choice_box = def.box_def(key).is_some_and(is_choice_box);
     if let Some(mut options) = choice_binding(evidence, key, choice_box)? {
-        for (_, value, path, set, _) in CHOICE_OPTION_SETS.iter().filter(|(k, ..)| *k == key) {
+        let ours = |form: &str, k: &str| form == def.form_code && k == key;
+        for (_, _, value, path, set, _) in CHOICE_OPTION_SETS
+            .iter()
+            .filter(|(form, k, ..)| ours(form, k))
+        {
             if let Some(option) = options.iter_mut().find(|option| option.value == *value) {
                 option
                     .set
                     .insert((*path).to_string(), Value::String((*set).to_string()));
             }
         }
-        for (_, prefix, _) in CHOICE_PATHS_WITHIN.iter().filter(|(k, ..)| *k == key) {
+        for (_, _, prefix, _) in CHOICE_PATHS_WITHIN
+            .iter()
+            .filter(|(form, k, ..)| ours(form, k))
+        {
             for option in &mut options {
                 option.set.retain(|path, _| path.starts_with(prefix));
             }
