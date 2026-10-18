@@ -28,12 +28,12 @@
   "R6.1": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_0605_others_box_waits_for_others (item 17's Others box, now bound to /other_manner_description by a probe seed, is off with 'Needs item 17 = Others' and keeps and prints what is typed once Others is the manner); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (0605 count 3 -> 4); bir-core sample_payloads_test form_0605_sample_payload_is_current (payload unchanged)"
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_others_box_waits_for_others (item 17's Others box, written by the host (rows_as_needed.rs), is off with 'Needs item 17 = Others', refuses a typed value with that tag until Others is the manner, then keeps and prints it); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (0605 count 3 -> 4)"
   },
   "preview.0": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_0605_quarter_boxes_are_the_drafts_quarter (item 3's boxes are the draft's quarter, written by the host; the page and the print map tick the same box for every quarter, and unticking clears it)"
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_quarter_boxes_are_the_drafts_quarter (item 3's boxes show the draft's quarter as the print does for every quarter; the quarter is the return's period identity, so on an opened return they are locked, say what sets them and refuse a write); screen_form_module::tests::a_0605_quarter_is_its_quarter (a sample's period part sets it)"
   },
   "manual-0": {
    "status": "fixed",
@@ -65,7 +65,7 @@
   "R6.1": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list is off with 'Needs item 11 = Yes', takes nothing while off and keeps a choice once Yes); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1606 count 2 -> 5); screen_form_module::audit::p1_relief_dropdowns_offer_each_forms_official_choices (answers item 11 Yes before the list)"
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list is off with 'Needs item 11 = Yes' and refuses a choice with it, alone or after No in one batch, until Yes; rules/forms/1606-v2018/fields.json enabled_when 'Item 19 indicates treaty or special-law relief.', item 19 the older numbering of item 11, whose Yes answers both); screen_form_module::tests::as_needed::pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief; screen_form_module::audit::p1_relief_dropdowns_offer_each_forms_official_choices"
   },
   "R6.2": {
    "status": "fixed",
@@ -80,7 +80,7 @@
   "validation.0": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_messages_name_the_printed_item_numbers (decision D6: each official message in rows_as_needed::PRINTED_MESSAGES is the validator's own text and its rewrite names only drawn item numbers; a fresh 1606 shows 'Please select an option for Item 9.' and 'Item 6.')"
+   "proof": "screen_form_module::tests::as_needed::pr9_messages_name_the_printed_item_numbers (decision D6: each official message in rows_as_needed::PRINTED_MESSAGES is the validator's own text and its rewrite names only drawn item numbers; a fresh 1606 shows 'Please select an option for Item 9.' and 'Item 6.') (52 rewrites in all: 32 for 1606, 20 for 1706)"
   },
   "manual-1": {
    "status": "fixed",
@@ -112,17 +112,17 @@
   "R6.0": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (items 8 and 9 off until item 3 is the individual seller's ATC); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1706 count 0 -> 8)"
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (items 8 and 9, their group keys too, refuse a tick with their tag until item 3 is the individual seller's ATC); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1706 count 0 -> 8)"
   },
   "R6.1": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 18's boxes, bound by an overpaid probe seed, off with 'Needs item 18 below zero (an over-remittance)'); bir-core sample_payloads_test form_1706_sample_payload_is_current (payload unchanged)"
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 18's boxes, bound by an overpaid probe seed, are off with 'Needs item 18 below zero (an over-remittance)' and refuse a tick with it until item 18 is below zero); bir-core sample_payloads_test form_1706_sample_payload_is_current (payload unchanged)"
   },
   "R6.2": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list off until Yes)"
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list refuses a choice with 'Needs item 11 = Yes' until Yes; rules/forms/1706-v2018/fields.json enabled_when 'Item 20 indicates tax-treaty relief.', item 20 the older numbering of item 11, whose Yes answers 'tax relief under an International Tax Treaty or Special Law'); screen_form_module::tests::as_needed::pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief"
   },
   "R6.3": {
    "status": "fixed",
@@ -132,7 +132,7 @@
   "validation.0": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_messages_name_the_printed_item_numbers (decision D6; a fresh 1706 shows 'Please select an option for Item 3.')"
+   "proof": "screen_form_module::tests::as_needed::pr9_messages_name_the_printed_item_numbers (decision D6; a fresh 1706 shows 'Please select an option for Item 3.') (52 rewrites in all: 32 for 1606, 20 for 1706)"
   },
   "manual-0": {
    "status": "fixed",
@@ -184,7 +184,7 @@
   "R3.6": {
    "status": "not_a_bug",
    "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry are disabled at load in the official program (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue, txtPg1Pt4DateOfExpiry disabled: true) and this app's field map writes them for no draft; the page shows their printed caption with a note saying so (screen_form_module::tests::as_needed::pr9_1707_printed_rates_and_disabled_parts_are_notes).",
-   "reviewer": ""
+   "reviewer": "Agree (PR 9 review): rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json has frm1707:txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue and txtPg1Pt4DateOfExpiry with disabled: true (source_line 1103, 1109, 1115), so the official keeps them shut. The page draws their printed captions with a note (test pr9_1707_printed_rates_and_disabled_parts_are_notes), and no draft write is added."
   },
   "R4.0": {
    "status": "fixed",
@@ -256,7 +256,7 @@
   "R4.0": {
    "status": "not_a_bug",
    "reason": "Item 1 is the return's identity: maintainer decision 10 matches a 2000OT return to its stored one by its exact date, so the date is chosen where the return is started (the sample's date period part, screen_form_sample_period, or New return's typed date) and is locked on the return, where form_page.js `control` shows a locked date box as 'Dec 10, 2020' (shownDate). A return opened without a date now says in the box what sets it (rows_as_needed waits; screen_form_module::tests::as_needed::pr9_2000ot_item_1_date_says_what_sets_it).",
-   "reviewer": ""
+   "reviewer": "Agree (PR 9 review): bir-core/data/agent-forms/2000ot-v2018.json binds frm2000OT:txtTransactionDate with lock \"identity\" (path /transaction_date). Under the maintainer decision that per-transaction forms match by exact date (PR 0c), the date is the return's identity, so the box stays locked and says what sets it (DATE_FROM_NEW_RETURN; test pr9_2000ot_item_1_date_says_what_sets_it)."
   },
   "manual-0": {
    "status": "fixed",
@@ -313,17 +313,17 @@
   "manual-0": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part IV its own part, one table of five rows); screen_form_module::tests::as_needed::pr9_2552_part_iv_rows_take_their_amounts (rows 2-5's amounts typed and printed)"
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part IV its own part, one table of five rows); screen_form_module::tests::as_needed::pr9_2552_part_iv_rows_take_their_amounts (rows 2-5 refuse a write with 'Needs Part IV row N-1' until the row before is used, as the official inventory keeps them disabled; then typed and printed)"
   },
   "manual-1": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts; screen_form_module::tests::as_needed::pr9_2552_item_11_asks_before_it_clears_part_v_and_row_5_fills (row 5 typed like rows 1-4; changing item 11 asks before it clears the rows typed)"
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts; screen_form_module::tests::as_needed::pr9_2552_item_11_asks_before_it_clears_part_v_and_row_5_fills; screen_form_module::tests::as_needed::pr9_2552_item_11_counts_every_typed_row_and_row_5_dates_like_rows_1_to_4; screen_form_module::tests::as_needed::pr9_2552_item_11_untick_keeps_the_answer"
   },
   "manual-3": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_2552_item_12_takes_whole_numbers_of_shares"
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_item_12_takes_whole_numbers_of_shares (12A and 12B whole numbers, refused with the offering tag until item 11 is Primary or Secondary, then typed and printed)"
   },
   "manual-4": {
    "status": "fixed",
