@@ -706,7 +706,6 @@ fn pr9_1606_1706_options_read_as_printed() {
                 d.label
             );
             if let Some(caption) = printed_caption(slug, &d.key) {
-                let caption = caption.replace("Cash Sales", "Cash Sales");
                 assert!(
                     caption.ends_with(&d.label) || caption.ends_with(&format!("{}?", d.label)),
                     "{code} {}: {caption}",
@@ -1499,7 +1498,7 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
     ];
     for (key, _) in cells {
         assert!(opened["locks"][key].is_null(), "{key}");
-        assert_eq!(placed("1707", key).t != "hidden", true);
+        assert!(placed("1707", key).t != "hidden");
     }
     let edits = Value::Object(
         cells
