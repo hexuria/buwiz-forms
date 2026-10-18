@@ -237,7 +237,10 @@ const app = {
         hostValues = { ...hostValues, ...edits };
         penaltyValues();
         poolValues();
-        return { draft: args[1], values: { ...hostValues }, options: {}, rejected, penalties: penaltyState(), pools: { ...poolStore } };
+        // A second schedule row folds Sales (the host's `relocks`); "778" unfolds it.
+        const relocks = edits[K("amount1")] === "777" ? { [K("sales")]: "computed from its (Add more...) rows: OTHERS and their subtotal" } : edits[K("amount1")] === "778" ? { [K("sales")]: null } : {};
+        const relock_notes = Object.fromEntries(Object.entries(relocks).map(([k, v]) => [k, v ? "Computed by the form." : null]));
+        return { draft: args[1], values: { ...hostValues }, options: {}, rejected, penalties: penaltyState(), pools: { ...poolStore }, relocks, relock_notes };
       }
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: offNow(), penalties: penaltyState(), pools: { ...poolStore } });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
@@ -498,4 +501,21 @@ console.log("PASS rule 8: penalties computed by default; one Edit unlocks all th
   assert.equal(hostValues[K("sales")], salesBefore, "the draft keeps it");
   await settle();
   console.log("PASS removal: Cancel on a typed answer puts the box back instead of asking again.");
+}
+
+// ---- A lock the fill changes takes effect at once.
+{
+  frame();
+  assert.equal(ui.isLocked(K("sales")), false, "Sales starts open");
+  input(K("amount1")).type("777");
+  input(K("amount1")).fire("blur");
+  await settle(); frame();
+  assert.equal(ui.isLocked(K("sales")), true, "the fill's relock shuts it without reopening the return");
+  assert.equal(ui.state.lockNotes[K("sales")], "Computed by the form.", "with its note");
+  input(K("amount1")).type("778");
+  input(K("amount1")).fire("blur");
+  await settle(); frame();
+  assert.equal(ui.isLocked(K("sales")), false, "and a null relock opens it again");
+  assert.equal(ui.state.lockNotes[K("sales")], undefined);
+  console.log("PASS relock: a fill's lock changes apply at once.");
 }

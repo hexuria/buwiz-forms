@@ -2148,11 +2148,16 @@ fn pr8_form_1702rt_answers_that_clear_typed_boxes_ask_first() {
         rt("txtPg2Pt4I42MinimumCorporate"),
         rt("txtPg2Pt4I45IncomeTaxPaymentUnderMCIT"),
     ];
-    let typed_mcit = typed(
+    // Item 42 opens once MCIT applies and item 39 is above zero.
+    let earning = typed(
         "1702RT",
         &opened["draft"],
+        json!({ rt("txtPg1Pt1I10"): "01/02/2015", rt("txtPg2Pt4I27Sales"): "1000000" }),
+    );
+    let typed_mcit = typed(
+        "1702RT",
+        &earning["draft"],
         json!({
-            rt("txtPg1Pt1I10"): "01/02/2015",
             rt("txtPg4Sc4I1C1"): "2024",
             &mcit_lost[0]: "1000",
             &mcit_lost[1]: "5000",
@@ -2398,6 +2403,13 @@ fn pr8_form_1702mx_rates_are_typed_percents() {
         ("txtPg2Sc2It14B", "5.125"),
         ("txtPg2Sc2It14C", "100"),
         ("txtPg2Sc2It14C", "abc"),
+        // Round 2: never wrapped (42949673 * 100 overflows an i32 into 0.04).
+        ("txtPg2Sc2It14C", "42949673"),
+        ("txtPg2Sc2It14B", "21474837"),
+        ("txtPg2Pt4I34SpecialTaxRate", "42949673"),
+        // Round 2: a lone "%" is not a rate (blank clears; "%" is refused).
+        ("txtPg2Sc2It14B", "%"),
+        ("txtPg2Sc2It14B", "5%%"),
     ] {
         let refused = fill("1702MX", draft, json!({ mx(key): text }));
         assert!(refused["rejected"].get(mx(key)).is_some(), "{key} {text}");
@@ -2411,51 +2423,130 @@ fn pr8_form_1702mx_rates_are_typed_percents() {
     assert_eq!(cleared["values"][mx("txtPg2Sc2It14B")], "");
 }
 
-/// PR 8 review H4: 1702RT item 42 MCIT Due is the filer's entry while MCIT
-/// applies (rules/forms/1702rt-v2018c/calculations.json 1702rt-item42-mcit:
-/// "2020+ leaves the enabled value user-controlled"; the page enables it
-/// with enableMCITFields): a 2026 return of a corporation incorporated in
-/// 2019 takes it and item 43 follows; before the fourth year it is refused.
+/// PR 8 review H4 and round 2 item 1: 1702RT item 42 MCIT Due follows the
+/// official computeP2Pt4I42 (rules/forms/1702rt-v2018c/calculations.json
+/// 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
+/// of gross; 2020+ leaves the enabled value user-controlled except
+/// nonpositive net forces zero"). From 2020 it is the filer's entry while
+/// MCIT applies and item 39 is above zero; otherwise, and on every return
+/// before 2020, it is locked with its reason and a note, shows its value
+/// (0 on a new return), and a typed amount is refused. The lock follows the answers as they are typed
+/// (the fill's `relocks`).
 #[test]
-fn pr8_form_1702rt_item_42_is_an_entry_once_mcit_applies() {
+fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
     setup();
     let item_42 = rt("txtPg2Pt4I42MinimumCorporate");
     let def = kind_of("1702RT").unwrap().definition();
     assert!(
         def.fillable().any(|entry| entry.key == item_42),
-        "item 42 is an entry"
+        "item 42 is bound"
     );
     let opened = open("1702RT", 0);
     assert_eq!(opened["year"], json!(2026));
-    assert!(opened["locks"].get(&item_42).is_none());
     let incorporated = typed(
         "1702RT",
         &opened["draft"],
         json!({ rt("txtPg1Pt1I10"): "06/30/2019" }),
     );
-    let mcit = typed(
+    // 2026, MCIT applies, item 39 is zero: locked at 0.
+    assert!(amount(&incorporated["values"], &rt("txtPg2Pt4I39NetTaxable")) <= 0.0);
+    assert_eq!(
+        incorporated["relocks"][&item_42],
+        rows_annual_corporate::RT_MCIT_NO_NET
+    );
+    assert_eq!(
+        incorporated["relock_notes"][&item_42],
+        rows_annual_corporate::RT_MCIT_NO_NET_NOTE
+    );
+    assert_eq!(amount(&incorporated["values"], &item_42), 0.0, "shows 0");
+    assert_eq!(
+        incorporated["draft"]["part_iv"]["item_42_mcit_due"],
+        json!(0)
+    );
+    let refused = fill(
         "1702RT",
         &incorporated["draft"],
         json!({ &item_42: "50000" }),
     );
-    assert_eq!(mcit["draft"]["part_iv"]["item_42_mcit_due"], json!(50_000));
-    assert_eq!(amount(&mcit["values"], &item_42), 50_000.0);
+    assert_eq!(
+        refused["rejected"][&item_42],
+        rows_annual_corporate::RT_MCIT_NO_NET
+    );
+    assert_eq!(refused["draft"], incorporated["draft"]);
+    save("1702RT", &incorporated["draft"]);
+    assert_eq!(
+        open("1702RT", 0)["locks"][&item_42],
+        rows_annual_corporate::RT_MCIT_NO_NET,
+        "a reopened return keeps the lock"
+    );
+    // Item 39 above zero: the filer's entry; item 43 follows.
+    let earning = typed(
+        "1702RT",
+        &incorporated["draft"],
+        json!({ rt("txtPg2Pt4I27Sales"): "1000000" }),
+    );
+    assert!(amount(&earning["values"], &rt("txtPg2Pt4I39NetTaxable")) > 0.0);
+    assert_eq!(earning["relocks"][&item_42], Value::Null, "item 42 opens");
+    let mcit = typed("1702RT", &earning["draft"], json!({ &item_42: "500000" }));
+    assert_eq!(mcit["draft"]["part_iv"]["item_42_mcit_due"], json!(500_000));
     assert_eq!(
         amount(&mcit["values"], &rt("txtPg2Pt4I43TotalIncomeTax")),
-        50_000.0,
+        500_000.0,
         "item 43 is the larger of items 41 and 42"
     );
+    // MCIT not applying yet (incorporated 2024): locked with why.
     let young = typed(
         "1702RT",
-        &opened["draft"],
+        &earning["draft"],
         json!({ rt("txtPg1Pt1I10"): "06/30/2024" }),
+    );
+    assert_eq!(
+        young["relocks"][&item_42],
+        rows_annual_corporate::RT_MCIT_REFUSAL
     );
     let refused = fill("1702RT", &young["draft"], json!({ &item_42: "50000" }));
     assert_eq!(
         refused["rejected"][&item_42],
         rows_annual_corporate::RT_MCIT_REFUSAL
     );
-    assert_eq!(refused["draft"], young["draft"]);
+
+    // A 2019 return: locked with the 2% rule, whatever the net.
+    let old = open_for(TIN, "1702RT", 2019, 0);
+    assert_eq!(old["year"], json!(2019));
+    assert_eq!(
+        old["locks"][&item_42],
+        rows_annual_corporate::RT_MCIT_BEFORE_2020
+    );
+    assert_eq!(
+        old["lock_notes"][&item_42],
+        rows_annual_corporate::RT_MCIT_BEFORE_2020_NOTE
+    );
+    let old_earning = typed(
+        "1702RT",
+        &old["draft"],
+        json!({ rt("txtPg1Pt1I10"): "01/02/2010", rt("txtPg2Pt4I27Sales"): "1000000" }),
+    );
+    assert_eq!(
+        old_earning["relocks"][&item_42],
+        rows_annual_corporate::RT_MCIT_BEFORE_2020
+    );
+    let refused = fill(
+        "1702RT",
+        &old_earning["draft"],
+        json!({ &item_42: "20000" }),
+    );
+    assert_eq!(
+        refused["rejected"][&item_42],
+        rows_annual_corporate::RT_MCIT_BEFORE_2020
+    );
+    // What a 2019 return files today: item 42 as stored (0; the port does
+    // not compute the 2%), and item 43 is item 41.
+    let map = agent::field_map(kind_of("1702RT").unwrap(), &old_earning["draft"]).unwrap();
+    assert_eq!(agent::parse_amount(&map[&item_42]), Some(0.0));
+    assert_eq!(
+        map[&rt("txtPg2Pt4I43TotalIncomeTax")],
+        map[&rt("txtPg2Pt4I41IncomeTaxDue")]
+    );
 }
 
 /// PR 8 review M1: a 1702RT (Add more...) item whose table holds two or
@@ -2476,6 +2567,10 @@ fn pr8_form_1702rt_folded_items_are_locked_while_folded() {
         json!({ &description: "Training", &amount_key: "250" }),
     );
     assert_eq!(amount(&one["values"], &amount_key), 250.0);
+    // Round 2: the fill says at once which locks changed (`relocks`).
+    for key in [&description, &amount_key] {
+        assert_eq!(one["relocks"][key], Value::Null, "{key} is open");
+    }
     let folded = typed(
         "1702RT",
         &opened["draft"],
@@ -2487,6 +2582,22 @@ fn pr8_form_1702rt_folded_items_are_locked_while_folded() {
         }),
     );
     assert_eq!(folded["values"][&description], "OTHERS");
+    for key in [&description, &amount_key] {
+        assert_eq!(
+            folded["relocks"][key],
+            rows_annual_corporate::RT_FOLDED_LOCK,
+            "{key} shuts as the second row is added"
+        );
+        assert_eq!(folded["relock_notes"][key], NOTE_COMPUTED, "{key}");
+    }
+    let unfolded = typed(
+        "1702RT",
+        &folded["draft"],
+        json!({ rt("txtPg3Sc1I17i.2C1"): "", rt("txtPg3Sc1I17i.2C2"): "0" }),
+    );
+    for key in [&description, &amount_key] {
+        assert_eq!(unfolded["relocks"][key], Value::Null, "{key} opens again");
+    }
     assert_eq!(amount(&folded["values"], &amount_key), 300.0);
     for key in [&description, &amount_key] {
         let refused = fill("1702RT", &folded["draft"], json!({ key: "5" }));
@@ -2545,6 +2656,20 @@ fn pr8_a_typed_zero_attachment_count_shows() {
         assert_eq!(zero["draft"]["number_of_attachments"], "0", "{code}");
         assert_eq!(zero["values"][key], "0", "{code}: a typed 0 shows");
     }
+    // Round 2: 1702EX keeps the count as a number (form_1702ex.rs
+    // `number_of_attachments: u8`, new drafts 0, filed as "00"): an untyped
+    // draft shows empty, a typed count shows; a typed 0 is the default.
+    let key = "frm1702EX:txtPg1P2I23NumOfAttachments";
+    let opened = open("1702EX", 0);
+    assert_eq!(opened["draft"]["number_of_attachments"], json!(0));
+    assert_eq!(
+        agent::field_map(kind_of("1702EX").unwrap(), &opened["draft"]).unwrap()[key],
+        "00",
+        "the untyped draft still files the official zeros"
+    );
+    assert_eq!(opened["values"][key], "", "1702EX: the default shows empty");
+    let two = typed("1702EX", &opened["draft"], json!({ key: "2" }));
+    assert_eq!(two["values"][key], "02", "1702EX: a typed count shows");
 }
 
 /// Maintainer decision D6 (2026-10-18; replaces review item L6's note): a
@@ -2764,4 +2889,159 @@ fn pr8_form_1702mx_others_rows_stay_as_the_runtime_keeps_them() {
         );
         assert!(opened["locks"].get(mx(key)).is_none(), "{key} is an entry");
     }
+}
+
+/// Stored drafts as the save path serialized them before PR 8 (pr0b-push
+/// and 84299e34 share this one: form_1702rt*.rs, form_1702mx*.rs,
+/// form_1702ex.rs, form_1707a.rs and db/ are unchanged since pr0b-push).
+/// The 1702RT draft holds an MCIT in Schedule IV row 2 and the 1702MX draft
+/// a rate with the older lexeme ("5.0").
+const STORED_DRAFTS: [(&str, &str); 4] = [
+    ("1702RT", include_str!("fixtures/pr8_stored_1702rt.json")),
+    ("1702MX", include_str!("fixtures/pr8_stored_1702mx.json")),
+    ("1702EX", include_str!("fixtures/pr8_stored_1702ex.json")),
+    ("1707A", include_str!("fixtures/pr8_stored_1707a.json")),
+];
+
+/// Put `fixture` into the database as this TIN's stored draft of `code`
+/// for 2026 (row 1 of a fresh database), byte for byte; its row id.
+fn store_fixture(code: &str, fixture: &str) -> i64 {
+    setup();
+    let opened = open(code, 0);
+    let id = save(code, &opened["draft"])["id"].as_i64().unwrap();
+    assert_eq!(id, 1, "{code}: a fresh database's first row");
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[fixture, &id.to_string()],
+    );
+    assert_eq!(raw_row(id).1, fixture, "{code}: stored as given");
+    id
+}
+
+/// Round 2 item 9: each stored draft opens and saves back byte for byte
+/// (PR 0c's profile_baseline set aside where present), and its field map
+/// is the one the stored bytes give.
+#[test]
+fn pr8_stored_drafts_save_back_byte_for_byte() {
+    for (code, fixture) in STORED_DRAFTS {
+        let id = store_fixture(code, fixture);
+        let opened = open(code, 0);
+        assert_eq!(opened["draft"]["id"], json!(id), "{code}");
+        save(code, &opened["draft"]);
+        let again = raw_row(id).1;
+        if fixture.contains("\"profile_baseline\"") || again.contains("\"profile_baseline\"") {
+            let strip = |text: &str| {
+                let mut value: Value = serde_json::from_str(text).unwrap();
+                value.as_object_mut().unwrap().remove("profile_baseline");
+                value
+            };
+            assert_eq!(strip(&again), strip(fixture), "{code}");
+        } else {
+            assert_eq!(again, fixture, "{code}: byte for byte");
+        }
+        let kind = kind_of(code).unwrap();
+        let stored: Value = serde_json::from_str(fixture).unwrap();
+        assert_eq!(
+            agent::field_map(kind, &opened["draft"]).unwrap(),
+            agent::field_map(kind, &stored).unwrap(),
+            "{code}: the field map is the stored draft's"
+        );
+    }
+}
+
+/// Round 2 item 5: before the review, 1702RT Schedule IV column C (rows 2
+/// and 3) was bound to the row's MCIT, so a stored draft may hold there an
+/// amount typed in column C, which files as MCIT. Each such row says so
+/// beside its MCIT box; nothing is changed and the stored bytes stay.
+#[test]
+fn pr8_form_1702rt_column_c_mcit_rows_are_flagged() {
+    let fixture = STORED_DRAFTS[0].1;
+    let stored: Value = serde_json::from_str(fixture).unwrap();
+    assert_eq!(stored["schedule_4"]["rows"][1]["mcit"], json!(4000));
+    let id = store_fixture("1702RT", fixture);
+    let opened = open("1702RT", 0);
+    let row_2 = rt("txtPg4Sc4I2C3");
+    let notice = rows_annual_corporate::rt_column_c_notice(2);
+    assert_eq!(
+        notice,
+        "Row 2 holds an MCIT amount that may have been typed in column C; check it before you file."
+    );
+    let flagged: Vec<&Value> = opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["message"] == notice.as_str())
+        .collect();
+    assert_eq!(flagged.len(), 1, "{}", opened["errors"]);
+    assert_eq!(flagged[0]["keys"], json!([row_2]));
+    assert!(
+        !opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["message"] == rows_annual_corporate::rt_column_c_notice(3).as_str()),
+        "row 3 holds no MCIT"
+    );
+    assert_eq!(amount(&opened["values"], &row_2), 4000.0, "nothing changes");
+    assert_eq!(raw_row(id).1, fixture, "the stored bytes stay");
+    let validated = validate("1702RT", &opened["draft"]);
+    assert!(messages(&validated).contains(&notice));
+    // Checked and cleared by the filer: the notice goes.
+    let cleared = typed("1702RT", &opened["draft"], json!({ &row_2: "0" }));
+    assert!(!messages(&validate("1702RT", &cleared["draft"])).contains(&notice));
+}
+
+/// Round 2 item 12 (D6): 1702EX's "(more...)" alerts number pop-up rows
+/// "17.2", "4.2", which the sheet does not print; they read the printed
+/// item (Schedule 1 item 17i, Schedule 2 item 4: html-frozen/1702ex-2018/
+/// index.html) and the pop-up row.
+#[test]
+fn pr8_form_1702ex_popup_alerts_name_the_printed_item() {
+    setup();
+    let kind = kind_of("1702EX").unwrap();
+    let mut errors = vec![
+        (
+            "other_deductions[6]".to_string(),
+            "Cannot save. You have an empty description on item 17.2".to_string(),
+        ),
+        (
+            "other_deductions[6]".to_string(),
+            "Cannot save.  Amount should not be zero on item 17.2".to_string(),
+        ),
+        (
+            "special_rows[4]".to_string(),
+            "Cannot save. Your legal basis is empty on item 4.2".to_string(),
+        ),
+        (
+            "non_taxable_income[5]".to_string(),
+            "Cannot save. You have an empty description on item 6.3".to_string(),
+        ),
+    ];
+    rows_annual_corporate::printed_item_numbers(kind, &mut errors);
+    let reworded: Vec<&str> = errors.iter().map(|(_, m)| m.as_str()).collect();
+    assert_eq!(
+        reworded,
+        [
+            "Cannot save. You have an empty description on item 17i (row 2)",
+            "Cannot save.  Amount should not be zero on item 17i (row 2)",
+            "Cannot save. Your legal basis is empty on item 4 (row 2)",
+            "Cannot save. You have an empty description on item 6 (row 3)",
+        ]
+    );
+    // Through the page's validation.
+    let mut draft = open("1702EX", 0)["draft"].clone();
+    draft["deduction"] = json!("itemized");
+    let mut rows: Vec<Value> = (0..6)
+        .map(|n| json!({"description": format!("Item {n}"), "amount": 100.0}))
+        .collect();
+    rows.push(json!({"description": "", "amount": 100.0}));
+    draft["other_deductions"] = Value::Array(rows);
+    let found = messages(&validate("1702EX", &draft));
+    assert!(
+        found
+            .iter()
+            .any(|m| m == "Cannot save. You have an empty description on item 17i (row 2)"),
+        "{found:?}"
+    );
+    assert!(!found.iter().any(|m| m.contains("item 17.")), "{found:?}");
 }

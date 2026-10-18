@@ -157,6 +157,9 @@ export interface ScreenFormFilled {
     blank?: string[] | null;
     /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
     removes?: { message: string; done: string; rows: number } | null;
+    /** Locks this fill opened or shut (a folded item, a box an answer shuts): the reason, or null to open the box; `relock_notes` holds each one's note. */
+    relocks?: Record<string, string | null>;
+    relock_notes?: Record<string, string | null>;
 }
 export interface ScreenFormValidated {
     draft: object;
@@ -2062,7 +2065,12 @@ fn evaluate_here(
     // A message naming another item number than the printed one reads the
     // printed number (D6; PR 8's forms).
     rows_annual_corporate::printed_item_numbers(kind, &mut errors);
-    let errors = errors_json(kind, &errors);
+    let mut errors = errors_json(kind, &errors);
+    // Notices the filer checks; nothing is changed (PR 8: 1702RT Schedule
+    // IV rows an older version may have saved from column C).
+    if let Value::Array(list) = &mut errors {
+        list.extend(rows_annual_corporate::notices(kind, draft));
+    }
     Ok((values_json(kind, draft)?, errors, status))
 }
 
@@ -2278,6 +2286,9 @@ fn assigned_to_open(code: &str, key: &str) -> bool {
 /// A lock's reason as a filer reads it (see the NOTE_* texts), for
 /// `code`'s box `key`.
 fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
+    if let Some(note) = rows_annual_corporate::live_lock_note(reason) {
+        return note;
+    }
     match lock_note(reason) {
         NOTE_NOT_YET if assigned_to_open(code, key) => NOTE_ASSIGNED,
         note => note,
@@ -3216,6 +3227,18 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     // What the filer typed that this edit removed: the page asks first (PR
     // 8's forms; the integration merge chains the other form groups').
     let removes = rows_annual_corporate::removes(kind, &before, &draft, &edits);
+    // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42),
+    // each with its note; `null` opens the box.
+    let relocks = rows_annual_corporate::live_locks(kind, &draft);
+    let relock_notes: Map<String, Value> = relocks
+        .iter()
+        .map(|(key, lock)| {
+            let note = lock.as_str().map_or(Value::Null, |reason| {
+                json!(lock_note_for(kind.form_code(), key, reason))
+            });
+            (key.clone(), note)
+        })
+        .collect();
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3227,6 +3250,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
         "removes": removes,
+        "relocks": relocks,
+        "relock_notes": relock_notes,
     })))
 }
 

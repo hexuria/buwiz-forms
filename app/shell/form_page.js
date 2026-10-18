@@ -732,6 +732,19 @@ export class FormPageActions {
     s.options = r.options || {};
     if (Array.isArray(r.penalties)) s.penalties = r.penalties;
     if (r.pools) s.poolTexts = r.pools;
+    // Locks this fill opened or shut (a folded item, a box an answer shuts)
+    // take effect at once, not on the next opening.
+    for (const [k, lock] of Object.entries(r.relocks || {})) {
+      s.lockNotes ||= {};
+      if (lock == null) {
+        delete s.locks[k];
+        delete s.lockNotes[k];
+      } else {
+        s.locks[k] = lock;
+        const note = r.relock_notes?.[k];
+        if (note) s.lockNotes[k] = note;
+      }
+    }
     this.syncComputed();
     this.syncChanged(before, edits);
     // The preview prints the draft the host just applied, never the

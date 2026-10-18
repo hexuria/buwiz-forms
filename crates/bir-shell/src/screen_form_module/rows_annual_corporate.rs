@@ -96,8 +96,20 @@ pub(super) fn mx_rate_refusal(decimals: usize) -> String {
 /// 1702RT item 42 MCIT Due.
 const RT_MCIT_DUE: &str = "frm1702RT:txtPg2Pt4I42MinimumCorporate";
 
-/// What item 42 says while MCIT does not apply.
+/// Item 42's lock while MCIT does not apply.
 pub(super) const RT_MCIT_REFUSAL: &str = "Item 42 applies once MCIT does: from the fourth taxable year after the year of incorporation (item 10).";
+
+/// Item 42's lock on a return for a year before 2020 (calculations.json
+/// 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
+/// of gross"; the port does not compute it, so the box stays as stored).
+pub(super) const RT_MCIT_BEFORE_2020: &str =
+    "For years before 2020, MCIT is 2% of gross income (item 33)";
+
+/// Item 42's lock from 2020 while net taxable income is zero or less
+/// (calculations.json 1702rt-item42-mcit: "2020+ leaves the enabled value
+/// user-controlled except nonpositive net forces zero").
+pub(super) const RT_MCIT_NO_NET: &str =
+    "From 2020, MCIT is zero while net taxable income (item 39) is zero or less.";
 
 /// The lock of a 1702RT (Add more...) item once its table folds.
 pub(super) const RT_FOLDED_LOCK: &str =
@@ -180,16 +192,34 @@ pub(super) fn fill(
     }
 }
 
-/// A 1702RT box the form keeps right now: item 42 while MCIT does not
-/// apply, and an (Add more...) item while its table is folded. A blank
-/// item 42 is taken (recompute keeps it zero anyway).
+/// Why 1702RT item 42 is shut, if it is: the official computeP2Pt4I42
+/// (calculations.json 1702rt-item42-mcit) leaves it to the filer only from
+/// 2020, while MCIT applies (item 10's four years) and item 39 is above
+/// zero.
+pub(super) fn rt_item_42_lock(draft: &Value) -> Option<&'static str> {
+    let typed: Form1702RTDraft = serde_json::from_value(draft.clone()).ok()?;
+    if typed.taxable_year < 2020 {
+        Some(RT_MCIT_BEFORE_2020)
+    } else if !typed.subject_to_mcit() {
+        Some(RT_MCIT_REFUSAL)
+    } else if typed.part_iv.item_39_net_taxable_income_or_loss.0 <= 0 {
+        Some(RT_MCIT_NO_NET)
+    } else {
+        None
+    }
+}
+
+/// A 1702RT box the form keeps right now: item 42 while it is shut (see
+/// [`rt_item_42_lock`]), and an (Add more...) item while its table is
+/// folded. A blank item 42 is taken: it only clears the box.
 #[inline(never)]
 fn refuse_1702rt(draft: &Value, key: &str, value: &Value) -> Option<String> {
     if key == RT_MCIT_DUE {
         let text = text_of(value);
-        let blank = text.is_empty() || agent::parse_amount(&text) == Some(0.0);
-        let typed: Form1702RTDraft = serde_json::from_value(draft.clone()).ok()?;
-        return (!blank && !typed.subject_to_mcit()).then(|| RT_MCIT_REFUSAL.to_string());
+        if text.is_empty() || agent::parse_amount(&text) == Some(0.0) {
+            return None;
+        }
+        return rt_item_42_lock(draft).map(str::to_string);
     }
     let modal = rt_folded_item(key)?;
     rt_more_rows(draft)
@@ -207,9 +237,9 @@ fn fill_1702mx_rate(
     decimals: usize,
     value: &Value,
 ) -> Result<(), String> {
-    let text = text_of(value);
-    let text = text.trim_end_matches('%').trim();
-    let rate = if text.is_empty() {
+    let typed = text_of(value);
+    let text = typed.strip_suffix('%').unwrap_or(&typed).trim();
+    let rate = if typed.is_empty() {
         json!({"hundredths": null, "raw": ""})
     } else {
         let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
@@ -217,12 +247,15 @@ fn fill_1702mx_rate(
         if whole.is_empty() || !digits(whole) || !digits(fraction) || fraction.len() > decimals {
             return Err(mx_rate_refusal(decimals));
         }
-        let whole: i32 = whole.parse().map_err(|_| mx_rate_refusal(decimals))?;
+        // Checked: a long number is refused, never wrapped into a small rate.
         let fraction: i32 = format!("{fraction:0<2}").parse().unwrap_or(0);
-        let hundredths = whole * 100 + fraction;
-        if !(0..10_000).contains(&hundredths) {
-            return Err(mx_rate_refusal(decimals));
-        }
+        let hundredths = whole
+            .parse::<i32>()
+            .ok()
+            .and_then(|whole| whole.checked_mul(100))
+            .and_then(|whole| whole.checked_add(fraction))
+            .filter(|hundredths| (0..10_000).contains(hundredths))
+            .ok_or_else(|| mx_rate_refusal(decimals))?;
         let raw = format!("{:.*}", decimals, f64::from(hundredths) / 100.0);
         json!({"hundredths": hundredths, "raw": raw})
     };
@@ -405,22 +438,31 @@ const EX_WHOLE_FIELDS: [(&str, &str); 2] = [
     ("txtPg1Pt1I9RegisteredAddress", "registered_address"),
 ];
 
-/// Number of Attachments where the new draft holds the official default
-/// (form_1702rt.rs and form_1702mx.rs new_from_profile: `000`, `00`): the
-/// box shows empty while the draft holds exactly that default, and a typed
-/// count (`0` too) as typed. `(key, draft field, default)`.
-const ATTACHMENTS: [(&str, &str, &str); 2] = [
-    (
-        "frm1702RT:txtPg1Pt2PagesFilled",
-        "number_of_attachments",
-        "000",
-    ),
-    (
-        "frm1702MX:txtPg1P2I23NumOfAttachments",
-        "number_of_attachments",
-        "00",
-    ),
-];
+/// Number of Attachments where the new draft holds a default (form_1702rt.rs
+/// and form_1702mx.rs new_from_profile: `000`, `00`; form_1702ex.rs: the
+/// number 0): the box shows empty while the draft holds exactly that
+/// default, and any other count as typed. 1702RT and 1702MX keep a typed 0
+/// apart from their default; 1702EX keeps a number, so its typed 0 is the
+/// default and shows empty too. `(key, draft field, default)`.
+fn attachments() -> [(&'static str, &'static str, Value); 3] {
+    [
+        (
+            "frm1702RT:txtPg1Pt2PagesFilled",
+            "number_of_attachments",
+            json!("000"),
+        ),
+        (
+            "frm1702MX:txtPg1P2I23NumOfAttachments",
+            "number_of_attachments",
+            json!("00"),
+        ),
+        (
+            "frm1702EX:txtPg1P2I23NumOfAttachments",
+            "number_of_attachments",
+            json!(0),
+        ),
+    ]
+}
 
 /// What the page shows where the field map's value is not what the box
 /// holds (display only: the field map, the XML and the print are
@@ -447,12 +489,12 @@ pub(super) fn shown(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Strin
             }
         }
     }
-    for (key, field, default) in ATTACHMENTS
-        .iter()
+    for (key, field, default) in attachments()
+        .into_iter()
         .filter(|(key, _, _)| key.starts_with(&format!("frm{code}:")))
     {
-        if draft[*field].as_str() == Some(*default)
-            && let Some(shown) = map.get_mut(*key)
+        if same(draft.get(field), Some(&default))
+            && let Some(shown) = map.get_mut(key)
         {
             shown.clear();
         }
@@ -461,6 +503,56 @@ pub(super) fn shown(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Strin
 
 /// The forms this module serves.
 const FORMS: [&str; 4] = ["1702RT", "1702MX", "1702EX", "1707A"];
+
+/// The locks that follow the draft as it is filled, each key with its
+/// reason or `null` (open): 1702RT's (Add more...) items, shut while their
+/// table holds two or more rows, and item 42 (see [`rt_item_42_lock`]).
+/// `screen_form_open` applies them with the other locks; `screen_form_fill`
+/// returns them, so a box shuts or opens as soon as the answer that decides
+/// it is typed.
+pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+    let mut locks = Map::new();
+    if kind.form_code() != "1702RT" {
+        return locks;
+    }
+    let more = rt_more_rows(draft);
+    for modal in FORM_1702RT_MODALS {
+        let lock = if more.is_folded(modal) {
+            json!(RT_FOLDED_LOCK)
+        } else {
+            Value::Null
+        };
+        for key in rt_folded_columns(modal) {
+            locks.insert(key, lock.clone());
+        }
+    }
+    locks.insert(
+        RT_MCIT_DUE.to_string(),
+        rt_item_42_lock(draft).map_or(Value::Null, |reason| json!(reason)),
+    );
+    locks
+}
+
+/// The note a live lock shows under its item, in the filer's words: item
+/// 42 says why it is shut.
+pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
+    [
+        (RT_MCIT_BEFORE_2020, RT_MCIT_BEFORE_2020_NOTE),
+        (RT_MCIT_REFUSAL, RT_MCIT_NOT_YET_NOTE),
+        (RT_MCIT_NO_NET, RT_MCIT_NO_NET_NOTE),
+    ]
+    .into_iter()
+    .find(|(known, _)| *known == reason)
+    .map(|(_, note)| note)
+}
+
+/// Item 42's notes (see [`live_lock_note`]).
+pub(super) const RT_MCIT_BEFORE_2020_NOTE: &str =
+    "Shut for this year: MCIT before 2020 is 2% of gross income, which this app does not compute.";
+pub(super) const RT_MCIT_NOT_YET_NOTE: &str =
+    "Shut until MCIT applies, from the fourth year after incorporation.";
+pub(super) const RT_MCIT_NO_NET_NOTE: &str =
+    "Shut while net taxable income is zero or less: MCIT is then zero.";
 
 /// The lock the probe gives a box whose value follows other draft fields
 /// and never echoes one of them.
@@ -495,16 +587,10 @@ pub(super) fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String,
     if !FORMS.contains(&code) {
         return;
     }
-    // 1702RT: an (Add more...) item whose table holds two or more rows.
-    if code == "1702RT" {
-        let more = rt_more_rows(draft);
-        for modal in FORM_1702RT_MODALS
-            .into_iter()
-            .filter(|m| more.is_folded(*m))
-        {
-            for key in rt_folded_columns(modal) {
-                locks.insert(key, json!(RT_FOLDED_LOCK));
-            }
+    // 1702RT: a folded (Add more...) item and a shut item 42.
+    for (key, lock) in live_locks(kind, draft) {
+        if !lock.is_null() {
+            locks.insert(key, lock);
         }
     }
     let identity = |key: &str| key.contains("TIN") || key.contains("Tin");
@@ -629,11 +715,13 @@ pub(super) fn removes(
 /// off: 1702RT (OSD clears Schedules I, II and IIIA, the pop-up rows and
 /// item 57; MCIT no longer applying clears Schedule IV and items 42 and 45;
 /// Amended No zeroes item 51; an overpayment gone clears item 21's choice),
-/// 1702MX (OSD clears Schedules 5, 6 and 7.1 column C; Amended No zeroes
+/// 1702MX (OSD clears column C of Schedules 5 and 6 and Schedule 7.1 rows
+/// 1 to 3, their year incurred and every amount column; Amended No zeroes
 /// item 27; MCIT no longer applying clears Schedule 9; an overpayment gone
-/// clears item 21's choice) and 1702EX (OSD clears items 17D to 17I and the
-/// Schedule 2 rows), in form_1702rt_official.rs, form_1702mx_official.rs
-/// and form_1702ex.rs recompute.
+/// clears item 21's choice) and 1702EX (OSD clears every Schedule 1 item,
+/// the other-deduction rows 17d to 17i and their pop-up, and the Schedule 2
+/// special rows), in form_1702rt_official.rs, form_1702mx_official.rs and
+/// form_1702ex.rs recompute.
 const ASKS_FIRST: [&str; 3] = ["1702RT", "1702MX", "1702EX"];
 
 /// The draft fields a binding writes.
@@ -815,7 +903,9 @@ fn cleared_entries(
 ///   of incorporation is item 10.
 /// - 1702MX: the registered name is item 8 and the registered address item
 ///   9 (the date of incorporation is item 10).
-/// - 1702EX: every message already names its printed item.
+/// - 1702EX: its "(more...)" pop-up alerts name rows the sheet does not
+///   print ("item 17.2"); they read the printed item and the row
+///   ([`ex_popup_row`]). Its other messages name their printed item.
 const PRINTED_ITEM_NUMBERS: [(&str, &str, &str, &str); 11] = [
     ("1707A", "year_end", "on Item 1", "on Item 2"),
     (
@@ -880,11 +970,46 @@ const PRINTED_ITEM_NUMBERS: [(&str, &str, &str, &str); 11] = [
     ),
 ];
 
+/// 1702EX's "(more...)" pop-ups: the official alerts number their rows
+/// "17.1", "17.2", ..., which the printed sheet does not print; the sheet
+/// prints the item the pop-up belongs to (Schedule 1 item 17i, Schedule 2
+/// item 4, Schedule 3 items 3, 6 and 8; html-frozen/1702ex-2018/index.html)
+/// and the page lists the pop-up's rows under it. `(field prefix, official
+/// number, printed item)`, from form_1702ex.rs POPUP_*.
+const EX_POPUP_ITEMS: [(&str, &str, &str); 5] = [
+    ("other_deductions[", "17.", "17i"),
+    ("special_rows[", "4.", "4"),
+    ("non_deductible[", "3.", "3"),
+    ("non_taxable_income[", "6.", "6"),
+    ("special_deductions_s3[", "8.", "8"),
+];
+
+/// A 1702EX pop-up alert ("... on item 17.2") read with the printed item
+/// and the pop-up row: "... on item 17i (row 2)".
+fn ex_popup_row(field: &str, message: &str) -> Option<String> {
+    let (_, official, printed) = EX_POPUP_ITEMS
+        .iter()
+        .find(|(prefix, _, _)| field.starts_with(prefix))?;
+    let marker = format!("on item {official}");
+    let at = message.rfind(&marker)?;
+    let row = &message[at + marker.len()..];
+    if row.is_empty() || !row.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(format!("{}on item {printed} (row {row})", &message[..at]))
+}
+
 /// Each message the form's validation gives, with an item number the
 /// printed sheet does not give that item reworded to the printed one.
 pub(super) fn printed_item_numbers(kind: AgentFormKind, errors: &mut [(String, String)]) {
     let code = kind.form_code();
     for (field, message) in errors.iter_mut() {
+        if code == "1702EX"
+            && let Some(reworded) = ex_popup_row(field, message)
+        {
+            *message = reworded;
+            continue;
+        }
         if let Some((_, _, official, printed)) =
             PRINTED_ITEM_NUMBERS
                 .iter()
@@ -895,4 +1020,39 @@ pub(super) fn printed_item_numbers(kind: AgentFormKind, errors: &mut [(String, S
             *message = message.replace(official, printed);
         }
     }
+}
+
+/// What a 1702RT Schedule IV row says while it holds an MCIT that an older
+/// version may have saved from column C.
+pub(super) fn rt_column_c_notice(row: usize) -> String {
+    format!(
+        "Row {row} holds an MCIT amount that may have been typed in column C; check it before you file."
+    )
+}
+
+/// Notices beside the form's own messages: nothing is changed, the filer
+/// checks. 1702RT Schedule IV rows 2 and 3: before PR 8's review, column C
+/// (Excess MCIT, which the form computes) was bound to the row's MCIT, so
+/// a value typed there was saved as column B and files as MCIT. A stored
+/// draft cannot tell which column it was typed in, so each row 2 or 3
+/// holding an MCIT says so (as the maintainer's D5 does for 1604E's
+/// changed rows); its stored bytes stay as they are.
+pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
+    if kind.form_code() != "1702RT" {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for index in [1usize, 2] {
+        let mcit = &draft["schedule_4"]["rows"][index]["mcit"];
+        if holds_nothing(Some(mcit)) {
+            continue;
+        }
+        let row = index + 1;
+        out.push(json!({
+            "field": format!("schedule_4.rows[{index}].mcit"),
+            "message": rt_column_c_notice(row),
+            "keys": [format!("{RT}txtPg4Sc4I{row}C3")],
+        }));
+    }
+    out
 }
