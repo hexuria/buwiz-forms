@@ -64,9 +64,6 @@
       "status": "fixed",
       "pr": "PR 10",
       "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (frm1800v2018:txtZipCode under 8A); screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (8A 'ZIP Code'; item 13 Yes / No); screen_form_module::tests::donor_estate::pr10_1800_email_shows_as_typed (item 11 shows the email as typed; the upload keeps capitals); bir_print::frozen_html::donor_estate_print_tests::pr10_1800_13a_and_8a_print_in_their_cells (8A prints in p1c26)"
-    },
-    "_note": {
-      "note": "R5.0 and R5.1 of this form are closed by PR 0c's ledger (tools/form_findings_status/fix__findings-maintainer-decisions.json on fix/findings-maintainer-decisions), not here."
     }
   },
   "1801": {
@@ -129,9 +126,6 @@
       "status": "fixed",
       "pr": "PR 10",
       "proof": "screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (one name line after ESTATE OF; item 14's full heading; item 22); screen_form_module::tests::donor_estate::pr10_part_v_is_its_own_part_and_the_header_copy_is_not_drawn (registeredName_2, the page 2 header copy, is not drawn)"
-    },
-    "_note": {
-      "note": "R5.0 and R5.1 of this form are closed by PR 0c's ledger (tools/form_findings_status/fix__findings-maintainer-decisions.json on fix/findings-maintainer-decisions), not here."
     }
   }
 }

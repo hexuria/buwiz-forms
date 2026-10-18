@@ -39,7 +39,7 @@
 use bir_core::forms::agent::{self, AgentFormKind};
 use bir_core::forms::form_1800::{FORM_1800_DEDUCTIONS, Form1800Deduction, Form1800Draft};
 use bir_core::forms::form_1801::{Form1801Draft, Form1801Frequency};
-use bir_core::forms::official_inputs::{cents, has_cent_precision, within_round_limit};
+use bir_core::forms::official_inputs::{cents, within_round_limit};
 use serde_json::{Map, Value, json};
 
 use super::rows_1700::with_tin_part;
@@ -137,6 +137,11 @@ fn cell_1801(rest: &str) -> Option<Cell> {
 /// does not apply on the page).
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     cell(kind, key).is_some()
+}
+
+/// One of 1801 item 15D's four frequency ticks (not its group box).
+pub(super) fn is_frequency_tick(kind: AgentFormKind, key: &str) -> bool {
+    matches!(cell(kind, key), Some(Cell::Frequency1801(Some(_))))
 }
 
 /// An answer before the box it opens, and a TIN's boxes left to right, in
@@ -318,21 +323,27 @@ fn deduction_amount(value: &Value) -> Result<f64, String> {
     }
     let refused =
         || format!("`{shown}` is not an amount: enter pesos and centavos below 1,000,000,000,000.");
-    // More than two decimals is refused, never rounded away (the other 1800
-    // money boxes: form_1800.rs `has_cent_precision`).
-    let decimals = shown.split_once('.').map_or(0, |(_, cents)| {
-        cents.chars().filter(char::is_ascii_digit).count()
-    });
-    let amount = agent::parse_amount(&shown).ok_or_else(refused)?;
+    // The typed text decides the centavos: pesos (digits, thousands
+    // commas, a peso sign) and at most two digits after one point. More is
+    // refused, never rounded away; a float check (`has_cent_precision`)
+    // would refuse valid amounts of about 2,000,000 and up.
+    let plain: String = shown
+        .chars()
+        .filter(|c| !matches!(c, ',' | '\u{20b1}' | ' '))
+        .collect();
+    let (pesos, centavos) = plain.split_once('.').unwrap_or((&plain, ""));
+    let digits = |part: &str| part.chars().all(|c| c.is_ascii_digit());
+    if !digits(pesos)
+        || !digits(centavos)
+        || centavos.len() > 2
+        || pesos.len() + centavos.len() == 0
+    {
+        return Err(refused());
+    }
+    let amount = agent::parse_amount(&plain).ok_or_else(refused)?;
     // The bound applies to what is stored: the amount at centavos.
     let stored = cents(amount);
-    if decimals > 2
-        || !has_cent_precision(amount)
-        || !amount.is_finite()
-        || amount < 0.0
-        || !within_round_limit(amount)
-        || !within_round_limit(stored)
-    {
+    if !amount.is_finite() || !within_round_limit(amount) || !within_round_limit(stored) {
         return Err(refused());
     }
     Ok(stored)
@@ -461,8 +472,9 @@ fn fill_1801_installment(draft: &mut Value, granted: bool) -> Result<(), String>
 /// `installmentGranted`, clears it with the frequency), and the tracked
 /// function inventory's `freqOtherChecked` (rules/forms/1801-v2018/
 /// fixtures/validation-function-inventory-v796.json, source lines
-/// 4942-4945) ties the box to `freq_Other` alone. Kept, a hidden text would
-/// come back unseen with Others. The page asks first ([`removes`]).
+/// 4942-4945) reads the box with `freq_Other` and `instGranted_1` (15D's
+/// Yes): the box belongs to Others under 15D Yes only. Kept, a hidden text
+/// would come back unseen with Others. The page asks first ([`removes`]).
 fn set_frequency(form: &mut Form1801Draft, frequency: Option<Form1801Frequency>) {
     form.installment_frequency = frequency;
     if frequency != Some(Form1801Frequency::Others) {
@@ -676,6 +688,33 @@ fn item_1_date(kind: AgentFormKind) -> Option<([&'static str; 3], &'static str)>
     }
 }
 
+/// What the page keeps quiet on a return whose item 1 date nobody has
+/// typed: the date's error field and its boxes (form_page.js `quiet`: the
+/// message waits until the filer edits a box of it, or presses Check or
+/// Save). `null` otherwise.
+pub(super) fn quiet(kind: AgentFormKind, draft: &Value) -> Value {
+    let Some((parts, field)) = item_1_date(kind) else {
+        return Value::Null;
+    };
+    if !parts.iter().all(|part| draft[*part].as_u64() == Some(0)) {
+        return Value::Null;
+    }
+    let keys: &[&str] = if kind.form_code() == "1800" {
+        &[
+            "frm1800v2018:txtMonth",
+            "frm1800v2018:txtDate",
+            "frm1800v2018:txtYear",
+        ]
+    } else {
+        &[
+            "frm1801v2018:txtDateMonth",
+            "frm1801v2018:txtDateDay",
+            "frm1801v2018:txtDateYear",
+        ]
+    };
+    json!({ "field": field, "keys": keys })
+}
+
 /// On opening a return whose item 1 date nobody has typed (all three parts
 /// 0, as a new return starts), the page shows no message for it yet; Check,
 /// which validates, and save still report it (display only: the form's
@@ -827,7 +866,15 @@ pub(super) fn removes(
             .map(|text| format!("the Others (specify) text (\"{text}\")"))
             .unwrap_or_default()
     };
-    if touched(&|c| matches!(c, Cell::Installment1801(_))) && (frequency || other_gone) {
+    // 15D No is what cleared them only when this batch turned 15D from Yes
+    // to No; a 15D Yes in the same batch as a frequency change leaves the
+    // frequency's own sentence.
+    let answered_no =
+        before["installment_granted"] == json!(true) && after["installment_granted"] != json!(true);
+    if touched(&|c| matches!(c, Cell::Installment1801(_)))
+        && answered_no
+        && (frequency || other_gone)
+    {
         let what = match (frequency, other_gone) {
             (true, true) => format!("its frequency of payment and {}", others(&other)),
             (true, false) => "its frequency of payment".to_string(),

@@ -131,6 +131,9 @@ const { FormPageActions, renderFormPage, oneDateText } = mod.namespace;
 // A new return: the estate's TIN from the profile (locked), the executor's
 // blank and open, and the date of death blank (the host shows a 0 part as
 // blank).
+// What the host's validation reports for a date of death never typed.
+const DATE_MESSAGE = { field: "death_date", message: "Please enter a valid Return Date", keys: [MONTH, DAY, YEAR] };
+let quiet = true;
 let hostValues = {
   [K("tinA_1")]: "123", [K("tinA_2")]: "456", [K("tinA_3")]: "788", [K("branchCode_1")]: "00000",
   [K("txtTINE1")]: "", [K("txtTINE2")]: "", [K("txtTINE3")]: "", [K("txtBranchCodeE")]: "",
@@ -143,6 +146,8 @@ const locks = {
 const opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {}, locks: { ...locks },
   profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: {}, penalties: [], pools: {}, errors: [],
+  // The host's `quiet`: the untouched date of death waits to speak.
+  quiet: quiet ? { field: "death_date", keys: [MONTH, DAY, YEAR] } : null,
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
@@ -158,7 +163,7 @@ const app = {
         hostValues = { ...hostValues, ...args[2] };
         return { draft: args[1], values: { ...hostValues }, options: {}, rejected: {}, penalties: [], pools: {} };
       }
-      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
+      if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [DATE_MESSAGE], off: {}, penalties: [], pools: {} });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
     },
@@ -192,6 +197,53 @@ ui.state.inputs.get(K("txtTINE1")).fire("blur");
 await settle();
 assert.equal(lastFill()[3][K("txtTINE1")], "123", "what is typed in item 11 reaches the host as typed");
 console.log("PASS 1801 item 11: the executor's TIN is typed on the return, without the profile mark.");
+
+// ---- The untouched date's message waits: past other edits (the blur above
+// validated), until Check.
+const dateShown = () => Object.values(ui.state.messages).some((m) => m.includes(DATE_MESSAGE.message));
+assert.equal(dateShown(), false, "an edit elsewhere leaves the untouched date quiet");
+ui.state.inputs.get(K("txtTINE2")).type("456");
+ui.state.inputs.get(K("txtTINE2")).fire("blur");
+await settle();
+assert.equal(dateShown(), false, "and so does another");
+ui.check(cx);
+await settle();
+assert.equal(dateShown(), true, "Check reports it");
+// Opened again: Save reports it too, and so does an edit of the date.
+ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 1 }, cx);
+await settle();
+ui.ensureInputs(0, cx);
+ui.validate(cx);
+await settle();
+assert.equal(dateShown(), false, "quiet again on the reopened return");
+ui.save(cx);
+await settle();
+assert.equal(dateShown(), true, "Save reports it");
+ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 1 }, cx);
+await settle();
+ui.ensureInputs(0, cx);
+ui.state.openParts = new Set([0]);
+frame();
+ui.state.inputs.get(`${MONTH}#date`).type("13312020");
+ui.state.inputs.get(`${MONTH}#date`).type("");
+ui.state.inputs.get(`${MONTH}#date`).fire("blur");
+await settle();
+assert.equal(dateShown(), true, "an edit of the date lets it speak");
+// A return the host marks nothing quiet shows the message at once.
+quiet = false;
+ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 1 }, cx);
+await settle();
+ui.ensureInputs(0, cx);
+ui.validate(cx);
+await settle();
+assert.equal(dateShown(), true, "nothing quiet: the message shows");
+quiet = true;
+console.log("PASS 1801/1800 item 1: an untouched date's message waits for an edit of the date, Check or Save.");
+ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 1 }, cx);
+await settle();
+ui.ensureInputs(0, cx);
+ui.state.openParts = new Set([0]);
+frame();
 
 // ---- Item 1 is one date box, empty on a new return.
 const one = ui.state.inputs.get(ONE);

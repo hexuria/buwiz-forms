@@ -87,6 +87,8 @@ export interface ScreenFormOpened {
     needs: Record<string, string>;
     /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
     waits: Record<string, string>;
+    /** An untouched date whose message the page holds until it is edited or Check / Save is pressed (1800/1801 item 1). */
+    quiet?: { field: string; keys: string[] } | null;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
     /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -2378,8 +2380,10 @@ fn opened_json(
         }
     }
     blank_sample(&blank, &mut values, &mut errors);
-    // 1800/1801 (PR 10): an untouched item 1 date says nothing on open.
+    // 1800/1801 (PR 10): an untouched item 1 date says nothing on open,
+    // and the page keeps it quiet until the date is edited or checked.
     rows_donor_estate::hold_untouched_date(kind, &draft, &mut errors);
+    let quiet = rows_donor_estate::quiet(kind, &draft);
     let lock_notes: Map<String, Value> = locks
         .iter()
         .map(|(key, reason)| {
@@ -2441,6 +2445,7 @@ fn opened_json(
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
         "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
         "errors": errors,
+        "quiet": quiet,
     }))
 }
 
@@ -3491,13 +3496,22 @@ fn plan_choice_edits(
         .collect();
     let mut plain = Vec::new();
     for (key, value) in edits {
-        // 1800/1801 (PR 10): the host writes these answers through the
-        // typed draft and its setters, ticks and unticks alike.
-        if rows_donor_estate::host_writes(kind, &key) {
+        let unticked = is_unticked(&value);
+        // 1801 item 15D's four frequency ticks (PR 10): a lone untick of the
+        // chosen one would be a direct draft step here (three members or
+        // more), which skips the host's own write (it clears the Others
+        // text and asks first: rows_donor_estate.rs). Every other untick
+        // keeps the rule below: one of a group with a box ticked in the
+        // batch, or of a box not shown ticked, writes nothing.
+        if rows_donor_estate::is_frequency_tick(kind, &key) {
+            let group_ticked = group_info(&key).is_some_and(|(g, _)| ticked_groups.contains(&g));
+            let shown_on = shown.get(&key).and_then(Value::as_str) == Some("true");
+            if unticked && (group_ticked || !shown_on) {
+                continue;
+            }
             plain.push((key, ChoiceStep::Fill(value)));
             continue;
         }
-        let unticked = is_unticked(&value);
         if let Some((type_path, flag_path)) = form_1701_type_paths(kind, &key) {
             let current = draft
                 .pointer(type_path)

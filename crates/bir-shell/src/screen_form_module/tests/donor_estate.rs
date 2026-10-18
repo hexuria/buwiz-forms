@@ -1398,10 +1398,32 @@ fn pr10_1800_deduction_amounts_keep_their_centavos_or_are_refused() {
     setup();
     let key = "frm1800v2018:txtDeductionAmount28";
     let opened = open("1800", 1);
-    for bad in ["10.005", "1.999", "999999999999.995", "1e13"] {
+    for bad in [
+        "10.005",
+        "1.999",
+        "0.125",
+        "999999999999.995",
+        "1000000000000",
+        "1e13",
+        "1.5e-3",
+    ] {
         let refused = fill("1800", &opened["draft"], json!({ key: bad }));
         assert!(rejected(&refused, key).is_some(), "{bad}");
         assert_eq!(refused["draft"], opened["draft"], "{bad}");
+    }
+    // Second fix check: the typed text decides the centavos, so valid
+    // amounts of about 2,000,000 and up are kept as typed.
+    for (good, stored) in [
+        ("8816764.47", 8_816_764.47),
+        ("1234567890.12", 1_234_567_890.12),
+        ("8,816,764.47", 8_816_764.47),
+    ] {
+        let kept = fill("1800", &opened["draft"], json!({ key: good }));
+        assert!(
+            kept["rejected"].as_object().unwrap().is_empty(),
+            "{good}: {kept}"
+        );
+        assert_eq!(kept["draft"]["deductions"][0]["amount"], stored, "{good}");
     }
     let kept = fill(
         "1800",
@@ -1412,4 +1434,138 @@ fn pr10_1800_deduction_amounts_keep_their_centavos_or_are_refused() {
     assert_eq!(kept["draft"]["deductions"][0]["amount"], 999_999_999_999.99);
     let two = fill("1800", &opened["draft"], json!({ key: "10.50" }));
     assert_eq!(two["draft"]["deductions"][0]["amount"], 10.5);
+}
+
+/// Second fix check, item 8 (host side): a new return tells the page which
+/// date to keep quiet (its error field and its three boxes); once a part is
+/// typed there is nothing to keep quiet. tools/test_form_donor_estate.mjs
+/// drives the page: the message stays hidden past other edits and shows on
+/// an edit of the date, on Check and on Save.
+#[test]
+fn pr10_a_new_returns_date_is_kept_quiet_by_the_page() {
+    setup();
+    for (code, field, keys, month) in [
+        (
+            "1800",
+            "donation_date",
+            [
+                "frm1800v2018:txtMonth",
+                "frm1800v2018:txtDate",
+                "frm1800v2018:txtYear",
+            ],
+            "donation_month",
+        ),
+        (
+            "1801",
+            "death_date",
+            [
+                "frm1801v2018:txtDateMonth",
+                "frm1801v2018:txtDateDay",
+                "frm1801v2018:txtDateYear",
+            ],
+            "death_month",
+        ),
+    ] {
+        let opened = open(code, 1);
+        assert_eq!(
+            opened["quiet"],
+            json!({ "field": field, "keys": keys }),
+            "{code}"
+        );
+        // The field is the one the date's own message carries.
+        assert!(
+            validated(code, &opened["draft"])["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["field"] == field)
+        );
+        let mut typed = opened["draft"].clone();
+        typed[month] = json!(6);
+        save(code, &typed);
+        assert!(open(code, 1)["quiet"].is_null(), "{code}");
+    }
+    assert!(open("1706", 1)["quiet"].is_null());
+}
+
+/// Second fix check, item 9: a batch that answers 15D Yes and changes the
+/// frequency from Others names the frequency's own removal (never "No at
+/// item 15D"); with item 14 No in it too, both are named.
+#[test]
+fn pr10_a_15d_yes_and_a_frequency_change_name_the_frequency() {
+    setup();
+    let p = |k: &str| format!("frm1801v2018:{k}");
+    let opened = open("1801", 1);
+    let others = fill(
+        "1801",
+        &opened["draft"],
+        json!({
+            p("optTreaty_1"): "true",
+            p("treatyY"): "RA 9504",
+            p("instGranted_1"): "true",
+            p("freq_Other"): "true",
+            p("freqOtherInput"): "Annual",
+        }),
+    );
+    let yes_and_monthly = fill(
+        "1801",
+        &others["draft"],
+        json!({
+            p("instGranted_1"): "true",
+            p("instGranted_2"): "false",
+            p("freq_Mon"): "true",
+            p("freq_Other"): "false",
+        }),
+    );
+    assert_eq!(yes_and_monthly["draft"]["installment_frequency"], "monthly");
+    assert_eq!(
+        yes_and_monthly["removes"]["message"],
+        "Changing item 15D's frequency from Others clears the Others (specify) text (\"Annual\"). Continue?"
+    );
+    let with_14 = fill(
+        "1801",
+        &others["draft"],
+        json!({
+            p("optTreaty_1"): "false",
+            p("optTreaty_2"): "true",
+            p("instGranted_1"): "true",
+            p("freq_Mon"): "true",
+            p("freq_Other"): "false",
+        }),
+    );
+    assert_eq!(
+        with_14["removes"]["message"],
+        "Answering No at item 14 clears item 14A (\"RA 9504\"). Changing item 15D's frequency \
+         from Others clears the Others (specify) text (\"Annual\"). Continue?"
+    );
+    assert_eq!(with_14["removes"]["rows"], 2);
+}
+
+/// Second fix check, item 10: only 15D's frequency ticks take the host's
+/// own path for an untick; an untick of a box not shown ticked writes
+/// nothing, and an untick of the chosen one clears it (and asks).
+#[test]
+fn pr10_an_untick_of_an_unshown_frequency_writes_nothing() {
+    setup();
+    let p = |k: &str| format!("frm1801v2018:{k}");
+    let opened = open("1801", 1);
+    let monthly = fill(
+        "1801",
+        &opened["draft"],
+        json!({ p("instGranted_1"): "true", p("freq_Mon"): "true" }),
+    );
+    for unshown in ["freq_Qtr", "freq_Semi", "freq_Other"] {
+        let same = fill("1801", &monthly["draft"], json!({ p(unshown): "false" }));
+        assert_eq!(same["draft"], monthly["draft"], "{unshown}");
+        assert!(same["removes"].is_null(), "{unshown}");
+    }
+    let cleared = fill("1801", &monthly["draft"], json!({ p("freq_Mon"): "false" }));
+    assert!(cleared["draft"]["installment_frequency"].is_null());
+    assert!(cleared["removes"].is_object());
+    for key in ["optTreaty_1", "instGranted_1", "amendedRtn_1"] {
+        assert!(!rows_donor_estate::is_frequency_tick(
+            kind_of("1801").unwrap(),
+            &p(key)
+        ));
+    }
 }
