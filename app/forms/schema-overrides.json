@@ -17595,6 +17595,10 @@
       "label": "Net Income/(Loss) per Books",
       "evidence": "PR 8: printed caption 'Sch V 1 Net Income/(Loss) per Books' (writer-cells peso_joins)"
     },
+    "frm1702RT:txtPg2Pt4I42MinimumCorporate": {
+      "computed": false,
+      "evidence": "PR 8 review (H4): item 42 MCIT Due is the filer's entry once MCIT applies (rules/forms/1702rt-v2018c/calculations.json 1702rt-item42-mcit: '2020+ leaves the enabled value user-controlled'; probe.rs USER_CHOSEN); the extractor marked it computed."
+    },
     "layout": {
       "evidence": "PR 8: the printed sheet's parts and item numbers. Structure and captions from html-frozen/1702rt-2018c/index.html (BIR Form 1702-RT January 2018: items 1-5, Part I 6-13, Part II 14-22 and the signature block, Part III 23-26, page 2 Parts IV 27-56 and V 57-59, pages 3 and 4 Part VI Schedules I, II, III, IIIA, IV and V) and html-frozen/1702rt-2018c/writer-cells.json joins (which box prints at which item). Item 7 is drpPg1Pt1I7RDOCode, the RDO the sheet prints (writer-cells rule: 'Item 7 RDO takes drpPg1Pt1I7RDOCode (txtRDO holds the same code, one cell only)'). The page 2-4 header copies (TIN, branch, name), the page counters and the (Add more...) pop-ups' counters and subtotals are not drawn (writer-cells not_joined). Schedule V item 1 (txtPg4Sc5I1NetIncome, bound to /schedule_5/item_1_net_income_or_loss_per_books) had no control in the extracted schema; it is item 1. Field keys, values, the official XML and the print map are unchanged.",
       "rest": "Not on the printed sheet",

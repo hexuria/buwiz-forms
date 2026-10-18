@@ -779,15 +779,38 @@ export class FormPageActions {
     cx.notify();
   }
 
-  /** Cancel: the old answer and the rows stay, and so does what was typed with it. */
+  /**
+   * Cancel: the old answer and the rows stay, and so does what was typed
+   * with it. A typed box that is itself the answer (a date that ends MCIT,
+   * an amount that ends an overpayment) would only ask again: it goes back
+   * to what the draft holds.
+   */
   cancelRemoval(cx) {
     const s = this.state;
     const held = s?.removal;
     if (s) s.removal = null;
     this.app.overlay = null;
     if (held && Object.keys(held.typed).length) {
-      s.pending = { ...held.typed, ...s.pending };
-      this.flush(cx);
+      const typed = held.typed;
+      let r = null;
+      try {
+        r = this.app.store.call("screen_form_fill", s.code, s.draft, typed, this.unlockedFor(typed));
+        if (r.removes) {
+          r = null;
+          // Each typed box shows what the draft holds again ("\0" never
+          // equals a shown value, so syncChanged resets every one).
+          const was = { ...s.values };
+          for (const k of Object.keys(typed)) was[k] = "\0";
+          this.syncChanged(was, {});
+        } else {
+          this.applyFill(r, typed);
+          s.dirty = true;
+        }
+      } catch (e) {
+        s.pending = { ...typed, ...s.pending };
+        this.app.toast(message(e), cx, "triangle-alert");
+      }
+      if (r) this.validate(cx);
     }
     this.refreshRows();
     cx.notify();

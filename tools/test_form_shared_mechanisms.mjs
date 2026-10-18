@@ -221,6 +221,9 @@ const app = {
       if (name === "screen_form_schema") return schema;
       if (name === "screen_form_open") return Promise.resolve(opened());
       if (name === "screen_form_fill") {
+        // Sales of 999 stands for a typed answer whose recompute clears
+        // boxes the filer typed (the host's `removes`).
+        if (String(args[2]?.[K("sales")]) === "999") return { draft: args[1], values: { ...hostValues }, options: {}, rejected: {}, removes: { message: "Changing item 14 clears 1 box you typed (Part II). Continue?", done: "Cleared 1 box", rows: 1 } };
         const edits = { ...args[2] }, rejected = {};
         const edited = Object.keys(overrides).length > 0;
         for (const k of PENALTY) {
@@ -477,3 +480,22 @@ assert.equal(ui.state.values[K("totpen")], "1156.50", "the computed amounts are 
 for (const k of PENALTY) assert.equal(ui.isLocked(k), true, `${k} is locked again`);
 assert.equal(input(COMP).value(), "1,000.00", "its box shows the computed amount again");
 console.log("PASS rule 8: penalties computed by default; one Edit unlocks all three; only typed boxes override; totals recompute.");
+
+// ---- A typed box that is itself an answer clearing typed boxes.
+{
+  frame();
+  const shownBefore = input(K("sales")).value();
+  const salesBefore = hostValues[K("sales")];
+  input(K("sales")).type("999");
+  input(K("sales")).fire("blur");
+  assert.equal(app.overlay, "removal", "the typed answer asks first");
+  const fills = () => calls.filter((c) => c[0] === "screen_form_fill").length;
+  const asked = fills();
+  act((c) => ui.cancelRemoval(c));
+  assert.equal(app.overlay, null, "Cancel closes the question");
+  assert.equal(fills(), asked + 1, "and asks the host once, never again in a loop");
+  assert.equal(input(K("sales")).value(), shownBefore, "the typed box shows what the draft holds again");
+  assert.equal(hostValues[K("sales")], salesBefore, "the draft keeps it");
+  await settle();
+  console.log("PASS removal: Cancel on a typed answer puts the box back instead of asking again.");
+}

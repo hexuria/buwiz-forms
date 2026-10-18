@@ -1999,3 +1999,769 @@ fn pr8_method_of_deduction_options_read_as_printed() {
         }
     }
 }
+
+// ------------------------------------------------------- PR 8 review fixes
+
+/// What a box shows holds nothing: blank, zero or unticked.
+fn shows_nothing(values: &Value, key: &str) -> bool {
+    let shown = values[key].as_str().unwrap_or_default().trim();
+    shown.is_empty()
+        || shown == "false"
+        || agent::parse_amount(shown).is_some_and(|amount| amount == 0.0)
+}
+
+/// An answer that clears boxes the filer typed (the page's flush with the
+/// host's `removes`): it asks first, naming every typed box it clears;
+/// Cancel keeps the page's draft, which still holds them; Continue applies
+/// the answer and clears them; Undo (form_page.js undoRemoval:
+/// screen_form_fill of the draft from before the answer, no edits) brings
+/// back that draft exactly.
+fn asks_then_undoes(code: &str, typed: &Value, answer: Value, lost: &[String]) {
+    for key in lost {
+        assert!(
+            !shows_nothing(&typed["values"], key),
+            "{code}: {key} was typed"
+        );
+    }
+    let asked = fill(code, &typed["draft"], answer.clone());
+    assert_eq!(asked["rejected"], json!({}), "{code}: {answer}");
+    let removes = &asked["removes"];
+    let message = removes["message"].as_str().unwrap_or_else(|| {
+        panic!("{code}: {answer} asks first: {removes}");
+    });
+    assert!(message.ends_with("Continue?"), "{code}: {message}");
+    let named: BTreeSet<String> = removes["keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|k| k.as_str().unwrap().to_string())
+        .collect();
+    for key in lost {
+        assert!(named.contains(key), "{code}: {key} is named in {named:?}");
+        assert!(
+            shows_nothing(&asked["values"], key),
+            "{code}: Continue clears {key}: {:?}",
+            asked["values"][key]
+        );
+    }
+    assert_eq!(removes["rows"], json!(named.len()), "{code}");
+    assert_eq!(
+        removes["done"],
+        json!(format!(
+            "Cleared {} {}",
+            named.len(),
+            if named.len() == 1 { "box" } else { "boxes" }
+        )),
+        "{code}"
+    );
+    // Cancel and Undo: the draft from before the answer, unchanged.
+    let back = fill(code, &typed["draft"], json!({}));
+    assert_eq!(back["draft"], typed["draft"], "{code}: exactly as before");
+    assert!(
+        back["removes"].is_null(),
+        "{code}: nothing is asked again: {}",
+        back["removes"]
+    );
+    for key in lost {
+        assert_eq!(back["values"][key], typed["values"][key], "{code}: {key}");
+    }
+}
+
+fn typed(code: &str, draft: &Value, edits: Value) -> Value {
+    let filled = fill(code, draft, edits.clone());
+    assert_eq!(filled["rejected"], json!({}), "{code}: {edits}");
+    assert!(filled["removes"].is_null(), "{code}: {edits}");
+    filled
+}
+
+/// PR 8 review H1: 1702RT Schedule IV column C (Excess MCIT) rows 2 and 3
+/// are the form's (recompute writes MCIT less normal income tax; the
+/// official page disables them at load, runtime-control-inventory-v796.json
+/// source lines 3188 and 3215, like row 1's at 3161): locked, a typed value
+/// is refused, and column B, which the probe once bound them to, is
+/// untouched.
+#[test]
+fn pr8_form_1702rt_schedule_iv_column_c_is_the_forms() {
+    setup();
+    let inventory = disabled_at_load("1702rt-v2018c");
+    let opened = open("1702RT", 0);
+    let dated = typed(
+        "1702RT",
+        &opened["draft"],
+        json!({ rt("txtPg1Pt1I10"): "01/02/2015", rt("txtPg4Sc4I2C3"): "4000", rt("txtPg4Sc4I3C3"): "3000" }),
+    );
+    for (row, c, b) in [(1, "txtPg4Sc4I2C4", 4000), (2, "txtPg4Sc4I3C4", 3000)] {
+        assert_eq!(inventory.get(&rt(c)), Some(&true), "{c} is shut at load");
+        assert!(opened["locks"].get(rt(c)).is_some(), "{c} is locked");
+        assert_eq!(opened["lock_notes"][rt(c)], NOTE_COMPUTED, "{c}");
+        let refused = fill("1702RT", &dated["draft"], json!({ rt(c): "999" }));
+        assert!(refused["rejected"].get(rt(c)).is_some(), "{c} is refused");
+        assert_eq!(refused["draft"], dated["draft"], "{c}: nothing changes");
+        assert_eq!(
+            refused["draft"]["schedule_4"]["rows"][row]["mcit"],
+            json!(b),
+            "{c}: column B keeps what was typed"
+        );
+        assert_eq!(amount(&refused["values"], &rt(c)), f64::from(b), "{c}");
+    }
+}
+
+/// PR 8 review H2 (1702RT): the Optional Standard Deduction clears
+/// Schedules I, II and IIIA, the (Add more...) rows and Part V item 57;
+/// MCIT no longer applying (a later date of incorporation) clears Schedule
+/// IV and items 42 and 45; Amended Return No clears item 51 (oracle:
+/// form_1702rt_official.rs official_recompute). Each asks first and Undo
+/// brings everything back.
+#[test]
+fn pr8_form_1702rt_answers_that_clear_typed_boxes_ask_first() {
+    setup();
+    let opened = open("1702RT", 0);
+    let deduction = [
+        rt("rdoPg1Pt1I13ItemizedDeduction"),
+        rt("rdoPg1Pt1I13OptionalStandard"),
+    ];
+    let names: Vec<&str> = deduction.iter().map(String::as_str).collect();
+    let itemized = typed("1702RT", &opened["draft"], pick(&names, &deduction[0]));
+    let osd_lost = [
+        rt("txtPg3Sc1I10PensionTrust"),
+        rt("txtPg3Sc2I1C3"),
+        rt("txtPg2Pt5I57SpecialAllowable"),
+        rt("txtPg3Sc1I17i.1C2"),
+    ];
+    let typed_osd = typed(
+        "1702RT",
+        &itemized["draft"],
+        json!({
+            &osd_lost[0]: "5000",
+            rt("txtPg3Sc2I1C1"): "Pension",
+            rt("txtPg3Sc2I1C2"): "RA 4917",
+            &osd_lost[1]: "600",
+            &osd_lost[2]: "100",
+            rt("txtPg3Sc1I17i.1C1"): "Training",
+            &osd_lost[3]: "250",
+        }),
+    );
+    asks_then_undoes("1702RT", &typed_osd, pick(&names, &deduction[1]), &osd_lost);
+
+    let mcit_lost = [
+        rt("txtPg4Sc4I1C3"),
+        rt("txtPg2Pt4I42MinimumCorporate"),
+        rt("txtPg2Pt4I45IncomeTaxPaymentUnderMCIT"),
+    ];
+    let typed_mcit = typed(
+        "1702RT",
+        &opened["draft"],
+        json!({
+            rt("txtPg1Pt1I10"): "01/02/2015",
+            rt("txtPg4Sc4I1C1"): "2024",
+            &mcit_lost[0]: "1000",
+            &mcit_lost[1]: "5000",
+            &mcit_lost[2]: "300",
+        }),
+    );
+    asks_then_undoes(
+        "1702RT",
+        &typed_mcit,
+        json!({ rt("txtPg1Pt1I10"): "03/15/2024" }),
+        &mcit_lost,
+    );
+
+    let amended = typed(
+        "1702RT",
+        &opened["draft"],
+        json!({ rt("rdoPg1I3Ammend"): "Yes" }),
+    );
+    let item_51 = rt("txtPg2Pt4I51TaxPaidInReturn");
+    let typed_51 = typed("1702RT", &amended["draft"], json!({ &item_51: "700" }));
+    asks_then_undoes(
+        "1702RT",
+        &typed_51,
+        json!({ rt("rdoPg1I3Ammend"): "No" }),
+        &[item_51],
+    );
+}
+
+/// PR 8 review H2 (1702MX): the Optional Standard Deduction clears column C
+/// of Schedules 5, 6 and 7.1; Amended Return No clears item 27; MCIT no
+/// longer applying clears Schedule 9 (oracle: form_1702mx_official.rs
+/// official_recompute).
+#[test]
+fn pr8_form_1702mx_answers_that_clear_typed_boxes_ask_first() {
+    setup();
+    let opened = open("1702MX", 0);
+    let method = mx("rdoPg1Pt1I13MethodOfDeduc");
+    let itemized = typed("1702MX", &opened["draft"], json!({ &method: "Itemized" }));
+    let osd_lost = [mx("txtPg3Sc5Itm1C"), mx("txtPg6Sc6I1CC")];
+    let typed_osd = typed(
+        "1702MX",
+        &itemized["draft"],
+        json!({
+            &osd_lost[0]: "5000",
+            mx("txtPg6Sc6I1description"): "Pension",
+            mx("txtPg6Sc6I1legal"): "RA 4917",
+            &osd_lost[1]: "300",
+        }),
+    );
+    asks_then_undoes(
+        "1702MX",
+        &typed_osd,
+        json!({ &method: "Optional" }),
+        &osd_lost,
+    );
+
+    let amended = typed(
+        "1702MX",
+        &opened["draft"],
+        json!({ mx("rdoPg1I3Amended"): "Yes" }),
+    );
+    let item_27 = mx("txtPg2Sc3It27C");
+    let typed_27 = typed("1702MX", &amended["draft"], json!({ &item_27: "700" }));
+    asks_then_undoes(
+        "1702MX",
+        &typed_27,
+        json!({ mx("rdoPg1I3Amended"): "No" }),
+        &[item_27],
+    );
+
+    let schedule_9 = mx("txtPg7Sc9I1CB");
+    let typed_9 = typed(
+        "1702MX",
+        &opened["draft"],
+        json!({ mx("txtPg1Pt1I8"): "01/02/2015", &schedule_9: "1000" }),
+    );
+    asks_then_undoes(
+        "1702MX",
+        &typed_9,
+        json!({ mx("txtPg1Pt1I8"): "03/15/2024" }),
+        &[schedule_9],
+    );
+}
+
+/// PR 8 review H2 (1702EX): the Optional Standard Deduction clears items
+/// 17D to 17I and the Schedule 2 rows (form_1702ex.rs recompute:
+/// disableForOSD).
+#[test]
+fn pr8_form_1702ex_osd_asks_before_clearing_typed_boxes() {
+    setup();
+    let opened = open("1702EX", 0);
+    let method = ex("rdoPg1Pt1I13MethodOfDeduc");
+    let itemized = typed("1702EX", &opened["draft"], json!({ &method: "Itemized" }));
+    let lost = [
+        ex("txtPg3Pt6S1I1Ammortization"),
+        ex("txtPg3Pt6I17OthersDAmt"),
+        ex("txtPg3Pt6S2I1Amount"),
+    ];
+    let typed_osd = typed(
+        "1702EX",
+        &itemized["draft"],
+        json!({
+            &lost[0]: "5000",
+            ex("txtPg3Pt6I17OthersDDesc"): "Training",
+            &lost[1]: "200",
+            ex("txtPg3Pt6S2I1Description"): "Pension",
+            ex("txtPg3Pt6S2I1LegalBasis"): "RA 4917",
+            &lost[2]: "300",
+        }),
+    );
+    asks_then_undoes("1702EX", &typed_osd, json!({ &method: "Optional" }), &lost);
+}
+
+/// PR 8 review M2: item 21's overpayment choice, which recompute clears
+/// once item 16 is no longer an overpayment, is a typed answer the page
+/// asks about first (1702RT and 1702MX).
+#[test]
+fn pr8_overpayment_choice_cleared_by_an_amount_asks_first() {
+    setup();
+    for (code, sales, credit, net, refund) in [
+        (
+            "1702RT",
+            rt("txtPg2Pt4I27Sales"),
+            rt("txtPg2Pt4I48CreditableTaxWithheldFromPrevious"),
+            rt("txtPg1Pt2I16NetTax"),
+            rt("rdoPg1Pt2I21OverpaymentRefunded"),
+        ),
+        (
+            "1702MX",
+            mx("txtPg2Sc2Itm1C"),
+            mx("txtPg2Sc3It20C"),
+            mx("txtPg1Pt2I16NetTaxPayable"),
+            mx("rdoPg1Pt2I21Refund"),
+        ),
+    ] {
+        let opened = open(code, 0);
+        let overpaid = typed(
+            code,
+            &opened["draft"],
+            json!({ &sales: "1000000", &credit: "5000000" }),
+        );
+        assert!(amount(&overpaid["values"], &net) < 0.0, "{code}");
+        let chosen = typed(code, &overpaid["draft"], json!({ &refund: "true" }));
+        assert_eq!(
+            chosen["draft"]["part_ii"]["overpayment_disposition"], "Refund",
+            "{code}"
+        );
+        asks_then_undoes(code, &chosen, json!({ &credit: "0" }), &[refund]);
+    }
+}
+
+/// PR 8 review H3: 1702MX's rates (Schedule 1 item 4, Schedule 2 item 14 B
+/// and C) are typed as percents: the draft keeps hundredths and the lexeme
+/// the official field map writes (form_1702mx_official.rs: item 4 one
+/// decimal, items 14 two), so the upload is the official one; 15B and 15C
+/// follow; validation passes with the IPA relief complete. A rate with more
+/// decimals than the field map writes, or of 100 or more, is refused.
+#[test]
+fn pr8_form_1702mx_rates_are_typed_percents() {
+    setup();
+    let opened = open("1702MX", 0);
+    for key in [
+        "txtPg2Pt4I34SpecialTaxRate",
+        "txtPg2Sc2It14B",
+        "txtPg2Sc2It14C",
+    ] {
+        assert_eq!(placed("1702MX", &mx(key)).t, "pct", "{key}");
+        assert!(opened["locks"].get(mx(key)).is_none(), "{key} is open");
+        assert_eq!(opened["values"][mx(key)], "", "{key}: blank until typed");
+    }
+    let relief = typed(
+        "1702MX",
+        &opened["draft"],
+        json!({
+            mx("Inst"): "APg2Part4",
+            mx("rdoPg1Pt1I13MethodOfDeduc"): "Itemized",
+            mx("txtPg2Sc2Itm1B"): "1000000",
+            mx("txtPg2Sc2Itm1C"): "2000000",
+            mx("txtPg2Pt4I31CB"): "PEZA",
+            mx("txtPg2Pt4I32CB"): "RA 7916",
+            mx("txtPg2Pt4I33CB"): "Manufacturing",
+            mx("txtPg2Pt4I35CB"): "01/01/2020",
+            mx("txtPg2Pt4I36CB"): "12/31/2030",
+        }),
+    );
+    let relief_errors = |validated: &Value| -> Vec<String> {
+        validated["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| {
+                let field = e["field"].as_str().unwrap_or_default();
+                field.starts_with("relief") || field.starts_with("schedule_2.item_14")
+            })
+            .map(|e| e["message"].as_str().unwrap().to_string())
+            .collect()
+    };
+    assert!(
+        !relief_errors(&validate("1702MX", &relief["draft"])).is_empty(),
+        "without the special rate the relief is incomplete"
+    );
+    let rated = typed(
+        "1702MX",
+        &relief["draft"],
+        json!({
+            mx("txtPg2Pt4I34SpecialTaxRate"): "5",
+            mx("txtPg2Sc2It14B"): "5",
+            mx("txtPg2Sc2It14C"): "25%",
+        }),
+    );
+    let draft = &rated["draft"];
+    assert_eq!(
+        draft["relief_basis"]["special_tax_rate"],
+        json!({"hundredths": 500, "raw": "5.0"})
+    );
+    assert_eq!(
+        draft["schedule_2"]["item_14_special_rate"],
+        json!({"hundredths": 500, "raw": "5.00"})
+    );
+    assert_eq!(
+        draft["schedule_2"]["item_14_regular_rate"],
+        json!({"hundredths": 2500, "raw": "25.00"})
+    );
+    let map = agent::field_map(kind_of("1702MX").unwrap(), draft).unwrap();
+    assert_eq!(map[&mx("txtPg2Pt4I34SpecialTaxRate")], "5.0");
+    assert_eq!(map[&mx("txtPg2Sc2It14B")], "5.00");
+    assert_eq!(map[&mx("txtPg2Sc2It14C")], "25.00");
+    assert_eq!(rated["values"][mx("txtPg2Sc2It14B")], "5.00");
+    assert_eq!(amount(&rated["values"], &mx("txtPg2Sc2It15B")), 50_000.0);
+    let item_13c = amount(&rated["values"], &mx("txtPg2Sc2It13C"));
+    assert!(item_13c > 0.0);
+    assert_eq!(
+        amount(&rated["values"], &mx("txtPg2Sc2It15C")),
+        (item_13c * 0.25 + 0.5).floor()
+    );
+    assert_eq!(
+        relief_errors(&validate("1702MX", draft)),
+        Vec::<String>::new(),
+        "the IPA relief is complete"
+    );
+    for (key, text) in [
+        ("txtPg2Pt4I34SpecialTaxRate", "5.25"),
+        ("txtPg2Sc2It14B", "5.125"),
+        ("txtPg2Sc2It14C", "100"),
+        ("txtPg2Sc2It14C", "abc"),
+    ] {
+        let refused = fill("1702MX", draft, json!({ mx(key): text }));
+        assert!(refused["rejected"].get(mx(key)).is_some(), "{key} {text}");
+        assert_eq!(refused["draft"], *draft, "{key} {text}");
+    }
+    let cleared = typed("1702MX", draft, json!({ mx("txtPg2Sc2It14B"): "" }));
+    assert_eq!(
+        cleared["draft"]["schedule_2"]["item_14_special_rate"],
+        json!({"hundredths": null, "raw": ""})
+    );
+    assert_eq!(cleared["values"][mx("txtPg2Sc2It14B")], "");
+}
+
+/// PR 8 review H4: 1702RT item 42 MCIT Due is the filer's entry while MCIT
+/// applies (rules/forms/1702rt-v2018c/calculations.json 1702rt-item42-mcit:
+/// "2020+ leaves the enabled value user-controlled"; the page enables it
+/// with enableMCITFields): a 2026 return of a corporation incorporated in
+/// 2019 takes it and item 43 follows; before the fourth year it is refused.
+#[test]
+fn pr8_form_1702rt_item_42_is_an_entry_once_mcit_applies() {
+    setup();
+    let item_42 = rt("txtPg2Pt4I42MinimumCorporate");
+    let def = kind_of("1702RT").unwrap().definition();
+    assert!(
+        def.fillable().any(|entry| entry.key == item_42),
+        "item 42 is an entry"
+    );
+    let opened = open("1702RT", 0);
+    assert_eq!(opened["year"], json!(2026));
+    assert!(opened["locks"].get(&item_42).is_none());
+    let incorporated = typed(
+        "1702RT",
+        &opened["draft"],
+        json!({ rt("txtPg1Pt1I10"): "06/30/2019" }),
+    );
+    let mcit = typed(
+        "1702RT",
+        &incorporated["draft"],
+        json!({ &item_42: "50000" }),
+    );
+    assert_eq!(mcit["draft"]["part_iv"]["item_42_mcit_due"], json!(50_000));
+    assert_eq!(amount(&mcit["values"], &item_42), 50_000.0);
+    assert_eq!(
+        amount(&mcit["values"], &rt("txtPg2Pt4I43TotalIncomeTax")),
+        50_000.0,
+        "item 43 is the larger of items 41 and 42"
+    );
+    let young = typed(
+        "1702RT",
+        &opened["draft"],
+        json!({ rt("txtPg1Pt1I10"): "06/30/2024" }),
+    );
+    let refused = fill("1702RT", &young["draft"], json!({ &item_42: "50000" }));
+    assert_eq!(
+        refused["rejected"][&item_42],
+        rows_annual_corporate::RT_MCIT_REFUSAL
+    );
+    assert_eq!(refused["draft"], young["draft"]);
+}
+
+/// PR 8 review M1: a 1702RT (Add more...) item whose table holds two or
+/// more rows reads OTHERS and the subtotal (official_recompute,
+/// saveModalTable): its boxes are then locked, say so, and refuse a write;
+/// with one row or none they stay the filer's entries.
+#[test]
+fn pr8_form_1702rt_folded_items_are_locked_while_folded() {
+    setup();
+    let opened = open("1702RT", 0);
+    let (description, amount_key) = (rt("txtPg3Sc1I17iC1"), rt("txtPg3Sc1I17iC2"));
+    for key in [&description, &amount_key] {
+        assert!(opened["locks"].get(key).is_none(), "{key} is open");
+    }
+    let one = typed(
+        "1702RT",
+        &opened["draft"],
+        json!({ &description: "Training", &amount_key: "250" }),
+    );
+    assert_eq!(amount(&one["values"], &amount_key), 250.0);
+    let folded = typed(
+        "1702RT",
+        &opened["draft"],
+        json!({
+            rt("txtPg3Sc1I17i.1C1"): "Training",
+            rt("txtPg3Sc1I17i.1C2"): "100",
+            rt("txtPg3Sc1I17i.2C1"): "Seminars",
+            rt("txtPg3Sc1I17i.2C2"): "200",
+        }),
+    );
+    assert_eq!(folded["values"][&description], "OTHERS");
+    assert_eq!(amount(&folded["values"], &amount_key), 300.0);
+    for key in [&description, &amount_key] {
+        let refused = fill("1702RT", &folded["draft"], json!({ key: "5" }));
+        assert_eq!(
+            refused["rejected"][key],
+            format!("`{key}` is {}", rows_annual_corporate::RT_FOLDED_LOCK)
+        );
+        assert_eq!(refused["draft"], folded["draft"], "{key}");
+    }
+    save("1702RT", &folded["draft"]);
+    let reopened = open("1702RT", 0);
+    for key in [&description, &amount_key] {
+        assert_eq!(
+            reopened["locks"][key],
+            rows_annual_corporate::RT_FOLDED_LOCK,
+            "{key}"
+        );
+    }
+    // Schedule II item 4 folds its legal basis too.
+    assert_eq!(
+        reopened["locks"].get(rt("txtPg3Sc2I4C2")),
+        None,
+        "an unfolded table leaves its item open"
+    );
+}
+
+/// PR 8 review L2: a 1702RT date takes a four-digit year only.
+#[test]
+fn pr8_form_1702rt_dates_need_a_four_digit_year() {
+    setup();
+    let opened = open("1702RT", 0);
+    let key = rt("txtPg1Pt1I10");
+    for text in ["03/15/24", "3/15/2024", "03-15-2024", "03/15/20241"] {
+        let refused = fill("1702RT", &opened["draft"], json!({ &key: text }));
+        assert_eq!(
+            refused["rejected"][&key],
+            rows_annual_corporate::RT_DATE_REFUSAL,
+            "{text}"
+        );
+        assert_eq!(refused["draft"], opened["draft"], "{text}");
+    }
+}
+
+/// PR 8 review L3: Number of Attachments shows empty only while a draft
+/// holds the new draft's default (`000`, `00`); a typed 0 shows as typed.
+#[test]
+fn pr8_a_typed_zero_attachment_count_shows() {
+    setup();
+    for (code, key) in [
+        ("1702RT", "frm1702RT:txtPg1Pt2PagesFilled"),
+        ("1702MX", "frm1702MX:txtPg1P2I23NumOfAttachments"),
+    ] {
+        let opened = open(code, 0);
+        assert_eq!(opened["values"][key], "", "{code}: the default shows empty");
+        let zero = typed(code, &opened["draft"], json!({ key: "0" }));
+        assert_eq!(zero["draft"]["number_of_attachments"], "0", "{code}");
+        assert_eq!(zero["values"][key], "0", "{code}: a typed 0 shows");
+    }
+}
+
+/// Maintainer decision D6 (2026-10-18; replaces review item L6's note): a
+/// message naming another item number than the printed sheet gives the
+/// thing it names reads the printed number. The checks are unchanged.
+/// Oracle: the frozen sheets' item numbers, as the page draws them.
+#[test]
+fn pr8_messages_name_the_printed_item_numbers() {
+    setup();
+    // 1707A validation.0: the year ended is printed item 2.
+    let opened = open("1707A", 0);
+    for stem in ["txtI1YearEndMonth", "txtI1YearEndDay", "txtI1YearEndYear"] {
+        assert_eq!(placed("1707A", &a(stem)).no, "2", "{stem}");
+    }
+    assert_eq!(placed("1707A", &a("txtI3Sheets")).no, "4");
+    assert_eq!(placed("1707A", &a("txtI16BTotalTaxPaid")).no, "18B");
+    let future = fill(
+        "1707A",
+        &opened["draft"],
+        json!({ a("txtI1YearEndMonth"): "12", a("txtI1YearEndDay"): "31", a("txtI1YearEndYear"): "2099" }),
+    );
+    let found = messages(&validate("1707A", &future["draft"]));
+    assert!(
+        found
+            .iter()
+            .any(|m| m == "Year Ended should not be a future date on Item 2."),
+        "{found:?}"
+    );
+    assert!(!found.iter().any(|m| m.contains("on Item 1")), "{found:?}");
+    let mut draft = opened["draft"].clone();
+    draft["number_of_attached_sheets"] = json!(100);
+    let found = messages(&validate("1707A", &draft));
+    assert!(
+        found
+            .iter()
+            .any(|m| m == "Item 4 holds at most two digits."),
+        "{found:?}"
+    );
+    // Item 18B's message: the page's own validate clears the amount on an
+    // original return first, so the rewording is checked on the message.
+    let mut errors = vec![(
+        "tax_paid_previous".to_string(),
+        "Item 16B applies only to an amended return.".to_string(),
+    )];
+    rows_annual_corporate::printed_item_numbers(kind_of("1707A").unwrap(), &mut errors);
+    assert_eq!(errors[0].1, "Item 18B applies only to an amended return.");
+
+    // 1702RT: Part III's payment rows are items 23 to 26.
+    let rt_open = open("1702RT", 0);
+    let mut payments = Vec::new();
+    for (stem, item) in [
+        ("txtPg1Pt3I23DebitMemoC4Amount", "23"),
+        ("txtPg1Pt3I24CheckC4Amount", "24"),
+        ("txtPg1Pt3I25TaxDebitC4Amount", "25"),
+    ] {
+        assert_eq!(placed("1702RT", &rt(stem)).no, item, "{stem}");
+        payments.push((rt(stem), item));
+    }
+    let paid = fill(
+        "1702RT",
+        &rt_open["draft"],
+        Value::Object(
+            payments
+                .iter()
+                .map(|(k, _)| (k.clone(), json!("100")))
+                .collect(),
+        ),
+    );
+    let found = messages(&validate("1702RT", &paid["draft"]));
+    for (_, item) in &payments {
+        let message = format!("Please provide data on Page 1 Part III Item {item}.");
+        assert!(found.contains(&message), "{message}: {found:?}");
+    }
+    // Schedule I's sixth OTHERS row is 17h; the date of incorporation is
+    // item 10.
+    let mut draft = rt_open["draft"].clone();
+    draft["deduction_method"] = json!("Itemized");
+    draft["schedule_1"]["other"][4] = json!({"description": "", "amount": 500});
+    draft["incorporation_date"] = json!({"year": 2024, "month": 1, "day": 2});
+    draft["schedule_4"]["rows"][0]["year"] = json!("2023");
+    let found = messages(&validate("1702RT", &draft));
+    assert!(
+        found.contains(&"Please provide data on Page 3 Schedule 1 Item 17h.".to_string()),
+        "{found:?}"
+    );
+    assert_eq!(placed("1702RT", &rt("txtPg1Pt1I10")).no, "10");
+    // (Recompute clears Schedule IV whenever the year could precede the
+    // incorporation, so the rewording is checked on the message.)
+    let mut errors = vec![(
+        "schedule_4.rows[0].year".to_string(),
+        "Year incurred cannot be lower than Year of Incorporation [2024] (Page 1 Item 8)."
+            .to_string(),
+    )];
+    rows_annual_corporate::printed_item_numbers(kind_of("1702RT").unwrap(), &mut errors);
+    assert_eq!(
+        errors[0].1,
+        "Year incurred cannot be lower than Year of Incorporation [2024] (Page 1 Item 10)."
+    );
+
+    // 1702MX: the registered name is item 8 and the address item 9.
+    assert_eq!(placed("1702MX", &mx("txtPg1Pt1I9RegisteredName")).no, "8");
+    assert_eq!(
+        placed("1702MX", &mx("txtPg1Pt1I10RegisteredAddress")).no,
+        "9"
+    );
+    let mut draft = open("1702MX", 0)["draft"].clone();
+    draft["taxpayer_name"] = json!("");
+    draft["registered_address"] = json!("");
+    let found = messages(&validate("1702MX", &draft));
+    for message in [
+        "Please provide a Registered Name (Part I Item 8).",
+        "Please provide a Registered Address (Part I Item 9).",
+    ] {
+        assert!(found.iter().any(|m| m == message), "{message}: {found:?}");
+    }
+}
+
+/// PR 8 review L8: a stored draft of each form opens and saves back with
+/// identical JSON (PR 0c's profile_baseline excepted where present), and
+/// its field map is unchanged; a rate stored with the older lexeme
+/// (PercentInput::from_hundredths: "5.0") keeps it.
+#[test]
+fn pr8_stored_drafts_open_and_save_unchanged() {
+    setup();
+    let strip = |mut stored: Value| {
+        if let Some(object) = stored.as_object_mut() {
+            object.remove("profile_baseline");
+        }
+        stored
+    };
+    for (code, edits) in [
+        ("1702RT", json!({ rt("txtPg2Pt4I27Sales"): "1000000" })),
+        ("1702MX", json!({ mx("txtPg2Sc2Itm1C"): "1000000" })),
+        (
+            "1702EX",
+            json!({ ex("txtPg2Pt4I28SalesReceiptsRevFees"): "1000000" }),
+        ),
+        ("1707A", json!({ a("txtI3Sheets"): "2" })),
+    ] {
+        let opened = open(code, 0);
+        let mut draft = fill(code, &opened["draft"], edits)["draft"].clone();
+        if code == "1702MX" {
+            draft["schedule_2"]["item_14_special_rate"] = json!({"hundredths": 500, "raw": "5.0"});
+        }
+        save(code, &draft);
+        let year = opened["year"].as_i64().unwrap();
+        let period = opened["period"].as_i64().unwrap();
+        let read = || {
+            call(
+                "get_form_draft",
+                vec![TIN.into(), code.into(), year.into(), period.into()],
+            )
+            .expect("get_form_draft")
+        };
+        let stored = read();
+        let reopened = open(code, 0);
+        save(code, &reopened["draft"]);
+        let again = read();
+        assert_eq!(strip(again.clone()), strip(stored.clone()), "{code}");
+        let kind = kind_of(code).unwrap();
+        assert_eq!(
+            agent::field_map(kind, &again).unwrap(),
+            agent::field_map(kind, &stored).unwrap(),
+            "{code}"
+        );
+        if code == "1702MX" {
+            assert_eq!(
+                again["schedule_2"]["item_14_special_rate"],
+                json!({"hundredths": 500, "raw": "5.0"})
+            );
+        }
+    }
+}
+
+/// Maintainer decision P2-3 (open 1702MX's others rows as 1702EX's, row by
+/// row, only where BIR's runtime enables the box at load and nothing in the
+/// port computes it): no Schedule 5 17d-17i amount and no Schedule 6 row
+/// 2-4 amount qualifies. The official runtime disables every one at load
+/// (runtime-control-inventory-v796.json), where its 17a-17c and row 1
+/// amounts are enabled, and fills columns A and B from the attachment
+/// schedules (calculation-function-inventory-v796.json computeToMainScD,
+/// computeToMainScE), which this port does not hold. They stay locked.
+#[test]
+fn pr8_form_1702mx_others_rows_stay_as_the_runtime_keeps_them() {
+    setup();
+    let inventory = disabled_at_load("1702mx-v2018c");
+    let opened = open("1702MX", 0);
+    let mut shut = Vec::new();
+    for letter in ['d', 'e', 'f', 'g', 'h', 'i'] {
+        for column in ['A', 'B', 'C'] {
+            shut.push(mx(&format!("txtPg3Sc5Itm17{letter}{column}")));
+        }
+    }
+    for ids in [
+        ["txtPg6Sc6I2CA", "txtPg3Sc6I2CB", "txtPg6Sc6I2CC"],
+        ["txtPg6Sc6I3CA", "txtPg4Sc6I3CB", "txtPg6Sc6I3CC"],
+        ["txtPg3Sc6I4CA", "txtPg3Sc6I4CB", "txtPg3Sc6I4CC"],
+    ] {
+        shut.extend(ids.iter().map(|id| mx(id)));
+    }
+    for key in &shut {
+        assert_eq!(inventory.get(key), Some(&true), "{key} is shut at load");
+        assert!(opened["locks"].get(key).is_some(), "{key} stays locked");
+        let refused = fill("1702MX", &opened["draft"], json!({ key: "100" }));
+        assert!(refused["rejected"].get(key).is_some(), "{key}");
+    }
+    for key in [
+        "txtPg3Sc5Itm17aA",
+        "txtPg3Sc5Itm17aC",
+        "txtPg6Sc6I1CA",
+        "txtPg6Sc6I1CC",
+    ] {
+        assert_eq!(
+            inventory.get(&mx(key)),
+            Some(&false),
+            "{key} is open at load"
+        );
+        assert!(opened["locks"].get(mx(key)).is_none(), "{key} is an entry");
+    }
+}

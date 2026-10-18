@@ -2054,16 +2054,16 @@ fn evaluate_here(
     draft: &mut Value,
 ) -> Result<(Value, Value, FilingStatus), String> {
     let status = agent::identity(kind, draft)?.status;
-    let errors = if status == FilingStatus::Draft {
+    let mut errors = if status == FilingStatus::Draft {
         agent::validate(kind, draft)?
     } else {
         agent::validate(kind, &mut draft.clone())?
     };
-    Ok((
-        values_json(kind, draft)?,
-        errors_json(kind, &errors),
-        status,
-    ))
+    // A message naming another item number than the printed one reads the
+    // printed number (D6; PR 8's forms).
+    rows_annual_corporate::printed_item_numbers(kind, &mut errors);
+    let errors = errors_json(kind, &errors);
+    Ok((values_json(kind, draft)?, errors, status))
 }
 
 // --------------------------------------------------------- host functions
@@ -2320,7 +2320,7 @@ fn opened_json(
         draft: from_profile_draft,
     };
     let mut locks = locks(kind, &from_profile);
-    rows_annual_corporate::relock(kind, &mut locks);
+    rows_annual_corporate::relock(kind, &draft, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group.
     for group in penalties::groups(kind) {
         if !penalties::edited(&group, &draft) {
@@ -5749,13 +5749,18 @@ mod tests {
     fn rows_1707a_continuation_tables_save() {
         setup();
         let form = schema_entry("1707A").unwrap();
-        // The schedules sit in Part IV since PR 8's printed layout.
+        // Both schedules' tables sit in "Part IV · Schedules", as the sheet
+        // prints them, since PR 8's printed layout.
         let table = |first: &str| -> Value {
             form["parts"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .flat_map(|part| part["items"].as_array().unwrap())
+                .find(|part| part["n"] == "Part IV · Schedules")
+                .expect("1707A has Part IV")["items"]
+                .as_array()
+                .unwrap()
+                .iter()
                 .find(|it| it["keys"][0][0] == first)
                 .unwrap_or_else(|| panic!("table starting {first}"))
                 .clone()
