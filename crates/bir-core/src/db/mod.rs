@@ -419,6 +419,11 @@ pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbEr
     prepare_app_database_file(&path);
     let lock = try_acquire_live_owner_lock(&path)?;
     let (db, recovered) = Database::open_or_recreate(&path)?;
+    // D8a: the shipped holiday lists, on first run and for every new year
+    // an update ships. Never fatal: the app runs without them.
+    if let Err(error) = db.seed_official_holidays() {
+        tracing::warn!(%error, "official holidays not seeded");
+    }
     Ok((db.with_owner_lock(lock), path, recovered))
 }
 
@@ -942,7 +947,72 @@ impl Database {
         self.set_setting("deadline_overrides", &json)?;
         self.request_google_calendar_sync()
     }
+
+    /// Seed the official non-working holidays the app ships
+    /// ([`crate::official_holidays::OFFICIAL_HOLIDAY_YEARS`]) into the stored
+    /// deadline overrides (decision D8a). Returns how many were added.
+    pub fn seed_official_holidays(&self) -> Result<usize, DbError> {
+        self.seed_holidays_from(crate::official_holidays::OFFICIAL_HOLIDAY_YEARS)
+    }
+
+    /// [`Self::seed_official_holidays`] for an explicit list of years.
+    ///
+    /// Each holiday is offered once: the dates already offered are kept
+    /// under [`HOLIDAY_SEED_LEDGER_KEY`], so a re-run adds only years and
+    /// dates that are new, and a seeded override the user deleted is not
+    /// brought back. A date the user already has an override for keeps it
+    /// and is skipped. Nothing stored is changed or removed; stored overrides
+    /// that do not parse are left alone and nothing is seeded.
+    pub fn seed_holidays_from(
+        &self,
+        years: &[crate::official_holidays::HolidayYear],
+    ) -> Result<usize, DbError> {
+        let mut overrides: Vec<crate::calendar_rules::DeadlineOverride> = match self
+            .get_setting("deadline_overrides")?
+        {
+            None => Vec::new(),
+            Some(json) => match serde_json::from_str(&json) {
+                Ok(overrides) => overrides,
+                Err(error) => {
+                    tracing::warn!(%error, "stored deadline overrides do not parse; holidays not seeded");
+                    return Ok(0);
+                }
+            },
+        };
+        let mut offered: std::collections::BTreeSet<String> = self
+            .get_setting(HOLIDAY_SEED_LEDGER_KEY)?
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default();
+        let before = offered.len();
+        let mut added = 0;
+        for seed in crate::official_holidays::holiday_overrides(years) {
+            if !offered.insert(seed.original_deadline.to_string()) {
+                continue;
+            }
+            if overrides
+                .iter()
+                .any(|saved| saved.original_deadline == seed.original_deadline)
+            {
+                continue;
+            }
+            overrides.push(seed);
+            added += 1;
+        }
+        if added > 0 {
+            self.set_deadline_overrides(&overrides)?;
+        }
+        if offered.len() != before {
+            let json =
+                serde_json::to_string(&offered).map_err(|e| DbError::Other(e.to_string()))?;
+            self.set_setting(HOLIDAY_SEED_LEDGER_KEY, &json)?;
+        }
+        Ok(added)
+    }
 }
+
+/// Settings key of the holiday dates [`Database::seed_holidays_from`] has
+/// already offered (a JSON array of `YYYY-MM-DD`).
+pub const HOLIDAY_SEED_LEDGER_KEY: &str = "official_holidays_seeded";
 
 // =========================================================================
 // Utility functions
@@ -1260,6 +1330,184 @@ mod tests {
             assert_eq!(
                 reopened.get_setting("probe").expect("read"),
                 Some("visible".into())
+            );
+        });
+    }
+
+    const EXTRA_YEAR: crate::official_holidays::HolidayYear =
+        crate::official_holidays::HolidayYear {
+            year: 2027,
+            proclamation: Some("Test proclamation 2027"),
+            days: &[
+                crate::official_holidays::Holiday {
+                    month: 1,
+                    day: 1,
+                    name: "New Year's Day",
+                },
+                crate::official_holidays::Holiday {
+                    month: 6,
+                    day: 14,
+                    name: "Test Monday holiday",
+                },
+            ],
+        };
+
+    fn ymd(y: i32, m: u32, d: u32) -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn first_run_seeds_every_shipped_holiday() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let shipped: usize = crate::official_holidays::OFFICIAL_HOLIDAY_YEARS
+            .iter()
+            .map(|year| year.days.len())
+            .sum();
+        assert!(shipped > 0);
+        assert_eq!(db.seed_official_holidays().unwrap(), shipped);
+        let overrides = db.get_deadline_overrides();
+        assert_eq!(overrides.len(), shipped);
+        let christmas = overrides
+            .iter()
+            .find(|o| o.original_deadline == ymd(2026, 12, 25))
+            .expect("Christmas 2026 seeded");
+        assert_eq!(christmas.id, "official-holiday-2026-12-25");
+        assert_eq!(christmas.adjusted_deadline, ymd(2026, 12, 28));
+        assert!(!christmas.source_reference.trim().is_empty());
+        // A seeded holiday moves a deadline that lands on it: 1702Q Q3 (60
+        // days after September 30) is due Sunday November 29, 2026, moved
+        // to Monday the 30th, Bonifacio Day, and so on to December 1.
+        let rows = crate::calendar_rules::DeadlineResolver::deadlines_for_forms(
+            &["1702Q".to_string()],
+            2026,
+            &overrides,
+        );
+        let q3 = rows
+            .iter()
+            .find(|d| d.period.quarter() == Some(3))
+            .expect("1702Q Q3");
+        assert_eq!(q3.original_deadline_date(), Some(ymd(2026, 11, 29)));
+        assert_eq!(q3.final_deadline_date(), Some(ymd(2026, 12, 1)));
+    }
+
+    #[test]
+    fn a_second_run_adds_nothing() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.seed_official_holidays().unwrap();
+        let first = db.get_setting("deadline_overrides").unwrap();
+        assert_eq!(db.seed_official_holidays().unwrap(), 0);
+        assert_eq!(db.get_setting("deadline_overrides").unwrap(), first);
+    }
+
+    #[test]
+    fn a_saved_override_on_a_holiday_is_kept() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let saved = crate::calendar_rules::DeadlineOverride {
+            id: "user-christmas".to_string(),
+            title: "Saved by the user".to_string(),
+            source_reference: "RMC 99-2026".to_string(),
+            affected_form_codes: vec!["1601C".to_string()],
+            original_deadline: ymd(2026, 12, 25),
+            adjusted_deadline: ymd(2027, 1, 4),
+            affected_regions: Vec::new(),
+            affected_taxpayer_types: Vec::new(),
+            effective_from: None,
+            effective_until: None,
+            expires_at: None,
+        };
+        db.set_deadline_overrides(std::slice::from_ref(&saved))
+            .unwrap();
+        let shipped = crate::official_holidays::OFFICIAL_HOLIDAY_YEARS[0]
+            .days
+            .len();
+        assert_eq!(db.seed_official_holidays().unwrap(), shipped - 1);
+        let overrides = db.get_deadline_overrides();
+        let christmas: Vec<_> = overrides
+            .iter()
+            .filter(|o| o.original_deadline == ymd(2026, 12, 25))
+            .collect();
+        assert_eq!(christmas.len(), 1, "no second override for the date");
+        assert_eq!(christmas[0].id, "user-christmas");
+        assert_eq!(christmas[0].adjusted_deadline, ymd(2027, 1, 4));
+        assert_eq!(christmas[0].source_reference, "RMC 99-2026");
+        assert_eq!(
+            overrides[0].id, "user-christmas",
+            "saved overrides stay first"
+        );
+    }
+
+    #[test]
+    fn a_missing_year_is_added_and_nothing_else() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let shipped = crate::official_holidays::OFFICIAL_HOLIDAY_YEARS;
+        db.seed_holidays_from(shipped).unwrap();
+        let before = db.get_deadline_overrides();
+        let mut with_extra = shipped.to_vec();
+        with_extra.push(EXTRA_YEAR);
+        assert_eq!(db.seed_holidays_from(&with_extra).unwrap(), 2);
+        let after = db.get_deadline_overrides();
+        assert_eq!(after.len(), before.len() + 2);
+        assert_eq!(
+            after[..before.len()]
+                .iter()
+                .map(|o| (&o.id, o.original_deadline, o.adjusted_deadline))
+                .collect::<Vec<_>>(),
+            before
+                .iter()
+                .map(|o| (&o.id, o.original_deadline, o.adjusted_deadline))
+                .collect::<Vec<_>>(),
+            "the seeded years are unchanged"
+        );
+        let added: Vec<_> = after[before.len()..]
+            .iter()
+            .map(|o| (o.original_deadline, o.source_reference.as_str()))
+            .collect();
+        assert_eq!(
+            added,
+            [
+                (ymd(2027, 1, 1), "Test proclamation 2027"),
+                (ymd(2027, 6, 14), "Test proclamation 2027"),
+            ]
+        );
+        assert_eq!(db.seed_holidays_from(&with_extra).unwrap(), 0);
+    }
+
+    #[test]
+    fn a_seeded_holiday_the_user_deleted_is_not_brought_back() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.seed_official_holidays().unwrap();
+        let mut overrides = db.get_deadline_overrides();
+        overrides.retain(|o| o.original_deadline != ymd(2026, 6, 12));
+        db.set_deadline_overrides(&overrides).unwrap();
+        assert_eq!(db.seed_official_holidays().unwrap(), 0);
+        assert!(
+            db.get_deadline_overrides()
+                .iter()
+                .all(|o| o.original_deadline != ymd(2026, 6, 12))
+        );
+    }
+
+    #[test]
+    fn stored_overrides_that_do_not_parse_are_left_alone() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.set_setting("deadline_overrides", "not json").unwrap();
+        assert_eq!(db.seed_official_holidays().unwrap(), 0);
+        assert_eq!(
+            db.get_setting("deadline_overrides").unwrap().as_deref(),
+            Some("not json")
+        );
+    }
+
+    #[test]
+    fn open_live_database_seeds_the_shipped_holidays() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let db_path = directory.path().join("seeded.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(db_path.as_os_str()), || {
+            let (db, _, _) = open_live_database().expect("open live file db");
+            assert!(
+                db.get_deadline_overrides()
+                    .iter()
+                    .any(|o| o.id == "official-holiday-2026-01-01")
             );
         });
     }

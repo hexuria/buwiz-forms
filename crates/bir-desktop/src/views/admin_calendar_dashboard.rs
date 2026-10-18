@@ -65,19 +65,15 @@ impl AdminCalendarDashboard {
             .parse()
             .unwrap_or(2025);
         let rules = DeadlineResolver::official_rules();
-        let mut overrides = db
+        // The shipped official holidays (D8a): adds only what was never
+        // offered and keeps every override the user saved.
+        let overrides = db
             .lock()
-            .map(|d| d.get_deadline_overrides())
+            .map(|d| {
+                let _ = d.seed_official_holidays();
+                d.get_deadline_overrides()
+            })
             .unwrap_or_default();
-
-        // Auto-seed holiday overrides if none exist
-        if overrides.is_empty() {
-            let seed = DeadlineResolver::seed_2026_holiday_overrides();
-            if let Ok(db_lock) = db.lock() {
-                let _ = db_lock.set_deadline_overrides(&seed);
-            }
-            overrides = seed;
-        }
 
         let deadlines =
             DeadlineResolver::resolve_deadline_calendar_year_with_overrides(year, &overrides);
