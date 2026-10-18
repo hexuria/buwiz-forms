@@ -186,9 +186,11 @@ enum Fit {
 /// 0619E: a 200-character registered address printed item 10's second line
 /// at 8.61 pt by the estimate, but its capitals measure 0.591 em each, so
 /// the line ran 453 pt into a 446.5 pt cell and was cut at the 10A ZIP
-/// Code caption. Every other sheet keeps the estimate and prints byte for
+/// Code caption. 0619F prints the same two address lines (and shares the
+/// maintainer's address decision); the same address ran about 8.5 pt past
+/// its first line. Every other sheet keeps the estimate and prints byte for
 /// byte as before (`long_text_prints_as_before_on_every_sheet_but_0619e`).
-const MEASURED_SHEETS: [&str; 1] = ["0619e-2018"];
+const MEASURED_SHEETS: [&str; 2] = ["0619e-2018", "0619f-2018"];
 
 /// The overflow sizing of sheet `slug`.
 fn fit_of(slug: &str) -> Fit {
@@ -5186,6 +5188,57 @@ mod tests {
         assert_eq!(printed_cell(&document, "p1c44"), ("1226".to_string(), None));
     }
 
+    /// Per cell, on both measured sheets (0619E and 0619F, the same two
+    /// address lines): the captured address, split at BIR's character 127
+    /// or whole on line 1, and a 200-character text in every text join,
+    /// print so that each plain line's text, measured in Arimo at its size,
+    /// fits its cell less the input's 1 pt left padding.
+    #[test]
+    fn measured_sheets_fit_every_plain_line_in_its_cell() {
+        let first = "UNIT 4512 TOWER B THE RESIDENCES AT GREENBELT 123 ESPERANZA STREET COR. \
+                     MAKATI AVENUE BRGY. SAN LORENZO MAKATI";
+        let second = "CITY METRO MANILA PHILIPPINES NEAR AYALA TRIANGLE GARDENS ACROSS \
+                      GREENBELT 5 MALL GATE 12";
+        let whole = format!("{first} {second}");
+        for (slug, prefix) in [("0619e-2018", "frm0619E"), ("0619f-2018", "frm0619F")] {
+            assert!(MEASURED_SHEETS.contains(&slug));
+            let address = |one: String, two: &str| {
+                BTreeMap::from([
+                    (format!("{prefix}:txtAddress"), one),
+                    (format!("{prefix}:txtAddress2"), two.to_string()),
+                    (format!("{prefix}:txtZipCode"), "1226".to_string()),
+                ])
+            };
+            let every: BTreeMap<String, String> = writer_cells(slug)
+                .unwrap()
+                .joins
+                .keys()
+                .map(|key| (key.clone(), words_of(200)))
+                .collect();
+            for (case, fields) in [
+                ("split", address(format!("{first} "), second)),
+                ("whole", address(whole.clone(), "")),
+                ("every join", every),
+            ] {
+                let document = filled_document(slug, &fields).unwrap();
+                let mut lines = 0;
+                for (cell, (text, size)) in printed_cells(&document) {
+                    let Some(size) = size else {
+                        continue;
+                    };
+                    let width = comb_cell(&document, &cell).unwrap().1;
+                    let measured = arimo_ems(&text) * size;
+                    assert!(
+                        1.0 + measured <= width,
+                        "{slug} {case} {cell}: {text:?} at {size}pt measures {measured}pt in {width}pt"
+                    );
+                    lines += 1;
+                }
+                assert!(lines >= 2, "{slug} {case}: {lines} plain lines");
+            }
+        }
+    }
+
     /// Every sheet filled three ways: each text join's key holding a
     /// 200-character text, a 90-character one and a 12-character one (past
     /// the boxes of most combs, past a line, and fitting), hashed together.
@@ -5212,7 +5265,8 @@ mod tests {
     /// Goldens: what every sheet printed for long text before 0619E's
     /// overflow type was measured (`fixtures/overflow-goldens.json`, written
     /// by the fill at f7b7f475 with `BIR_PRINT_BLESS_OVERFLOW=1`). Every
-    /// other sheet prints byte for byte as it did; 0619E alone changes.
+    /// other sheet prints byte for byte as it did; the measured sheets
+    /// (0619E and 0619F) alone change.
     #[test]
     fn long_text_prints_as_before_on_every_sheet_but_0619e() {
         let path = concat!(
