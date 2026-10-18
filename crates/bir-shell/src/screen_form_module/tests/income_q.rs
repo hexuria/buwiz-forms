@@ -1062,18 +1062,34 @@ fn form_1702q_items_follow_the_printed_sheet() {
         "frm1702q:txtPg2BranchCode",
         "frm1702q:txtPg2TaxpayerName",
         "frm1702q:txtCurrentPage",
-        "resultOtherSpecify",
     ] {
         assert_eq!(field_of(C, key)["t"], "hidden", "{key}");
     }
-    // Schedule 4 ends with its own total, item 7, after rows a and b.
+    // Schedule 4 ends with its own total, item 7, after rows a and b; then
+    // BIR's internal total (D9, replacing PR 5's hidden box), unnumbered
+    // because the sheet does not print it.
     let (part, _) = item_of(C, "frm1702q:Sched4:txtTax7");
     let numbers: Vec<&str> = items(C)
         .into_iter()
         .filter(|(name, _)| name == &part)
         .filter_map(|(_, item)| item["no"].as_str())
         .collect();
-    assert_eq!(numbers, ["1", "2", "3", "4", "5", "6", "6a", "6b", "7"]);
+    assert_eq!(numbers, ["1", "2", "3", "4", "5", "6", "6a", "6b", "7", ""]);
+    let (internal_part, internal) = item_of(C, "resultOtherSpecify");
+    assert_eq!(internal_part, part);
+    assert_eq!(
+        internal["l"],
+        "BIR's internal value (not on the printed form)"
+    );
+    assert_eq!(
+        field_of(C, "resultOtherSpecify"),
+        &json!({
+            "k": "resultOtherSpecify",
+            "l": "Other tax credits total, as BIR's own save writes it (always 0.00)",
+            "t": "money",
+            "c": 1,
+        })
+    );
     assert_eq!(
         field_of(C, "frm1702q:Sched4:txtOthrTxCrdts0")["l"],
         "Specify"
@@ -1146,6 +1162,55 @@ fn form_1702q_schedules_take_their_entries_once_item_5_has_an_atc() {
         "{}",
         cleared["removes"]
     );
+}
+
+/// Maintainer decision D9 (2026-10-18): Schedule 4 shows BIR's internal
+/// total `resultOtherSpecify` as a read-only box labelled as BIR's value.
+/// It shows what the upload carries, 0.00, as BIR's own save writes it
+/// (tests/sample-payloads/1702Q-2025Q2.official.xml) even beside a typed
+/// other credit; it takes no entry; items 6a/6b, the field map, the
+/// upload and the print are unchanged.
+#[test]
+fn form_1702q_schedule_4_shows_birs_internal_total_read_only() {
+    setup();
+    let key = "resultOtherSpecify";
+    let opened = open(C, 2);
+    assert_eq!(opened["values"][key], "0.00");
+    assert!(opened["locks"][key].is_string(), "{}", opened["locks"][key]);
+    let with_atc = fill(
+        C,
+        &opened["draft"],
+        json!({"frm1702q:cbATC_2": "IC010_25%", "frm1702q:rbATC_2": "true"}),
+    );
+    let credits = json!({
+        "frm1702q:Sched4:txtOthrTxCrdts0": "SAMPLE CREDIT",
+        "frm1702q:Sched4:txtOthrTxCrdtAmnt0": "1234",
+    });
+    let before = fill(C, &with_atc["draft"], credits.clone());
+    assert_eq!(before["rejected"], json!({}));
+    assert_eq!(before["values"][key], "0.00");
+    assert_eq!(
+        amount(&before["values"], "frm1702q:Sched4:txtOthrTxCrdtAmnt0"),
+        1234.0
+    );
+    // It takes no entry, and nothing it holds files: the field map leaves
+    // it out and the upload writes the official default.
+    let refused = fill(C, &before["draft"], json!({ key: "1234" }));
+    assert!(
+        refused["rejected"][key].is_string(),
+        "{}",
+        refused["rejected"]
+    );
+    assert_eq!(refused["draft"], before["draft"]);
+    let map = field_map(C, &before["draft"]);
+    assert!(!map.contains_key(key));
+    assert_eq!(map["frm1702q:Sched4:txtOthrTxCrdtAmnt0"], "1,234.00");
+    let layout = bir_core::official_xml::layout("1702q-v2018c").unwrap();
+    let upload = bir_core::official_xml::write(layout, &map).unwrap();
+    assert!(upload.contains("<div>resultOtherSpecify=0.00resultOtherSpecify=</div>"));
+    let sample = include_str!("../../../../bir-core/tests/sample-payloads/1702Q-2025Q2.plain.xml");
+    assert!(sample.contains("<div>resultOtherSpecify=0.00resultOtherSpecify=</div>"));
+    assert!(!printed(C, &before["draft"]).contains_key(key));
 }
 
 /// Item 10, the contact number, is the profile's box: tucked with Edit like

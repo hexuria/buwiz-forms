@@ -485,12 +485,39 @@ fn fill_cell(
     }
 }
 
+/// 1702Q's `resultOtherSpecify`: BIR's internal total of the Schedule 4
+/// other credits, not a box of the printed sheet.
+pub(crate) const INTERNAL_TOTAL: &str = "resultOtherSpecify";
+
+/// What 1702Q's upload carries for [`INTERNAL_TOTAL`] (maintainer decision
+/// D9, 2026-10-18: the page shows it, read-only, as BIR's internal value).
+/// This app never writes it, so the official layout's default 0.00 goes
+/// out, which is what BIR's own save writes
+/// (tests/sample-payloads/1702Q-2025Q2.official.xml: `resultOtherSpecify=
+/// 0.00` beside an other credit of 1,234.00). Read back from the official
+/// plaintext of the draft's field map, so the box shows exactly what files.
+fn internal_total(kind: AgentFormKind, draft: &Value) -> Option<String> {
+    use bir_core::official_xml;
+    let layout = official_xml::layout(bir_core::forms::form_1702q::FORM_1702Q_FORM_ID).ok()?;
+    let fields = agent::field_map(kind, draft).ok()?;
+    let plaintext = official_xml::write(layout, &fields).ok()?;
+    official_xml::read(layout, &plaintext)
+        .ok()?
+        .remove(INTERNAL_TOTAL)
+}
+
 /// What each page box of this module shows: the Civil Status answer, and
 /// item 17's TIN boxes as the draft holds the digits (the field map writes
 /// a box only once it is whole, so a box typed digit by digit would show
 /// nothing until then). Display only: the field map, upload and print are
 /// unchanged.
 pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<String, String>) {
+    if kind.form_code() == "1702Q" {
+        if let Some(value) = internal_total(kind, draft) {
+            map.insert(INTERNAL_TOTAL.to_string(), value);
+        }
+        return;
+    }
     if !is_1701q(kind) {
         return;
     }
