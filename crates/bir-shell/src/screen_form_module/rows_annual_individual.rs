@@ -52,6 +52,11 @@ pub(super) enum Gate {
     SpouseIncome,
     /// A joint return: the spouse's column is on the return.
     Joint,
+    /// 1701MS Part II item 20 of a column: open once that column's item 19
+    /// (income tax due at the special/preferential rate) is more than zero
+    /// (form_1701ms.rs `share_open`, the official toggleShareOfOtherNo20*);
+    /// column B also needs a joint return.
+    TaxDue { spouse: bool },
 }
 
 /// One gated box: `(form, key, gate, condition)`. The condition is the
@@ -86,6 +91,14 @@ const C1701MS_JOINT: &str = "A joint return: Item 4 Married and Item 5 Jointly."
 const C1701MS_JOINT_RELIEF: &str =
     "A joint return (Items 4 and 5) and Item 12 column B Exempt or Special/Preferential Rate.";
 const C1701MS_JOINT_DEDUCTION: &str = "A joint return (Items 4 and 5) and, in column B, Item 12 Graduated Income Tax Rates with business income at Item 11.";
+/// Column B's amounts: the gate is the joint return; once joint, the
+/// form's own compute clears what column B's answers close, as for column A
+/// (Schedule A for compensation, item 12's rate, an amended return), which
+/// rule 6 tries the ordinary way.
+const C1701MS_JOINT_COLUMN: &str = "A joint return (Items 4 and 5), and in column B the answers that open the same box of column A.";
+const C1701MS_SHARE_A: &str =
+    "Item 19 column A, Income Tax Due at the Special/Preferential Rate, is more than zero.";
+const C1701MS_SHARE_B: &str = "A joint return (Items 4 and 5) and Item 19 column B, Income Tax Due at the Special/Preferential Rate, is more than zero.";
 
 const GATED: &[GatedBox] = &[
     // 1700 items 16-25 (html-frozen/1700-2018/writer-cells.json "16 If
@@ -601,6 +614,155 @@ const GATED: &[GatedBox] = &[
         Gate::Joint,
         C1701MS_JOINT_DEDUCTION,
     ),
+    // 1701MS item 18 column B and column B's amounts (PR 7 review): the
+    // form resets the whole spouse column off a joint return
+    // (form_1701ms.rs `recompute`: "marriedJointly / toggleLine5 reset
+    // every spouse control"), so they take a write only on one.
+    (
+        "1701MS",
+        "taxCodeDropdownSpouse",
+        Gate::Joint,
+        C1701MS_JOINT,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtGrossb",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtLessNonTaxableb",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtSalesRevenueNo5b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtSalesReturnsNo6b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtCostofSalesNo8b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtAllowableItemizedDeductionsNo10aSpouse",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtSpecialAllowableNo10b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtNetOperatingLossNo10b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtNonOperatingIncomeNo13b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtSalesRevenuesFeesANo19b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtOtherNonOperatingIncomeNo20b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtTaxDueAllowedNo26b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtPriorYearsNo1b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtTaxPaymentsNo2b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtCreditableTaxNo3b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtCreditableFourthQuarterNo4b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtCreditableForm2316No5b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtForeignTaxCreditsNo7b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtSpecialTaxCreditsNo8b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtOtherCreditsPaymentsNo9b",
+        Gate::Joint,
+        C1701MS_JOINT_COLUMN,
+    ),
+    // Part II item 20 of each column: open once its item 19 is positive.
+    (
+        "1701MS",
+        "frm1701MS:txtShareOfOtherNo20a",
+        Gate::TaxDue { spouse: false },
+        C1701MS_SHARE_A,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtShareOfOtherNo20b",
+        Gate::TaxDue { spouse: true },
+        C1701MS_SHARE_B,
+    ),
 ];
 
 /// The reviewed conditions of the gated boxes the page draws, for
@@ -659,6 +821,7 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                 Gate::Married => married,
                 Gate::SpouseIncome => married && form.spouse_has_income == Some(true),
                 Gate::Joint => form.is_joint(),
+                Gate::TaxDue { .. } => true,
             }
         }),
         "1701" => serde_json::from_value::<Form1701Draft>(typed(draft)).is_ok_and(|form| {
@@ -667,6 +830,7 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                 Gate::Married => married,
                 Gate::SpouseIncome => married && form.spouse_has_income == Some(true),
                 Gate::Joint => form.spouse_column_active(),
+                Gate::TaxDue { .. } => true,
             }
         }),
         "1701A" => serde_json::from_value::<Form1701ADraft>(typed(draft)).is_ok_and(|form| {
@@ -675,6 +839,7 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                 Gate::Married => married,
                 Gate::SpouseIncome => married && form.spouse_has_income == Some(true),
                 Gate::Joint => form.is_joint(),
+                Gate::TaxDue { .. } => true,
             }
         }),
         "1701MS" => {
@@ -683,6 +848,10 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                     form.civil_status == Form1701MsCivilStatus::Married
                 }
                 Gate::Joint => form.is_joint(),
+                Gate::TaxDue { spouse: false } => form.taxpayer.income_tax_due > 0.0,
+                Gate::TaxDue { spouse: true } => {
+                    form.is_joint() && form.spouse.income_tax_due > 0.0
+                }
             })
         }
         _ => true,
@@ -693,6 +862,12 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
 fn refusal(code: &str, gate: Gate) -> String {
     let (status, income, filing, part) = items(code);
     match (gate, income) {
+        (Gate::TaxDue { spouse }, _) => {
+            let column = if spouse { "B" } else { "A" };
+            format!(
+                "Item 20 column {column} is for a special or preferential rate tax due: it opens once item 19 column {column} is more than zero."
+            )
+        }
         (Gate::Married, _) => {
             format!("This item is for a married filer: choose Married at item {status} first.")
         }
@@ -712,9 +887,15 @@ fn refusal(code: &str, gate: Gate) -> String {
 #[cfg(test)]
 pub(super) fn is_gate_refusal(code: &str, reason: &str) -> bool {
     FORMS.contains(&code)
-        && [Gate::Married, Gate::SpouseIncome, Gate::Joint]
-            .iter()
-            .any(|gate| refusal(code, *gate) == reason)
+        && [
+            Gate::Married,
+            Gate::SpouseIncome,
+            Gate::Joint,
+            Gate::TaxDue { spouse: false },
+            Gate::TaxDue { spouse: true },
+        ]
+        .iter()
+        .any(|gate| refusal(code, *gate) == reason)
 }
 
 /// Write `key` the way the form takes it, past this module's gate: a TIN
@@ -820,7 +1001,15 @@ pub(super) fn closed_refusal(
         return None;
     }
     let gate = gate_of(kind, key)?;
-    (!holds(kind, draft, gate)).then(|| refusal(kind.form_code(), gate))
+    if holds(kind, draft, gate) {
+        return None;
+    }
+    // Column B's item 20 off a joint return says what opens column B.
+    let gate = match gate {
+        Gate::TaxDue { spouse: true } if !holds(kind, draft, Gate::Joint) => Gate::Joint,
+        gate => gate,
+    };
+    Some(refusal(kind.form_code(), gate))
 }
 
 /// Civil status and the spouse's answers first, then the spouse part, so
@@ -833,6 +1022,7 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
         Gate::Married => Some(1),
         Gate::SpouseIncome => Some(2),
         Gate::Joint => Some(5),
+        Gate::TaxDue { .. } => Some(6),
     }
 }
 
@@ -1158,6 +1348,31 @@ pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
     }
 }
 
+/// A 1701 draft stored, or a save file imported, before the penalty model
+/// has no `penalty` / `spouse_penalty` object, so an amount typed after Edit
+/// penalties has no override to land in. Give the column its (default,
+/// version 0) state first: the typed amount becomes its override and the
+/// column joins the model as form_1701_official.rs `official_recompute`
+/// documents.
+pub(super) fn make_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
+    if kind.form_code() != "1701" {
+        return;
+    }
+    let Some(path) = super::penalties::path_of(kind, key) else {
+        return;
+    };
+    let Some(slot) = path.trim_start_matches('/').split('/').next() else {
+        return;
+    };
+    if let Some(object) = draft.as_object_mut()
+        && object.get(slot).is_none_or(Value::is_null)
+        && let Ok(state) =
+            serde_json::to_value(bir_core::forms::penalty_items::PenaltyState::default())
+    {
+        object.insert(slot.to_string(), state);
+    }
+}
+
 // ------------------------------------------------------------ waits
 
 /// A box the form fills from another of its row: what it waits for while
@@ -1297,6 +1512,11 @@ fn typed_entries(kind: AgentFormKind, draft: &Value) -> BTreeMap<String, String>
         if let Some(Binding::Amount { path, .. }) = binding
             && path.contains("/penalty_overrides/")
         {
+            // A 1701 column kept as entered (no penalty model yet) holds
+            // the filer's own amounts.
+            if penalty_lock(kind, draft, key).is_some() {
+                return !says_nothing(&json!(shown));
+            }
             return draft.pointer(path).is_some_and(|value| !value.is_null());
         }
         if says_nothing(&json!(shown)) {
@@ -1372,14 +1592,29 @@ pub(super) fn removes(
     let had = typed_entries(kind, before);
     let has = typed_entries(kind, after);
     let edited_groups: BTreeSet<String> = edits.keys().map(|key| group_key(kind, key)).collect();
-    let untouched =
-        |key: &String| !edits.contains_key(key) && !edited_groups.contains(&group_key(kind, key));
+    // "Use the computed amounts" blanks a penalty group: the amounts the
+    // filer typed or kept there are replaced by the computed ones, which
+    // the page asks about first like any other loss.
+    let to_computed = |key: &String| {
+        super::penalties::path_of(kind, key).is_some()
+            && edits.get(key).is_some_and(|value| {
+                value.as_str().is_some_and(|text| text.trim().is_empty()) || value.is_null()
+            })
+    };
+    let untouched = |key: &String| {
+        to_computed(key)
+            || (!edits.contains_key(key) && !edited_groups.contains(&group_key(kind, key)))
+    };
     let shown = agent::field_map(kind, after).unwrap_or_default();
     let answered = edits.keys().any(|key| is_answer(kind, key));
     let mut cleared = Vec::new();
     let mut replaced = Vec::new();
     for (key, was) in &had {
         if !untouched(key) {
+            continue;
+        }
+        if to_computed(key) {
+            replaced.push(key.clone());
             continue;
         }
         match has.get(key) {

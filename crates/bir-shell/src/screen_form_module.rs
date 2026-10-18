@@ -3350,6 +3350,9 @@ fn apply_screen_edits(
                 *draft = next;
                 continue;
             }
+            // A 1701 column with no penalty state yet takes the amount as
+            // its override (PR 7).
+            rows_annual_individual::make_room(kind, &mut next, &key);
         }
         let result = match step {
             // A pooled address (rule 5) comes as one text on its first line.
@@ -9806,11 +9809,13 @@ mod tests {
                 // with no civil status: 1700 items 16-25 (17), 1701 items
                 // 17-18, Part IV and Schedule 1's Spouse marks (35), 1701A
                 // items 17-18 and Part V (17), 1701MS item 5 and column B of
-                // Part I items 6-17 (26). At pr0b-push none had an entry.
+                // Part I items 6-17 (26), plus 24 for 1701MS (PR 7 review):
+                // item 18 column B, column B's amounts and item 20 of each
+                // column. At pr0b-push none had an entry.
                 ("1700", 17),
                 ("1701", 35),
                 ("1701A", 17),
-                ("1701MS", 26),
+                ("1701MS", 50),
                 ("1701Q", 39),
                 ("1800", 1),
                 ("1801", 1),

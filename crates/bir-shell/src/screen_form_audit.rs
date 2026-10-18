@@ -2397,7 +2397,11 @@ fn page_option_value(option: &Value) -> Option<String> {
 }
 
 /// Every choice a schema dropdown lists, sent the way the page sends it,
-/// is one the host accepts (unless the page shows the field locked).
+/// is one the host accepts (unless the page shows the field locked, or
+/// faded by rule 6 until another answer opens it: PR 7's 1701MS item 18
+/// column B, whose choices
+/// `annual_individual::form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return`
+/// sends on a joint return).
 #[test]
 fn every_listed_dropdown_choice_is_accepted_by_the_host() {
     seed_fictional_profile();
@@ -2408,6 +2412,7 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             continue;
         };
         let locks = opened["locks"].as_object().cloned().unwrap_or_default();
+        let off = opened["off"].as_object().cloned().unwrap_or_default();
         let fields = form["parts"]
             .as_array()
             .into_iter()
@@ -2416,7 +2421,11 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             .flat_map(|it| it["f"].as_array().into_iter().flatten());
         for field in fields {
             let key = field["k"].as_str().unwrap_or_default();
-            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) {
+            if field["t"] != "sel"
+                || field["c"] == 1
+                || locks.contains_key(key)
+                || off.contains_key(key)
+            {
                 continue;
             }
             for option in field["o"].as_array().into_iter().flatten() {
