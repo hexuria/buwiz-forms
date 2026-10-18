@@ -622,28 +622,38 @@ pub(super) fn fill_official(
     Ok((next, filled, kept, not_shown))
 }
 
-/// Validation errors with the label of the box they name, when the form
-/// has one (`{field, label, message}`).
 /// 2553 item 13's list (`lstTaxTreaty`).
 const TAX_TREATY_LIST: &str = "frm2553:lstTaxTreaty";
 
 /// What the assistant is told when it answers 2553 item 13 Yes without its
-/// list: the page's own reason, and what to do.
+/// list: the page's own reason, that nothing in the call was applied, and
+/// what to do.
 fn tax_treaty_refusal() -> String {
     format!(
-        "{} Item 13 is Yes, so its list must be answered: ask the user which applies and fill `{TAX_TREATY_LIST}` with it (\"1\" Special Rate, \"2\" International Tax Treaty) in the same call.",
+        "{} Item 13 is Yes, so its list must be answered. Nothing in this call was applied: the other boxes in it were not filled either. Ask the user which applies and fill `{TAX_TREATY_LIST}` with it (\"1\" Special Rate, \"2\" International Tax Treaty) in the same call as the Yes.",
         bir_core::forms::form_2553::TAX_TREATY_UNCHOSEN
     )
+}
+
+/// A fill value as text, as `agent::fill` reads it (its `value_text`): a
+/// string as is, null as blank, any other scalar as its JSON text (`1`).
+fn fill_text(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.trim().to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
 }
 
 /// 2553 item 13 (maintainer decision D7, 2026-10-18). The pin binds the
 /// Yes radio to Special Rate, so `form.fill` answering Yes alone filed a
 /// relief nobody chose, where the page opens the list blank and Check asks
-/// for it. Here a Yes with its list answered in the same fill ("1" or "2")
-/// takes the list's answer (applied last, so the radio's binding cannot
-/// replace it); a Yes alone keeps the relief already chosen on the return,
-/// and on a return with none is refused with the page's reason. Only these
-/// item 13 keys are read; every other fill is unchanged.
+/// for it. Here a Yes with its list answered in the same fill (`1` or `2`,
+/// as a string or a number) takes the list's answer (applied last, so the
+/// radio's binding cannot replace it); a Yes alone keeps the relief already
+/// chosen on the return, and on a return with none is refused with the
+/// page's reason. Only these item 13 keys are read; every other fill is
+/// unchanged.
 fn tax_treaty_2553(
     kind: AgentFormKind,
     before: &Value,
@@ -678,7 +688,7 @@ fn tax_treaty_2553(
     if let Some(list) = fields
         .get(TAX_TREATY_LIST)
         .filter(|_| filled.iter().any(|key| key == TAX_TREATY_LIST))
-        && matches!(list.as_str().map(str::trim), Some("1" | "2"))
+        && matches!(fill_text(list).as_str(), "1" | "2")
     {
         return agent::fill(kind, next, TAX_TREATY_LIST, list);
     }
@@ -689,6 +699,8 @@ fn tax_treaty_2553(
     Err(tax_treaty_refusal())
 }
 
+/// Validation errors with the label of the box they name, when the form
+/// has one (`{field, label, message}`).
 fn labelled_errors(kind: AgentFormKind, errors: &[(String, String)]) -> Vec<Value> {
     let def = kind.definition();
     errors
@@ -1280,11 +1292,17 @@ mod tests {
             json!({"frm2553:optTreaty_1": "true"}),
             json!({"frm2553:optTreaty_1": "true", "frm2553:optTreaty_2": "false"}),
             json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "0"}),
+            json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 0}),
+            json!({"frm2553:txtSheets": "2", "frm2553:optTreaty_1": "true"}),
         ] {
             let refused = call(&mut host, "form.fill", json!({ "fields": yes }));
             assert!(!refused.ok, "{yes}");
             let error = refused.error.unwrap();
             assert!(error.contains(TAX_TREATY_UNCHOSEN), "{error}");
+            assert!(
+                error.contains("Nothing in this call was applied: the other boxes in it were not filled either."),
+                "{error}"
+            );
             assert!(error.contains("frm2553:lstTaxTreaty"), "{error}");
             assert_eq!(host.generic_form().unwrap().draft, before, "unchanged");
         }
@@ -1318,6 +1336,40 @@ mod tests {
         let map = agent::field_map(kind, &host.generic_form().unwrap().draft).unwrap();
         assert_eq!(map["frm2553:optTreaty_1"], "true");
         assert_eq!(map["frm2553:lstTaxTreaty"], "2");
+        // A list answer the agent sends as a JSON number is the same answer,
+        // in either order, and replaces the relief the return holds.
+        for (fields, wanted) in [
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 1}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": 2, "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": 1, "frm2553:optTreaty_1": "true"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 2}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "1"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": "2", "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+        ] {
+            ok(
+                call(&mut host, "form.fill", json!({ "fields": fields })),
+                "fill",
+            );
+            assert_eq!(treaty(&host), wanted, "{fields}");
+        }
         // Yes alone on a return with a relief chosen keeps it.
         ok(
             call(
