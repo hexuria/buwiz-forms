@@ -56,7 +56,9 @@ const USER_CHOSEN: &[(&str, &str)] = &[
 
 /// Amount boxes the rules corpus marks computed although the official page
 /// leaves them open for the filer to type (the corpus is read only, see
-/// [`USER_CHOSEN`]). Unlike a choice they keep the corpus's `optional`.
+/// [`USER_CHOSEN`]). The projection marks them not computed and
+/// `optional`, although the corpus says computed (a choice of
+/// [`USER_CHOSEN`] becomes `conditional`).
 /// PR 7: 1701's corpus marks Schedule 3 items 8, 9 and 11, Schedule 4 items 3
 /// and 6-13, Schedule 6's NOLCO rows 6, 7B and 9-12B and Part IV item 6
 /// computed, although no rules/forms/1701-v2018/calculations.json calculation
@@ -207,11 +209,11 @@ const FILER_TYPED: &[(&str, &str)] = &[
     ),
     (
         "frm1701MS:txtLessNonTaxablea",
-        "Part IV item 2A Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered",
+        "Part IV item 2A Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
     (
         "frm1701MS:txtLessNonTaxableb",
-        "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered",
+        "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
 ];
 
@@ -349,6 +351,48 @@ const CASE_FOLLOWS_ANOTHER_FIELD: &[(&str, &str)] = &[
          /spouse_info/email on a joint return, upper-cased as item 9A",
     ),
 ];
+
+/// Choice options whose probed draft value is overruled, with evidence:
+/// `(key, option value, draft path, value it sets, evidence)`. 1701MS's ATC
+/// II012 is "Business Income-Graduated IT Rates" (html-frozen/1701ms-2024/
+/// guide.html ATC table; rules/forms/1701ms-v2024/fields.json lists it among
+/// the item 18 options), but the ATC is the same code for
+/// a business taxpayer on special rates, so a seed on special rates showed
+/// the probe II012 with `tax_option = special` and it bound the code to
+/// special: a special rate left at 0 then files the business tax as 0. The
+/// code sets graduated, as II013 and II014 do; item 12 still chooses
+/// special (PR 7 review).
+const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str)] = &[
+    (
+        "taxCodeDropdown",
+        "II012",
+        "/taxpayer/tax_option",
+        "graduated",
+        "1701MS item 18 column A: II012 Business Income - Graduated IT Rates",
+    ),
+    (
+        "taxCodeDropdownSpouse",
+        "II012",
+        "/spouse/tax_option",
+        "graduated",
+        "1701MS item 18 column B: II012 Business Income - Graduated IT Rates",
+    ),
+];
+
+/// Choices whose options may set only draft fields under a prefix, with
+/// evidence: `(key, path prefix, evidence)`. 1701MS item 18 column B, the
+/// spouse's ATC, is open only on a joint return (form_1701ms.rs `recompute`
+/// resets the spouse column off one, as the official marriedJointly /
+/// toggleLine5 do), so every seed that answers it is a joint one and the
+/// probe tied each code to `/civil_status = married` and `/filing =
+/// jointly`, and the blank option to `single`: clearing the spouse's ATC
+/// made the return Single and wiped column B. Its options set the spouse's
+/// own fields only (PR 7 review).
+const CHOICE_PATHS_WITHIN: &[(&str, &str, &str)] = &[(
+    "taxCodeDropdownSpouse",
+    "/spouse/",
+    "1701MS item 18 column B sets the spouse's source and tax option only",
+)];
 
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
@@ -1841,7 +1885,19 @@ fn decide(
         return Ok(BoundBox { binding, lock });
     }
     let choice_box = def.box_def(key).is_some_and(is_choice_box);
-    if let Some(options) = choice_binding(evidence, key, choice_box)? {
+    if let Some(mut options) = choice_binding(evidence, key, choice_box)? {
+        for (_, value, path, set, _) in CHOICE_OPTION_SETS.iter().filter(|(k, ..)| *k == key) {
+            if let Some(option) = options.iter_mut().find(|option| option.value == *value) {
+                option
+                    .set
+                    .insert((*path).to_string(), Value::String((*set).to_string()));
+            }
+        }
+        for (_, prefix, _) in CHOICE_PATHS_WITHIN.iter().filter(|(k, ..)| *k == key) {
+            for option in &mut options {
+                option.set.retain(|path, _| path.starts_with(prefix));
+            }
+        }
         let paths: BTreeSet<&str> = options
             .iter()
             .flat_map(|option| option.set.keys().map(String::as_str))
