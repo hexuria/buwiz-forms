@@ -30,6 +30,12 @@
 //!   (`exempt_transactions`), 12B (`outstanding_shares`) and Part V row 5
 //!   while the schedule is not folded (row 5 reads OTHERS once the add-more
 //!   rows hold rows 5 onward; they are edited there).
+//! - 1707 item 8's Yes and No are the draft's `tax_relief` (`Some` holds
+//!   8A): No clears what 8A holds, so it asks first. Schedule 2 row A's
+//!   No. of Shares (no fields.json box) and Schedules 2 and 3's row D (row
+//!   D reads OTHERS once the add-more rows hold row D onward) are written
+//!   here. Its profile copy of the address shows the whole address the
+//!   draft keeps, never the upload's cut first line.
 //!
 //! Field keys, the official XML and the print map are the forms' own and
 //! unchanged.
@@ -38,6 +44,9 @@ use bir_core::forms::agent::AgentFormKind;
 use bir_core::forms::form_0605::Form0605Draft;
 use bir_core::forms::form_1606::Form1606Draft;
 use bir_core::forms::form_1706::Form1706Draft;
+use bir_core::forms::form_1707::{
+    FORM_1707_SCHEDULE_ROWS, Form1707Draft, Form1707Expense, Form1707Shares,
+};
 use bir_core::forms::form_2552::{
     FORM_2552_ROWS, Form2552Draft, Form2552ExemptRow, Form2552ShareRow, Form2552Transaction,
 };
@@ -64,6 +73,12 @@ pub(super) enum Cell {
     OutstandingShares2552,
     /// 2552 Part V row 5 of schedule 1-3.
     Row5_2552(u8, Row5),
+    /// 1707 item 8 Yes (`true`) or No.
+    TaxRelief1707(bool),
+    /// 1707 Schedule 2 row `.0` (0 = A, 3 = D), column `.1` (0-3).
+    Shares1707(usize, usize),
+    /// 1707 Schedule 3 row D, column `.0` (0 particulars, 1 amount).
+    ExpenseD1707(usize),
 }
 
 /// A column of 2552's Part V row 5.
@@ -131,8 +146,32 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
             _ => tin_part(key.strip_prefix("frm1706:txtTINB")?).map(Cell::BuyerTin1706),
         },
         "2552" => cell_2552(key),
+        "1707" => cell_1707(key),
         _ => None,
     }
+}
+
+fn cell_1707(key: &str) -> Option<Cell> {
+    let rest = key.strip_prefix("frm1707:")?;
+    match rest {
+        "rdoPg1I8TaxReliefYes" => return Some(Cell::TaxRelief1707(true)),
+        "rdoPg1I8TaxReliefNo" => return Some(Cell::TaxRelief1707(false)),
+        // Row A's No. of Shares: fields.json lists no box for it.
+        "txtPg2P4Sch2NoOfShares1" => return Some(Cell::Shares1707(0, 1)),
+        "txtPg2P4Sch3Particulars4" => return Some(Cell::ExpenseD1707(0)),
+        "txtPg2P4Sch3Amount4" => return Some(Cell::ExpenseD1707(1)),
+        _ => {}
+    }
+    let row_d = rest.strip_prefix("txtPg2P4Sch2")?.strip_suffix('4')?;
+    let column = [
+        "NameOfCorpStock",
+        "NoOfShares",
+        "StockCertNo",
+        "TaxBaseSellPrice",
+    ]
+    .iter()
+    .position(|name| *name == row_d)?;
+    Some(Cell::Shares1707(FORM_1707_SCHEDULE_ROWS - 1, column))
 }
 
 fn cell_2552(key: &str) -> Option<Cell> {
@@ -177,6 +216,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
         // Item 11 picks the schedule before its rows are typed.
         Cell::Transaction2552(_) => Some(0),
         Cell::PartIvAmount2552(_) | Cell::OutstandingShares2552 | Cell::Row5_2552(..) => Some(1),
+        // Item 8's answer before its 8A text in one batch.
+        Cell::TaxRelief1707(_) => Some(0),
+        Cell::Shares1707(..) | Cell::ExpenseD1707(_) => Some(1),
         Cell::Quarter0605(_) => None,
     }
 }
@@ -224,6 +266,9 @@ pub(super) fn fill(
         Cell::PartIvAmount2552(row) => fill_2552_part_iv(draft, row, value),
         Cell::OutstandingShares2552 => fill_2552_outstanding(draft, value),
         Cell::Row5_2552(_, column) => fill_2552_row5(draft, column, value),
+        Cell::TaxRelief1707(yes) => fill_1707_tax_relief(draft, yes, value),
+        Cell::Shares1707(row, column) => fill_1707_shares(draft, row, column, value),
+        Cell::ExpenseD1707(column) => fill_1707_expense_d(draft, column, value),
         Cell::Gate(gate) => {
             if blank(value) || open(gate, draft) {
                 ordinary(draft)
@@ -401,6 +446,119 @@ fn fill_2552_row5(draft: &mut Value, column: Row5, value: &Value) -> Result<(), 
     store(draft, &form)
 }
 
+/// 1707 item 8: the ticked box carries the answer; Yes keeps what 8A
+/// holds, No clears it (asked first: [`removes`]).
+#[inline(never)]
+fn fill_1707_tax_relief(draft: &mut Value, yes: bool, value: &Value) -> Result<(), String> {
+    if !ticked(value) {
+        return Ok(());
+    }
+    let mut form: Form1707Draft = typed(draft)?;
+    form.tax_relief = if yes {
+        Some(form.tax_relief.take().unwrap_or_default())
+    } else {
+        None
+    };
+    form.recompute();
+    store(draft, &form)
+}
+
+/// What a 1707 row D box says once the add-more rows hold row D onward.
+pub(super) const ROW_D_FOLDED: &str = "Row D reads OTHERS while the add-more rows hold row D onward: change it in the add-more table.";
+
+#[inline(never)]
+fn fill_1707_shares(
+    draft: &mut Value,
+    row: usize,
+    column: usize,
+    value: &Value,
+) -> Result<(), String> {
+    let mut form: Form1707Draft = typed(draft)?;
+    if row == FORM_1707_SCHEDULE_ROWS - 1 && form.shares.len() > FORM_1707_SCHEDULE_ROWS {
+        return Err(ROW_D_FOLDED.to_string());
+    }
+    let shown = text(value);
+    let filling = match column {
+        1 | 3 => amount(value)? != 0.0,
+        _ => !shown.is_empty(),
+    };
+    if form.shares.len() <= row {
+        if !filling {
+            return Ok(());
+        }
+        form.shares.resize(row + 1, Form1707Shares::default());
+    }
+    let entry = &mut form.shares[row];
+    match column {
+        0 => entry.corporation = shown,
+        1 => entry.number_of_shares = (!shown.is_empty()).then(|| amount(value)).transpose()?,
+        2 => entry.certificate_number = shown,
+        _ => entry.selling_price = amount(value)?,
+    }
+    while form
+        .shares
+        .last()
+        .is_some_and(|last| *last == Form1707Shares::default())
+    {
+        form.shares.pop();
+    }
+    form.recompute();
+    store(draft, &form)
+}
+
+#[inline(never)]
+fn fill_1707_expense_d(draft: &mut Value, column: usize, value: &Value) -> Result<(), String> {
+    let mut form: Form1707Draft = typed(draft)?;
+    if form.expenses.len() > FORM_1707_SCHEDULE_ROWS {
+        return Err(ROW_D_FOLDED.to_string());
+    }
+    let row = FORM_1707_SCHEDULE_ROWS - 1;
+    let shown = text(value);
+    let filling = if column == 1 {
+        amount(value)? != 0.0
+    } else {
+        !shown.is_empty()
+    };
+    if form.expenses.len() <= row {
+        if !filling {
+            return Ok(());
+        }
+        form.expenses.resize(row + 1, Form1707Expense::default());
+    }
+    if column == 1 {
+        form.expenses[row].amount = amount(value)?;
+    } else {
+        form.expenses[row].particulars = shown;
+    }
+    while form
+        .expenses
+        .last()
+        .is_some_and(|last| *last == Form1707Expense::default())
+    {
+        form.expenses.pop();
+    }
+    form.recompute();
+    store(draft, &form)
+}
+
+/// What the page shows where the field map's value is not what the draft
+/// keeps (display only; the field map, upload and print are unchanged):
+/// 1707's profile copy of the address is the whole address, never the
+/// upload's cut first line (form_1707.rs address_parts), so an edit there
+/// never drops the second line.
+pub(super) fn values(
+    kind: AgentFormKind,
+    draft: &Value,
+    map: &mut std::collections::BTreeMap<String, String>,
+) {
+    if kind.form_code() == "1707"
+        && let Some(address) = draft["registered_address"].as_str()
+        && map.contains_key("frm1707:ProfileAddress1")
+    {
+        map.insert("frm1707:ProfileAddress1".into(), address.to_uppercase());
+    }
+}
+
 /// The boxes this module shuts, and why, over the probed locks: 2552's
 /// add-more tax due (h) cells and Schedule 1's fixed rate (g), which
 /// form_2552.rs `recompute` computes (the probe saw them change with the
@@ -432,6 +590,9 @@ pub(super) fn mark_calendar_tables(form: &mut Value, code: &str) {
     if !matches!(code, "2552" | "1707") {
         return;
     }
+    if code == "1707" {
+        order_1707_sellers(form);
+    }
     let items = form["parts"]
         .as_array_mut()
         .into_iter()
@@ -444,6 +605,43 @@ pub(super) fn mark_calendar_tables(form: &mut Value, code: &str) {
         if dated {
             item["calendar"] = Value::Bool(true);
         }
+    }
+}
+
+/// 1707 item 6's extracted table keeps its columns in key order (address,
+/// name, TIN): the sheet prints Name | Registered Address | TIN on rows
+/// 6A-6C (html-frozen/1707-2021/writer-cells.json "6A Seller name", "6A
+/// Seller's Registered Address", "6A Seller's Taxpayer Identification
+/// Number").
+fn order_1707_sellers(form: &mut Value) {
+    let items = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
+    for item in items {
+        if item["keys"][0][0] != "frm1707:txtPg1I6SellerAddr0" {
+            continue;
+        }
+        let order = [1, 0, 2];
+        let cols = item["cols"].clone();
+        item["cols"] = Value::Array(order.iter().map(|&c| cols[c].clone()).collect());
+        for (col, caption) in item["cols"].as_array_mut().unwrap().iter_mut().zip([
+            "Seller's Name",
+            "Seller's Registered Address",
+            "Seller's Taxpayer Identification Number (TIN)",
+        ]) {
+            col["l"] = Value::from(caption);
+        }
+        if let Some(rows) = item["keys"].as_array_mut() {
+            for row in rows {
+                let old = row.clone();
+                *row = Value::Array(order.iter().map(|&c| old[c].clone()).collect());
+            }
+        }
+        item["no"] = Value::from("6");
+        item["l"] = Value::from("Seller's Name, Registered Address and TIN (rows 6A-6C)");
+        item["row_labels"] = serde_json::json!({"caption": "Row", "rows": ["6A", "6B", "6C"]});
     }
 }
 
@@ -786,6 +984,23 @@ pub(super) fn printed_message(kind: AgentFormKind, message: &str) -> Option<&'st
         .map(|(_, _, printed)| *printed)
 }
 
+/// 1707 item 8 No clears what 8A held.
+fn removes_1707(before: &Value, after: &Value, edits: &Map<String, Value>) -> Option<Value> {
+    if !edits.contains_key("frm1707:rdoPg1I8TaxReliefNo") {
+        return None;
+    }
+    let held = before["tax_relief"]
+        .as_str()
+        .filter(|t| !t.trim().is_empty())?;
+    after["tax_relief"].is_null().then(|| {
+        serde_json::json!({
+            "message": format!("Answering No at item 8 clears item 8A (\"{held}\"). Continue?"),
+            "done": "Cleared item 8A",
+            "rows": 1,
+        })
+    })
+}
+
 /// When `edits` turned `before` into `after` by removing what the filer
 /// typed, what the page asks first (`message`), what the Undo toast says
 /// (`done`) and how many rows went; `None` when nothing typed went.
@@ -795,6 +1010,9 @@ pub(super) fn removes(
     after: &Value,
     edits: &Map<String, Value>,
 ) -> Option<Value> {
+    if kind.form_code() == "1707" {
+        return removes_1707(before, after, edits);
+    }
     if kind.form_code() != "2552"
         || !edits
             .keys()

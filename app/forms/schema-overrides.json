@@ -15816,12 +15816,12 @@
       "evidence": "internal workflow/credential key ebirOnlineUsername (not a printed box)"
     },
     "frm1707:ProfileAddress1": {
-      "label": "Registered address (profile)",
-      "evidence": "painted form_1707_view.rs (local:address via binding /registered_address): 'Registered address (profile)'"
+      "label": "Registered Address",
+      "evidence": "painted form_1707_view.rs (local:address via binding /registered_address): 'Registered address (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
     },
     "frm1707:ProfileEmailAddr": {
-      "label": "E-mail address (profile)",
-      "evidence": "painted form_1707_view.rs (local:email via binding /email): 'E-mail address (profile)'"
+      "label": "Email Address",
+      "evidence": "painted form_1707_view.rs (local:email via binding /email): 'E-mail address (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
     },
     "frm1707:txtPg1I1Day": {
       "kind": "int",
@@ -15852,16 +15852,16 @@
       "kind": "int"
     },
     "frm1707:txtPg1I8TaxReliefSpec": {
-      "label": "Tax relief, specify",
-      "evidence": "painted form_1707_view.rs (local:relief via binding /tax_relief): 'Tax relief, specify'; writer-cells printed caption: 'If yes, specify'"
+      "label": "8A If yes, please specify",
+      "evidence": "painted form_1707_view.rs (local:relief via binding /tax_relief): 'Tax relief, specify'; writer-cells printed caption: 'If yes, specify' | PR 9: html-frozen/1707-2021/writer-cells.json joins '8 If yes, specify'"
     },
     "frm1707:txtPg1I9TransDescSpec": {
-      "label": "Others, specify",
-      "evidence": "painted form_1707_view.rs (local:txn_description via binding /transaction_description): 'Others, specify'; writer-cells printed caption: 'Others (please specify)'"
+      "label": "Specify",
+      "evidence": "painted form_1707_view.rs (local:txn_description via binding /transaction_description): 'Others, specify'; writer-cells printed caption: 'Others (please specify)' | PR 9: item 9's Others specification"
     },
     "frm1707:txtLOB": {
-      "label": "Line of business (profile)",
-      "evidence": "painted form_1707_view.rs (local:lob via binding /line_of_business): 'Line of business (profile)'"
+      "label": "Line of Business",
+      "evidence": "painted form_1707_view.rs (local:lob via binding /line_of_business): 'Line of business (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
     },
     "frm1707:txtPg1P2I17Surcharge": {
       "label": "Surcharge",
@@ -15885,15 +15885,16 @@
     },
     "frm1707:txtPg2RegisteredName": {
       "label": "Taxpayer's name (profile)",
-      "evidence": "painted form_1707_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's name (profile)\"; writer-cells printed caption: \"Taxpayer's Name (page 2)\""
+      "evidence": "painted form_1707_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's name (profile)\"; writer-cells printed caption: \"Taxpayer's Name (page 2)\" | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "Pg2Pt4S2SubTotal": {
-      "label": "Page 2 Part 4 S 2 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 4 S 2 Sub Total'"
+      "label": "Add-more subtotal (row D prints it as OTHERS)",
+      "evidence": "agent box label: 'Page 2 Part 4 S 2 Sub Total' | PR 9: the add-more subtotal, which row D prints as OTHERS (form_1707.rs shares_popup_subtotal / expenses_popup_subtotal)"
     },
     "Pg2Pt4S3SubTotal": {
-      "label": "Page 2 Part 4 S 3 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 4 S 3 Sub Total'"
+      "label": "Add-more subtotal (row D prints it as OTHERS)",
+      "evidence": "agent box label: 'Page 2 Part 4 S 3 Sub Total' | PR 9: the add-more subtotal, which row D prints as OTHERS (form_1707.rs shares_popup_subtotal / expenses_popup_subtotal)"
     },
     "txtEnroll": {
       "kind": "hidden",
@@ -15904,24 +15905,28 @@
       "evidence": "internal workflow/credential key txtFinalFlag (not a printed box)"
     },
     "frm1707:rdoPg1I3ATCIndiv": {
-      "label": "ATC: II030 Individual",
-      "evidence": "P4: printed caption '3 ATC: II030 Individual' (html-frozen/1707-2021/writer-cells.json xbox_joins)"
+      "label": "II030 Individual",
+      "evidence": "P4: printed caption '3 ATC: II030 Individual' (html-frozen/1707-2021/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json xbox_joins '3 ATC: II030 Individual'"
     },
     "frm1707:txtPg2TinC1": {
       "label": "Page 2 header TIN (part 1)",
-      "evidence": "P4: key frm1707:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1"
+      "evidence": "P4: key frm1707:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2TinC2": {
       "label": "Page 2 header TIN (part 2)",
-      "evidence": "P4: key frm1707:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2"
+      "evidence": "P4: key frm1707:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2TinC3": {
       "label": "Page 2 header TIN (part 3)",
-      "evidence": "P4: key frm1707:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3"
+      "evidence": "P4: key frm1707:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2TinC4": {
       "label": "Page 2 header TIN (part 4)",
-      "evidence": "P4: key frm1707:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4"
+      "evidence": "P4: key frm1707:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2P4Sch3Amount1": {
       "label": "Schedule 3 row A Amount",
@@ -16128,6 +16133,581 @@
     "frm1707:txtCurrentPage": {
       "kind": "hidden",
       "evidence": "Item 3: internal page state of the official program (which inputs to enable, the page shown, a modal's row count, the page version), set by the page's own script, not a box the filer types; this app's field map never writes it, so it is hidden."
+    },
+    "frm1707:rdoPg1I2AmendedYes": {
+      "label": "Yes",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '2 Amended Return? Yes'; the box sets /is_amended true (crates/bir-core/data/agent-forms/1707-v2021.json), so it reads Yes"
+    },
+    "frm1707:rdoPg1I2AmendedNo": {
+      "label": "No",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '2 Amended Return? No'; the box sets /is_amended false, so it reads No"
+    },
+    "frm1707:rdoPg1I3ATCCorp": {
+      "label": "IC110 Corporation",
+      "evidence": "PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json xbox_joins '3 ATC: IC110 Corporation'"
+    },
+    "frm1707:txtPg1I3Indiv": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (II030 / IC110); the boxes print from rdoPg1I3ATCIndiv / rdoPg1I3ATCCorp'; the box's label names the code"
+    },
+    "frm1707:txtPg1I3Corp": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (II030 / IC110); the boxes print from rdoPg1I3ATCIndiv / rdoPg1I3ATCCorp'; the box's label names the code"
+    },
+    "frm1707:rdoPg1I8TaxReliefYes": {
+      "label": "Yes",
+      "evidence": "PR 9 (R3.3): html-frozen/1707-2021/writer-cells.json xbox_joins '8 ... Yes'"
+    },
+    "frm1707:rdoPg1I8TaxReliefNo": {
+      "label": "No",
+      "evidence": "PR 9 (R3.3): html-frozen/1707-2021/writer-cells.json xbox_joins '8 ... No'"
+    },
+    "frm1707:rdoPg1I9TransDescCash": {
+      "label": "Cash Sale",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Cash Sale'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:rdoPg1I9TransDescInstallment": {
+      "label": "Installment Sale (Fill-out Part IV-Schedule 1)",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Installment Sale'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:rdoPg1I9TransDescForeclosure": {
+      "label": "Foreclosure Sale",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Foreclosure Sale'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:rdoPg1I9TransDescOthers": {
+      "label": "Others (please specify)",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Others'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:txtPg1P2I13AppTaxRate": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-3): the rate is preprinted (15%) on the sheet (html-frozen/1707-2021/writer-cells.json not_joined: 'item 13 rate is preprinted (15%); there is no box to fill'); the item shows it as printed"
+    },
+    "frm1707:txtPg2P4Sch1I6ApplcRate": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-3): the rate is preprinted (15%) on the sheet (html-frozen/1707-2021/writer-cells.json not_joined: 'item 13 rate is preprinted (15%); there is no box to fill'); the item shows it as printed"
+    },
+    "frm1707:ProfileAddress2": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R5.2): the upload's second registered-address line, cut from the one draft address (form_1707.rs address_parts); the page shows the whole address in its first box (rows_as_needed.rs values), and the sheet prints neither (html-frozen/1707-2021/writer-cells.json not_joined)"
+    },
+    "Pg2Pt4S2PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.5): html-frozen/1707-2021/writer-cells.json not_joined: 'pop-up row count of the page, not on the paper form'"
+    },
+    "Pg2Pt4S3PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.5): html-frozen/1707-2021/writer-cells.json not_joined: 'pop-up row count of the page, not on the paper form'"
+    },
+    "frm1707:rdoCorpoDomestic": {
+      "label": "Domestic",
+      "evidence": "PR 9 (R3.0): the option without its question; html-frozen/1707-2021/writer-cells.json not_joined: 'domestic/foreign corporation radio of the page; the 2021 sheet draws no box for it'"
+    },
+    "frm1707:rdoCorpoForeign": {
+      "label": "Foreign",
+      "evidence": "PR 9 (R3.0): the option without its question; html-frozen/1707-2021/writer-cells.json not_joined: 'domestic/foreign corporation radio of the page; the 2021 sheet draws no box for it'"
+    },
+    "frm1707:ProfileName": {
+      "label": "Taxpayer's Name",
+      "evidence": "PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
+    },
+    "frm1707:ProfileZipCode": {
+      "label": "ZIP Code",
+      "evidence": "PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
+    },
+    "frm1707:ProfileContactNum": {
+      "label": "Contact Number",
+      "evidence": "PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
+    },
+    "add:3:0": {
+      "fields": [
+        {
+          "k": "frm1707:txtPg2P4Sch2NoOfShares1",
+          "l": "No. of Shares",
+          "t": "int"
+        }
+      ],
+      "evidence": "PR 9 (R3.2, manual-4): Schedule 2 row A's No. of Shares, which html-frozen/1707-2021/writer-cells.json joins at 'Schedule 2 row A No. of Shares' and form_1707.rs writes from shares[0]; fields.json lists no box for it (the host writes it, rows_as_needed.rs)"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/1707-2021/index.html (BIR Form 1707, April 2021) (Items 1-4, Part I 5-9, Part II 10-19, Part III 20-23, Part IV Schedules 1-3) and html-frozen/1707-2021/writer-cells.json. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction (MM/DD/YYYY)",
+              "k": [
+                "frm1707:txtPg1I1Month",
+                "frm1707:txtPg1I1Day",
+                "frm1707:txtPg1I1Year"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1707:rdoPg1I2AmendedYes",
+                "frm1707:rdoPg1I2AmendedNo"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Alphanumeric Tax Code (ATC)",
+              "k": [
+                "frm1707:rdoPg1I3ATCIndiv",
+                "frm1707:txtPg1I3Indiv",
+                "frm1707:rdoPg1I3ATCCorp",
+                "frm1707:txtPg1I3Corp"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1707:txtPg1I4NoOfSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "RDO Code of the Seller",
+              "k": [
+                "frm1707:rdoPg1Pt1I5RDO"
+              ]
+            },
+            {
+              "table": "frm1707:txtPg1I6SellerName0"
+            },
+            {
+              "no": "7",
+              "l": "Buyer's Name, Registered Address and TIN (rows 7A-7C)",
+              "grid": {
+                "cols": [
+                  "Buyer's Name",
+                  "Buyer's Registered Address",
+                  "Buyer's Taxpayer Identification Number (TIN)"
+                ],
+                "keys": [
+                  [
+                    "frm1707:txtPg1I7BuyerName0",
+                    "frm1707:txtPg1I7BuyerAddr0",
+                    "frm1707:txtPg1I7BuyerTIN0"
+                  ],
+                  [
+                    "frm1707:txtPg1I7BuyerName1",
+                    "frm1707:txtPg1I7BuyerAddr1",
+                    "frm1707:txtPg1I7BuyerTIN1"
+                  ],
+                  [
+                    "frm1707:txtPg1I7BuyerName2",
+                    "frm1707:txtPg1I7BuyerAddr2",
+                    "frm1707:txtPg1I7BuyerTIN2"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Row",
+                  "rows": [
+                    "7A",
+                    "7B",
+                    "7C"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "8",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1707:rdoPg1I8TaxReliefYes",
+                "frm1707:rdoPg1I8TaxReliefNo",
+                "frm1707:txtPg1I8TaxReliefSpec"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Description of Transaction",
+              "k": [
+                "frm1707:rdoPg1I9TransDescCash",
+                "frm1707:rdoPg1I9TransDescInstallment",
+                "frm1707:rdoPg1I9TransDescForeclosure",
+                "frm1707:rdoPg1I9TransDescOthers",
+                "frm1707:txtPg1I9TransDescSpec"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "10",
+              "l": "Taxable Base – For Cash Sale / Foreclosure Sale (From Part IV – Schedule 2)",
+              "k": [
+                "frm1707:txtPg1P2I10TaxBase"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Less: Cost and Other Allowable Expenses (From Part IV – Schedule 3)",
+              "k": [
+                "frm1707:txtPg1P2I11AllowExpnse"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Net Capital Gain/(Loss) (Item 10 Less Item 11)",
+              "k": [
+                "frm1707:txtPg1P2I12NetCptalChnged"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Applicable Tax Rate",
+              "note": "15% (printed on the form)"
+            },
+            {
+              "no": "14",
+              "l": "Tax Due on the Entire Transaction (Cash Sale/Foreclosure Sale) (Item 12 Multiply by Item 13)",
+              "k": [
+                "frm1707:txtPg1P2I13TaxDueForTrans"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Tax Due for this Payment Period (If Tax is Payable under Installment Method of Computation) (From Part IV – Schedule 1 Item 7)",
+              "k": [
+                "frm1707:txtPg1P2I14TaxDuePmtPriod"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Less: Tax Paid in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm1707:txtPg1P2I15TaxPaidInPrevRtrn"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Tax Payable/(Overpayment) (Item 14 or 15 Less Item 16)",
+              "k": [
+                "frm1707:txtPg1P2I16TaxPayable"
+              ]
+            },
+            {
+              "no": "18A",
+              "l": "Surcharge",
+              "k": [
+                "frm1707:txtPg1P2I17Surcharge"
+              ]
+            },
+            {
+              "no": "18B",
+              "l": "Interest",
+              "k": [
+                "frm1707:txtPg1P2I17Interest"
+              ]
+            },
+            {
+              "no": "18C",
+              "l": "Compromise",
+              "k": [
+                "frm1707:txtPg1P2I17Compromise"
+              ]
+            },
+            {
+              "no": "18D",
+              "l": "Total Penalties (Sum of Items 18A to 18C)",
+              "k": [
+                "frm1707:txtPg1P2I17TotPenalties"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Items 17 and 18D)",
+              "k": [
+                "frm1707:txtPg1P2I18TotAmtPyable"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
+              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "20",
+              "l": "Cash/Bank Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "21",
+              "l": "Check",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "22",
+              "l": "Tax Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "23",
+              "l": "Others (specify below)",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 1 – Installment Sale",
+          "items": [
+            {
+              "no": "1",
+              "l": "Selling Price",
+              "k": [
+                "frm1707:txtPg2P4Sch1I1SellPrice"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Cost and Expenses",
+              "k": [
+                "frm1707:txtPg2P4Sch1I2CostExpense"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Mortgage Assumed",
+              "k": [
+                "frm1707:txtPg2P4Sch1I3AssumMortgage"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "No. of Installment",
+              "k": [
+                "frm1707:txtPg2P4Sch1I4NumInstallments"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Amount of Installment for this Payment Period",
+              "k": [
+                "frm1707:txtPg2P4Sch1I5InstallmentAmt"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Applicable Tax Rate",
+              "note": "15% (printed on the form)"
+            },
+            {
+              "no": "7",
+              "l": "Tax Due for the Period (Item 5 Multiply by Item 6) (To Part II Item 15)",
+              "k": [
+                "frm1707:txtPg2P4Sch1I7PeriodTaxDue"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Date of Collection of Installment for this Payment Period (MM/DD/YYYY)",
+              "k": [
+                "frm1707:txtPg2P4Sch1I8DateCollection"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Total Collection (Down payment and Installments) during the Year of Sale",
+              "k": [
+                "frm1707:txtPg2P4Sch1I9TotCollection"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 2 – Description of Shares of Stocks",
+          "items": [
+            {
+              "no": "",
+              "l": "Description of Shares of Stocks (rows A-D)",
+              "grid": {
+                "cols": [
+                  "Name of Corporate Stock",
+                  "No. of Shares",
+                  "Stock Certificate Number",
+                  "Taxable Base/Selling Price"
+                ],
+                "keys": [
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock1",
+                    "frm1707:txtPg2P4Sch2NoOfShares1",
+                    "frm1707:txtPg2P4Sch2StockCertNo1",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice1"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock2",
+                    "frm1707:txtPg2P4Sch2NoOfShares2",
+                    "frm1707:txtPg2P4Sch2StockCertNo2",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice2"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock3",
+                    "frm1707:txtPg2P4Sch2NoOfShares3",
+                    "frm1707:txtPg2P4Sch2StockCertNo3",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice3"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock4",
+                    "frm1707:txtPg2P4Sch2NoOfShares4",
+                    "frm1707:txtPg2P4Sch2StockCertNo4",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Row",
+                  "rows": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "Total Taxable Base (To Part II Item 10)",
+              "k": [
+                "frm1707:txtPg2P4Sch2TotAmount"
+              ]
+            },
+            {
+              "table": "frm1707:txtPg2Pt4S2_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 add-more subtotal",
+              "k": [
+                "Pg2Pt4S2SubTotal",
+                "Pg2Pt4S2PopLength"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 3 – Schedule of Cost and Other Allowable Expenses",
+          "items": [
+            {
+              "no": "",
+              "l": "Cost and Other Allowable Expenses (rows A-D)",
+              "grid": {
+                "cols": [
+                  "Particulars",
+                  "Amount"
+                ],
+                "keys": [
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars1",
+                    "frm1707:txtPg2P4Sch3Amount1"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars2",
+                    "frm1707:txtPg2P4Sch3Amount2"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars3",
+                    "frm1707:txtPg2P4Sch3Amount3"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars4",
+                    "frm1707:txtPg2P4Sch3Amount4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Row",
+                  "rows": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "Total (To Part II Item 11)",
+              "k": [
+                "frm1707:txtPg2P4Sch3TotAmount"
+              ]
+            },
+            {
+              "table": "frm1707:txtPg2Pt4S3_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 add-more subtotal",
+              "k": [
+                "Pg2Pt4S3SubTotal",
+                "Pg2Pt4S3PopLength"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "The filer's profile copy the official page keeps (the 2021 sheet prints the parties in items 6 and 7, and the filer's name on page 2)",
+              "k": [
+                "frm1707:ProfileName",
+                "frm1707:ProfileAddress1",
+                "frm1707:ProfileAddress2",
+                "frm1707:ProfileZipCode",
+                "frm1707:ProfileContactNum",
+                "frm1707:ProfileEmailAddr",
+                "frm1707:txtLOB"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Taxpayer Identification Number (TIN) (the official page's copy; the sheet prints it on page 2)",
+              "k": [
+                "frm1707:txtPg1TIN1",
+                "frm1707:txtPg1TIN2",
+                "frm1707:txtPg1TIN3",
+                "frm1707:txtPg1TIN4"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Corporation: Domestic or Foreign (the official page's own question; the sheet draws no box)",
+              "k": [
+                "frm1707:rdoCorpoDomestic",
+                "frm1707:rdoCorpoForeign"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "add:1:1": {
+      "fields": [
+        {
+          "k": "frm1707:rdoPg1Pt1I5RDO",
+          "l": "RDO Code of the Seller",
+          "t": "sel"
+        }
+      ],
+      "evidence": "PR 9 (R2.2, preview.0, manual-2): item 5, which html-frozen/1707-2021/writer-cells.json joins at '5 RDO Code of the Seller' and form_1707.rs writes from rdo_code; the probe binds it (probe.rs PRINTED_NOT_IN_CORPUS)"
     }
   },
   "1707A": {

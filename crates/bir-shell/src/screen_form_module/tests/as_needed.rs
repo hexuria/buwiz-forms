@@ -15,6 +15,7 @@ const FORMS: &[(&str, &str)] = &[
     ("1706", "1706-2018"),
     ("2000OT", "2000-ot-2018"),
     ("2552", "2552-2018"),
+    ("1707", "1707-2021"),
 ];
 
 fn writer_cells(slug: &str) -> Value {
@@ -96,9 +97,11 @@ fn drawn(code: &str) -> Vec<Drawn> {
                 }
             }
             for (r, row) in item["keys"].as_array().into_iter().flatten().enumerate() {
+                // A table numbered from `start` carries its row's number; one
+                // whose rows the sheet letters (1707's 6A-6C) its item's.
                 let row_no = item["start"]
                     .as_u64()
-                    .map_or(String::new(), |start| (start + r as u64).to_string());
+                    .map_or(no.clone(), |start| (start + r as u64).to_string());
                 for (c, key) in row.as_array().unwrap().iter().enumerate() {
                     let col = &item["cols"][c];
                     if col["t"] != "hidden" {
@@ -1223,4 +1226,368 @@ fn pr9_2552_item_11_asks_before_it_clears_part_v_and_row_5_fills() {
         rows_as_needed::ROW5_FOLDED
     );
     assert_eq!(refused["values"]["frm2552:txtPg2Pt5Sch1Seller5"], "OTHERS");
+}
+
+// ------------------------------------------------------------------ 1707
+
+/// 1707 R2.2, preview.0, manual-2: item 5, the seller's RDO, is drawn in
+/// its printed item, filled from the profile and locked with Edit like the
+/// other profile boxes, and what it shows is what prints at "5 RDO Code of
+/// the Seller" (writer-cells.json).
+#[test]
+fn pr9_1707_item_5_rdo_is_drawn_and_prints() {
+    setup();
+    let key = "frm1707:rdoPg1Pt1I5RDO";
+    assert_eq!(
+        printed_caption("1707-2021", key).unwrap(),
+        "5 RDO Code of the Seller"
+    );
+    let at = placed("1707", key);
+    assert_eq!(
+        (at.part.as_str(), at.no.as_str()),
+        ("Part I · Background Information", "5")
+    );
+    let opened = open("1707", 1);
+    assert_eq!(opened["values"][key], "039");
+    assert!(strings(&opened["profile_edit"]).contains(key));
+    assert!(
+        opened["options"][key]
+            .as_array()
+            .is_some_and(|o| o.iter().any(|o| o["value"] == "040"))
+    );
+    let edited = call(
+        "screen_form_fill",
+        vec![
+            "1707".into(),
+            json(opened["draft"].clone()),
+            json(json!({ key: "040" })),
+            json(json!([key])),
+        ],
+    )
+    .unwrap();
+    assert!(edited["rejected"].as_object().unwrap().is_empty());
+    assert_eq!(printed("1707", &edited["draft"])[key], "040");
+}
+
+/// 1707 manual-0, manual-1, R3.0, R3.1, R3.3: items read as printed. Item
+/// 6's sellers and item 7's buyers are tables of Name | Registered Address
+/// | TIN on rows 6A-6C and 7A-7C; item 3's boxes are II030 Individual and
+/// IC110 Corporation (the uploaded codes beside them not drawn); item 9's
+/// options each write the transaction they name (oracle: the probed
+/// bindings); the profile copies the sheet does not print are under Not
+/// on the printed sheet.
+#[test]
+fn pr9_1707_items_read_as_printed() {
+    let form = schema_entry("1707").unwrap();
+    let table = |first: &str| -> Value {
+        form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .find(|it| it["keys"][0][0] == first)
+            .cloned()
+            .unwrap_or_else(|| panic!("1707 table {first}"))
+    };
+    for (first, no, party, rows) in [
+        (
+            "frm1707:txtPg1I6SellerName0",
+            "6",
+            "Seller's",
+            ["6A", "6B", "6C"],
+        ),
+        (
+            "frm1707:txtPg1I7BuyerName0",
+            "7",
+            "Buyer's",
+            ["7A", "7B", "7C"],
+        ),
+    ] {
+        let t = table(first);
+        assert_eq!(t["no"], no);
+        let cols: Vec<&str> = t["cols"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["l"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            cols,
+            [
+                format!("{party} Name"),
+                format!("{party} Registered Address"),
+                format!("{party} Taxpayer Identification Number (TIN)")
+            ]
+        );
+        assert_eq!(t["row_labels"]["rows"], json!(rows));
+        // Each row's cells are that row's name, address and TIN.
+        for (i, row) in t["keys"].as_array().unwrap().iter().enumerate() {
+            let caption =
+                |key: &Value| printed_caption("1707-2021", key.as_str().unwrap()).unwrap();
+            assert!(
+                caption(&row[0]).starts_with(rows[i]),
+                "{}",
+                caption(&row[0])
+            );
+            assert!(caption(&row[1]).contains("Registered Address"));
+            assert!(
+                caption(&row[2]).contains("TIN") || caption(&row[2]).contains("Identification")
+            );
+        }
+    }
+    assert_eq!(
+        labels_of("1707", "3"),
+        ["II030 Individual", "IC110 Corporation"]
+    );
+    let def = kind_of("1707").unwrap().definition();
+    for d in drawn("1707")
+        .into_iter()
+        .filter(|d| d.no == "9" && d.t == "radio")
+    {
+        let Some(Binding::Choice { options }) = def.bindings.get(&d.key).map(|b| &b.binding) else {
+            panic!("{} is bound", d.key);
+        };
+        let set = options.iter().find(|o| o.value == "true").unwrap().set["/transaction_type"]
+            .as_str()
+            .unwrap()
+            .replace('_', " ");
+        let label = d.label.to_ascii_lowercase();
+        let first_word = set.split(' ').next().unwrap();
+        assert!(
+            label.starts_with(first_word),
+            "{}: {} writes {set}",
+            d.key,
+            d.label
+        );
+    }
+    let off: Vec<String> = drawn("1707")
+        .into_iter()
+        .filter(|d| d.part == "Not on the printed sheet")
+        .map(|d| d.key)
+        .collect();
+    let printed_not = not_joined("1707-2021");
+    assert!(off.len() >= 10);
+    for key in &off {
+        assert!(printed_not.contains(key), "{key} is printed");
+    }
+}
+
+/// 1707 manual-3: items 13 and Schedule 1 item 6 show the preprinted 15%
+/// (writer-cells.json: "item 13 rate is preprinted (15%)"), with no box;
+/// R3.6 and manual-4: the tax agent's boxes and Part III items 20-23 show a
+/// note (the official program keeps them disabled at load).
+#[test]
+fn pr9_1707_printed_rates_and_disabled_parts_are_notes() {
+    let sheet = sheet_text("1707-2021");
+    assert!(sheet.contains("15% 13 Applicable Tax Rate"));
+    assert!(sheet.contains("15% 6 Applicable Tax Rate"));
+    let form = schema_entry("1707").unwrap();
+    let notes: Vec<(String, String, String)> = form["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|p| {
+            let name = p["n"].as_str().unwrap().to_string();
+            p["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(move |it| {
+                    it["note"].as_str().map(|n| {
+                        (
+                            name.clone(),
+                            it["no"].as_str().unwrap().to_string(),
+                            n.to_string(),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let rates: Vec<&(String, String, String)> = notes
+        .iter()
+        .filter(|(_, _, n)| n.starts_with("15%"))
+        .collect();
+    assert_eq!(rates.len(), 2);
+    let iii: Vec<&str> = notes
+        .iter()
+        .filter(|(p, _, _)| p == "Part III · Details of Payment")
+        .map(|(_, no, _)| no.as_str())
+        .collect();
+    assert_eq!(iii, ["20", "21", "22", "23"]);
+    assert!(notes.iter().any(|(_, _, n)| n.contains("tax agent")));
+    for key in [
+        "frm1707:txtPg1P2I13AppTaxRate",
+        "frm1707:txtPg2P4Sch1I6ApplcRate",
+        "frm1707:txtPg1Pt4TaxAcredNo",
+        "frm1707:txtPg1Pt3I28Date",
+    ] {
+        assert!(!drawn("1707").iter().any(|d| d.key == key), "{key}");
+    }
+    let inventory: Value = serde_json::from_str(
+        &std::fs::read_to_string(format!(
+            "{}/../../rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let controls = inventory["controls"]
+        .as_array()
+        .or(inventory["static_controls"].as_array())
+        .unwrap();
+    let shut: Vec<&Value> = controls
+        .iter()
+        .filter(|c| {
+            c["id"]
+                .as_str()
+                .is_some_and(|id| id.contains("Pg1Pt3") || id.contains("Pg1Pt4"))
+        })
+        .collect();
+    assert!(shut.len() >= 20);
+    assert!(shut.iter().all(|c| c["disabled"] == true));
+}
+
+/// 1707 R3.3: item 8's Yes and No are the draft's tax relief (`Some` holds
+/// 8A). Yes keeps what 8A holds and prints; No clears it, so the page asks
+/// first (`removes`) and offers Undo.
+#[test]
+fn pr9_1707_item_8_no_asks_before_it_clears_8a() {
+    setup();
+    let keys = [
+        "frm1707:rdoPg1I8TaxReliefYes",
+        "frm1707:rdoPg1I8TaxReliefNo",
+    ];
+    let opened = open("1707", 1);
+    for key in keys {
+        assert!(opened["locks"][key].is_null(), "{key}");
+    }
+    let yes = fill("1707", &opened["draft"], pick(&keys, keys[0]));
+    let typed = fill(
+        "1707",
+        &yes["draft"],
+        json!({"frm1707:txtPg1I8TaxReliefSpec": "Special law"}),
+    );
+    assert_eq!(typed["draft"]["tax_relief"], "Special law");
+    assert_eq!(typed["values"][keys[0]], "true");
+    assert_eq!(printed("1707", &typed["draft"])[keys[0]], "true");
+    let no = fill("1707", &typed["draft"], pick(&keys, keys[1]));
+    assert!(no["removes"]["message"].as_str().unwrap().contains("8A"));
+    assert!(no["draft"]["tax_relief"].is_null());
+    assert_eq!(no["values"][keys[1]], "true");
+    // Nothing typed in 8A: No removes nothing.
+    let plain = fill("1707", &yes["draft"], pick(&keys, keys[1]));
+    assert!(plain["removes"].is_null());
+}
+
+/// 1707 R3.2, manual-4: Schedules 2 and 3 show rows A-D open, as printed.
+/// Row A's No. of Shares (no fields.json box; writer-cells.json "Schedule 2
+/// row A No. of Shares") and row D (once the add-more rows hold row D
+/// onward it reads OTHERS and says where to edit) are typed and print.
+#[test]
+fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
+    setup();
+    let opened = open("1707", 1);
+    let cells = [
+        ("frm1707:txtPg2P4Sch2NameOfCorpStock1", "Example Corp"),
+        ("frm1707:txtPg2P4Sch2NoOfShares1", "1000"),
+        ("frm1707:txtPg2P4Sch2StockCertNo4", "C-4"),
+        ("frm1707:txtPg2P4Sch2NameOfCorpStock4", "Fourth Corp"),
+        ("frm1707:txtPg2P4Sch2TaxBaseSellPrice4", "5000"),
+        ("frm1707:txtPg2P4Sch3Particulars4", "Broker fee"),
+        ("frm1707:txtPg2P4Sch3Amount4", "250"),
+    ];
+    for (key, _) in cells {
+        assert!(opened["locks"][key].is_null(), "{key}");
+        assert_eq!(placed("1707", key).t != "hidden", true);
+    }
+    let edits = Value::Object(
+        cells
+            .iter()
+            .map(|(k, v)| (k.to_string(), json!(v)))
+            .collect(),
+    );
+    let filled = fill("1707", &opened["draft"], edits);
+    assert!(
+        filled["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        filled["rejected"]
+    );
+    assert_eq!(filled["draft"]["shares"][0]["number_of_shares"], 1000.0);
+    assert_eq!(filled["draft"]["shares"][3]["certificate_number"], "C-4");
+    assert_eq!(filled["draft"]["expenses"][3]["amount"], 250.0);
+    let map = printed("1707", &filled["draft"]);
+    assert_eq!(map["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000.000");
+    assert_eq!(map["frm1707:txtPg2P4Sch3Amount4"], "250.00");
+    let mut typed: bir_core::forms::form_1707::Form1707Draft =
+        serde_json::from_value(filled["draft"].clone()).unwrap();
+    typed.shares.push(typed.shares[3].clone());
+    let folded = serde_json::to_value(&typed).unwrap();
+    let refused = fill(
+        "1707",
+        &folded,
+        json!({"frm1707:txtPg2P4Sch2StockCertNo4": "C-5"}),
+    );
+    assert_eq!(
+        refused["rejected"]["frm1707:txtPg2P4Sch2StockCertNo4"],
+        rows_as_needed::ROW_D_FOLDED
+    );
+}
+
+/// 1707 R5.2: the profile copy of the address shows the whole address the
+/// draft keeps, never the upload's cut first line, so an edit there keeps
+/// the rest; the upload's second line is not drawn and the field map is
+/// unchanged.
+#[test]
+fn pr9_1707_profile_address_shows_the_whole_address() {
+    setup();
+    let opened = open("1707", 1);
+    let long = "UNIT 1234 EXAMPLE TOWER, 56 SAMPLE AVENUE CORNER LONG STREET NAME, BARANGAY SAMPLE, QUEZON CITY";
+    let mut draft = opened["draft"].clone();
+    draft["registered_address"] = json!(long);
+    let shown = fill("1707", &draft, json!({}));
+    assert_eq!(shown["values"]["frm1707:ProfileAddress1"], long);
+    let map = agent::field_map(kind_of("1707").unwrap(), &draft).unwrap();
+    assert_eq!(map["frm1707:ProfileAddress1"].chars().count(), 80);
+    assert!(!map["frm1707:ProfileAddress2"].is_empty());
+    assert!(
+        !drawn("1707")
+            .iter()
+            .any(|d| d.key == "frm1707:ProfileAddress2")
+    );
+}
+
+/// 1707 R4.0: Schedule 1 item 8 is one date box (shown "Dec 10, 2020",
+/// with its calendar) that keeps a typed MM/DD/YYYY date on an installment
+/// sale and prints it (writer-cells.json date_joins); item 9 is an amount.
+#[test]
+fn pr9_1707_schedule_1_date_is_a_date() {
+    setup();
+    assert_eq!(
+        placed("1707", "frm1707:txtPg2P4Sch1I8DateCollection").t,
+        "date"
+    );
+    assert_eq!(
+        placed("1707", "frm1707:txtPg2P4Sch1I9TotCollection").t,
+        "money"
+    );
+    let opened = open("1707", 1);
+    let installment = fill(
+        "1707",
+        &opened["draft"],
+        json!({"frm1707:rdoPg1I9TransDescInstallment": "true"}),
+    );
+    let dated = fill(
+        "1707",
+        &installment["draft"],
+        json!({"frm1707:txtPg2P4Sch1I8DateCollection": "03/15/2026"}),
+    );
+    assert_eq!(
+        dated["values"]["frm1707:txtPg2P4Sch1I8DateCollection"],
+        "03/15/2026"
+    );
+    assert_eq!(
+        printed("1707", &dated["draft"])["frm1707:txtPg2P4Sch1I8DateCollection"],
+        "03/15/2026"
+    );
 }

@@ -1931,6 +1931,8 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
+    // PR 9's forms: what the draft keeps where the field map cuts it.
+    rows_as_needed::values(kind, draft, &mut map);
     // A row family's row the upload leaves out still shows what the draft
     // holds: 1702RT writes its "(Add more...)" rows only once two or more
     // are saved, but a single row is already the filer's entry.
@@ -6007,8 +6009,9 @@ mod tests {
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
         // Less 1 for 2552 (PR 9): its item 5 runtime RDO select is a hidden
-        // copy of the printed item 5 box.
-        assert_eq!(supplied, 81);
+        // copy of the printed item 5 box; plus 1 for 1707 (PR 9): its item 5
+        // RDO list, now a box of its printed item.
+        assert_eq!(supplied, 82);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8482,13 +8485,6 @@ mod tests {
         "1702EX frm1702EX:txtLOB",
         "1702EX frm1702EX:txtPg2RegisteredName",
         "1702EX frm1702EX:txtPg3RegisteredName",
-        "1707 frm1707:ProfileAddress1",
-        "1707 frm1707:ProfileContactNum",
-        "1707 frm1707:ProfileEmailAddr",
-        "1707 frm1707:ProfileName",
-        "1707 frm1707:ProfileZipCode",
-        "1707 frm1707:txtLOB",
-        "1707 frm1707:txtPg2RegisteredName",
         "1800 frm1800v2018:txtLineBus",
         "1800 frm1800v2018:txtPg2TaxpayerName",
         "2000 frm2000:txtLineBus",

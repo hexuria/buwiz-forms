@@ -1800,8 +1800,9 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
     // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
     // Less 1 for 2552 (PR 9): its item 5 runtime RDO select is a hidden
-    // copy of the printed item 5 box.
-    assert_eq!(supplied, 81, "catalog lists, dependent ones included");
+    // copy of the printed item 5 box; plus 1 for 1707 (PR 9): its item 5
+    // RDO list, now a box of its printed item.
+    assert_eq!(supplied, 82, "catalog lists, dependent ones included");
 }
 
 #[test]
