@@ -143,6 +143,11 @@
    "status": "fixed",
    "pr": "PR 9",
    "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_party_tins_are_one_comb_and_typed_box_by_box"
+  },
+  "manual-2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_dates_over_three_boxes_are_one_date_box (the item is PR 5's one-date box, one_date: one date typed or picked, the three parts stored split; empty clears, other text must be a MM/DD/YYYY date's parts with a 4-digit year) for Schedule 2 item 7 Date of Installment; screen_form_module::tests::as_needed::pr9_stored_one_dates_open_and_save_unchanged (a literal stored draft with a legacy date opens, files and saves byte for byte unchanged)"
   }
  },
  "1707": {
@@ -230,6 +235,11 @@
    "status": "fixed",
    "pr": "PR 9",
    "proof": "screen_form_module::tests::as_needed::pr9_1707_schedules_2_and_3_rows_a_to_d_are_open; screen_form_module::tests::as_needed::pr9_1707_printed_rates_and_disabled_parts_are_notes (Part III 20-23)"
+  },
+  "manual-1": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_dates_over_three_boxes_are_one_date_box (the item is PR 5's one-date box, one_date: one date typed or picked, the three parts stored split; empty clears, other text must be a MM/DD/YYYY date's parts with a 4-digit year) for item 1, which no longer shows a 00 day on a return not yet dated; screen_form_module::tests::as_needed::pr9_stored_one_dates_open_and_save_unchanged (a literal stored draft with a legacy date opens, files and saves byte for byte unchanged); screen_form_module::tests::as_needed::pr9_1707_item_3_message_sits_under_item_3 (item 3 reads II030 Individual / IC110 Corporation; its 'ATC Code on Page 1 Item 3 is required.' message is drawn under item 3, no Additional details group)"
   }
  },
  "2000OT": {
@@ -329,6 +339,11 @@
    "status": "fixed",
    "pr": "PR 9",
    "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part III items 26-29 with a note; the inventory keeps them disabled)"
+  },
+  "manual-2": {
+   "status": "fixed",
+   "pr": "PR 9",
+   "proof": "screen_form_module::tests::as_needed::pr9_dates_over_three_boxes_are_one_date_box (the item is PR 5's one-date box, one_date: one date typed or picked, the three parts stored split; empty clears, other text must be a MM/DD/YYYY date's parts with a 4-digit year) for item 1, the return's identity, which shows no 00 day and says what sets it; screen_form_module::tests::as_needed::pr9_stored_one_dates_open_and_save_unchanged (a literal stored draft with a legacy date opens, files and saves byte for byte unchanged); screen_form_module::tests::as_needed::pr9_2552_items_5_11_and_12_read_as_printed (one item 5 RDO box, the runtime selector a hidden copy; items 11 and 12 carry their printed headings and 11A its printed caption)"
   }
  }
 }
