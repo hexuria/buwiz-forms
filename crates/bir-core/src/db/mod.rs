@@ -956,63 +956,141 @@ impl Database {
     }
 
     /// [`Self::seed_official_holidays`] for an explicit list of years.
+    /// Returns how many overrides were appended.
     ///
-    /// Each holiday is offered once: the dates already offered are kept
-    /// under [`HOLIDAY_SEED_LEDGER_KEY`], so a re-run adds only years and
-    /// dates that are new, and a seeded override the user deleted is not
-    /// brought back. A date the user already has an override for keeps it
-    /// and is skipped. Nothing stored is changed or removed; stored overrides
-    /// that do not parse are left alone and nothing is seeded.
+    /// Per holiday date and form code:
+    /// - a code an existing override already covers on that date (its
+    ///   `original_deadline` and `affected_form_codes`) keeps that override
+    ///   and is not seeded, so one saved override for one form blocks the
+    ///   holiday for that form only;
+    /// - each (date, code) is offered once, recorded under
+    ///   [`HOLIDAY_SEED_LEDGER_KEY`] as `YYYY-MM-DD|CODE`, so a re-run adds
+    ///   only new years, dates and codes, and a seed the user deleted is not
+    ///   brought back;
+    /// - what is left for a date is appended as one override.
+    ///
+    /// Stored overrides are never modified, removed or re-identified: the
+    /// stored JSON text is kept byte for byte (unknown keys included) and
+    /// the new entries are appended to it. Overrides or a ledger that do
+    /// not parse stop the seeding. The two settings are written in one
+    /// transaction.
     pub fn seed_holidays_from(
         &self,
         years: &[crate::official_holidays::HolidayYear],
     ) -> Result<usize, DbError> {
-        let mut overrides: Vec<crate::calendar_rules::DeadlineOverride> = match self
-            .get_setting("deadline_overrides")?
-        {
+        use std::collections::BTreeSet;
+        let stored = self.get_setting("deadline_overrides")?;
+        let existing: Vec<serde_json::Value> = match stored.as_deref() {
             None => Vec::new(),
-            Some(json) => match serde_json::from_str(&json) {
-                Ok(overrides) => overrides,
-                Err(error) => {
-                    tracing::warn!(%error, "stored deadline overrides do not parse; holidays not seeded");
+            Some(json) => match serde_json::from_str::<serde_json::Value>(json) {
+                Ok(serde_json::Value::Array(entries)) => entries,
+                _ => {
+                    tracing::warn!("stored deadline overrides do not parse; holidays not seeded");
                     return Ok(0);
                 }
             },
         };
-        let mut offered: std::collections::BTreeSet<String> = self
-            .get_setting(HOLIDAY_SEED_LEDGER_KEY)?
-            .and_then(|json| serde_json::from_str(&json).ok())
-            .unwrap_or_default();
-        let before = offered.len();
-        let mut added = 0;
-        for seed in crate::official_holidays::holiday_overrides(years) {
-            if !offered.insert(seed.original_deadline.to_string()) {
-                continue;
+        let ledger: BTreeSet<String> = match self.get_setting(HOLIDAY_SEED_LEDGER_KEY)? {
+            None => BTreeSet::new(),
+            Some(json) => match serde_json::from_str(&json) {
+                Ok(ledger) => ledger,
+                Err(error) => {
+                    tracing::warn!(%error, "the holiday seed ledger does not parse; holidays not seeded");
+                    return Ok(0);
+                }
+            },
+        };
+        let mut covered: BTreeSet<(String, String)> = BTreeSet::new();
+        let mut ids: BTreeSet<String> = BTreeSet::new();
+        for entry in &existing {
+            if let Some(id) = entry.get("id").and_then(serde_json::Value::as_str) {
+                ids.insert(id.to_string());
             }
-            if overrides
-                .iter()
-                .any(|saved| saved.original_deadline == seed.original_deadline)
+            let Some(date) = entry
+                .get("original_deadline")
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            for code in entry
+                .get("affected_form_codes")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
             {
+                covered.insert((date.to_string(), code.to_string()));
+            }
+        }
+        let mut offered = ledger.clone();
+        let mut appended = Vec::new();
+        for mut seed in crate::official_holidays::holiday_overrides(years) {
+            let date = seed.original_deadline.to_string();
+            seed.affected_form_codes.retain(|code| {
+                offered.insert(format!("{date}|{code}"))
+                    && !covered.contains(&(date.clone(), code.clone()))
+            });
+            if seed.affected_form_codes.is_empty() {
                 continue;
             }
-            overrides.push(seed);
-            added += 1;
+            let base = seed.id.clone();
+            let mut n = 2;
+            while ids.contains(&seed.id) {
+                seed.id = format!("{base}-{n}");
+                n += 1;
+            }
+            ids.insert(seed.id.clone());
+            appended.push(seed);
         }
-        if added > 0 {
-            self.set_deadline_overrides(&overrides)?;
+        if appended.is_empty() && offered == ledger {
+            return Ok(0);
         }
-        if offered.len() != before {
+        let tx = self.conn.unchecked_transaction()?;
+        if !appended.is_empty() {
+            let json = append_json_entries(stored.as_deref(), existing.is_empty(), &appended)?;
+            self.set_setting("deadline_overrides", &json)?;
+        }
+        if offered != ledger {
             let json =
                 serde_json::to_string(&offered).map_err(|e| DbError::Other(e.to_string()))?;
             self.set_setting(HOLIDAY_SEED_LEDGER_KEY, &json)?;
         }
-        Ok(added)
+        tx.commit()?;
+        if !appended.is_empty() {
+            let _ = self.request_google_calendar_sync();
+        }
+        Ok(appended.len())
     }
 }
 
-/// Settings key of the holiday dates [`Database::seed_holidays_from`] has
-/// already offered (a JSON array of `YYYY-MM-DD`).
+/// Settings key of the (holiday date, form code) pairs
+/// [`Database::seed_holidays_from`] has offered: a JSON array of
+/// `YYYY-MM-DD|CODE`.
 pub const HOLIDAY_SEED_LEDGER_KEY: &str = "official_holidays_seeded";
+
+/// `stored` (a JSON array, or nothing) with `entries` appended, every
+/// stored byte before the closing bracket kept as it is.
+fn append_json_entries<T: serde::Serialize>(
+    stored: Option<&str>,
+    stored_is_empty: bool,
+    entries: &[T],
+) -> Result<String, DbError> {
+    let items = entries
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| DbError::Other(e.to_string()))?
+        .join(",");
+    let Some(stored) = stored else {
+        return Ok(format!("[{items}]"));
+    };
+    let head = stored
+        .trim_end()
+        .strip_suffix(']')
+        .ok_or_else(|| DbError::Other("stored deadline overrides are not an array".into()))?;
+    let separator = if stored_is_empty { "" } else { "," };
+    Ok(format!("{head}{separator}{items}]"))
+}
 
 // =========================================================================
 // Utility functions
@@ -1417,23 +1495,192 @@ mod tests {
         };
         db.set_deadline_overrides(std::slice::from_ref(&saved))
             .unwrap();
+        let stored = db.get_setting("deadline_overrides").unwrap().unwrap();
         let shipped = crate::official_holidays::OFFICIAL_HOLIDAY_YEARS[0]
             .days
             .len();
-        assert_eq!(db.seed_official_holidays().unwrap(), shipped - 1);
+        // Every date is seeded: Christmas too, for every form but 1601C.
+        assert_eq!(db.seed_official_holidays().unwrap(), shipped);
         let overrides = db.get_deadline_overrides();
         let christmas: Vec<_> = overrides
             .iter()
             .filter(|o| o.original_deadline == ymd(2026, 12, 25))
             .collect();
-        assert_eq!(christmas.len(), 1, "no second override for the date");
-        assert_eq!(christmas[0].id, "user-christmas");
-        assert_eq!(christmas[0].adjusted_deadline, ymd(2027, 1, 4));
-        assert_eq!(christmas[0].source_reference, "RMC 99-2026");
+        assert_eq!(christmas.len(), 2);
         assert_eq!(
-            overrides[0].id, "user-christmas",
+            christmas[0].id, "user-christmas",
             "saved overrides stay first"
         );
+        assert_eq!(christmas[0].affected_form_codes, ["1601C"]);
+        assert_eq!(christmas[0].adjusted_deadline, ymd(2027, 1, 4));
+        assert_eq!(christmas[0].source_reference, "RMC 99-2026");
+        assert_eq!(christmas[1].id, "official-holiday-2026-12-25");
+        assert!(
+            !christmas[1]
+                .affected_form_codes
+                .iter()
+                .any(|c| c == "1601C")
+        );
+        assert!(
+            christmas[1]
+                .affected_form_codes
+                .iter()
+                .any(|c| c == "0619E")
+        );
+        let after = db.get_setting("deadline_overrides").unwrap().unwrap();
+        assert!(
+            after.starts_with(stored.trim_end().strip_suffix(']').unwrap()),
+            "the saved entry's stored text is kept"
+        );
+        // The user's date moves 1601C; the seed moves the other forms.
+        let codes = ["1601C".to_string(), "0619E".to_string()];
+        let rows =
+            crate::calendar_rules::DeadlineResolver::deadlines_for_forms(&codes, 2026, &overrides);
+        assert!(
+            rows.iter()
+                .all(|d| d.final_deadline_date() != Some(ymd(2026, 12, 25)))
+        );
+    }
+
+    /// The desktop's former 2026 seed (13 form codes, random ids, cited
+    /// "RR 2026-001") as an install holds it: kept byte for byte, and the
+    /// holiday added for every form it did not cover.
+    #[test]
+    fn the_former_desktop_seed_is_kept_and_completed_for_the_other_forms() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let old_codes = [
+            "2000", "0619E", "0619F", "1601C", "0620", "1606", "2551Q", "2550Q", "1701Q", "1601EQ",
+            "1601FQ", "1602Q", "1603Q",
+        ];
+        let old = |id: &str, title: &str, original: &str, adjusted: &str| {
+            serde_json::json!({
+                "id": id, "title": title, "source_reference": "RR 2026-001",
+                "affected_form_codes": old_codes, "original_deadline": original,
+                "adjusted_deadline": adjusted, "affected_regions": [],
+                "affected_taxpayer_types": [], "effective_from": null,
+                "effective_until": null, "expires_at": null
+            })
+        };
+        let stored = serde_json::to_string(&[
+            old(
+                "9b1c0f7e-0000-4000-8000-000000000001",
+                "New Year's Day 2026",
+                "2026-01-01",
+                "2026-01-02",
+            ),
+            old(
+                "9b1c0f7e-0000-4000-8000-000000000002",
+                "Maundy Thursday 2026",
+                "2026-04-02",
+                "2026-04-03",
+            ),
+            old(
+                "9b1c0f7e-0000-4000-8000-000000000003",
+                "Good Friday 2026",
+                "2026-04-03",
+                "2026-04-06",
+            ),
+        ])
+        .unwrap();
+        db.set_setting("deadline_overrides", &stored).unwrap();
+        let shipped = crate::official_holidays::OFFICIAL_HOLIDAY_YEARS[0]
+            .days
+            .len();
+        assert_eq!(db.seed_official_holidays().unwrap(), shipped);
+        let after = db.get_setting("deadline_overrides").unwrap().unwrap();
+        assert!(
+            after.starts_with(&stored[..stored.len() - 1]),
+            "kept byte for byte"
+        );
+        let overrides = db.get_deadline_overrides();
+        let jan1: Vec<_> = overrides
+            .iter()
+            .filter(|o| o.original_deadline == ymd(2026, 1, 1))
+            .collect();
+        assert_eq!(jan1.len(), 2);
+        assert_eq!(jan1[0].affected_form_codes, old_codes);
+        assert!(
+            jan1[1]
+                .affected_form_codes
+                .iter()
+                .all(|c| !old_codes.contains(&c.as_str()))
+        );
+        assert!(jan1[1].affected_form_codes.iter().any(|c| c == "2200C"));
+        assert_eq!(db.seed_official_holidays().unwrap(), 0);
+    }
+
+    #[test]
+    fn one_saved_override_for_one_form_blocks_the_holiday_for_that_form_only() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.set_setting(
+            "deadline_overrides",
+            r#"[{"id":"mine","title":"Mine","source_reference":"RMC","affected_form_codes":["2551Q"],"original_deadline":"2026-01-01","adjusted_deadline":"2026-01-05","affected_regions":[],"affected_taxpayer_types":[],"effective_from":null,"effective_until":null,"expires_at":null}]"#,
+        )
+        .unwrap();
+        db.seed_official_holidays().unwrap();
+        let overrides = db.get_deadline_overrides();
+        let seeded = overrides
+            .iter()
+            .find(|o| o.id == "official-holiday-2026-01-01")
+            .unwrap();
+        assert!(!seeded.affected_form_codes.iter().any(|c| c == "2551Q"));
+        assert!(seeded.affected_form_codes.iter().any(|c| c == "1601C"));
+        let ledger: std::collections::BTreeSet<String> =
+            serde_json::from_str(&db.get_setting(HOLIDAY_SEED_LEDGER_KEY).unwrap().unwrap())
+                .unwrap();
+        assert!(
+            ledger.contains("2026-01-01|2551Q"),
+            "offered, kept as the user's"
+        );
+        assert!(ledger.contains("2026-01-01|1601C"));
+    }
+
+    /// Review F21: an entry's keys this build does not know survive.
+    #[test]
+    fn an_override_with_an_extra_key_is_kept_exactly() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let stored = "[ {\"id\":\"x\", \"note\": \"from a newer build\", \"original_deadline\":\"2026-03-03\",\"affected_form_codes\":[\"1601C\"]} ]\n";
+        db.set_setting("deadline_overrides", stored).unwrap();
+        assert!(db.seed_official_holidays().unwrap() > 0);
+        let after = db.get_setting("deadline_overrides").unwrap().unwrap();
+        assert!(after.starts_with("[ {\"id\":\"x\", \"note\": \"from a newer build\", \"original_deadline\":\"2026-03-03\",\"affected_form_codes\":[\"1601C\"]} ,{"));
+        let parsed: serde_json::Value = serde_json::from_str(&after).unwrap();
+        assert_eq!(parsed[0]["note"], "from a newer build");
+    }
+
+    #[test]
+    fn a_ledger_that_does_not_parse_stops_the_seeding() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.set_setting(HOLIDAY_SEED_LEDGER_KEY, "{not a list")
+            .unwrap();
+        assert_eq!(db.seed_official_holidays().unwrap(), 0);
+        assert_eq!(db.get_setting("deadline_overrides").unwrap(), None);
+        assert_eq!(
+            db.get_setting(HOLIDAY_SEED_LEDGER_KEY).unwrap().as_deref(),
+            Some("{not a list"),
+            "not reset to empty"
+        );
+    }
+
+    /// The overrides and the ledger are written together or not at all.
+    #[test]
+    fn the_seed_writes_both_settings_in_one_transaction() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.conn
+            .execute_batch(&format!(
+                "CREATE TEMP TRIGGER refuse_ledger BEFORE INSERT ON settings
+                 WHEN NEW.key = '{HOLIDAY_SEED_LEDGER_KEY}'
+                 BEGIN SELECT RAISE(ABORT, 'ledger refused'); END;"
+            ))
+            .unwrap();
+        assert!(db.seed_official_holidays().is_err());
+        assert_eq!(
+            db.get_setting("deadline_overrides").unwrap(),
+            None,
+            "the overrides write rolled back with the ledger's"
+        );
+        db.conn.execute_batch("DROP TRIGGER refuse_ledger").unwrap();
+        assert!(db.seed_official_holidays().unwrap() > 0);
     }
 
     #[test]

@@ -52,9 +52,10 @@ impl HolidayYear {
     }
 }
 
-/// 2026: the regular holidays the app already carried (the list
-/// `seed_2026_holiday_overrides` seeded). The repo records no proclamation
-/// number for it, and no special non-working days.
+/// 2026: the ten regular holidays the desktop's former 2026 seed carried,
+/// the only list tracked in the repo. The repo records no proclamation
+/// number for it, nor 2026's Eid'l Fitr and Eid'l Adha (declared by their
+/// own proclamations) or its special non-working days, so none is here.
 const HOLIDAYS_2026: HolidayYear = HolidayYear {
     year: 2026,
     proclamation: None,
@@ -113,6 +114,11 @@ const HOLIDAYS_2026: HolidayYear = HolidayYear {
 };
 
 /// Every year the app ships a list for, oldest first.
+///
+/// A year with no table here has no holidays: its deadlines move off
+/// weekends only (the Calendar's window reaches into the next year, and
+/// 2027 has no table yet), so a deadline on a 2027 holiday shows on the
+/// holiday until an update adds that year.
 pub const OFFICIAL_HOLIDAY_YEARS: &[HolidayYear] = &[HOLIDAYS_2026];
 
 /// Whether `date` is a weekend or one of `years`' holidays.
@@ -152,8 +158,12 @@ pub fn business_day_calendar() -> BusinessDayCalendar {
 
 /// The stable id of the override a holiday seeds.
 pub fn seed_id(date: NaiveDate) -> String {
-    format!("official-holiday-{date}")
+    format!("{SEED_ID_PREFIX}{date}")
 }
+
+/// The id prefix of every override the shipped holidays seed: a deadline
+/// one moves is labelled Holiday Adjusted, not Extended.
+pub const SEED_ID_PREFIX: &str = "official-holiday-";
 
 /// Every canonical form code the calendar has a rule for: a holiday moves
 /// any of their deadlines that fall on it.
@@ -206,6 +216,77 @@ mod tests {
             assert_eq!(year.dates().count(), year.days.len(), "{}", year.year);
             assert!(year.dates().all(|(date, _)| date.year() == year.year));
         }
+    }
+
+    #[test]
+    fn a_seeded_holiday_labels_the_deadline_it_moves_holiday_adjusted() {
+        let overrides = holiday_overrides(OFFICIAL_HOLIDAY_YEARS);
+        let rows = DeadlineResolver::deadlines_for_forms(&["1702Q".to_string()], 2026, &overrides);
+        let q3 = rows.iter().find(|d| d.period.quarter() == Some(3)).unwrap();
+        assert_eq!(
+            q3.final_deadline_date(),
+            NaiveDate::from_ymd_opt(2026, 12, 1)
+        );
+        assert_eq!(
+            q3.status,
+            crate::calendar_rules::DeadlineStatus::HolidayAdjusted
+        );
+        // Q1 (May 30, a Saturday, to Monday June 1) meets no holiday.
+        let q1 = rows.iter().find(|d| d.period.quarter() == Some(1)).unwrap();
+        assert_eq!(
+            q1.status,
+            crate::calendar_rules::DeadlineStatus::WeekendAdjusted
+        );
+        // A user's or BIR's extension is still Extended.
+        let extension = DeadlineOverride {
+            id: "bir-extension".to_string(),
+            ..overrides[0].clone()
+        };
+        let rows = DeadlineResolver::deadlines_for_forms(
+            &["1702Q".to_string()],
+            2026,
+            &[DeadlineOverride {
+                original_deadline: NaiveDate::from_ymd_opt(2026, 11, 30).unwrap(),
+                adjusted_deadline: NaiveDate::from_ymd_opt(2026, 12, 15).unwrap(),
+                ..extension
+            }],
+        );
+        let q3 = rows.iter().find(|d| d.period.quarter() == Some(3)).unwrap();
+        assert_eq!(q3.status, crate::calendar_rules::DeadlineStatus::Extended);
+    }
+
+    /// Review F3: 2027 has no table yet, so its deadlines move off weekends
+    /// only, and New Year's Day 2027 (a Friday) reads as a working day.
+    #[test]
+    fn a_year_with_no_table_moves_its_deadlines_off_weekends_only() {
+        assert!(OFFICIAL_HOLIDAY_YEARS.iter().all(|year| year.year != 2027));
+        assert!(
+            business_day_calendar().is_business_day(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap())
+        );
+        let overrides = holiday_overrides(OFFICIAL_HOLIDAY_YEARS);
+        assert!(overrides.iter().all(|o| o.original_deadline.year() != 2027));
+        let codes = affected_form_codes();
+        let weekends = BusinessDayCalendar::default();
+        let mut checked = 0;
+        for year in [2026, 2027] {
+            for d in DeadlineResolver::deadlines_for_forms(&codes, year, &overrides) {
+                let Some(original) = d.original_deadline_date() else {
+                    continue;
+                };
+                if original.year() != 2027 {
+                    continue;
+                }
+                assert_eq!(
+                    d.final_deadline_date(),
+                    Some(weekends.adjust_to_next_business_day(original).0),
+                    "{} {:?}",
+                    d.form_code,
+                    d.period
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 100);
     }
 
     #[test]

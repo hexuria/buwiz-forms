@@ -70,7 +70,9 @@ impl AdminCalendarDashboard {
         let overrides = db
             .lock()
             .map(|d| {
-                let _ = d.seed_official_holidays();
+                if let Err(error) = d.seed_official_holidays() {
+                    tracing::warn!(%error, "official holidays not seeded");
+                }
                 d.get_deadline_overrides()
             })
             .unwrap_or_default();

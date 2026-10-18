@@ -410,7 +410,16 @@ impl ResolvedTaxDeadline {
         *final_deadline = calendar
             .adjust_to_next_business_day(deadline_override.adjusted_deadline)
             .0;
-        self.status = DeadlineStatus::Extended;
+        // A shipped holiday (D8a) moves a deadline for the holiday; any
+        // other override (a BIR extension, or one the user saved) extends it.
+        self.status = if deadline_override
+            .id
+            .starts_with(crate::official_holidays::SEED_ID_PREFIX)
+        {
+            DeadlineStatus::HolidayAdjusted
+        } else {
+            DeadlineStatus::Extended
+        };
         self.source_reference = Some(deadline_override.source_reference.clone());
         true
     }
