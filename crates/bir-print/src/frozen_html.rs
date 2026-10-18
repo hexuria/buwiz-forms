@@ -5145,10 +5145,14 @@ mod tests {
         assert_eq!(fit_size(1000.0, 5), PLAIN_MAX_PT);
     }
 
-    /// The capture that found the bug: a 200-character 0619E address on its
-    /// two lines as the capture printed them (111 characters on line 1, the
-    /// trailing space included, and 89 on line 2). Item 10's second line printed
-    /// at 8.61 pt measured 453.1 pt in Arimo, past its 446.5 pt cell, and was
+    /// The bug as found: a 200-character 0619E registered address
+    /// overflowing item 10. The inputs are synthetic: the address typed
+    /// into the two writer keys as 111 characters (the trailing space
+    /// included) and 89, the shape the review's screenshot showed; the print
+    /// rejoins the lines either way. (BIR's character-127 cut of the escaped
+    /// address does not apply: this address's cut lands inside a %20, so
+    /// form_0619e_official refuses it.) By the old estimate, line 2 printed
+    /// at 8.61 pt and measured 453.1 pt in Arimo, past its 446.5 pt cell,
     /// cut at the 10A ZIP Code caption. Measured, each line's text at its
     /// size fits its cell less the input's 1 pt left padding, so line 2 ends
     /// before the caption; the ZIP prints in its own boxes and the whole
@@ -5190,11 +5194,12 @@ mod tests {
     }
 
     /// Per cell, on both measured sheets (0619E and 0619F, the same two
-    /// address lines): the captured address on its two lines as the capture
-    /// printed them (111 + 89 characters) or whole on line 1, and a
-    /// 200-character text in every text join,
-    /// print so that each plain line's text, measured in Arimo at its size,
-    /// fits its cell less the input's 1 pt left padding.
+    /// address lines), with synthetic inputs: the 200-character address
+    /// whole on line 1, and a 200-character text in every text join, print
+    /// so that each plain line's text, measured in Arimo at its size, fits
+    /// its cell less the input's 1 pt left padding. The same address typed
+    /// across the two keys (111 + 89 characters) prints the very same
+    /// document, so it is checked once.
     #[test]
     fn measured_sheets_fit_every_plain_line_in_its_cell() {
         let first = "UNIT 4512 TOWER B THE RESIDENCES AT GREENBELT 123 ESPERANZA STREET COR. \
@@ -5217,11 +5222,12 @@ mod tests {
                 .keys()
                 .map(|key| (key.clone(), words_of(200)))
                 .collect();
-            for (case, fields) in [
-                ("split", address(format!("{first} "), second)),
-                ("whole", address(whole.clone(), "")),
-                ("every join", every),
-            ] {
+            assert_eq!(
+                filled_document(slug, &address(format!("{first} "), second)).unwrap(),
+                filled_document(slug, &address(whole.clone(), "")).unwrap(),
+                "{slug}: typed across the two lines, it prints as typed whole"
+            );
+            for (case, fields) in [("whole", address(whole.clone(), "")), ("every join", every)] {
                 let document = filled_document(slug, &fields).unwrap();
                 let mut lines = 0;
                 for (cell, (text, size)) in printed_cells(&document) {
