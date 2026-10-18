@@ -1989,3 +1989,52 @@ fn form_1600pt_and_1600vt_drafts_missing_boxes_open_blank() {
         );
     }
 }
+
+/// Review round 3 (P2-4 on the page): the page's fill writes a box's JSON
+/// key, so a missing box the filer cleared or typed spaces into would come
+/// back as `""`. On 1600PT and 1600VT the host takes such a blank key out
+/// again, so the draft still lacks it and saves back byte for byte; a typed
+/// value stays (the main test above).
+#[test]
+fn form_1600pt_and_1600vt_a_blank_page_edit_keeps_a_missing_box_out() {
+    for (code, fixture, missing) in MISSING_BOXES {
+        setup();
+        let p = format!("frm{code}:");
+        let stored = stamped_today(fixture);
+        let id = save(code, &open(code, 3)["draft"])["id"].as_i64().unwrap();
+        raw_exec(
+            "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+            &[&stored, &id.to_string()],
+        );
+        let opened = open(code, 3);
+        let (field, _) = missing[0];
+        let key = match field {
+            "contact_number" => format!("{p}txtPg1Pt1I9ContactNumber"),
+            "zip_code" => format!("{p}txPg1I8ZipCode"),
+            _ => format!("{p}txtPg1Pt1I11Email"),
+        };
+        for blank in ["", "   "] {
+            let edited = fill_unlocked(code, &opened["draft"], json!({ &key: blank }), &[&key]);
+            assert_eq!(edited["rejected"], json!({}), "{code}");
+            assert!(
+                edited["draft"].get(field).is_none(),
+                "{code}: {field} stays out after {blank:?}"
+            );
+            save(code, &edited["draft"]);
+            let saved = raw_row(id).1;
+            let saved = match saved.find(",\"profile_baseline\":") {
+                Some(at) => format!("{}}}", &saved[..at]),
+                None => saved,
+            };
+            assert!(
+                !saved.contains(&format!("\"{field}\":")),
+                "{code}: {field} not saved"
+            );
+        }
+    }
+    // Other forms keep a blank the page writes (0619E's contact number).
+    assert_eq!(
+        rows_monthly::absent_part_i(kind_of("0619E").unwrap(), &json!({})),
+        Vec::<&str>::new()
+    );
+}

@@ -8,18 +8,21 @@
 //! `#[serde(default, skip_serializing_if = "KeptText::is_absent")]`), the
 //! way [`super::form_1701q::PenaltySlot`] keeps 1701Q's penalty keys.
 //!
-//! The rule: a value is left out on save only while it is blank and absent.
-//! It is absent when the stored draft lacked the key (the serde default)
-//! and nothing replaced it whole through [`From`]; a key read from the
-//! store ([`Deserialize`]) and a value built with [`From`] (a new draft from
-//! the profile) are present, and stay so. Editing in place through
-//! [`DerefMut`] (`*text = ...`, `push_str`, `clear`; what the desktop
-//! editor's `set_typed_part_i` does on every change) keeps the presence the
-//! value had, so a missing box files as soon as it holds text and stays out
-//! while it is blank. (The page's fill writes the draft's JSON key, which
-//! is then read back, so a box the filer edits on the page is present.) A
-//! present value serializes as the plain string, byte for byte what a
-//! `String` field wrote.
+//! The rule: a value is left out on save only while it is blank (empty or
+//! spaces only) and absent. It is absent when the stored draft lacked the
+//! key (the serde default) and nothing replaced it whole through [`From`];
+//! a key read from the store ([`Deserialize`]) and a value built with
+//! [`From`] (a new draft from the profile) are present, and stay so.
+//! Editing in place through [`DerefMut`] (`*text = ...`, `push_str`,
+//! `clear`; what the desktop editor's `set_typed_part_i` does on every
+//! change) keeps the presence the value had, so a missing box files as
+//! soon as it holds text and stays out while it is blank. The page's fill
+//! writes the draft's JSON key (a cleared box as `""`), which would read
+//! back present; for these two forms the host takes a blank key the
+//! stored draft lacked out again after the fill
+//! (bir-shell `rows_monthly::keep_absent_blank`), so on the page too a
+//! missing box stays out while blank. A present value serializes as the
+//! plain string, byte for byte what a `String` field wrote.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
@@ -35,9 +38,10 @@ pub struct KeptText {
 }
 
 impl KeptText {
-    /// Missing from the stored draft and still blank: left out on save.
+    /// Missing from the stored draft and still blank (empty or spaces
+    /// only): left out on save.
     pub fn is_absent(&self) -> bool {
-        !self.present && self.text.is_empty()
+        !self.present && self.text.trim().is_empty()
     }
 }
 
@@ -139,6 +143,10 @@ mod tests {
         );
         // Cleared again, it is blank and missing, as it was read.
         draft.email.clear();
+        assert_eq!(serde_json::to_string(&draft).unwrap(), old);
+        // Spaces only are blank too.
+        *draft.email = "   ".to_string();
+        assert!(draft.email.is_absent());
         assert_eq!(serde_json::to_string(&draft).unwrap(), old);
     }
 

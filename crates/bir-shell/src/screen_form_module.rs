@@ -4001,6 +4001,20 @@ fn apply_screen_edits(
     editable: bool,
     unlocked: &BTreeSet<String>,
 ) -> Result<Map<String, Value>, HostError> {
+    // 1600PT/1600VT Part I fields an older draft lacks stay out while blank (P2-4).
+    let absent_part_i = rows_monthly::absent_part_i(kind, draft);
+    let rejected = apply_screen_edits_here(kind, draft, edits, editable, unlocked)?;
+    rows_monthly::keep_absent_blank(&absent_part_i, draft);
+    Ok(rejected)
+}
+
+fn apply_screen_edits_here(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    edits: &Map<String, Value>,
+    editable: bool,
+    unlocked: &BTreeSet<String>,
+) -> Result<Map<String, Value>, HostError> {
     // An open radio opens its item's group box, and an open group box its radios.
     let def = kind.definition();
     let expand = |keys: &BTreeSet<String>| {
