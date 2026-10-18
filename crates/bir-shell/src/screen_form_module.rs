@@ -47,6 +47,7 @@ mod rows_2550m;
 mod rows_2550q;
 mod rows_annual_corporate;
 mod rows_annual_individual;
+mod rows_as_needed;
 mod rows_dst_pt_vat;
 mod rows_income_q;
 mod rows_monthly;
@@ -93,7 +94,7 @@ export interface ScreenFormOpened {
     needs: Record<string, string>;
     /** A printed box the filer cannot fill here, while it shows blank: why, in the filer's words (the schema's reviewed `why`; shown in the box). */
     whys: Record<string, string>;
-    /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
+    /** A blank box's reason, shown in the box: what it waits for (a rate its row's ATC, a tick box the amount that ticks it, a date the return it is started with). */
     waits: Record<string, string>;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
@@ -292,6 +293,7 @@ fn schema() -> &'static [Value] {
             rows_dst_pt_vat::mark_calendar_tables(form, &code);
             rows_income_q::mark_one_date(form, &code);
             rows_annual_corporate::mark_whole_pesos(form, &code);
+            rows_as_needed::mark_calendar_tables(form, &code);
             combs::apply_combs(form, &code);
             // 1701A's item 9, printed from `derived:` lines (PR 7).
             rows_annual_individual::mark_pools(form, &code);
@@ -2408,6 +2410,9 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                // The printed item numbers where BIR's message names its
+                // program's own (decision D6; PR 9's forms).
+                let message = rows_as_needed::printed_message(kind, message).unwrap_or(message);
                 // The annual individual returns draw a message under the
                 // item it cites (PR 7, rows_annual_individual.rs).
                 rows_annual_individual::cited_keys(kind, message, &mut keys);
@@ -2421,6 +2426,8 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
+    // PR 9's forms: what the draft keeps where the field map cuts it.
+    rows_as_needed::values(kind, draft, &mut map);
     // A row family's row the upload leaves out still shows what the draft
     // holds: 1702RT writes its "(Add more...)" rows only once two or more
     // are saved, but a single row is already the filer's entry.
@@ -2892,6 +2899,8 @@ fn opened_json(
     let mut locks = locks(kind, &from_profile);
     rows_dst_pt_vat::relock(kind, &draft, &mut locks);
     rows_annual_corporate::relock(kind, &draft, &mut locks);
+    // PR 9's forms' computed boxes the probe called derived.
+    rows_as_needed::relock(kind, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group; a
     // return with no due date computes none, and its boxes stay open.
     for group in penalties::computed_groups(kind) {
@@ -3006,6 +3015,7 @@ fn opened_json(
     waits.extend(rows_dst_pt_vat::waits(kind));
     waits.extend(rows_annual_corporate::waits(kind));
     waits.extend(rows_annual_individual::waits(kind));
+    waits.extend(rows_as_needed::waits(kind, &draft));
     Ok(json!({
         "form_code": code,
         "year": year,
@@ -3849,13 +3859,14 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's, PR 5's, PR 6's, PR 7's and PR 8's forms; the integration merge chains PR 2's and
+    // 4's, PR 5's, PR 6's, PR 7's, PR 8's and PR 9's forms; the integration merge chains PR 2's and
     // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
         .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_1604::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_annual_corporate::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_annual_individual::removes(kind, &before, &draft, &edits));
+        .or_else(|| rows_annual_individual::removes(kind, &before, &draft, &edits))
+        .or_else(|| rows_as_needed::removes(kind, &before, &draft, &edits));
     // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42),
     // each with its note; `null` opens the box.
     let relocks = rows_annual_corporate::live_locks(kind, &draft);
@@ -4310,6 +4321,11 @@ fn plan_choice_edits(
                 if ticked_groups.contains(&group)
                     || shown.get(&key).and_then(Value::as_str) != Some("true")
                 {
+                    continue;
+                }
+                // 2552 item 11 has no unanswered state to go back to (PR 9):
+                // unticking its answer keeps it.
+                if rows_as_needed::untick_keeps_the_answer(kind, &key) {
                     continue;
                 }
                 if members >= 3 {
@@ -5075,6 +5091,9 @@ mod tests {
     mod annual_1604;
     // PR 8: 1702RT, 1702MX, 1702EX and 1707A against their printed sheets.
     mod annual_corporate;
+    // PR 9: 0605, 1606, 1706, 1707, 2000OT and 2552 against their printed
+    // sheets.
+    mod as_needed;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -6102,7 +6121,14 @@ mod tests {
         let form = schema_entry("2552").unwrap();
         for s in 1..=3 {
             let first = format!("frm2552:txtPg2Pt5Sch{s}_1Col1");
-            let table = form["parts"][4]["items"]
+            // Part V is its own part since PR 9's printed layout.
+            let part = form["parts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|part| part["n"] == "Part V · Details of Taxable Transactions")
+                .expect("2552 Part V");
+            let table = part["items"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -8254,7 +8280,10 @@ mod tests {
         // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now
         // drawn), and plus 4 for 1701 and 1701A (PR 7: their RDO lists,
         // item 5 and the spouse's, 1701 Part IV item 2 and 1701A item 67,
-        // drawn now): 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4.
+        // drawn now), less 1 for 2552 (PR 9: its item 5 runtime RDO select is
+        // a hidden copy of the printed item 5 box) and plus 1 for 1707 (PR 9:
+        // its item 5 RDO list, now a box of its printed item):
+        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
@@ -11400,17 +11429,8 @@ mod tests {
     /// 10 where the sheet prints them, hide the later pages' header copies
     /// and put Line of Business in Not on the printed sheet.
     const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
-        "0605 txtEmail",
-        "1707 frm1707:ProfileAddress1",
-        "1707 frm1707:ProfileContactNum",
-        "1707 frm1707:ProfileEmailAddr",
-        "1707 frm1707:ProfileName",
-        "1707 frm1707:ProfileZipCode",
-        "1707 frm1707:txtLOB",
-        "1707 frm1707:txtPg2RegisteredName",
         "1800 frm1800v2018:txtLineBus",
         "1800 frm1800v2018:txtPg2TaxpayerName",
-        "2000OT frm2000OT:txtLineBus",
         "2200C frm2200C:txtLOB",
         "2200M frm2200M:txtPg2RegisteredName",
         "2200P frm2200P:txtLOB",
@@ -11419,7 +11439,6 @@ mod tests {
         "2200P frm2200P:txtPg2RegisteredName",
         "2200T frm2200Tv2020:registeredName_2",
         "2200T frm2200Tv2020:registeredName_3",
-        "2552 frm2552:txtLOB",
     ];
 
     #[test]
@@ -11735,16 +11754,21 @@ mod tests {
             NOTE_NOT_YET
         );
         // "It will be added" only where a form group is assigned to open
-        // the box: 0605's quarter is (PR 9). 2551Q's repeated email was
-        // (PR 1), which opened it: it is no longer pinned.
+        // the box: 0605's quarter boxes were (PR 9 opened them), and 2551Q's
+        // repeated email was (PR 1). 2200A's Schedule 1 tick box is still
+        // assigned (PR 11).
         assert!(!assigned_to_open("2551Q", "txtEmail#occurrence-1"));
-        assert!(assigned_to_open("0605", "itemQuarter_1"));
+        assert!(assigned_to_open(
+            "2200A",
+            "frm2200Av2020:txtSched1_xa_others1_Check"
+        ));
+        assert!(!assigned_to_open("0605", "itemQuarter_1"));
         assert!(!assigned_to_open("2551Q", "txtEmail"));
         assert!(!assigned_to_open("0619E", "txtEmail#occurrence-1"));
         assert_eq!(
             lock_note_for(
-                "0605",
-                "itemQuarter_1",
+                "2200A",
+                "frm2200Av2020:txtSched1_xa_others1_Check",
                 "cannot be filled here: written by the app without a draft field (a constant or the period)"
             ),
             NOTE_ASSIGNED
@@ -12087,6 +12111,7 @@ mod tests {
         // PR 7: date boxes the annual individual returns' spouse gate
         // refuses on a fresh return (no joint return yet), each by hand.
         let mut gated = Vec::new();
+        let mut closed_2552: Vec<String> = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -12124,6 +12149,13 @@ mod tests {
                         closed.push(key.clone());
                         continue;
                     }
+                    // 2552's Part V dates wait for item 11 to pick their
+                    // schedule (catalogs.rs inactive_schedule); PR 9 draws
+                    // row 5's too: asserted exactly below.
+                    if code == "2552" && reason.starts_with("Item 11 (Kind of Transaction)") {
+                        closed_2552.push(key.clone());
+                        continue;
+                    }
                     // Refused by its form's own rule (a later schedule row
                     // before the first, a schedule another answer turns
                     // off), never for the date.
@@ -12157,6 +12189,17 @@ mod tests {
             .collect();
         schedule_dates.sort();
         assert_eq!(closed, schedule_dates);
+        // Every 2552 Part V date box drawn, and only those, waits for item
+        // 11 on a return that has not answered it.
+        let mut part_v_dates: Vec<String> = screen_types("2552")
+            .into_iter()
+            .filter(|(key, t)| t == "date" && key.starts_with("frm2552:txtPg2Pt5Sch"))
+            .map(|(key, _)| key)
+            .collect();
+        part_v_dates.sort();
+        closed_2552.sort();
+        assert!(closed_2552.contains(&"frm2552:txtPg2Pt5Sch3Date5".to_string()));
+        assert_eq!(closed_2552, part_v_dates);
         let mut expected: Vec<&str> = DATE_BOXES_LOCKED_FOR_OTHER_REASONS.to_vec();
         expected.sort_unstable();
         locked.sort();
@@ -12201,9 +12244,6 @@ mod tests {
         "2551Q frm2551Qv2018:txtDate28: cannot be filled here: not written by this app's field map for any sample draft",
         "2551Q txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "2551Q txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2552 frm2552:txtPg2Pt5Sch1Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
-        "2552 frm2552:txtPg2Pt5Sch2Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
-        "2552 frm2552:txtPg2Pt5Sch3Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
     ];
 
     /// Every field of a form with its schema entry (hidden ones too).
@@ -13179,6 +13219,8 @@ mod tests {
                 &["frm1600VT:rdoPg1I12TaxReliefYes"][..],
             ),
             ("frm1700:txtPg1I21SpouseName", married_1700),
+            // 1706 item 21's Others text waits for Schedule 2 = Others (PR 9).
+            ("frm1706:txtOthers21", &["frm1706:j_id395:_5"][..]),
             ("frm1701:txtPg3IShed5_1Desc", itemized_1701),
             ("frm1701:txtPg3IShed5_2Desc", itemized_1701),
             ("frm1701:txtPg3IShed5_4Desc", itemized_spouse_1701),
@@ -13311,14 +13353,8 @@ mod tests {
                 "frm1702RT:txtPg2Pt4I54C2",
                 "derived from the item's amounts",
             ),
-            (
-                "frm1707:txtPg2P4Sch2NameOfCorpStock4",
-                "derived from the transaction type",
-            ),
-            (
-                "frm1707:txtPg2P4Sch3Particulars4",
-                "derived from the transaction type",
-            ),
+            // 1707 Schedules 2 and 3 row D are typed since PR 9 (rows A-D
+            // open), so they print whole like rows A-C.
             (
                 "frm2200S:txtOthMannerofPymnt",
                 "the app writes it (no draft field)",
@@ -13399,7 +13435,8 @@ mod tests {
                 whole += 1;
             }
         }
-        assert_eq!(whole, 159, "boxes typed long and printed whole");
+        // Plus 2 for 1707 (PR 9): Schedules 2 and 3 row D, typed now.
+        assert_eq!(whole, 161, "boxes typed long and printed whole");
     }
 
     /// Rules page question 4, decided 2026-10-17, end to end on every pooled
@@ -13706,12 +13743,15 @@ mod tests {
 
     /// The boxes the host reports off.
     fn off_keys(checked: &Value) -> Vec<String> {
-        checked["off"]
+        // Sorted: PR 9's host gates join the batched check's own list.
+        let mut keys: Vec<String> = checked["off"]
             .as_object()
             .unwrap()
             .keys()
             .cloned()
-            .collect()
+            .collect();
+        keys.sort();
+        keys
     }
 
     /// The boxes off by the test's own probing of each conditional box
@@ -13728,6 +13768,11 @@ mod tests {
     /// spouse part is closed (PR 7) is judged by the form itself: written
     /// past the page's gate (the form's own `fill_as_user`, a TIN straight
     /// into its draft field), recomputed, its official box shows nothing.
+    /// A box nothing takes but every probe is refused with exactly its
+    /// reviewed tag (PR 9's host gates) is off too. 2552's gated boxes,
+    /// which its corpus gives no condition, are off exactly when their
+    /// hand-listed opening condition is shut (`hand_gates_2552`, backed by
+    /// rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json).
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         const WP_SCHEDULE: [&str; 4] = [
             "frm1600WP:dtSched:txtTin",
@@ -13736,13 +13781,34 @@ mod tests {
             "frm1600WP:dtSched:amount",
         ];
         let corpus = conditions::tests::derived();
-        corpus[code]
+        let tags: Value =
+            serde_json::from_str(include_str!("../../../app/forms/condition-labels.json")).unwrap();
+        let mut keys: Vec<(String, String, String)> = corpus[code]
             .as_object()
             .into_iter()
             .flatten()
-            .filter(|(key, condition)| {
+            .map(|(key, condition)| {
+                let tag = tags["keys"][code][key]
+                    .as_str()
+                    .or_else(|| tags["conditions"][code][condition.as_str().unwrap_or("")].as_str())
+                    .unwrap_or("")
+                    .to_string();
+                (
+                    key.clone(),
+                    condition.as_str().unwrap_or("").to_string(),
+                    tag,
+                )
+            })
+            .collect();
+        let hand = hand_gates_2552(code, &checked["draft"]);
+        for (key, tag, _) in &hand {
+            keys.push((key.clone(), String::new(), tag.clone()));
+        }
+        let mut off: Vec<String> = keys
+            .into_iter()
+            .filter(|(key, condition, tag)| {
                 let item_4 = code == "1600WP"
-                    && condition.as_str() == Some("Item 4 Yes.")
+                    && condition == "Item 4 Yes."
                     && WP_SCHEDULE.iter().any(|stem| {
                         key.strip_prefix(stem)
                             .and_then(|n| n.parse::<usize>().ok())
@@ -13754,20 +13820,24 @@ mod tests {
                 if !shows_nothing(&checked["values"][key.as_str()]) {
                     return false;
                 }
-                let taken: Vec<bool> = test_probes(checked, code, key)
-                    .into_iter()
-                    .filter_map(|probe| {
-                        let key = key.as_str();
-                        let filled = fill(code, &checked["draft"], json!({ key: probe }));
-                        match filled["rejected"][key].as_str() {
-                            None => Some(shows_nothing(&filled["values"][key])),
-                            Some(why)
-                                if rows_withholding::is_gate_refusal(why)
-                                    || rows_income_q::is_gate_refusal(why) =>
-                            {
-                                Some(true)
-                            }
-                            Some(why) if rows_annual_individual::is_gate_refusal(code, why) => {
+                // 2552: off exactly when its hand-listed condition is shut.
+                if let Some((_, _, shut)) = hand.iter().find(|(k, _, _)| k == key) {
+                    return *shut;
+                }
+                let (mut taken, mut refused) = (Vec::new(), Vec::new());
+                for probe in test_probes(checked, code, key) {
+                    let key = key.as_str();
+                    let filled = fill(code, &checked["draft"], json!({ key: probe }));
+                    match filled["rejected"][key].as_str() {
+                        None => taken.push(shows_nothing(&filled["values"][key])),
+                        Some(why)
+                            if rows_withholding::is_gate_refusal(why)
+                                || rows_income_q::is_gate_refusal(why) =>
+                        {
+                            taken.push(true);
+                        }
+                        Some(why) if rows_annual_individual::is_gate_refusal(code, why) => {
+                            let past_gate = || -> Option<bool> {
                                 let kind = kind_of(code).unwrap();
                                 let mut draft = checked["draft"].clone();
                                 rows_annual_individual::write_past_gate(
@@ -13786,15 +13856,70 @@ mod tests {
                                 Some(shows_nothing(&json!(
                                     map.get(key).cloned().unwrap_or_default()
                                 )))
+                            };
+                            if let Some(cleared) = past_gate() {
+                                taken.push(cleared);
                             }
-                            Some(_) => None,
                         }
-                    })
-                    .collect();
-                !taken.is_empty() && taken.iter().all(|cleared| *cleared)
+                        Some(why) => refused.push(why == tag),
+                    }
+                }
+                if taken.is_empty() {
+                    !refused.is_empty() && refused.iter().all(|same| *same)
+                } else {
+                    taken.iter().all(|cleared| *cleared)
+                }
             })
-            .map(|(key, _)| key.clone())
-            .collect()
+            .map(|(key, _, _)| key)
+            .collect();
+        off.sort();
+        off
+    }
+
+    /// 2552's gated boxes, by hand (fix check 5): the official runtime keeps
+    /// each disabled at load (rules/forms/2552-v2018/fixtures/
+    /// runtime-control-inventory-v796.json, disabled: true; 2552's corpus
+    /// records no enabled_when), with its opening condition written out and
+    /// judged here on the draft: `(key, tag, shut now)`.
+    fn hand_gates_2552(code: &str, draft: &Value) -> Vec<(String, String, bool)> {
+        if code != "2552" {
+            return Vec::new();
+        }
+        let offering = matches!(
+            draft["transaction"].as_str(),
+            Some("primary_offering" | "secondary_offering")
+        );
+        let used = |row: usize| {
+            draft["exempt_transactions"].get(row).is_some_and(|r| {
+                r["classification"]
+                    .as_str()
+                    .is_some_and(|c| !c.trim().is_empty())
+                    || r["amount"].as_f64().is_some_and(|a| a != 0.0)
+            })
+        };
+        let tag = "Needs item 11 = Initial Public Offering (Primary or Secondary)";
+        let mut out = vec![
+            (
+                "frm2552:txtPg1Pt1I12NumOfShare".to_string(),
+                tag.to_string(),
+                !offering,
+            ),
+            (
+                "frm2552:txtPg1Pt1I12TotShare".to_string(),
+                tag.to_string(),
+                !offering,
+            ),
+        ];
+        for n in 2..=5 {
+            for stem in ["TransClass", "Amount"] {
+                out.push((
+                    format!("frm2552:txtPg2P4I{n}{stem}"),
+                    format!("Needs Part IV row {}", n - 1),
+                    !used(n - 2),
+                ));
+            }
+        }
+        out
     }
 
     /// Rule 6: a box another answer turns off is faded with what turns it
@@ -13814,12 +13939,20 @@ mod tests {
             let code = kind.form_code();
             let opened = open(code, page_period_of(code));
             for (key, why) in opened["off"].as_object().unwrap() {
+                // 2552's PR 9 gates have no corpus condition: their tag is
+                // the hand list's (hand_gates_2552).
+                let host = hand_gates_2552(code, &opened["draft"])
+                    .into_iter()
+                    .find(|(k, _, _)| k == key)
+                    .map(|(_, tag, _)| tag);
                 let condition = corpus[code][key]
                     .as_str()
+                    .or(host.as_deref())
                     .unwrap_or_else(|| panic!("{code}: {key}"));
                 let tag = tags["keys"][code][key]
                     .as_str()
-                    .or_else(|| tags["conditions"][code][condition].as_str());
+                    .or_else(|| tags["conditions"][code][condition].as_str())
+                    .or(host.as_deref());
                 // PR 5: 1701Q's Part II and column B, on a draft with no
                 // spouse, need Civil Status = Married first (maintainer
                 // decision 11's words), whatever else they need.
@@ -13848,7 +13981,8 @@ mod tests {
         assert_eq!(
             found,
             BTreeMap::from([
-                ("0605", 3),
+                // Plus 1 for 0605 (PR 9): item 17's Others (Specify) box.
+                ("0605", 4),
                 ("0619F", 2),
                 // PR 3: Schedule 1.1's TIN, payee, ATC and amount, ten rows,
                 // wait for item 4 Yes (the host refuses them until then).
@@ -13861,7 +13995,9 @@ mod tests {
                 ("1602Q", 12),
                 ("1604C", 5),
                 ("1604F", 1),
-                ("1606", 2),
+                // Plus 3 for 1606 (PR 9): item 11's list and Schedules 1
+                // and 2's specifications.
+                ("1606", 5),
                 // Plus 18 for 1701Q (PR 5): item 17's four TIN boxes (the
                 // host writes them now), item 25A's two boxes, 36B-44B and
                 // 47A-52A, which the probe binds now, are off on a draft
@@ -13886,6 +14022,9 @@ mod tests {
                 ("1701", 35),
                 ("1701A", 17),
                 ("1701MS", 52),
+                // 8 for 1706 (PR 9): items 8 and 9, item 11's list,
+                // Schedule 2's specification and item 18's two boxes.
+                ("1706", 8),
                 ("1800", 1),
                 ("1801", 1),
                 ("2000OT", 2),
@@ -13895,6 +14034,9 @@ mod tests {
                 ("2200M", 1),
                 ("2200P", 1),
                 ("2200T", 1),
+                // 10 for 2552 (PR 9): items 12A and 12B and Part IV rows
+                // 2-5's two boxes, which the official runtime keeps shut.
+                ("2552", 10),
                 // PR 4: 2553 item 13's list waits for item 13 Yes too.
                 ("2553", 2),
             ])

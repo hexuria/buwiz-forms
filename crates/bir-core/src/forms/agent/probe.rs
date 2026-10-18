@@ -524,15 +524,28 @@ const PROFILE_FACT: &[(&str, &str)] = &[(
 /// the app's field map writes them: each is supplemented as a box of its
 /// printed item, and its binding is still derived by probing. Each entry:
 /// `(key, item, printed caption, evidence)`.
-const PRINTED_NOT_IN_CORPUS: &[(&str, &str, &str, &str)] = &[(
-    "frm2000:txtRDOCode",
-    "5",
-    "RDO Code",
-    "Item 5 RDO Code: rules/forms/2000-v2018/validations.json 2000-val-006-rdo \
+const PRINTED_NOT_IN_CORPUS: &[(&str, &str, &str, &str)] = &[
+    (
+        "frm2000:txtRDOCode",
+        "5",
+        "RDO Code",
+        "Item 5 RDO Code: rules/forms/2000-v2018/validations.json 2000-val-006-rdo \
      names frm2000:txtRDOCode (\"Please enter a valid RDO Code on Item 5.\"), \
      html-frozen/2000-dst-2018/writer-cells.json joins it at \"5 RDO Code\", and \
      form_2000.rs writes it from the draft's rdo_code; fields.json has no row for it",
-)];
+    ),
+    (
+        "frm1707:rdoPg1Pt1I5RDO",
+        "5",
+        "RDO Code of the Seller",
+        "Item 5 RDO Code of the Seller (PR 9): rules/forms/1707-v2021/validations.json \
+     1707-validate-009-rdo names frm1707:rdoPg1Pt1I5RDO (\"Please enter a valid RDO \
+     Code on Page 1 Item 5.\", a tracked rule record of the untracked official HTA \
+     runtime), html-frozen/1707-2021/writer-cells.json joins it at \"5 RDO Code of \
+     the Seller\", and form_1707.rs writes it from the draft's rdo_code; fields.json \
+     has no row for it",
+    ),
+];
 
 /// Text boxes the form's own page upper-cases when another field is typed,
 /// so the probe sees them change with that field and would call them a
@@ -566,6 +579,13 @@ const CASE_FOLLOWS_ANOTHER_FIELD: &[(&str, &str)] = &[
 ///
 /// `(form code, key, option value, draft path, value it sets, evidence)`:
 /// scoped by form, so another form's `taxCodeDropdown` never inherits it.
+///
+/// PR 9: 1606's and 1706's item 11 Yes (rdTreaty) is
+/// "yes, with nothing picked from the list yet" (`YesUnspecified`, the
+/// official `enableSelTreaty` opens the list blank), but the samples answer
+/// it with special law, so the probe bound Yes to `special_law`: Yes alone
+/// then filed special-law relief and the official "Please select a tax
+/// relief" check could never fire. The list still picks the relief.
 const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str, &str)] = &[
     (
         "1701MS",
@@ -582,6 +602,54 @@ const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str, &str)] = &[
         "/spouse/tax_option",
         "graduated",
         "1701MS item 18 column B: II012 Business Income - Graduated IT Rates",
+    ),
+    (
+        "1606",
+        "frm1606:rdTreaty",
+        "1",
+        "/tax_relief",
+        "yes_unspecified",
+        "1606 item 11 Yes: form_1606.rs Form1606TaxRelief::YesUnspecified",
+    ),
+    (
+        "1606",
+        "frm1606:rdTreaty:_1",
+        "true",
+        "/tax_relief",
+        "yes_unspecified",
+        "1606 item 11 Yes: form_1606.rs Form1606TaxRelief::YesUnspecified",
+    ),
+    (
+        "1606",
+        "frm1606:rdTreaty:_2",
+        "false",
+        "/tax_relief",
+        "yes_unspecified",
+        "1606 item 11 No unticked is Yes: Form1606TaxRelief::YesUnspecified",
+    ),
+    (
+        "1706",
+        "frm1706:rdTreaty",
+        "1",
+        "/tax_relief",
+        "yes_unspecified",
+        "1706 item 11 Yes: form_1706.rs Form1706TaxRelief::YesUnspecified",
+    ),
+    (
+        "1706",
+        "frm1706:rdTreaty:_1",
+        "true",
+        "/tax_relief",
+        "yes_unspecified",
+        "1706 item 11 Yes: form_1706.rs Form1706TaxRelief::YesUnspecified",
+    ),
+    (
+        "1706",
+        "frm1706:rdTreaty:_2",
+        "false",
+        "/tax_relief",
+        "yes_unspecified",
+        "1706 item 11 No unticked is Yes: Form1706TaxRelief::YesUnspecified",
     ),
 ];
 
@@ -605,11 +673,17 @@ const CHOICE_PATHS_WITHIN: &[(&str, &str, &str, &str)] = &[(
 mod choice_list_tests {
     use super::{CHOICE_OPTION_SETS, CHOICE_PATHS_WITHIN};
 
-    /// Every scoped entry names 1701MS (its only reviewed form) and a key
-    /// that form's pin binds, so no other form's same-named box is touched.
+    /// Every scoped entry names a reviewed form (1701MS, PR 7; 1606 and
+    /// 1706, PR 9) and a key that form's pin binds, so no other form's
+    /// same-named box is touched.
     #[test]
     fn choice_overrides_are_scoped_to_their_form() {
-        let pin = include_str!("../../../data/agent-forms/1701ms-v2024.json");
+        let pin = |form: &str| match form {
+            "1701MS" => include_str!("../../../data/agent-forms/1701ms-v2024.json"),
+            "1606" => include_str!("../../../data/agent-forms/1606-v2018.json"),
+            "1706" => include_str!("../../../data/agent-forms/1706-v2018.json"),
+            other => panic!("{other} is not a reviewed form"),
+        };
         let keys = CHOICE_OPTION_SETS
             .iter()
             .map(|(form, key, ..)| (*form, *key))
@@ -619,8 +693,10 @@ mod choice_list_tests {
                     .map(|(form, key, ..)| (*form, *key)),
             );
         for (form, key) in keys {
-            assert_eq!(form, "1701MS");
-            assert!(pin.contains(&format!("\"{key}\": {{")), "{key}");
+            assert!(
+                pin(form).contains(&format!("\"{key}\": {{")),
+                "{form} {key}"
+            );
         }
     }
 }

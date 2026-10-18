@@ -1811,7 +1811,10 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now drawn);
     // plus 4 for 1701 and 1701A (PR 7: their RDO lists, item 5 and the
     // spouse's, 1701 Part IV item 2 and 1701A item 67, drawn now):
-    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4. Table cells are counted apart (the 36 2550M
+    // less 1 for 2552 (PR 9: its item 5 runtime RDO select is a hidden copy
+    // of the printed item 5 box) and plus 1 for 1707 (PR 9: its item 5 RDO
+    // list, now a box of its printed item):
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1. Table cells are counted apart (the 36 2550M
     // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
     // checks every one).
     assert_eq!(supplied, 73, "catalog lists, dependent ones included");
@@ -2148,13 +2151,20 @@ fn choose_save_reopen(code: &str, key: &str, value: &str) -> Reopened {
     let kind = kind_of(code).expect("form kind");
     let period = page_period_for(code);
     let opened = open(code, period).expect("form opens");
+    let mut edits = json!({ key: value });
+    // PR 9: 1606's and 1706's relief lists take a choice only once item 11
+    // is Yes (rules/forms fields.json enabled_when "Item 19/20 indicates
+    // ... relief"), so the filer answers Yes in the same batch first.
+    if let Some(yes) = match key {
+        "frm1606:selTreaty" => Some("frm1606:rdTreaty:_1"),
+        "frm1706:selTreaty" => Some("frm1706:rdTreaty:_1"),
+        _ => None,
+    } {
+        edits[yes] = json!("true");
+    }
     let filled = call(
         "screen_form_fill",
-        vec![
-            code.into(),
-            json(opened["draft"].clone()),
-            json(json!({ key: value })),
-        ],
+        vec![code.into(), json(opened["draft"].clone()), json(edits)],
     )
     .expect("fill runs");
     call(
@@ -2294,6 +2304,26 @@ fn p1_relief_dropdowns_offer_each_forms_official_choices() {
             assert_eq!(shown, *value, "{code} {key}: {label} after reopen");
             assert_eq!(printed, *value, "{code} {key}: {label} in print");
         }
+    }
+    // PR 9: with item 11 No the lists are shut: a choice is refused with the
+    // tag the page shows on them, and the draft keeps no relief.
+    for (code, key, value) in [
+        ("1606", "frm1606:selTreaty", "0"),
+        ("1706", "frm1706:selTreaty", "1"),
+    ] {
+        seed_fictional_profile();
+        let opened = open(code, page_period_for(code)).expect("opens");
+        let shut = call(
+            "screen_form_fill",
+            vec![
+                code.into(),
+                json(opened["draft"].clone()),
+                json(json!({ format!("frm{code}:rdTreaty:_2"): "true", key: value })),
+            ],
+        )
+        .expect("fill runs");
+        assert_eq!(shut["rejected"][key], "Needs item 11 = Yes", "{code}");
+        assert_eq!(shut["draft"]["tax_relief"], "no", "{code}");
     }
     // 1606's blank official choice is the page's empty choice: it means no
     // relief, and 0 (International Tax Treaty) is not turned into it.
@@ -2484,7 +2514,11 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             // A box the host refuses until its answer holds (1602Q's 13A
             // until item 13 is Yes): its choices are taken once it holds
             // (q3_withholding_item_13_is_answered_on_the_page_and_prints).
-            // Every other off box is still tried here.
+            // A PR 9 gated box that is off now is shut on the page
+            // (form_page.js `isLocked`) and refused by the host with its tag
+            // (tests::as_needed). Every other off box is still tried here.
+            let gated_off =
+                opened["off"].get(key).is_some() && super::rows_as_needed::is_gated(code, key);
             let gated = rows_withholding::gated(kind_of(code).unwrap(), &opened["draft"], key)
                 == Some(true);
             if field["t"] != "sel"
@@ -2492,6 +2526,7 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                 || locks.contains_key(key)
                 || gated
                 || rows_annual_individual::gated(kind, &opened["draft"], key)
+                || gated_off
             {
                 continue;
             }
@@ -2500,6 +2535,7 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                 let Some(value) = page_option_value(option) else {
                     continue;
                 };
+                sent.insert(format!("{code} {key}"));
                 let filled = call(
                     "screen_form_fill",
                     vec![
@@ -2545,14 +2581,14 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
     // (1602Q's lstSpecialTax is not among them since PR 2: the host refuses
     // it until item 13 is Yes, and the rows_withholding gate above skips it;
     // q3_withholding_item_13_is_answered_on_the_page_and_prints sends its
-    // choices once item 13 holds.)
+    // choices once item 13 holds. 1606's and 1706's selTreaty are not among
+    // them since PR 9: the host refuses them until item 11 is Yes, and
+    // tests::as_needed sends their choices once it holds.)
     for key in [
         "1601C frm1601c:selTreaty",
         "1604C frm1604c:txtRefMonth",
         "1604C frm1604c:select13",
-        "1606 frm1606:selTreaty",
         "1701Q frm1701q:txtSpouseRDOCode",
-        "1706 frm1706:selTreaty",
         "2553 frm2553:lstTaxTreaty",
     ] {
         assert!(sent.contains(key), "{key} is sent");

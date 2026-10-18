@@ -109,6 +109,13 @@ fn label(code: &str, key: &str, condition: &Value) -> Value {
         )
 }
 
+/// The tag of `code`'s box `key` when the corpus gives it a condition
+/// (PR 9's host gates refuse a write with it).
+pub(super) fn tag(code: &str, key: &str) -> Option<String> {
+    let condition = conditions()[code].get(key)?;
+    label(code, key, condition).as_str().map(str::to_string)
+}
+
 /// Fill `edits` on a copy of `draft` the way the page does, recompute, and
 /// give each key's shown value, or `None` for a key the copy refused.
 fn trial(
@@ -170,7 +177,8 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
     let mut off = Map::new();
     let code = kind.form_code();
     let Some(list) = conditions()[code].as_object() else {
-        return off;
+        // A form without corpus conditions may still have PR 9 host gates.
+        return super::rows_as_needed::off(kind, draft, values);
     };
     // A box the host itself closes while its answer does not hold (it
     // refuses what is typed there: rows_withholding.rs, rows_monthly.rs,
@@ -222,10 +230,17 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
             off.insert(key.clone(), label(code, key, condition));
         }
     }
-    // In the conditions' own order, gated boxes among the rest.
-    list.keys()
+    // PR 9's host gates refuse a write while shut (the probe above sees a
+    // refusal, not a clearing): rows_as_needed.rs says which are off.
+    off.extend(super::rows_as_needed::off(kind, draft, values));
+    // In the conditions' own order, gated boxes among the rest; a host-gated
+    // box the conditions do not list (PR 9's group keys) follows them.
+    let mut ordered: Map<String, Value> = list
+        .keys()
         .filter_map(|key| off.remove(key).map(|tag| (key.clone(), tag)))
-        .collect()
+        .collect();
+    ordered.extend(off);
+    ordered
 }
 
 #[cfg(test)]

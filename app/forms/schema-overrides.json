@@ -2,16 +2,17 @@
   "_comment": "Applied by the shell at load (screen_form_module.rs apply_overrides). Keys: field key k (label/kind/options/computed; table columns are keyed by the column's row-0 key); item:<partIndex>:<itemIndex> for item labels (0-based into forms-schema.json parts/items); table:<part>:<name> builds a schedule table from row templates; add:<part>:<item> appends bound controls the extractor left out; move:<field key> with to '<part>:<item>' or '<part>:new:<no>' (+ item {l, order}) regroups a control under its printed item. Every entry carries its evidence.",
   "0605": {
     "frm0605:itemFiscalStartMonth:_1": {
-      "label": "For the Calendar",
-      "evidence": "agent group option: 'For the Calendar'; agent box label: 'For the Calendar'; binding /filing_basis='Calendar' when selected: 'Calendar'"
+      "label": "Calendar",
+      "evidence": "PR 9 (R3.1): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '1 For the Calendar'; the item heading reads 'For the', so the option is 'Calendar'"
     },
     "frm0605:itemFiscalStartMonth:_2": {
       "label": "Fiscal",
-      "evidence": "agent group option: 'Fiscal'; agent box label: 'Fiscal'; binding /filing_basis='Fiscal' when selected: 'Fiscal'"
+      "evidence": "PR 9 (R3.1): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '1 Fiscal'"
     },
     "frm0605:txtYearEnded": {
       "kind": "int",
-      "evidence": "binding type whole; fields.json text/code"
+      "evidence": "binding type whole; fields.json text/code | PR 9 (manual-0): html-frozen/0605-1999/writer-cells.json joins '2 Year Ended (YYYY)'",
+      "label": "Year"
     },
     "frm0605:txtDueDateMonth": {
       "kind": "int",
@@ -151,20 +152,275 @@
       "evidence": "internal workflow/credential key ebirOnlineSecret (not a printed box)"
     },
     "itemQuarter_1": {
-      "label": "3 Quarter: 1st",
-      "evidence": "P4: printed caption '3 Quarter: 1st' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_1)"
+      "label": "1st",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 1st'; the item heading is 'Quarter'"
     },
     "itemQuarter_2": {
-      "label": "3 Quarter: 2nd",
-      "evidence": "P4: printed caption '3 Quarter: 2nd' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_2)"
+      "label": "2nd",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 2nd'; the item heading is 'Quarter'"
     },
     "itemQuarter_3": {
-      "label": "3 Quarter: 3rd",
-      "evidence": "P4: printed caption '3 Quarter: 3rd' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_3)"
+      "label": "3rd",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 3rd'; the item heading is 'Quarter'"
     },
     "itemQuarter_4": {
-      "label": "3 Quarter: 4th",
-      "evidence": "P4: printed caption '3 Quarter: 4th' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_4)"
+      "label": "4th",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 4th'; the item heading is 'Quarter'"
+    },
+    "frm0605:itemYearEndMonth": {
+      "label": "Month",
+      "evidence": "PR 9 (manual-0): html-frozen/0605-1999/writer-cells.json joins '2 Year Ended (MM/YYYY), month'"
+    },
+    "frm0605:txtClassification:_1": {
+      "label": "I - Individual",
+      "evidence": "PR 9 (manual-1): html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) legend 'Taxpayer Classification: I - Individual'; html-frozen/0605-1999/writer-cells.json xbox_joins '11 Taxpayer Classification: I'"
+    },
+    "frm0605:txtClassification:_2": {
+      "label": "N - Non-Individual",
+      "evidence": "PR 9 (manual-1): html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) legend 'N - Non-Individual'; html-frozen/0605-1999/writer-cells.json xbox_joins '11 Taxpayer Classification: N'"
+    },
+    "frm0605:txtOthersName": {
+      "label": "Specify",
+      "evidence": "PR 9: html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) item 17 'Others (Specify)'; the box beside it takes the specification"
+    },
+    "frm0605:itemApprovedYN:_1": {
+      "label": "Pre-approved by Investigating Office",
+      "evidence": "PR 9 (manual-2): crates/bir-core/src/forms/form_0605.rs Form0605ApprovalSelection::XmlOption1, 'frm0605:itemApprovedYN:_1 (value Y): Pre-approved by Investigating Office' (BIR-Form0605.hta:944-947)"
+    },
+    "frm0605:itemApprovedYN:_2": {
+      "label": "Not approved by Investigating Office",
+      "evidence": "PR 9 (manual-2): crates/bir-core/src/forms/form_0605.rs Form0605ApprovalSelection::XmlOption2, 'frm0605:itemApprovedYN:_2 (value N): Not approved by Investigating Office'"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) (Items 1-8, Part I 9-18, Part II 19-21) and html-frozen/0605-1999/writer-cells.json (joins and not_joined notes). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the",
+              "k": [
+                "frm0605:itemFiscalStartMonth:_1",
+                "frm0605:itemFiscalStartMonth:_2"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Year Ended (MM/YYYY)",
+              "k": [
+                "frm0605:itemYearEndMonth",
+                "frm0605:txtYearEnded"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Quarter",
+              "k": [
+                "itemQuarter_1",
+                "itemQuarter_2",
+                "itemQuarter_3",
+                "itemQuarter_4"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Due Date (MM/DD/YYYY)",
+              "k": [
+                "frm0605:txtDueDateMonth",
+                "frm0605:txtDueDateDay",
+                "frm0605:txtDueDateYear"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "No. of Sheets Attached",
+              "k": [
+                "frm0605:txtNoOfSheets"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "ATC",
+              "k": [
+                "txtATCCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Return Period (MM/DD/YYYY)",
+              "k": [
+                "frm0605:txtReturnPeriodMonth",
+                "frm0605:txtReturnPeriodDay",
+                "frm0605:txtReturnPeriodYear"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Tax Type Code",
+              "k": [
+                "txtTaxTypeCode"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "9",
+              "l": "Taxpayer Identification No.",
+              "k": [
+                "frm0605:txtTIN1",
+                "frm0605:txtTIN2",
+                "frm0605:txtTIN3",
+                "frm0605:txtBranchCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "RDO Code",
+              "k": [
+                "frm0605:txtRDOCode"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Taxpayer Classification",
+              "k": [
+                "frm0605:txtClassification:_1",
+                "frm0605:txtClassification:_2"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Line of Business/Occupation",
+              "k": [
+                "frm0605:txtLineBus"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Taxpayer's Name (Last Name, First Name, Middle Name for Individuals) / (Registered Name for Non-Individuals)",
+              "k": [
+                "frm0605:txtTaxPayerName"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Telephone Number",
+              "k": [
+                "frm0605:txtTelNum"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Registered Address",
+              "k": [
+                "frm0605:txtAddress"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Zip Code",
+              "k": [
+                "frm0605:txtZipCode"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Manner of Payment",
+              "k": [
+                "frm0605:itemMannerOfPayment:_1",
+                "frm0605:itemMannerOfPayment:_2",
+                "frm0605:itemMannerOfPayment:_3",
+                "frm0605:itemMannerOfPayment:_4",
+                "frm0605:itemMannerOfPayment:_5",
+                "frm0605:txtOthersName",
+                "frm0605:itemMannerOfPaymentB:_1",
+                "frm0605:itemMannerOfPaymentB:_2"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Type of Payment",
+              "k": [
+                "frm0605:itemModeOfPayment:_1",
+                "frm0605:txtNumOfInstallment",
+                "frm0605:itemModeOfPayment:_2",
+                "frm0605:itemModeOfPayment:_3"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "19",
+              "l": "Basic Tax / Deposit / Advance Payment",
+              "k": [
+                "frm0605:txtTax19"
+              ]
+            },
+            {
+              "no": "20A",
+              "l": "Surcharge",
+              "k": [
+                "frm0605:txtTax20A"
+              ]
+            },
+            {
+              "no": "20B",
+              "l": "Interest",
+              "k": [
+                "frm0605:txtTax20B"
+              ]
+            },
+            {
+              "no": "20C",
+              "l": "Compromise",
+              "k": [
+                "frm0605:txtTax20C"
+              ]
+            },
+            {
+              "no": "20D",
+              "l": "Total Penalties",
+              "k": [
+                "frm0605:txtTax20D"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Total Amount Payable (Sum of Items 19 & 20D)",
+              "k": [
+                "frm0605:txtTax21"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Approval by the Investigating Office (the eBIRForms page asks it for item 17's Per Audit/Delinquent Account payments; the 1999 sheet has no box)",
+              "k": [
+                "frm0605:itemApprovedYN:_1",
+                "frm0605:itemApprovedYN:_2"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Email address (the 1999 sheet has no email box)",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "0619E": {
@@ -10966,79 +11222,79 @@
       "evidence": "Decision (a) layout: 2018 item 2 Amended Return? No"
     },
     "frm1606:j_id252:_1": {
-      "label": "Any Taxes Withheld? Yes",
-      "evidence": "P4: printed caption '3 Any Taxes Withheld? Yes' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Yes",
+      "evidence": "P4: printed caption '3 Any Taxes Withheld? Yes' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'Yes'"
     },
     "frm1606:j_id252:_2": {
-      "label": "Any Taxes Withheld? No",
-      "evidence": "P4: printed caption '3 Any Taxes Withheld? No' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "No",
+      "evidence": "P4: printed caption '3 Any Taxes Withheld? No' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'No'"
     },
     "frm1606:j_id392:_1": {
-      "label": "Category of Withholding Agent Private",
-      "evidence": "P4: printed caption '6 Category of Withholding Agent Private' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Private",
+      "evidence": "P4: printed caption '6 Category of Withholding Agent Private' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'Private'"
     },
     "frm1606:j_id392:_2": {
-      "label": "Category of Withholding Agent Government",
-      "evidence": "P4: printed caption '6 Category of Withholding Agent Government' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Government",
+      "evidence": "P4: printed caption '6 Category of Withholding Agent Government' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'Government'"
     },
     "frm1606:j_id395:_1": {
-      "label": "Schedule 2 Cash Sales",
-      "evidence": "P4: printed caption 'Schedule 2 Cash Sales' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Cash Sales",
+      "evidence": "P4: printed caption 'Schedule 2 Cash Sales' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Cash Sales', without the schedule's name"
     },
     "frm1606:j_id395:_4": {
-      "label": "Schedule 2 Foreclosure Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Foreclosure Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Foreclosure Sale', without the schedule's name"
     },
     "frm1606:j_id395:_2": {
-      "label": "Schedule 2 Exempt",
-      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Exempt",
+      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Exempt', without the schedule's name"
     },
     "frm1606:j_id395:_5": {
-      "label": "Schedule 2 Others",
-      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Others",
+      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Others', without the schedule's name"
     },
     "frm1606:j_id395:_3": {
-      "label": "Schedule 2 Installment Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Installment Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Installment Sale', without the schedule's name"
     },
     "frm1606:j_id393:_1": {
-      "label": "Classification of Property: Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_1 caption 'Residential' under 'Classification of Property'"
+      "label": "Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_1 caption 'Residential' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_2": {
-      "label": "Classification of Property: Agricultural",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_2 caption 'Agricultural' under 'Classification of Property'"
+      "label": "Agricultural",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_2 caption 'Agricultural' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_3": {
-      "label": "Classification of Property: Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_3 caption 'Commercial' under 'Classification of Property'"
+      "label": "Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_3 caption 'Commercial' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_4": {
-      "label": "Classification of Property: Industrial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_4 caption 'Industrial' under 'Classification of Property'"
+      "label": "Industrial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_4 caption 'Industrial' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_5": {
-      "label": "Classification of Property: Condominium Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_5 caption 'Condominium Residential' under 'Classification of Property'"
+      "label": "Condominium Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_5 caption 'Condominium Residential' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_6": {
-      "label": "Classification of Property: Condominium Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_6 caption 'Condominium Commercial' under 'Classification of Property'"
+      "label": "Condominium Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_6 caption 'Condominium Commercial' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393_8": {
-      "label": "Classification of Property: Others (Specify)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio j_id393_8 enables text j_id393_7, caption 'Others (Specify)'"
+      "label": "Others (Specify)",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio j_id393_8 enables text j_id393_7, caption 'Others (Specify)' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:opt37:_1": {
-      "label": "If overremittance: To be refunded",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_1 caption 'To be refunded' under 'If overremittance mark one box only'"
+      "label": "To be refunded",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_1 caption 'To be refunded' under 'If overremittance mark one box only' | PR 9 (manual-1): the option without its question"
     },
     "frm1606:opt37:_2": {
-      "label": "If overremittance: To be issued a Tax Credit Certificate",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate'"
+      "label": "To be issued a Tax Credit Certificate",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate' | PR 9 (manual-1): the option without its question"
     },
     "layout": {
-      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1606-2018/index.html (BIR Form 1606 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1606-2018/writer-cells.json (joins and not_joined notes). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1606-2018/index.html (BIR Form 1606 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1606-2018/writer-cells.json (joins and not_joined notes). Field keys, values, the official XML and the print map are unchanged; validation messages name the printed item numbers (maintainer decision D6, 2026-10-18: screen_form_module/rows_as_needed.rs printed_message).. The sheet's rows A-C are parties (one per row, 'Attach additional sheet/s, if necessary'); this return has one, on row A, so its name, address and TIN sit under the row's number (writer-cells.json joins '7A Buyer's Name', '7A Buyer's Registered Address', '7A Buyer's TIN').",
       "parts": [
         {
           "n": "Page 1",
@@ -11096,29 +11352,51 @@
               ]
             },
             {
-              "no": "7",
-              "l": "Buyer (7A Name, 7B Registered Address, 7C TIN)",
+              "no": "7A",
+              "l": "Buyer's Name",
               "k": [
-                "frm1606:txtBuyerName",
-                "frm1606:txtBuyerAddress",
-                "frm1606:txtTIN1",
-                "frm1606:txtTIN2",
-                "frm1606:txtTIN3",
-                "frm1606:txtBranchCode",
-                "frm1606:txtRDOCode"
+                "frm1606:txtBuyerName"
               ]
             },
             {
-              "no": "8",
-              "l": "Seller (8A Name, 8B Registered Address, 8C TIN)",
+              "no": "7A",
+              "l": "Buyer's Registered Address",
               "k": [
-                "frm1606:txtSellerName",
-                "frm1606:txtSellerAddress",
+                "frm1606:txtBuyerAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1606:txtTIN1",
+                "frm1606:txtTIN2",
+                "frm1606:txtTIN3",
+                "frm1606:txtBranchCode"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "Seller's Name",
+              "k": [
+                "frm1606:txtSellerName"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "Seller's Registered Address",
+              "k": [
+                "frm1606:txtSellerAddress"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "Seller's Taxpayer Identification Number (TIN)",
+              "k": [
                 "frm1606:txtTINS1",
                 "frm1606:txtTINS2",
                 "frm1606:txtTINS3",
-                "frm1606:txtBranchCodeS",
-                "frm1606:txtRDOCodeS"
+                "frm1606:txtBranchCodeS"
               ]
             },
             {
@@ -11395,6 +11673,14 @@
           "items": [
             {
               "no": "",
+              "l": "Buyer's and seller's RDO Codes (older layout; the 2018 sheet prints only item 5, the RDO of the property)",
+              "k": [
+                "frm1606:txtRDOCode",
+                "frm1606:txtRDOCodeS"
+              ]
+            },
+            {
+              "no": "",
               "l": "FMV basis boxes (older layout Item 27; the 2018 sheet prints the FMVs in Schedule 1)",
               "k": [
                 "frm1606:opt27A",
@@ -11438,24 +11724,24 @@
       "evidence": "Decision (a) layout: older-layout ATC text box of the corporate row (writer-cells not_joined: prints Item 9 from derived:atc_corporate_*)"
     },
     "frm1606:opt28A": {
-      "label": "Line A – Gross Selling Price",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28A matches 2018 Schedule 3 line A"
+      "label": "Gross Selling Price (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28A matches 2018 Schedule 3 line A | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28B": {
-      "label": "Line B – Total FMV of Land and Improvement",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28B matches 2018 Schedule 3 line B"
+      "label": "Total FMV of Land and Improvement (1B)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28B matches 2018 Schedule 3 line B | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28C": {
-      "label": "Line A – Bid Price (foreclosure sale)",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28C matches 2018 Schedule 3 line A"
+      "label": "Bid Price for Foreclosure Sale (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28C matches 2018 Schedule 3 line A | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28D": {
-      "label": "Line C – Installment Collected",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28D matches 2018 Schedule 3 line C"
+      "label": "Installment Collected (1C)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28D matches 2018 Schedule 3 line C | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28E": {
-      "label": "Line D – Others",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28E matches 2018 Schedule 3 line D"
+      "label": "Others (1D)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28E matches 2018 Schedule 3 line D | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:Habitual_1": {
       "label": "Yes",
@@ -11480,6 +11766,22 @@
     "frm1606:opt27D": {
       "label": "FMV of Improvements per BIR",
       "evidence": "Decision (a) layout: older-layout item 27D caption (forms-schema item 27D 'FMV of Improvements per BIR'); writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1606:txtTINS1": {
+      "label": "TIN (1-3)",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
+    },
+    "frm1606:txtTINS2": {
+      "label": "TIN (4-6)",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
+    },
+    "frm1606:txtTINS3": {
+      "label": "TIN (7-9)",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
+    },
+    "frm1606:txtBranchCodeS": {
+      "label": "Branch code",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
     }
   },
   "1701": {
@@ -30450,17 +30752,19 @@
       "evidence": "painted form_1706_view.rs (local:txn_description via binding /transaction_description): 'Schedule 2 — If exempt or others, specify'; writer-cells printed caption: 'If Exempt, or others, specify'"
     },
     "frm1706:txtDateMonthI": {
-      "label": "Schedule 2 Item 7 — Date of installment (MM)",
-      "evidence": "painted form_1706_view.rs (local:inst_date_month via binding /installment/date_month): 'Schedule 2 Item 7 — Date of installment (MM)'; writer-cells printed caption: 'Date of Installment (MM)' | fields.json logical_type date-component-string, max_length 2 — one component of a split date",
+      "label": "Month",
+      "evidence": "painted form_1706_view.rs (local:inst_date_month via binding /installment/date_month): 'Schedule 2 Item 7 — Date of installment (MM)'; writer-cells printed caption: 'Date of Installment (MM)' | fields.json logical_type date-component-string, max_length 2 — one component of a split date | PR 9 (manual-2): one part of Schedule 2 item 7, Date of Installment (MM/DD/YYYY) (html-frozen/1706-2018/writer-cells.json joins '7 Date of Installment')",
       "kind": "int"
     },
     "frm1706:txtDateDayI": {
       "kind": "int",
-      "evidence": "fields.json logical_type date-component-string, max_length 2 — one component of a split date"
+      "evidence": "fields.json logical_type date-component-string, max_length 2 — one component of a split date | PR 9 (manual-2): one part of Schedule 2 item 7, Date of Installment (MM/DD/YYYY) (html-frozen/1706-2018/writer-cells.json joins '7 Date of Installment')",
+      "label": "Day"
     },
     "frm1706:txtDateYearI": {
       "kind": "int",
-      "evidence": "fields.json logical_type date-component-string, max_length 4 — one component of a split date"
+      "evidence": "fields.json logical_type date-component-string, max_length 4 — one component of a split date | PR 9 (manual-2): one part of Schedule 2 item 7, Date of Installment (MM/DD/YYYY) (html-frozen/1706-2018/writer-cells.json joins '7 Date of Installment')",
+      "label": "Year"
     },
     "frm1706:selTreaty": {
       "kind": "sel",
@@ -30491,83 +30795,83 @@
       "evidence": "R05: the agent binds frm1706:txtRDOCode14A to /property_rdo_code and the form asks \"Please enter the RDO Code on Item 14A.\", but the extracted schema had no control for it; added beside the property location (Item 14). The RDO list comes from the catalog."
     },
     "frm1706:j_id392:_1": {
-      "label": "Principal residence? Yes",
-      "evidence": "P4: printed caption '8 Principal residence? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Yes",
+      "evidence": "P4: printed caption '8 Principal residence? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'Yes'"
     },
     "frm1706:j_id392:_2": {
-      "label": "Principal residence? No",
-      "evidence": "P4: printed caption '8 Principal residence? No' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "No",
+      "evidence": "P4: printed caption '8 Principal residence? No' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'No'"
     },
     "frm1706:j_id393:_1": {
-      "label": "New principal residence within 18 months? Yes",
-      "evidence": "P4: printed caption '9 New principal residence within 18 months? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Yes",
+      "evidence": "P4: printed caption '9 New principal residence within 18 months? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'Yes'"
     },
     "frm1706:j_id393:_2": {
-      "label": "New principal residence within 18 months? No",
-      "evidence": "P4: printed caption '9 New principal residence within 18 months? No' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "No",
+      "evidence": "P4: printed caption '9 New principal residence within 18 months? No' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'No'"
     },
     "frm1706:j_id395:_1": {
-      "label": "Schedule 2 Cash Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Cash Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Cash Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Cash Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Cash Sale', without the schedule's name"
     },
     "frm1706:j_id395:_4": {
-      "label": "Schedule 2 Foreclosure Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Foreclosure Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Foreclosure Sale', without the schedule's name"
     },
     "frm1706:j_id395:_2": {
-      "label": "Schedule 2 Exempt",
-      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Exempt",
+      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Exempt', without the schedule's name"
     },
     "frm1706:j_id395:_5": {
-      "label": "Schedule 2 Others",
-      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Others",
+      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Others', without the schedule's name"
     },
     "frm1706:j_id395:_3": {
-      "label": "Schedule 2 Installment Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Installment Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Installment Sale', without the schedule's name"
     },
     "frm1706:j_id391:_1": {
-      "label": "Classification of Property: Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_1 caption 'Residential' under 'Classification of Property'"
+      "label": "Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_1 caption 'Residential' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_2": {
-      "label": "Classification of Property: Agricultural",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_2 caption 'Agricultural' under 'Classification of Property'"
+      "label": "Agricultural",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_2 caption 'Agricultural' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_3": {
-      "label": "Classification of Property: Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_3 caption 'Commercial' under 'Classification of Property'"
+      "label": "Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_3 caption 'Commercial' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_4": {
-      "label": "Classification of Property: Industrial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_4 caption 'Industrial' under 'Classification of Property'"
+      "label": "Industrial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_4 caption 'Industrial' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_5": {
-      "label": "Classification of Property: Condominium Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_5 caption 'Condominium Residential' under 'Classification of Property'"
+      "label": "Condominium Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_5 caption 'Condominium Residential' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_6": {
-      "label": "Classification of Property: Condominium Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_6 caption 'Condominium Commercial' under 'Classification of Property'"
+      "label": "Condominium Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_6 caption 'Condominium Commercial' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_8": {
-      "label": "Classification of Property: Others (Specify)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio j_id391:_8 enables text j_id391:_7, caption 'Others (Specify)'"
+      "label": "Others (Specify)",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio j_id391:_8 enables text j_id391:_7, caption 'Others (Specify)' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:opt37:_1": {
-      "label": "If overremittance: To be refunded",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_1 caption 'To be refunded'"
+      "label": "To be refunded",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_1 caption 'To be refunded' | PR 9 (R3.0): the option without its question"
     },
     "frm1706:opt37:_2": {
-      "label": "If overremittance: To be issued a Tax Credit Certificate",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate'"
+      "label": "To be issued a Tax Credit Certificate",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate' | PR 9 (R3.0): the option without its question"
     },
     "frm1706:opt4C": {
-      "label": "WC 450 – Corporation",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type corporation; 2018 item 3 prints 'WC 450-Corporation'"
+      "label": "WC 450-Corporation",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type corporation; 2018 item 3 prints 'WC 450-Corporation' | PR 9 (manual-0): html-frozen/1706-2018/writer-cells.json xbox_joins '3 ATC: WC 450-Corporation', as the sheet prints it"
     },
     "layout": {
-      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1706-2018/index.html (BIR Form 1706 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1706-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1706-2018/index.html (BIR Form 1706 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1706-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged; validation messages name the printed item numbers (maintainer decision D6, 2026-10-18: screen_form_module/rows_as_needed.rs printed_message).. The sheet's rows A-C are parties (one per row, 'Attach additional sheet/s, if necessary'); this return has one, on row A, so its name, address and TIN sit under the row's number (writer-cells.json joins '7A Buyer's Name', '7A Buyer's Registered Address', '7A Buyer's TIN').",
       "parts": [
         {
           "n": "Page 1",
@@ -30594,9 +30898,7 @@
               "l": "ATC",
               "k": [
                 "frm1706:opt4",
-                "frm1706:txt4",
-                "frm1706:opt4C",
-                "frm1706:txt4C"
+                "frm1706:opt4C"
               ]
             },
             {
@@ -30619,30 +30921,51 @@
               ]
             },
             {
-              "no": "6",
-              "l": "Seller (6A Name, 6B Registered Address, 6C TIN)",
+              "no": "6A",
+              "l": "Seller's Name",
               "k": [
-                "frm1706:txtSellerName",
-                "frm1706:txtSellerAddress",
-                "frm1706:txtTIN1",
-                "frm1706:txtTIN2",
-                "frm1706:txtTIN3",
-                "frm1706:txtBranchCode",
-                "frm1706:txtRDOCode",
-                "frm1706:txtSellerRAddress"
+                "frm1706:txtSellerName"
               ]
             },
             {
-              "no": "7",
-              "l": "Buyer (7A Name, 7B Registered Address, 7C TIN)",
+              "no": "6A",
+              "l": "Seller's Registered Address",
               "k": [
-                "frm1706:txtBuyerName",
-                "frm1706:txtBuyerAddress",
+                "frm1706:txtSellerAddress"
+              ]
+            },
+            {
+              "no": "6A",
+              "l": "Seller's Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1706:txtTIN1",
+                "frm1706:txtTIN2",
+                "frm1706:txtTIN3",
+                "frm1706:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Name",
+              "k": [
+                "frm1706:txtBuyerName"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Registered Address",
+              "k": [
+                "frm1706:txtBuyerAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Taxpayer Identification Number (TIN)",
+              "k": [
                 "frm1706:txtTINB1",
                 "frm1706:txtTINB2",
                 "frm1706:txtTINB3",
-                "frm1706:txtBranchCodeB",
-                "frm1706:txtRDOCodeB"
+                "frm1706:txtBranchCodeB"
               ]
             },
             {
@@ -30792,32 +31115,6 @@
                 "frm1706:txtFMVZonal",
                 "frm1706:txtFMVBIR"
               ]
-            },
-            {
-              "no": "",
-              "l": "More property rows (the official program's Schedule 1 popup cells)",
-              "k": [
-                "frm1706:txtSchedModal1",
-                "frm1706:txtSchedModal2",
-                "frm1706:txtSchedModal3",
-                "frm1706:txtSchedModal4",
-                "frm1706:txtSchedModal5",
-                "frm1706:txtSchedModal6",
-                "frm1706:txtSchedModal7",
-                "frm1706:txtSchedModal8",
-                "frm1706:txtSchedModal9",
-                "frm1706:txtSchedModal10",
-                "frm1706:txtSchedModal11",
-                "frm1706:txtSchedModal12",
-                "frm1706:txtSchedModal13",
-                "frm1706:txtSchedModal14",
-                "frm1706:txtSchedModal15",
-                "frm1706:txtSchedModal16",
-                "frm1706:txtSchedModal17",
-                "frm1706:txtSchedModal18",
-                "frm1706:txtSchedModal19",
-                "frm1706:txtSchedModal20"
-              ]
             }
           ]
         },
@@ -30948,6 +31245,41 @@
           "items": [
             {
               "no": "",
+              "l": "Seller's and buyer's RDO Codes and the seller's residence address (older layout; the 2018 sheet prints only item 5, the RDO of the property, and the registered addresses)",
+              "k": [
+                "frm1706:txtRDOCode",
+                "frm1706:txtRDOCodeB",
+                "frm1706:txtSellerRAddress"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 1 popup cells of the official program (unutilized sales proceeds; the 2018 sheet prints no box for them)",
+              "k": [
+                "frm1706:txtSchedModal1",
+                "frm1706:txtSchedModal2",
+                "frm1706:txtSchedModal3",
+                "frm1706:txtSchedModal4",
+                "frm1706:txtSchedModal5",
+                "frm1706:txtSchedModal6",
+                "frm1706:txtSchedModal7",
+                "frm1706:txtSchedModal8",
+                "frm1706:txtSchedModal9",
+                "frm1706:txtSchedModal10",
+                "frm1706:txtSchedModal11",
+                "frm1706:txtSchedModal12",
+                "frm1706:txtSchedModal13",
+                "frm1706:txtSchedModal14",
+                "frm1706:txtSchedModal15",
+                "frm1706:txtSchedModal16",
+                "frm1706:txtSchedModal17",
+                "frm1706:txtSchedModal18",
+                "frm1706:txtSchedModal19",
+                "frm1706:txtSchedModal20"
+              ]
+            },
+            {
+              "no": "",
               "l": "FMV basis boxes (older layout Item 29; the 2018 sheet prints the FMVs in Schedule 1)",
               "k": [
                 "frm1706:opt29A",
@@ -30975,40 +31307,42 @@
       ]
     },
     "frm1706:opt4": {
-      "label": "WI 450 – Individual",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type individual; 2018 item 3 prints 'WI 450-Individual'"
+      "label": "WI 450-Individual",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type individual; 2018 item 3 prints 'WI 450-Individual' | PR 9 (manual-0): html-frozen/1706-2018/writer-cells.json xbox_joins '3 ATC: WI 450-Individual', as the sheet prints it"
     },
     "frm1706:txt4": {
       "label": "ATC code (WI 450)",
-      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box"
+      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box | PR 9 (manual-0): the ATC code the official program uploads (II420 / IC420, crates/bir-core/tests/sample-payloads/1706-03152025_T123456.official.xml) beside its item 3 box; html-frozen/1706-2018/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (WI 450 / WC 450); the boxes print from opt4 / opt4C', so the page shows the printed ATC as the box's label and does not draw the uploaded code",
+      "kind": "hidden"
     },
     "frm1706:txt4C": {
       "label": "ATC code (WC 450)",
-      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box"
+      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box | PR 9 (manual-0): the ATC code the official program uploads (II420 / IC420, crates/bir-core/tests/sample-payloads/1706-03152025_T123456.official.xml) beside its item 3 box; html-frozen/1706-2018/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (WI 450 / WC 450); the boxes print from opt4 / opt4C', so the page shows the printed ATC as the box's label and does not draw the uploaded code",
+      "kind": "hidden"
     },
     "frm1706:opt30A": {
-      "label": "Line A – Gross Selling Price",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option gross_selling_price; 2018 Schedule 4 line A"
+      "label": "Gross Selling Price (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option gross_selling_price; 2018 Schedule 4 line A | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30B": {
-      "label": "Line A – Bid Price (foreclosure sale)",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option bid_price; 2018 Schedule 4 line A"
+      "label": "Bid Price for Foreclosure Sale (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option bid_price; 2018 Schedule 4 line A | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30C": {
-      "label": "Line B – Total FMV of Land and Improvement",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option fair_market_value; 2018 Schedule 4 line B"
+      "label": "Total FMV of Land and Improvement (1B)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option fair_market_value; 2018 Schedule 4 line B | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30D": {
-      "label": "Line D – Installment Collected",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option taxable_installment; 2018 Schedule 4 line D"
+      "label": "Installment Collected (1D)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option taxable_installment; 2018 Schedule 4 line D | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30E": {
-      "label": "Line C – Unutilized Portion of Sales Proceeds",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option unutilized_proceeds; 2018 Schedule 4 line C"
+      "label": "Unutilized Portion of Sales Proceeds (1C)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option unutilized_proceeds; 2018 Schedule 4 line C | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30F": {
-      "label": "Line E – Others",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option others; 2018 Schedule 4 line E"
+      "label": "Others (1E)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option others; 2018 Schedule 4 line E | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt29A": {
       "label": "FMV of Land per latest Tax Declaration",
@@ -31109,6 +31443,22 @@
     "frm1706:txtRate": {
       "label": "Tax Due",
       "evidence": "Decision (a) layout: html-frozen/1706-2018/writer-cells.json joins frm1706:txtRate to '14 Tax Due (Item 12 Multiply by Item 13)'"
+    },
+    "frm1706:txtTINB1": {
+      "label": "TIN (1-3)",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
+    },
+    "frm1706:txtTINB2": {
+      "label": "TIN (4-6)",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
+    },
+    "frm1706:txtTINB3": {
+      "label": "TIN (7-9)",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
+    },
+    "frm1706:txtBranchCodeB": {
+      "label": "Branch code",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
     }
   },
   "1707": {
@@ -31125,12 +31475,12 @@
       "evidence": "internal workflow/credential key ebirOnlineUsername (not a printed box)"
     },
     "frm1707:ProfileAddress1": {
-      "label": "Registered address (profile)",
-      "evidence": "painted form_1707_view.rs (local:address via binding /registered_address): 'Registered address (profile)'"
+      "label": "Registered Address",
+      "evidence": "painted form_1707_view.rs (local:address via binding /registered_address): 'Registered address (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
     },
     "frm1707:ProfileEmailAddr": {
-      "label": "E-mail address (profile)",
-      "evidence": "painted form_1707_view.rs (local:email via binding /email): 'E-mail address (profile)'"
+      "label": "Email Address",
+      "evidence": "painted form_1707_view.rs (local:email via binding /email): 'E-mail address (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
     },
     "frm1707:txtPg1I1Day": {
       "kind": "int",
@@ -31161,16 +31511,16 @@
       "kind": "int"
     },
     "frm1707:txtPg1I8TaxReliefSpec": {
-      "label": "Tax relief, specify",
-      "evidence": "painted form_1707_view.rs (local:relief via binding /tax_relief): 'Tax relief, specify'; writer-cells printed caption: 'If yes, specify'"
+      "label": "8A If yes, please specify",
+      "evidence": "painted form_1707_view.rs (local:relief via binding /tax_relief): 'Tax relief, specify'; writer-cells printed caption: 'If yes, specify' | PR 9: html-frozen/1707-2021/writer-cells.json joins '8 If yes, specify'"
     },
     "frm1707:txtPg1I9TransDescSpec": {
-      "label": "Others, specify",
-      "evidence": "painted form_1707_view.rs (local:txn_description via binding /transaction_description): 'Others, specify'; writer-cells printed caption: 'Others (please specify)'"
+      "label": "Specify",
+      "evidence": "painted form_1707_view.rs (local:txn_description via binding /transaction_description): 'Others, specify'; writer-cells printed caption: 'Others (please specify)' | PR 9: item 9's Others specification"
     },
     "frm1707:txtLOB": {
-      "label": "Line of business (profile)",
-      "evidence": "painted form_1707_view.rs (local:lob via binding /line_of_business): 'Line of business (profile)'"
+      "label": "Line of Business",
+      "evidence": "painted form_1707_view.rs (local:lob via binding /line_of_business): 'Line of business (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
     },
     "frm1707:txtPg1P2I17Surcharge": {
       "label": "Surcharge",
@@ -31194,15 +31544,16 @@
     },
     "frm1707:txtPg2RegisteredName": {
       "label": "Taxpayer's name (profile)",
-      "evidence": "painted form_1707_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's name (profile)\"; writer-cells printed caption: \"Taxpayer's Name (page 2)\""
+      "evidence": "painted form_1707_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's name (profile)\"; writer-cells printed caption: \"Taxpayer's Name (page 2)\" | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "Pg2Pt4S2SubTotal": {
-      "label": "Page 2 Part 4 S 2 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 4 S 2 Sub Total'"
+      "label": "Add-more subtotal (row D prints it as OTHERS)",
+      "evidence": "agent box label: 'Page 2 Part 4 S 2 Sub Total' | PR 9: the add-more subtotal, which row D prints as OTHERS (form_1707.rs shares_popup_subtotal / expenses_popup_subtotal)"
     },
     "Pg2Pt4S3SubTotal": {
-      "label": "Page 2 Part 4 S 3 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 4 S 3 Sub Total'"
+      "label": "Add-more subtotal (row D prints it as OTHERS)",
+      "evidence": "agent box label: 'Page 2 Part 4 S 3 Sub Total' | PR 9: the add-more subtotal, which row D prints as OTHERS (form_1707.rs shares_popup_subtotal / expenses_popup_subtotal)"
     },
     "txtEnroll": {
       "kind": "hidden",
@@ -31213,24 +31564,28 @@
       "evidence": "internal workflow/credential key txtFinalFlag (not a printed box)"
     },
     "frm1707:rdoPg1I3ATCIndiv": {
-      "label": "ATC: II030 Individual",
-      "evidence": "P4: printed caption '3 ATC: II030 Individual' (html-frozen/1707-2021/writer-cells.json xbox_joins)"
+      "label": "II030 Individual",
+      "evidence": "P4: printed caption '3 ATC: II030 Individual' (html-frozen/1707-2021/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json xbox_joins '3 ATC: II030 Individual'"
     },
     "frm1707:txtPg2TinC1": {
       "label": "Page 2 header TIN (part 1)",
-      "evidence": "P4: key frm1707:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1"
+      "evidence": "P4: key frm1707:txtPg2TinC1 is the page-2 header copy of the filer TIN, segment 1 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2TinC2": {
       "label": "Page 2 header TIN (part 2)",
-      "evidence": "P4: key frm1707:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2"
+      "evidence": "P4: key frm1707:txtPg2TinC2 is the page-2 header copy of the filer TIN, segment 2 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2TinC3": {
       "label": "Page 2 header TIN (part 3)",
-      "evidence": "P4: key frm1707:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3"
+      "evidence": "P4: key frm1707:txtPg2TinC3 is the page-2 header copy of the filer TIN, segment 3 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2TinC4": {
       "label": "Page 2 header TIN (part 4)",
-      "evidence": "P4: key frm1707:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4"
+      "evidence": "P4: key frm1707:txtPg2TinC4 is the page-2 header copy of the filer TIN, segment 4 | PR 9 (R2.0, R5.3): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/1707-2021/writer-cells.json: derived:tin_digits, join txtPg2RegisteredName); the page does not draw it twice",
+      "kind": "hidden"
     },
     "frm1707:txtPg2P4Sch3Amount1": {
       "label": "Schedule 3 row A Amount",
@@ -31437,6 +31792,581 @@
     "frm1707:txtCurrentPage": {
       "kind": "hidden",
       "evidence": "Item 3: internal page state of the official program (which inputs to enable, the page shown, a modal's row count, the page version), set by the page's own script, not a box the filer types; this app's field map never writes it, so it is hidden."
+    },
+    "frm1707:rdoPg1I2AmendedYes": {
+      "label": "Yes",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '2 Amended Return? Yes'; the box sets /is_amended true (crates/bir-core/data/agent-forms/1707-v2021.json), so it reads Yes"
+    },
+    "frm1707:rdoPg1I2AmendedNo": {
+      "label": "No",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '2 Amended Return? No'; the box sets /is_amended false, so it reads No"
+    },
+    "frm1707:rdoPg1I3ATCCorp": {
+      "label": "IC110 Corporation",
+      "evidence": "PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json xbox_joins '3 ATC: IC110 Corporation'"
+    },
+    "frm1707:txtPg1I3Indiv": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (II030 / IC110); the boxes print from rdoPg1I3ATCIndiv / rdoPg1I3ATCCorp'; the box's label names the code"
+    },
+    "frm1707:txtPg1I3Corp": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-1): html-frozen/1707-2021/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (II030 / IC110); the boxes print from rdoPg1I3ATCIndiv / rdoPg1I3ATCCorp'; the box's label names the code"
+    },
+    "frm1707:rdoPg1I8TaxReliefYes": {
+      "label": "Yes",
+      "evidence": "PR 9 (R3.3): html-frozen/1707-2021/writer-cells.json xbox_joins '8 ... Yes'"
+    },
+    "frm1707:rdoPg1I8TaxReliefNo": {
+      "label": "No",
+      "evidence": "PR 9 (R3.3): html-frozen/1707-2021/writer-cells.json xbox_joins '8 ... No'"
+    },
+    "frm1707:rdoPg1I9TransDescCash": {
+      "label": "Cash Sale",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Cash Sale'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:rdoPg1I9TransDescInstallment": {
+      "label": "Installment Sale (Fill-out Part IV-Schedule 1)",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Installment Sale'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:rdoPg1I9TransDescForeclosure": {
+      "label": "Foreclosure Sale",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Foreclosure Sale'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:rdoPg1I9TransDescOthers": {
+      "label": "Others (please specify)",
+      "evidence": "PR 9: html-frozen/1707-2021/writer-cells.json xbox_joins '9 Description of Transaction: Others'; the label is the box's own option (the extracted labels sat one box off)"
+    },
+    "frm1707:txtPg1P2I13AppTaxRate": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-3): the rate is preprinted (15%) on the sheet (html-frozen/1707-2021/writer-cells.json not_joined: 'item 13 rate is preprinted (15%); there is no box to fill'); the item shows it as printed"
+    },
+    "frm1707:txtPg2P4Sch1I6ApplcRate": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-3): the rate is preprinted (15%) on the sheet (html-frozen/1707-2021/writer-cells.json not_joined: 'item 13 rate is preprinted (15%); there is no box to fill'); the item shows it as printed"
+    },
+    "frm1707:ProfileAddress2": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R5.2): the upload's second registered-address line, cut from the one draft address (form_1707.rs address_parts); the page shows the whole address in its first box (rows_as_needed.rs values), and the sheet prints neither (html-frozen/1707-2021/writer-cells.json not_joined)"
+    },
+    "Pg2Pt4S2PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.5): html-frozen/1707-2021/writer-cells.json not_joined: 'pop-up row count of the page, not on the paper form'"
+    },
+    "Pg2Pt4S3PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.5): html-frozen/1707-2021/writer-cells.json not_joined: 'pop-up row count of the page, not on the paper form'"
+    },
+    "frm1707:rdoCorpoDomestic": {
+      "label": "Domestic",
+      "evidence": "PR 9 (R3.0): the option without its question; html-frozen/1707-2021/writer-cells.json not_joined: 'domestic/foreign corporation radio of the page; the 2021 sheet draws no box for it'"
+    },
+    "frm1707:rdoCorpoForeign": {
+      "label": "Foreign",
+      "evidence": "PR 9 (R3.0): the option without its question; html-frozen/1707-2021/writer-cells.json not_joined: 'domestic/foreign corporation radio of the page; the 2021 sheet draws no box for it'"
+    },
+    "frm1707:ProfileName": {
+      "label": "Taxpayer's Name",
+      "evidence": "PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
+    },
+    "frm1707:ProfileZipCode": {
+      "label": "ZIP Code",
+      "evidence": "PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
+    },
+    "frm1707:ProfileContactNum": {
+      "label": "Contact Number",
+      "evidence": "PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
+    },
+    "add:3:0": {
+      "fields": [
+        {
+          "k": "frm1707:txtPg2P4Sch2NoOfShares1",
+          "l": "No. of Shares",
+          "t": "int"
+        }
+      ],
+      "evidence": "PR 9 (R3.2, manual-4): Schedule 2 row A's No. of Shares, which html-frozen/1707-2021/writer-cells.json joins at 'Schedule 2 row A No. of Shares' and form_1707.rs writes from shares[0]; fields.json lists no box for it (the host writes it, rows_as_needed.rs)"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/1707-2021/index.html (BIR Form 1707, April 2021) (Items 1-4, Part I 5-9, Part II 10-19, Part III 20-23, Part IV Schedules 1-3) and html-frozen/1707-2021/writer-cells.json. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction (MM/DD/YYYY)",
+              "k": [
+                "frm1707:txtPg1I1Month",
+                "frm1707:txtPg1I1Day",
+                "frm1707:txtPg1I1Year"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm1707:rdoPg1I2AmendedYes",
+                "frm1707:rdoPg1I2AmendedNo"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Alphanumeric Tax Code (ATC)",
+              "k": [
+                "frm1707:rdoPg1I3ATCIndiv",
+                "frm1707:txtPg1I3Indiv",
+                "frm1707:rdoPg1I3ATCCorp",
+                "frm1707:txtPg1I3Corp"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm1707:txtPg1I4NoOfSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "RDO Code of the Seller",
+              "k": [
+                "frm1707:rdoPg1Pt1I5RDO"
+              ]
+            },
+            {
+              "table": "frm1707:txtPg1I6SellerName0"
+            },
+            {
+              "no": "7",
+              "l": "Buyer's Name, Registered Address and TIN (rows 7A-7C)",
+              "grid": {
+                "cols": [
+                  "Buyer's Name",
+                  "Buyer's Registered Address",
+                  "Buyer's Taxpayer Identification Number (TIN)"
+                ],
+                "keys": [
+                  [
+                    "frm1707:txtPg1I7BuyerName0",
+                    "frm1707:txtPg1I7BuyerAddr0",
+                    "frm1707:txtPg1I7BuyerTIN0"
+                  ],
+                  [
+                    "frm1707:txtPg1I7BuyerName1",
+                    "frm1707:txtPg1I7BuyerAddr1",
+                    "frm1707:txtPg1I7BuyerTIN1"
+                  ],
+                  [
+                    "frm1707:txtPg1I7BuyerName2",
+                    "frm1707:txtPg1I7BuyerAddr2",
+                    "frm1707:txtPg1I7BuyerTIN2"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Row",
+                  "rows": [
+                    "7A",
+                    "7B",
+                    "7C"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "8",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm1707:rdoPg1I8TaxReliefYes",
+                "frm1707:rdoPg1I8TaxReliefNo",
+                "frm1707:txtPg1I8TaxReliefSpec"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Description of Transaction",
+              "k": [
+                "frm1707:rdoPg1I9TransDescCash",
+                "frm1707:rdoPg1I9TransDescInstallment",
+                "frm1707:rdoPg1I9TransDescForeclosure",
+                "frm1707:rdoPg1I9TransDescOthers",
+                "frm1707:txtPg1I9TransDescSpec"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "10",
+              "l": "Taxable Base – For Cash Sale / Foreclosure Sale (From Part IV – Schedule 2)",
+              "k": [
+                "frm1707:txtPg1P2I10TaxBase"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Less: Cost and Other Allowable Expenses (From Part IV – Schedule 3)",
+              "k": [
+                "frm1707:txtPg1P2I11AllowExpnse"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Net Capital Gain/(Loss) (Item 10 Less Item 11)",
+              "k": [
+                "frm1707:txtPg1P2I12NetCptalChnged"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Applicable Tax Rate",
+              "note": "15% (printed on the form)"
+            },
+            {
+              "no": "14",
+              "l": "Tax Due on the Entire Transaction (Cash Sale/Foreclosure Sale) (Item 12 Multiply by Item 13)",
+              "k": [
+                "frm1707:txtPg1P2I13TaxDueForTrans"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Tax Due for this Payment Period (If Tax is Payable under Installment Method of Computation) (From Part IV – Schedule 1 Item 7)",
+              "k": [
+                "frm1707:txtPg1P2I14TaxDuePmtPriod"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Less: Tax Paid in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm1707:txtPg1P2I15TaxPaidInPrevRtrn"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Tax Payable/(Overpayment) (Item 14 or 15 Less Item 16)",
+              "k": [
+                "frm1707:txtPg1P2I16TaxPayable"
+              ]
+            },
+            {
+              "no": "18A",
+              "l": "Surcharge",
+              "k": [
+                "frm1707:txtPg1P2I17Surcharge"
+              ]
+            },
+            {
+              "no": "18B",
+              "l": "Interest",
+              "k": [
+                "frm1707:txtPg1P2I17Interest"
+              ]
+            },
+            {
+              "no": "18C",
+              "l": "Compromise",
+              "k": [
+                "frm1707:txtPg1P2I17Compromise"
+              ]
+            },
+            {
+              "no": "18D",
+              "l": "Total Penalties (Sum of Items 18A to 18C)",
+              "k": [
+                "frm1707:txtPg1P2I17TotPenalties"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Items 17 and 18D)",
+              "k": [
+                "frm1707:txtPg1P2I18TotAmtPyable"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
+              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "20",
+              "l": "Cash/Bank Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "21",
+              "l": "Check",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "22",
+              "l": "Tax Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "23",
+              "l": "Others (specify below)",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 1 – Installment Sale",
+          "items": [
+            {
+              "no": "1",
+              "l": "Selling Price",
+              "k": [
+                "frm1707:txtPg2P4Sch1I1SellPrice"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Cost and Expenses",
+              "k": [
+                "frm1707:txtPg2P4Sch1I2CostExpense"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Mortgage Assumed",
+              "k": [
+                "frm1707:txtPg2P4Sch1I3AssumMortgage"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "No. of Installment",
+              "k": [
+                "frm1707:txtPg2P4Sch1I4NumInstallments"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "Amount of Installment for this Payment Period",
+              "k": [
+                "frm1707:txtPg2P4Sch1I5InstallmentAmt"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Applicable Tax Rate",
+              "note": "15% (printed on the form)"
+            },
+            {
+              "no": "7",
+              "l": "Tax Due for the Period (Item 5 Multiply by Item 6) (To Part II Item 15)",
+              "k": [
+                "frm1707:txtPg2P4Sch1I7PeriodTaxDue"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Date of Collection of Installment for this Payment Period (MM/DD/YYYY)",
+              "k": [
+                "frm1707:txtPg2P4Sch1I8DateCollection"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Total Collection (Down payment and Installments) during the Year of Sale",
+              "k": [
+                "frm1707:txtPg2P4Sch1I9TotCollection"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 2 – Description of Shares of Stocks",
+          "items": [
+            {
+              "no": "",
+              "l": "Description of Shares of Stocks (rows A-D)",
+              "grid": {
+                "cols": [
+                  "Name of Corporate Stock",
+                  "No. of Shares",
+                  "Stock Certificate Number",
+                  "Taxable Base/Selling Price"
+                ],
+                "keys": [
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock1",
+                    "frm1707:txtPg2P4Sch2NoOfShares1",
+                    "frm1707:txtPg2P4Sch2StockCertNo1",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice1"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock2",
+                    "frm1707:txtPg2P4Sch2NoOfShares2",
+                    "frm1707:txtPg2P4Sch2StockCertNo2",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice2"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock3",
+                    "frm1707:txtPg2P4Sch2NoOfShares3",
+                    "frm1707:txtPg2P4Sch2StockCertNo3",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice3"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch2NameOfCorpStock4",
+                    "frm1707:txtPg2P4Sch2NoOfShares4",
+                    "frm1707:txtPg2P4Sch2StockCertNo4",
+                    "frm1707:txtPg2P4Sch2TaxBaseSellPrice4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Row",
+                  "rows": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "Total Taxable Base (To Part II Item 10)",
+              "k": [
+                "frm1707:txtPg2P4Sch2TotAmount"
+              ]
+            },
+            {
+              "table": "frm1707:txtPg2Pt4S2_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 add-more subtotal",
+              "k": [
+                "Pg2Pt4S2SubTotal",
+                "Pg2Pt4S2PopLength"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedule 3 – Schedule of Cost and Other Allowable Expenses",
+          "items": [
+            {
+              "no": "",
+              "l": "Cost and Other Allowable Expenses (rows A-D)",
+              "grid": {
+                "cols": [
+                  "Particulars",
+                  "Amount"
+                ],
+                "keys": [
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars1",
+                    "frm1707:txtPg2P4Sch3Amount1"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars2",
+                    "frm1707:txtPg2P4Sch3Amount2"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars3",
+                    "frm1707:txtPg2P4Sch3Amount3"
+                  ],
+                  [
+                    "frm1707:txtPg2P4Sch3Particulars4",
+                    "frm1707:txtPg2P4Sch3Amount4"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Row",
+                  "rows": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "",
+              "l": "Total (To Part II Item 11)",
+              "k": [
+                "frm1707:txtPg2P4Sch3TotAmount"
+              ]
+            },
+            {
+              "table": "frm1707:txtPg2Pt4S3_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 add-more subtotal",
+              "k": [
+                "Pg2Pt4S3SubTotal",
+                "Pg2Pt4S3PopLength"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "The filer's profile copy the official page keeps (the 2021 sheet prints the parties in items 6 and 7, and the filer's name on page 2)",
+              "k": [
+                "frm1707:ProfileName",
+                "frm1707:ProfileAddress1",
+                "frm1707:ProfileAddress2",
+                "frm1707:ProfileZipCode",
+                "frm1707:ProfileContactNum",
+                "frm1707:ProfileEmailAddr",
+                "frm1707:txtLOB"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Taxpayer Identification Number (TIN) (the official page's copy; the sheet prints it on page 2)",
+              "k": [
+                "frm1707:txtPg1TIN1",
+                "frm1707:txtPg1TIN2",
+                "frm1707:txtPg1TIN3",
+                "frm1707:txtPg1TIN4"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Corporation: Domestic or Foreign (the official page's own question; the sheet draws no box)",
+              "k": [
+                "frm1707:rdoCorpoDomestic",
+                "frm1707:rdoCorpoForeign"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "add:1:1": {
+      "fields": [
+        {
+          "k": "frm1707:rdoPg1Pt1I5RDO",
+          "l": "RDO Code of the Seller",
+          "t": "sel"
+        }
+      ],
+      "evidence": "PR 9 (R2.2, preview.0, manual-2): item 5, which html-frozen/1707-2021/writer-cells.json joins at '5 RDO Code of the Seller' and form_1707.rs writes from rdo_code; the probe binds it (probe.rs PRINTED_NOT_IN_CORPUS)"
     }
   },
   "1707A": {
@@ -33959,7 +34889,8 @@
     },
     "frm2000OT:txtPg2TaxpayerName": {
       "label": "Taxpayer's Name",
-      "evidence": "painted form_2000ot_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's Name\"; writer-cells printed caption: \"Taxpayer's Name (page 2 header)\""
+      "evidence": "painted form_2000ot_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's Name\"; writer-cells printed caption: \"Taxpayer's Name (page 2 header)\" | PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I",
+      "kind": "hidden"
     },
     "frm2000OT:Sched2:txtGrossSellingPrice": {
       "label": "Schedule 1A — Gross selling price / bid price / net gift",
@@ -33986,16 +34917,16 @@
       "evidence": "P4: printed caption 'Taxable Base (cash/foreclosure sale/net gift, Item A or B whichever is higher)' (html-frozen/2000-ot-2018/writer-cells.json money_joins)"
     },
     "frm2000OT:ATC_1": {
-      "label": "3 ATC: DO 102",
-      "evidence": "P4: printed caption '3 ATC: DO 102' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_1)"
+      "label": "DO 102",
+      "evidence": "P4: printed caption '3 ATC: DO 102' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_1) | PR 9 (R3.2): html-frozen/2000-ot-2018/writer-cells.json xbox_joins prints this box at '3 ATC: DO 102'; the item heading is the ATC"
     },
     "frm2000OT:ATC_2": {
-      "label": "3 ATC: DO 122",
-      "evidence": "P4: printed caption '3 ATC: DO 122' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_2)"
+      "label": "DO 122",
+      "evidence": "P4: printed caption '3 ATC: DO 122' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_2) | PR 9 (R3.2): html-frozen/2000-ot-2018/writer-cells.json xbox_joins prints this box at '3 ATC: DO 122'; the item heading is the ATC"
     },
     "frm2000OT:ATC_3": {
-      "label": "3 ATC: DO 125",
-      "evidence": "P4: printed caption '3 ATC: DO 125' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_3)"
+      "label": "DO 125",
+      "evidence": "P4: printed caption '3 ATC: DO 125' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_3) | PR 9 (R3.2): html-frozen/2000-ot-2018/writer-cells.json xbox_joins prints this box at '3 ATC: DO 125'; the item heading is the ATC"
     },
     "frm2000OT:txtTax14": {
       "label": "14 Taxable Base-Shares of Stock",
@@ -34007,7 +34938,8 @@
     },
     "frm2000OT:txtTax16": {
       "label": "16 Tax Rate",
-      "evidence": "P4: printed caption '16 Tax Rate' (html-frozen/2000-ot-2018/writer-cells.json joins frm2000OT:txtTax16)"
+      "evidence": "P4: printed caption '16 Tax Rate' (html-frozen/2000-ot-2018/writer-cells.json joins frm2000OT:txtTax16) | PR 9 (manual-2): item 16 Tax Rate is the ATC's rate text the official SelectedATC writes (form_2000ot.rs Form2000OTAtc::rate_text: 'P1.50 / P200', 'P15 / P1,000', '50% DST paid on original issue'), never a peso amount; html-frozen/2000-ot-2018/writer-cells.json joins it at '16 Tax Rate'",
+      "kind": "text"
     },
     "frm2000OT:txtTax17": {
       "label": "17 Tax Due (Item 14 or 15 x Item 16)",
@@ -34160,6 +35092,311 @@
     "chkSchedule1BDelete2": {
       "kind": "hidden",
       "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "frm2000OT:rbTransNature_1": {
+      "label": "Transfer of Shares of Stock Not Traded Through the Local Stock Exchange",
+      "evidence": "PR 9 (R3.2, manual-0): html-frozen/2000-ot-2018/writer-cells.json xbox_joins '12 Nature: Transfer of Shares of Stock Not Traded Through the Local Stock Exchange'"
+    },
+    "frm2000OT:rbTransNature_2": {
+      "label": "Transfer of Real Property Classified as Capital Asset",
+      "evidence": "PR 9 (R3.2, manual-0): html-frozen/2000-ot-2018/writer-cells.json xbox_joins '12 Nature: Transfer of Real Property Classified as Capital Asset'"
+    },
+    "frm2000OT:rbTransNature_3": {
+      "label": "Transfer of Real Property Other Than Capital Asset",
+      "evidence": "PR 9 (R3.2, manual-0): html-frozen/2000-ot-2018/writer-cells.json xbox_joins '12 Nature: Transfer of Real Property Other Than Capital Asset'"
+    },
+    "frm2000OT:txtPg2TIN1": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "frm2000OT:txtPg2TIN2": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "frm2000OT:txtPg2TIN3": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "frm2000OT:txtPg2BranchCode": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/2000-ot-2018/index.html (BIR Form 2000-OT, January 2018) (Items 1-4, Part I 5-13, Part II 14-21, Part IV Schedules 1.A, 1.B and 2) and html-frozen/2000-ot-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction (MM/DD/YYYY)",
+              "k": [
+                "frm2000OT:txtTransactionDate"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm2000OT:AmendedRtn_1",
+                "frm2000OT:AmendedRtn_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Alphanumeric Tax Code (ATC)",
+              "k": [
+                "frm2000OT:ATC_1",
+                "frm2000OT:ATC_2",
+                "frm2000OT:ATC_3"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm2000OT:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2000OT:txtTIN1",
+                "frm2000OT:txtTIN2",
+                "frm2000OT:txtTIN3",
+                "frm2000OT:txtBranchCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "RDO Code of Location of the Property",
+              "k": [
+                "frm2000OT:txtRDOCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Taxpayer's Name",
+              "k": [
+                "frm2000OT:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Registered Address",
+              "k": [
+                "frm2000OT:txtAddress"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2000OT:txtZipCode"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "k": [
+                "frm2000OT:txtTelNum"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Other Party to the transaction",
+              "k": [
+                "frm2000OT:optParty_1",
+                "frm2000OT:optParty_2"
+              ]
+            },
+            {
+              "no": "11A",
+              "l": "Name (Last Name, First Name, Middle Name for Individual)/(Registered Name for Non-Individual)",
+              "k": [
+                "frm2000OT:txtOtherName"
+              ]
+            },
+            {
+              "no": "11B",
+              "l": "TIN",
+              "k": [
+                "frm2000OT:txtOtherTIN"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Nature of Transaction",
+              "k": [
+                "frm2000OT:rbTransNature_1",
+                "frm2000OT:rbTransNature_2",
+                "frm2000OT:rbTransNature_3"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Location of Real Property (if sale/transfer/donation of real property)",
+              "k": [
+                "frm2000OT:txtRealLocation"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "14",
+              "l": "Taxable Base – Shares of Stock (From Part IV Schedule 1.B column (d) or (e), whichever is applicable)",
+              "k": [
+                "frm2000OT:txtTax14"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Taxable Base – Real Property (From Part IV Schedule 2 Item 2)",
+              "k": [
+                "frm2000OT:txtTax15"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Tax Rate",
+              "k": [
+                "frm2000OT:txtTax16"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Tax Due (Item 14 or 15 x Item 16)",
+              "k": [
+                "frm2000OT:txtTax17"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Less: Tax Paid in Return previously filed, if this is an amended return",
+              "k": [
+                "frm2000OT:txtTax18"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Tax Still Due/(Overpayment) (Item 17 less Item 18)",
+              "k": [
+                "frm2000OT:txtTax19"
+              ]
+            },
+            {
+              "no": "20A",
+              "l": "Surcharge",
+              "k": [
+                "frm2000OT:txtTax20A"
+              ]
+            },
+            {
+              "no": "20B",
+              "l": "Interest",
+              "k": [
+                "frm2000OT:txtTax20B"
+              ]
+            },
+            {
+              "no": "20C",
+              "l": "Compromise",
+              "k": [
+                "frm2000OT:txtTax20C"
+              ]
+            },
+            {
+              "no": "20D",
+              "l": "Total Penalties (Sum of Items 20A to 20C)",
+              "k": [
+                "frm2000OT:txtTax20D"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Items 19 and 20D)",
+              "k": [
+                "frm2000OT:txtTax21"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedules",
+          "items": [
+            {
+              "table": "frm2000OT:sched1A:txtOCTNo0"
+            },
+            {
+              "no": "",
+              "l": "Schedule 1.A TOTAL (To Schedule 2 Item B)",
+              "k": [
+                "frm2000OT:sched1A:txtFMVTotal"
+              ]
+            },
+            {
+              "table": "frm2000OT:sched1B:txtNameOfCorpStock0"
+            },
+            {
+              "no": "1A",
+              "l": "Schedule 2 – Gross Selling Price / Bid Price for foreclosure sale / Net Gift",
+              "k": [
+                "frm2000OT:Sched2:txtGrossSellingPrice"
+              ]
+            },
+            {
+              "no": "1B",
+              "l": "Total Fair Market Value of Land and Improvement per Schedule 1.A",
+              "k": [
+                "frm2000OT:Sched2:txtTotalFairMarket"
+              ]
+            },
+            {
+              "no": "1C",
+              "l": "Others (Specify)",
+              "k": [
+                "frm2000OT:Sched2:txtOthers",
+                "frm2000OT:Sched2:txtOthersAmount"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Taxable Base (For cash/foreclosure sale/net gift Item A or B whichever is higher; or, For other transaction Item C, whichever is applicable) (To Part II, Item 15)",
+              "k": [
+                "frm2000OT:Sched2:txtTaxableBase"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business (the 2018 sheet has no line-of-business box)",
+              "k": [
+                "frm2000OT:txtLineBus"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "2200A": {
@@ -44256,8 +45493,9 @@
       "evidence": "painted form_2552_view.rs (local:relief via binding /tax_relief_specification): 'If yes, specify'; writer-cells printed caption: 'If yes, specify'"
     },
     "frm2552:txtPg1Pt1I12NumOfShare": {
-      "label": "No. of shares sold, bartered or exchanged",
-      "evidence": "painted form_2552_view.rs (local:shares_sold via binding /shares_sold): 'No. of shares sold, bartered or exchanged'; writer-cells printed caption: 'No. of Shares Sold, Bartered, or Exchanged'"
+      "label": "No. of Shares Sold, Bartered, or Exchanged",
+      "evidence": "painted form_2552_view.rs (local:shares_sold via binding /shares_sold): 'No. of shares sold, bartered or exchanged'; writer-cells printed caption: 'No. of Shares Sold, Bartered, or Exchanged' | PR 9 (manual-3): a number of shares, typed as the filer writes it (form_2552.rs shares_sold, text)",
+      "kind": "int"
     },
     "frm2552:txtPg1P2I18CredTaxWthhld": {
       "label": "Creditable tax withheld per BIR Form 2307",
@@ -44273,15 +45511,21 @@
     },
     "Pg2Pt5Sch1SubTotal": {
       "label": "Page 2 Part 5 Sch 1 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 5 Sch 1 Sub Total'"
+      "evidence": "PR 9: the add-more popup's subtotal, form_2552.rs popup_subtotal (the sum of the add-more rows' tax due), which row 5 prints as OTHERS",
+      "kind": "money",
+      "computed": true
     },
     "Pg2Pt5Sch2SubTotal": {
       "label": "Page 2 Part 5 Sch 2 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 5 Sch 2 Sub Total'"
+      "evidence": "PR 9: the add-more popup's subtotal, form_2552.rs popup_subtotal (the sum of the add-more rows' tax due), which row 5 prints as OTHERS",
+      "kind": "money",
+      "computed": true
     },
     "Pg2Pt5Sch3SubTotal": {
       "label": "Page 2 Part 5 Sch 3 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 5 Sch 3 Sub Total'"
+      "evidence": "PR 9: the add-more popup's subtotal, form_2552.rs popup_subtotal (the sum of the add-more rows' tax due), which row 5 prints as OTHERS",
+      "kind": "money",
+      "computed": true
     },
     "txtEnroll": {
       "kind": "hidden",
@@ -44637,7 +45881,8 @@
     },
     "frm2552:txtPg2P4I2Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 2 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I2Amount)"
+      "evidence": "P4: printed caption 'Part IV row 2 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I2Amount) | PR 9 (manual-0): Part IV row 2's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[1].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:3": {
       "label": "Part IV row 2 Transaction Classification",
@@ -44653,7 +45898,8 @@
     },
     "frm2552:txtPg2P4I3Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 3 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I3Amount)"
+      "evidence": "P4: printed caption 'Part IV row 3 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I3Amount) | PR 9 (manual-0): Part IV row 3's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[2].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:5": {
       "label": "Part IV row 3 Transaction Classification",
@@ -44669,7 +45915,8 @@
     },
     "frm2552:txtPg2P4I4Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 4 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I4Amount)"
+      "evidence": "P4: printed caption 'Part IV row 4 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I4Amount) | PR 9 (manual-0): Part IV row 4's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[3].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:7": {
       "label": "Part IV row 4 Transaction Classification",
@@ -44685,7 +45932,8 @@
     },
     "frm2552:txtPg2P4I5Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 5 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I5Amount)"
+      "evidence": "P4: printed caption 'Part IV row 5 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I5Amount) | PR 9 (manual-0): Part IV row 5's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[4].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:10": {
       "label": "Part IV row 5 Transaction Classification",
@@ -44918,6 +46166,705 @@
     "frm2552:txtPg1Pt3I29Date": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: id frm2552:txtPg1Pt3I29Date, source line 1140) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm2552:rdoPg1I2AmendedYes": {
+      "label": "Yes",
+      "evidence": "PR 9: html-frozen/2552-2018/writer-cells.json xbox_joins '2 Amended Return Yes'; the box sets /is_amended true (crates/bir-core/data/agent-forms/2552-v2018.json), so it reads Yes"
+    },
+    "frm2552:rdoPg1I2AmendedNo": {
+      "label": "No",
+      "evidence": "PR 9: html-frozen/2552-2018/writer-cells.json xbox_joins '2 Amended Return No'; the box sets /is_amended false, so it reads No"
+    },
+    "frm2552:rdoPg1I10TaxReliefYes": {
+      "label": "Yes",
+      "evidence": "PR 9 (R3.3): html-frozen/2552-2018/writer-cells.json xbox_joins '10 Tax relief Yes'"
+    },
+    "frm2552:rdoPg1I10TaxReliefNo": {
+      "label": "No",
+      "evidence": "PR 9 (R3.3): html-frozen/2552-2018/writer-cells.json xbox_joins '10 Tax relief No'"
+    },
+    "frm2552:rdoPg1I11TransactionLSE": {
+      "label": "11A Shares of Stocks Listed and Traded through the LSE",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11A Shares Listed and Traded through the LSE'; html-frozen/2552-2018/index.html (BIR Form 2552, January 2018) '11A Shares of Stocks Listed and Traded through the LSE'"
+    },
+    "frm2552:rdoPg1I11TransactionPrimary": {
+      "label": "11B Initial Public Offering: Primary",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Primary'"
+    },
+    "frm2552:rdoPg1I11TransactionSecondary": {
+      "label": "11B Initial Public Offering: Secondary",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Secondary'"
+    },
+    "frm2552:rdoPg1OverpaymentRefund": {
+      "label": "To be refunded",
+      "evidence": "PR 9 (R3.0): html-frozen/2552-2018/writer-cells.json xbox_joins 'If overpayment: To be refunded'"
+    },
+    "frm2552:rdoPg1OverpaymentTaxCredCert": {
+      "label": "To be issued Tax Credit Certificate",
+      "evidence": "PR 9 (R3.0): html-frozen/2552-2018/writer-cells.json xbox_joins 'If overpayment: To be issued Tax Credit Certificate'"
+    },
+    "frm2552:txtPg1Pt1I12TotShare": {
+      "label": "Total Outstanding Shares of Stocks after Listing in the LSE",
+      "kind": "int",
+      "computed": false,
+      "evidence": "PR 9 (manual-3): 12B is typed by the filer for an initial public offering (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load like 12A, both opened by kindOfTransaction; form_2552.rs keeps it in outstanding_shares, text, and clears it unless item 11 is an offering); the corpus marks it computed, so the host writes it (rows_as_needed.rs)"
+    },
+    "frm2552:txtPg1P2I13TaxATC": {
+      "kind": "hidden",
+      "evidence": "PR 9: the ATC is preprinted on the item 13 row (html-frozen/2552-2018/writer-cells.json not_joined: 'ATC PT 200/201/202 is preprinted'); the item's caption names it"
+    },
+    "frm2552:txtPg1P2I14TaxATC": {
+      "kind": "hidden",
+      "evidence": "PR 9: the ATC is preprinted on the item 14 row (html-frozen/2552-2018/writer-cells.json not_joined: 'ATC PT 200/201/202 is preprinted'); the item's caption names it"
+    },
+    "frm2552:txtPg1P2I15TaxATC": {
+      "kind": "hidden",
+      "evidence": "PR 9: the ATC is preprinted on the item 15 row (html-frozen/2552-2018/writer-cells.json not_joined: 'ATC PT 200/201/202 is preprinted'); the item's caption names it"
+    },
+    "frm2552:rdoPg1Pt1I5RDO": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-2): the official program's injected copy of item 5 (html-frozen/2552-2018/writer-cells.json not_joined: 'duplicate of frm2552:txtPg1I5RDO (same RDO), which prints in item 5'); the page shows item 5 once"
+    },
+    "frm2552:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.1): html-frozen/2552-2018/writer-cells.json not_joined: 'page counter of the eBIRForms page, not a box on the paper form'"
+    },
+    "Pg2Pt5Sch1PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9: the official add-more popup's row count, not a box on the paper form"
+    },
+    "Pg2Pt5Sch2PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9: the official add-more popup's row count, not a box on the paper form"
+    },
+    "Pg2Pt5Sch3PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9: the official add-more popup's row count, not a box on the paper form"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/2552-2018/index.html (BIR Form 2552, January 2018) (Items 1-3, Part I 4-12, Part II 13-25, Part III 26-29, Part IV, Part V Schedules 1-3, Part VI) and html-frozen/2552-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction or Date of Listing of Share of Stocks on the Stock Exchange (MM/DD/YYYY)",
+              "k": [
+                "frm2552:txtPg1I1Month",
+                "frm2552:txtPg1I1Day",
+                "frm2552:txtPg1I1Year"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm2552:rdoPg1I2AmendedYes",
+                "frm2552:rdoPg1I2AmendedNo"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Number of sheet/s attached",
+              "k": [
+                "frm2552:txtPg1I3NoOfSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2552:txtPg1TIN1",
+                "frm2552:txtPg1TIN2",
+                "frm2552:txtPg1TIN3",
+                "frm2552:txtPg1TIN4"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm2552:txtPg1I5RDO"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Name of Stockbroker/Issuing Corporation (Last Name, First Name, Middle Name for Individuals OR Registered Name for Non-Individuals)",
+              "k": [
+                "frm2552:txtPg1Pt1I6Name"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address",
+              "k": [
+                "frm2552:txtPg1Pt1I7RegisteredAddress",
+                "frm2552:txtPg1Pt1I7RegisteredAddress2"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2552:txPg1I7ZipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Contact Number",
+              "k": [
+                "frm2552:txtPg1Pt1I8ContactNumber"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Email Address",
+              "k": [
+                "frm2552:txtPg1Pt1I9Email"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm2552:rdoPg1I10TaxReliefYes",
+                "frm2552:rdoPg1I10TaxReliefNo"
+              ]
+            },
+            {
+              "no": "10A",
+              "l": "If yes, specify",
+              "k": [
+                "frm2552:txtPg1Pt1I10TaxReliefSpec"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Kinds of Transaction",
+              "k": [
+                "frm2552:rdoPg1I11TransactionLSE",
+                "frm2552:rdoPg1I11TransactionPrimary",
+                "frm2552:rdoPg1I11TransactionSecondary"
+              ]
+            },
+            {
+              "no": "12A",
+              "l": "For Initial Public Offering: No. of Shares Sold, Bartered, or Exchanged",
+              "k": [
+                "frm2552:txtPg1Pt1I12NumOfShare"
+              ]
+            },
+            {
+              "no": "12B",
+              "l": "For Initial Public Offering: Total Outstanding Shares of Stocks after Listing in the LSE",
+              "k": [
+                "frm2552:txtPg1Pt1I12TotShare"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "13",
+              "l": "Tax Due, ATC PT 200 (From Part V Schedule 1 Item 6)",
+              "k": [
+                "frm2552:txtPg1P2I13TaxATC",
+                "frm2552:txtPg1P2I13TaxDue"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Tax Due, ATC PT 201 (From Part V Schedule 2 Item 6)",
+              "k": [
+                "frm2552:txtPg1P2I14TaxATC",
+                "frm2552:txtPg1P2I14TaxDue"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Tax Due, ATC PT 202 (From Part V Schedule 3 Item 6)",
+              "k": [
+                "frm2552:txtPg1P2I15TaxATC",
+                "frm2552:txtPg1P2I15TaxDue"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "TOTAL TAX DUE (Sum of Items 13 to 15)",
+              "k": [
+                "frm2552:txtPg1P2I16TotTaxDue"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Less: Tax Paid in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm2552:txtPg1P2I17TaxPaidInPrevRtrn"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Creditable Tax Withheld per BIR Form No. 2307",
+              "k": [
+                "frm2552:txtPg1P2I18CredTaxWthhld"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Total Tax Credits/Payments (Sum of Items 17 to 18)",
+              "k": [
+                "frm2552:txtPg1P2I19TotTaxCredPmnt"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Total Tax Still Due/(Overpayment) (Item 16 Less Item 19)",
+              "k": [
+                "frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Surcharge",
+              "k": [
+                "frm2552:txtPg1P2I21Surcharge"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Interest",
+              "k": [
+                "frm2552:txtPg1P2I22Interest"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Compromise",
+              "k": [
+                "frm2552:txtPg1P2I23Compromise"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Total Penalties (Sum of Items 21 to 23)",
+              "k": [
+                "frm2552:txtPg1P2I24TotPenalties"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "TOTAL AMOUNT PAYABLE/(OVERPAYMENT) (Sum of Items 20 and 24); if overpayment, mark one box only",
+              "k": [
+                "frm2552:txtPg1P2I25TotAmntPyable",
+                "frm2552:rdoPg1OverpaymentRefund",
+                "frm2552:rdoPg1OverpaymentTaxCredCert"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "26",
+              "l": "Cash/Bank Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "27",
+              "l": "Check",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "28",
+              "l": "Tax Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "29",
+              "l": "Others (Specify below)",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Summary of Transactions not subject to Tax",
+          "items": [
+            {
+              "no": "",
+              "l": "Transactions not subject to tax",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "Transaction Classification",
+                  "Amount Involved"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2P4I1TransClass",
+                    "frm2552:txtPg2P4I1Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I2TransClass",
+                    "frm2552:txtPg2P4I2Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I3TransClass",
+                    "frm2552:txtPg2P4I3Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I4TransClass",
+                    "frm2552:txtPg2P4I4Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I5TransClass",
+                    "frm2552:txtPg2P4I5Amount"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "n": "Part V · Details of Taxable Transactions",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1 – Sale, Barter or Exchange of Shares of Stock Listed and Traded Through the LSE",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "(a) Date",
+                  "(b) Seller",
+                  "(c) Buyer",
+                  "(d) Issuing Corporation",
+                  "(e) Number of Shares",
+                  "(f) Tax Base",
+                  "(g) Tax Rate",
+                  "(h) Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date1",
+                    "frm2552:txtPg2Pt5Sch1Seller1",
+                    "frm2552:txtPg2Pt5Sch1Buyer1",
+                    "frm2552:txtPg2Pt5Sch1Corp1",
+                    "frm2552:txtPg2Pt5Sch1NumShares1",
+                    "frm2552:txtPg2Pt5Sch1TaxBase1",
+                    "frm2552:txtPg2Pt5Sch1TaxRate1",
+                    "frm2552:txtPg2Pt5Sch1TaxDue1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date2",
+                    "frm2552:txtPg2Pt5Sch1Seller2",
+                    "frm2552:txtPg2Pt5Sch1Buyer2",
+                    "frm2552:txtPg2Pt5Sch1Corp2",
+                    "frm2552:txtPg2Pt5Sch1NumShares2",
+                    "frm2552:txtPg2Pt5Sch1TaxBase2",
+                    "frm2552:txtPg2Pt5Sch1TaxRate2",
+                    "frm2552:txtPg2Pt5Sch1TaxDue2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date3",
+                    "frm2552:txtPg2Pt5Sch1Seller3",
+                    "frm2552:txtPg2Pt5Sch1Buyer3",
+                    "frm2552:txtPg2Pt5Sch1Corp3",
+                    "frm2552:txtPg2Pt5Sch1NumShares3",
+                    "frm2552:txtPg2Pt5Sch1TaxBase3",
+                    "frm2552:txtPg2Pt5Sch1TaxRate3",
+                    "frm2552:txtPg2Pt5Sch1TaxDue3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date4",
+                    "frm2552:txtPg2Pt5Sch1Seller4",
+                    "frm2552:txtPg2Pt5Sch1Buyer4",
+                    "frm2552:txtPg2Pt5Sch1Corp4",
+                    "frm2552:txtPg2Pt5Sch1NumShares4",
+                    "frm2552:txtPg2Pt5Sch1TaxBase4",
+                    "frm2552:txtPg2Pt5Sch1TaxRate4",
+                    "frm2552:txtPg2Pt5Sch1TaxDue4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date5",
+                    "frm2552:txtPg2Pt5Sch1Seller5",
+                    "frm2552:txtPg2Pt5Sch1Buyer5",
+                    "frm2552:txtPg2Pt5Sch1Corp5",
+                    "frm2552:txtPg2Pt5Sch1NumShares5",
+                    "frm2552:txtPg2Pt5Sch1TaxBase5",
+                    "frm2552:txtPg2Pt5Sch1TaxRate5",
+                    "frm2552:txtPg2Pt5Sch1TaxDue5"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "6",
+              "l": "TOTAL (Sum of Items 1h to 5h) (To Part II Item 13)",
+              "k": [
+                "frm2552:txtPg2Pt5Sch1TaxDueTot"
+              ]
+            },
+            {
+              "table": "frm2552:txtPg2Pt5Sch1_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 1 add-more subtotal (row 5 prints it as OTHERS)",
+              "k": [
+                "Pg2Pt5Sch1SubTotal"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 – Sale/Exchange of Shares of Stock through Primary Public Offering",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "(a) Date",
+                  "(b) Seller",
+                  "(c) Buyer",
+                  "(d) Issuing Corporation",
+                  "(e) Number of Shares",
+                  "(f) Tax Base",
+                  "(g) Tax Rate",
+                  "(h) Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date1",
+                    "frm2552:txtPg2Pt5Sch2Seller1",
+                    "frm2552:txtPg2Pt5Sch2Buyer1",
+                    "frm2552:txtPg2Pt5Sch2Corp1",
+                    "frm2552:txtPg2Pt5Sch2NumShares1",
+                    "frm2552:txtPg2Pt5Sch2TaxBase1",
+                    "frm2552:txtPg2Pt5Sch2TaxRate1",
+                    "frm2552:txtPg2Pt5Sch2TaxDue1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date2",
+                    "frm2552:txtPg2Pt5Sch2Seller2",
+                    "frm2552:txtPg2Pt5Sch2Buyer2",
+                    "frm2552:txtPg2Pt5Sch2Corp2",
+                    "frm2552:txtPg2Pt5Sch2NumShares2",
+                    "frm2552:txtPg2Pt5Sch2TaxBase2",
+                    "frm2552:txtPg2Pt5Sch2TaxRate2",
+                    "frm2552:txtPg2Pt5Sch2TaxDue2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date3",
+                    "frm2552:txtPg2Pt5Sch2Seller3",
+                    "frm2552:txtPg2Pt5Sch2Buyer3",
+                    "frm2552:txtPg2Pt5Sch2Corp3",
+                    "frm2552:txtPg2Pt5Sch2NumShares3",
+                    "frm2552:txtPg2Pt5Sch2TaxBase3",
+                    "frm2552:txtPg2Pt5Sch2TaxRate3",
+                    "frm2552:txtPg2Pt5Sch2TaxDue3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date4",
+                    "frm2552:txtPg2Pt5Sch2Seller4",
+                    "frm2552:txtPg2Pt5Sch2Buyer4",
+                    "frm2552:txtPg2Pt5Sch2Corp4",
+                    "frm2552:txtPg2Pt5Sch2NumShares4",
+                    "frm2552:txtPg2Pt5Sch2TaxBase4",
+                    "frm2552:txtPg2Pt5Sch2TaxRate4",
+                    "frm2552:txtPg2Pt5Sch2TaxDue4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date5",
+                    "frm2552:txtPg2Pt5Sch2Seller5",
+                    "frm2552:txtPg2Pt5Sch2Buyer5",
+                    "frm2552:txtPg2Pt5Sch2Corp5",
+                    "frm2552:txtPg2Pt5Sch2NumShares5",
+                    "frm2552:txtPg2Pt5Sch2TaxBase5",
+                    "frm2552:txtPg2Pt5Sch2TaxRate5",
+                    "frm2552:txtPg2Pt5Sch2TaxDue5"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "6",
+              "l": "TOTAL (Sum of Items 1h to 5h) (To Part II Item 14)",
+              "k": [
+                "frm2552:txtPg2Pt5Sch2TaxDueTot"
+              ]
+            },
+            {
+              "table": "frm2552:txtPg2Pt5Sch2_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 add-more subtotal (row 5 prints it as OTHERS)",
+              "k": [
+                "Pg2Pt5Sch2SubTotal"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 – Sale/Exchange of Shares of Stock through Secondary Public Offering",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "(a) Date",
+                  "(b) Seller",
+                  "(c) Buyer",
+                  "(d) Issuing Corporation",
+                  "(e) Number of Shares",
+                  "(f) Tax Base",
+                  "(g) Tax Rate",
+                  "(h) Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date1",
+                    "frm2552:txtPg2Pt5Sch3Seller1",
+                    "frm2552:txtPg2Pt5Sch3Buyer1",
+                    "frm2552:txtPg2Pt5Sch3Corp1",
+                    "frm2552:txtPg2Pt5Sch3NumShares1",
+                    "frm2552:txtPg2Pt5Sch3TaxBase1",
+                    "frm2552:txtPg2Pt5Sch3TaxRate1",
+                    "frm2552:txtPg2Pt5Sch3TaxDue1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date2",
+                    "frm2552:txtPg2Pt5Sch3Seller2",
+                    "frm2552:txtPg2Pt5Sch3Buyer2",
+                    "frm2552:txtPg2Pt5Sch3Corp2",
+                    "frm2552:txtPg2Pt5Sch3NumShares2",
+                    "frm2552:txtPg2Pt5Sch3TaxBase2",
+                    "frm2552:txtPg2Pt5Sch3TaxRate2",
+                    "frm2552:txtPg2Pt5Sch3TaxDue2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date3",
+                    "frm2552:txtPg2Pt5Sch3Seller3",
+                    "frm2552:txtPg2Pt5Sch3Buyer3",
+                    "frm2552:txtPg2Pt5Sch3Corp3",
+                    "frm2552:txtPg2Pt5Sch3NumShares3",
+                    "frm2552:txtPg2Pt5Sch3TaxBase3",
+                    "frm2552:txtPg2Pt5Sch3TaxRate3",
+                    "frm2552:txtPg2Pt5Sch3TaxDue3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date4",
+                    "frm2552:txtPg2Pt5Sch3Seller4",
+                    "frm2552:txtPg2Pt5Sch3Buyer4",
+                    "frm2552:txtPg2Pt5Sch3Corp4",
+                    "frm2552:txtPg2Pt5Sch3NumShares4",
+                    "frm2552:txtPg2Pt5Sch3TaxBase4",
+                    "frm2552:txtPg2Pt5Sch3TaxRate4",
+                    "frm2552:txtPg2Pt5Sch3TaxDue4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date5",
+                    "frm2552:txtPg2Pt5Sch3Seller5",
+                    "frm2552:txtPg2Pt5Sch3Buyer5",
+                    "frm2552:txtPg2Pt5Sch3Corp5",
+                    "frm2552:txtPg2Pt5Sch3NumShares5",
+                    "frm2552:txtPg2Pt5Sch3TaxBase5",
+                    "frm2552:txtPg2Pt5Sch3TaxRate5",
+                    "frm2552:txtPg2Pt5Sch3TaxDue5"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "6",
+              "l": "TOTAL (Sum of Items 1h to 5h) (To Part II Item 15)",
+              "k": [
+                "frm2552:txtPg2Pt5Sch3TaxDueTot"
+              ]
+            },
+            {
+              "table": "frm2552:txtPg2Pt5Sch3_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 add-more subtotal (row 5 prints it as OTHERS)",
+              "k": [
+                "Pg2Pt5Sch3SubTotal"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part VI · Details of Transactions not Subject to Percentage Tax",
+          "items": [
+            {
+              "no": "",
+              "l": "Transactions not subject to percentage tax",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "Date (MM/DD/YYYY)",
+                  "Seller",
+                  "Buyer",
+                  "Issuing Corporation",
+                  "Number of Shares"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt6Date1",
+                    "frm2552:txtPg2Pt6Seller1",
+                    "frm2552:txtPg2Pt6Buyer1",
+                    "frm2552:txtPg2Pt6Corp1",
+                    "frm2552:txtPg2Pt6NumShares1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date2",
+                    "frm2552:txtPg2Pt6Seller2",
+                    "frm2552:txtPg2Pt6Buyer2",
+                    "frm2552:txtPg2Pt6Corp2",
+                    "frm2552:txtPg2Pt6NumShares2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date3",
+                    "frm2552:txtPg2Pt6Seller3",
+                    "frm2552:txtPg2Pt6Buyer3",
+                    "frm2552:txtPg2Pt6Corp3",
+                    "frm2552:txtPg2Pt6NumShares3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date4",
+                    "frm2552:txtPg2Pt6Seller4",
+                    "frm2552:txtPg2Pt6Buyer4",
+                    "frm2552:txtPg2Pt6Corp4",
+                    "frm2552:txtPg2Pt6NumShares4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date5",
+                    "frm2552:txtPg2Pt6Seller5",
+                    "frm2552:txtPg2Pt6Buyer5",
+                    "frm2552:txtPg2Pt6Corp5",
+                    "frm2552:txtPg2Pt6NumShares5"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business (the 2018 sheet has no line-of-business item)",
+              "k": [
+                "frm2552:txtLOB"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "2553": {

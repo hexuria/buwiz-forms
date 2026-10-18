@@ -712,7 +712,9 @@ fn pr4_form_2000_schedule_dates_take_typed_dates_once_item_13_opens_them() {
         .collect();
     assert_eq!(dates.len(), 9, "{dates:?}");
     // Their tables give each date box a calendar (form_page.js reads
-    // `calendar`); no other form's table is marked (lesson 9).
+    // `calendar`); no other form's table is marked (lesson 9) but 2552's
+    // and 1707's tables with a date column (PR 9,
+    // rows_as_needed::mark_calendar_tables).
     for form in schema() {
         for part in form["parts"].as_array().unwrap() {
             for item in part["items"].as_array().unwrap() {
@@ -721,9 +723,13 @@ fn pr4_form_2000_schedule_dates_take_typed_dates_once_item_13_opens_them() {
                     && ["Schedule 2", "Schedule 3", "Schedule 4"]
                         .iter()
                         .any(|n| part["n"].as_str().unwrap().starts_with(n));
+                let dated_pr9 = (form["c"] == "2552" || form["c"] == "1707")
+                    && item["cols"]
+                        .as_array()
+                        .is_some_and(|cols| cols.iter().any(|col| col["t"] == "date"));
                 assert_eq!(
                     marked,
-                    schedule_2_to_4 && item.get("rows").is_some(),
+                    (schedule_2_to_4 && item.get("rows").is_some()) || dated_pr9,
                     "{} {}",
                     form["c"],
                     part["n"]
