@@ -2,16 +2,17 @@
   "_comment": "Applied by the shell at load (screen_form_module.rs apply_overrides). Keys: field key k (label/kind/options/computed; table columns are keyed by the column's row-0 key); item:<partIndex>:<itemIndex> for item labels (0-based into forms-schema.json parts/items); table:<part>:<name> builds a schedule table from row templates; add:<part>:<item> appends bound controls the extractor left out; move:<field key> with to '<part>:<item>' or '<part>:new:<no>' (+ item {l, order}) regroups a control under its printed item. Every entry carries its evidence.",
   "0605": {
     "frm0605:itemFiscalStartMonth:_1": {
-      "label": "For the Calendar",
-      "evidence": "agent group option: 'For the Calendar'; agent box label: 'For the Calendar'; binding /filing_basis='Calendar' when selected: 'Calendar'"
+      "label": "Calendar",
+      "evidence": "PR 9 (R3.1): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '1 For the Calendar'; the item heading reads 'For the', so the option is 'Calendar'"
     },
     "frm0605:itemFiscalStartMonth:_2": {
       "label": "Fiscal",
-      "evidence": "agent group option: 'Fiscal'; agent box label: 'Fiscal'; binding /filing_basis='Fiscal' when selected: 'Fiscal'"
+      "evidence": "PR 9 (R3.1): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '1 Fiscal'"
     },
     "frm0605:txtYearEnded": {
       "kind": "int",
-      "evidence": "binding type whole; fields.json text/code"
+      "evidence": "binding type whole; fields.json text/code | PR 9 (manual-0): html-frozen/0605-1999/writer-cells.json joins '2 Year Ended (YYYY)'",
+      "label": "Year"
     },
     "frm0605:txtDueDateMonth": {
       "kind": "int",
@@ -151,20 +152,275 @@
       "evidence": "internal workflow/credential key ebirOnlineSecret (not a printed box)"
     },
     "itemQuarter_1": {
-      "label": "3 Quarter: 1st",
-      "evidence": "P4: printed caption '3 Quarter: 1st' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_1)"
+      "label": "1st",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 1st'; the item heading is 'Quarter'"
     },
     "itemQuarter_2": {
-      "label": "3 Quarter: 2nd",
-      "evidence": "P4: printed caption '3 Quarter: 2nd' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_2)"
+      "label": "2nd",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 2nd'; the item heading is 'Quarter'"
     },
     "itemQuarter_3": {
-      "label": "3 Quarter: 3rd",
-      "evidence": "P4: printed caption '3 Quarter: 3rd' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_3)"
+      "label": "3rd",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 3rd'; the item heading is 'Quarter'"
     },
     "itemQuarter_4": {
-      "label": "3 Quarter: 4th",
-      "evidence": "P4: printed caption '3 Quarter: 4th' (html-frozen/0605-1999/writer-cells.json xbox_joins itemQuarter_4)"
+      "label": "4th",
+      "evidence": "PR 9 (R3.2): html-frozen/0605-1999/writer-cells.json xbox_joins prints this box at '3 Quarter: 4th'; the item heading is 'Quarter'"
+    },
+    "frm0605:itemYearEndMonth": {
+      "label": "Month",
+      "evidence": "PR 9 (manual-0): html-frozen/0605-1999/writer-cells.json joins '2 Year Ended (MM/YYYY), month'"
+    },
+    "frm0605:txtClassification:_1": {
+      "label": "I - Individual",
+      "evidence": "PR 9 (manual-1): html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) legend 'Taxpayer Classification: I - Individual'; html-frozen/0605-1999/writer-cells.json xbox_joins '11 Taxpayer Classification: I'"
+    },
+    "frm0605:txtClassification:_2": {
+      "label": "N - Non-Individual",
+      "evidence": "PR 9 (manual-1): html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) legend 'N - Non-Individual'; html-frozen/0605-1999/writer-cells.json xbox_joins '11 Taxpayer Classification: N'"
+    },
+    "frm0605:txtOthersName": {
+      "label": "Specify",
+      "evidence": "PR 9: html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) item 17 'Others (Specify)'; the box beside it takes the specification"
+    },
+    "frm0605:itemApprovedYN:_1": {
+      "label": "Pre-approved by Investigating Office",
+      "evidence": "PR 9 (manual-2): crates/bir-core/src/forms/form_0605.rs Form0605ApprovalSelection::XmlOption1, 'frm0605:itemApprovedYN:_1 (value Y): Pre-approved by Investigating Office' (BIR-Form0605.hta:944-947)"
+    },
+    "frm0605:itemApprovedYN:_2": {
+      "label": "Not approved by Investigating Office",
+      "evidence": "PR 9 (manual-2): crates/bir-core/src/forms/form_0605.rs Form0605ApprovalSelection::XmlOption2, 'frm0605:itemApprovedYN:_2 (value N): Not approved by Investigating Office'"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/0605-1999/index.html (BIR Form 0605, July 1999) (Items 1-8, Part I 9-18, Part II 19-21) and html-frozen/0605-1999/writer-cells.json (joins and not_joined notes). Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "For the",
+              "k": [
+                "frm0605:itemFiscalStartMonth:_1",
+                "frm0605:itemFiscalStartMonth:_2"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Year Ended (MM/YYYY)",
+              "k": [
+                "frm0605:itemYearEndMonth",
+                "frm0605:txtYearEnded"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Quarter",
+              "k": [
+                "itemQuarter_1",
+                "itemQuarter_2",
+                "itemQuarter_3",
+                "itemQuarter_4"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Due Date (MM/DD/YYYY)",
+              "k": [
+                "frm0605:txtDueDateMonth",
+                "frm0605:txtDueDateDay",
+                "frm0605:txtDueDateYear"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "No. of Sheets Attached",
+              "k": [
+                "frm0605:txtNoOfSheets"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "ATC",
+              "k": [
+                "txtATCCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Return Period (MM/DD/YYYY)",
+              "k": [
+                "frm0605:txtReturnPeriodMonth",
+                "frm0605:txtReturnPeriodDay",
+                "frm0605:txtReturnPeriodYear"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Tax Type Code",
+              "k": [
+                "txtTaxTypeCode"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "9",
+              "l": "Taxpayer Identification No.",
+              "k": [
+                "frm0605:txtTIN1",
+                "frm0605:txtTIN2",
+                "frm0605:txtTIN3",
+                "frm0605:txtBranchCode"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "RDO Code",
+              "k": [
+                "frm0605:txtRDOCode"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Taxpayer Classification",
+              "k": [
+                "frm0605:txtClassification:_1",
+                "frm0605:txtClassification:_2"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Line of Business/Occupation",
+              "k": [
+                "frm0605:txtLineBus"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Taxpayer's Name (Last Name, First Name, Middle Name for Individuals) / (Registered Name for Non-Individuals)",
+              "k": [
+                "frm0605:txtTaxPayerName"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Telephone Number",
+              "k": [
+                "frm0605:txtTelNum"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Registered Address",
+              "k": [
+                "frm0605:txtAddress"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Zip Code",
+              "k": [
+                "frm0605:txtZipCode"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Manner of Payment",
+              "k": [
+                "frm0605:itemMannerOfPayment:_1",
+                "frm0605:itemMannerOfPayment:_2",
+                "frm0605:itemMannerOfPayment:_3",
+                "frm0605:itemMannerOfPayment:_4",
+                "frm0605:itemMannerOfPayment:_5",
+                "frm0605:txtOthersName",
+                "frm0605:itemMannerOfPaymentB:_1",
+                "frm0605:itemMannerOfPaymentB:_2"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Type of Payment",
+              "k": [
+                "frm0605:itemModeOfPayment:_1",
+                "frm0605:txtNumOfInstallment",
+                "frm0605:itemModeOfPayment:_2",
+                "frm0605:itemModeOfPayment:_3"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "19",
+              "l": "Basic Tax / Deposit / Advance Payment",
+              "k": [
+                "frm0605:txtTax19"
+              ]
+            },
+            {
+              "no": "20A",
+              "l": "Surcharge",
+              "k": [
+                "frm0605:txtTax20A"
+              ]
+            },
+            {
+              "no": "20B",
+              "l": "Interest",
+              "k": [
+                "frm0605:txtTax20B"
+              ]
+            },
+            {
+              "no": "20C",
+              "l": "Compromise",
+              "k": [
+                "frm0605:txtTax20C"
+              ]
+            },
+            {
+              "no": "20D",
+              "l": "Total Penalties",
+              "k": [
+                "frm0605:txtTax20D"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Total Amount Payable (Sum of Items 19 & 20D)",
+              "k": [
+                "frm0605:txtTax21"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Approval by the Investigating Office (the eBIRForms page asks it for item 17's Per Audit/Delinquent Account payments; the 1999 sheet has no box)",
+              "k": [
+                "frm0605:itemApprovedYN:_1",
+                "frm0605:itemApprovedYN:_2"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Email address (the 1999 sheet has no email box)",
+              "k": [
+                "txtEmail"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "0619E": {

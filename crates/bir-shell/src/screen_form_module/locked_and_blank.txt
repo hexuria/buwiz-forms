@@ -4,8 +4,6 @@
 # ` | `. Pinned by screen_form_module::tests::
 # no_box_is_locked_and_blank_without_a_reason_on_every_form: remove a line
 # when its group fixes the box; the test fails if a box is added.
-0605 frm0605:txtOthersName: cannot be filled here: written by the app without a draft field (a constant or the period) | PR 9 (fix/findings-as-needed-transfers)
-0605 itemQuarter_1 (radio group): cannot be filled here: written by the app without a draft field (a constant or the period) | PR 9 (fix/findings-as-needed-transfers)
 0619F txtAgency20: cannot be filled here: not written by this app's field map for any sample draft | PR 3 (fix/findings-monthly-withholding)
 0619F txtAgency21: cannot be filled here: not written by this app's field map for any sample draft | PR 3 (fix/findings-monthly-withholding)
 0619F txtAgency22: cannot be filled here: not written by this app's field map for any sample draft | PR 3 (fix/findings-monthly-withholding)

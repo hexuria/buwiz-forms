@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_as_needed;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -2404,6 +2405,9 @@ fn opened_json(
             json!({ "key": key, "part": part.name(), "quarter": quarter })
         })
         .collect();
+    // What a box waits for (PR 9's forms, rows_as_needed.rs; the
+    // integration merge joins the other form groups' lists here).
+    let waits = rows_as_needed::waits(kind, &draft);
     Ok(json!({
         "form_code": code,
         "year": year,
@@ -2421,6 +2425,7 @@ fn opened_json(
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
+        "waits": waits,
         "off": off,
         "penalties": penalty_groups,
         "pools": pool_texts,
@@ -3176,6 +3181,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3202,6 +3208,10 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 9's forms, rows_as_needed.rs; the integration merge chains the other
+    // form groups' removes here).
+    let removes = rows_as_needed::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3212,6 +3222,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        // Rows the filer typed that this edit removed: the page asks first.
+        "removes": removes,
     })))
 }
 
@@ -4131,6 +4143,10 @@ mod tests {
 
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
+
+    // PR 9: 0605, 1606, 1706, 1707, 2000OT and 2552 against their printed
+    // sheets.
+    mod as_needed;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -8436,7 +8452,6 @@ mod tests {
     /// out of paper order: placing them is each form's own fix (rule 3),
     /// so those forms' R2.0 stays open. A new one fails this test.
     const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
-        "0605 txtEmail",
         "1604E frm1604e:txtLineBus",
         "1604E frm1604e:txtPg2TaxpayerName",
         "1604F frm1604f:txtLineBus",
@@ -8767,7 +8782,13 @@ mod tests {
         // "It will be added" only where a form group is assigned to open
         // the box: 2551Q's repeated email is (PR 1).
         assert!(assigned_to_open("2551Q", "txtEmail#occurrence-1"));
-        assert!(assigned_to_open("0605", "itemQuarter_1"));
+        // 0605's quarter boxes were the example here until PR 9 opened
+        // them; 2200A's Schedule 1 tick box is still assigned (PR 11).
+        assert!(assigned_to_open(
+            "2200A",
+            "frm2200Av2020:txtSched1_xa_others1_Check"
+        ));
+        assert!(!assigned_to_open("0605", "itemQuarter_1"));
         assert!(!assigned_to_open("2551Q", "txtEmail"));
         assert!(!assigned_to_open("0619E", "txtEmail#occurrence-1"));
         assert_eq!(
@@ -9707,7 +9728,8 @@ mod tests {
         assert_eq!(
             found,
             BTreeMap::from([
-                ("0605", 3),
+                // Plus 1 for 0605 (PR 9): item 17's Others (Specify) box.
+                ("0605", 4),
                 ("0619F", 2),
                 ("1601C", 2),
                 ("1601EQ", 4),
