@@ -216,6 +216,10 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
     let last_year = to.year();
     let mut rows = Vec::new();
     for branch in branches(db)? {
+        // As-needed returns of any taxable year whose due date falls in the
+        // window (an estate's year-later deadline, a return filed under
+        // another year).
+        rows.extend(as_needed_rows(db, &branch, &overrides, &working, from, to)?);
         for year in first_year..=last_year {
             let Ok(year16) = u16::try_from(year) else {
                 continue;
@@ -223,15 +227,12 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             let codes = db
                 .active_form_codes_for_year(&branch.tin, year16)
                 .map_err(error)?;
-            let drafts = db
-                .list_draft_summaries(&branch.tin, year16)
-                .map_err(error)?;
-            rows.extend(as_needed_rows(
-                db, &branch, &drafts, &overrides, &working, from, to,
-            )?);
             if codes.is_empty() {
                 continue;
             }
+            let drafts = db
+                .list_draft_summaries(&branch.tin, year16)
+                .map_err(error)?;
             for deadline in DeadlineResolver::deadlines_for_forms(&codes, year, &overrides) {
                 let Some(due) = deadline.final_deadline_date() else {
                     continue;
@@ -286,31 +287,24 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
     Ok(rows)
 }
 
-/// The dated rows of a branch's saved as-needed returns that hold their
-/// trigger date, due in `[from, to]`. A saved return is its own evidence the
-/// form is filed, so these do not depend on the year's forms.
+/// The dated rows of a branch's saved as-needed returns, any taxable year,
+/// that hold an entered trigger date due in `[from, to]`
+/// (`event_trigger::dated_event_returns`). A saved return is its own
+/// evidence the form is filed, so these do not depend on the year's forms.
 fn as_needed_rows(
     db: &Database,
     branch: &BranchRef,
-    drafts: &[FormDraftSummary],
     overrides: &[DeadlineOverride],
     working: &BusinessDayCalendar,
     from: NaiveDate,
     to: NaiveDate,
 ) -> Result<Vec<Value>, HostError> {
     let mut rows = Vec::new();
-    for summary in drafts {
-        if !DeadlineResolver::is_as_needed(&summary.form_code) {
-            continue;
-        }
-        let Some(trigger) = db.draft_event_trigger(summary.id).map_err(error)? else {
-            continue;
-        };
-        let Some(deadline) =
-            DeadlineResolver::event_deadline(&trigger.rule, trigger.date, overrides, working)
-        else {
-            continue;
-        };
+    for dated in
+        bir_core::forms::event_trigger::dated_event_returns(db, &branch.tin, overrides, working)
+            .map_err(error)?
+    {
+        let (summary, trigger, deadline) = (&dated.summary, dated.trigger, &dated.deadline);
         let Some(due) = deadline.final_deadline_date() else {
             continue;
         };
@@ -756,6 +750,137 @@ mod tests {
             &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
         );
         assert!(listed[0]["undated"].as_array().unwrap().is_empty());
+    }
+
+    /// Review F24: an as-needed return is listed by its due date whatever
+    /// taxable year it is filed under: an estate return kept under 2024
+    /// for a death on January 10, 2026 is due January 11, 2027 (a year
+    /// later is a Sunday), in a window the old year scan never reached.
+    #[test]
+    fn an_as_needed_return_of_any_taxable_year_is_listed_by_its_due_date() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut estate =
+                bir_core::forms::form_1801::Form1801Draft::new_from_profile(&profile, 2024, 1);
+            (estate.death_month, estate.death_day, estate.death_year) = (1, 10, 2026);
+            db.save_queueable_draft(&estate).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2027-01-01", "2027-01-31"])).unwrap());
+        let rows: Vec<&Value> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["frequency"] == "As needed")
+            .collect();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["form_code"], "1801");
+        assert_eq!(rows[0]["taxable_year"], 2024);
+        assert_eq!(rows[0]["period_label"], "Death Jan 10, 2026");
+        assert_eq!(rows[0]["due_date"], "2027-01-11");
+    }
+
+    fn keys(value: &Value) -> Vec<&str> {
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        keys
+    }
+
+    /// Review F26: the field names home.js reads from the as-needed rows,
+    /// pinned so the host and the page cannot drift (the DECLARATIONS
+    /// interfaces name the same fields).
+    #[test]
+    fn the_as_needed_json_field_names_are_pinned() {
+        setup_as_needed();
+        let rows = to_json(&deadlines_between(&args(&["2026-10-01", "2026-10-31"])).unwrap());
+        let dated = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["frequency"] == "As needed")
+            .unwrap();
+        let periodic = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["frequency"] != "As needed")
+            .unwrap();
+        let row_fields = [
+            "branch_code",
+            "branch_count",
+            "branch_name",
+            "draft_id",
+            "due_date",
+            "form_code",
+            "form_name",
+            "frequency",
+            "period",
+            "period_label",
+            "return_key",
+            "status",
+            "taxable_year",
+            "taxpayer_name",
+            "tin",
+            "tin_root",
+        ];
+        assert_eq!(
+            keys(dated),
+            row_fields,
+            "a dated as-needed row is a DeadlineRow"
+        );
+        assert_eq!(keys(periodic), row_fields);
+        with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["2000OT", "2553"])
+                .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let forms = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        let with_undated = forms
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["form_code"] == "2000OT")
+            .unwrap();
+        assert_eq!(
+            keys(with_undated),
+            [
+                "branch_code",
+                "branch_count",
+                "branch_name",
+                "due_rule",
+                "form_code",
+                "form_name",
+                "taxable_year",
+                "taxpayer_name",
+                "tin",
+                "tin_root",
+                "trigger",
+                "undated",
+            ]
+        );
+        assert_eq!(
+            keys(&with_undated["undated"][0]),
+            ["draft_id", "period", "return_key", "status", "updated_at"]
+        );
+        // And the declarations name the same fields.
+        for field in [
+            "trigger: string | null;",
+            "due_rule: string;",
+            "undated: AsNeededReturn[];",
+            "updated_at: string;",
+        ] {
+            assert!(DECLARATIONS.contains(field), "{field}");
+        }
     }
 
     #[test]

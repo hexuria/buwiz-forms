@@ -152,6 +152,48 @@ pub fn event_trigger_from_json(form_code: &str, data_json: &str) -> Option<Event
     Some(EventTrigger { date, rule })
 }
 
+/// A saved as-needed return that holds its entered trigger date, with the
+/// due date that date gives.
+#[derive(Debug, Clone)]
+pub struct DatedEventReturn {
+    pub summary: super::FormDraftSummary,
+    pub trigger: EventTrigger,
+    pub deadline: crate::calendar_rules::ResolvedTaxDeadline,
+}
+
+/// Every saved as-needed return of `tin`, whatever its taxable year, that
+/// holds an entered trigger date, with its due date
+/// ([`DeadlineResolver::event_deadline`]: `overrides` applied, banking days
+/// counted on `working`). What Home, the Calendar and the Google Calendar
+/// sync list as dated as-needed rows.
+pub fn dated_event_returns(
+    db: &crate::db::Database,
+    tin: &str,
+    overrides: &[crate::calendar_rules::DeadlineOverride],
+    working: &crate::calendar_rules::BusinessDayCalendar,
+) -> Result<Vec<DatedEventReturn>, crate::db::DbError> {
+    let mut out = Vec::new();
+    for summary in db.list_draft_summaries_all_years(tin)? {
+        if !DeadlineResolver::is_as_needed(&summary.form_code) {
+            continue;
+        }
+        let Some(trigger) = db.draft_event_trigger(summary.id)? else {
+            continue;
+        };
+        let Some(deadline) =
+            DeadlineResolver::event_deadline(&trigger.rule, trigger.date, overrides, working)
+        else {
+            continue;
+        };
+        out.push(DatedEventReturn {
+            summary,
+            trigger,
+            deadline,
+        });
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

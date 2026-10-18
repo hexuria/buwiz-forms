@@ -364,6 +364,43 @@ fn summary_period_fields(period: &FilingPeriod) -> (Option<u8>, Option<u8>) {
     }
 }
 
+/// One `form_drafts` row (`id, tin, form_code, taxable_year, quarter,
+/// period_key, status, updated_at`) as a summary.
+fn draft_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FormDraftSummary> {
+    let form_code: String = row.get(2)?;
+    let period_val = row.get::<_, Option<i64>>(4)?.map(|q| q as u8);
+    let legacy_slot = row.get::<_, Option<i64>>(4)?;
+    let period_key = row.get::<_, Option<String>>(5)?;
+    let period = period_from_row(&form_code, legacy_slot, period_key.as_deref());
+    let (quarter, month) = summary_period_fields(&period);
+    let frequency = frequency_for_form(&form_code);
+    let quarter = quarter.or({
+        if matches!(&frequency, FilingFrequency::Quarterly) {
+            period_val
+        } else {
+            None
+        }
+    });
+    let month = month.or({
+        if matches!(&frequency, FilingFrequency::Monthly) {
+            period_val
+        } else {
+            None
+        }
+    });
+
+    Ok(FormDraftSummary {
+        id: row.get(0)?,
+        tin: row.get(1)?,
+        form_code,
+        taxable_year: row.get::<_, i64>(3)? as u16,
+        quarter,
+        month,
+        status: filing_status_from_db(row.get::<_, String>(6)?.as_str()),
+        updated_at: row.get(7)?,
+    })
+}
+
 impl Database {
     fn next_open_ended_period_number(
         &self,
@@ -2962,41 +2999,25 @@ impl Database {
             "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at
              FROM form_drafts WHERE tin = ?1 AND taxable_year = ?2",
         )?;
-        let rows = stmt.query_map(params![tin, year as i64], |row| {
-            let form_code: String = row.get(2)?;
-            let period_val = row.get::<_, Option<i64>>(4)?.map(|q| q as u8);
-            let legacy_slot = row.get::<_, Option<i64>>(4)?;
-            let period_key = row.get::<_, Option<String>>(5)?;
-            let period = period_from_row(&form_code, legacy_slot, period_key.as_deref());
-            let (quarter, month) = summary_period_fields(&period);
-            let frequency = frequency_for_form(&form_code);
-            let quarter = quarter.or({
-                if matches!(&frequency, FilingFrequency::Quarterly) {
-                    period_val
-                } else {
-                    None
-                }
-            });
-            let month = month.or({
-                if matches!(&frequency, FilingFrequency::Monthly) {
-                    period_val
-                } else {
-                    None
-                }
-            });
+        let rows = stmt.query_map(params![tin, year as i64], draft_summary_from_row)?;
 
-            Ok(FormDraftSummary {
-                id: row.get(0)?,
-                tin: row.get(1)?,
-                form_code,
-                taxable_year: row.get::<_, i64>(3)? as u16,
-                quarter,
-                month,
-                status: filing_status_from_db(row.get::<_, String>(6)?.as_str()),
-                updated_at: row.get(7)?,
-            })
-        })?;
+        let mut summaries = Vec::new();
+        for row in rows {
+            summaries.push(row?);
+        }
+        Ok(summaries)
+    }
 
+    /// Every form draft summary for a TIN, whatever its taxable year.
+    pub fn list_draft_summaries_all_years(
+        &self,
+        tin: &str,
+    ) -> Result<Vec<FormDraftSummary>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at
+             FROM form_drafts WHERE tin = ?1",
+        )?;
+        let rows = stmt.query_map(params![tin], draft_summary_from_row)?;
         let mut summaries = Vec::new();
         for row in rows {
             summaries.push(row?);

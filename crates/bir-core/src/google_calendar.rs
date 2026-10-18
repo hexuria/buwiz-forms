@@ -560,67 +560,149 @@ pub fn build_desired_events(
             let period_key = period_key(&deadline.period);
             let obligation_key = format!("{}:{}:{}", year, deadline.form_code, period_key);
             let period_label = concise_period_label(&deadline.period);
-            let title_prefix = if paid { "[Filed] " } else { "" };
-            let masked_tin = mask_tin(&tin);
-            let mut description = format!(
-                "Tax profile: {} ({})\nForm: {} - {}\n{}\nFinal deadline: {}\nStatus: {}",
-                profile.full_name,
-                masked_tin,
-                deadline.display_form_no,
-                deadline.form_name,
-                deadline.period.label(),
-                final_deadline,
-                deadline.status.label(),
-            );
-            if original_deadline != final_deadline {
-                description.push_str(&format!("\nOriginal deadline: {original_deadline}"));
-            }
-            if let Some(source) = &deadline.source_reference {
-                description.push_str(&format!("\nSource: {source}"));
-            }
-            if !deadline.description.is_empty() {
-                description.push_str(&format!("\n\n{}", deadline.description));
-            }
-
-            let reminders = if paid {
-                json!({"useDefault": false, "overrides": []})
-            } else {
-                json!({
-                    "useDefault": false,
-                    "overrides": [
-                        {"method": "email", "minutes": 10080},
-                        {"method": "email", "minutes": 1440}
-                    ]
-                })
-            };
-            let body = json!({
-                "summary": format!("{title_prefix}[BIR] {} - {}", deadline.display_form_no, period_label),
-                "description": description,
-                "start": {"date": final_deadline.format("%Y-%m-%d").to_string()},
-                "end": {"date": (final_deadline + Duration::days(1)).format("%Y-%m-%d").to_string()},
-                "transparency": "transparent",
-                "reminders": reminders,
-                "extendedProperties": {
-                    "private": {
-                        "ebirformsManaged": "true",
-                        "profileKey": profile_key(&tin),
-                        "obligationKey": obligation_key
-                    }
-                }
-            });
-            let content_hash = hex::encode(Sha256::digest(serde_json::to_vec(&body)?));
-            desired.push(DesiredCalendarEvent {
-                obligation_key,
-                taxable_year: year,
-                form_code: deadline.form_code,
-                period_label,
-                content_hash,
-                body,
-            });
+            desired.push(desired_event(
+                profile,
+                &deadline,
+                (original_deadline, final_deadline),
+                paid,
+                EventNames {
+                    obligation_key,
+                    taxable_year: year,
+                    period_label,
+                    period_line: deadline.period.label(),
+                },
+            )?);
         }
+    }
+
+    // Decision D8c: each saved as-needed return that holds its entered
+    // trigger date is a dated event too, keyed by the return, so the user
+    // keeps one event per return (`event_trigger::dated_event_returns`, the
+    // rows Home and the Calendar list).
+    let mut overrides = global_overrides.clone();
+    for year in db.list_forms_set_years(&tin)? {
+        overrides.extend(crate::integration::profile_deadline_overrides_for_year(
+            profile, year,
+        ));
+    }
+    let working = crate::official_holidays::business_day_calendar();
+    for dated in crate::forms::event_trigger::dated_event_returns(db, &tin, &overrides, &working)? {
+        if !selection.allows(&dated.summary.form_code) {
+            continue;
+        }
+        let DeadlineKind::Dated {
+            original_deadline,
+            final_deadline,
+        } = dated.deadline.deadline
+        else {
+            continue;
+        };
+        let trigger = format!(
+            "{} {}",
+            dated.trigger.rule.trigger,
+            dated.trigger.date.format("%Y-%m-%d")
+        );
+        desired.push(desired_event(
+            profile,
+            &dated.deadline,
+            (original_deadline, final_deadline),
+            dated.summary.status == FilingStatus::Paid,
+            EventNames {
+                obligation_key: format!(
+                    "{}:{}:return-{}",
+                    dated.summary.taxable_year, dated.summary.form_code, dated.summary.id
+                ),
+                taxable_year: dated.summary.taxable_year,
+                period_line: format!("As needed: {trigger}"),
+                period_label: trigger,
+            },
+        )?);
     }
     desired.sort_by(|a, b| a.obligation_key.cmp(&b.obligation_key));
     Ok((desired, excluded_undated))
+}
+
+/// How one event is named: its stable key, year and the period's words.
+struct EventNames {
+    obligation_key: String,
+    taxable_year: u16,
+    /// Short, for the title ("2026-10", "Removal 2026-10-07").
+    period_label: String,
+    /// Long, for the description.
+    period_line: String,
+}
+
+fn desired_event(
+    profile: &TaxpayerProfile,
+    deadline: &crate::calendar_rules::ResolvedTaxDeadline,
+    (original_deadline, final_deadline): (chrono::NaiveDate, chrono::NaiveDate),
+    paid: bool,
+    names: EventNames,
+) -> Result<DesiredCalendarEvent, anyhow::Error> {
+    let tin = profile.tin.full();
+    let EventNames {
+        obligation_key,
+        taxable_year,
+        period_label,
+        period_line,
+    } = names;
+    let title_prefix = if paid { "[Filed] " } else { "" };
+    let masked_tin = mask_tin(&tin);
+    let mut description = format!(
+        "Tax profile: {} ({})\nForm: {} - {}\n{}\nFinal deadline: {}\nStatus: {}",
+        profile.full_name,
+        masked_tin,
+        deadline.display_form_no,
+        deadline.form_name,
+        period_line,
+        final_deadline,
+        deadline.status.label(),
+    );
+    if original_deadline != final_deadline {
+        description.push_str(&format!("\nOriginal deadline: {original_deadline}"));
+    }
+    if let Some(source) = &deadline.source_reference {
+        description.push_str(&format!("\nSource: {source}"));
+    }
+    if !deadline.description.is_empty() {
+        description.push_str(&format!("\n\n{}", deadline.description));
+    }
+
+    let reminders = if paid {
+        json!({"useDefault": false, "overrides": []})
+    } else {
+        json!({
+            "useDefault": false,
+            "overrides": [
+                {"method": "email", "minutes": 10080},
+                {"method": "email", "minutes": 1440}
+            ]
+        })
+    };
+    let body = json!({
+        "summary": format!("{title_prefix}[BIR] {} - {}", deadline.display_form_no, period_label),
+        "description": description,
+        "start": {"date": final_deadline.format("%Y-%m-%d").to_string()},
+        "end": {"date": (final_deadline + Duration::days(1)).format("%Y-%m-%d").to_string()},
+        "transparency": "transparent",
+        "reminders": reminders,
+        "extendedProperties": {
+            "private": {
+                "ebirformsManaged": "true",
+                "profileKey": profile_key(&tin),
+                "obligationKey": obligation_key
+            }
+        }
+    });
+    let content_hash = hex::encode(Sha256::digest(serde_json::to_vec(&body)?));
+    Ok(DesiredCalendarEvent {
+        obligation_key,
+        taxable_year,
+        form_code: deadline.form_code.clone(),
+        period_label,
+        content_hash,
+        body,
+    })
 }
 
 fn deadline_is_paid(
@@ -1288,6 +1370,54 @@ mod tests {
         assert_eq!(events.len(), 12);
         assert_eq!(excluded, 0);
         assert!(events.iter().all(|event| event.form_code == "0619E"));
+    }
+
+    /// Review F5: a saved as-needed return that holds its entered trigger
+    /// date syncs as its own dated event, as the rows on Home and the
+    /// Calendar; one that holds only a pre-filled date does not.
+    #[test]
+    fn a_dated_as_needed_return_syncs_as_its_own_event() {
+        let (_file, db) = test_database();
+        let gift = db
+            .save_form_draft_v2(
+                "123456789000",
+                "1800",
+                2026,
+                &FilingPeriod::OpenEnded(1),
+                &FilingStatus::Draft,
+                &json!({"status": "Draft", "donation_month": 9, "donation_day": 15, "donation_year": 2026}),
+            )
+            .unwrap();
+        db.save_form_draft_v2(
+            "123456789000",
+            "2200A",
+            2026,
+            &FilingPeriod::Monthly(9),
+            &FilingStatus::Draft,
+            &json!({"status": "Draft", "month": 9, "day": 14, "year": 2026}),
+        )
+        .unwrap();
+
+        let (events, excluded) = build_desired_events(&db, &test_profile()).unwrap();
+        assert_eq!(excluded, 0);
+        let periodic = events
+            .iter()
+            .filter(|event| event.form_code == "0619E")
+            .count();
+        assert_eq!(periodic, 12, "the periodic events are unchanged");
+        let dated: Vec<_> = events
+            .iter()
+            .filter(|event| event.form_code != "0619E")
+            .collect();
+        assert_eq!(dated.len(), 1, "the untouched 2200A has no event");
+        let event = dated[0];
+        assert_eq!(event.form_code, "1800");
+        assert_eq!(event.obligation_key, format!("2026:1800:return-{gift}"));
+        assert_eq!(
+            event.body["start"]["date"], "2026-10-15",
+            "30 days after the gift"
+        );
+        assert_eq!(event.body["summary"], "[BIR] 1800 - Donation 2026-09-15");
     }
 
     #[test]

@@ -675,6 +675,31 @@ impl DueFromTrigger {
     }
 }
 
+/// The as-needed codes and each one's rule name, built once from the static
+/// rules (review F25: not per draft or row).
+struct AsNeededIndex {
+    codes: Vec<&'static str>,
+    names: Vec<(&'static str, &'static str)>,
+}
+
+fn as_needed_index() -> &'static AsNeededIndex {
+    static INDEX: std::sync::OnceLock<AsNeededIndex> = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| {
+        let mut names = Vec::new();
+        for rule in DeadlineResolver::official_rules() {
+            if rule.is_as_needed() {
+                for no in &rule.form_nos {
+                    names.push((canonical_form_code(no), rule.form_name));
+                }
+            }
+        }
+        let mut codes: Vec<&'static str> = names.iter().map(|(code, _)| *code).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        AsNeededIndex { codes, names }
+    })
+}
+
 pub struct DeadlineResolver;
 
 impl DeadlineResolver {
@@ -803,19 +828,12 @@ impl DeadlineResolver {
     /// The canonical codes of every as-needed (event-triggered) obligation,
     /// sorted.
     pub fn as_needed_form_codes() -> Vec<&'static str> {
-        let mut codes: Vec<&'static str> = Self::official_rules()
-            .iter()
-            .filter(|rule| rule.is_as_needed())
-            .flat_map(|rule| rule.form_nos.iter().map(|no| canonical_form_code(no)))
-            .collect();
-        codes.sort_unstable();
-        codes.dedup();
-        codes
+        as_needed_index().codes.clone()
     }
 
     /// Whether `form_code` (canonical) is filed as needed.
     pub fn is_as_needed(form_code: &str) -> bool {
-        Self::as_needed_form_codes().contains(&form_code)
+        as_needed_index().codes.contains(&form_code)
     }
 
     /// The dated deadline of one as-needed return whose trigger date is
@@ -829,18 +847,11 @@ impl DeadlineResolver {
         working: &BusinessDayCalendar,
     ) -> Option<ResolvedTaxDeadline> {
         let due = rule.due.due_date(trigger, working)?;
-        let form_name = Self::official_rules()
-            .into_iter()
-            .find(|official| {
-                official.is_as_needed()
-                    && official
-                        .form_nos
-                        .iter()
-                        .any(|no| canonical_form_code(no) == rule.form_code)
-            })
-            .map_or("As Needed / Special / Event-Based", |official| {
-                official.form_name
-            });
+        let form_name = as_needed_index()
+            .names
+            .iter()
+            .find(|(code, _)| *code == rule.form_code)
+            .map_or("As Needed / Special / Event-Based", |(_, name)| name);
         let mut deadline = ResolvedTaxDeadline {
             form_code: rule.form_code.to_string(),
             display_form_no: rule.form_code.to_string(),
