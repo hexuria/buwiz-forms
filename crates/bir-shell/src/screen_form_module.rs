@@ -4149,6 +4149,9 @@ mod tests {
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
 
+    // PR 10: 1800 and 1801 against their printed sheets.
+    mod donor_estate;
+
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
 
