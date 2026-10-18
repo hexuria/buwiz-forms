@@ -676,16 +676,6 @@ fn pesos(amount: f64) -> String {
     format!("{}{grouped}.{cents:02}", if negative { "-" } else { "" })
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn pesos_group_and_keep_the_sign() {
-        assert_eq!(super::pesos(1234.5), "1,234.50");
-        assert_eq!(super::pesos(1_000_000.0), "1,000,000.00");
-        assert_eq!(super::pesos(-1234.56), "-1,234.56");
-    }
-}
-
 /// 1600PT's and 1600VT's Part I text fields that a stored draft may lack
 /// (P2-4, `KeptText` in bir-core).
 const KEPT_PART_I: [&str; 6] = [
@@ -724,5 +714,15 @@ pub(super) fn keep_absent_blank(absent: &[&str], draft: &mut Value) {
         {
             object.remove(*field);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn pesos_group_and_keep_the_sign() {
+        assert_eq!(super::pesos(1234.5), "1,234.50");
+        assert_eq!(super::pesos(1_000_000.0), "1,000,000.00");
+        assert_eq!(super::pesos(-1234.56), "-1,234.56");
     }
 }
