@@ -202,7 +202,10 @@ function penaltyValues() {
   hostValues[K("totpen")] = total.toFixed(2);
   hostValues[K("payable")] = (5000 + total).toFixed(2);
 }
-const penaltyState = () => [{ keys: PENALTY, edited: Object.keys(overrides).length > 0, applies: true }];
+// A group kept as entered before penalties were computed (PR 11: an excise
+// return stored before decision D8; 1701Q's column in PR 5).
+let kept = false;
+const penaltyState = () => [{ keys: PENALTY, edited: Object.keys(overrides).length > 0, applies: true, ...(kept ? { kept: true } : {}) }];
 penaltyValues();
 const offNow = () => (hostValues[K("amendY")] === "true" ? {} : { [K("prev")]: "Needs Amended Return = Yes" });
 let opened = () => ({
@@ -223,18 +226,27 @@ const app = {
       if (name === "screen_form_fill") {
         const edits = { ...args[2] }, rejected = {};
         const edited = Object.keys(overrides).length > 0;
+        let relocks;
         for (const k of PENALTY) {
           if (!(k in edits)) continue;
           if (!edited && !(args[3] || []).includes(k)) rejected[k] = "computed; choose Edit penalties";
-          else if (String(edits[k]).trim() === "") delete overrides[k];
-          else overrides[k] = Number(String(edits[k]).replace(/,/g, ""));
+          else if (String(edits[k]).trim() === "") {
+            delete overrides[k];
+            // A kept group's blank joins the computed amounts; the host
+            // relocks its boxes as computed at once.
+            if (kept) {
+              kept = false;
+              relocks = Object.fromEntries(PENALTY.map((p) => [p, "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to"]));
+            }
+          } else overrides[k] = Number(String(edits[k]).replace(/,/g, ""));
           delete edits[k];
         }
         for (const k of Object.keys(poolStore)) if (k in edits) { poolStore[k] = String(edits[k]).trim(); delete edits[k]; }
         hostValues = { ...hostValues, ...edits };
         penaltyValues();
         poolValues();
-        return { draft: args[1], values: { ...hostValues }, options: {}, rejected, penalties: penaltyState(), pools: { ...poolStore } };
+        const relock = relocks ? { relocks, relock_notes: Object.fromEntries(PENALTY.map((p) => [p, "Computed by the form."])) } : {};
+        return { draft: args[1], values: { ...hostValues }, options: {}, rejected, penalties: penaltyState(), pools: { ...poolStore }, ...relock };
       }
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: offNow(), penalties: penaltyState(), pools: { ...poolStore } });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
@@ -477,3 +489,33 @@ assert.equal(ui.state.values[K("totpen")], "1156.50", "the computed amounts are 
 for (const k of PENALTY) assert.equal(ui.isLocked(k), true, `${k} is locked again`);
 assert.equal(input(COMP).value(), "1,000.00", "its box shows the computed amount again");
 console.log("PASS rule 8: penalties computed by default; one Edit unlocks all three; only typed boxes override; totals recompute.");
+
+// ---- PR 11 (decision D8): a group kept as entered before penalties were
+// computed is locked with Edit; "Use the computed amounts" sends the three
+// blanks while Edit still has them open (so the host takes them), and the
+// host's relocks take effect at once.
+overrides = {};
+kept = true;
+penaltyValues();
+ui.state.penalties = penaltyState();
+ui.state.locks = { ...ui.state.locks, ...Object.fromEntries(PENALTY.map((k) => [k, "kept as entered before penalties were computed; choose Edit penalties to change them."])) };
+ui.state.penaltyOpen.clear();
+frame();
+for (const k of PENALTY) assert.equal(ui.isLocked(k), true, `${k} is kept, locked`);
+assert.ok(clicks.has(editId(SUR)), "a kept group offers Edit penalties");
+act(clicks.get(editId(SUR)).fn, {});
+frame();
+assert.ok(clicks.has(`fp-penalty-computed-${idOf(SUR)}`), "Edit opened, the computed amounts are offered");
+act(clicks.get(`fp-penalty-computed-${idOf(SUR)}`).fn, {});
+await settle(); frame();
+const keptFill = lastFill();
+assert.equal(JSON.stringify(keptFill[3]), JSON.stringify({ [SUR]: "", [INT]: "", [COMP]: "" }), "the kept group's three blanks are sent");
+assert.equal(JSON.stringify([...keptFill[4]].sort()), JSON.stringify([...PENALTY].sort()), "sent while Edit has them open");
+assert.equal(kept, false, "the host took them");
+for (const k of PENALTY) {
+  assert.equal(ui.isLocked(k), true, `${k} is computed and locked`);
+  assert.equal(ui.state.locks[k], "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to", `${k}: relocked at once`);
+  assert.equal(ui.state.lockNotes[k], "Computed by the form.");
+}
+assert.equal(ui.state.values[K("totpen")], "1156.50", "the computed amounts show");
+console.log("PASS PR 11: a kept penalty group goes to the computed amounts in one step, relocked at once.");

@@ -28065,6 +28065,9 @@ declare module "bir" {
       blank?: string[] | null;
       /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
       removes?: { message: string; done: string; rows: number } | null;
+      /** Locks this fill opened or shut (a folded item, a box an answer shuts): the reason, or null to open the box; `relock_notes` holds each one's note. */
+      relocks?: Record<string, string | null>;
+      relock_notes?: Record<string, string | null>;
   }
   export interface ScreenFormValidated {
       draft: object;

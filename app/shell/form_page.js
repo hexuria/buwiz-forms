@@ -732,6 +732,19 @@ export class FormPageActions {
     s.options = r.options || {};
     if (Array.isArray(r.penalties)) s.penalties = r.penalties;
     if (r.pools) s.poolTexts = r.pools;
+    // Locks this fill opened or shut (a folded item, a box an answer shuts)
+    // take effect at once, not on the next opening.
+    for (const [k, lock] of Object.entries(r.relocks || {})) {
+      s.lockNotes ||= {};
+      if (lock == null) {
+        delete s.locks[k];
+        delete s.lockNotes[k];
+      } else {
+        s.locks[k] = lock;
+        const note = r.relock_notes?.[k];
+        if (note) s.lockNotes[k] = note;
+      }
+    }
     this.syncComputed();
     this.syncChanged(before, edits);
     // The preview prints the draft the host just applied, never the
@@ -1382,8 +1395,12 @@ export class FormPageActions {
   /** Use the computed amounts: the group's overrides are cleared. */
   usePenaltyComputed(group, cx) {
     const s = this.state;
+    // A column kept as entered before penalties were computed (1701Q, the
+    // excise returns stored before decision D8) goes to the computed
+    // amounts the same way; its boxes are still open with Edit while the
+    // blanks go, so the host takes them.
+    if (group.edited || group.kept) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
     for (const k of group.keys) s.penaltyOpen.delete(k);
-    if (group.edited) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
     this.refreshRows();
     cx.notify();
   }

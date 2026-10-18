@@ -44,6 +44,7 @@ mod penalties;
 mod rows_1700;
 mod rows_2550m;
 mod rows_2550q;
+mod rows_excise;
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -156,6 +157,9 @@ export interface ScreenFormFilled {
     blank?: string[] | null;
     /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
     removes?: { message: string; done: string; rows: number } | null;
+    /** Locks this fill opened or shut (a folded item, a box an answer shuts): the reason, or null to open the box; `relock_notes` holds each one's note. */
+    relocks?: Record<string, string | null>;
+    relock_notes?: Record<string, string | null>;
 }
 export interface ScreenFormValidated {
     draft: object;
@@ -1916,6 +1920,9 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                // The printed item numbers where BIR's message names its
+                // program's own (decision D6; PR 11's forms).
+                let message = rows_excise::printed_message(kind, message).unwrap_or(message);
                 json!({"field": field, "message": message, "keys": keys})
             })
             .collect(),
@@ -2290,6 +2297,8 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_IDENTITY
     } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
         NOTE_REPEAT
+    } else if reason == rows_excise::KEPT_AS_ENTERED {
+        rows_excise::NOTE_KEPT
     } else {
         // Unmapped, derived, written by the app, or a field this page
         // cannot write: shut until the form's own work opens it.
@@ -2324,6 +2333,10 @@ fn opened_json(
                 penalties::NOT_ON_RETURN
             };
             for key in &group.keys {
+                // An excise return stored before decision D8 (PR 11).
+                let reason = rows_excise::penalty_lock(kind, &draft, key)
+                    .filter(|_| reason == penalties::LOCK)
+                    .unwrap_or(reason);
                 locks.insert(key.clone(), json!(reason));
             }
         }
@@ -3176,6 +3189,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
+    let before = draft.clone();
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -3202,6 +3216,23 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     });
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // Locks this fill opened or shut (PR 11: an excise return's penalties
+    // kept as entered, then computed), each with its note; `null` opens
+    // the box.
+    let relocks = rows_excise::live_locks(kind, &draft);
+    let relock_notes: Map<String, Value> = relocks
+        .iter()
+        .map(|(key, lock)| {
+            let note = lock.as_str().map_or(Value::Null, |reason| {
+                json!(lock_note_for(kind.form_code(), key, reason))
+            });
+            (key.clone(), note)
+        })
+        .collect();
+    // What the filer typed that this edit removed: the page asks first (PR
+    // 11's forms, rows_excise.rs; the integration merge chains the other
+    // form groups' removes here).
+    let removes = rows_excise::removes(kind, &before, &draft, &edits);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -3212,6 +3243,10 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
+        // Rows the filer typed that this edit removed: the page asks first.
+        "removes": removes,
+        "relocks": relocks,
+        "relock_notes": relock_notes,
     })))
 }
 
@@ -3295,16 +3330,17 @@ fn apply_screen_edits(
             .find(|(group, _)| group.keys.contains(&key))
         {
             if !unlocked.contains(&key) && !edited {
-                rejected.insert(
-                    key.clone(),
-                    json!(format!("`{key}` is {}", penalties::LOCK)),
-                );
+                let lock = rows_excise::penalty_lock(kind, draft, &key).unwrap_or(penalties::LOCK);
+                rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
                 continue;
             }
             if let (ChoiceStep::Fill(value), Some(path)) = (&step, penalties::path_of(kind, &key))
                 && (value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty()))
             {
                 set_draft_path(&mut next, &path, Value::Null);
+                // "Use the computed amounts" on an excise return stored
+                // before decision D8 puts it on the typed due date (PR 11).
+                rows_excise::join_model(kind, &mut next, &key);
                 *draft = next;
                 continue;
             }

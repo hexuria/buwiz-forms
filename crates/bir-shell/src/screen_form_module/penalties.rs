@@ -166,6 +166,8 @@ pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
                     "keys": group.keys,
                     "edited": edited(group, draft),
                     "applies": applies(kind, group, draft),
+                    // An excise return stored before decision D8 (PR 11).
+                    "kept": super::rows_excise::kept_as_entered(kind, &group.keys, draft),
                 })
             })
             .collect(),
