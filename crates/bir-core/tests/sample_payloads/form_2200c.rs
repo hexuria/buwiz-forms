@@ -76,6 +76,27 @@ pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![serde_json::to_value(sample_2200c()).expect("sample serializes")]
 }
 
+/// Decision D8 (2026-10-18): 2200C is monthly and "the excise tax due, if
+/// any" is paid with it (html-frozen/2200c-2018/guide.html: "In cases of no
+/// invasive cosmetic procedures performed, the return shall still be
+/// filed"), so a zero return with no Schedule 1 row validates and builds
+/// its upload.
+#[test]
+fn form_2200c_a_zero_return_validates() {
+    let mut draft = sample_2200c();
+    draft.is_amended = false;
+    draft.schedule.clear();
+    draft.balance_carried_over = 0.0;
+    draft.creditable_excise_tax = 0.0;
+    draft.tax_payment = 0.0;
+    draft.penalty.penalty_overrides = Default::default();
+    draft.recompute();
+    assert_eq!(draft.excise_tax_due, 0.0);
+    assert_eq!(draft.amount_payable, 0.0);
+    assert_eq!(draft.validate(), Vec::<(String, String)>::new());
+    assert!(draft.to_bir_xml_payload().is_ok(), "the upload builds");
+}
+
 /// Decision D8 (2026-10-18): 2200C is monthly, due within ten days after
 /// the close of Item 1's month, so the penalties run from the 10th of the
 /// next month (January 10 of the next year for December). Filed on the
