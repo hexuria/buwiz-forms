@@ -1586,9 +1586,9 @@ fn form_1701_spouse_contact_is_typed() {
 /// Lesson 6 with a literal fixture: `fixtures/1701-pre-pr7.json` is a 1701
 /// draft exactly as pr0b-push serialized it (built and written by the
 /// pr0b-push bir-core: no `penalty` / `spouse_penalty` keys, Items 27-29
-/// typed as 125.00, 0.00 and 1,000.00). Stored, opened on the page and saved
-/// again, its row is the fixture byte for byte (the row id aside, which the
-/// database assigns), and the page shows the typed amounts.
+/// typed as 125.00, 0.00 and 1,000.00). Written into a row's `data_json` as
+/// those bytes, opened on the page and saved again, the column holds the
+/// fixture byte for byte, and the page shows the typed amounts.
 #[test]
 fn a_1701_draft_stored_before_pr7_saves_back_byte_for_byte() {
     use bir_core::forms::form_1701::Form1701Draft;
@@ -1596,80 +1596,144 @@ fn a_1701_draft_stored_before_pr7_saves_back_byte_for_byte() {
     setup();
     let fixture = include_str!("fixtures/1701-pre-pr7.json");
     let stored: Form1701Draft = serde_json::from_str(fixture).unwrap();
+    // No key of the pre-PR 7 shape is one today's struct drops: read and
+    // written back, every key and value is there.
+    let literal: Value = serde_json::from_str(fixture).unwrap();
+    assert_eq!(serde_json::to_value(&stored).unwrap(), literal);
     let (tin, year, period) = (
         stored.tin.clone(),
         stored.taxable_year,
         stored.period_column(),
     );
-    let row = || -> String {
-        let mut draft = with_database(|db| {
-            db.get_queueable_draft::<Form1701Draft>(&tin, year, period)
-                .map_err(|error| HostError::new(error.to_string()))
-        })
-        .unwrap()
-        .expect("the stored row");
-        draft.set_draft_id(None);
-        serde_json::to_string(&draft).unwrap()
-    };
-    with_database(|db| {
+    let id = with_database(|db| {
         db.save_queueable_draft(&stored)
-            .map(|_| ())
             .map_err(|error| HostError::new(error.to_string()))
     })
     .unwrap();
-    assert_eq!(row(), fixture, "stored as the old code stored it");
+    // The row holds the fixture's own bytes, as the old code wrote a saved
+    // draft: with its row id (the fixture was written before any save).
+    let row_bytes = fixture.replacen("\"id\":null", &format!("\"id\":{id}"), 1);
+    assert_ne!(row_bytes, fixture);
+    super::raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&row_bytes, &id.to_string()],
+    );
+    let data_json = || super::raw_row(id).1;
+    assert_eq!(data_json(), row_bytes, "stored as the old code stored it");
     let opened = open_for(&tin, "1701", i64::from(year), period);
     assert_eq!(opened["values"]["frm1701:txtPg1I27A"], "125.00");
     assert_eq!(opened["values"]["frm1701:txtPg1I29A"], "1,000.00");
     save("1701", &opened["draft"]);
-    assert_eq!(row(), fixture, "opened and saved, byte for byte");
+    assert_eq!(data_json(), row_bytes, "opened and saved, byte for byte");
 }
 
 /// Maintainer decision D6 (2026-10-18): a message names the printed item
-/// number. Each item an official message cites on these forms (read on a
-/// fresh return and a joint one, where most of their checks
-/// speak) is a number the sheet prints, in the part the message names when
-/// it names one (`Part IV Item 3`, `Schedule 5 Item #1`). None of these four
-/// forms' messages needed rewording; this keeps it so.
+/// number. The oracle is the frozen sheet's own captions
+/// (html-frozen/<slug>/writer-cells.json, read by the rule 6 tag check's
+/// `printed_items`), not the page schema: for each item an official message
+/// cites (on a fresh return and a joint one, where most of their checks
+/// speak), one of the boxes the message sits on prints under that item, and
+/// in the part the message names when its caption names a part ("2 RDO
+/// Code (Part IV)", "Part II 19 ...", "Schedule 1 Item 3a ...", "5.A item
+/// 1"). A message on boxes the sheet does not caption still cites an item
+/// the sheet prints. None of the four forms' messages needed rewording.
 #[test]
 fn annual_messages_cite_printed_item_numbers() {
     setup();
-    for code in ["1700", "1701", "1701A", "1701MS"] {
-        let printed: Vec<(String, String)> =
-            drawn(code)
-                .into_iter()
-                .map(|(part, no, _)| (part, no))
-                .chain(items(code).into_iter().map(|(part, item)| {
-                    (part, item["no"].as_str().unwrap_or_default().to_string())
-                }))
-                .collect();
+    for (code, slug) in [
+        ("1700", "1700-2018"),
+        ("1701", "1701-2018"),
+        ("1701A", "1701a-2018"),
+        ("1701MS", "1701ms-2024"),
+    ] {
+        let sheet = super::conditions::tests::printed_items(code);
+        let captions = captions(slug);
         let fresh = opened(code);
         let joint = take(code, &fresh["draft"], joint(code));
-        let mut checked = 0;
+        let (mut keyed, mut unkeyed) = (0, 0);
         for draft in [&fresh["draft"], &joint["draft"]] {
             let errors = validated(code, draft)["errors"].clone();
             for error in errors.as_array().into_iter().flatten() {
                 let message = error["message"].as_str().unwrap_or_default();
-                for (part, item) in cited(message) {
+                let printed: Vec<(Option<String>, String)> = strings(&error["keys"])
+                    .iter()
+                    .filter_map(|key| captions.get(key))
+                    .filter_map(|caption| caption_place(caption))
+                    .collect();
+                // The first item cited is the one the message is about (its
+                // boxes); a later one names a condition ("Item 12 is
+                // required if Item 5 is ..."), which the sheet prints too.
+                for (nth, (part, item)) in cited(message).into_iter().enumerate() {
                     // "26A" is item 26's column A where the sheet numbers
                     // the item alone.
                     let column = item
                         .strip_suffix(['A', 'B', 'a', 'b'])
                         .unwrap_or(&item)
-                        .to_string();
-                    let found = printed.iter().any(|(p, no)| {
-                        let numbers: Vec<&str> = no.split('-').chain([no.as_str()]).collect();
-                        numbers.iter().any(|n| {
-                            n.eq_ignore_ascii_case(&item) || n.eq_ignore_ascii_case(&column)
-                        }) && part.as_ref().is_none_or(|named| p.contains(named.as_str()))
+                        .to_ascii_uppercase();
+                    let item_up = item.to_ascii_uppercase();
+                    let same = |no: &String| *no == item_up || *no == column;
+                    if printed.is_empty() || nth > 0 {
+                        assert!(
+                            sheet.contains(&item_up) || sheet.contains(&column),
+                            "{code}: {message:?} cites item {item}, which the sheet does not print"
+                        );
+                        unkeyed += 1;
+                        continue;
+                    }
+                    let found = printed.iter().any(|(caption_part, no)| {
+                        same(no)
+                            && match (&part, caption_part) {
+                                (Some(named), Some(printed)) => named == printed,
+                                _ => true,
+                            }
                     });
-                    assert!(found, "{code}: {message:?} cites {part:?} item {item}");
-                    checked += 1;
+                    assert!(
+                        found,
+                        "{code}: {message:?} cites {part:?} item {item}; its boxes print as {printed:?}"
+                    );
+                    keyed += 1;
                 }
             }
         }
-        assert!(checked > 0, "{code}: no message cites an item");
+        assert!(
+            keyed > 0,
+            "{code}: no cited item checked on its boxes ({unkeyed} unkeyed)"
+        );
     }
+}
+
+/// The part (when the caption names one) and the item a writer-cells
+/// caption prints a box under.
+fn caption_place(caption: &str) -> Option<(Option<String>, String)> {
+    let mut part = None;
+    let mut rest = caption.trim();
+    if let Some(tail) = rest.strip_prefix("Part ") {
+        let (name, after) = tail.split_once(' ')?;
+        part = Some(format!("Part {name}"));
+        rest = after;
+    } else if let Some(tail) = rest.strip_prefix("Schedule ") {
+        let (name, after) = tail.split_once(' ')?;
+        part = Some(format!("Schedule {name}"));
+        rest = after.strip_prefix("Item ").unwrap_or(after);
+    } else if let Some((schedule, after)) = rest.split_once(" item ")
+        && schedule.contains('.')
+    {
+        // "5.A item 2, Description": Schedule 5's item 2.
+        part = Some(format!("Schedule {}", schedule.split('.').next()?));
+        rest = after;
+    }
+    if part.is_none()
+        && let Some(open) = caption.rfind("(Part ")
+    {
+        part = Some(caption[open + 1..].trim_end_matches(')').to_string());
+    }
+    let item: String = rest
+        .chars()
+        .take_while(char::is_ascii_alphanumeric)
+        .collect::<String>()
+        .to_ascii_uppercase();
+    item.starts_with(|c: char| c.is_ascii_digit())
+        .then_some((part, item))
 }
 
 /// `(part or schedule named, item)` for each "Item N" a message cites.
@@ -1764,15 +1828,205 @@ fn form_1701_legacy_draft_takes_a_typed_penalty() {
     let typed = fill_unlocked(
         "1701",
         &fixture,
-        json!({"frm1701:txtPg1I29A": "1000"}),
+        json!({"frm1701:txtPg1I29A": "750"}),
         &keys,
     );
     assert_eq!(typed["rejected"], json!({}));
+    // Not the 1,000.00 it held: the typed 750.00 shows and files.
+    assert_eq!(typed["values"]["frm1701:txtPg1I29A"], "750.00");
     let fields = field_map("1701", &typed["draft"]);
-    assert_eq!(fields["frm1701:txtPg1I29A"], "1,000.00");
+    assert_eq!(fields["frm1701:txtPg1I29A"], "750.00");
     // The amounts it held stay as entered.
     assert_eq!(fields["frm1701:txtPg1I27A"], "125.00");
     assert_eq!(typed["draft"]["penalty"]["penalty_model_version"], 1);
+}
+
+/// `make_room` gives a penalty state only to a column that has none: a
+/// current draft's state, overrides and all, is left exactly as it is.
+#[test]
+fn make_room_leaves_a_current_penalty_state_alone() {
+    setup();
+    let opened = opened("1701");
+    let keys = [
+        "frm1701:txtPg1I27A",
+        "frm1701:txtPg1I28A",
+        "frm1701:txtPg1I29A",
+    ];
+    let typed = fill_unlocked(
+        "1701",
+        &opened["draft"],
+        json!({"frm1701:txtPg1I29A": "500"}),
+        &keys,
+    );
+    let mut draft = typed["draft"].clone();
+    assert_eq!(draft["penalty"]["penalty_model_version"], 1);
+    let before = draft.clone();
+    let kind = kind_of("1701").unwrap();
+    for key in keys.iter().chain(&["frm1701:txtPg1I29B"]) {
+        rows_annual_individual::make_room(kind, &mut draft, key);
+    }
+    assert_eq!(draft, before);
+}
+
+/// Lesson 8 on the other annual forms: "Use the computed amounts" over a
+/// typed penalty asks first ("replaces what you typed"), as 1701 does.
+#[test]
+fn using_the_computed_penalties_asks_first_on_every_annual_form() {
+    setup();
+    for code in ["1700", "1701A", "1701MS"] {
+        let opened = opened(code);
+        let group = opened["penalties"]
+            .as_array()
+            .unwrap()
+            .first()
+            .cloned()
+            .unwrap_or_else(|| panic!("{code}: a penalty group"));
+        let keys: Vec<String> = strings(&group["keys"]).into_iter().collect();
+        let open: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let typed = fill_unlocked(code, &opened["draft"], json!({ &keys[0]: "500" }), &open);
+        assert_eq!(typed["rejected"], json!({}), "{code}");
+        assert_eq!(typed["removes"], Value::Null, "{code}");
+        let blanks: Map<String, Value> = keys.iter().map(|k| (k.clone(), json!(""))).collect();
+        let back = fill_unlocked(code, &typed["draft"], Value::Object(blanks), &open);
+        let removes = &back["removes"];
+        assert_eq!(removes["rows"], 1, "{code}: {removes}");
+        assert!(
+            removes["message"]
+                .as_str()
+                .is_some_and(|m| m.starts_with("This answer replaces what you typed in ")),
+            "{code}: {removes}"
+        );
+        assert_eq!(removes["done"], "Removed 1 entry", "{code}");
+    }
+}
+
+/// 1701MS item 16, each column's tax rate, takes a rate only while its
+/// item 12 is Exempt or Special/Preferential Rate (column B also on a joint
+/// return): the form zeroes it otherwise, so the host refuses it and says
+/// why, and ending the special rate asks before it clears a typed rate.
+#[test]
+fn form_1701ms_tax_rates_follow_item_12() {
+    setup();
+    let opened = opened("1701MS");
+    let refused = fill(
+        "1701MS",
+        &opened["draft"],
+        json!({"frm1701MS:txtTaxRateb": "5%"}),
+    );
+    assert_eq!(
+        refused["rejected"]["frm1701MS:txtTaxRateb"],
+        "Column B of Part I is for a joint return: choose Married at item 4 and Jointly at item 5 first."
+    );
+    let refused = fill(
+        "1701MS",
+        &opened["draft"],
+        json!({"frm1701MS:txtTaxRatea": "5%"}),
+    );
+    assert_eq!(
+        refused["rejected"]["frm1701MS:txtTaxRatea"],
+        "Item 16 column A is the rate of an exempt or special/preferential rate income: choose Exempt or Special/Preferential Rate at item 12 column A first."
+    );
+    assert_eq!(
+        opened["off"]["frm1701MS:txtTaxRatea"],
+        "Needs item 12 = Exempt or Special/Preferential Rate in column A"
+    );
+    assert_eq!(opened["values"]["frm1701MS:txtTaxRatea"], "");
+    // One batch: Special at item 12, then the rate.
+    let special = take(
+        "1701MS",
+        &opened["draft"],
+        json!({
+            "frm1701MS:txtTaxpayerNo11a": "true",
+            "frm1701MS:txtTaxpayerNo12e": "true",
+            "frm1701MS:txtTaxRatea": "5%",
+        }),
+    );
+    assert_eq!(special["draft"]["taxpayer"]["special_rate"], 5.0);
+    let graduated = take(
+        "1701MS",
+        &special["draft"],
+        json!({"frm1701MS:txtTaxpayerNo12b": "true"}),
+    );
+    assert!(
+        graduated["removes"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("item 16")),
+        "{}",
+        graduated["removes"]
+    );
+}
+
+/// Item 20's gate reads the batch as it stands, recomputed: one batch that
+/// makes item 19A positive (special rate, its rate and sales) and types
+/// item 20A is taken whole.
+#[test]
+fn form_1701ms_item_20_opens_within_one_batch() {
+    setup();
+    let opened = opened("1701MS");
+    let filled = take(
+        "1701MS",
+        &opened["draft"],
+        json!({
+            "frm1701MS:txtTaxpayerNo11a": "true",
+            "frm1701MS:txtTaxpayerNo12e": "true",
+            "frm1701MS:txtTaxRatea": "5",
+            "frm1701MS:txtSalesRevenueNo5a": "1000000",
+            "frm1701MS:txtShareOfOtherNo20a": "100",
+        }),
+    );
+    assert_eq!(
+        filled["draft"]["taxpayer"]["share_of_other_agencies"],
+        100.0
+    );
+}
+
+/// An imported 1701 joint draft stored before PR 7's review keeps its
+/// spouse's RDO only in `spouse.rdo_code` (the upload filed 000). Nothing
+/// is changed: page, print and upload agree on what files, and the box
+/// carries a notice saying the imported RDO is not on the filing.
+#[test]
+fn an_imported_1701_spouse_rdo_off_the_filing_has_a_notice() {
+    setup();
+    let key = "frm1701:txtPg2I2SpouseRDOCode";
+    let opened = opened("1701");
+    let joint = take("1701", &opened["draft"], joint("1701"));
+    let mut legacy = joint["draft"].clone();
+    legacy["spouse"]["rdo_code"] = json!("040");
+    legacy["spouse_rdo_code"] = json!("");
+    let checked = validated("1701", &legacy);
+    assert_eq!(checked["values"][key], "");
+    assert_eq!(printed("1701", &checked["draft"])[key], "");
+    assert_eq!(field_map("1701", &checked["draft"])[key], "000");
+    assert_eq!(
+        checked["draft"]["spouse"]["rdo_code"], "040",
+        "no automatic change"
+    );
+    let notice = checked["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| {
+            e["field"] == "spouse_rdo_code"
+                && strings(&e["keys"]).contains(key)
+                && e["message"]
+                    .as_str()
+                    .is_some_and(|m| m.starts_with("Imported"))
+        })
+        .unwrap_or_else(|| panic!("a notice: {}", checked["errors"]));
+    assert_eq!(
+        notice["message"],
+        "Imported spouse RDO 040 isn't on the filing; check it."
+    );
+    // Once the RDO is typed, the notice goes.
+    let typed = take("1701", &legacy, json!({ key: "040" }));
+    let rechecked = validated("1701", &typed["draft"]);
+    assert!(
+        rechecked["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|e| e["message"] != notice["message"])
+    );
 }
 
 /// Lesson 8 for "Use the computed amounts": it replaces penalty amounts
