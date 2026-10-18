@@ -1582,3 +1582,377 @@ fn form_1701_spouse_contact_is_typed() {
     assert_eq!(field_map("1701", &filled["draft"])[key], "09170000001");
     assert_eq!(printed("1701", &filled["draft"])[key], "09170000001");
 }
+
+/// Lesson 6 with a literal fixture: `fixtures/1701-pre-pr7.json` is a 1701
+/// draft exactly as pr0b-push serialized it (built and written by the
+/// pr0b-push bir-core: no `penalty` / `spouse_penalty` keys, Items 27-29
+/// typed as 125.00, 0.00 and 1,000.00). Stored, opened on the page and saved
+/// again, its row is the fixture byte for byte (the row id aside, which the
+/// database assigns), and the page shows the typed amounts.
+#[test]
+fn a_1701_draft_stored_before_pr7_saves_back_byte_for_byte() {
+    use bir_core::forms::form_1701::Form1701Draft;
+    use bir_core::forms::queueable::QueueableForm;
+    setup();
+    let fixture = include_str!("fixtures/1701-pre-pr7.json");
+    let stored: Form1701Draft = serde_json::from_str(fixture).unwrap();
+    let (tin, year, period) = (
+        stored.tin.clone(),
+        stored.taxable_year,
+        stored.period_column(),
+    );
+    let row = || -> String {
+        let mut draft = with_database(|db| {
+            db.get_queueable_draft::<Form1701Draft>(&tin, year, period)
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap()
+        .expect("the stored row");
+        draft.set_draft_id(None);
+        serde_json::to_string(&draft).unwrap()
+    };
+    with_database(|db| {
+        db.save_queueable_draft(&stored)
+            .map(|_| ())
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+    .unwrap();
+    assert_eq!(row(), fixture, "stored as the old code stored it");
+    let opened = open_for(&tin, "1701", i64::from(year), period);
+    assert_eq!(opened["values"]["frm1701:txtPg1I27A"], "125.00");
+    assert_eq!(opened["values"]["frm1701:txtPg1I29A"], "1,000.00");
+    save("1701", &opened["draft"]);
+    assert_eq!(row(), fixture, "opened and saved, byte for byte");
+}
+
+/// Maintainer decision D6 (2026-10-18): a message names the printed item
+/// number. Each item an official message cites on these forms (read on a
+/// fresh return and a joint one, where most of their checks
+/// speak) is a number the sheet prints, in the part the message names when
+/// it names one (`Part IV Item 3`, `Schedule 5 Item #1`). None of these four
+/// forms' messages needed rewording; this keeps it so.
+#[test]
+fn annual_messages_cite_printed_item_numbers() {
+    setup();
+    for code in ["1700", "1701", "1701A", "1701MS"] {
+        let printed: Vec<(String, String)> =
+            drawn(code)
+                .into_iter()
+                .map(|(part, no, _)| (part, no))
+                .chain(items(code).into_iter().map(|(part, item)| {
+                    (part, item["no"].as_str().unwrap_or_default().to_string())
+                }))
+                .collect();
+        let fresh = opened(code);
+        let joint = take(code, &fresh["draft"], joint(code));
+        let mut checked = 0;
+        for draft in [&fresh["draft"], &joint["draft"]] {
+            let errors = validated(code, draft)["errors"].clone();
+            for error in errors.as_array().into_iter().flatten() {
+                let message = error["message"].as_str().unwrap_or_default();
+                for (part, item) in cited(message) {
+                    // "26A" is item 26's column A where the sheet numbers
+                    // the item alone.
+                    let column = item
+                        .strip_suffix(['A', 'B', 'a', 'b'])
+                        .unwrap_or(&item)
+                        .to_string();
+                    let found = printed.iter().any(|(p, no)| {
+                        let numbers: Vec<&str> = no.split('-').chain([no.as_str()]).collect();
+                        numbers.iter().any(|n| {
+                            n.eq_ignore_ascii_case(&item) || n.eq_ignore_ascii_case(&column)
+                        }) && part.as_ref().is_none_or(|named| p.contains(named.as_str()))
+                    });
+                    assert!(found, "{code}: {message:?} cites {part:?} item {item}");
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "{code}: no message cites an item");
+    }
+}
+
+/// `(part or schedule named, item)` for each "Item N" a message cites.
+fn cited(message: &str) -> Vec<(Option<String>, String)> {
+    let mut out = Vec::new();
+    let words: Vec<&str> = message.split_whitespace().collect();
+    for (at, word) in words.iter().enumerate() {
+        if !word.eq_ignore_ascii_case("item") {
+            continue;
+        }
+        let mut next = words.get(at + 1).copied().unwrap_or_default();
+        if next.eq_ignore_ascii_case("no.") {
+            next = words.get(at + 2).copied().unwrap_or_default();
+        }
+        let item: String = next
+            .trim_start_matches('#')
+            .chars()
+            .take_while(char::is_ascii_alphanumeric)
+            .collect();
+        if !item.starts_with(|c: char| c.is_ascii_digit()) {
+            continue;
+        }
+        let part = (at >= 2)
+            .then(|| (words[at - 2], words[at - 1]))
+            .filter(|(kind, _)| *kind == "Part" || *kind == "Schedule")
+            .map(|(kind, name)| format!("{kind} {name}"));
+        out.push((part, item));
+    }
+    out
+}
+
+// ------------------------------------------------------- PR 7 review
+
+/// 1701MS item 18's II012 is "Business Income-Graduated IT Rates"
+/// (html-frozen/1701ms-2024/guide.html): in either column it puts the
+/// column on graduated rates, and the business tax files at those rates.
+/// Oracle: the 2023-onwards graduated table (guide.html Table 2) on
+/// P600,000 sales with the 40% OSD: P360,000 taxable, 15% of the P110,000
+/// over P250,000 = P16,500.
+#[test]
+fn form_1701ms_ii012_is_graduated_in_both_columns() {
+    setup();
+    let opened = opened("1701MS");
+    let mut edits = joint("1701MS");
+    edits["taxCodeDropdown"] = json!("II012");
+    edits["taxCodeDropdownSpouse"] = json!("II012");
+    let chosen = take("1701MS", &opened["draft"], edits);
+    for column in ["taxpayer", "spouse"] {
+        assert_eq!(
+            chosen["draft"][column]["tax_option"], "graduated",
+            "{column}"
+        );
+        assert_eq!(chosen["draft"][column]["source"], "business", "{column}");
+    }
+    let typed = take(
+        "1701MS",
+        &chosen["draft"],
+        json!({
+            "frm1701MS:txtSalesRevenueNo5a": "600000",
+            "frm1701MS:txtSalesRevenueNo5b": "600000",
+            "frm1701MS:txtTaxpayerNo17b": "true",
+            "frm1701MS:txtSpouseNo17b": "true",
+        }),
+    );
+    let fields = field_map("1701MS", &typed["draft"]);
+    for key in [
+        "frm1701MS:txtIncomeTaxRegularNo22a",
+        "frm1701MS:txtIncomeTaxRegularNo22b",
+    ] {
+        assert_eq!(
+            agent::parse_amount(&fields[key]),
+            Some(16_500.0),
+            "{key}: {}",
+            fields[key]
+        );
+    }
+}
+
+/// A 1701 draft stored before the penalty model (no `penalty` key): Edit
+/// penalties, type item 29A 1,000 and it is taken, files and joins the
+/// model (form_1701_official.rs `official_recompute`).
+#[test]
+fn form_1701_legacy_draft_takes_a_typed_penalty() {
+    setup();
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/1701-pre-pr7.json")).unwrap();
+    assert!(fixture.get("penalty").is_none());
+    let keys = [
+        "frm1701:txtPg1I27A",
+        "frm1701:txtPg1I28A",
+        "frm1701:txtPg1I29A",
+    ];
+    let typed = fill_unlocked(
+        "1701",
+        &fixture,
+        json!({"frm1701:txtPg1I29A": "1000"}),
+        &keys,
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    let fields = field_map("1701", &typed["draft"]);
+    assert_eq!(fields["frm1701:txtPg1I29A"], "1,000.00");
+    // The amounts it held stay as entered.
+    assert_eq!(fields["frm1701:txtPg1I27A"], "125.00");
+    assert_eq!(typed["draft"]["penalty"]["penalty_model_version"], 1);
+}
+
+/// Lesson 8 for "Use the computed amounts": it replaces penalty amounts
+/// the filer typed or kept, so it asks first, on a legacy draft's kept
+/// amounts and on a current draft's overrides alike.
+#[test]
+fn using_the_computed_penalties_asks_first() {
+    setup();
+    let keys = [
+        "frm1701:txtPg1I27A",
+        "frm1701:txtPg1I28A",
+        "frm1701:txtPg1I29A",
+    ];
+    let blank = json!({
+        "frm1701:txtPg1I27A": "",
+        "frm1701:txtPg1I28A": "",
+        "frm1701:txtPg1I29A": "",
+    });
+    // Kept as entered: 125.00 and 1,000.00 (the 0.00 says nothing).
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/1701-pre-pr7.json")).unwrap();
+    let kept = fill_unlocked("1701", &fixture, blank.clone(), &keys);
+    assert_eq!(kept["rejected"], json!({}));
+    assert_eq!(
+        kept["removes"],
+        json!({
+            "message": "This answer replaces what you typed in Part II item 27 and Part II item 29. Continue?",
+            "done": "Removed 2 entries",
+            "rows": 2,
+        })
+    );
+    // A current draft's override.
+    let opened = opened("1701");
+    let typed = fill_unlocked(
+        "1701",
+        &opened["draft"],
+        json!({"frm1701:txtPg1I29A": "500"}),
+        &keys,
+    );
+    assert_eq!(typed["removes"], Value::Null);
+    let back = fill_unlocked("1701", &typed["draft"], blank, &keys);
+    assert_eq!(
+        back["removes"],
+        json!({
+            "message": "This answer replaces what you typed in Part II item 29. Continue?",
+            "done": "Removed 1 entry",
+            "rows": 1,
+        })
+    );
+    // Blanks over computed amounts ask nothing.
+    let quiet = fill_unlocked(
+        "1701",
+        &opened["draft"],
+        json!({"frm1701:txtPg1I29A": ""}),
+        &keys,
+    );
+    assert_eq!(quiet["removes"], Value::Null);
+}
+
+/// 1701MS column B (item 18, item 12's radios and its amounts) is faded
+/// off a joint return and refuses a write; item 20 of each column opens
+/// once that column's item 19 is more than zero.
+#[test]
+fn form_1701ms_column_b_and_item_20_follow_their_answers() {
+    setup();
+    let opened = opened("1701MS");
+    let joint_refusal = "Column B of Part I is for a joint return: choose Married at item 4 and Jointly at item 5 first.";
+    for key in [
+        "taxCodeDropdownSpouse",
+        "frm1701MS:txtTaxpayerNo12b1",
+        "frm1701MS:txtSalesRevenueNo5b",
+        "frm1701MS:txtCreditableForm2316No5b",
+        "frm1701MS:txtShareOfOtherNo20b",
+    ] {
+        assert_eq!(
+            opened["off"][key]
+                .as_str()
+                .map(|tag| tag.starts_with("Needs")),
+            Some(true),
+            "{key}: {}",
+            opened["off"][key]
+        );
+        let value = if key == "taxCodeDropdownSpouse" {
+            "II012"
+        } else if key.contains("No12") {
+            "true"
+        } else {
+            "1000"
+        };
+        let refused = fill("1701MS", &opened["draft"], json!({ key: value }));
+        assert_eq!(refused["rejected"][key], joint_refusal, "{key}");
+        assert_eq!(refused["draft"], opened["draft"], "{key}: nothing written");
+    }
+    // Item 20A: closed while item 19A is zero (graduated rates).
+    assert_eq!(
+        opened["off"]["frm1701MS:txtShareOfOtherNo20a"],
+        "Needs a special-rate income tax due above zero in column A"
+    );
+    let refused = fill(
+        "1701MS",
+        &opened["draft"],
+        json!({"frm1701MS:txtShareOfOtherNo20a": "100"}),
+    );
+    assert_eq!(
+        refused["rejected"]["frm1701MS:txtShareOfOtherNo20a"],
+        "Item 20 column A is for a special or preferential rate tax due: it opens once item 19 column A is more than zero."
+    );
+    // A special rate with income: item 19A is positive and 20A takes it.
+    let special = take(
+        "1701MS",
+        &opened["draft"],
+        json!({
+            "frm1701MS:txtTaxpayerNo11a": "true",
+            "frm1701MS:txtTaxpayerNo12e": "true",
+        }),
+    );
+    let special = take(
+        "1701MS",
+        &special["draft"],
+        json!({
+            "frm1701MS:txtTaxRatea": "5",
+            "frm1701MS:txtSalesRevenueNo5a": "1000000",
+        }),
+    );
+    let shared = take(
+        "1701MS",
+        &special["draft"],
+        json!({"frm1701MS:txtShareOfOtherNo20a": "100"}),
+    );
+    assert_eq!(
+        shared["draft"]["taxpayer"]["share_of_other_agencies"],
+        100.0
+    );
+    // Ending the special rate would clear it: asked first.
+    let graduated = take(
+        "1701MS",
+        &shared["draft"],
+        json!({"frm1701MS:txtTaxpayerNo12b": "true"}),
+    );
+    assert!(
+        graduated["removes"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("Part II item 20")),
+        "{}",
+        graduated["removes"]
+    );
+}
+
+/// 1701MS item 18 column B on a joint return takes every code its list
+/// offers, each setting only the spouse's source and tax option (the civil
+/// status and filing stay as answered); a blank leaves the return joint.
+#[test]
+fn form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return() {
+    setup();
+    let opened = opened("1701MS");
+    let on = take("1701MS", &opened["draft"], joint("1701MS"));
+    let field = items("1701MS")
+        .into_iter()
+        .flat_map(|(_, it)| it["f"].as_array().cloned().unwrap_or_default())
+        .find(|f| f["k"] == "taxCodeDropdownSpouse")
+        .expect("item 18 column B drawn");
+    let codes: Vec<String> = field["o"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|option| {
+            option["value"].as_str().map(str::to_string).or_else(|| {
+                option
+                    .as_str()
+                    .map(|text| text.split(" - ").next().unwrap().to_string())
+            })
+        })
+        .collect();
+    assert!(codes.len() >= 7, "{codes:?}");
+    for code in codes.iter().chain([&String::new()]) {
+        let chosen = take(
+            "1701MS",
+            &on["draft"],
+            json!({ "taxCodeDropdownSpouse": code }),
+        );
+        assert_eq!(chosen["draft"]["civil_status"], "married", "{code}");
+        assert_eq!(chosen["draft"]["filing"], "jointly", "{code}");
+    }
+}
