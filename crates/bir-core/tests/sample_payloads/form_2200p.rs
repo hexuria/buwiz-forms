@@ -119,13 +119,15 @@ fn form_2200p_sample_with_many_rows_is_current() {
     );
 }
 
-/// Event-based: the calendar has no 2200-P deadline.
+/// Due per removal (decision D8): the penalties run from Item 1, the
+/// removal date; the calendar has no 2200-P deadline.
 #[test]
 fn form_2200p_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_2200p,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Decision D8 (2026-10-18): the removal date the sample types (Item 1, 03/14/2025).
+        Deadline::Typed {
+            due: day(2025, 3, 14),
         },
     );
 }

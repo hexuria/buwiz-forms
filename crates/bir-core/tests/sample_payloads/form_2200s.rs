@@ -102,13 +102,15 @@ fn sample_2200s_prepayment() -> Form2200SDraft {
     draft
 }
 
-/// Items 23A-23C are open on a prepayment only.
+/// Items 23A-23C are open on a prepayment only, and run from Item 1, the
+/// removal date (decision D8).
 #[test]
 fn form_2200s_prepayment_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_2200s_prepayment,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Decision D8 (2026-10-18): the removal date the sample types (Item 1, 06/30/2025).
+        Deadline::Typed {
+            due: day(2025, 6, 30),
         },
     );
 }

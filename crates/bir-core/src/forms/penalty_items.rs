@@ -23,6 +23,14 @@
 //! - **Back-compat.** A draft saved while the items were manual-only (no
 //!   `penalty_model_version`) keeps every non-zero hand-typed amount as an
 //!   override, so nothing it carried changes value.
+//! - **Typed trigger date (maintainer decision D8, 2026-10-18).** A form
+//!   whose penalties run from a date the filer types, not from the calendar
+//!   (the excise returns 2200A, 2200AN, 2200M, 2200P, 2200S and 2200T: the
+//!   removal date; 2200C: the 10th of the month after its Item 1 month),
+//!   declares [`PenaltyItems::typed_due_date`]. It is measured from that
+//!   date once the draft is on [`TYPED_DUE_DATE_MODEL_VERSION`] (a new
+//!   return, or one that joins); a draft stored before computes nothing
+//!   until it joins, so it keeps what it holds.
 
 use std::cell::Cell;
 
@@ -40,6 +48,11 @@ use crate::profile::{EoptTier, TaxpayerProfile};
 
 /// Current penalty model: computed default with a per-component override.
 pub const PENALTY_MODEL_VERSION: u8 = 1;
+
+/// The model of a form with a [`PenaltyItems::typed_due_date`] (decision
+/// D8): computed from the date the filer typed. A draft of such a form
+/// stored at [`PENALTY_MODEL_VERSION`] predates it and computes nothing.
+pub const TYPED_DUE_DATE_MODEL_VERSION: u8 = 2;
 
 /// The penalty engine's class for a profile's EOPT classification.
 pub fn taxpayer_class_of(tier: &EoptTier) -> TaxpayerClass {
@@ -97,6 +110,16 @@ impl PenaltyState {
     /// [`Self::new`] with the class read from `profile`.
     pub fn for_profile(profile: &TaxpayerProfile) -> Self {
         Self::new(profile.eopt_tier.as_ref().map(taxpayer_class_of))
+    }
+
+    /// [`Self::for_profile`] for a new return of a form whose penalties run
+    /// from a date the filer types (decision D8): on
+    /// [`TYPED_DUE_DATE_MODEL_VERSION`] from the start.
+    pub fn for_profile_typed_due_date(profile: &TaxpayerProfile) -> Self {
+        Self {
+            penalty_model_version: TYPED_DUE_DATE_MODEL_VERSION,
+            ..Self::for_profile(profile)
+        }
     }
 
     /// The state of a return imported from official XML: current model, every
@@ -177,6 +200,11 @@ pub struct PenaltyItems<F> {
     /// The calendar period this return is filed for; `None` when the app's
     /// calendar has no period for it (event-based returns).
     pub deadline_period: fn(&F) -> Option<DeadlinePeriod>,
+    /// A due date the return carries itself, read from what the filer typed
+    /// (decision D8: the excise returns' removal date). When set it is the
+    /// only due date, used once the draft is on
+    /// [`TYPED_DUE_DATE_MODEL_VERSION`]; `None` for every other form.
+    pub typed_due_date: Option<fn(&F) -> Option<NaiveDate>>,
     pub period_code: fn(&F) -> String,
     pub is_amended: fn(&F) -> bool,
     /// The form's full compute chain (which calls [`Self::apply`]).
@@ -268,12 +296,37 @@ impl<F> PenaltyItems<F> {
 
     /// The deadline penalties are measured from: the one the app resolved
     /// when the form was opened, else the standard calendar rule. `None` when
-    /// the calendar has no deadline for this return.
+    /// the calendar has no deadline for this return. A form with a
+    /// [`Self::typed_due_date`] uses that alone, and only on a draft on its
+    /// model ([`Self::on_typed_due_date`]).
     pub fn due_date(&self, form: &F) -> Option<NaiveDate> {
+        if let Some(typed) = self.typed_due_date {
+            return self.on_typed_due_date(form).then(|| typed(form)).flatten();
+        }
         self.state_of(form).penalty_due_date.or_else(|| {
             (self.deadline_period)(form)
                 .and_then(|period| resolve_due_date(self.form_code, &period, &[]))
         })
+    }
+
+    /// Whether a form with a [`Self::typed_due_date`] has this draft on that
+    /// model: a new return, or one that joined ([`Self::join_typed_due_date`]).
+    pub fn on_typed_due_date(&self, form: &F) -> bool {
+        self.typed_due_date.is_some()
+            && self.state_of(form).penalty_model_version >= TYPED_DUE_DATE_MODEL_VERSION
+    }
+
+    /// Put a Draft of a form with a [`Self::typed_due_date`] on that model,
+    /// so its penalties are computed from the typed date from now on. A
+    /// return that has left Draft, or a form without one, is left alone.
+    pub fn join_typed_due_date(&self, form: &mut F) {
+        if self.typed_due_date.is_none() || !matches!((self.status)(form), FilingStatus::Draft) {
+            return;
+        }
+        let state = (self.state_mut)(form);
+        state.penalty_model_version = state
+            .penalty_model_version
+            .max(TYPED_DUE_DATE_MODEL_VERSION);
     }
 
     /// What the engine computes if the return is filed (and paid) on
@@ -527,6 +580,7 @@ macro_rules! queueable_penalty_items {
                 state_mut: |d: &mut $ty| &mut d.$($state).+,
                 status: |d: &$ty| d.lifecycle().status.clone(),
                 deadline_period: $crate::forms::penalty_items::calendar_period::<$ty>,
+                typed_due_date: None,
                 period_code: |d: &$ty| d.period_code(),
                 is_amended: |d: &$ty| d.amended_return_answer().unwrap_or(false),
                 recompute: |d: &mut $ty| d.compute(),

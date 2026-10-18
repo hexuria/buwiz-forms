@@ -271,7 +271,7 @@ impl Form2200CDraft {
             (12, 31)
         };
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             month,
             day,
@@ -758,6 +758,20 @@ impl Form2200CDraft {
             ],
             state: penalty,
             basic_tax_due: "Item 20", |d| d.tax_still_due,
+            // Decision D8 (2026-10-18): a monthly return, due within ten days
+            // after the close of Item 1's month, so the penalties run from
+            // the 10th of the month after it.
+            typed_due_date: Some(|d: &Self| {
+                if !(1..=12).contains(&d.month) {
+                    return None;
+                }
+                let (year, month) = if d.month == 12 {
+                    (i32::from(d.year).checked_add(1)?, 1)
+                } else {
+                    (i32::from(d.year), u32::from(d.month) + 1)
+                };
+                chrono::NaiveDate::from_ymd_opt(year, month, 10)
+            }),
             // The typed amount fields take digits only.
             rounding: super::penalty_items::PenaltyRounding::WholePesos,
         )

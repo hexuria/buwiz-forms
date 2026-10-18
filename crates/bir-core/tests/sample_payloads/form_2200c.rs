@@ -58,13 +58,15 @@ fn form_2200c_sample_payload_is_current() {
     );
 }
 
-/// Item 1 is a date the calendar's monthly 2200-C rule is not keyed to.
+/// Item 1 is a date the calendar's monthly 2200-C rule is not keyed to;
+/// monthly (decision D8), the penalties run from the 10th after its month.
 #[test]
 fn form_2200c_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_2200c,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Decision D8 (2026-10-18): the 10th of the month after the sample's Item 1 month (06/30/2025).
+        Deadline::Typed {
+            due: day(2025, 7, 10),
         },
     );
 }
@@ -72,4 +74,44 @@ fn form_2200c_penalty_items_follow_the_shared_model() {
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![serde_json::to_value(sample_2200c()).expect("sample serializes")]
+}
+
+/// Decision D8 (2026-10-18): 2200C is monthly, due within ten days after
+/// the close of Item 1's month, so the penalties run from the 10th of the
+/// next month (January 10 of the next year for December). Filed on the
+/// 10th the return owes none; on the 11th it owes the 25% surcharge.
+#[test]
+fn form_2200c_penalties_run_from_the_10th_of_the_next_month() {
+    use bir_core::forms::penalty_items::with_clock;
+    let items = Form2200CDraft::penalty_declaration();
+    let mut draft = sample_2200c();
+    draft.penalty.penalty_overrides = Default::default();
+    items.join_typed_due_date(&mut draft);
+    assert_eq!((draft.month, draft.day, draft.year), (6, 30, 2025));
+    assert_eq!(items.due_date(&draft), Some(day(2025, 7, 10)));
+    for (month, day_of_month, due) in [
+        (1, 1, day(2025, 2, 10)),
+        (1, 31, day(2025, 2, 10)),
+        (11, 15, day(2025, 12, 10)),
+        (12, 31, day(2026, 1, 10)),
+    ] {
+        let mut other = draft.clone();
+        other.month = month;
+        other.day = day_of_month;
+        assert_eq!(items.due_date(&other), Some(due), "{month}/{day_of_month}");
+    }
+
+    let mut on_time = draft.clone();
+    with_clock(day(2025, 7, 10), || on_time.recompute());
+    assert!(on_time.tax_still_due > 0.0);
+    assert_eq!(
+        [on_time.surcharge, on_time.interest, on_time.compromise],
+        [0.0; 3]
+    );
+
+    let mut late = draft.clone();
+    with_clock(day(2025, 7, 11), || late.recompute());
+    // Whole pesos (the 2200-C items take no centavos).
+    assert_eq!(late.surcharge, (late.tax_still_due * 0.25).round());
+    assert!(late.compromise > 0.0);
 }

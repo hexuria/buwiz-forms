@@ -69,13 +69,15 @@ fn form_2200an_sample_payload_is_current() {
     );
 }
 
-/// Event-based: the calendar has no 2200-AN deadline.
+/// Due per removal (decision D8): the penalties run from Item 1, the
+/// removal date; the calendar has no 2200-AN deadline.
 #[test]
 fn form_2200an_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_2200an,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Decision D8 (2026-10-18): the removal date the sample types (Item 1, 06/30/2025).
+        Deadline::Typed {
+            due: day(2025, 6, 30),
         },
     );
 }

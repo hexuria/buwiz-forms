@@ -379,7 +379,7 @@ impl Form2200MDraft {
             last_day_of_month(year, month)
         };
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             month,
             day,
@@ -1109,6 +1109,15 @@ impl Form2200MDraft {
             ],
             state: penalty,
             basic_tax_due: "Item 20", |d| d.tax_still_due,
+            // Decision D8 (2026-10-18): due on removal, so the penalties run
+            // from Item 1, the removal date the filer types.
+            typed_due_date: Some(|d: &Self| {
+                chrono::NaiveDate::from_ymd_opt(
+                    i32::from(d.year),
+                    u32::from(d.month),
+                    u32::from(d.day),
+                )
+            }),
         )
     }
 }

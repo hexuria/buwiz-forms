@@ -736,6 +736,7 @@ impl Form1601CDraft {
                     month: d.month,
                 })
             },
+            typed_due_date: None,
             period_code: |d| d.period_code(),
             is_amended: |d| d.is_amended,
             recompute: |d| d.compute(),
