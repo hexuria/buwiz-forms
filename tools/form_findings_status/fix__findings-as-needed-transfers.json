@@ -33,7 +33,7 @@
   "preview.0": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_0605_quarter_boxes_are_the_drafts_quarter (item 3's boxes show the draft's quarter as the print does for every quarter; the quarter is the return's period identity, so on an opened return they are locked, say what sets them and refuse a write); screen_form_module::tests::a_0605_quarter_is_its_quarter (a sample's period part sets it)"
+   "proof": "screen_form_module::tests::as_needed::pr9_0605_quarter_boxes_are_the_drafts_quarter (item 3's boxes are the draft's quarter, written by the host: a typed quarter is stored, printed and filed in the upload's field map for every quarter, unticking the ticked one clears it, and the return's identity, its entry number, does not move)"
   },
   "manual-0": {
    "status": "fixed",
@@ -65,7 +65,7 @@
   "R6.1": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list is off with 'Needs item 11 = Yes' and refuses a choice with it, alone or after No in one batch, until Yes; rules/forms/1606-v2018/fields.json enabled_when 'Item 19 indicates treaty or special-law relief.', item 19 the older numbering of item 11, whose Yes answers both); screen_form_module::tests::as_needed::pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief; screen_form_module::audit::p1_relief_dropdowns_offer_each_forms_official_choices"
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list is off with 'Needs item 11 = Yes' and refuses a choice with it, alone or after No in one batch, until Yes; rules/forms/1606-v2018/fields.json enabled_when 'Item 19 indicates treaty or special-law relief.', item 19 the older numbering of item 11, whose Yes answers both); screen_form_module::tests::as_needed::pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief; screen_form_module::audit::p1_relief_dropdowns_offer_each_forms_official_choices; screen_form_module::tests::as_needed::pr9_1606_1706_item_11_yes_waits_for_the_list (Yes is yes-unspecified, probe.rs CHOICE_OPTION_SETS: Yes alone shows the official message, Yes and a list choice files the choice, a stored special-law draft opens and files unchanged)"
   },
   "R6.2": {
    "status": "fixed",
@@ -122,7 +122,7 @@
   "R6.2": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list refuses a choice with 'Needs item 11 = Yes' until Yes; rules/forms/1706-v2018/fields.json enabled_when 'Item 20 indicates tax-treaty relief.', item 20 the older numbering of item 11, whose Yes answers 'tax relief under an International Tax Treaty or Special Law'); screen_form_module::tests::as_needed::pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief"
+   "proof": "screen_form_module::tests::as_needed::pr9_1606_1706_boxes_wait_for_their_answer (item 11's list refuses a choice with 'Needs item 11 = Yes' until Yes; rules/forms/1706-v2018/fields.json enabled_when 'Item 20 indicates tax-treaty relief.', item 20 the older numbering of item 11, whose Yes answers 'tax relief under an International Tax Treaty or Special Law'); screen_form_module::tests::as_needed::pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief; screen_form_module::tests::as_needed::pr9_1606_1706_item_11_yes_waits_for_the_list (Yes is yes-unspecified, probe.rs CHOICE_OPTION_SETS: Yes alone shows the official message, Yes and a list choice files the choice, a stored special-law draft opens and files unchanged)"
   },
   "R6.3": {
    "status": "fixed",
@@ -313,7 +313,7 @@
   "manual-0": {
    "status": "fixed",
    "pr": "PR 9",
-   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part IV its own part, one table of five rows); screen_form_module::tests::as_needed::pr9_2552_part_iv_rows_take_their_amounts (rows 2-5 refuse a write with 'Needs Part IV row N-1' until the row before is used, as the official inventory keeps them disabled; then typed and printed)"
+   "proof": "screen_form_module::tests::as_needed::pr9_2552_page_2_is_its_printed_parts (Part IV its own part, one table of five rows); screen_form_module::tests::as_needed::pr9_2552_part_iv_rows_take_their_amounts (rows 2-5 refuse a write with 'Needs Part IV row N-1' until the row before is used, then are typed, printed and cleared; the row-before rule is inferred: the official runtime keeps rows 2-5 disabled at load, rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json, and what enables them, enablePartIVRow, is tracked as a hash only, so the port keeps the rows in order); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (2552 gates checked against a hand list, hand_gates_2552)"
   },
   "manual-1": {
    "status": "fixed",
