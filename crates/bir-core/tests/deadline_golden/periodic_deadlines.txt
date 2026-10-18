@@ -5,7 +5,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
-1606|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
@@ -13,7 +12,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
-1606|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
@@ -21,7 +19,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
-1606|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 2550DS|Quarterly { taxable_year: 2025, quarter: 1 }|2025-04-25|2025-04-25|2025-01-01|Normal
 2550Q|Quarterly { taxable_year: 2025, quarter: 1 }|2025-04-25|2025-04-25|2025-01-01|Normal
@@ -37,7 +34,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 1701Q|Quarterly { taxable_year: 2025, quarter: 1 }|2025-05-15|2025-05-15|2025-01-01|Normal
 1702Q|Quarterly { taxable_year: 2025, quarter: 1 }|2025-05-30|2025-05-30|2025-01-01|Normal
@@ -47,7 +43,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
-1606|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
@@ -55,7 +50,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
-1606|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 2550DS|Quarterly { taxable_year: 2025, quarter: 2 }|2025-07-25|2025-07-25|2025-04-01|Normal
 2550Q|Quarterly { taxable_year: 2025, quarter: 2 }|2025-07-25|2025-07-25|2025-04-01|Normal
@@ -71,7 +65,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 1701Q|Quarterly { taxable_year: 2025, quarter: 2 }|2025-08-15|2025-08-15|2025-04-01|Normal
 1702Q|Quarterly { taxable_year: 2025, quarter: 2 }|2025-08-29|2025-08-29|2025-04-01|Normal
@@ -81,7 +74,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
-1606|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
@@ -89,7 +81,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
-1606|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 2550DS|Quarterly { taxable_year: 2025, quarter: 3 }|2025-10-25|2025-10-27|2025-07-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2025, quarter: 3 }|2025-10-25|2025-10-27|2025-07-01|WeekendAdjusted
@@ -105,7 +96,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
-1606|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 1701Q|Quarterly { taxable_year: 2025, quarter: 3 }|2025-11-15|2025-11-17|2025-07-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2025, quarter: 3 }|2025-11-29|2025-12-01|2025-07-01|WeekendAdjusted
@@ -115,12 +105,10 @@
 1600PT|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
-1606|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 0620|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 1600PT|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 0619E|Monthly { taxable_year: 2025, month: 12 }|2026-01-15|2026-01-15|2025-12-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 12 }|2026-01-15|2026-01-15|2025-12-01|Normal
@@ -154,7 +142,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
-1606|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
@@ -162,7 +149,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
-1606|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
@@ -170,7 +156,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
-1606|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 2550DS|Quarterly { taxable_year: 2026, quarter: 1 }|2026-04-25|2026-04-27|2026-01-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2026, quarter: 1 }|2026-04-25|2026-04-27|2026-01-01|WeekendAdjusted
@@ -186,7 +171,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 1701Q|Quarterly { taxable_year: 2026, quarter: 1 }|2026-05-15|2026-05-15|2026-01-01|Normal
 1702Q|Quarterly { taxable_year: 2026, quarter: 1 }|2026-05-30|2026-06-01|2026-01-01|WeekendAdjusted
@@ -196,7 +180,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
-1606|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
@@ -204,7 +187,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
-1606|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 2550DS|Quarterly { taxable_year: 2026, quarter: 2 }|2026-07-25|2026-07-27|2026-04-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2026, quarter: 2 }|2026-07-25|2026-07-27|2026-04-01|WeekendAdjusted
@@ -220,7 +202,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
-1606|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 1701Q|Quarterly { taxable_year: 2026, quarter: 2 }|2026-08-15|2026-08-17|2026-04-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2026, quarter: 2 }|2026-08-29|2026-08-31|2026-04-01|WeekendAdjusted
@@ -230,7 +211,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
-1606|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
@@ -238,7 +218,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2026, quarter: 3 }|2026-10-25|2026-10-26|2026-07-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2026, quarter: 3 }|2026-10-25|2026-10-26|2026-07-01|WeekendAdjusted
@@ -254,7 +233,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
-1606|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 1701Q|Quarterly { taxable_year: 2026, quarter: 3 }|2026-11-15|2026-11-16|2026-07-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2026, quarter: 3 }|2026-11-29|2026-11-30|2026-07-01|WeekendAdjusted
@@ -264,12 +242,10 @@
 1600PT|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
-1606|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 0620|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 1600PT|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 0619E|Monthly { taxable_year: 2026, month: 12 }|2027-01-15|2027-01-15|2026-12-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 12 }|2027-01-15|2027-01-15|2026-12-01|Normal
@@ -303,7 +279,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
-1606|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 0619F|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
@@ -311,7 +286,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
-1606|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
@@ -319,7 +293,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2027, quarter: 1 }|2027-04-25|2027-04-26|2027-01-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2027, quarter: 1 }|2027-04-25|2027-04-26|2027-01-01|WeekendAdjusted
@@ -335,7 +308,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
-1606|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 1701Q|Quarterly { taxable_year: 2027, quarter: 1 }|2027-05-15|2027-05-17|2027-01-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2027, quarter: 1 }|2027-05-30|2027-05-31|2027-01-01|WeekendAdjusted
@@ -345,7 +317,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
-1606|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
@@ -353,7 +324,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2027, quarter: 2 }|2027-07-25|2027-07-26|2027-04-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2027, quarter: 2 }|2027-07-25|2027-07-26|2027-04-01|WeekendAdjusted
@@ -369,7 +339,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
-1606|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 1701Q|Quarterly { taxable_year: 2027, quarter: 2 }|2027-08-15|2027-08-16|2027-04-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2027, quarter: 2 }|2027-08-29|2027-08-30|2027-04-01|WeekendAdjusted
@@ -379,7 +348,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
-1606|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
@@ -387,7 +355,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2027, quarter: 3 }|2027-10-25|2027-10-25|2027-07-01|Normal
 2550Q|Quarterly { taxable_year: 2027, quarter: 3 }|2027-10-25|2027-10-25|2027-07-01|Normal
@@ -403,7 +370,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
-1606|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 1701Q|Quarterly { taxable_year: 2027, quarter: 3 }|2027-11-15|2027-11-15|2027-07-01|Normal
 1702Q|Quarterly { taxable_year: 2027, quarter: 3 }|2027-11-29|2027-11-29|2027-07-01|Normal
@@ -413,12 +379,10 @@
 1600PT|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
-1606|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 0620|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 1600PT|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
-1606|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 12 }|2028-01-15|2028-01-17|2027-12-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 12 }|2028-01-15|2028-01-17|2027-12-01|WeekendAdjusted
@@ -452,7 +416,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
-1606|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 1 }|2025-02-10|2025-02-10|2025-01-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
@@ -460,7 +423,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
-1606|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 2 }|2025-03-10|2025-03-10|2025-02-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
@@ -468,7 +430,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
-1606|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 3 }|2025-04-10|2025-04-10|2025-03-01|Normal
 2550DS|Quarterly { taxable_year: 2025, quarter: 1 }|2025-04-25|2025-04-25|2025-01-01|Normal
 2550Q|Quarterly { taxable_year: 2025, quarter: 1 }|2025-04-25|2025-04-25|2025-01-01|Normal
@@ -484,7 +445,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2025, month: 4 }|2025-05-10|2025-05-12|2025-04-01|WeekendAdjusted
 1701Q|Quarterly { taxable_year: 2025, quarter: 1 }|2025-05-15|2025-05-15|2025-01-01|Normal
 1702Q|Quarterly { taxable_year: 2025, quarter: 1 }|2025-05-30|2025-05-30|2025-01-01|Normal
@@ -494,7 +454,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
-1606|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 5 }|2025-06-10|2025-06-10|2025-05-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
@@ -502,7 +461,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
-1606|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 6 }|2025-07-10|2025-07-10|2025-06-01|Normal
 2550DS|Quarterly { taxable_year: 2025, quarter: 2 }|2025-07-25|2025-07-25|2025-04-01|Normal
 2550Q|Quarterly { taxable_year: 2025, quarter: 2 }|2025-07-25|2025-07-25|2025-04-01|Normal
@@ -518,7 +476,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2025, month: 7 }|2025-08-10|2025-08-11|2025-07-01|WeekendAdjusted
 1701Q|Quarterly { taxable_year: 2025, quarter: 2 }|2025-08-15|2025-08-15|2025-04-01|Normal
 1702Q|Quarterly { taxable_year: 2025, quarter: 2 }|2025-08-29|2025-08-29|2025-04-01|Normal
@@ -528,7 +485,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
-1606|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 8 }|2025-09-10|2025-09-10|2025-08-01|Normal
 0619E|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
@@ -536,7 +492,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
-1606|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 9 }|2025-10-10|2025-10-10|2025-09-01|Normal
 2550DS|Quarterly { taxable_year: 2025, quarter: 3 }|2025-10-25|2025-10-27|2025-07-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2025, quarter: 3 }|2025-10-25|2025-10-27|2025-07-01|WeekendAdjusted
@@ -552,7 +507,6 @@
 1600PT|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
-1606|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 10 }|2025-11-10|2025-11-10|2025-10-01|Normal
 1701Q|Quarterly { taxable_year: 2025, quarter: 3 }|2025-11-15|2025-11-17|2025-07-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2025, quarter: 3 }|2025-11-29|2025-12-01|2025-07-01|WeekendAdjusted
@@ -562,12 +516,10 @@
 1600PT|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 1600VT|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 1601C|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
-1606|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 2200C|Monthly { taxable_year: 2025, month: 11 }|2025-12-10|2025-12-10|2025-11-01|Normal
 0620|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 1600PT|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2025, month: 12 }|2026-01-10|2026-01-12|2025-12-01|WeekendAdjusted
 0619E|Monthly { taxable_year: 2025, month: 12 }|2026-01-15|2026-01-15|2025-12-01|Normal
 0619F|Monthly { taxable_year: 2025, month: 12 }|2026-01-15|2026-01-15|2025-12-01|Normal
@@ -601,7 +553,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
-1606|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 1 }|2026-02-10|2026-02-10|2026-01-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
@@ -609,7 +560,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
-1606|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 2 }|2026-03-10|2026-03-10|2026-02-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
@@ -617,7 +567,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
-1606|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 3 }|2026-04-10|2026-04-10|2026-03-01|Normal
 2550DS|Quarterly { taxable_year: 2026, quarter: 1 }|2026-04-25|2026-04-27|2026-01-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2026, quarter: 1 }|2026-04-25|2026-04-27|2026-01-01|WeekendAdjusted
@@ -633,7 +582,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2026, month: 4 }|2026-05-10|2026-05-11|2026-04-01|WeekendAdjusted
 1701Q|Quarterly { taxable_year: 2026, quarter: 1 }|2026-05-15|2026-05-15|2026-01-01|Normal
 1702Q|Quarterly { taxable_year: 2026, quarter: 1 }|2026-05-30|2026-06-01|2026-01-01|WeekendAdjusted
@@ -643,7 +591,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
-1606|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 5 }|2026-06-10|2026-06-10|2026-05-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
@@ -651,7 +598,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
-1606|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 6 }|2026-07-10|2026-07-10|2026-06-01|Normal
 2550DS|Quarterly { taxable_year: 2026, quarter: 2 }|2026-07-25|2026-07-27|2026-04-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2026, quarter: 2 }|2026-07-25|2026-07-27|2026-04-01|WeekendAdjusted
@@ -667,7 +613,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
-1606|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 7 }|2026-08-10|2026-08-10|2026-07-01|Normal
 1701Q|Quarterly { taxable_year: 2026, quarter: 2 }|2026-08-15|2026-08-17|2026-04-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2026, quarter: 2 }|2026-08-29|2026-08-31|2026-04-01|WeekendAdjusted
@@ -677,7 +622,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
-1606|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 8 }|2026-09-10|2026-09-10|2026-08-01|Normal
 0619E|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
@@ -685,7 +629,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2026, month: 9 }|2026-10-10|2026-10-12|2026-09-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2026, quarter: 3 }|2026-10-25|2026-10-26|2026-07-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2026, quarter: 3 }|2026-10-25|2026-10-26|2026-07-01|WeekendAdjusted
@@ -701,7 +644,6 @@
 1600PT|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
-1606|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 10 }|2026-11-10|2026-11-10|2026-10-01|Normal
 1701Q|Quarterly { taxable_year: 2026, quarter: 3 }|2026-11-15|2026-11-16|2026-07-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2026, quarter: 3 }|2026-11-29|2026-12-01|2026-07-01|Extended
@@ -711,12 +653,10 @@
 1600PT|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 1600VT|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 1601C|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
-1606|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 2200C|Monthly { taxable_year: 2026, month: 11 }|2026-12-10|2026-12-10|2026-11-01|Normal
 0620|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 1600PT|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2026, month: 12 }|2027-01-10|2027-01-11|2026-12-01|WeekendAdjusted
 0619E|Monthly { taxable_year: 2026, month: 12 }|2027-01-15|2027-01-15|2026-12-01|Normal
 0619F|Monthly { taxable_year: 2026, month: 12 }|2027-01-15|2027-01-15|2026-12-01|Normal
@@ -750,7 +690,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
-1606|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 1 }|2027-02-10|2027-02-10|2027-01-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 0619F|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
@@ -758,7 +697,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
-1606|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 2 }|2027-03-10|2027-03-10|2027-02-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
@@ -766,7 +704,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2027, month: 3 }|2027-04-10|2027-04-12|2027-03-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2027, quarter: 1 }|2027-04-25|2027-04-26|2027-01-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2027, quarter: 1 }|2027-04-25|2027-04-26|2027-01-01|WeekendAdjusted
@@ -782,7 +719,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
-1606|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 4 }|2027-05-10|2027-05-10|2027-04-01|Normal
 1701Q|Quarterly { taxable_year: 2027, quarter: 1 }|2027-05-15|2027-05-17|2027-01-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2027, quarter: 1 }|2027-05-30|2027-05-31|2027-01-01|WeekendAdjusted
@@ -792,7 +728,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
-1606|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 5 }|2027-06-10|2027-06-10|2027-05-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
@@ -800,7 +735,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2027, month: 6 }|2027-07-10|2027-07-12|2027-06-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2027, quarter: 2 }|2027-07-25|2027-07-26|2027-04-01|WeekendAdjusted
 2550Q|Quarterly { taxable_year: 2027, quarter: 2 }|2027-07-25|2027-07-26|2027-04-01|WeekendAdjusted
@@ -816,7 +750,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
-1606|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 7 }|2027-08-10|2027-08-10|2027-07-01|Normal
 1701Q|Quarterly { taxable_year: 2027, quarter: 2 }|2027-08-15|2027-08-16|2027-04-01|WeekendAdjusted
 1702Q|Quarterly { taxable_year: 2027, quarter: 2 }|2027-08-29|2027-08-30|2027-04-01|WeekendAdjusted
@@ -826,7 +759,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
-1606|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 8 }|2027-09-10|2027-09-10|2027-08-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
@@ -834,7 +766,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 1600VT|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 1601C|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
-1606|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 2200C|Monthly { taxable_year: 2027, month: 9 }|2027-10-10|2027-10-11|2027-09-01|WeekendAdjusted
 2550DS|Quarterly { taxable_year: 2027, quarter: 3 }|2027-10-25|2027-10-25|2027-07-01|Normal
 2550Q|Quarterly { taxable_year: 2027, quarter: 3 }|2027-10-25|2027-10-25|2027-07-01|Normal
@@ -850,7 +781,6 @@
 1600PT|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
-1606|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 10 }|2027-11-10|2027-11-10|2027-10-01|Normal
 1701Q|Quarterly { taxable_year: 2027, quarter: 3 }|2027-11-15|2027-11-15|2027-07-01|Normal
 1702Q|Quarterly { taxable_year: 2027, quarter: 3 }|2027-11-29|2027-11-29|2027-07-01|Normal
@@ -860,12 +790,10 @@
 1600PT|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 1601C|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
-1606|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 11 }|2027-12-10|2027-12-10|2027-11-01|Normal
 0620|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 1600PT|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 1600VT|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
-1606|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 2200C|Monthly { taxable_year: 2027, month: 12 }|2028-01-10|2028-01-10|2027-12-01|Normal
 0619E|Monthly { taxable_year: 2027, month: 12 }|2028-01-15|2028-01-17|2027-12-01|WeekendAdjusted
 0619F|Monthly { taxable_year: 2027, month: 12 }|2028-01-15|2028-01-17|2027-12-01|WeekendAdjusted
@@ -912,3 +840,4 @@
 2553|2553|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
 2000|2000|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
 2000OT|2000-OT|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+1606|1606|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased

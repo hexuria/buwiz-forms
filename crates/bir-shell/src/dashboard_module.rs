@@ -892,6 +892,70 @@ mod tests {
         assert_eq!(synced("2026:1601C:m09"), "2026-10-20");
     }
 
+    /// Decision P4-3: 1606 is as needed. Home lists it under "As needed"
+    /// while its sale date is not entered; a return holding its sale date
+    /// (Friday September 18, 2026) is a dated row due October 12 (the 10th
+    /// is a Saturday), and syncs to the Google Calendar the same.
+    #[test]
+    fn form_1606_is_listed_as_needed_and_dated_by_its_sale() {
+        setup();
+        let profile = with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1606"]).unwrap();
+            Ok(db.get_profile(HEAD).unwrap().unwrap())
+        })
+        .unwrap();
+        let listed = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        assert_eq!(listed.as_array().unwrap().len(), 1);
+        assert_eq!(listed[0]["form_code"], "1606");
+        assert_eq!(listed[0]["trigger"], "Sale");
+        assert!(listed[0]["undated"].as_array().unwrap().is_empty());
+        let window = args(&["2026-01-01", "2027-12-31"]);
+        assert!(
+            to_json(&deadlines_between(&window).unwrap())
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["form_code"] != "1606"),
+            "no monthly 1606 rows"
+        );
+        with_database(|db| {
+            let mut sale =
+                bir_core::forms::form_1606::Form1606Draft::new_from_profile(&profile, 2026, 1);
+            (
+                sale.transaction_month,
+                sale.transaction_day,
+                sale.transaction_year,
+            ) = (9, 18, 2026);
+            sale.lifecycle.trigger_date_entered = true;
+            db.save_queueable_draft(&sale).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&window).unwrap());
+        let dated: Vec<&Value> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["form_code"] == "1606")
+            .collect();
+        assert_eq!(dated.len(), 1);
+        assert_eq!(dated[0]["frequency"], "As needed");
+        assert_eq!(dated[0]["period_label"], "Sale Sep 18, 2026");
+        assert_eq!(dated[0]["due_date"], "2026-10-12");
+        let (events, _) = with_database(|db| {
+            Ok(bir_core::google_calendar::build_desired_events(db, &profile).unwrap())
+        })
+        .unwrap();
+        let event = events
+            .iter()
+            .find(|event| event.form_code == "1606")
+            .expect("the 1606 return syncs");
+        assert!(event.obligation_key.contains(":1606:return-"));
+        assert_eq!(event.body["start"]["date"], "2026-10-12");
+    }
+
     /// Round 3, item 5: a profile row that cannot be read skips that
     /// branch's profile overrides only; the feed still lists every branch.
     #[test]

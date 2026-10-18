@@ -5400,6 +5400,16 @@ mod tests {
                 ["09", "14", "2026"],
             ),
             (
+                "1606",
+                1,
+                [
+                    "/transaction_month",
+                    "/transaction_day",
+                    "/transaction_year",
+                ],
+                ["09", "14", "2026"],
+            ),
+            (
                 "1706",
                 1,
                 [

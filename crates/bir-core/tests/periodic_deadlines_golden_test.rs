@@ -2,7 +2,9 @@
 //! it pins what the code did, not an independent reading of the BIR
 //! calendar. The dated sections were recorded from the code before the D8
 //! deadline changes; D8 then removed the 24 2200M quarterly rows from them
-//! (2200M is due per removal), and nothing else in them changed. The
+//! (2200M is due per removal), and nothing else in them changed. Decision
+//! P4-3 (2026-10-19) then removed 1606's 72 monthly rows (12 months, three
+//! taxable years, both override sets) and added its one event row. The
 //! event-based section was recorded after D8, from the code with D8
 //! applied (2200M as needed, 2000OT added).
 //!
@@ -121,5 +123,20 @@ fn periodic_deadline_rows_match_the_golden() {
     assert!(
         golden == rendered,
         "periodic deadline rows changed; diff {GOLDEN_PATH} against a regenerated copy"
+    );
+}
+
+/// Decision P4-3: the golden holds no 1606 monthly row, and 1606 is one
+/// event-based row (the 72 monthly rows it held went).
+#[test]
+fn the_golden_holds_1606_as_an_event_row_only() {
+    let golden = std::fs::read_to_string(GOLDEN_PATH).expect("golden file");
+    assert!(!golden.lines().any(|line| line.starts_with("1606|Monthly")));
+    assert_eq!(
+        golden
+            .lines()
+            .filter(|line| line.starts_with("1606|1606|"))
+            .count(),
+        1
     );
 }

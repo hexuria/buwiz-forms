@@ -11,7 +11,7 @@
 //!
 //! **Only a date the filer entered counts.** Several constructors pre-fill
 //! a real date (the excise returns and 1600WP: today or the month's last
-//! day; 1706: today or January 1; 2552: the date its caller passes), so a
+//! day; 1606 and 1706: today or January 1; 2552: the date its caller passes), so a
 //! stored date alone does not say the event happened then. For those forms
 //! ([`PREFILLED_TRIGGER_FORMS`]) a Draft counts only once the page recorded
 //! that the filer wrote the date (`trigger_date_entered`, a flag on the
@@ -68,7 +68,7 @@ fn date_from_text(text: &str, today: NaiveDate) -> Option<NaiveDate> {
 
 /// The as-needed forms whose constructor pre-fills the trigger date.
 pub const PREFILLED_TRIGGER_FORMS: &[&str] = &[
-    "2200A", "2200AN", "2200M", "2200P", "2200S", "2200T", "1600WP", "1706", "2552",
+    "2200A", "2200AN", "2200M", "2200P", "2200S", "2200T", "1600WP", "1606", "1706", "2552",
 ];
 
 /// The top-level draft fields that hold `form_code`'s trigger date (what
@@ -79,7 +79,9 @@ pub fn trigger_paths(form_code: &str) -> &'static [&'static str] {
             &["month", "day", "year"]
         }
         "0605" => &["due_date"],
-        "1706" | "1707" | "2552" => &["transaction_month", "transaction_day", "transaction_year"],
+        "1606" | "1706" | "1707" | "2552" => {
+            &["transaction_month", "transaction_day", "transaction_year"]
+        }
         "2000OT" => &["transaction_date"],
         "1800" => &["donation_month", "donation_day", "donation_year"],
         "1801" => &["death_month", "death_day", "death_year"],
@@ -139,7 +141,7 @@ pub fn held_trigger_date(form_code: &str, draft: &Value) -> Option<NaiveDate> {
             date_from(draft, "year", "month", "day")
         }
         "0605" => date_from(draft.get("due_date")?, "year", "month", "day"),
-        "1706" | "1707" | "2552" => date_from(
+        "1606" | "1706" | "1707" | "2552" => date_from(
             draft,
             "transaction_year",
             "transaction_month",
@@ -297,6 +299,20 @@ mod tests {
         f0605.due_date = Some(super::super::form_0605::Form0605Date::new(2026, 10, 15).unwrap());
         assert_eq!(trigger_of("0605", &f0605).unwrap().date, ymd(2026, 10, 15));
 
+        // 1606 (decision P4-3): the sale date, pre-filled with today or
+        // January 1, so it counts only once entered.
+        let mut sale = super::super::form_1606::Form1606Draft::new_from_profile(&p, 2026, 1);
+        assert_eq!(trigger_of("1606", &sale), None, "1606 untouched");
+        (
+            sale.transaction_month,
+            sale.transaction_day,
+            sale.transaction_year,
+        ) = (9, 18, 2026);
+        sale.lifecycle.trigger_date_entered = true;
+        let trigger = trigger_of("1606", &sale).unwrap();
+        assert_eq!(trigger.date, ymd(2026, 9, 18));
+        assert_eq!(trigger.rule.due, DueFromTrigger::DayOfFollowingMonth(10));
+
         let mut f1706 = super::super::form_1706::Form1706Draft::new_from_profile(&p, 2026, 1);
         assert_eq!(trigger_of("1706", &f1706), None, "1706 untouched");
         f1706.lifecycle.trigger_date_entered = true;
@@ -401,7 +417,7 @@ mod tests {
         assert_eq!(
             event_trigger_from_json("1606", r#"{"transaction_month":1}"#),
             None,
-            "1606 is still filed monthly"
+            "1606 with no full sale date"
         );
         assert_eq!(event_trigger_from_json("2200A", "not json"), None);
         assert_eq!(

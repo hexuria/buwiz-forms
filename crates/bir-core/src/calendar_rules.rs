@@ -575,17 +575,19 @@ pub const EVENT_DUE_RULES: &[EventDueRule] = &[
         description: "The due date of the tax type paid",
         source: "html-frozen/0605-1999/guide.html When and Where to File and Pay",
     },
-    // 1606 is listed with the as-needed forms in decision D8c, but the
-    // calendar files it monthly (a row every month, due the 10th, the same
-    // date this rule gives). Until the maintainer moves it, it stays monthly
-    // and this rule is unused: only as-needed codes get trigger-date rows.
+    // Decision P4-3 (2026-10-19): 1606 is as needed, dated by the sale, due
+    // the 10th of the month after the sale. The workflow's "large taxpayers
+    // use the 25th" paraphrases a help file the repo does not track, and no
+    // profile field marks a Large Taxpayers Service taxpayer (the EOPT
+    // "Large" tier is a different classification), so the 10th applies to
+    // every taxpayer.
     EventDueRule {
         form_code: "1606",
-        trigger: "Transaction",
+        trigger: "Sale",
         due: DueFromTrigger::DayOfFollowingMonth(10),
         rolls_to_business_day: true,
-        description: "10th day following the end of the transaction month",
-        source: "rules/forms/1606-v2018/workflow.json filing_deadlines",
+        description: "10th day of the month following the month of the sale",
+        source: "Decision P4-3; rules/forms/1606-v2018/workflow.json filing_deadlines",
     },
     EventDueRule {
         form_code: "1706",
@@ -911,7 +913,8 @@ impl DeadlineResolver {
             // It is event-based — only filed when a taxable document transaction
             // occurs in a given month. Moved to the AsNeeded bucket below.
             OfficialRule {
-                form_nos: vec!["0620", "1600-VT", "1600-PT", "1606", "2200-C"],
+                // 1606 is as needed (decision P4-3), in the rule below.
+                form_nos: vec!["0620", "1600-VT", "1600-PT", "2200-C"],
                 form_name: "Monthly Remittance / Excise Tax",
                 frequency: Frequency::Monthly,
                 filing_trigger: FilingTrigger::PeriodEnd,
@@ -1085,7 +1088,7 @@ impl DeadlineResolver {
                 form_nos: vec![
                     "2552", "1600-WP", "1706", "1707", "1800", "1801", "0605", "0611-A", "0613",
                     "1905", "2200-A", "2200-AN", "2200-M", "2200P", "2200-S", "2200-T", "2553",
-                    "2000", "2000-OT",
+                    "2000", "2000-OT", "1606",
                 ],
                 form_name: "As Needed / Special / Event-Based",
                 frequency: Frequency::AsNeeded,
@@ -1599,25 +1602,48 @@ mod tests {
     fn the_as_needed_codes_are_the_event_rules_codes() {
         let codes = DeadlineResolver::as_needed_form_codes();
         for code in [
-            "0605", "1600WP", "1706", "1707", "1800", "1801", "2000", "2000OT", "2200A", "2200AN",
-            "2200M", "2200P", "2200S", "2200T", "2552", "2553",
+            "0605", "1600WP", "1606", "1706", "1707", "1800", "1801", "2000", "2000OT", "2200A",
+            "2200AN", "2200M", "2200P", "2200S", "2200T", "2552", "2553",
         ] {
             assert!(codes.contains(&code), "{code} is as needed");
         }
-        for code in ["1601C", "2200C", "2551Q", "1701", "1604C", "1606"] {
+        for code in ["1601C", "2200C", "2551Q", "1701", "1604C"] {
             assert!(!DeadlineResolver::is_as_needed(code), "{code} is periodic");
         }
-        // Every form with a trigger-date rule is an as-needed obligation,
-        // except 1606: its rule is ready, but the calendar still files it
-        // monthly (see EVENT_DUE_RULES), so it has no as-needed rows.
+        // Every form with a trigger-date rule is an as-needed obligation
+        // (1606 too, decision P4-3).
         for rule in EVENT_DUE_RULES {
-            assert_eq!(
-                codes.contains(&rule.form_code),
-                rule.form_code != "1606",
-                "{}",
-                rule.form_code
+            assert!(codes.contains(&rule.form_code), "{}", rule.form_code);
+        }
+    }
+
+    /// Decision P4-3: 1606 is as needed, dated by the sale, due the 10th of
+    /// the next month on the next working day; it has no monthly rows.
+    #[test]
+    fn form_1606_is_due_the_10th_after_the_sale_month() {
+        for year in 2025..=2027 {
+            assert!(
+                DeadlineResolver::resolve_taxable_year(year)
+                    .iter()
+                    .filter(|d| d.form_code == "1606")
+                    .all(|d| d.final_deadline_date().is_none()),
+                "no monthly 1606 row in {year}"
             );
         }
+        let rule = event_due_rule("1606").unwrap();
+        assert_eq!(rule.trigger, "Sale");
+        let calendar = BusinessDayCalendar::default();
+        let due = |sale| {
+            DeadlineResolver::event_deadline(&rule, sale, &[], &calendar)
+                .unwrap()
+                .final_deadline_date()
+        };
+        assert_eq!(due(ymd(2026, 8, 3)), Some(ymd(2026, 9, 10)));
+        assert_eq!(due(ymd(2026, 8, 31)), Some(ymd(2026, 9, 10)));
+        // October 10, 2026 is a Saturday.
+        assert_eq!(due(ymd(2026, 9, 18)), Some(ymd(2026, 10, 12)));
+        // December's sale: January 10, 2027 is a Sunday.
+        assert_eq!(due(ymd(2026, 12, 2)), Some(ymd(2027, 1, 11)));
     }
 
     /// Decision D8: 2200M is due per removal, not quarterly on the 15th.
