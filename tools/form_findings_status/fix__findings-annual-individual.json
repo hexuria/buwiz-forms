@@ -2,12 +2,12 @@
  "1700": {
   "R2.2": {
    "reason": "txtPg2I3PartVIEmployerName1 is Schedule 1 row 3's 'a. Name of Employer' (html-frozen/1700-2018/writer-cells.json: 'Schedule 1 Item 3a Name of Employer'), the employer's name, a different fact from the profile's own name; the filer types it and it files and prints (screen_form_module::tests::annual_individual::form_1700_rows_3_and_4_mark_their_party_from_the_draft).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 7 review): txtPg2I3PartVIEmployerName1 is Schedule 1 row 3's 'a. Name of Employer' (html-frozen/1700-2018/writer-cells.json 'Schedule 1 Item 3a Name of Employer'); a per-row filer entry; proof form_1700_rows_3_and_4_mark_their_party_from_the_draft.",
    "status": "not_a_bug"
   },
   "R2.3": {
    "reason": "txtPg2I4PartVIEmployerName1 is Schedule 1 row 4's 'a. Name of Employer' (html-frozen/1700-2018/writer-cells.json: 'Schedule 1 Item 4a Name of Employer'), the employer's name, a different fact from the profile's own name; the filer types it and it files and prints (screen_form_module::tests::annual_individual::form_1700_rows_3_and_4_mark_their_party_from_the_draft).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 7 review): txtPg2I4PartVIEmployerName1 is Schedule 1 row 4's 'a. Name of Employer' (writer-cells 'Schedule 1 Item 4a Name of Employer'); a per-row filer entry, as R2.2.",
    "status": "not_a_bug"
   },
   "manual-0": {
@@ -21,13 +21,13 @@
    "status": "fixed"
   },
   "preview.0": {
-   "reason": "Rows 3 and 4's Taxpayer/Spouse marks are not constants: rows_1700.rs writes each row's mark from the draft's employer (its owner), and the page and the print show the same mark for each owner (screen_form_module::tests::annual_individual::form_1700_rows_3_and_4_mark_their_party_from_the_draft). The probe saw one value because no sample draft has a spouse's employer in rows 3 and 4.",
-   "reviewer": "",
+   "reason": "Rows 3 and 4's Taxpayer/Spouse marks are not constants: rows_1700.rs writes each row's mark from the row's for_spouse flag, and the page and the print show the same mark for each row's for_spouse (screen_form_module::tests::annual_individual::form_1700_rows_3_and_4_mark_their_party_from_the_draft). The probe saw one value because no sample draft has a spouse's employer in rows 3 and 4.",
+   "reviewer": "Agree (PR 7 review): rows 3 and 4 Taxpayer/Spouse marks follow each row's for_spouse flag (rows_1700.rs), so page and print agree per row; proof form_1700_rows_3_and_4_mark_their_party_from_the_draft.",
    "status": "not_a_bug"
   },
   "validation.0": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites",
+   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites; screen_form_module::tests::annual_individual::annual_messages_cite_printed_item_numbers",
    "status": "fixed"
   }
  },
@@ -39,17 +39,17 @@
   },
   "R2.2": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_spouse_rdo_agrees_on_page_print_and_upload",
    "status": "fixed"
   },
   "R2.3": {
    "reason": "txtPg2I6TelNum is Part IV item 6, the spouse's contact number (html-frozen/1701-2018/writer-cells.json joins it under Part IV), a different fact from the profile's own phone. It is the filer's entry now (probe.rs FILER_TYPED; it was locked as computed), open on a joint return and filed (screen_form_module::tests::annual_individual::form_1701_spouse_contact_is_typed; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 7 review): txtPg2I6TelNum is Part IV item 6, the spouse's contact number, not the profile phone; now a filer entry; the upload writes spouse.contact_number on a joint return; proof form_1701_spouse_contact_is_typed.",
    "status": "not_a_bug"
   },
   "R2.4": {
    "reason": "txtZIP is the official program's hidden workflow control, not a box of the sheet: rules/forms/1701-v2018/fields.json (a tracked rule record of the untracked official HTA runtime) records it with no page and no item, html-frozen/1701-2018/writer-cells.json prints nothing from it, and app/forms/schema-overrides.json keeps it hidden. The profile's ZIP shows, files and prints in item 9A (txtPg1I9AZipCode) (screen_form_module::tests::annual_individual::annual_zip_shows_in_item_9a_not_the_hidden_control).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 7 review): txtZIP has page and item null in rules/forms/1701-v2018/fields.json, is absent from html-frozen/1701-2018/writer-cells.json and hidden in schema-overrides.json; the profile ZIP is item 9A; proof annual_zip_shows_in_item_9a_not_the_hidden_control.",
    "status": "not_a_bug"
   },
   "R3.0": {
@@ -69,7 +69,7 @@
   },
   "R3.11": {
    "reason": "The sixteen boxes are Part III, Details of Payment (items 34-37), which the official program disables at load (rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json: disabled true, source lines 934-960), so the upload files them blank as the official program does. The page shows each printed item with its caption and a note instead of a box (screen_form_module::tests::annual_individual::form_1701_details_of_payment_show_a_note), as PR 8 does for 1702MX's Part III.",
-   "reviewer": "",
+   "reviewer": "Agree (PR 7 review): the 16 boxes txtPg1I34-37 sit at source lines 934-960 of rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json, all disabled:true; proof form_1701_details_of_payment_show_a_note.",
    "status": "not_a_bug"
   },
   "R3.2": {
@@ -114,7 +114,7 @@
   },
   "R4.1": {
    "reason": "the official form stores the period split (txtPg1I1Month beside txtPg1I1Year; the 2018 sheet prints the year only, so the month is drawn under 'Not on the printed sheet'); rule 4 keeps the split, and a library opening shows it blank (screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form), as PR 0b found for 1701A and 1701MS R4.1.",
-   "reviewer": "",
+   "reviewer": "Agree (PR 7 review): the split period (month beside year) is kept as the official form stores it; PR 0b recorded the same for 1701A and 1701MS R4.1.",
    "status": "not_a_bug"
   },
   "R5.3": {
@@ -124,7 +124,7 @@
   },
   "R8.0": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::annual_individual::form_1701_penalties_are_computed_and_kept_ones_say_so; screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_penalty_items_follow_the_shared_model",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_penalties_are_computed_and_kept_ones_say_so; screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_penalty_items_follow_the_shared_model; screen_form_module::tests::annual_individual::form_1701_legacy_draft_takes_a_typed_penalty; screen_form_module::tests::annual_individual::using_the_computed_penalties_asks_first; screen_form_module::tests::annual_individual::a_1701_draft_stored_before_pr7_saves_back_byte_for_byte",
    "status": "fixed"
   },
   "manual-0": {
@@ -159,12 +159,12 @@
   },
   "preview.0": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_spouse_rdo_agrees_on_page_print_and_upload",
    "status": "fixed"
   },
   "validation.0": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites",
+   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites; screen_form_module::tests::annual_individual::annual_messages_cite_printed_item_numbers",
    "status": "fixed"
   }
  },
@@ -181,7 +181,7 @@
   },
   "R2.3": {
    "reason": "txtZIP is the official program's hidden workflow control, not a box of the sheet: rules/forms/1701a-v2018/fields.json (a tracked rule record of the untracked official HTA runtime) records it with no page and no item, html-frozen/1701a-2018/writer-cells.json prints nothing from it, and app/forms/schema-overrides.json keeps it hidden. The profile's ZIP shows, files and prints in item 9A (txtZipCode) (screen_form_module::tests::annual_individual::annual_zip_shows_in_item_9a_not_the_hidden_control).",
-   "reviewer": "",
+   "reviewer": "Agree (PR 7 review): frm1701A:txtZIP has page and item null in rules/forms/1701a-v2018/fields.json, is absent from writer-cells and hidden in schema-overrides.json; the profile ZIP is item 9A; proof annual_zip_shows_in_item_9a_not_the_hidden_control.",
    "status": "not_a_bug"
   },
   "R3.0": {
@@ -216,7 +216,7 @@
   },
   "R5.2": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool; screen_form_module::rows_annual_individual::tests",
+   "proof": "screen_form_module::tests::a_printed_address_over_stacked_lines_is_one_pool",
    "status": "fixed"
   },
   "manual-0": {
@@ -246,7 +246,7 @@
   },
   "validation.0": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites",
+   "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites; screen_form_module::tests::annual_individual::annual_messages_cite_printed_item_numbers",
    "status": "fixed"
   }
  },
@@ -323,7 +323,7 @@
   },
   "manual-4": {
    "pr": "PR 7",
-   "proof": "screen_form_module::tests::annual_individual::annual_forms_open_the_spouse_part_from_the_printed_civil_status; screen_form_module::tests::annual_individual::closing_the_spouse_part_asks_first_on_every_annual_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form",
+   "proof": "screen_form_module::tests::annual_individual::annual_forms_open_the_spouse_part_from_the_printed_civil_status; screen_form_module::tests::annual_individual::closing_the_spouse_part_asks_first_on_every_annual_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::annual_individual::form_1701ms_column_b_and_item_20_follow_their_answers; screen_form_module::tests::annual_individual::form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return",
    "status": "fixed"
   }
  }
