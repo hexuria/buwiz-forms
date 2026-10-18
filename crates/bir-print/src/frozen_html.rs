@@ -189,7 +189,7 @@ enum Fit {
 /// Code caption. 0619F prints the same two address lines (and shares the
 /// maintainer's address decision); the same address ran about 8.5 pt past
 /// its first line. Every other sheet keeps the estimate and prints byte for
-/// byte as before (`long_text_prints_as_before_on_every_sheet_but_0619e`).
+/// byte as before (`long_text_prints_as_before_on_every_sheet_but_the_measured_ones`).
 const MEASURED_SHEETS: [&str; 2] = ["0619e-2018", "0619f-2018"];
 
 /// The overflow sizing of sheet `slug`.
@@ -5145,8 +5145,9 @@ mod tests {
         assert_eq!(fit_size(1000.0, 5), PLAIN_MAX_PT);
     }
 
-    /// The capture that found the bug: a 200-character 0619E address, split
-    /// at BIR's character 127 by the print map. Item 10's second line printed
+    /// The capture that found the bug: a 200-character 0619E address on its
+    /// two lines as the capture printed them (111 characters on line 1, the
+    /// trailing space included, and 89 on line 2). Item 10's second line printed
     /// at 8.61 pt measured 453.1 pt in Arimo, past its 446.5 pt cell, and was
     /// cut at the 10A ZIP Code caption. Measured, each line's text at its
     /// size fits its cell less the input's 1 pt left padding, so line 2 ends
@@ -5189,8 +5190,9 @@ mod tests {
     }
 
     /// Per cell, on both measured sheets (0619E and 0619F, the same two
-    /// address lines): the captured address, split at BIR's character 127
-    /// or whole on line 1, and a 200-character text in every text join,
+    /// address lines): the captured address on its two lines as the capture
+    /// printed them (111 + 89 characters) or whole on line 1, and a
+    /// 200-character text in every text join,
     /// print so that each plain line's text, measured in Arimo at its size,
     /// fits its cell less the input's 1 pt left padding.
     #[test]
@@ -5262,25 +5264,31 @@ mod tests {
             .collect()
     }
 
-    /// Goldens: what every sheet printed for long text before 0619E's
-    /// overflow type was measured (`fixtures/overflow-goldens.json`, written
-    /// by the fill at f7b7f475 with `BIR_PRINT_BLESS_OVERFLOW=1`). Every
+    /// The measured sheets' long-text prints since their overflow type is
+    /// measured (MEASURED_SHEETS): `(slug, overflow_print_hash)`, pinned
+    /// exactly.
+    const MEASURED_HASHES: [(&str, &str); 2] = [
+        (
+            "0619e-2018",
+            "fd3930f958c67f4d379e537a31dab670787b2024d6e3ded6a36fc9d910284ffa",
+        ),
+        (
+            "0619f-2018",
+            "905ce0375498434a605f3bc82f4fa658db618a0bca4be641b89afc2795a33544",
+        ),
+    ];
+
+    /// Goldens: what every sheet printed for long text before 0619E's and
+    /// 0619F's overflow type was measured (`fixtures/overflow-goldens.json`,
+    /// written once by the fill at f7b7f475 and never rewritten). Every
     /// other sheet prints byte for byte as it did; the measured sheets
-    /// (0619E and 0619F) alone change.
+    /// differ from it and print exactly [`MEASURED_HASHES`].
     #[test]
-    fn long_text_prints_as_before_on_every_sheet_but_0619e() {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/fixtures/overflow-goldens.json"
-        );
+    fn long_text_prints_as_before_on_every_sheet_but_the_measured_ones() {
         let now: BTreeMap<String, String> = sheet_slugs()
             .iter()
             .map(|slug| (slug.clone(), overflow_print_hash(slug)))
             .collect();
-        if std::env::var_os("BIR_PRINT_BLESS_OVERFLOW").is_some() {
-            std::fs::write(path, serde_json::to_string_pretty(&now).unwrap() + "\n").unwrap();
-            return;
-        }
         let golden: BTreeMap<String, String> =
             serde_json::from_str(include_str!("fixtures/overflow-goldens.json")).unwrap();
         assert_eq!(
@@ -5288,11 +5296,21 @@ mod tests {
             now.keys().collect::<Vec<_>>(),
             "every sheet has a golden"
         );
+        assert_eq!(
+            MEASURED_HASHES.map(|(slug, _)| slug),
+            MEASURED_SHEETS,
+            "every measured sheet has its own hash"
+        );
         for (slug, hash) in &now {
-            if MEASURED_SHEETS.contains(&slug.as_str()) {
-                assert_ne!(hash, &golden[slug], "{slug}: its overflow type is measured");
-            } else {
-                assert_eq!(hash, &golden[slug], "{slug}: prints as before");
+            match MEASURED_HASHES
+                .iter()
+                .find(|(measured, _)| measured == slug)
+            {
+                Some((_, pinned)) => {
+                    assert_ne!(hash, &golden[slug], "{slug}: its overflow type is measured");
+                    assert_eq!(hash, pinned, "{slug}: prints as measured");
+                }
+                None => assert_eq!(hash, &golden[slug], "{slug}: prints as before"),
             }
         }
     }
