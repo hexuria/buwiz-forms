@@ -1,8 +1,8 @@
 use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1706::{
-    Form1706Draft, Form1706PropertyClass, Form1706SellerType, Form1706TaxRelief,
-    Form1706TaxableBase, Form1706TransactionType,
+    FORM_1706_SCHEDULE_1_CELLS, Form1706Draft, Form1706Overpayment, Form1706PropertyClass,
+    Form1706SellerType, Form1706TaxRelief, Form1706TaxableBase, Form1706TransactionType,
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
@@ -78,5 +78,25 @@ fn form_1706_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_1706()).expect("sample serializes")]
+    // PR 9: an amended return overpaid by the tax paid before, the only
+    // state in which the Item 36 boxes (`opt37`) keep a choice
+    // (`recompute` clears it otherwise), with all twenty Schedule 1 popup
+    // cells filled, so the probe binds both. Its payload is never written.
+    let mut overpaid = sample_1706();
+    overpaid.set_amended(true);
+    overpaid.tax_paid_previous = 5_000_000.0;
+    overpaid.recompute();
+    assert!(
+        overpaid.total_amount_payable < 0.0,
+        "the overpaid seed is overpaid"
+    );
+    overpaid.overpayment = Form1706Overpayment::Refund;
+    overpaid.schedule_1 = (1..=FORM_1706_SCHEDULE_1_CELLS)
+        .map(|cell| format!("Cell {cell}"))
+        .collect();
+    overpaid.recompute();
+    vec![
+        serde_json::to_value(sample_1706()).expect("sample serializes"),
+        serde_json::to_value(overpaid).expect("overpaid sample serializes"),
+    ]
 }
