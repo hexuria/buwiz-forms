@@ -57,6 +57,11 @@ pub(super) enum Gate {
     /// (form_1701ms.rs `share_open`, the official toggleShareOfOtherNo20*);
     /// column B also needs a joint return.
     TaxDue { spouse: bool },
+    /// 1701MS item 16 (the tax rate) of a column: open while that column's
+    /// item 12 is Exempt or Special/Preferential Rate (form_1701ms.rs
+    /// `relief_items_open`; `normalize` zeroes `special_rate` otherwise);
+    /// column B also needs a joint return.
+    Relief { spouse: bool },
 }
 
 /// One gated box: `(form, key, gate, condition)`. The condition is the
@@ -96,6 +101,7 @@ const C1701MS_JOINT_DEDUCTION: &str = "A joint return (Items 4 and 5) and, in co
 /// (Schedule A for compensation, item 12's rate, an amended return), which
 /// rule 6 tries the ordinary way.
 const C1701MS_JOINT_COLUMN: &str = "A joint return (Items 4 and 5), and in column B the answers that open the same box of column A.";
+const C1701MS_RELIEF_A: &str = "Item 12 column A Exempt or Special/Preferential Rate.";
 const C1701MS_SHARE_A: &str =
     "Item 19 column A, Income Tax Due at the Special/Preferential Rate, is more than zero.";
 const C1701MS_SHARE_B: &str = "A joint return (Items 4 and 5) and Item 19 column B, Income Tax Due at the Special/Preferential Rate, is more than zero.";
@@ -614,6 +620,9 @@ const GATED: &[GatedBox] = &[
         Gate::Joint,
         C1701MS_JOINT_DEDUCTION,
     ),
+    // These, like every gate here, are host locks (lesson 15), not
+    // validation: a closed box refuses the write in the host and rule 6
+    // fades it; no message is added and the form's checks are unchanged.
     // 1701MS item 18 column B and column B's amounts (PR 7 review): the
     // form resets the whole spouse column off a joint return
     // (form_1701ms.rs `recompute`: "marriedJointly / toggleLine5 reset
@@ -750,6 +759,20 @@ const GATED: &[GatedBox] = &[
         Gate::Joint,
         C1701MS_JOINT_COLUMN,
     ),
+    // Part IV item 16, each column's tax rate (PR 7 review): open while that
+    // column's item 12 is Exempt or Special/Preferential Rate.
+    (
+        "1701MS",
+        "frm1701MS:txtTaxRatea",
+        Gate::Relief { spouse: false },
+        C1701MS_RELIEF_A,
+    ),
+    (
+        "1701MS",
+        "frm1701MS:txtTaxRateb",
+        Gate::Relief { spouse: true },
+        C1701MS_JOINT_RELIEF,
+    ),
     // Part II item 20 of each column: open once its item 19 is positive.
     (
         "1701MS",
@@ -821,7 +844,7 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                 Gate::Married => married,
                 Gate::SpouseIncome => married && form.spouse_has_income == Some(true),
                 Gate::Joint => form.is_joint(),
-                Gate::TaxDue { .. } => true,
+                Gate::TaxDue { .. } | Gate::Relief { .. } => true,
             }
         }),
         "1701" => serde_json::from_value::<Form1701Draft>(typed(draft)).is_ok_and(|form| {
@@ -830,7 +853,7 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                 Gate::Married => married,
                 Gate::SpouseIncome => married && form.spouse_has_income == Some(true),
                 Gate::Joint => form.spouse_column_active(),
-                Gate::TaxDue { .. } => true,
+                Gate::TaxDue { .. } | Gate::Relief { .. } => true,
             }
         }),
         "1701A" => serde_json::from_value::<Form1701ADraft>(typed(draft)).is_ok_and(|form| {
@@ -839,7 +862,7 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                 Gate::Married => married,
                 Gate::SpouseIncome => married && form.spouse_has_income == Some(true),
                 Gate::Joint => form.is_joint(),
-                Gate::TaxDue { .. } => true,
+                Gate::TaxDue { .. } | Gate::Relief { .. } => true,
             }
         }),
         "1701MS" => {
@@ -852,6 +875,8 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
                 Gate::TaxDue { spouse: true } => {
                     form.is_joint() && form.spouse.income_tax_due > 0.0
                 }
+                Gate::Relief { spouse: false } => form.taxpayer.relief_items_open(),
+                Gate::Relief { spouse: true } => form.is_joint() && form.spouse.relief_items_open(),
             })
         }
         _ => true,
@@ -862,6 +887,12 @@ fn holds(kind: AgentFormKind, draft: &Value, gate: Gate) -> bool {
 fn refusal(code: &str, gate: Gate) -> String {
     let (status, income, filing, part) = items(code);
     match (gate, income) {
+        (Gate::Relief { spouse }, _) => {
+            let column = if spouse { "B" } else { "A" };
+            format!(
+                "Item 16 column {column} is the rate of an exempt or special/preferential rate income: choose Exempt or Special/Preferential Rate at item 12 column {column} first."
+            )
+        }
         (Gate::TaxDue { spouse }, _) => {
             let column = if spouse { "B" } else { "A" };
             format!(
@@ -893,6 +924,8 @@ pub(super) fn is_gate_refusal(code: &str, reason: &str) -> bool {
             Gate::Joint,
             Gate::TaxDue { spouse: false },
             Gate::TaxDue { spouse: true },
+            Gate::Relief { spouse: false },
+            Gate::Relief { spouse: true },
         ]
         .iter()
         .any(|gate| refusal(code, *gate) == reason)
@@ -931,6 +964,13 @@ pub(super) fn write_past_gate(
         return super::rows_1700::fill(draft, cell, value);
     }
     agent::fill_as_user(kind, draft, key, value)
+}
+
+/// The draft value a host-written rate box keeps after a write past its
+/// gate and a recompute (its field map always shows a rate, "0.0%" too).
+#[cfg(test)]
+pub(super) fn kept_past_gate(kind: AgentFormKind, draft: &Value, key: &str) -> Option<Value> {
+    rate_cell(kind, key).and_then(|path| draft.pointer(path).cloned())
 }
 
 fn text(value: &Value) -> String {
@@ -1001,12 +1041,28 @@ pub(super) fn closed_refusal(
         return None;
     }
     let gate = gate_of(kind, key)?;
+    // A gate on an amount the form computes (item 19) reads the draft as
+    // the batch has left it, recomputed: a batch that makes item 19
+    // positive opens item 20 for its own later write.
+    let computed;
+    let draft = if matches!(gate, Gate::TaxDue { .. } | Gate::Relief { .. }) {
+        let mut copy = draft.clone();
+        let _ = agent::compute(kind, &mut copy);
+        computed = copy;
+        &computed
+    } else {
+        draft
+    };
     if holds(kind, draft, gate) {
         return None;
     }
-    // Column B's item 20 off a joint return says what opens column B.
+    // Column B's items 16 and 20 off a joint return say what opens column B.
     let gate = match gate {
-        Gate::TaxDue { spouse: true } if !holds(kind, draft, Gate::Joint) => Gate::Joint,
+        Gate::TaxDue { spouse: true } | Gate::Relief { spouse: true }
+            if !holds(kind, draft, Gate::Joint) =>
+        {
+            Gate::Joint
+        }
         gate => gate,
     };
     Some(refusal(kind.form_code(), gate))
@@ -1022,7 +1078,7 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
         Gate::Married => Some(1),
         Gate::SpouseIncome => Some(2),
         Gate::Joint => Some(5),
-        Gate::TaxDue { .. } => Some(6),
+        Gate::TaxDue { .. } | Gate::Relief { .. } => Some(6),
     }
 }
 
@@ -1159,6 +1215,13 @@ pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Stri
         .map(|entry| entry.key.clone())
         .filter(|key| tin_cell(kind, key).is_some())
         .collect();
+    // A closed rate box (1701MS item 16) shows nothing, not the field
+    // map's "0.0%" (display only; the upload keeps it).
+    for (code, key, _) in RATE_CELLS {
+        if *code == kind.form_code() && gated(kind, draft, key) {
+            map.insert((*key).to_string(), String::new());
+        }
+    }
     for key in keys {
         let Some((path, part)) = tin_cell(kind, &key) else {
             continue;
@@ -1473,6 +1536,41 @@ pub(super) fn cited_keys(kind: AgentFormKind, message: &str, keys: &mut Vec<Stri
     if keys.iter().any(under) {
         keys.retain(under);
     }
+}
+
+// ------------------------------------------------------------ notices
+
+/// Notices beside the form's own messages: nothing is changed, the filer
+/// checks (as the maintainer's D5 does for 1604E's changed rows). A 1701
+/// save file imported before PR 7's review kept its spouse's RDO only in
+/// `spouse.rdo_code`, which the upload never read: it filed `000`, and the
+/// page and the print now show what files. Such a joint draft says so on
+/// Part IV item 2; its stored bytes stay as they are.
+pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
+    if kind.form_code() != "1701" {
+        return Vec::new();
+    }
+    let Ok(form) = serde_json::from_value::<Form1701Draft>(draft.clone()) else {
+        return Vec::new();
+    };
+    let imported = form.spouse.rdo_code.trim();
+    if !form.spouse_column_active()
+        || !form.spouse_rdo_code.trim().is_empty()
+        || imported.is_empty()
+        || imported == "000"
+    {
+        return Vec::new();
+    }
+    vec![json!({
+        "field": "spouse_rdo_code",
+        "message": spouse_rdo_notice(imported),
+        "keys": ["frm1701:txtPg2I2SpouseRDOCode"],
+    })]
+}
+
+/// The notice of an imported 1701 spouse RDO the filing does not carry.
+pub(super) fn spouse_rdo_notice(imported: &str) -> String {
+    format!("Imported spouse RDO {imported} isn't on the filing; check it.")
 }
 
 // ------------------------------------------------------------ removes

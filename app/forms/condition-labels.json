@@ -64,7 +64,8 @@
    "A joint return (Items 4 and 5) and, in column B, Item 12 Graduated Income Tax Rates with business income at Item 11.": "Needs a joint return and, in column B, item 12 = Graduated with business income at item 11",
    "Item 19 column A, Income Tax Due at the Special/Preferential Rate, is more than zero.": "Needs a special-rate income tax due above zero in column A",
    "A joint return (Items 4 and 5) and Item 19 column B, Income Tax Due at the Special/Preferential Rate, is more than zero.": "Needs a joint return and a special-rate income tax due above zero in column B",
-   "A joint return (Items 4 and 5), and in column B the answers that open the same box of column A.": "Needs a joint return and, in column B, the answers that open it"
+   "A joint return (Items 4 and 5), and in column B the answers that open the same box of column A.": "Needs a joint return and, in column B, the answers that open it",
+   "Item 12 column A Exempt or Special/Preferential Rate.": "Needs item 12 = Exempt or Special/Preferential Rate in column A"
   },
   "1701Q": {
    "Base spouse branch is enabled for taxpayer type Single Proprietor or Professional and disabled/reset for Estate or Trust.": "Spouse details can't be entered on this page yet",

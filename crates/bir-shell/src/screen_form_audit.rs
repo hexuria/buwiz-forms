@@ -2397,22 +2397,24 @@ fn page_option_value(option: &Value) -> Option<String> {
 }
 
 /// Every choice a schema dropdown lists, sent the way the page sends it,
-/// is one the host accepts (unless the page shows the field locked, or
-/// faded by rule 6 until another answer opens it: PR 7's 1701MS item 18
-/// column B, whose choices
+/// is one the host accepts (unless the page shows the field locked, or the
+/// host refuses it while its part is closed: PR 7's
+/// `rows_annual_individual::gated`, 1701MS item 18 column B off a joint
+/// return, whose choices
 /// `annual_individual::form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return`
-/// sends on a joint return).
+/// sends on a joint return). A box rule 6 only fades is still sent.
 #[test]
 fn every_listed_dropdown_choice_is_accepted_by_the_host() {
     seed_fictional_profile();
     let mut refused = Vec::new();
+    let mut sent = BTreeSet::new();
     for form in schema() {
         let code = form["c"].as_str().unwrap_or_default();
         let Ok(opened) = open(code, page_period_for(code)) else {
             continue;
         };
         let locks = opened["locks"].as_object().cloned().unwrap_or_default();
-        let off = opened["off"].as_object().cloned().unwrap_or_default();
+        let kind = AgentFormKind::from_code(code).expect("schema form is an agent form");
         let fields = form["parts"]
             .as_array()
             .into_iter()
@@ -2424,10 +2426,11 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             if field["t"] != "sel"
                 || field["c"] == 1
                 || locks.contains_key(key)
-                || off.contains_key(key)
+                || rows_annual_individual::gated(kind, &opened["draft"], key)
             {
                 continue;
             }
+            sent.insert(format!("{code} {key}"));
             for option in field["o"].as_array().into_iter().flatten() {
                 let Some(value) = page_option_value(option) else {
                     continue;
@@ -2446,6 +2449,19 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                 }
             }
         }
+    }
+    // Selects rule 6 fades on a fresh return but the host takes: still sent.
+    for key in [
+        "1601C frm1601c:selTreaty",
+        "1602Q frm1602Q:lstSpecialTax",
+        "1604C frm1604c:txtRefMonth",
+        "1604C frm1604c:select13",
+        "1606 frm1606:selTreaty",
+        "1701Q frm1701q:txtSpouseRDOCode",
+        "1706 frm1706:selTreaty",
+        "2553 frm2553:lstTaxTreaty",
+    ] {
+        assert!(sent.contains(key), "{key} is sent");
     }
     // N03 (fixed): 2550M's Schedule 1 ATC selects list the form's own ATC
     // popup and the host writes them through the typed draft.

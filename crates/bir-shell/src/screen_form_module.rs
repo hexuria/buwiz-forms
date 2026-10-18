@@ -2065,11 +2065,13 @@ fn evaluate_here(
     } else {
         agent::validate(kind, &mut draft.clone())?
     };
-    Ok((
-        values_json(kind, draft)?,
-        errors_json(kind, &errors),
-        status,
-    ))
+    let mut errors = errors_json(kind, &errors);
+    // Notices the filer checks; nothing is changed (PR 7: an imported 1701
+    // spouse RDO the filing does not carry).
+    if let Value::Array(list) = &mut errors {
+        list.extend(rows_annual_individual::notices(kind, draft));
+    }
+    Ok((values_json(kind, draft)?, errors, status))
 }
 
 // --------------------------------------------------------- host functions
@@ -9743,6 +9745,13 @@ mod tests {
                                 )
                                 .ok()?;
                                 agent::compute(kind, &mut draft).ok()?;
+                                // A rate box's field map always shows a
+                                // rate; the draft says whether it was kept.
+                                if let Some(kept) =
+                                    rows_annual_individual::kept_past_gate(kind, &draft, key)
+                                {
+                                    return Some(shows_nothing(&json!(kept.to_string())));
+                                }
                                 let map = agent::field_map(kind, &draft).ok()?;
                                 Some(shows_nothing(&json!(
                                     map.get(key.as_str()).cloned().unwrap_or_default()
@@ -9811,11 +9820,12 @@ mod tests {
                 // items 17-18 and Part V (17), 1701MS item 5 and column B of
                 // Part I items 6-17 (26), plus 24 for 1701MS (PR 7 review):
                 // item 18 column B, column B's amounts and item 20 of each
-                // column. At pr0b-push none had an entry.
+                // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
+                // rate in each column. At pr0b-push none had an entry.
                 ("1700", 17),
                 ("1701", 35),
                 ("1701A", 17),
-                ("1701MS", 50),
+                ("1701MS", 52),
                 ("1701Q", 39),
                 ("1800", 1),
                 ("1801", 1),

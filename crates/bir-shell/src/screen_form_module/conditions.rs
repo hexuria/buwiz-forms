@@ -344,7 +344,7 @@ pub(super) mod tests {
 
     /// The items a form's print sheet prints ("31", "15B"), read from its
     /// writer-cells captions.
-    fn printed_items(code: &str) -> std::collections::BTreeSet<String> {
+    pub(crate) fn printed_items(code: &str) -> std::collections::BTreeSet<String> {
         let slug = super::super::schema_entry(code).unwrap()["s"]
             .as_str()
             .unwrap()
