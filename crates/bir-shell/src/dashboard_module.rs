@@ -571,10 +571,12 @@ mod tests {
             let mut removal =
                 bir_core::forms::form_2200a::Form2200ADraft::new_from_profile(&profile, 2026, 10);
             removal.day = 7;
+            removal.lifecycle.trigger_date_entered = true;
             db.save_queueable_draft(&removal).unwrap();
             let mut withholding =
                 bir_core::forms::form_1600wp::Form1600WpDraft::new_from_profile(&profile, 2026, 10);
             withholding.day = 5;
+            withholding.lifecycle.trigger_date_entered = true;
             db.save_queueable_draft(&withholding).unwrap();
             let undated =
                 bir_core::forms::form_2000ot::Form2000OTDraft::new_from_profile(&profile, 2026);
@@ -706,6 +708,54 @@ mod tests {
                 .iter()
                 .all(|r| r["form_code"] != "2000OT")
         );
+    }
+
+    /// Review F1: a 1600WP for September 2026 started on any day and saved
+    /// untouched holds the date its constructor pre-filled, not one the
+    /// filer entered: no dated row, listed with no withholding date yet.
+    /// The same return with its date typed is a dated row.
+    #[test]
+    fn an_untouched_prefilled_return_is_undated_until_its_date_is_typed() {
+        setup();
+        let id = with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1600WP"]).unwrap();
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let draft =
+                bir_core::forms::form_1600wp::Form1600WpDraft::new_from_profile(&profile, 2026, 9);
+            Ok(db.save_queueable_draft(&draft).unwrap())
+        })
+        .unwrap();
+        let window = args(&["2026-01-01", "2027-12-31"]);
+        let rows = to_json(&deadlines_between(&window).unwrap());
+        assert!(rows.as_array().unwrap().is_empty(), "no dated row: {rows}");
+        let listed = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        assert_eq!(listed[0]["form_code"], "1600WP");
+        assert_eq!(listed[0]["undated"][0]["draft_id"], id);
+        with_database(|db| {
+            let mut draft = db
+                .list_queueable_drafts::<bir_core::forms::form_1600wp::Form1600WpDraft>(HEAD, 2026)
+                .unwrap()
+                .into_iter()
+                .map(|(_, draft)| draft)
+                .next()
+                .unwrap();
+            draft.day = 14;
+            draft.lifecycle.trigger_date_entered = true;
+            db.save_queueable_draft(&draft).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&window).unwrap());
+        let rows = rows.as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["period_label"], "Withholding Sep 14, 2026");
+        assert_eq!(rows[0]["due_date"], "2026-10-05", "20 days is a Sunday");
+        let listed = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        assert!(listed[0]["undated"].as_array().unwrap().is_empty());
     }
 
     #[test]

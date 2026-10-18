@@ -2076,6 +2076,28 @@ fn mark_profile_edit(draft: &mut Value, key: &str) {
     }
 }
 
+/// Record that the filer wrote this as-needed return's trigger date (its
+/// removal, withholding or transaction date, decision D8c) when box `key`
+/// writes one of the form's trigger fields. A date the constructor
+/// pre-fills is not one the filer entered, so only a write from the page
+/// makes the return dated (`bir_core::forms::event_trigger`).
+fn mark_trigger_date(kind: AgentFormKind, draft: &mut Value, key: &str) {
+    let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
+    if fields.is_empty() {
+        return;
+    }
+    let writes_the_date = bound_paths(kind.definition(), key).iter().any(|path| {
+        path.trim_start_matches('/')
+            .split('/')
+            .next()
+            .is_some_and(|top| fields.contains(&top))
+    });
+    if writes_the_date {
+        let pointer = lifecycle_pointer(draft, "trigger_date_entered");
+        set_draft_path(draft, &pointer, json!(true));
+    }
+}
+
 /// How a profile note names a box's two values.
 #[derive(Clone, Copy)]
 enum NoteStyle {
@@ -2726,6 +2748,14 @@ fn open_screen_form(
             let typed = typed_from_key(year, key);
             write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
             write_typed_period(kind, &parts, &typed, &mut from_profile).map_err(host_error)?;
+            // A key that names a day (`MMDD`) is the date the filer typed
+            // for the sample this return starts from: where it is the
+            // trigger date, the return is dated (D8c).
+            if typed.day.is_some() {
+                for (part_key, _) in &parts {
+                    mark_trigger_date(kind, &mut draft, part_key);
+                }
+            }
         }
         // A stored Draft follows the tax profile in every box the filer did
         // not edit on it, saved quietly; the page says what changed.
@@ -3076,6 +3106,11 @@ fn screen_form_sample_period(
             let mut draft =
                 load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
             write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
+            // The filer typed this complete period: where it is the trigger
+            // date (a removal's Item 1), the return is dated (D8c).
+            for (key, _) in &parts {
+                mark_trigger_date(kind, &mut draft, key);
+            }
             agent::compute(kind, &mut draft).map_err(host_error)?;
             // A per-transaction form numbered by entry, not by date, cannot
             // match a typed date to a stored return.
@@ -4084,6 +4119,7 @@ fn apply_screen_edits(
                 {
                     mark_profile_edit(&mut next, &key);
                 }
+                mark_trigger_date(kind, &mut next, &key);
                 *draft = next;
             }
             Err(message) => {
@@ -5175,6 +5211,170 @@ mod tests {
                     "{code}: error key {key} is not in the schema"
                 );
             }
+        }
+    }
+
+    /// The key of the box bound to draft path `path` on `code`'s page.
+    fn key_bound_to(code: &str, path: &str) -> String {
+        let kind = kind_of(code).unwrap();
+        kind.definition()
+            .bindings
+            .keys()
+            .find(|key| bound_paths(kind.definition(), key) == [path])
+            .unwrap_or_else(|| panic!("{code}: no box bound to {path}"))
+            .clone()
+    }
+
+    /// The trigger date of the stored return `id`, as Home and the
+    /// Calendar read it.
+    fn stored_trigger(id: i64) -> Option<chrono::NaiveDate> {
+        with_database(|db| {
+            db.draft_event_trigger(id)
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap()
+        .map(|trigger| trigger.date)
+    }
+
+    fn stored_id(saved: &Value) -> i64 {
+        saved["draft"]["id"]
+            .as_i64()
+            .unwrap_or_else(|| panic!("saved has an id: {saved}"))
+    }
+
+    /// D8c review F1: a form whose constructor pre-fills its trigger date
+    /// (the excise returns and 1600WP: today or the month's end; 1706:
+    /// today or January 1; 2552: the date its slot names), opened and saved
+    /// untouched, holds no trigger date: it gets no dated row and stays in
+    /// Home's "no date yet" list. Typing the date on the page makes it dated.
+    #[test]
+    fn a_prefilled_trigger_date_counts_only_once_the_filer_types_it() {
+        setup();
+        for (code, period, fields, typed) in [
+            (
+                "2200A",
+                9,
+                ["/month", "/day", "/year"],
+                ["09", "14", "2026"],
+            ),
+            (
+                "2200AN",
+                9,
+                ["/month", "/day", "/year"],
+                ["09", "14", "2026"],
+            ),
+            (
+                "2200M",
+                9,
+                ["/month", "/day", "/year"],
+                ["09", "14", "2026"],
+            ),
+            (
+                "2200P",
+                9,
+                ["/month", "/day", "/year"],
+                ["09", "14", "2026"],
+            ),
+            (
+                "2200S",
+                9,
+                ["/month", "/day", "/year"],
+                ["09", "14", "2026"],
+            ),
+            (
+                "2200T",
+                9,
+                ["/month", "/day", "/year"],
+                ["09", "14", "2026"],
+            ),
+            (
+                "1600WP",
+                9,
+                ["/month", "/day", "/year"],
+                ["09", "14", "2026"],
+            ),
+            (
+                "1706",
+                1,
+                [
+                    "/transaction_month",
+                    "/transaction_day",
+                    "/transaction_year",
+                ],
+                ["09", "14", "2026"],
+            ),
+            (
+                "2552",
+                1,
+                [
+                    "/transaction_month",
+                    "/transaction_day",
+                    "/transaction_year",
+                ],
+                ["09", "14", "2026"],
+            ),
+        ] {
+            let opened = open(code, period);
+            let mut draft = opened["draft"].clone();
+            if code == "2552" {
+                // Item 11 picks 2552's rule; without it no date counts.
+                draft["transaction"] = json!("local_stock_exchange");
+            }
+            let untouched = save(code, &draft);
+            let id = stored_id(&untouched);
+            assert_eq!(stored_trigger(id), None, "{code}: untouched is undated");
+            assert!(
+                untouched["draft"].get("trigger_date_entered").is_none(),
+                "{code}: no marker stored on an untouched return"
+            );
+            // Each date box the page lets the filer type. A box that picks
+            // which return this is (the period's month and year of the
+            // excise returns and 1600WP) is refused as on the page; the day
+            // is the filer's.
+            let mut filled = untouched.clone();
+            let mut accepted = Vec::new();
+            for (path, value) in fields.iter().zip(typed) {
+                let key = key_bound_to(code, path);
+                let next = fill(code, &filled["draft"], json!({ key.clone(): value }));
+                match next["rejected"].get(&key) {
+                    None => {
+                        accepted.push(*path);
+                        filled = next;
+                    }
+                    Some(reason) => assert!(
+                        reason
+                            .as_str()
+                            .unwrap()
+                            .contains("picks which return this is"),
+                        "{code}: {key} refused: {reason}"
+                    ),
+                }
+            }
+            let dated = if accepted.iter().any(|path| path.ends_with("day")) {
+                assert_eq!(filled["draft"]["trigger_date_entered"], true, "{code}");
+                save(code, &filled["draft"])
+            } else {
+                // The whole date picks which return this is (2200AN, 2200S,
+                // 2552: their stored key is the date): the filer types it
+                // for a Form library sample, which saves as its return.
+                assert!(accepted.is_empty(), "{code}: {accepted:?}");
+                // August: September already has its return (one per month).
+                let answer = sample_period(TIN, code, typed_parts(code, 2026, 8, 14, 1));
+                let mut sample = answer["sample"]["draft"].clone();
+                assert_eq!(sample["trigger_date_entered"], true, "{code} sample");
+                if code == "2552" {
+                    sample["transaction"] = json!("local_stock_exchange");
+                }
+                save(code, &sample)
+            };
+            let held = &dated["draft"];
+            let part = |path: &str| held[path.trim_start_matches('/')].as_u64().unwrap() as u32;
+            assert_eq!(part(fields[1]), 14, "{code}: the typed day");
+            assert_eq!(
+                stored_trigger(stored_id(&dated)),
+                chrono::NaiveDate::from_ymd_opt(part(fields[2]) as i32, part(fields[0]), 14),
+                "{code}: the typed date is the trigger"
+            );
         }
     }
 

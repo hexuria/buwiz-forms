@@ -554,7 +554,7 @@ pub const EVENT_DUE_RULES: &[EventDueRule] = &[
     },
     EventDueRule {
         form_code: "0605",
-        trigger: "Due date",
+        trigger: "Due",
         due: DueFromTrigger::IsTheDueDate,
         rolls_to_business_day: true,
         description: "The due date of the tax type paid",

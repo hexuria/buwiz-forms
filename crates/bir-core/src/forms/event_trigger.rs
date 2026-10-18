@@ -8,6 +8,17 @@
 //! of 1801). Once a saved return holds that date it has a computed due date
 //! ([`crate::calendar_rules::DeadlineResolver::event_deadline`]); until then
 //! it has none.
+//!
+//! **Only a date the filer entered counts.** Several constructors pre-fill
+//! a real date (the excise returns and 1600WP: today or the month's last
+//! day; 1706: today or January 1; 2552: the date its caller passes), so a
+//! stored date alone does not say the event happened then. For those forms
+//! ([`PREFILLED_TRIGGER_FORMS`]) a Draft counts only once the page recorded
+//! that the filer wrote the date (`trigger_date_entered`, a flag on the
+//! flattened `SubmissionLifecycle`, absent and so byte-identical on every
+//! draft saved before it existed); a return that has left Draft was filed
+//! with its date, so it counts. The other as-needed forms start with the
+//! date blank (0, empty or `None`), so any date they hold was typed.
 
 use chrono::NaiveDate;
 use serde_json::Value;
@@ -37,21 +48,74 @@ fn date_from(draft: &Value, year: &str, month: &str, day: &str) -> Option<NaiveD
     NaiveDate::from_ymd_opt(year, number(draft, month)?, number(draft, day)?)
 }
 
-/// `MM/DD/YYYY` as typed.
+/// 2000OT's Item 1 as stored: the page writes `MM/DD/YYYY`; the desktop
+/// view stores the text as typed, so a month or day of one digit
+/// (`M/D/YYYY`) is read too. Anything else (another separator, a two-digit
+/// year, a day that does not exist, extra text) is no date.
 fn date_from_text(text: &str) -> Option<NaiveDate> {
-    NaiveDate::parse_from_str(text.trim(), "%m/%d/%Y").ok()
+    let parts: Vec<&str> = text.trim().split('/').collect();
+    let [month, day, year] = parts.as_slice() else {
+        return None;
+    };
+    let digits = |part: &str, lengths: std::ops::RangeInclusive<usize>| {
+        lengths.contains(&part.len()) && part.bytes().all(|b| b.is_ascii_digit())
+    };
+    if !digits(month, 1..=2) || !digits(day, 1..=2) || !digits(year, 4..=4) {
+        return None;
+    }
+    NaiveDate::from_ymd_opt(year.parse().ok()?, month.parse().ok()?, day.parse().ok()?)
+}
+
+/// The as-needed forms whose constructor pre-fills the trigger date.
+pub const PREFILLED_TRIGGER_FORMS: &[&str] = &[
+    "2200A", "2200AN", "2200M", "2200P", "2200S", "2200T", "1600WP", "1706", "2552",
+];
+
+/// The top-level draft fields that hold `form_code`'s trigger date (what
+/// the page records `trigger_date_entered` for). Empty for a form without one.
+pub fn trigger_paths(form_code: &str) -> &'static [&'static str] {
+    match form_code {
+        "2200A" | "2200AN" | "2200M" | "2200P" | "2200S" | "2200T" | "1600WP" => {
+            &["month", "day", "year"]
+        }
+        "0605" => &["due_date"],
+        "1706" | "1707" | "2552" => &["transaction_month", "transaction_day", "transaction_year"],
+        "2000OT" => &["transaction_date"],
+        "1800" => &["donation_month", "donation_day", "donation_year"],
+        "1801" => &["death_month", "death_day", "death_year"],
+        _ => &[],
+    }
+}
+
+/// Whether the date a draft holds was entered (see the module docs).
+fn date_was_entered(form_code: &str, draft: &Value) -> bool {
+    if !PREFILLED_TRIGGER_FORMS.contains(&form_code) {
+        return true;
+    }
+    let filed = draft
+        .get("status")
+        .and_then(Value::as_str)
+        .is_some_and(|status| status != "Draft");
+    filed
+        || draft
+            .get("trigger_date_entered")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
 }
 
 /// The trigger date of a saved return of `form_code` from its stored
 /// `form_drafts.data_json`. `None` for a form that is not as needed or has
-/// no trigger-date rule, a return that does not hold the date yet, or JSON
-/// that does not parse.
+/// no trigger-date rule, a return that does not hold an entered date yet, or
+/// JSON that does not parse.
 pub fn event_trigger_from_json(form_code: &str, data_json: &str) -> Option<EventTrigger> {
     if !DeadlineResolver::is_as_needed(form_code) {
         return None;
     }
     let mut rule = event_due_rule(form_code)?;
     let draft: Value = serde_json::from_str(data_json).ok()?;
+    if !date_was_entered(form_code, &draft) {
+        return None;
+    }
     let date = match form_code {
         // Item 1: the removal date (the excise returns), the withholding
         // date (1600WP).
@@ -126,13 +190,26 @@ mod tests {
         let p = profile();
         macro_rules! item1 {
             ($ty:ty, $code:literal) => {{
+                // As the constructor builds it: a pre-filled date, not entered.
                 let mut draft = <$ty>::new_from_profile(&p, 2026, 10);
+                assert_eq!(trigger_of($code, &draft), None, "{} untouched", $code);
+                assert!(
+                    !serde_json::to_string(&draft)
+                        .unwrap()
+                        .contains("trigger_date_entered"),
+                    "an unmarked draft stores no marker"
+                );
                 draft.month = 10;
                 draft.day = 7;
                 draft.year = 2026;
+                draft.lifecycle.trigger_date_entered = true;
                 let trigger = trigger_of($code, &draft).expect($code);
                 assert_eq!(trigger.date, ymd(2026, 10, 7), $code);
                 assert_eq!(trigger.rule.form_code, $code);
+                // A return that left Draft was filed with its date.
+                draft.lifecycle.trigger_date_entered = false;
+                draft.lifecycle.status = crate::forms::FilingStatus::Queued;
+                assert!(trigger_of($code, &draft).is_some(), "{} queued", $code);
             }};
         }
         item1!(super::super::form_2200a::Form2200ADraft, "2200A");
@@ -145,6 +222,7 @@ mod tests {
 
         let mut wp = super::super::form_1600wp::Form1600WpDraft::new_from_profile(&p, 2026, 10);
         wp.day = 5;
+        wp.lifecycle.trigger_date_entered = true;
         assert_eq!(
             trigger_of("1600WP", &wp).unwrap().rule.due,
             DueFromTrigger::DaysAfter(20)
@@ -157,6 +235,8 @@ mod tests {
         assert_eq!(trigger_of("0605", &f0605).unwrap().date, ymd(2026, 10, 15));
 
         let mut f1706 = super::super::form_1706::Form1706Draft::new_from_profile(&p, 2026, 1);
+        assert_eq!(trigger_of("1706", &f1706), None, "1706 untouched");
+        f1706.lifecycle.trigger_date_entered = true;
         (
             f1706.transaction_month,
             f1706.transaction_day,
@@ -178,6 +258,10 @@ mod tests {
         assert_eq!(trigger_of("2000OT", &dst).unwrap().date, ymd(2026, 12, 3));
 
         let mut stock = super::super::form_2552::Form2552Draft::new_from_profile(&p, 2026, 10, 8);
+        stock.set_transaction(super::super::form_2552::Form2552Transaction::LocalStockExchange);
+        assert_eq!(trigger_of("2552", &stock), None, "2552 untouched");
+        stock.lifecycle.trigger_date_entered = true;
+        stock.set_transaction(super::super::form_2552::Form2552Transaction::Unspecified);
         assert_eq!(
             trigger_of("2552", &stock),
             None,
@@ -202,6 +286,31 @@ mod tests {
         assert_eq!(trigger_of("1801", &estate).unwrap().date, ymd(2026, 2, 28));
     }
 
+    /// 2000OT's Item 1 as the page and the desktop view store it.
+    #[test]
+    fn form_2000ot_reads_the_slash_dates_it_stores_and_nothing_else() {
+        for (text, date) in [
+            ("12/03/2026", Some(ymd(2026, 12, 3))),
+            ("  12/03/2026 ", Some(ymd(2026, 12, 3))),
+            ("6/5/2026", Some(ymd(2026, 6, 5))),
+            ("06/5/2026", Some(ymd(2026, 6, 5))),
+            ("2026-12-03", None),
+            ("12-03-2026", None),
+            ("12/03/26", None),
+            ("02/30/2026", None),
+            ("12/03/2026 x", None),
+            ("1/2/3/2026", None),
+            ("", None),
+        ] {
+            let json = serde_json::json!({ "transaction_date": text }).to_string();
+            assert_eq!(
+                event_trigger_from_json("2000OT", &json).map(|t| t.date),
+                date,
+                "{text:?}"
+            );
+        }
+    }
+
     #[test]
     fn periodic_forms_and_unknown_json_have_no_trigger() {
         assert_eq!(
@@ -215,13 +324,24 @@ mod tests {
         );
         assert_eq!(event_trigger_from_json("2200A", "not json"), None);
         assert_eq!(
-            event_trigger_from_json("2200A", r#"{"month":0,"day":0,"year":0}"#),
+            event_trigger_from_json(
+                "2200A",
+                r#"{"month":0,"day":0,"year":0,"trigger_date_entered":true}"#
+            ),
             None,
             "an unset date is no trigger"
         );
         assert_eq!(
-            event_trigger_from_json("2200A", r#"{"month":2,"day":30,"year":2026}"#),
+            event_trigger_from_json(
+                "2200A",
+                r#"{"month":2,"day":30,"year":2026,"trigger_date_entered":true}"#
+            ),
             None
+        );
+        assert_eq!(
+            event_trigger_from_json("2200A", r#"{"month":2,"day":3,"year":2026}"#),
+            None,
+            "a pre-filled date nobody entered"
         );
         assert_eq!(
             event_trigger_from_json("2553", r#"{"month":2,"day":3,"year":2026}"#),

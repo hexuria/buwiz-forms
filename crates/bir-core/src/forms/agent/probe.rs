@@ -836,6 +836,7 @@ fn skipped(top: &str) -> bool {
             submission_put_started_at: Some(String::new()),
             submission_error: Some(String::new()),
             next_retry_at: Some(String::new()),
+            trigger_date_entered: true,
             ..Default::default()
         })
         .expect("lifecycle serializes");

@@ -76,6 +76,14 @@ pub struct SubmissionLifecycle {
     /// holds this value. Never filed or printed.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
+    /// The filer entered this as-needed return's trigger date (its removal,
+    /// withholding or transaction date) on the page, so it is no longer the
+    /// date the form pre-fills (decision D8c; see
+    /// [`crate::forms::event_trigger`]). Absent (false) on every draft saved
+    /// before it existed, so their stored bytes are unchanged. Never filed
+    /// or printed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trigger_date_entered: bool,
 }
 
 impl Default for SubmissionLifecycle {
@@ -101,6 +109,7 @@ impl Default for SubmissionLifecycle {
             next_retry_at: None,
             profile_edits: Vec::new(),
             profile_baseline: std::collections::BTreeMap::new(),
+            trigger_date_entered: false,
         }
     }
 }
