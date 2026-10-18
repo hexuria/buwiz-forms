@@ -9,7 +9,12 @@ use super::*;
 
 /// `(code, frozen sheet slug)` of the forms whose printed layout PR 9
 /// builds.
-const FORMS: &[(&str, &str)] = &[("0605", "0605-1999"), ("2000OT", "2000-ot-2018")];
+const FORMS: &[(&str, &str)] = &[
+    ("0605", "0605-1999"),
+    ("1606", "1606-2018"),
+    ("1706", "1706-2018"),
+    ("2000OT", "2000-ot-2018"),
+];
 
 fn writer_cells(slug: &str) -> Value {
     let path = format!(
@@ -549,4 +554,393 @@ fn pr9_2000ot_item_1_date_says_what_sets_it() {
     assert_eq!(started["values"][key], "10/15/2026");
     assert_eq!(started["draft"]["transaction_date"], "10/15/2026");
     assert!(started["locks"][key].is_string());
+}
+
+// ------------------------------------------------------------ 1606, 1706
+
+/// Every key writer-cells.json lists as not printed (`not_joined`).
+fn not_joined(slug: &str) -> BTreeSet<String> {
+    writer_cells(slug)["not_joined"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|entry| {
+            entry["writer_keys"]
+                .as_array()
+                .cloned()
+                .unwrap_or_else(|| vec![entry["writer_key"].clone()])
+        })
+        .filter_map(|k| k.as_str().map(str::to_string))
+        .collect()
+}
+
+/// form_page.js `isTinItem`: an item named for a TIN with three to five
+/// text boxes is drawn as one TIN comb.
+fn is_tin_item(it: &Value) -> bool {
+    let fields: Vec<&Value> = it["f"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["t"] != "hidden")
+        .collect();
+    let label = it["l"].as_str().unwrap();
+    (label.contains("TIN") || label.contains("Identification"))
+        && (3..=5).contains(&fields.len())
+        && fields.iter().all(|f| f["t"] == "text" || f["t"] == "int")
+}
+
+/// The items of `code` drawn under printed number `no`, in order.
+fn items_numbered(code: &str, no: &str) -> Vec<Value> {
+    schema_entry(code).unwrap()["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|part| part["items"].as_array().unwrap())
+        .filter(|it| it["no"] == no)
+        .cloned()
+        .collect()
+}
+
+/// 1606 R5.0, manual-2; 1706 R5.2, manual-3: each party's name, address
+/// and TIN sit under the sheet's row A of its item, the TIN one comb of
+/// its four boxes. The party the filer is not (1606's seller,
+/// 1706's buyer) is typed box by box into the one draft TIN, which prints
+/// whole in the sheet's TIN cell (writer-cells.json derived joins).
+#[test]
+fn pr9_1606_1706_party_tins_are_one_comb_and_typed_box_by_box() {
+    setup();
+    // The sheet's rows A-C are parties; the return's one party is row A:
+    // its name, address and TIN (writer-cells.json "7A Buyer's Name",
+    // "7A Buyer's Registered Address", "7A Buyer's TIN").
+    for (code, rows) in [("1606", ["7A", "8A"]), ("1706", ["6A", "7A"])] {
+        for no in rows {
+            let items = items_numbered(code, no);
+            assert_eq!(items.len(), 3, "{code} row {no}");
+            let tins: Vec<bool> = items.iter().map(is_tin_item).collect();
+            assert_eq!(tins, [false, false, true], "{code} row {no}");
+        }
+    }
+    // 1606 item 8C, the seller's TIN.
+    let opened = open("1606", 1);
+    let keys = [
+        "frm1606:txtTINS1",
+        "frm1606:txtTINS2",
+        "frm1606:txtTINS3",
+        "frm1606:txtBranchCodeS",
+    ];
+    for key in keys {
+        assert!(opened["locks"][key].is_null(), "1606 {key} is open");
+    }
+    let filled = fill(
+        "1606",
+        &opened["draft"],
+        json!({ keys[0]: "987", keys[1]: "654", keys[2]: "321", keys[3]: "00000" }),
+    );
+    assert!(filled["rejected"].as_object().unwrap().is_empty());
+    assert_eq!(filled["draft"]["seller_tin"], "98765432100000");
+    for (key, part) in keys.iter().zip(["987", "654", "321", "00000"]) {
+        assert_eq!(filled["values"][*key], part);
+    }
+    assert!(
+        printed_caption("1606-2018", "derived:seller_tin")
+            .unwrap()
+            .starts_with("8A")
+    );
+    assert_eq!(
+        printed("1606", &filled["draft"])["derived:seller_tin"],
+        "987-654-321-00000"
+    );
+    // A box out of order is refused; the draft keeps what it had.
+    let refused = fill("1606", &opened["draft"], json!({ keys[1]: "654" }));
+    assert!(refused["rejected"][keys[1]].is_string());
+    // 1706 item 7C, the buyer's TIN; its branch code is its own bound box.
+    let opened = open("1706", 1);
+    let keys = ["frm1706:txtTINB1", "frm1706:txtTINB2", "frm1706:txtTINB3"];
+    for key in keys {
+        assert!(opened["locks"][key].is_null(), "1706 {key} is open");
+    }
+    let filled = fill(
+        "1706",
+        &opened["draft"],
+        json!({ keys[0]: "111", keys[1]: "222", keys[2]: "333", "frm1706:txtBranchCodeB": "00000" }),
+    );
+    assert!(filled["rejected"].as_object().unwrap().is_empty());
+    assert_eq!(filled["draft"]["buyer_tin"], "111222333");
+    assert_eq!(
+        printed("1706", &filled["draft"])["derived:buyer_tin"],
+        "111-222-333-00000"
+    );
+    // A whole TIN pasted into the first box fills the comb.
+    let pasted = fill(
+        "1706",
+        &opened["draft"],
+        json!({ keys[0]: "444-555-666-00001" }),
+    );
+    assert_eq!(pasted["draft"]["buyer_tin"], "444555666");
+    assert_eq!(pasted["draft"]["buyer_branch_code"], "00001");
+}
+
+/// 1606 manual-1, 1706 R3.0: options read as printed, without their
+/// question (writer-cells.json xbox captions end with the option).
+#[test]
+fn pr9_1606_1706_options_read_as_printed() {
+    assert_eq!(labels_of("1606", "3"), ["Yes", "No"]);
+    assert_eq!(labels_of("1606", "6"), ["Private", "Government"]);
+    for (code, slug) in [("1606", "1606-2018"), ("1706", "1706-2018")] {
+        for d in drawn(code) {
+            if d.t != "radio" {
+                continue;
+            }
+            assert!(
+                !d.label.contains('?')
+                    && !d.label.starts_with("Classification of Property")
+                    && !d.label.starts_with("Schedule 2")
+                    && !d.label.starts_with("If overremittance")
+                    && !d.label.starts_with("Line "),
+                "{code} {}: {}",
+                d.key,
+                d.label
+            );
+            if let Some(caption) = printed_caption(slug, &d.key) {
+                let caption = caption.replace("Cash Sales", "Cash Sales");
+                assert!(
+                    caption.ends_with(&d.label) || caption.ends_with(&format!("{}?", d.label)),
+                    "{code} {}: {caption}",
+                    d.key
+                );
+            }
+        }
+    }
+    assert_eq!(labels_of("1706", "8"), ["Yes", "No"]);
+    assert_eq!(labels_of("1706", "9"), ["Yes", "No"]);
+    assert_eq!(
+        labels_of("1706", "18")[1..],
+        ["To be refunded", "To be issued a Tax Credit Certificate"]
+    );
+}
+
+/// 1606 R3.1, 1706 R3.1: what is drawn under Not on the printed sheet is
+/// what writer-cells.json lists as not printed; the FMV-basis tick boxes
+/// there say what ticks them (form_1606.rs/form_1706.rs field maps tick
+/// them from Schedule 1's amounts).
+#[test]
+fn pr9_1606_1706_boxes_off_the_sheet_are_not_printed() {
+    setup();
+    for (code, slug, prefix) in [
+        ("1606", "1606-2018", "frm1606:opt27"),
+        ("1706", "1706-2018", "frm1706:opt29"),
+    ] {
+        let off: Vec<Drawn> = drawn(code)
+            .into_iter()
+            .filter(|d| d.part == "Not on the printed sheet")
+            .collect();
+        assert!(off.len() >= 6, "{code}");
+        let printed_not = not_joined(slug);
+        for d in &off {
+            assert!(printed_not.contains(&d.key), "{code} {} is printed", d.key);
+        }
+        let opened = open(code, 1);
+        for letter in ["A", "B", "C", "D"] {
+            let key = format!("{prefix}{letter}");
+            assert!(opened["locks"][&key].is_string());
+            assert!(
+                opened["waits"][&key]
+                    .as_str()
+                    .is_some_and(|w| w.starts_with("Ticked by the form once Schedule 1's")),
+                "{code} {key}"
+            );
+        }
+        let code_key = format!("frm{code}:txtFMVLand");
+        let typed = fill(code, &opened["draft"], json!({ code_key: "1000" }));
+        assert_eq!(typed["values"][format!("{prefix}A")], "true", "{code}");
+    }
+}
+
+/// 1606 R6.1-R6.3, 1706 R6.0-R6.3: boxes the official page opens only on
+/// another answer (fields.json `enabled_when`) are off with what turns them
+/// on, take nothing while off, and keep what is typed once on.
+#[test]
+fn pr9_1606_1706_boxes_wait_for_their_answer() {
+    setup();
+    let cases: Vec<(&str, &str, Value, Value, &str)> = vec![
+        (
+            "1606",
+            "frm1606:selTreaty",
+            json!({"frm1606:rdTreaty:_1": "true"}),
+            json!("0"),
+            "0",
+        ),
+        (
+            "1606",
+            "frm1606:j_id393_7",
+            json!({"frm1606:j_id393_8": "true"}),
+            json!("Mixed use"),
+            "MIXED USE",
+        ),
+        (
+            "1606",
+            "frm1606:txtOthers20",
+            json!({"frm1606:j_id395:_5": "true"}),
+            json!("Swap"),
+            "SWAP",
+        ),
+        (
+            "1706",
+            "frm1706:j_id392:_1",
+            json!({"frm1706:opt4": "true"}),
+            json!("true"),
+            "true",
+        ),
+        (
+            "1706",
+            "frm1706:j_id393:_2",
+            json!({"frm1706:opt4": "true"}),
+            json!("true"),
+            "true",
+        ),
+        (
+            "1706",
+            "frm1706:selTreaty",
+            json!({"frm1706:rdTreaty:_1": "true"}),
+            json!("1"),
+            "1",
+        ),
+        (
+            "1706",
+            "frm1706:txtOthers21",
+            json!({"frm1706:j_id395:_5": "true"}),
+            json!("Swap"),
+            "SWAP",
+        ),
+    ];
+    let tags: Value = serde_json::from_str(include_str!(
+        "../../../../../app/forms/condition-labels.json"
+    ))
+    .unwrap();
+    let corpus = conditions::tests::derived();
+    for (code, key, answer, value, shown) in cases {
+        let opened = open(code, 1);
+        let condition = corpus[code][key]
+            .as_str()
+            .unwrap_or_else(|| panic!("{code} {key} has a corpus condition"));
+        assert_eq!(
+            opened["off"][key], tags["conditions"][code][condition],
+            "{code} {key}"
+        );
+        let closed = fill(code, &opened["draft"], json!({ key: value }));
+        assert_eq!(
+            closed["values"][key], opened["values"][key],
+            "{code} {key} takes nothing while off"
+        );
+        let on = fill(code, &opened["draft"], answer.clone());
+        let kept = fill(code, &on["draft"], json!({ key: value }));
+        assert!(kept["rejected"].as_object().unwrap().is_empty());
+        assert_eq!(kept["values"][key], shown, "{code} {key} once {answer}");
+    }
+    // 1706 item 18's boxes, now bound: off until item 18 is below zero.
+    let opened = open("1706", 1);
+    assert_eq!(
+        opened["off"]["frm1706:opt37:_1"],
+        "Needs item 18 below zero (an over-remittance)"
+    );
+}
+
+/// 1706 manual-0: item 3 shows the sheet's printed ATC captions (WI 450 /
+/// WC 450); the code the official program uploads beside each box (II420 /
+/// IC420, in the official sample payload) is not drawn and still uploads
+/// unchanged.
+#[test]
+fn pr9_1706_item_3_shows_the_printed_atc() {
+    setup();
+    let sheet = sheet_text("1706-2018");
+    assert_eq!(
+        labels_of("1706", "3"),
+        ["WI 450-Individual", "WC 450-Corporation"]
+    );
+    assert!(sheet.contains("WI 450-Individual") && sheet.contains("WC 450-Corporation"));
+    for key in ["frm1706:txt4", "frm1706:txt4C"] {
+        assert!(schema_keys("1706").contains(key));
+        assert!(!drawn("1706").iter().any(|d| d.key == key));
+    }
+    let official = std::fs::read_to_string(format!(
+        "{}/../bir-core/tests/sample-payloads/1706-03152025_T123456.official.xml",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    assert!(official.contains("frm1706:txt4=II420"));
+    let opened = open("1706", 1);
+    let map = agent::field_map(kind_of("1706").unwrap(), &opened["draft"]).unwrap();
+    assert_eq!(map["frm1706:txt4"], "II420");
+    assert_eq!(map["frm1706:txt4C"], "IC420");
+}
+
+/// Decision D6 (2026-10-18) on 1606 and 1706 (validation.0): a message that
+/// names the official program's item number names the printed one on the
+/// page. Oracles: each official text is one the form's own validator emits
+/// (its source, read here), and each rewritten one names only item numbers
+/// the page draws outside the Part IV schedules; a fresh return's messages
+/// read them. The checks and the filed data are the form's own.
+#[test]
+fn pr9_messages_name_the_printed_item_numbers() {
+    setup();
+    let source = |code: &str| {
+        std::fs::read_to_string(format!(
+            "{}/../bir-core/src/forms/form_{}.rs",
+            env!("CARGO_MANIFEST_DIR"),
+            code.to_ascii_lowercase()
+        ))
+        .unwrap()
+        .replace("\\\"", "\"")
+    };
+    for (code, official, printed) in rows_as_needed::PRINTED_MESSAGES {
+        assert!(
+            source(code).contains(&format!("\"{official}\"")),
+            "{code}: {official:?} is not the validator's"
+        );
+        let numbers: BTreeSet<String> = schema_entry(code).unwrap()["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| !p["n"].as_str().unwrap().starts_with("Part IV"))
+            .flat_map(|p| p["items"].as_array().unwrap())
+            .filter_map(|it| it["no"].as_str().map(str::to_string))
+            .collect();
+        // Every "Item N" outside a Part IV schedule names a drawn item.
+        if printed.contains("Schedule") {
+            continue;
+        }
+        let words: Vec<&str> = printed.split_whitespace().collect();
+        for (i, word) in words.iter().enumerate() {
+            if matches!(*word, "Item" | "Items") {
+                let no = words[i + 1].trim_end_matches(['.', ',']);
+                assert!(numbers.contains(no), "{code} {printed:?}: {no}");
+            }
+        }
+    }
+    let errors = |code: &str| -> Vec<String> {
+        open(code, 1)["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["message"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let shown = errors("1606");
+    assert!(
+        shown.contains(&"Please select an option for Item 9.".to_string()),
+        "{shown:?}"
+    );
+    assert!(shown.contains(&"Please select an option for Item 6.".to_string()));
+    let official = |code: &str, m: &String| {
+        rows_as_needed::PRINTED_MESSAGES
+            .iter()
+            .any(|(form, official, _)| *form == code && official == m)
+    };
+    assert!(!shown.iter().any(|m| official("1606", m)), "{shown:?}");
+    let shown = errors("1706");
+    assert!(
+        shown.contains(&"Please select an option for Item 3.".to_string()),
+        "{shown:?}"
+    );
+    assert!(!shown.iter().any(|m| official("1706", m)), "{shown:?}");
 }

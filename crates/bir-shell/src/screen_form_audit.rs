@@ -2088,13 +2088,20 @@ fn choose_save_reopen(code: &str, key: &str, value: &str) -> Reopened {
     let kind = kind_of(code).expect("form kind");
     let period = page_period_for(code);
     let opened = open(code, period).expect("form opens");
+    let mut edits = json!({ key: value });
+    // PR 9: 1606's and 1706's relief lists take a choice only once item 11
+    // is Yes (rules/forms fields.json enabled_when "Item 19/20 indicates
+    // ... relief"), so the filer answers Yes in the same batch first.
+    if let Some(yes) = match key {
+        "frm1606:selTreaty" => Some("frm1606:rdTreaty:_1"),
+        "frm1706:selTreaty" => Some("frm1706:rdTreaty:_1"),
+        _ => None,
+    } {
+        edits[yes] = json!("true");
+    }
     let filled = call(
         "screen_form_fill",
-        vec![
-            code.into(),
-            json(opened["draft"].clone()),
-            json(json!({ key: value })),
-        ],
+        vec![code.into(), json(opened["draft"].clone()), json(edits)],
     )
     .expect("fill runs");
     call(

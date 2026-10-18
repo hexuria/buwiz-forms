@@ -1917,6 +1917,9 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 // the error still carries its field and message.
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                // The printed item numbers where BIR's message names its
+                // program's own (decision D6; PR 9's forms).
+                let message = rows_as_needed::printed_message(kind, message).unwrap_or(message);
                 json!({"field": field, "message": message, "keys": keys})
             })
             .collect(),
@@ -9735,8 +9738,13 @@ mod tests {
                 ("1602Q", 3),
                 ("1604C", 5),
                 ("1604F", 1),
-                ("1606", 2),
+                // Plus 3 for 1606 (PR 9): item 11's list and Schedules 1
+                // and 2's specifications.
+                ("1606", 5),
                 ("1701Q", 39),
+                // 8 for 1706 (PR 9): items 8 and 9, item 11's list,
+                // Schedule 2's specification and item 18's two boxes.
+                ("1706", 8),
                 ("1800", 1),
                 ("1801", 1),
                 ("2000OT", 2),

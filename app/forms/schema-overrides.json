@@ -4981,79 +4981,79 @@
       "evidence": "Decision (a) layout: 2018 item 2 Amended Return? No"
     },
     "frm1606:j_id252:_1": {
-      "label": "Any Taxes Withheld? Yes",
-      "evidence": "P4: printed caption '3 Any Taxes Withheld? Yes' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Yes",
+      "evidence": "P4: printed caption '3 Any Taxes Withheld? Yes' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'Yes'"
     },
     "frm1606:j_id252:_2": {
-      "label": "Any Taxes Withheld? No",
-      "evidence": "P4: printed caption '3 Any Taxes Withheld? No' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "No",
+      "evidence": "P4: printed caption '3 Any Taxes Withheld? No' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'No'"
     },
     "frm1606:j_id392:_1": {
-      "label": "Category of Withholding Agent Private",
-      "evidence": "P4: printed caption '6 Category of Withholding Agent Private' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Private",
+      "evidence": "P4: printed caption '6 Category of Withholding Agent Private' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'Private'"
     },
     "frm1606:j_id392:_2": {
-      "label": "Category of Withholding Agent Government",
-      "evidence": "P4: printed caption '6 Category of Withholding Agent Government' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Government",
+      "evidence": "P4: printed caption '6 Category of Withholding Agent Government' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): the option without its question; html-frozen/1606-2018/writer-cells.json xbox_joins captions end with 'Government'"
     },
     "frm1606:j_id395:_1": {
-      "label": "Schedule 2 Cash Sales",
-      "evidence": "P4: printed caption 'Schedule 2 Cash Sales' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Cash Sales",
+      "evidence": "P4: printed caption 'Schedule 2 Cash Sales' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Cash Sales', without the schedule's name"
     },
     "frm1606:j_id395:_4": {
-      "label": "Schedule 2 Foreclosure Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Foreclosure Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Foreclosure Sale', without the schedule's name"
     },
     "frm1606:j_id395:_2": {
-      "label": "Schedule 2 Exempt",
-      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Exempt",
+      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Exempt', without the schedule's name"
     },
     "frm1606:j_id395:_5": {
-      "label": "Schedule 2 Others",
-      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Others",
+      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Others', without the schedule's name"
     },
     "frm1606:j_id395:_3": {
-      "label": "Schedule 2 Installment Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins)"
+      "label": "Installment Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1606-2018/writer-cells.json xbox_joins) | PR 9 (manual-1): html-frozen/1606-2018/writer-cells.json xbox_joins 'Schedule 2 Installment Sale', without the schedule's name"
     },
     "frm1606:j_id393:_1": {
-      "label": "Classification of Property: Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_1 caption 'Residential' under 'Classification of Property'"
+      "label": "Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_1 caption 'Residential' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_2": {
-      "label": "Classification of Property: Agricultural",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_2 caption 'Agricultural' under 'Classification of Property'"
+      "label": "Agricultural",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_2 caption 'Agricultural' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_3": {
-      "label": "Classification of Property: Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_3 caption 'Commercial' under 'Classification of Property'"
+      "label": "Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_3 caption 'Commercial' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_4": {
-      "label": "Classification of Property: Industrial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_4 caption 'Industrial' under 'Classification of Property'"
+      "label": "Industrial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_4 caption 'Industrial' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_5": {
-      "label": "Classification of Property: Condominium Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_5 caption 'Condominium Residential' under 'Classification of Property'"
+      "label": "Condominium Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_5 caption 'Condominium Residential' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393:_6": {
-      "label": "Classification of Property: Condominium Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_6 caption 'Condominium Commercial' under 'Classification of Property'"
+      "label": "Condominium Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio frm1606:j_id393:_6 caption 'Condominium Commercial' under 'Classification of Property' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:j_id393_8": {
-      "label": "Classification of Property: Others (Specify)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio j_id393_8 enables text j_id393_7, caption 'Others (Specify)'"
+      "label": "Others (Specify)",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio j_id393_8 enables text j_id393_7, caption 'Others (Specify)' | PR 9: the option without its item's heading (Classification)"
     },
     "frm1606:opt37:_1": {
-      "label": "If overremittance: To be refunded",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_1 caption 'To be refunded' under 'If overremittance mark one box only'"
+      "label": "To be refunded",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_1 caption 'To be refunded' under 'If overremittance mark one box only' | PR 9 (manual-1): the option without its question"
     },
     "frm1606:opt37:_2": {
-      "label": "If overremittance: To be issued a Tax Credit Certificate",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate'"
+      "label": "To be issued a Tax Credit Certificate",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1606.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate' | PR 9 (manual-1): the option without its question"
     },
     "layout": {
-      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1606-2018/index.html (BIR Form 1606 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1606-2018/writer-cells.json (joins and not_joined notes). Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1606-2018/index.html (BIR Form 1606 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1606-2018/writer-cells.json (joins and not_joined notes). Field keys, values, the official XML and the print map are unchanged; validation messages name the printed item numbers (maintainer decision D6, 2026-10-18: screen_form_module/rows_as_needed.rs printed_message).. The sheet's rows A-C are parties (one per row, 'Attach additional sheet/s, if necessary'); this return has one, on row A, so its name, address and TIN sit under the row's number (writer-cells.json joins '7A Buyer's Name', '7A Buyer's Registered Address', '7A Buyer's TIN').",
       "parts": [
         {
           "n": "Page 1",
@@ -5111,29 +5111,51 @@
               ]
             },
             {
-              "no": "7",
-              "l": "Buyer (7A Name, 7B Registered Address, 7C TIN)",
+              "no": "7A",
+              "l": "Buyer's Name",
               "k": [
-                "frm1606:txtBuyerName",
-                "frm1606:txtBuyerAddress",
-                "frm1606:txtTIN1",
-                "frm1606:txtTIN2",
-                "frm1606:txtTIN3",
-                "frm1606:txtBranchCode",
-                "frm1606:txtRDOCode"
+                "frm1606:txtBuyerName"
               ]
             },
             {
-              "no": "8",
-              "l": "Seller (8A Name, 8B Registered Address, 8C TIN)",
+              "no": "7A",
+              "l": "Buyer's Registered Address",
               "k": [
-                "frm1606:txtSellerName",
-                "frm1606:txtSellerAddress",
+                "frm1606:txtBuyerAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1606:txtTIN1",
+                "frm1606:txtTIN2",
+                "frm1606:txtTIN3",
+                "frm1606:txtBranchCode"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "Seller's Name",
+              "k": [
+                "frm1606:txtSellerName"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "Seller's Registered Address",
+              "k": [
+                "frm1606:txtSellerAddress"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "Seller's Taxpayer Identification Number (TIN)",
+              "k": [
                 "frm1606:txtTINS1",
                 "frm1606:txtTINS2",
                 "frm1606:txtTINS3",
-                "frm1606:txtBranchCodeS",
-                "frm1606:txtRDOCodeS"
+                "frm1606:txtBranchCodeS"
               ]
             },
             {
@@ -5410,6 +5432,14 @@
           "items": [
             {
               "no": "",
+              "l": "Buyer's and seller's RDO Codes (older layout; the 2018 sheet prints only item 5, the RDO of the property)",
+              "k": [
+                "frm1606:txtRDOCode",
+                "frm1606:txtRDOCodeS"
+              ]
+            },
+            {
+              "no": "",
               "l": "FMV basis boxes (older layout Item 27; the 2018 sheet prints the FMVs in Schedule 1)",
               "k": [
                 "frm1606:opt27A",
@@ -5453,24 +5483,24 @@
       "evidence": "Decision (a) layout: older-layout ATC text box of the corporate row (writer-cells not_joined: prints Item 9 from derived:atc_corporate_*)"
     },
     "frm1606:opt28A": {
-      "label": "Line A – Gross Selling Price",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28A matches 2018 Schedule 3 line A"
+      "label": "Gross Selling Price (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28A matches 2018 Schedule 3 line A | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28B": {
-      "label": "Line B – Total FMV of Land and Improvement",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28B matches 2018 Schedule 3 line B"
+      "label": "Total FMV of Land and Improvement (1B)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28B matches 2018 Schedule 3 line B | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28C": {
-      "label": "Line A – Bid Price (foreclosure sale)",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28C matches 2018 Schedule 3 line A"
+      "label": "Bid Price for Foreclosure Sale (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28C matches 2018 Schedule 3 line A | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28D": {
-      "label": "Line C – Installment Collected",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28D matches 2018 Schedule 3 line C"
+      "label": "Installment Collected (1C)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28D matches 2018 Schedule 3 line C | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:opt28E": {
-      "label": "Line D – Others",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28E matches 2018 Schedule 3 line D"
+      "label": "Others (1D)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1606-v2018.json binds it to /taxable_base_box; older-layout item 28E matches 2018 Schedule 3 line D | PR 9: the Schedule 3 line the box picks, by its printed line number, without the 'Line' prefix"
     },
     "frm1606:Habitual_1": {
       "label": "Yes",
@@ -5495,6 +5525,22 @@
     "frm1606:opt27D": {
       "label": "FMV of Improvements per BIR",
       "evidence": "Decision (a) layout: older-layout item 27D caption (forms-schema item 27D 'FMV of Improvements per BIR'); writer-cells not_joined: no such boxes on the 2018 sheet"
+    },
+    "frm1606:txtTINS1": {
+      "label": "TIN (1-3)",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
+    },
+    "frm1606:txtTINS2": {
+      "label": "TIN (4-6)",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
+    },
+    "frm1606:txtTINS3": {
+      "label": "TIN (7-9)",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
+    },
+    "frm1606:txtBranchCodeS": {
+      "label": "Branch code",
+      "evidence": "PR 9 (R5.0, manual-2): one part of item 8C, the seller's TIN (html-frozen/1606-2018/writer-cells.json derived:seller_tin '8A Seller's TIN')"
     }
   },
   "1701": {
@@ -15047,17 +15093,19 @@
       "evidence": "painted form_1706_view.rs (local:txn_description via binding /transaction_description): 'Schedule 2 — If exempt or others, specify'; writer-cells printed caption: 'If Exempt, or others, specify'"
     },
     "frm1706:txtDateMonthI": {
-      "label": "Schedule 2 Item 7 — Date of installment (MM)",
-      "evidence": "painted form_1706_view.rs (local:inst_date_month via binding /installment/date_month): 'Schedule 2 Item 7 — Date of installment (MM)'; writer-cells printed caption: 'Date of Installment (MM)' | fields.json logical_type date-component-string, max_length 2 — one component of a split date",
+      "label": "Month",
+      "evidence": "painted form_1706_view.rs (local:inst_date_month via binding /installment/date_month): 'Schedule 2 Item 7 — Date of installment (MM)'; writer-cells printed caption: 'Date of Installment (MM)' | fields.json logical_type date-component-string, max_length 2 — one component of a split date | PR 9 (manual-2): one part of Schedule 2 item 7, Date of Installment (MM/DD/YYYY) (html-frozen/1706-2018/writer-cells.json joins '7 Date of Installment')",
       "kind": "int"
     },
     "frm1706:txtDateDayI": {
       "kind": "int",
-      "evidence": "fields.json logical_type date-component-string, max_length 2 — one component of a split date"
+      "evidence": "fields.json logical_type date-component-string, max_length 2 — one component of a split date | PR 9 (manual-2): one part of Schedule 2 item 7, Date of Installment (MM/DD/YYYY) (html-frozen/1706-2018/writer-cells.json joins '7 Date of Installment')",
+      "label": "Day"
     },
     "frm1706:txtDateYearI": {
       "kind": "int",
-      "evidence": "fields.json logical_type date-component-string, max_length 4 — one component of a split date"
+      "evidence": "fields.json logical_type date-component-string, max_length 4 — one component of a split date | PR 9 (manual-2): one part of Schedule 2 item 7, Date of Installment (MM/DD/YYYY) (html-frozen/1706-2018/writer-cells.json joins '7 Date of Installment')",
+      "label": "Year"
     },
     "frm1706:selTreaty": {
       "kind": "sel",
@@ -15088,83 +15136,83 @@
       "evidence": "R05: the agent binds frm1706:txtRDOCode14A to /property_rdo_code and the form asks \"Please enter the RDO Code on Item 14A.\", but the extracted schema had no control for it; added beside the property location (Item 14). The RDO list comes from the catalog."
     },
     "frm1706:j_id392:_1": {
-      "label": "Principal residence? Yes",
-      "evidence": "P4: printed caption '8 Principal residence? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Yes",
+      "evidence": "P4: printed caption '8 Principal residence? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'Yes'"
     },
     "frm1706:j_id392:_2": {
-      "label": "Principal residence? No",
-      "evidence": "P4: printed caption '8 Principal residence? No' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "No",
+      "evidence": "P4: printed caption '8 Principal residence? No' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'No'"
     },
     "frm1706:j_id393:_1": {
-      "label": "New principal residence within 18 months? Yes",
-      "evidence": "P4: printed caption '9 New principal residence within 18 months? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Yes",
+      "evidence": "P4: printed caption '9 New principal residence within 18 months? Yes' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'Yes'"
     },
     "frm1706:j_id393:_2": {
-      "label": "New principal residence within 18 months? No",
-      "evidence": "P4: printed caption '9 New principal residence within 18 months? No' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "No",
+      "evidence": "P4: printed caption '9 New principal residence within 18 months? No' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9 (R3.0): the option without its question; html-frozen/1706-2018/writer-cells.json xbox_joins captions end with 'No'"
     },
     "frm1706:j_id395:_1": {
-      "label": "Schedule 2 Cash Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Cash Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Cash Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Cash Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Cash Sale', without the schedule's name"
     },
     "frm1706:j_id395:_4": {
-      "label": "Schedule 2 Foreclosure Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Foreclosure Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Foreclosure Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Foreclosure Sale', without the schedule's name"
     },
     "frm1706:j_id395:_2": {
-      "label": "Schedule 2 Exempt",
-      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Exempt",
+      "evidence": "P4: printed caption 'Schedule 2 Exempt' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Exempt', without the schedule's name"
     },
     "frm1706:j_id395:_5": {
-      "label": "Schedule 2 Others",
-      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Others",
+      "evidence": "P4: printed caption 'Schedule 2 Others' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Others', without the schedule's name"
     },
     "frm1706:j_id395:_3": {
-      "label": "Schedule 2 Installment Sale",
-      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins)"
+      "label": "Installment Sale",
+      "evidence": "P4: printed caption 'Schedule 2 Installment Sale' (html-frozen/1706-2018/writer-cells.json xbox_joins) | PR 9: html-frozen/1706-2018/writer-cells.json xbox_joins 'Schedule 2 Installment Sale', without the schedule's name"
     },
     "frm1706:j_id391:_1": {
-      "label": "Classification of Property: Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_1 caption 'Residential' under 'Classification of Property'"
+      "label": "Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_1 caption 'Residential' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_2": {
-      "label": "Classification of Property: Agricultural",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_2 caption 'Agricultural' under 'Classification of Property'"
+      "label": "Agricultural",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_2 caption 'Agricultural' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_3": {
-      "label": "Classification of Property: Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_3 caption 'Commercial' under 'Classification of Property'"
+      "label": "Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_3 caption 'Commercial' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_4": {
-      "label": "Classification of Property: Industrial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_4 caption 'Industrial' under 'Classification of Property'"
+      "label": "Industrial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_4 caption 'Industrial' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_5": {
-      "label": "Classification of Property: Condominium Residential",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_5 caption 'Condominium Residential' under 'Classification of Property'"
+      "label": "Condominium Residential",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_5 caption 'Condominium Residential' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_6": {
-      "label": "Classification of Property: Condominium Commercial",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_6 caption 'Condominium Commercial' under 'Classification of Property'"
+      "label": "Condominium Commercial",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio frm1706:j_id391:_6 caption 'Condominium Commercial' under 'Classification of Property' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:j_id391:_8": {
-      "label": "Classification of Property: Others (Specify)",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio j_id391:_8 enables text j_id391:_7, caption 'Others (Specify)'"
+      "label": "Others (Specify)",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio j_id391:_8 enables text j_id391:_7, caption 'Others (Specify)' | PR 9 (R3.0): the option without its item's heading (Classification)"
     },
     "frm1706:opt37:_1": {
-      "label": "If overremittance: To be refunded",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_1 caption 'To be refunded'"
+      "label": "To be refunded",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_1 caption 'To be refunded' | PR 9 (R3.0): the option without its question"
     },
     "frm1706:opt37:_2": {
-      "label": "If overremittance: To be issued a Tax Credit Certificate",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate'"
+      "label": "To be issued a Tax Credit Certificate",
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1706.hta radio opt37:_2 caption 'To be issued a Tax Credit Certificate' | PR 9 (R3.0): the option without its question"
     },
     "frm1706:opt4C": {
-      "label": "WC 450 – Corporation",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type corporation; 2018 item 3 prints 'WC 450-Corporation'"
+      "label": "WC 450-Corporation",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type corporation; 2018 item 3 prints 'WC 450-Corporation' | PR 9 (manual-0): html-frozen/1706-2018/writer-cells.json xbox_joins '3 ATC: WC 450-Corporation', as the sheet prints it"
     },
     "layout": {
-      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1706-2018/index.html (BIR Form 1706 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1706-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged; official messages keep the official program's item numbers.",
+      "evidence": "Decision (a), 2026-10-15: show the printed sheet's item numbers. Structure from html-frozen/1706-2018/index.html (BIR Form 1706 January 2018: items 1-4, Part I 5-11, Part II 12-18, Part IV Schedules 1-4) and html-frozen/1706-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged; validation messages name the printed item numbers (maintainer decision D6, 2026-10-18: screen_form_module/rows_as_needed.rs printed_message).. The sheet's rows A-C are parties (one per row, 'Attach additional sheet/s, if necessary'); this return has one, on row A, so its name, address and TIN sit under the row's number (writer-cells.json joins '7A Buyer's Name', '7A Buyer's Registered Address', '7A Buyer's TIN').",
       "parts": [
         {
           "n": "Page 1",
@@ -15191,9 +15239,7 @@
               "l": "ATC",
               "k": [
                 "frm1706:opt4",
-                "frm1706:txt4",
-                "frm1706:opt4C",
-                "frm1706:txt4C"
+                "frm1706:opt4C"
               ]
             },
             {
@@ -15216,30 +15262,51 @@
               ]
             },
             {
-              "no": "6",
-              "l": "Seller (6A Name, 6B Registered Address, 6C TIN)",
+              "no": "6A",
+              "l": "Seller's Name",
               "k": [
-                "frm1706:txtSellerName",
-                "frm1706:txtSellerAddress",
-                "frm1706:txtTIN1",
-                "frm1706:txtTIN2",
-                "frm1706:txtTIN3",
-                "frm1706:txtBranchCode",
-                "frm1706:txtRDOCode",
-                "frm1706:txtSellerRAddress"
+                "frm1706:txtSellerName"
               ]
             },
             {
-              "no": "7",
-              "l": "Buyer (7A Name, 7B Registered Address, 7C TIN)",
+              "no": "6A",
+              "l": "Seller's Registered Address",
               "k": [
-                "frm1706:txtBuyerName",
-                "frm1706:txtBuyerAddress",
+                "frm1706:txtSellerAddress"
+              ]
+            },
+            {
+              "no": "6A",
+              "l": "Seller's Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm1706:txtTIN1",
+                "frm1706:txtTIN2",
+                "frm1706:txtTIN3",
+                "frm1706:txtBranchCode"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Name",
+              "k": [
+                "frm1706:txtBuyerName"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Registered Address",
+              "k": [
+                "frm1706:txtBuyerAddress"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "Buyer's Taxpayer Identification Number (TIN)",
+              "k": [
                 "frm1706:txtTINB1",
                 "frm1706:txtTINB2",
                 "frm1706:txtTINB3",
-                "frm1706:txtBranchCodeB",
-                "frm1706:txtRDOCodeB"
+                "frm1706:txtBranchCodeB"
               ]
             },
             {
@@ -15389,32 +15456,6 @@
                 "frm1706:txtFMVZonal",
                 "frm1706:txtFMVBIR"
               ]
-            },
-            {
-              "no": "",
-              "l": "More property rows (the official program's Schedule 1 popup cells)",
-              "k": [
-                "frm1706:txtSchedModal1",
-                "frm1706:txtSchedModal2",
-                "frm1706:txtSchedModal3",
-                "frm1706:txtSchedModal4",
-                "frm1706:txtSchedModal5",
-                "frm1706:txtSchedModal6",
-                "frm1706:txtSchedModal7",
-                "frm1706:txtSchedModal8",
-                "frm1706:txtSchedModal9",
-                "frm1706:txtSchedModal10",
-                "frm1706:txtSchedModal11",
-                "frm1706:txtSchedModal12",
-                "frm1706:txtSchedModal13",
-                "frm1706:txtSchedModal14",
-                "frm1706:txtSchedModal15",
-                "frm1706:txtSchedModal16",
-                "frm1706:txtSchedModal17",
-                "frm1706:txtSchedModal18",
-                "frm1706:txtSchedModal19",
-                "frm1706:txtSchedModal20"
-              ]
             }
           ]
         },
@@ -15545,6 +15586,41 @@
           "items": [
             {
               "no": "",
+              "l": "Seller's and buyer's RDO Codes and the seller's residence address (older layout; the 2018 sheet prints only item 5, the RDO of the property, and the registered addresses)",
+              "k": [
+                "frm1706:txtRDOCode",
+                "frm1706:txtRDOCodeB",
+                "frm1706:txtSellerRAddress"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 1 popup cells of the official program (unutilized sales proceeds; the 2018 sheet prints no box for them)",
+              "k": [
+                "frm1706:txtSchedModal1",
+                "frm1706:txtSchedModal2",
+                "frm1706:txtSchedModal3",
+                "frm1706:txtSchedModal4",
+                "frm1706:txtSchedModal5",
+                "frm1706:txtSchedModal6",
+                "frm1706:txtSchedModal7",
+                "frm1706:txtSchedModal8",
+                "frm1706:txtSchedModal9",
+                "frm1706:txtSchedModal10",
+                "frm1706:txtSchedModal11",
+                "frm1706:txtSchedModal12",
+                "frm1706:txtSchedModal13",
+                "frm1706:txtSchedModal14",
+                "frm1706:txtSchedModal15",
+                "frm1706:txtSchedModal16",
+                "frm1706:txtSchedModal17",
+                "frm1706:txtSchedModal18",
+                "frm1706:txtSchedModal19",
+                "frm1706:txtSchedModal20"
+              ]
+            },
+            {
+              "no": "",
               "l": "FMV basis boxes (older layout Item 29; the 2018 sheet prints the FMVs in Schedule 1)",
               "k": [
                 "frm1706:opt29A",
@@ -15572,40 +15648,42 @@
       ]
     },
     "frm1706:opt4": {
-      "label": "WI 450 – Individual",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type individual; 2018 item 3 prints 'WI 450-Individual'"
+      "label": "WI 450-Individual",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /seller_type individual; 2018 item 3 prints 'WI 450-Individual' | PR 9 (manual-0): html-frozen/1706-2018/writer-cells.json xbox_joins '3 ATC: WI 450-Individual', as the sheet prints it"
     },
     "frm1706:txt4": {
       "label": "ATC code (WI 450)",
-      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box"
+      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box | PR 9 (manual-0): the ATC code the official program uploads (II420 / IC420, crates/bir-core/tests/sample-payloads/1706-03152025_T123456.official.xml) beside its item 3 box; html-frozen/1706-2018/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (WI 450 / WC 450); the boxes print from opt4 / opt4C', so the page shows the printed ATC as the box's label and does not draw the uploaded code",
+      "kind": "hidden"
     },
     "frm1706:txt4C": {
       "label": "ATC code (WC 450)",
-      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box"
+      "evidence": "Decision (a) layout: writer-cells not_joined: ATC code preprinted beside its item 3 box | PR 9 (manual-0): the ATC code the official program uploads (II420 / IC420, crates/bir-core/tests/sample-payloads/1706-03152025_T123456.official.xml) beside its item 3 box; html-frozen/1706-2018/writer-cells.json not_joined: 'ATC code preprinted beside its item 3 box (WI 450 / WC 450); the boxes print from opt4 / opt4C', so the page shows the printed ATC as the box's label and does not draw the uploaded code",
+      "kind": "hidden"
     },
     "frm1706:opt30A": {
-      "label": "Line A – Gross Selling Price",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option gross_selling_price; 2018 Schedule 4 line A"
+      "label": "Gross Selling Price (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option gross_selling_price; 2018 Schedule 4 line A | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30B": {
-      "label": "Line A – Bid Price (foreclosure sale)",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option bid_price; 2018 Schedule 4 line A"
+      "label": "Bid Price for Foreclosure Sale (1A)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option bid_price; 2018 Schedule 4 line A | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30C": {
-      "label": "Line B – Total FMV of Land and Improvement",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option fair_market_value; 2018 Schedule 4 line B"
+      "label": "Total FMV of Land and Improvement (1B)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option fair_market_value; 2018 Schedule 4 line B | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30D": {
-      "label": "Line D – Installment Collected",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option taxable_installment; 2018 Schedule 4 line D"
+      "label": "Installment Collected (1D)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option taxable_installment; 2018 Schedule 4 line D | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30E": {
-      "label": "Line C – Unutilized Portion of Sales Proceeds",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option unutilized_proceeds; 2018 Schedule 4 line C"
+      "label": "Unutilized Portion of Sales Proceeds (1C)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option unutilized_proceeds; 2018 Schedule 4 line C | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt30F": {
-      "label": "Line E – Others",
-      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option others; 2018 Schedule 4 line E"
+      "label": "Others (1E)",
+      "evidence": "Decision (a) layout: crates/bir-core/data/agent-forms/1706-v2018.json sets /taxable_base_option others; 2018 Schedule 4 line E | PR 9 (R3.0): the Schedule 4 line the box picks, by its printed line letter, without the 'Line' prefix"
     },
     "frm1706:opt29A": {
       "label": "FMV of Land per latest Tax Declaration",
@@ -15706,6 +15784,22 @@
     "frm1706:txtRate": {
       "label": "Tax Due",
       "evidence": "Decision (a) layout: html-frozen/1706-2018/writer-cells.json joins frm1706:txtRate to '14 Tax Due (Item 12 Multiply by Item 13)'"
+    },
+    "frm1706:txtTINB1": {
+      "label": "TIN (1-3)",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
+    },
+    "frm1706:txtTINB2": {
+      "label": "TIN (4-6)",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
+    },
+    "frm1706:txtTINB3": {
+      "label": "TIN (7-9)",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
+    },
+    "frm1706:txtBranchCodeB": {
+      "label": "Branch code",
+      "evidence": "PR 9 (R5.2, manual-3): one part of item 7C, the buyer's TIN (html-frozen/1706-2018/writer-cells.json derived:buyer_tin '7A Buyer's TIN')"
     }
   },
   "1707": {
