@@ -3019,6 +3019,27 @@ impl Database {
             .flatten())
     }
 
+    /// The trigger date the saved as-needed return `draft_id` holds and its
+    /// due-date rule (see [`crate::forms::event_trigger::event_trigger_from_json`]).
+    /// `None` when the row is gone, the form is not as needed, or the return
+    /// does not hold the date yet.
+    pub fn draft_event_trigger(
+        &self,
+        draft_id: i64,
+    ) -> Result<Option<crate::forms::event_trigger::EventTrigger>, DbError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT form_code, data_json FROM form_drafts WHERE id = ?1",
+                params![draft_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?;
+        Ok(row.and_then(|(form_code, data_json)| {
+            crate::forms::event_trigger::event_trigger_from_json(&form_code, &data_json)
+        }))
+    }
+
     /// The total amount payable the saved return `draft_id` computed for
     /// itself (see [`crate::forms::calendar_status::amount_payable_from_json`]).
     /// `None` when the row is gone or its form has no readable total.
