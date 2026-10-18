@@ -381,11 +381,11 @@ impl Form1600PtView {
             schedule.pop();
         }
         draft.schedule = schedule;
-        *draft.agent_name = self.input_text("name", cx);
-        *draft.registered_address = self.input_text("address", cx);
-        *draft.zip_code = self.input_text("zip", cx).trim().to_string();
-        *draft.contact_number = self.input_text("phone", cx).trim().to_string();
-        *draft.email = self.input_text("email", cx).trim().to_string();
+        draft.agent_name = self.input_text("name", cx).into();
+        draft.registered_address = self.input_text("address", cx).into();
+        draft.zip_code = self.input_text("zip", cx).trim().to_string().into();
+        draft.contact_number = self.input_text("phone", cx).trim().to_string().into();
+        draft.email = self.input_text("email", cx).trim().to_string().into();
         draft.tax_relief_specify = self.input_text("relief_spec", cx);
         // An empty penalty box means "use computed"; any amount overrides it.
         parse_errors.extend(penalty_section::apply_overrides(

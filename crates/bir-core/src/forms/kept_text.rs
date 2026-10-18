@@ -8,10 +8,14 @@
 //! `#[serde(default, skip_serializing_if = "KeptText::is_absent")]`), the
 //! way [`super::form_1701q::PenaltySlot`] keeps 1701Q's penalty keys.
 //!
-//! Every value the app writes is present: [`From`] and [`Deserialize`] mark
-//! it so, and only the missing key's default is absent. A present value
-//! serializes as the plain string, byte for byte what a `String` field
-//! wrote.
+//! A value the app assigns is present: [`From`] and [`Deserialize`] mark it
+//! so (the desktop views assign the boxes they read with `.into()`), and
+//! only the missing key's default is absent. An edit in place through
+//! [`DerefMut`] (`push_str`, `clear`, `*text = ...`) keeps the presence
+//! the value had: a missing box typed that way still files whenever it
+//! holds text, since only a blank absent value is left out. A present
+//! value serializes as the plain string, byte for byte what a `String`
+//! field wrote.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
