@@ -516,6 +516,9 @@ impl Form2200SDraft {
             self.surcharge = 0.0;
             self.interest = 0.0;
             self.compromise = 0.0;
+            // The three items are not on the return, so an amount entered
+            // for them while it was a prepayment goes with them.
+            self.penalty.clear_overrides();
         }
         if !self.other_scheme {
             self.other_scheme_text.clear();
