@@ -471,6 +471,9 @@ export class FormPageActions {
     // A draft saved before it kept its profile baseline: its boxes that
     // differ from the profile now, never changed by opening it.
     s.profileDiffers = r.profile_differs || [];
+    // A note a stored return shows once (the host records it as seen in
+    // app state: a filed third-quarter 1701Q charged under October 15).
+    s.notes = r.notes || [];
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
   }
@@ -3138,6 +3141,8 @@ function formContent(cx, app, width) {
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
   // A draft whose untouched profile boxes followed a later profile change.
   if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
+  // A one-time note from the host (shown on the opening it was given for).
+  for (const note of s.notes || []) page.child(Text(cx, "meta", note, "fg2").mb(SPACE[4]).whitespace_normal());
   if (s.editable && s.profileDiffers?.length) {
     page.child(
       div()

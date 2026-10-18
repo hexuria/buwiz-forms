@@ -906,6 +906,95 @@ fn form_1701q_penalties_are_computed_and_a_typed_one_overrides() {
     assert_eq!(field_map(Q, &edited["draft"])["frm1701q:txt64A"], "500.00");
 }
 
+/// Maintainer decision D3 (2026-10-18): a filed third-quarter 1701Q whose
+/// penalties were charged under the old October 15 deadline shows a note
+/// once: on the first opening only, recorded as seen in app state (the
+/// settings table), never in the return, whose stored bytes and filed
+/// amounts stay exactly as filed. A filed Q3 return measured from the
+/// November deadline, the same return still a Draft, and a filed return
+/// of another quarter show none.
+#[test]
+fn form_1701q_a_q3_return_filed_under_october_15_says_so_once() {
+    setup();
+    let year = YEAR - 1;
+    let opened = open_for(TIN, Q, year, 3);
+    let filled = fill(
+        Q,
+        &opened["draft"],
+        json!({
+            "frm1701q:optType_1": "true",
+            "frm1701q:optATC_1": "true",
+            "frm1701q:optMethodOfDeduction:_2": "true",
+            "frm1701q:txt36A": "2000000",
+        }),
+    );
+    let inputs = &filled["draft"]["penalty"]["computed_penalties"]["inputs"];
+    assert_eq!(
+        inputs["due_date"],
+        format!("{year}-11-17"),
+        "Nov 15 {year} is a Saturday"
+    );
+    let surcharge = amount(&filled["values"], "frm1701q:txt64A");
+    assert!(surcharge > 0.0);
+    // The Draft: no note.
+    let id = save(Q, &filled["draft"])["id"].as_i64().unwrap();
+    assert_eq!(open_for(TIN, Q, year, 3)["notes"], json!([]));
+    // Filed, measured from November: no note.
+    let stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    let file = |draft: &Value| {
+        let mut filed = with_status(draft, "Submitted");
+        filed["submitted_at"] = json!(format!("{year}-12-01T01:02:03+00:00"));
+        let text = serde_json::to_string(&filed).unwrap();
+        raw_exec(
+            &format!("UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = {id}"),
+            &[&text],
+        );
+        text
+    };
+    file(&stored);
+    assert_eq!(open_for(TIN, Q, year, 3)["notes"], json!([]));
+    // Filed as the app filed it before PR 5: penalties measured from
+    // October 15.
+    let mut october = stored.clone();
+    let old_due = json!(format!("{year}-10-15"));
+    october["penalty"]["penalty_due_date"] = old_due.clone();
+    october["penalty"]["computed_penalties"]["inputs"]["due_date"] = old_due;
+    let bytes = file(&october);
+    let key = format!("notice_seen:1701q_q3_due_nov15:{id}");
+    let seen = || {
+        with_database(|db| {
+            db.get_setting(&key)
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap()
+    };
+    assert_eq!(seen(), None);
+    let first = open_for(TIN, Q, year, 3);
+    assert_eq!(first["notes"], json!([rows_income_q::Q3_DEADLINE_NOTE]));
+    assert_eq!(
+        rows_income_q::Q3_DEADLINE_NOTE,
+        "The third-quarter 1701Q is now due November 15, not October 15. This return's penalties were counted from October 15: any charged for October 16 to November 15 may need checking."
+    );
+    assert_eq!(seen().as_deref(), Some("1"));
+    // Nothing on the return changes: its bytes and its filed amounts.
+    assert_eq!(raw_row(id), ("Submitted".to_string(), bytes.clone()));
+    assert_eq!(amount(&first["values"], "frm1701q:txt64A"), surcharge);
+    assert_eq!(first["editable"], false);
+    // Once per return: the next opening says nothing.
+    assert_eq!(open_for(TIN, Q, year, 3)["notes"], json!([]));
+    assert_eq!(raw_row(id).1, bytes);
+    // Another quarter filed under an October deadline says nothing.
+    let october = with_status(&october, "Submitted");
+    let mut first_quarter = october.clone();
+    first_quarter["quarter"] = json!(1);
+    let kind = kind_of(Q).unwrap();
+    assert!(rows_income_q::q3_charged_under_october(kind, &october));
+    assert!(!rows_income_q::q3_charged_under_october(
+        kind,
+        &first_quarter
+    ));
+}
+
 /// preview.0: the boxes the probe called app constants are the draft's:
 /// the quarter ticks follow the return's own quarter, and columns A and B
 /// of Schedules I and II and item 25A show on the page what the print

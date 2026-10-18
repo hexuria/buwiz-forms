@@ -2708,7 +2708,7 @@ fn open_screen_form(
     // The draft to show; the one the profile alone makes for this period
     // (what decides whether the profile filled a box); and for a sample, one
     // for another year and period (what tells which boxes follow the period).
-    let (draft, from_profile, build, filed_original, followed) = with_database(|db| {
+    let (draft, from_profile, build, filed_original, followed, notes) = with_database(|db| {
         let profile = db
             .get_profile_by_tin(&tin)
             .map_err(|error| host_error(error.to_string()))?
@@ -2776,7 +2776,14 @@ fn open_screen_form(
         } else {
             filed_original(db, kind, &draft).map_err(host_error)?
         };
-        Ok((draft, from_profile, build, filed_original, followed))
+        // A note a stored return shows once (D3: a filed third-quarter
+        // 1701Q charged under October 15), recorded as seen in app state.
+        let notes = if sample {
+            Vec::new()
+        } else {
+            rows_income_q::once_notes(db, kind, &draft)
+        };
+        Ok((draft, from_profile, build, filed_original, followed, notes))
     })?;
     Ok(async move {
         let mut opened =
@@ -2785,6 +2792,7 @@ fn open_screen_form(
                 .map_err(host_error)?;
         opened["filed_original"] = filed_original;
         opened["profile_updates"] = json!(followed);
+        opened["notes"] = json!(notes);
         Ok(json(opened))
     })
 }

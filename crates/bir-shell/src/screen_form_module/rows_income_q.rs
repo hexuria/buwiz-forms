@@ -485,6 +485,82 @@ fn fill_cell(
     }
 }
 
+/// The one-time note on a filed third-quarter 1701Q charged under the old
+/// deadline (maintainer decision D3, 2026-10-18).
+pub(crate) const Q3_DEADLINE_NOTE: &str = "The third-quarter 1701Q is now due November 15, not October 15. This return's penalties were counted from October 15: any charged for October 16 to November 15 may need checking.";
+
+/// Whether `draft` is a third-quarter 1701Q that left Draft (queued,
+/// submitted, confirmed or paid) with penalties charged under the October
+/// 15 deadline the app resolved before PR 5. A column counts when it files
+/// a surcharge, interest or compromise and the deadline it was measured
+/// from is October of the taxable year: the engine's own input
+/// (`computed_penalties.inputs.due_date`), else the deadline the return
+/// kept (`penalty_due_date`), else, with neither stored (typed before the
+/// penalties were computed), the October deadline the app gave then.
+pub(super) fn q3_charged_under_october(kind: AgentFormKind, draft: &Value) -> bool {
+    use chrono::Datelike;
+    if !is_1701q(kind) {
+        return false;
+    }
+    let Ok(form) = typed(draft) else {
+        return false;
+    };
+    if form.quarter != 3 || form.lifecycle.is_editable() {
+        return false;
+    }
+    Form1701QDraft::penalty_declarations().iter().any(|items| {
+        let charged = items.filed(&form).iter().any(|amount| *amount != 0.0);
+        let state = (items.state)(&form);
+        let due = state
+            .computed_penalties
+            .as_ref()
+            .map(|computed| computed.inputs.due_date)
+            .or(state.penalty_due_date);
+        charged
+            && (items.applies)(&form)
+            && due.is_none_or(|due| due.year() == i32::from(form.taxable_year) && due.month() == 10)
+    })
+}
+
+/// The settings key that records [`Q3_DEADLINE_NOTE`] was shown for the
+/// stored return `id`. App state, never the return: a filed return's bytes
+/// do not change.
+fn q3_note_seen_key(id: i64) -> String {
+    format!("notice_seen:1701q_q3_due_nov15:{id}")
+}
+
+/// The one-time notes `draft` shows on opening: [`Q3_DEADLINE_NOTE`] the
+/// first time a filed third-quarter 1701Q charged under October 15 opens
+/// (D3), recorded as seen in the settings table. A note that cannot be
+/// read or recorded is left out; it never stops the return opening, and
+/// the filed amounts are never changed.
+pub(super) fn once_notes(
+    db: &bir_core::db::Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Vec<String> {
+    let Some(id) = draft["id"].as_i64() else {
+        return Vec::new();
+    };
+    if !q3_charged_under_october(kind, draft) {
+        return Vec::new();
+    }
+    let key = q3_note_seen_key(id);
+    match db.get_setting(&key) {
+        Ok(None) => {}
+        Ok(Some(_)) => return Vec::new(),
+        Err(error) => {
+            tracing::warn!("1701Q: reading {key} failed: {error}");
+            return Vec::new();
+        }
+    }
+    if let Err(error) = db.set_setting(&key, "1") {
+        tracing::warn!("1701Q: recording {key} failed: {error}");
+        return Vec::new();
+    }
+    vec![Q3_DEADLINE_NOTE.to_string()]
+}
+
 /// 1702Q's `resultOtherSpecify`: BIR's internal total of the Schedule 4
 /// other credits, not a box of the printed sheet.
 pub(crate) const INTERNAL_TOTAL: &str = "resultOtherSpecify";
