@@ -422,6 +422,8 @@ export class FormPageActions {
         s.chromeSnapshot = this.chromeSnapshot();
         acx.notify();
         if (then) then(null, acx);
+        // Once the page has drawn the opening, its one-time notes are seen.
+        this.recordNotesWhenShown(acx, token);
       } catch (e) {
         if (token !== this.token) return;
         this.state.loading = false;
@@ -472,19 +474,38 @@ export class FormPageActions {
     // differ from the profile now, never changed by opening it.
     s.profileDiffers = r.profile_differs || [];
     // A note a stored return shows once (a filed third-quarter 1701Q
-    // charged under October 15): recorded seen now that this opening has
-    // it, and shown only if this call recorded it (another opening did not).
-    s.notes = [];
-    if (r.notes?.length) {
-      try {
-        const recorded = this.app.store.call("screen_form_notes_seen", r.notes.map((n) => n.key));
-        s.notes = r.notes.filter((n) => recorded.includes(n.key)).map((n) => n.text);
-      } catch (_) {
-        s.notes = [];
-      }
-    }
+    // charged under October 15). Shown now; recorded seen only once the
+    // page has drawn it (recordNotesWhenShown), so an opening that fails
+    // before then offers it again.
+    s.notes = (r.notes || []).map((n) => ({ key: n.key, text: n.text, recorded: false }));
+    s.notesRendered = false;
     s.saved = Boolean(r.draft && r.draft.id);
     this.setErrors(r.errors);
+  }
+
+  /**
+   * Record the opening's one-time notes seen once the page has drawn them
+   * (`s.notesRendered`, set by the render that shows them), waiting a
+   * frame at a time. The host records each only if not yet recorded; a
+   * note another opening recorded first is taken off this page. Nothing is
+   * recorded for a page that never drew its notes or was left.
+   */
+  recordNotesWhenShown(cx, token, tries = 0) {
+    const s = this.state;
+    if (token !== this.token || !s?.notes?.some((n) => !n.recorded)) return;
+    if (!s.notesRendered) {
+      if (tries < 50) cx.timer.after(100, (tcx) => this.recordNotesWhenShown(tcx, token, tries + 1));
+      return;
+    }
+    const pending = s.notes.filter((n) => !n.recorded);
+    let recorded;
+    try {
+      recorded = this.app.store.call("screen_form_notes_seen", pending.map((n) => n.key));
+    } catch (_) {
+      return;
+    }
+    s.notes = s.notes.filter((n) => n.recorded || recorded.includes(n.key)).map((n) => ({ ...n, recorded: true }));
+    this.notify(cx);
   }
 
   /** Create InputStates for one part's text-like controls (only once). */
@@ -3172,7 +3193,8 @@ function formContent(cx, app, width) {
   // A draft whose untouched profile boxes followed a later profile change.
   if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
   // A one-time note from the host (shown on the opening it was given for).
-  for (const note of s.notes || []) page.child(Text(cx, "meta", note, "fg2").mb(SPACE[4]).whitespace_normal());
+  for (const note of s.notes || []) page.child(Text(cx, "meta", note.text, "fg2").mb(SPACE[4]).whitespace_normal());
+
   if (s.editable && s.profileDiffers?.length) {
     page.child(
       div()
@@ -3358,6 +3380,14 @@ function formContent(cx, app, width) {
 }
 
 export function renderFormPage(cx, app, width) {
+  const page = drawFormPage(cx, app, width);
+  // The page drew whole: its one-time notes are on screen (recordNotesWhenShown).
+  const s = app.formUi?.state;
+  if (s?.notes?.length && !s.loading && !s.error) s.notesRendered = true;
+  return page;
+}
+
+function drawFormPage(cx, app, width) {
   const c = formContent(cx, app, width);
   if (c.early) return c.early;
   if (!c.parts) return c.page;

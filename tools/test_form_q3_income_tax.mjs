@@ -142,7 +142,12 @@ let editable = true;
 const opened = () => ({
   draft: { id: 7 }, status: editable ? "Draft" : "Submitted", editable, values: { ...hostValues }, options: {}, locks: {},
   profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: {}, penalties: [], pools: {}, errors: [],
+  notes: offeredNotes.map((n) => ({ ...n })),
 });
+// D3: the one-time notes the host offers, and the keys it has recorded seen
+// (screen_form_notes_seen records each only if not yet recorded).
+let offeredNotes = [];
+const seenKeys = new Set();
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
   invalidate() {}, toast() {}, startNewReturn() {},
@@ -168,6 +173,11 @@ const app = {
       }
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...(args[1].values || hostValues) }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
+      if (name === "screen_form_notes_seen") {
+        const fresh = args[0].filter((key) => !seenKeys.has(key));
+        for (const key of fresh) seenKeys.add(key);
+        return fresh;
+      }
       throw Error(name);
     },
   },
@@ -286,3 +296,39 @@ act(undo);
 assert.equal(fills().length, fillsAfterSave, "and a stale Undo does nothing");
 assert.equal(ui.state.values[CIVIL], "Widow/er");
 console.log("PASS 1701Q Civil Status: leaving Married asks first, Undo brings it back, a save retires the Undo.");
+
+// ---- D3: a one-time note is recorded seen only once the page drew it.
+const NOTE = { key: "notice_seen:1701q_q3_due_nov15:7", text: "The third-quarter 1701Q is now due November 15, or the next business day." };
+const noteCalls = () => calls.filter((c) => c[0] === "screen_form_notes_seen");
+editable = false;
+offeredNotes = [NOTE];
+timers.length = 0;
+// An opening the page never draws (it fails before its first frame):
+// nothing is recorded, so the next opening offers the note again.
+ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 3 }, cx);
+await settle();
+assert.equal(ui.state.notes.length, 1, "the opening holds the note");
+runTimers();
+assert.equal(noteCalls().length, 0, "not drawn, not recorded");
+assert.equal(seenKeys.size, 0);
+// Drawn: shown, then recorded once.
+await openAll();
+assert.ok(texts.includes(NOTE.text), "the note shows");
+assert.equal(noteCalls().length, 0, "recorded only after the frame");
+runTimers();
+assert.deepEqual(noteCalls().at(-1)[1], [NOTE.key], "then recorded");
+assert.ok(seenKeys.has(NOTE.key));
+frame();
+assert.ok(texts.includes(NOTE.text), "and it stays on this page");
+runTimers();
+assert.equal(noteCalls().length, 1, "recorded once");
+// Two openings at once: the other recorded it first, so this page drops it.
+await openAll();
+assert.ok(texts.includes(NOTE.text));
+runTimers();
+assert.equal(noteCalls().length, 2);
+frame();
+assert.ok(!texts.includes(NOTE.text), "a note another opening recorded is taken off");
+offeredNotes = [];
+editable = true;
+console.log("PASS D3: a one-time note is recorded seen only after the page drew it, and shows once.");
