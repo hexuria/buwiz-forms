@@ -24,8 +24,8 @@
 //!
 //! No migration: a Draft of a pre-filled form saved by the first D8c build
 //! (which dated any held date) and never re-typed has no flag and is now
-//! undated. That build was never released (its branch chain is unmerged),
-//! so no stored return depends on the old reading.
+//! undated. The D8c build was never released (its branch chain is
+//! unmerged), so no released return depends on the old reading.
 
 use chrono::NaiveDate;
 use serde_json::Value;
@@ -349,37 +349,47 @@ mod tests {
         assert_eq!(trigger_of("1801", &estate).unwrap().date, ymd(2026, 2, 28));
     }
 
-    /// 2000OT's Item 1 as the page and the desktop view store it.
+    /// 2000OT's Item 1 is dated exactly when the form's own validator takes
+    /// it (no Item 1 error), so the two cannot drift. Both read the real
+    /// clock: the future dates are relative to today.
     #[test]
     fn form_2000ot_dates_only_what_its_validator_accepts() {
-        // Today pinned to October 19, 2026: the validator refuses a future
-        // date and one before 2018.
-        super::super::penalty_items::with_clock(ymd(2026, 10, 19), || {
-            for (text, date) in [
-                ("09/03/2026", Some(ymd(2026, 9, 3))),
-                ("  09/03/2026 ", Some(ymd(2026, 9, 3))),
-                ("10/19/2026", Some(ymd(2026, 10, 19))),
-                ("01/01/2018", Some(ymd(2018, 1, 1))),
-                ("10/20/2026", None),
-                ("12/31/2017", None),
-                ("01/01/0001", None),
-                ("1/2/2026", None),
-                ("6/5/2026", None),
-                ("2026-09-03", None),
-                ("09-03-2026", None),
-                ("09/03/26", None),
-                ("02/30/2026", None),
-                ("09/03/2026 x", None),
-                ("", None),
-            ] {
-                let json = serde_json::json!({ "transaction_date": text }).to_string();
-                assert_eq!(
-                    event_trigger_from_json("2000OT", &json).map(|t| t.date),
-                    date,
-                    "{text:?}"
-                );
+        use super::super::FormValidator as _;
+        let today = chrono::Local::now().date_naive();
+        let as_text = |date: NaiveDate| date.format("%m/%d/%Y").to_string();
+        let mut accepted = 0;
+        for text in [
+            "09/03/2025".to_string(),
+            "  09/03/2025 ".to_string(),
+            as_text(today),
+            as_text(today + chrono::Duration::days(1)),
+            "01/01/2018".to_string(),
+            "12/31/2017".to_string(),
+            "01/01/0001".to_string(),
+            "1/2/2026".to_string(),
+            "6/5/2025".to_string(),
+            "2025-09-03".to_string(),
+            "09-03-2025".to_string(),
+            "09/03/25".to_string(),
+            "02/30/2025".to_string(),
+            "09/03/2025 x".to_string(),
+            String::new(),
+        ] {
+            let mut draft =
+                super::super::form_2000ot::Form2000OTDraft::new_from_profile(&profile(), 2025);
+            draft.transaction_date = text.clone();
+            let validator_takes_it = !draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "transaction_date");
+            let dated = trigger_of("2000OT", &draft);
+            assert_eq!(dated.is_some(), validator_takes_it, "{text:?}");
+            if let Some(trigger) = dated {
+                assert_eq!(as_text(trigger.date), text.trim(), "{text:?}");
+                accepted += 1;
             }
-        });
+        }
+        assert_eq!(accepted, 4, "the four valid dates");
     }
 
     #[test]

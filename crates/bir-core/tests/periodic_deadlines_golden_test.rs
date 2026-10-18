@@ -1,9 +1,10 @@
 //! Regression snapshot of the deadline rows `deadlines_for_forms` resolves:
 //! it pins what the code did, not an independent reading of the BIR
 //! calendar. The dated sections were recorded from the code before the D8
-//! deadline changes (D8 removed exactly 2200M's 24 quarterly rows from
-//! them); the event-based section was recorded after D8, from the code with
-//! D8 applied (2200M as needed, 2000OT added).
+//! deadline changes; D8 then removed the 24 2200M quarterly rows from them
+//! (2200M is due per removal), and nothing else in them changed. The
+//! event-based section was recorded after D8, from the code with D8
+//! applied (2200M as needed, 2000OT added).
 //!
 //! A fixed profile (every form code the official calendar rules name) over
 //! fixed taxable years, once with no overrides and once with a fixed set of
