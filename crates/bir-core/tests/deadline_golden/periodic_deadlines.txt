@@ -892,3 +892,23 @@
 1702MX|Annual { taxable_year: 2027 }|2028-04-15|2028-04-17|2027-01-01|WeekendAdjusted
 1702RT|Annual { taxable_year: 2027 }|2028-04-15|2028-04-17|2027-01-01|WeekendAdjusted
 1707A|Annual { taxable_year: 2027 }|2028-04-15|2028-04-17|2027-01-01|WeekendAdjusted
+# event-based obligations
+2552|2552|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+1600WP|1600-WP|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+1706|1706|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+1707|1707|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+1800|1800|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+1801|1801|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+0605|0605|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+0611A|0611-A|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+0613|0613|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+1905|1905|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2200A|2200-A|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2200AN|2200-AN|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2200M|2200-M|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2200P|2200P|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2200S|2200-S|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2200T|2200-T|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2553|2553|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2000|2000|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased
+2000OT|2000-OT|Taxpayer transaction or statutory event|Depends on the specific BIR form and triggering event|EventBased

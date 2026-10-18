@@ -495,8 +495,9 @@ pub struct EventDueRule {
     pub trigger: &'static str,
     pub due: DueFromTrigger,
     /// Whether a due date on a weekend or holiday moves to the next working
-    /// day. The excise returns are due on removal: the removal date stands,
-    /// as their penalties measure it.
+    /// day. The excise returns are due on removal: the removal date stands.
+    /// That matches PR 11 (not yet merged into integration), which measures
+    /// the 2200 penalties from the typed removal date with no move.
     pub rolls_to_business_day: bool,
     pub description: &'static str,
     /// Where the rule is printed.

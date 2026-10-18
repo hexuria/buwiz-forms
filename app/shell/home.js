@@ -60,8 +60,11 @@ export function dueRow(cx, app, d, width) {
         ? StatusChip(cx, "due_soon", n)
         : Text(cx, "meta", n === 0 ? "Today" : n < 0 ? `${-n} days ago` : `In ${n} days`, "fg2");
   const compact = width < 560;
-  // Two as-needed returns can share a year and period (two removals in a
-  // month): their saved return tells them apart.
+  // An as-needed row is keyed by its saved return as well. For the 2200
+  // family a month holds one return (a stored return is matched by month
+  // and year, an earlier maintainer decision), so two removals in one month
+  // are one return; other as-needed forms can hold several returns that
+  // share a year and period column, and the return keeps their rows apart.
   const key = `due-${d.tin}-${d.form_code}-${d.taxable_year}-${d.period}${d.frequency === "As needed" ? `-${d.draft_id}` : ""}`;
   const row = ListRow(cx, key, {
     onClick: (_e, cx) => {

@@ -1,9 +1,13 @@
-//! Golden pin of the periodic deadline rows `deadlines_for_forms` resolves.
+//! Regression snapshot of the deadline rows `deadlines_for_forms` resolves,
+//! recorded from the code before the D8 deadline changes (so it pins what
+//! the code did, not an independent reading of the BIR calendar).
 //!
 //! A fixed profile (every form code the official calendar rules name) over
 //! fixed taxable years, once with no overrides and once with a fixed set of
-//! holiday overrides, rendered one row per line. Any change to a periodic
-//! row shows as a diff of `deadline_golden/periodic_deadlines.txt`.
+//! holiday overrides, rendered one row per line, then the event-based rows
+//! (the as-needed obligations, which have no date and so no year), one per
+//! line. Any change shows as a diff of
+//! `deadline_golden/periodic_deadlines.txt`.
 //!
 //! Regenerate (only for an intended change, and review the diff) with
 //! `BIR_UPDATE_DEADLINE_GOLDEN=1 cargo test -p bir-core --test periodic_deadlines_golden_test`.
@@ -83,6 +87,22 @@ fn render() -> String {
                 ));
             }
         }
+    }
+    // The event-based rows the dated sections skip (added after the first
+    // recording, so this section is appended).
+    out.push_str("# event-based obligations\n");
+    for d in DeadlineResolver::event_based_obligations() {
+        let bir_core::calendar_rules::DeadlineKind::EventBased {
+            trigger,
+            statutory_window,
+        } = &d.deadline
+        else {
+            panic!("{} event row is dated", d.form_code);
+        };
+        out.push_str(&format!(
+            "{}|{}|{}|{}|{:?}\n",
+            d.form_code, d.display_form_no, trigger, statutory_window, d.status
+        ));
     }
     out
 }
