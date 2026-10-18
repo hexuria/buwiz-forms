@@ -3282,6 +3282,13 @@ fn apply_screen_edits(
         }
     };
     let mut rejected = Map::new();
+    // The boxes this batch blanks (an excise return joins decision D8 only
+    // when a whole penalty group is blanked, PR 11).
+    let blanked: Vec<String> = edits
+        .iter()
+        .filter(|(_, v)| v.is_null() || v.as_str().is_some_and(|text| text.trim().is_empty()))
+        .map(|(k, _)| k.clone())
+        .collect();
     let mut edits: Vec<_> = edits.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     edits.sort_by_key(|(key, _)| catalogs::edit_order(kind, key));
     let shown = values_json(kind, draft).map_err(host_error)?;
@@ -3325,10 +3332,17 @@ fn apply_screen_edits(
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
         // override, so the computed amount files again (rule 8).
-        if let Some((_, edited)) = penalty_groups
+        if let Some((group, edited)) = penalty_groups
             .iter()
             .find(|(group, _)| group.keys.contains(&key))
         {
+            // A group not on the return opens with nothing (PR 11's forms).
+            if let ChoiceStep::Fill(value) = &step
+                && let Some(lock) = rows_excise::closed_penalty(kind, draft, group, value)
+            {
+                rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
+                continue;
+            }
             if !unlocked.contains(&key) && !edited {
                 let lock = rows_excise::penalty_lock(kind, draft, &key).unwrap_or(penalties::LOCK);
                 rejected.insert(key.clone(), json!(format!("`{key}` is {lock}")));
@@ -3338,13 +3352,15 @@ fn apply_screen_edits(
                 && (value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty()))
             {
                 set_draft_path(&mut next, &path, Value::Null);
-                // "Use the computed amounts" on an excise return stored
-                // before decision D8 puts it on the typed due date (PR 11).
-                rows_excise::join_model(kind, &mut next, &key);
                 *draft = next;
                 continue;
             }
         }
+        // What the batch wrote, for PR 11's host refusals below.
+        let written = match &step {
+            ChoiceStep::Fill(value) => Some(value.clone()),
+            ChoiceStep::Set(_) => None,
+        };
         let result = match step {
             // A pooled address (rule 5) comes as one text on its first line.
             ChoiceStep::Fill(value) if pools.contains_key(&key) => {
@@ -3360,6 +3376,13 @@ fn apply_screen_edits(
                 Ok(())
             }
         };
+        // A box the form would clear (its answer does not hold) or past its
+        // official length is refused with its reason (PR 11's forms).
+        let result = result.and_then(|()| {
+            written
+                .and_then(|value| rows_excise::refusal(kind, &next, &key, &value))
+                .map_or(Ok(()), Err)
+        });
         match result {
             Ok(()) => *draft = next,
             Err(message) => {
@@ -3367,6 +3390,11 @@ fn apply_screen_edits(
             }
         }
     }
+    // "Use the computed amounts" on an excise return stored before decision
+    // D8 puts it on the typed due date (PR 11).
+    let groups: Vec<penalties::Group> =
+        penalty_groups.into_iter().map(|(group, _)| group).collect();
+    rows_excise::join_if_group_blanked(kind, draft, &groups, &blanked, &rejected);
     Ok(rejected)
 }
 
@@ -3586,6 +3614,12 @@ fn plan_choice_edits(
                 if ticked_groups.contains(&group)
                     || shown.get(&key).and_then(Value::as_str) != Some("true")
                 {
+                    continue;
+                }
+                // 2200S item 17 is a tick box of its own (PR 11): unticking
+                // it writes its false option, not the group's blank.
+                if rows_excise::untick_writes_its_option(kind, &key) {
+                    plain.push((key, ChoiceStep::Fill(value)));
                     continue;
                 }
                 if members >= 3 {
@@ -9671,40 +9705,69 @@ mod tests {
 
     /// The boxes the host reports off.
     fn off_keys(checked: &Value) -> Vec<String> {
-        checked["off"]
+        let mut keys: Vec<String> = checked["off"]
             .as_object()
             .unwrap()
             .keys()
             .cloned()
-            .collect()
+            .collect();
+        keys.sort();
+        keys
     }
 
     /// The boxes off by the test's own probing of each conditional box
-    /// alone: blank now, at least one probe taken, and every probe taken
-    /// cleared by the form through the page's own fill.
+    /// alone: blank now, and either at least one probe taken and every
+    /// probe taken cleared by the form through the page's own fill, or
+    /// (PR 11's host gates) the probes it takes refused with exactly the box's
+    /// reviewed tag (app/forms/condition-labels.json for a corpus condition;
+    /// the excise returns' boxes the corpus gives none, their host
+    /// condition, which tests::excise checks against the form's own
+    /// computation).
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         let corpus = conditions::tests::derived();
-        corpus[code]
+        let tags: Value =
+            serde_json::from_str(include_str!("../../../app/forms/condition-labels.json")).unwrap();
+        let mut keys: Vec<(String, String)> = corpus[code]
             .as_object()
             .into_iter()
             .flatten()
-            .map(|(key, _)| key.clone())
-            .filter(|key| {
+            .map(|(key, condition)| {
+                let tag = tags["keys"][code][key]
+                    .as_str()
+                    .or_else(|| tags["conditions"][code][condition.as_str().unwrap_or("")].as_str())
+                    .unwrap_or("")
+                    .to_string();
+                (key.clone(), tag)
+            })
+            .collect();
+        for key in schema_keys(code) {
+            if let Some(tag) = rows_excise::host_condition(code, key) {
+                keys.push((key.clone(), tag));
+            }
+        }
+        let mut off: Vec<String> = keys
+            .into_iter()
+            .filter(|(key, tag)| {
                 if !shows_nothing(&checked["values"][key]) {
                     return false;
                 }
-                let taken: Vec<bool> = test_probes(checked, code, key)
-                    .into_iter()
-                    .filter_map(|probe| {
-                        let filled = fill(code, &checked["draft"], json!({ key: probe }));
-                        filled["rejected"][key]
-                            .is_null()
-                            .then(|| shows_nothing(&filled["values"][key]))
-                    })
-                    .collect();
-                !taken.is_empty() && taken.iter().all(|cleared| *cleared)
+                let (mut taken, mut refused) = (Vec::new(), Vec::new());
+                for probe in test_probes(checked, code, key) {
+                    let filled = fill(code, &checked["draft"], json!({ key: probe }));
+                    // A probe the box cannot take at all (text in an
+                    // amount) says nothing either way.
+                    match filled["rejected"][key].as_str() {
+                        None => taken.push(shows_nothing(&filled["values"][key])),
+                        Some(why) if why == tag => refused.push(true),
+                        Some(_) => {}
+                    }
+                }
+                !(taken.is_empty() && refused.is_empty()) && taken.iter().all(|cleared| *cleared)
             })
-            .collect()
+            .map(|(key, _)| key)
+            .collect();
+        off.sort();
+        off
     }
 
     /// Rule 6: a box another answer turns off is faded with what turns it
@@ -9724,12 +9787,18 @@ mod tests {
             let code = kind.form_code();
             let opened = open(code, page_period_of(code));
             for (key, why) in opened["off"].as_object().unwrap() {
+                // The excise returns' PR 11 host gates have no corpus
+                // condition: their tag is the host's (tests::excise checks
+                // each against the form's own computation).
+                let host = rows_excise::host_condition(code, key);
                 let condition = corpus[code][key]
                     .as_str()
+                    .or(host.as_deref())
                     .unwrap_or_else(|| panic!("{code}: {key}"));
                 let tag = tags["keys"][code][key]
                     .as_str()
-                    .or_else(|| tags["conditions"][code][condition].as_str());
+                    .or_else(|| tags["conditions"][code][condition].as_str())
+                    .or(host.as_deref());
                 assert_eq!(why.as_str(), tag, "{code}: {key} says what turns it on");
                 assert!(
                     opened["locks"][key].is_null(),
@@ -9758,12 +9827,20 @@ mod tests {
                 ("1800", 1),
                 ("1801", 1),
                 ("2000OT", 2),
-                ("2200A", 2),
-                ("2200AN", 1),
-                ("2200C", 1),
-                ("2200M", 1),
-                ("2200P", 1),
-                ("2200T", 1),
+                // PR 11's host gates on the excise returns (rows_excise.rs):
+                // plus 1 for 2200A (item 15), plus 2 each for 2200AN,
+                // 2200M, 2200P and 2200T (items 12A and 15), plus 72 for
+                // 2200C (items 12A and 15 and Part V's 70 typed cells while
+                // item 13 or 15 is not ticked), and 94 for 2200S (items 17
+                // and 21 and Schedule 1's 92 boxes off a payment on actual
+                // removal).
+                ("2200A", 3),
+                ("2200AN", 3),
+                ("2200C", 73),
+                ("2200M", 3),
+                ("2200P", 3),
+                ("2200S", 94),
+                ("2200T", 3),
                 ("2553", 1),
             ])
         );

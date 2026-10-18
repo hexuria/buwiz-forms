@@ -109,6 +109,19 @@ fn label(code: &str, key: &str, condition: &Value) -> Value {
         )
 }
 
+/// The tag of `code`'s box `key` when the corpus gives it a condition
+/// (PR 11's host gates refuse a write with it).
+pub(super) fn tag(code: &str, key: &str) -> Option<String> {
+    let condition = conditions()[code].get(key)?;
+    label(code, key, condition).as_str().map(str::to_string)
+}
+
+/// Whether the form clears the first probe value typed into `key` alone
+/// (PR 11's host gates).
+pub(super) fn cleared(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> bool {
+    off_alone(kind, draft, key, shown)
+}
+
 /// Fill `edits` on a copy of `draft` the way the page does, recompute, and
 /// give each key's shown value, or `None` for a key the copy refused.
 fn trial(
@@ -170,7 +183,8 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
     let mut off = Map::new();
     let code = kind.form_code();
     let Some(list) = conditions()[code].as_object() else {
-        return off;
+        // A form without corpus conditions may still have PR 11 host gates.
+        return super::rows_excise::off(kind, draft, values);
     };
     let blank: Vec<(&String, &Value, &str)> = list
         .iter()
@@ -195,6 +209,10 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         if !kept_together && off_alone(kind, draft, key, shown) {
             off.insert(key.clone(), label(code, key, condition));
         }
+    }
+    // PR 11's host gates (rows_excise.rs), where the corpus names none.
+    for (key, tag) in super::rows_excise::off(kind, draft, values) {
+        off.entry(key).or_insert(tag);
     }
     off
 }

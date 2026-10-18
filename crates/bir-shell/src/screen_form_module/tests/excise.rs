@@ -1263,7 +1263,10 @@ fn pr11_2200s_leaving_prepayment_asks_before_it_removes_entered_penalties() {
         removes["rows"], 2,
         "23A and 23C, the two typed (only a typed box overrides)"
     );
-    assert!(removes["message"].as_str().unwrap().contains("23A-23C"));
+    assert_eq!(
+        removes["message"],
+        "This answer removes what you typed in items 23A-23C. Continue?"
+    );
     assert!(actual["draft"]["penalty_overrides"]["surcharge"].is_null());
     // Nothing entered: nothing asked.
     let plain = fill(
@@ -1549,7 +1552,8 @@ fn pr11_a_new_2200a_return_computes_its_penalties_from_the_removal_date() {
 /// D8: 2200C is monthly, due the 10th of the month after Item 1's month.
 /// A new return opened from the page measures its penalties from that day
 /// (the engine's own record of its inputs), whatever month Item 1 holds;
-/// one dated in December is due January 10 of the next year.
+/// one dated in December is due January 10 of the next year, and a 10th on
+/// a weekend moves to the next business day as every calendar deadline does.
 #[test]
 fn pr11_2200c_is_due_the_10th_of_the_next_month() {
     use bir_core::forms::form_2200c::Form2200CDraft;
@@ -1566,7 +1570,13 @@ fn pr11_2200c_is_due_the_10th_of_the_next_month() {
     } else {
         (year, month + 1)
     };
-    let due = chrono::NaiveDate::from_ymd_opt(due_year, due_month, 10).unwrap();
+    // The 10th, or the Monday after when it falls on a weekend.
+    let tenth = chrono::NaiveDate::from_ymd_opt(due_year, due_month, 10).unwrap();
+    let due = match chrono::Datelike::weekday(&tenth) {
+        chrono::Weekday::Sat => tenth + chrono::Duration::days(2),
+        chrono::Weekday::Sun => tenth + chrono::Duration::days(1),
+        _ => tenth,
+    };
     assert_eq!(
         draft["computed_penalties"]["inputs"]["due_date"],
         json!(due.format("%Y-%m-%d").to_string()),
@@ -1579,7 +1589,17 @@ fn pr11_2200c_is_due_the_10th_of_the_next_month() {
     december.day = 31;
     assert_eq!(
         Form2200CDraft::penalty_declaration().due_date(&december),
-        chrono::NaiveDate::from_ymd_opt(2027, 1, 10)
+        // January 10, 2027 is a Sunday.
+        chrono::NaiveDate::from_ymd_opt(2027, 1, 11)
+    );
+    let mut december_2025 = typed.clone();
+    december_2025.year = 2025;
+    december_2025.month = 12;
+    december_2025.day = 31;
+    assert_eq!(
+        Form2200CDraft::penalty_declaration().due_date(&december_2025),
+        chrono::NaiveDate::from_ymd_opt(2026, 1, 12),
+        "Saturday 2026-01-10 moves to Monday"
     );
 }
 
@@ -1624,7 +1644,6 @@ const STORED: &[(&str, &str)] = &[
 
 /// Store a literal fixture as the app would have, by its own typed draft.
 fn store_fixture(code: &str, fixture: &str) {
-    use bir_core::forms::queueable::QueueableKind;
     let AgentFormKind::Queueable(kind) = kind_of(code).unwrap() else {
         unreachable!()
     };
@@ -1634,7 +1653,6 @@ fn store_fixture(code: &str, fixture: &str) {
         let id = with_database(|db| db.save_queueable_draft(&typed).map_err(|e| HostError::new(e.to_string()))).unwrap();
         assert_eq!(Some(id), typed.draft_id(), "{code}: the fixture's own row id");
     });
-    let _ = QueueableKind::Form2200A;
 }
 
 /// The stored JSON of `code`'s return for January 2026.
@@ -1786,4 +1804,310 @@ fn pr11_an_untyped_stored_return_is_kept_as_entered_until_edit() {
         "25% of 6,600.00"
     );
     assert_eq!(joined["relocks"][&keys[0]], penalties::LOCK);
+}
+
+// ------------------------------------------------- PR 11 review: gates
+
+/// The draft path a box writes (its binding, from the probed agent data).
+fn binding_path(code: &str, key: &str) -> String {
+    match &kind_of(code).unwrap().definition().bindings[key].binding {
+        Binding::Text { path, .. } | Binding::Amount { path, .. } | Binding::Whole { path, .. } => {
+            path.clone()
+        }
+        other => panic!("{code}: {key} is {other:?}"),
+    }
+}
+
+/// Whether the draft holds something at `path` (a text, a non-zero amount).
+fn holds(draft: &Value, path: &str) -> bool {
+    match draft.pointer(path) {
+        Some(Value::String(text)) => !text.trim().is_empty(),
+        Some(Value::Number(number)) => number.as_f64().is_some_and(|n| n != 0.0),
+        _ => false,
+    }
+}
+
+/// Lesson 15 and 8 on every box an answer of the excise returns erases
+/// (form_2200*.rs `recompute`). The oracle is the form's own computation:
+/// the value written straight into the draft at the box's binding path is
+/// cleared by `compute` while the answer does not hold. Then, on the page:
+/// the box is off with what turns it on, a typed value is refused with that
+/// reason (never taken and lost), the same value is kept once the answer
+/// holds (in one batch, the answer first), and the answer that turns it
+/// off again asks first (`removes`) naming the printed item.
+#[test]
+fn pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about() {
+    setup();
+    let cases: Vec<(&str, &str, &str, Value, Value, &str, &str)> = vec![
+        (
+            "2200A",
+            "frm2200Av2020:treatyY",
+            "Sample relief",
+            json!({"frm2200Av2020:optTreaty_1": "true"}),
+            json!({"frm2200Av2020:optTreaty_2": "true"}),
+            "item 12A",
+            "Needs item 12 = Yes",
+        ),
+        (
+            "2200A",
+            "frm2200Av2020:paymentOther",
+            "Sample scheme",
+            json!({"frm2200Av2020:optPayment_3": "true"}),
+            json!({"frm2200Av2020:optPayment_1": "true"}),
+            "item 15",
+            "Needs item 15 = Other Similar Schemes",
+        ),
+        (
+            "2200A",
+            "frm2200Av2020:txtPrevReturn",
+            "100",
+            json!({"frm2200Av2020:amendedRtn_1": "true"}),
+            json!({"frm2200Av2020:amendedRtn_2": "true"}),
+            "item 19",
+            "Needs Amended Return = Yes",
+        ),
+        (
+            "2200T",
+            "frm2200Tv2020:treatyY",
+            "Sample relief",
+            json!({"frm2200Tv2020:optTreaty_1": "true"}),
+            json!({"frm2200Tv2020:optTreaty_2": "true"}),
+            "item 12A",
+            "Needs item 12 = Yes",
+        ),
+        (
+            "2200T",
+            "frm2200Tv2020:paymentOther",
+            "Sample scheme",
+            json!({"frm2200Tv2020:optPayment_3": "true"}),
+            json!({"frm2200Tv2020:optPayment_1": "true"}),
+            "item 15",
+            "Needs item 15 = Other Similar Schemes",
+        ),
+        (
+            "2200C",
+            "frm2200C:txtPg1I12TaxReliefSpecify",
+            "Sample relief",
+            json!({"frm2200C:rdoPg1I12TaxReliefYes": "true"}),
+            json!({"frm2200C:rdoPg1I12TaxReliefNo": "true"}),
+            "item 12A",
+            "Needs item 12 = Yes",
+        ),
+        (
+            "2200C",
+            "frm2200C:txtPg1Pt2MOPOtherDesc",
+            "Sample scheme",
+            json!({"frm2200C:rdoPg1Pt2MOPOther": "true"}),
+            json!({"frm2200C:rdoPg1Pt2MOPPaymentActual": "true"}),
+            "item 15",
+            "Needs item 15 = Other Similar Schemes",
+        ),
+        (
+            "2200C",
+            "frm2200C:CPPexmpt1",
+            "5",
+            json!({"frm2200C:rdoPg1Pt2MOPPaymentActual": "true"}),
+            json!({"frm2200C:rdoPg1Pt2MOPPrepayment": "true"}),
+            "Part V Schedule 1 (1 row)",
+            "Needs item 13 or item 15",
+        ),
+        (
+            "2200S",
+            "frm2200S:txtOthMannerofPymnt",
+            "Sample scheme",
+            json!({"frm2200S:chkPymntManner_2": "true", "frm2200S:chkPymntManner_3": "true"}),
+            json!({"frm2200S:chkPymntManner_3": "false"}),
+            "item 17",
+            "Needs item 17 = Other Similar Schemes",
+        ),
+        (
+            "2200S",
+            "frm2200S:txtSalesValue0",
+            "100",
+            json!({"frm2200S:chkPymntManner_1": "true"}),
+            json!({"frm2200S:chkPymntManner_2": "true"}),
+            "Schedule 1 (1 row)",
+            "Needs item 15 = Payment on Actual Removal",
+        ),
+        (
+            "2200AN",
+            "frm2200ANv2018:MannerOfPaymentOthers",
+            "Sample scheme",
+            json!({"frm2200ANv2018:MannerOfPayment3": "true"}),
+            json!({"frm2200ANv2018:MannerOfPayment1": "true"}),
+            "item 15",
+            "Needs item 15 = Other Similar Schemes",
+        ),
+        (
+            "2200M",
+            "frm2200M:txtPg1I12TaxReliefSpecify",
+            "Sample relief",
+            json!({"frm2200M:rdoPg1I12TaxReliefYes": "true"}),
+            json!({"frm2200M:rdoPg1I12TaxReliefNo": "true"}),
+            "item 12A",
+            "Needs item 12 = Yes",
+        ),
+    ];
+    for (code, key, value, open_it, close_it, item, tag) in &cases {
+        let kind = kind_of(code).unwrap();
+        let opened = open(code, 1);
+        // The oracle: the form clears it while shut.
+        let path = binding_path(code, key);
+        let mut direct = opened["draft"].clone();
+        let typed = if value.chars().all(|c| c.is_ascii_digit()) {
+            json!(value.parse::<f64>().unwrap())
+        } else {
+            json!(value)
+        };
+        set_draft_path(&mut direct, &path, typed);
+        agent::compute(kind, &mut direct).unwrap();
+        assert!(
+            !holds(&direct, &path),
+            "{code}: the form clears {key} while shut"
+        );
+        // Off, and refused with the reason.
+        assert_eq!(opened["off"][*key], *tag, "{code}: {key} is off");
+        let refused = fill(code, &opened["draft"], json!({ *key: value }));
+        assert_eq!(refused["rejected"][*key], *tag, "{code}: {key} refused");
+        assert!(!holds(&refused["draft"], &path));
+        // Accepted once open, the answer in the same batch.
+        let mut both = open_it.as_object().unwrap().clone();
+        both.insert(key.to_string(), json!(value));
+        let taken = fill(code, &opened["draft"], Value::Object(both));
+        assert_eq!(
+            taken["rejected"],
+            json!({}),
+            "{code}: {key} taken once open"
+        );
+        assert!(holds(&taken["draft"], &path), "{code}: {key} kept");
+        assert!(taken["removes"].is_null(), "{code}: {key}");
+        // The answer that shuts it again asks first.
+        let shut = fill(code, &taken["draft"], close_it.clone());
+        assert_eq!(
+            shut["removes"]["message"],
+            format!("This answer removes what you typed in {item}. Continue?"),
+            "{code}: {key}"
+        );
+        assert_eq!(shut["removes"]["rows"], 1, "{code}: {key}");
+        assert!(!holds(&shut["draft"], &path));
+        // A box the filer blanks themselves is not asked about.
+        let blank = fill(code, &taken["draft"], json!({ *key: "" }));
+        assert!(blank["removes"].is_null(), "{code}: {key}");
+    }
+}
+
+/// 2200AN item 3: the official box takes two digits (maxlength 2), so the
+/// host refuses more, and takes 99.
+#[test]
+fn pr11_2200an_item_3_holds_up_to_two_digits() {
+    setup();
+    let opened = open("2200AN", 1);
+    let key = "frm2200ANv2018:txtSheets";
+    let refused = fill("2200AN", &opened["draft"], json!({ key: "100" }));
+    assert_eq!(refused["rejected"][key], "Item 3 holds up to two digits");
+    assert!(refused["draft"].get("number_of_attached_sheets").is_none());
+    let taken = fill("2200AN", &opened["draft"], json!({ key: "99" }));
+    assert_eq!(taken["rejected"], json!({}));
+    assert_eq!(taken["draft"]["number_of_attached_sheets"], 99);
+}
+
+/// Review item 6: "Use the computed amounts" replaces what the filer typed,
+/// so it asks first, as 1701 does: on a stored pre-D8 return's kept
+/// amounts (125.25 and 1,000.00; the 0.00 says nothing), and on a current
+/// return's override.
+#[test]
+fn pr11_using_the_computed_amounts_asks_before_it_replaces_typed_penalties() {
+    setup();
+    let p = "frm2200Av2020:";
+    let keys =
+        ["txtPen_Surcharge", "txtPen_Interest", "txtPen_Compromise"].map(|k| format!("{p}{k}"));
+    let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+    let blanks: Map<String, Value> = keys.iter().map(|k| (k.clone(), json!(""))).collect();
+    store_fixture("2200A", STORED[0].1.trim_end());
+    let kept = open("2200A", 1);
+    let replaced = fill_unlocked(
+        "2200A",
+        &kept["draft"],
+        Value::Object(blanks.clone()),
+        &refs,
+    );
+    assert_eq!(
+        replaced["removes"],
+        json!({
+            "message": "This answer replaces what you typed in item 21A and item 21C. Continue?",
+            "done": "Removed 2 entries",
+            "rows": 2,
+        })
+    );
+    setup();
+    let opened = open("2200A", 1);
+    let typed = fill_unlocked("2200A", &opened["draft"], json!({ &keys[1]: "50" }), &refs);
+    assert!(typed["removes"].is_null());
+    let back = fill_unlocked("2200A", &typed["draft"], Value::Object(blanks), &refs);
+    assert_eq!(
+        back["removes"],
+        json!({
+            "message": "This answer replaces what you typed in item 21B. Continue?",
+            "done": "Removed 1 entry",
+            "rows": 1,
+        })
+    );
+    // Blanks over computed amounts ask nothing.
+    let computed = fill_unlocked("2200A", &back["draft"], json!({ &keys[0]: "" }), &refs);
+    assert!(computed["removes"].is_null());
+}
+
+/// Review item 8: on a draft stored before D8, one blank box keeps the
+/// stored model (that box files 0.00, as entered); only the whole group
+/// blanked ("Use the computed amounts") joins the typed due date.
+#[test]
+fn pr11_one_blank_penalty_keeps_a_stored_return_on_its_model() {
+    setup();
+    let p = "frm2200Av2020:";
+    store_fixture("2200A", STORED[0].1.trim_end());
+    let opened = open("2200A", 1);
+    let one = fill(
+        "2200A",
+        &opened["draft"],
+        json!({ format!("{p}txtPen_Surcharge"): "" }),
+    );
+    assert_eq!(one["rejected"], json!({}));
+    assert_eq!(one["draft"]["penalty_model_version"], 1, "still kept");
+    assert_eq!(amount(&one["values"], &format!("{p}txtPen_Surcharge")), 0.0);
+    assert_eq!(
+        amount(&one["values"], &format!("{p}txtPen_Compromise")),
+        1_000.0
+    );
+    assert!(one["draft"]["computed_penalties"].is_null());
+}
+
+/// Review item 9: a write to a penalty group that is not on the return
+/// (2200S Items 23A-23C with Part II unanswered) is refused with that
+/// reason, not "choose Edit penalties", Edit or not, a blank too.
+#[test]
+fn pr11_a_penalty_group_off_the_return_refuses_with_that_reason() {
+    setup();
+    let opened = open("2200S", 1);
+    let keys = [
+        "frm2200S:txtTax21A",
+        "frm2200S:txtTax21B",
+        "frm2200S:txtTax21C",
+    ];
+    for unlocked in [&[][..], &keys[..]] {
+        let filled = fill_unlocked(
+            "2200S",
+            &opened["draft"],
+            json!({ keys[0]: "10" }),
+            unlocked,
+        );
+        assert_eq!(
+            filled["rejected"][keys[0]],
+            format!("`{}` is {}", keys[0], penalties::NOT_ON_RETURN)
+        );
+    }
+    let blank = fill("2200S", &opened["draft"], json!({ keys[0]: "" }));
+    assert_eq!(
+        blank["rejected"][keys[0]],
+        format!("`{}` is {}", keys[0], penalties::NOT_ON_RETURN)
+    );
 }

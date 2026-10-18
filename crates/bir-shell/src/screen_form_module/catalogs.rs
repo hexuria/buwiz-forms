@@ -10,7 +10,7 @@ use bir_core::forms::{
 use bir_core::reference;
 use serde_json::{Map, Value, json};
 
-use super::{rows_1700, rows_2550m, rows_2550q, schema_entry};
+use super::{rows_1700, rows_2550m, rows_2550q, rows_excise, schema_entry};
 
 fn option(value: &str, label: &str) -> Value {
     json!({"value": value, "label": label})
@@ -64,6 +64,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
         return order;
     }
     if let Some(order) = rows_1700::edit_order(kind, key) {
+        return order;
+    }
+    if let Some(order) = rows_excise::edit_order(kind, key) {
         return order;
     }
     location(kind, key).map_or(0, |(_, level)| level + 1)
