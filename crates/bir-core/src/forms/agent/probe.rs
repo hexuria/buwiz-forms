@@ -124,6 +124,23 @@ const NOT_PROFILE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Printed boxes the official program injects at run time, so `fields.json`
+/// (read only) lists no box for them, although its validations name them and
+/// the app's field map writes them: each is supplemented as a box of its
+/// printed item, and its binding is still derived by probing. Each entry:
+/// `(key, item, printed caption, evidence)`.
+const PRINTED_NOT_IN_CORPUS: &[(&str, &str, &str, &str)] = &[(
+    "frm1707:rdoPg1Pt1I5RDO",
+    "5",
+    "RDO Code of the Seller",
+    "Item 5 RDO Code of the Seller (PR 9): rules/forms/1707-v2021/validations.json \
+     1707-validate-009-rdo names frm1707:rdoPg1Pt1I5RDO (\"Please enter a valid RDO \
+     Code on Page 1 Item 5.\", a tracked rule record of the untracked official HTA \
+     runtime), html-frozen/1707-2021/writer-cells.json joins it at \"5 RDO Code of \
+     the Seller\", and form_1707.rs writes it from the draft's rdo_code; fields.json \
+     has no row for it",
+)];
+
 /// Amounts the filer types that another field only clears. The probe sees
 /// the box move with that other field and would call it a combination; here
 /// the other field closes a gate (no overpayment left) and `compute` empties
@@ -1643,16 +1660,38 @@ pub fn supplement_from_field_map(
         }
     }
     let listed: BTreeSet<&str> = boxes.iter().map(|entry| entry.key.as_str()).collect();
+    // A printed box the official program injects at run time.
+    let injected: Vec<BoxDef> = PRINTED_NOT_IN_CORPUS
+        .iter()
+        .filter(|(key, _, _, _)| written.contains_key(*key) && !listed.contains(key))
+        .map(|(key, item, caption, _)| BoxDef {
+            label: (*caption).to_string(),
+            item: (*item).to_string(),
+            kind: "runtime-generated-select".to_string(),
+            computed: false,
+            required: "required".to_string(),
+            options: Vec::new(),
+            layout_only: false,
+            group: None,
+            radio_group: false,
+            members: Vec::new(),
+            choice: String::new(),
+            choice_value: String::new(),
+            family: None,
+            key: (*key).to_string(),
+        })
+        .collect();
     let known = written
         .keys()
         .filter(|key| listed.contains(key.as_str()))
         .count();
     if written.is_empty() || known * 2 >= written.len() {
-        return Vec::new();
+        return injected;
     }
+    let taken: BTreeSet<String> = injected.iter().map(|entry| entry.key.clone()).collect();
     written
         .into_iter()
-        .filter(|(key, _)| !listed.contains(key.as_str()))
+        .filter(|(key, _)| !listed.contains(key.as_str()) && !taken.contains(key))
         .map(|(key, value)| {
             let control = key.rsplit(':').next().unwrap_or(&key).to_string();
             let flag = value == "true" || value == "false";
@@ -1679,6 +1718,7 @@ pub fn supplement_from_field_map(
                 key,
             }
         })
+        .chain(injected)
         .collect()
 }
 
