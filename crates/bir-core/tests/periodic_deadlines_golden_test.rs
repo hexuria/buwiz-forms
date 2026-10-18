@@ -1,6 +1,9 @@
-//! Regression snapshot of the deadline rows `deadlines_for_forms` resolves,
-//! recorded from the code before the D8 deadline changes (so it pins what
-//! the code did, not an independent reading of the BIR calendar).
+//! Regression snapshot of the deadline rows `deadlines_for_forms` resolves:
+//! it pins what the code did, not an independent reading of the BIR
+//! calendar. The dated sections were recorded from the code before the D8
+//! deadline changes (D8 removed exactly 2200M's 24 quarterly rows from
+//! them); the event-based section was recorded after D8, from the code with
+//! D8 applied (2200M as needed, 2000OT added).
 //!
 //! A fixed profile (every form code the official calendar rules name) over
 //! fixed taxable years, once with no overrides and once with a fixed set of
@@ -88,8 +91,8 @@ fn render() -> String {
             }
         }
     }
-    // The event-based rows the dated sections skip (added after the first
-    // recording, so this section is appended).
+    // The event-based rows the dated sections skip, recorded after D8 and
+    // appended.
     out.push_str("# event-based obligations\n");
     for d in DeadlineResolver::event_based_obligations() {
         let bir_core::calendar_rules::DeadlineKind::EventBased {

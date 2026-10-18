@@ -412,6 +412,8 @@ impl ResolvedTaxDeadline {
             .0;
         // A shipped holiday (D8a) moves a deadline for the holiday; any
         // other override (a BIR extension, or one the user saved) extends it.
+        // The desktop's former 2026 seed has random ids, not this prefix, so
+        // the deadlines its stored entries move keep "Extended".
         self.status = if deadline_override
             .id
             .starts_with(crate::official_holidays::SEED_ID_PREFIX)
@@ -453,6 +455,7 @@ pub enum ReportingPeriod {
     PerEvent,
 }
 
+#[derive(Clone)]
 pub struct OfficialRule {
     pub form_nos: Vec<&'static str>,
     pub form_name: &'static str,
@@ -496,8 +499,8 @@ pub struct EventDueRule {
     pub due: DueFromTrigger,
     /// Whether a due date on a weekend or holiday moves to the next working
     /// day. The excise returns are due on removal: the removal date stands.
-    /// That matches PR 11 (not yet merged into integration), which measures
-    /// the 2200 penalties from the typed removal date with no move.
+    /// That matches PR 11, which measures the 2200 penalties from the typed
+    /// removal date, unmoved.
     pub rolls_to_business_day: bool,
     pub description: &'static str,
     /// Where the rule is printed.
@@ -687,7 +690,7 @@ fn as_needed_index() -> &'static AsNeededIndex {
     static INDEX: std::sync::OnceLock<AsNeededIndex> = std::sync::OnceLock::new();
     INDEX.get_or_init(|| {
         let mut names = Vec::new();
-        for rule in DeadlineResolver::official_rules() {
+        for rule in DeadlineResolver::rules() {
             if rule.is_as_needed() {
                 for no in &rule.form_nos {
                     names.push((canonical_form_code(no), rule.form_name));
@@ -740,7 +743,7 @@ impl DeadlineResolver {
     ) -> Vec<ResolvedTaxDeadline> {
         let mut all_deadlines = Vec::new();
 
-        for rule in Self::official_rules() {
+        for rule in Self::rules() {
             let deadlines = (rule.generator)(
                 taxable_year,
                 &rule.form_nos,
@@ -881,14 +884,26 @@ impl DeadlineResolver {
     }
 
     pub fn event_based_obligations() -> Vec<ResolvedTaxDeadline> {
-        Self::official_rules()
-            .into_iter()
+        Self::rules()
+            .iter()
             .filter(|rule| rule.frequency == Frequency::AsNeeded)
             .flat_map(|rule| (rule.generator)(0, &rule.form_nos, rule.description, rule.form_name))
             .collect()
     }
 
+    /// The official rules (a copy; they are built once, see [`Self::rules`]).
     pub fn official_rules() -> Vec<OfficialRule> {
+        Self::rules().to_vec()
+    }
+
+    /// The official rules, built once (review F25: not per call of the
+    /// resolvers the feeds run per branch and year).
+    fn rules() -> &'static [OfficialRule] {
+        static RULES: std::sync::OnceLock<Vec<OfficialRule>> = std::sync::OnceLock::new();
+        RULES.get_or_init(Self::build_rules)
+    }
+
+    fn build_rules() -> Vec<OfficialRule> {
         vec![
             // NOTE: Form 2000 (DST) is NOT a recurring monthly obligation.
             // It is event-based — only filed when a taxable document transaction
