@@ -603,6 +603,10 @@ impl Form1701Draft {
                 fields.insert(key, value);
             }
         }
+        fields.insert(
+            "frm1701:txtPg2I2SpouseRDOCode".to_string(),
+            self.spouse_rdo_shown(),
+        );
         // The page 2-4 headers print "Taxpayer/Filer's Last Name", as the
         // official page fills them; the XML map keeps its full name.
         for page in [2, 3, 4] {
@@ -612,6 +616,24 @@ impl Form1701Draft {
             );
         }
         fields
+    }
+
+    /// Part IV Item 2 as the page shows and the sheet prints it (PR 7,
+    /// preview.0): the spouse's RDO the page writes (`spouse_rdo_code`,
+    /// which the upload files), or, for a save file imported before it was
+    /// typed here, the one it carried (`spouse.rdo_code`, which the
+    /// XML-shaped map reads); blank while there is none or the spouse
+    /// column is closed.
+    pub fn spouse_rdo_shown(&self) -> String {
+        if !self.spouse_column_active() {
+            return String::new();
+        }
+        let typed = self.spouse_rdo_code.trim();
+        if typed.is_empty() {
+            self.spouse.rdo_code.trim().to_string()
+        } else {
+            typed.to_string()
+        }
     }
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, _legacy_month: u8) -> Self {

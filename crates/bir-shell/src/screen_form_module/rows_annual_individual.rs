@@ -955,7 +955,8 @@ pub(super) fn fill(
 /// the digits while the spouse part is open (the field map writes a box only
 /// once the TIN is whole), and 1700's display fixes (manual-1): the email as
 /// typed, the spouse RDO and the number of attachments blank until there
-/// is a value (the field map's `000` and `00` stay in the upload and print).
+/// is a value (the field map's `000` and `00` stay in the upload and print),
+/// and 1701's spouse RDO blank until there is one, as its print shows it.
 /// Display only.
 pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<String, String>) {
     if !is_mine(kind) {
@@ -1007,6 +1008,14 @@ pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Stri
             if let Some(name) = draft.pointer(path).and_then(Value::as_str) {
                 map.insert(key.to_string(), name.trim().to_uppercase());
             }
+        }
+        // Part IV item 2 (preview.0): the spouse's RDO blank until there is
+        // one, as the print shows it (the upload keeps `000`).
+        if let Ok(form) = serde_json::from_value::<Form1701Draft>(draft.clone()) {
+            map.insert(
+                "frm1701:txtPg2I2SpouseRDOCode".to_string(),
+                form.spouse_rdo_shown(),
+            );
         }
     }
     if kind.form_code() == "1700"

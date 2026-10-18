@@ -409,3 +409,21 @@ fn form_1701_penalty_items_follow_the_shared_model() {
         assert_eq!(frozen.field_map(), base.field_map());
     }
 }
+
+/// Part IV Item 2 prints the spouse's RDO the page writes and the upload
+/// files (`spouse_rdo_code`), or an imported save file's own when none was
+/// typed here; blank once the spouse column closes (PR 7, preview.0).
+#[test]
+fn form_1701_spouse_rdo_prints_what_the_page_holds() {
+    let key = "frm1701:txtPg2I2SpouseRDOCode";
+    let joint = sample_1701_joint();
+    assert_eq!(joint.to_print_field_map()[key], "039");
+    assert_eq!(joint.field_map()[key], "039");
+    let mut imported = joint.clone();
+    imported.spouse_rdo_code.clear();
+    imported.spouse.rdo_code = "040".into();
+    assert_eq!(imported.to_print_field_map()[key], "040");
+    let mut single = joint.clone();
+    single.civil_status = Some(Form1701CivilStatus::Single);
+    assert_eq!(single.to_print_field_map()[key], "");
+}
