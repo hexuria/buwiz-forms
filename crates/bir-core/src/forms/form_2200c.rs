@@ -761,8 +761,7 @@ impl Form2200CDraft {
             // Decision D8 (2026-10-18): a monthly return, due within ten days
             // after the close of Item 1's month, so the penalties run from
             // the 10th of the month after it, moved to the next business day
-            // the way the app's calendar moves every deadline
-            // (BusinessDayCalendar::adjust_to_next_business_day).
+            // on the app's deadline calendar (`due_date_calendar`).
             typed_due_date: Some(|d: &Self| {
                 if !(1..=12).contains(&d.month) {
                     return None;
@@ -773,16 +772,30 @@ impl Form2200CDraft {
                     (i32::from(d.year), u32::from(d.month) + 1)
                 };
                 let tenth = chrono::NaiveDate::from_ymd_opt(year, month, 10)?;
-                Some(
-                    crate::calendar_rules::BusinessDayCalendar::default()
-                        .adjust_to_next_business_day(tenth)
-                        .0,
-                )
+                Some(next_business_day(tenth, &due_date_calendar()))
             }),
             // The typed amount fields take digits only.
             rounding: super::penalty_items::PenaltyRounding::WholePesos,
         )
     }
+}
+
+/// The calendar the 2200C due date moves on: the one the app's deadlines
+/// use. `DeadlineResolver::resolve_taxable_year_with_overrides` (what
+/// `penalty_items::resolve_due_date` and the dashboard read) builds
+/// `BusinessDayCalendar::default()`, weekends only, and the app has no
+/// shared accessor for a holiday calendar yet, so this is that same
+/// calendar. When one exists, this is the single function to swap.
+fn due_date_calendar() -> crate::calendar_rules::BusinessDayCalendar {
+    crate::calendar_rules::BusinessDayCalendar::default()
+}
+
+/// `date`, or the next business day on `calendar` when it is not one.
+fn next_business_day(
+    date: chrono::NaiveDate,
+    calendar: &crate::calendar_rules::BusinessDayCalendar,
+) -> chrono::NaiveDate {
+    calendar.adjust_to_next_business_day(date).0
 }
 
 impl QueueableForm for Form2200CDraft {
@@ -1159,5 +1172,26 @@ mod tests {
         assert!(amended.mark_amended());
         assert_eq!(amended.amended_return_answer(), Some(true));
         assert!(submit(&amended).is_ok());
+    }
+
+    /// D8 review: the 10th moves past a holiday on the calendar it is given
+    /// (`next_business_day`, the one function `typed_due_date` rolls with),
+    /// and the app's deadline calendar is weekends only today.
+    #[test]
+    fn the_due_date_moves_past_a_holiday_on_the_10th() {
+        use crate::calendar_rules::{BusinessDayCalendar, NonWorkingDay};
+        let tenth = chrono::NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+        assert_eq!(tenth.format("%A").to_string(), "Tuesday");
+        let holiday =
+            BusinessDayCalendar::with_non_working_days(vec![NonWorkingDay::regular_holiday(
+                tenth,
+                "Sample holiday",
+            )]);
+        assert_eq!(
+            next_business_day(tenth, &holiday),
+            chrono::NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()
+        );
+        assert_eq!(next_business_day(tenth, &due_date_calendar()), tenth);
+        assert_eq!(due_date_calendar(), BusinessDayCalendar::default());
     }
 }
