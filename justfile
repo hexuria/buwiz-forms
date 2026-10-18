@@ -79,6 +79,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_date_field_rows.mjs
     node --experimental-vm-modules tools/test_form_existing_offer.mjs
     node --experimental-vm-modules tools/test_form_shared_mechanisms.mjs
+    node --experimental-vm-modules tools/test_form_as_needed.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check
