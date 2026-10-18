@@ -2923,6 +2923,14 @@ fn store_fixture(code: &str, fixture: &str) -> i64 {
 /// is the one the stored bytes give.
 #[test]
 fn pr8_stored_drafts_save_back_byte_for_byte() {
+    // The fixtures were stored on 2026-10-18, and a Draft refreshes its
+    // computed penalties (their filing and payment dates) on every open:
+    // the round trip runs on that day's clock.
+    let stored_on = chrono::NaiveDate::from_ymd_opt(2026, 10, 18).unwrap();
+    bir_core::forms::penalty_items::with_clock(stored_on, stored_drafts_round_trip);
+}
+
+fn stored_drafts_round_trip() {
     for (code, fixture) in STORED_DRAFTS {
         let id = store_fixture(code, fixture);
         let opened = open(code, 0);
