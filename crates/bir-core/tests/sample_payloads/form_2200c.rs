@@ -99,8 +99,9 @@ fn form_2200c_a_zero_return_validates() {
 
 /// Decision D8 (2026-10-18): 2200C is monthly, due within ten days after
 /// the close of Item 1's month, so the penalties run from the 10th of the
-/// next month (January 10 of the next year for December). Filed on the
-/// 10th the return owes none; on the 11th it owes the 25% surcharge.
+/// next month (January 10 of the next year for December), moved to the next
+/// business day when it falls on a weekend. Filed on the 10th the return
+/// owes none; on the 11th it owes the 25% surcharge.
 #[test]
 fn form_2200c_penalties_run_from_the_10th_of_the_next_month() {
     use bir_core::forms::penalty_items::with_clock;
@@ -114,7 +115,9 @@ fn form_2200c_penalties_run_from_the_10th_of_the_next_month() {
         (1, 1, day(2025, 2, 10)),
         (1, 31, day(2025, 2, 10)),
         (11, 15, day(2025, 12, 10)),
-        (12, 31, day(2026, 1, 10)),
+        // January 10, 2026 is a Saturday: the next business day, as the
+        // app's calendar moves every deadline.
+        (12, 31, day(2026, 1, 12)),
     ] {
         let mut other = draft.clone();
         other.month = month;

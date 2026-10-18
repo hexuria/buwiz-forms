@@ -575,3 +575,34 @@ fn look_alike_fields_are_never_declared() {
         }
     }
 }
+
+/// PR 11 golden: decision D8's typed due date is declared by the seven
+/// excise returns and by no other form, so every other form's penalties
+/// keep their calendar due date (the `if let` in `PenaltyItems::due_date`
+/// is not taken); each form's `*_penalty_items_follow_the_shared_model`
+/// still pins its computed amounts.
+#[test]
+fn only_the_excise_returns_measure_penalties_from_a_typed_date() {
+    let mut typed = Vec::new();
+    for kind in QueueableKind::ALL {
+        bir_core::with_queueable_kind!(*kind, F => {
+            for items in F::penalty_items() {
+                if items.typed_due_date.is_some() {
+                    typed.push(F::FORM_CODE);
+                }
+            }
+        });
+    }
+    typed.sort_unstable();
+    assert_eq!(
+        typed,
+        [
+            "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S", "2200T"
+        ]
+    );
+    assert!(
+        bir_core::forms::form_1601c::Form1601CDraft::penalty_items()
+            .typed_due_date
+            .is_none()
+    );
+}

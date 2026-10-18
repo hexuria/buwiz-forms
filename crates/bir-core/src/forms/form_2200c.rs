@@ -760,7 +760,9 @@ impl Form2200CDraft {
             basic_tax_due: "Item 20", |d| d.tax_still_due,
             // Decision D8 (2026-10-18): a monthly return, due within ten days
             // after the close of Item 1's month, so the penalties run from
-            // the 10th of the month after it.
+            // the 10th of the month after it, moved to the next business day
+            // the way the app's calendar moves every deadline
+            // (BusinessDayCalendar::adjust_to_next_business_day).
             typed_due_date: Some(|d: &Self| {
                 if !(1..=12).contains(&d.month) {
                     return None;
@@ -770,7 +772,12 @@ impl Form2200CDraft {
                 } else {
                     (i32::from(d.year), u32::from(d.month) + 1)
                 };
-                chrono::NaiveDate::from_ymd_opt(year, month, 10)
+                let tenth = chrono::NaiveDate::from_ymd_opt(year, month, 10)?;
+                Some(
+                    crate::calendar_rules::BusinessDayCalendar::default()
+                        .adjust_to_next_business_day(tenth)
+                        .0,
+                )
             }),
             // The typed amount fields take digits only.
             rounding: super::penalty_items::PenaltyRounding::WholePesos,
