@@ -8485,7 +8485,6 @@ mod tests {
         "2000 frm2000:txtPg2TaxpayerName",
         "2000 frm2000:txtTelNum",
         "2000 txtEmail",
-        "2000OT frm2000OT:txtLineBus",
         "2200C frm2200C:txtLOB",
         "2200M frm2200M:txtPg2RegisteredName",
         "2200P frm2200P:txtLOB",

@@ -9,7 +9,7 @@ use super::*;
 
 /// `(code, frozen sheet slug)` of the forms whose printed layout PR 9
 /// builds.
-const FORMS: &[(&str, &str)] = &[("0605", "0605-1999")];
+const FORMS: &[(&str, &str)] = &[("0605", "0605-1999"), ("2000OT", "2000-ot-2018")];
 
 fn writer_cells(slug: &str) -> Value {
     let path = format!(
@@ -197,8 +197,11 @@ fn pr9_boxes_sit_under_their_printed_item_numbers() {
             // A table row carries its row's number, a caption its item's
             // (6A of item 6's table).
             let item_number = number.trim_end_matches(|c: char| c.is_ascii_uppercase());
+            // A sub-item the sheet letters but writer-cells.json does not
+            // (2000OT's "11 Name" is printed as 11A) is under its number too.
+            let at_item = at.no.trim_end_matches(|c: char| c.is_ascii_uppercase());
             assert!(
-                at.no == number || at.no == item_number,
+                at.no == number || at.no == item_number || at_item == number,
                 "{code} {key} prints at {:?}, drawn under {:?} ({})",
                 join["printed"],
                 at.no,
@@ -399,4 +402,151 @@ fn pr9_0605_others_box_waits_for_others() {
     )
     .unwrap();
     assert!(checked["off"].get(key).is_none());
+}
+
+// ---------------------------------------------------------------- 2000OT
+
+const ATCS_2000OT: [&str; 3] = ["frm2000OT:ATC_1", "frm2000OT:ATC_2", "frm2000OT:ATC_3"];
+
+/// 2000OT R3.2, manual-0: item 3's options are the printed codes, item
+/// 12's the printed natures, item 6 reads in full, and no heading keeps
+/// the sheet's "●" amount bullet. Oracle: writer-cells.json's xbox
+/// captions and the sheet's printed text.
+#[test]
+fn pr9_2000ot_labels_read_as_printed() {
+    let slug = "2000-ot-2018";
+    let sheet = sheet_text(slug);
+    assert_eq!(labels_of("2000OT", "3"), ["DO 102", "DO 122", "DO 125"]);
+    for key in ATCS_2000OT {
+        let caption = printed_caption(slug, key).unwrap();
+        assert!(caption.ends_with(&placed("2000OT", key).label), "{caption}");
+    }
+    let natures = labels_of("2000OT", "12");
+    assert_eq!(natures.len(), 3);
+    for (n, nature) in natures.iter().enumerate() {
+        let key = format!("frm2000OT:rbTransNature_{}", n + 1);
+        assert_eq!(
+            printed_caption(slug, &key).unwrap(),
+            format!("12 Nature: {nature}")
+        );
+        assert!(sheet.contains(nature.as_str()), "{nature}");
+    }
+    assert_eq!(
+        item("2000OT", "6")["l"],
+        "RDO Code of Location of the Property"
+    );
+    for d in drawn("2000OT") {
+        assert!(
+            !d.item.contains('●') && !d.label.contains('●'),
+            "{}",
+            d.item
+        );
+    }
+}
+
+/// 2000OT R2.0, R3.0, R3.1, manual-1: page 2's schedules are one part
+/// "Part IV · Schedules" with Schedule 1.A, its total, Schedule 1.B and
+/// Schedule 2's lines; the page 2 header copies of the TIN and name are
+/// not drawn (the print still writes them from the draft); Line of
+/// Business, which the sheet does not print, is the one box under Not on
+/// the printed sheet, a profile box with Edit.
+#[test]
+fn pr9_2000ot_schedules_are_part_iv_and_the_header_copy_is_not_drawn() {
+    setup();
+    let parts: Vec<String> = schema_entry("2000OT").unwrap()["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["n"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        parts.contains(&"Part IV · Schedules".to_string()),
+        "{parts:?}"
+    );
+    assert!(!parts.contains(&"Page 2".to_string()));
+    for key in [
+        "frm2000OT:sched1A:txtOCTNo0",
+        "frm2000OT:sched1A:txtFMVTotal",
+        "frm2000OT:sched1B:txtNameOfCorpStock0",
+        "frm2000OT:Sched2:txtGrossSellingPrice",
+        "frm2000OT:Sched2:txtOthersAmount",
+        "frm2000OT:Sched2:txtTaxableBase",
+    ] {
+        assert_eq!(placed("2000OT", key).part, "Part IV · Schedules", "{key}");
+    }
+    let header = [
+        "frm2000OT:txtPg2TIN1",
+        "frm2000OT:txtPg2TIN2",
+        "frm2000OT:txtPg2TIN3",
+        "frm2000OT:txtPg2BranchCode",
+        "frm2000OT:txtPg2TaxpayerName",
+    ];
+    for key in header {
+        assert!(schema_keys("2000OT").contains(key));
+        assert!(!drawn("2000OT").iter().any(|d| d.key == key), "{key}");
+    }
+    let opened = open("2000OT", 1);
+    let map = printed("2000OT", &opened["draft"]);
+    assert_eq!(
+        map["frm2000OT:txtPg2TaxpayerName"],
+        opened["values"]["frm2000OT:txtTaxpayerName"]
+    );
+    let off: Vec<String> = drawn("2000OT")
+        .into_iter()
+        .filter(|d| d.part == "Not on the printed sheet")
+        .map(|d| d.key)
+        .collect();
+    assert_eq!(off, ["frm2000OT:txtLineBus"]);
+    assert!(strings(&opened["profile_edit"]).contains("frm2000OT:txtLineBus"));
+}
+
+/// 2000OT manual-2: item 16 is a text box showing the ATC's rate as the
+/// official SelectedATC writes it (hand list from the sheet's ATC rates),
+/// never a peso amount; the page and the print agree.
+#[test]
+fn pr9_2000ot_item_16_shows_the_atcs_rate() {
+    setup();
+    assert_eq!(placed("2000OT", "frm2000OT:txtTax16").t, "text");
+    let opened = open("2000OT", 1);
+    for (key, rate) in ATCS_2000OT.iter().zip([
+        "P1.50 / P200",
+        "P15 / P1,000",
+        // The field map writes text upper-cased, as the official page does.
+        "50% DST PAID ON ORIGINAL ISSUE",
+    ]) {
+        let filled = fill("2000OT", &opened["draft"], pick(&ATCS_2000OT, key));
+        assert_eq!(filled["values"]["frm2000OT:txtTax16"], rate, "{key}");
+        assert_eq!(
+            printed("2000OT", &filled["draft"])["frm2000OT:txtTax16"],
+            rate
+        );
+    }
+}
+
+/// 2000OT's item 1 is the return's identity, bound to /transaction_date
+/// (decision 10): a return opened without a date says what sets it
+/// (`waits`, shown in the box), and one started for a date shows it,
+/// locked.
+#[test]
+fn pr9_2000ot_item_1_date_says_what_sets_it() {
+    setup();
+    let key = "frm2000OT:txtTransactionDate";
+    let blank = open("2000OT", 1);
+    assert_eq!(blank["values"][key], "");
+    assert_eq!(blank["waits"][key], rows_as_needed::DATE_FROM_NEW_RETURN);
+    let started = call_async(
+        "screen_form_open",
+        vec![
+            TIN.into(),
+            "2000OT".into(),
+            YEAR.into(),
+            1.into(),
+            json(Value::Null),
+            1015.into(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(started["values"][key], "10/15/2026");
+    assert_eq!(started["draft"]["transaction_date"], "10/15/2026");
+    assert!(started["locks"][key].is_string());
 }

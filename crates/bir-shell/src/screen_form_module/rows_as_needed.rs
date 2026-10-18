@@ -90,9 +90,22 @@ fn fill_0605_quarter(draft: &mut Value, quarter: u8, value: &Value) -> Result<()
 /// What each box the form fills from another box waits for while it shows
 /// blank (the page shows it in the box).
 pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
-    let _ = (kind, draft);
-    Map::new()
+    let _ = draft;
+    let mut out = Map::new();
+    if kind.form_code() == "2000OT" {
+        // Item 1 is the return's identity (decision 10: matched by its
+        // exact date); a return opened without one says what sets it.
+        out.insert(
+            "frm2000OT:txtTransactionDate".into(),
+            Value::from(DATE_FROM_NEW_RETURN),
+        );
+    }
+    out
 }
+
+/// What a blank identity date waits for.
+pub(super) const DATE_FROM_NEW_RETURN: &str =
+    "Set by the date of transaction you start this return with (New return).";
 
 /// When `edits` turned `before` into `after` by removing what the filer
 /// typed, what the page asks first (`message`), what the Undo toast says

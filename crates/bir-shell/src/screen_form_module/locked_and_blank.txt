@@ -456,7 +456,6 @@
 2000 frm2000:txtNumber20: cannot be filled here: not written by this app's field map for any sample draft | PR 4 (fix/findings-monthly-dst-pt-vat)
 2000 frm2000:txtNumber21: cannot be filled here: not written by this app's field map for any sample draft | PR 4 (fix/findings-monthly-dst-pt-vat)
 2000 frm2000:txtNumber22: cannot be filled here: not written by this app's field map for any sample draft | PR 4 (fix/findings-monthly-dst-pt-vat)
-2000OT frm2000OT:txtTransactionDate: picks which return this is; reopen the form for another TIN or period | PR 9 (fix/findings-as-needed-transfers)
 2200A frm2200Av2020:txtSched1_xa_others1_Check (tick box): cannot be filled here: written by the app without a draft field (a constant or the period) | PR 11 (fix/findings-as-needed-excise)
 2200A frm2200Av2020:txtSched1_xa_others2_Check (tick box): cannot be filled here: written by the app without a draft field (a constant or the period) | PR 11 (fix/findings-as-needed-excise)
 2200A frm2200Av2020:txtSched1_xa_others3_Check (tick box): cannot be filled here: written by the app without a draft field (a constant or the period) | PR 11 (fix/findings-as-needed-excise)

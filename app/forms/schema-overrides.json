@@ -17685,7 +17685,8 @@
     },
     "frm2000OT:txtPg2TaxpayerName": {
       "label": "Taxpayer's Name",
-      "evidence": "painted form_2000ot_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's Name\"; writer-cells printed caption: \"Taxpayer's Name (page 2 header)\""
+      "evidence": "painted form_2000ot_view.rs (local:name via binding /taxpayer_name): \"Taxpayer's Name\"; writer-cells printed caption: \"Taxpayer's Name (page 2 header)\" | PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I",
+      "kind": "hidden"
     },
     "frm2000OT:Sched2:txtGrossSellingPrice": {
       "label": "Schedule 1A — Gross selling price / bid price / net gift",
@@ -17712,16 +17713,16 @@
       "evidence": "P4: printed caption 'Taxable Base (cash/foreclosure sale/net gift, Item A or B whichever is higher)' (html-frozen/2000-ot-2018/writer-cells.json money_joins)"
     },
     "frm2000OT:ATC_1": {
-      "label": "3 ATC: DO 102",
-      "evidence": "P4: printed caption '3 ATC: DO 102' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_1)"
+      "label": "DO 102",
+      "evidence": "P4: printed caption '3 ATC: DO 102' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_1) | PR 9 (R3.2): html-frozen/2000-ot-2018/writer-cells.json xbox_joins prints this box at '3 ATC: DO 102'; the item heading is the ATC"
     },
     "frm2000OT:ATC_2": {
-      "label": "3 ATC: DO 122",
-      "evidence": "P4: printed caption '3 ATC: DO 122' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_2)"
+      "label": "DO 122",
+      "evidence": "P4: printed caption '3 ATC: DO 122' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_2) | PR 9 (R3.2): html-frozen/2000-ot-2018/writer-cells.json xbox_joins prints this box at '3 ATC: DO 122'; the item heading is the ATC"
     },
     "frm2000OT:ATC_3": {
-      "label": "3 ATC: DO 125",
-      "evidence": "P4: printed caption '3 ATC: DO 125' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_3)"
+      "label": "DO 125",
+      "evidence": "P4: printed caption '3 ATC: DO 125' (html-frozen/2000-ot-2018/writer-cells.json xbox_joins frm2000OT:ATC_3) | PR 9 (R3.2): html-frozen/2000-ot-2018/writer-cells.json xbox_joins prints this box at '3 ATC: DO 125'; the item heading is the ATC"
     },
     "frm2000OT:txtTax14": {
       "label": "14 Taxable Base-Shares of Stock",
@@ -17733,7 +17734,8 @@
     },
     "frm2000OT:txtTax16": {
       "label": "16 Tax Rate",
-      "evidence": "P4: printed caption '16 Tax Rate' (html-frozen/2000-ot-2018/writer-cells.json joins frm2000OT:txtTax16)"
+      "evidence": "P4: printed caption '16 Tax Rate' (html-frozen/2000-ot-2018/writer-cells.json joins frm2000OT:txtTax16) | PR 9 (manual-2): item 16 Tax Rate is the ATC's rate text the official SelectedATC writes (form_2000ot.rs Form2000OTAtc::rate_text: 'P1.50 / P200', 'P15 / P1,000', '50% DST paid on original issue'), never a peso amount; html-frozen/2000-ot-2018/writer-cells.json joins it at '16 Tax Rate'",
+      "kind": "text"
     },
     "frm2000OT:txtTax17": {
       "label": "17 Tax Due (Item 14 or 15 x Item 16)",
@@ -17886,6 +17888,311 @@
     "chkSchedule1BDelete2": {
       "kind": "hidden",
       "evidence": "N04: the official row tick box only selects a row for Delete; it is not a draft field (the probe finds no binding). Clearing a row's boxes empties it."
+    },
+    "frm2000OT:rbTransNature_1": {
+      "label": "Transfer of Shares of Stock Not Traded Through the Local Stock Exchange",
+      "evidence": "PR 9 (R3.2, manual-0): html-frozen/2000-ot-2018/writer-cells.json xbox_joins '12 Nature: Transfer of Shares of Stock Not Traded Through the Local Stock Exchange'"
+    },
+    "frm2000OT:rbTransNature_2": {
+      "label": "Transfer of Real Property Classified as Capital Asset",
+      "evidence": "PR 9 (R3.2, manual-0): html-frozen/2000-ot-2018/writer-cells.json xbox_joins '12 Nature: Transfer of Real Property Classified as Capital Asset'"
+    },
+    "frm2000OT:rbTransNature_3": {
+      "label": "Transfer of Real Property Other Than Capital Asset",
+      "evidence": "PR 9 (R3.2, manual-0): html-frozen/2000-ot-2018/writer-cells.json xbox_joins '12 Nature: Transfer of Real Property Other Than Capital Asset'"
+    },
+    "frm2000OT:txtPg2TIN1": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "frm2000OT:txtPg2TIN2": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "frm2000OT:txtPg2TIN3": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "frm2000OT:txtPg2BranchCode": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.0, manual-1): the page 2 header copy of the filer's TIN and name; the print writes it from the draft (html-frozen/2000-ot-2018/writer-cells.json: derived:pg2_tin, join txtPg2TaxpayerName 'Taxpayer's Name (page 2 header)'), so the page shows it once, in Part I"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/2000-ot-2018/index.html (BIR Form 2000-OT, January 2018) (Items 1-4, Part I 5-13, Part II 14-21, Part IV Schedules 1.A, 1.B and 2) and html-frozen/2000-ot-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction (MM/DD/YYYY)",
+              "k": [
+                "frm2000OT:txtTransactionDate"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm2000OT:AmendedRtn_1",
+                "frm2000OT:AmendedRtn_2"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Alphanumeric Tax Code (ATC)",
+              "k": [
+                "frm2000OT:ATC_1",
+                "frm2000OT:ATC_2",
+                "frm2000OT:ATC_3"
+              ]
+            },
+            {
+              "no": "4",
+              "l": "Number of Sheet/s Attached",
+              "k": [
+                "frm2000OT:txtSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "5",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2000OT:txtTIN1",
+                "frm2000OT:txtTIN2",
+                "frm2000OT:txtTIN3",
+                "frm2000OT:txtBranchCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "RDO Code of Location of the Property",
+              "k": [
+                "frm2000OT:txtRDOCode"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Taxpayer's Name",
+              "k": [
+                "frm2000OT:txtTaxpayerName"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Registered Address",
+              "k": [
+                "frm2000OT:txtAddress"
+              ]
+            },
+            {
+              "no": "8A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2000OT:txtZipCode"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Contact Number",
+              "k": [
+                "frm2000OT:txtTelNum"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Email Address",
+              "k": [
+                "txtEmail"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Other Party to the transaction",
+              "k": [
+                "frm2000OT:optParty_1",
+                "frm2000OT:optParty_2"
+              ]
+            },
+            {
+              "no": "11A",
+              "l": "Name (Last Name, First Name, Middle Name for Individual)/(Registered Name for Non-Individual)",
+              "k": [
+                "frm2000OT:txtOtherName"
+              ]
+            },
+            {
+              "no": "11B",
+              "l": "TIN",
+              "k": [
+                "frm2000OT:txtOtherTIN"
+              ]
+            },
+            {
+              "no": "12",
+              "l": "Nature of Transaction",
+              "k": [
+                "frm2000OT:rbTransNature_1",
+                "frm2000OT:rbTransNature_2",
+                "frm2000OT:rbTransNature_3"
+              ]
+            },
+            {
+              "no": "13",
+              "l": "Location of Real Property (if sale/transfer/donation of real property)",
+              "k": [
+                "frm2000OT:txtRealLocation"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "14",
+              "l": "Taxable Base – Shares of Stock (From Part IV Schedule 1.B column (d) or (e), whichever is applicable)",
+              "k": [
+                "frm2000OT:txtTax14"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Taxable Base – Real Property (From Part IV Schedule 2 Item 2)",
+              "k": [
+                "frm2000OT:txtTax15"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "Tax Rate",
+              "k": [
+                "frm2000OT:txtTax16"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Tax Due (Item 14 or 15 x Item 16)",
+              "k": [
+                "frm2000OT:txtTax17"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Less: Tax Paid in Return previously filed, if this is an amended return",
+              "k": [
+                "frm2000OT:txtTax18"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Tax Still Due/(Overpayment) (Item 17 less Item 18)",
+              "k": [
+                "frm2000OT:txtTax19"
+              ]
+            },
+            {
+              "no": "20A",
+              "l": "Surcharge",
+              "k": [
+                "frm2000OT:txtTax20A"
+              ]
+            },
+            {
+              "no": "20B",
+              "l": "Interest",
+              "k": [
+                "frm2000OT:txtTax20B"
+              ]
+            },
+            {
+              "no": "20C",
+              "l": "Compromise",
+              "k": [
+                "frm2000OT:txtTax20C"
+              ]
+            },
+            {
+              "no": "20D",
+              "l": "Total Penalties (Sum of Items 20A to 20C)",
+              "k": [
+                "frm2000OT:txtTax20D"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Total Amount Payable/(Overpayment) (Sum of Items 19 and 20D)",
+              "k": [
+                "frm2000OT:txtTax21"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Schedules",
+          "items": [
+            {
+              "table": "frm2000OT:sched1A:txtOCTNo0"
+            },
+            {
+              "no": "",
+              "l": "Schedule 1.A TOTAL (To Schedule 2 Item B)",
+              "k": [
+                "frm2000OT:sched1A:txtFMVTotal"
+              ]
+            },
+            {
+              "table": "frm2000OT:sched1B:txtNameOfCorpStock0"
+            },
+            {
+              "no": "1A",
+              "l": "Schedule 2 – Gross Selling Price / Bid Price for foreclosure sale / Net Gift",
+              "k": [
+                "frm2000OT:Sched2:txtGrossSellingPrice"
+              ]
+            },
+            {
+              "no": "1B",
+              "l": "Total Fair Market Value of Land and Improvement per Schedule 1.A",
+              "k": [
+                "frm2000OT:Sched2:txtTotalFairMarket"
+              ]
+            },
+            {
+              "no": "1C",
+              "l": "Others (Specify)",
+              "k": [
+                "frm2000OT:Sched2:txtOthers",
+                "frm2000OT:Sched2:txtOthersAmount"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Taxable Base (For cash/foreclosure sale/net gift Item A or B whichever is higher; or, For other transaction Item C, whichever is applicable) (To Part II, Item 15)",
+              "k": [
+                "frm2000OT:Sched2:txtTaxableBase"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business (the 2018 sheet has no line-of-business box)",
+              "k": [
+                "frm2000OT:txtLineBus"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "2200A": {
