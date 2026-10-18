@@ -2,6 +2,7 @@ use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::excise_places::ExcisePlace;
 use bir_core::forms::form_2200s::{Form2200SDraft, Form2200SManner, Form2200SOtherRow};
+use bir_core::forms::queueable::QueueableForm as _;
 
 fn sample_2200s() -> Form2200SDraft {
     let mut draft =
@@ -117,8 +118,24 @@ fn form_2200s_prepayment_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    // PR 11: a prepayment with Item 17's Other Similar Schemes and its
+    // penalties entered (as 0.00, so 25B's Pay Penalties flag stays off and
+    // does not move with the manner). Items 23A-23C are open on a
+    // prepayment only and Item 17's text only with the scheme ticked
+    // (form_2200s.rs recompute clears them otherwise), so the samples above
+    // never let the probe bind txtTax21A-txtTax21C or txtOthMannerofPymnt.
+    // Its payload is never written.
+    let mut prepayment = sample_2200s_prepayment();
+    prepayment.other_scheme = true;
+    prepayment.other_scheme_text = "Sample scheme".into();
+    prepayment.keep_entered_penalties();
+    prepayment.recompute();
+    assert_eq!(prepayment.other_scheme_text, "Sample scheme");
+    assert_eq!(prepayment.penalty.penalty_overrides.surcharge, Some(0.0));
+    assert_eq!(prepayment.penalties_paid, 0.0);
     vec![
         serde_json::to_value(sample_2200s()).expect("sample serializes"),
         serde_json::to_value(sample_2200s_many_rows()).expect("sample serializes"),
+        serde_json::to_value(prepayment).expect("prepayment sample serializes"),
     ]
 }

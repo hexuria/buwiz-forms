@@ -82,7 +82,22 @@ fn form_2200a_penalty_items_follow_the_shared_model() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_2200a()).expect("sample serializes")]
+    // PR 11: the sample's last typed row is 3B_2020B2, and recompute drops
+    // the zero rows after it, so the probe never saw Schedule 1's last ten
+    // fixed rows (3A_2021B ... 3B_2024) echo. A seed with the last fixed
+    // row typed holds all sixty; its payload is never written.
+    let mut all_rows = sample_2200a();
+    all_rows.row_by_key_mut("3B_2024").unwrap().taxable = 1.0;
+    all_rows.recompute();
+    assert_eq!(
+        all_rows.schedule.len(),
+        bir_core::forms::form_2200a::FORM_2200A_FIXED_ROW_COUNT,
+        "the all-rows seed holds every fixed row"
+    );
+    vec![
+        serde_json::to_value(sample_2200a()).expect("sample serializes"),
+        serde_json::to_value(all_rows).expect("all-rows sample serializes"),
+    ]
 }
 
 /// Decision D8 (2026-10-18): 2200A is due on removal, and the penalties
