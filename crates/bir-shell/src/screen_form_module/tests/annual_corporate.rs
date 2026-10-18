@@ -2924,6 +2924,25 @@ fn store_fixture(code: &str, fixture: &str) -> i64 {
 #[test]
 fn pr8_stored_drafts_save_back_byte_for_byte() {
     for (code, fixture) in STORED_DRAFTS {
+        // A Draft's computed penalties are refreshed on every open, stamped
+        // with the day: the fixtures were stamped 2026-10-18 (filed before
+        // a 2027 deadline, so 0 days late), and the row is stored with the
+        // stamp of the day the test runs.
+        let today = format!("\"{}\"", bir_core::forms::penalty_items::today());
+        let restamped = fixture
+            .replace(
+                "\"filing_date\":\"2026-10-18\"",
+                &format!("\"filing_date\":{today}"),
+            )
+            .replace(
+                "\"payment_date\":\"2026-10-18\"",
+                &format!("\"payment_date\":{today}"),
+            );
+        assert!(
+            !restamped.contains("\"days_late\":") || restamped.contains("\"days_late\":0,"),
+            "{code}: not late"
+        );
+        let fixture = restamped.as_str();
         let id = store_fixture(code, fixture);
         let opened = open(code, 0);
         assert_eq!(opened["draft"]["id"], json!(id), "{code}");
