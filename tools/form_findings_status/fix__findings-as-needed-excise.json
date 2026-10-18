@@ -21,13 +21,13 @@
    "status": "fixed"
   },
   "R3.5": {
-   "reason": "frm2200Av2020:tinB#occurrence-2 and #occurrence-3 are the page 2 and page 3 header copies of item 4's TIN (hidden repeat occurrences locked as repeating item 4); the print writes that header from the draft's TIN (html-frozen/2200a-2020/writer-cells.json joins derived:page_header 'Page 2 and page 3 header: TIN / Taxpayer's Name'), so there is nothing for the page to fill twice.",
-   "reviewer": "Agree (PR 11 review): html-frozen/2200a-2020/writer-cells.json joins derived:page_header to p2c5 and p3c5 ('Page 2 and page 3 header: TIN / Taxpayer's Name'), so the header copies print from the draft; crates/bir-core/data/agent-forms/2200a-v2020.json marks frm2200Av2020:tinB#occurrence-2 not written for any sample draft, and rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json has the tinB_2 and tinB_3 controls at disabled: true.",
+   "reason": "frm2200Av2020:tinB#occurrence-2 and #occurrence-3 (the official inventory lists the one id frm2200Av2020:tinB three times, the second and third disabled) are the page 2 and page 3 header copies of item 4's TIN (hidden repeat occurrences locked as repeating item 4); the print writes that header from the draft's TIN (html-frozen/2200a-2020/writer-cells.json joins derived:page_header 'Page 2 and page 3 header: TIN / Taxpayer's Name'), so there is nothing for the page to fill twice.",
+   "reviewer": "Agree (PR 11 review): html-frozen/2200a-2020/writer-cells.json joins derived:page_header to p2c5 and p3c5 ('Page 2 and page 3 header: TIN / Taxpayer's Name'), so the header copies print from the draft; crates/bir-core/data/agent-forms/2200a-v2020.json marks frm2200Av2020:tinB#occurrence-2 not written for any sample draft, and rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json lists one id, frm2200Av2020:tinB, three times: the first (item 4) enabled, the second and third (the page 2 and page 3 header copies) at disabled: true.",
    "status": "not_a_bug"
   },
   "manual-0": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once (one table per ATC and product as printed on pages 2-3, each of the sixty fixed rows once with its printed period and rate; the Others rows under 4) Others (specify); no part named Page 3); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (12A, 15 and 19 gated and asked about)",
+   "proof": "screen_form_module::tests::excise::pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once (one table per ATC and product as printed on pages 2-3, each of the sixty fixed rows once with its printed period and rate; the Others rows under 4) Others (specify); no part named Page 3); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (12A, 15 and 19 gated and asked about); screen_form_module::tests::excise::pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut (every gate key cleared by the form's compute exactly while the host reports it shut)",
    "status": "fixed"
   },
   "manual-1": {
@@ -106,7 +106,7 @@
   },
   "manual-2": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_2200c_item_3_and_schedule_1_read_as_printed (Part V - Schedule 1 is its own part, one table of the printed columns A-J, rows 1-10); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (Part V is off while item 13 or 15 is not ticked, refused with that reason, and a manner change that clears typed rows asks first)",
+   "proof": "screen_form_module::tests::excise::pr11_2200c_item_3_and_schedule_1_read_as_printed (Part V - Schedule 1 is its own part, one table of the printed columns A-J, rows 1-10); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (Part V is off while item 13 or 15 is not ticked, refused with that reason, and a manner change that clears typed rows asks first); screen_form_module::tests::excise::pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut (all 70 Part V cells cleared by the form's compute exactly while the host reports them shut). Part V Schedule 1 is enabled at load officially (load-state basis: rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json has frm2200C:CPPexmpt1 ... GRnonexcise10 at disabled: false); the port's recompute clears it unless item 13 or item 15 is ticked (resetPartFive), so the host keeps it shut until then rather than take a value and lose it",
    "status": "fixed"
   },
   "manual-3": {
@@ -262,7 +262,7 @@
   },
   "preview.0": {
    "pr": "PR 11",
-   "proof": "bir-core sample_payloads_test sample_payloads::form_2200s: agent_seeds' prepayment seed (the regenerated crates/bir-core/data/agent-forms/2200s-v2018.json binds txtOthMannerofPymnt to /other_scheme_text and txtTax21A-C to the penalty overrides; every sample payload pin unchanged); screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (item 17's text and 23A-23C file what is typed); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (item 17 is off until Other Similar Schemes is ticked, refused with that reason, kept once ticked, and unticking asks first)",
+   "proof": "bir-core sample_payloads_test sample_payloads::form_2200s: agent_seeds' prepayment seed (the regenerated crates/bir-core/data/agent-forms/2200s-v2018.json binds txtOthMannerofPymnt to /other_scheme_text and txtTax21A-C to the penalty overrides; every sample payload pin unchanged); screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (item 17's text and 23A-23C file what is typed); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (item 17 is off until Other Similar Schemes is ticked, refused with that reason, kept once ticked, and unticking asks first); screen_form_module::tests::excise::pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut (items 17 and 21 and all 92 Schedule 1 keys cleared by the form's compute exactly while the host reports them shut); screen_form_module::tests::excise::pr11_2200s_item_17_text_names_items_16_and_17 (the text needs item 16 = Prepayment as well as item 17, and its refusal names both). Schedule 1 is enabled at load officially (load-state basis: rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json has frm2200S:txtsched1Atc0 and txtsched1SalesValue0 at disabled: false); the port's recompute clears it unless item 15 = Payment on Actual Removal, so the host keeps it shut until then rather than take a value and lose it",
    "status": "fixed"
   }
  },
@@ -299,7 +299,7 @@
   },
   "manual-2": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_2200t_schedule_1_prints_the_2022_rows_and_keeps_the_older_ones_apart (items 17A-17C, 21A-21D and 23A-23C with their printed captions); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (12A and 15 gated and asked about)",
+   "proof": "screen_form_module::tests::excise::pr11_2200t_schedule_1_prints_the_2022_rows_and_keeps_the_older_ones_apart (items 17A-17C, 21A-21D and 23A-23C with their printed captions); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (12A and 15 gated and asked about); screen_form_module::tests::excise::pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut (every gate key cleared by the form's compute exactly while the host reports it shut). Item 15's paymentOther is enabled at load officially (load-state basis: rules/forms/2200t-v2020/fixtures/runtime-control-inventory-v796.json has frm2200Tv2020:paymentOther at disabled: false); the port's recompute clears it unless item 15 = Other Similar Schemes, so the host keeps it shut until then rather than take a value and lose it",
    "status": "fixed"
   },
   "manual-3": {
