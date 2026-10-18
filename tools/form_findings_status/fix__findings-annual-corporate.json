@@ -67,7 +67,7 @@
   },
   "manual-0": {
    "pr": "PR 8",
-   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_contact_number_is_a_phone_from_the_profile; bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical); screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_contact_number_is_a_phone_from_the_profile; bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical); screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged; screen_form_module::tests::annual_corporate::pr8_stored_drafts_save_back_byte_for_byte",
    "status": "fixed"
   },
   "manual-1": {
@@ -77,7 +77,7 @@
   },
   "manual-3": {
    "pr": "PR 8",
-   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_shut_items_show_their_caption_and_a_note",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_shut_items_show_their_caption_and_a_note; screen_form_module::tests::annual_corporate::pr8_a_typed_zero_attachment_count_shows",
    "status": "fixed"
   },
   "preview.0": {
@@ -87,7 +87,7 @@
   },
   "preview.1": {
    "pr": "PR 8",
-   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_other_credits_and_schedule_rows_take_entries; screen_form_module::tests::annual_corporate::pr8_form_1702ex_folded_lines_say_what_fills_them; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the 73 PR 8 lines of locked_and_blank.txt removed); bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical); screen_form_module::tests::annual_corporate::pr8_form_1702ex_osd_asks_before_clearing_typed_boxes",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702ex_other_credits_and_schedule_rows_take_entries; screen_form_module::tests::annual_corporate::pr8_form_1702ex_folded_lines_say_what_fills_them; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the 73 PR 8 lines of locked_and_blank.txt removed); bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical); screen_form_module::tests::annual_corporate::pr8_form_1702ex_osd_asks_before_clearing_typed_boxes; screen_form_module::tests::annual_corporate::pr8_form_1702ex_popup_alerts_name_the_printed_item",
    "status": "fixed"
   }
  },
@@ -189,7 +189,7 @@
   },
   "manual-0": {
    "pr": "PR 8",
-   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes; screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes; screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged; screen_form_module::tests::annual_corporate::pr8_stored_drafts_save_back_byte_for_byte",
    "status": "fixed"
   },
   "manual-1": {
@@ -276,7 +276,7 @@
   },
   "manual-0": {
    "pr": "PR 8",
-   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes; screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_boxes_sit_under_their_printed_item_numbers; screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_schedules_hold_only_their_own_boxes; screen_form_module::tests::annual_corporate::pr8_page_header_copies_are_not_drawn_and_still_print; screen_form_module::tests::annual_corporate::pr8_boxes_sit_under_their_printed_item_numbers; screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged; screen_form_module::tests::annual_corporate::pr8_stored_drafts_save_back_byte_for_byte",
    "status": "fixed"
   },
   "manual-1": {
@@ -296,7 +296,7 @@
   },
   "preview.1": {
    "pr": "PR 8",
-   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702rt_overpayment_choice_is_the_drafts; screen_form_module::tests::annual_corporate::pr8_form_1702rt_dates_are_typed_dates; screen_form_module::tests::annual_corporate::pr8_form_1702rt_entries_open_and_computed_boxes_say_so; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the 73 PR 8 lines of locked_and_blank.txt removed); bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical); screen_form_module::tests::annual_corporate::pr8_form_1702rt_schedule_iv_column_c_is_the_forms; screen_form_module::tests::annual_corporate::pr8_form_1702rt_answers_that_clear_typed_boxes_ask_first; screen_form_module::tests::annual_corporate::pr8_form_1702rt_item_42_is_an_entry_once_mcit_applies; screen_form_module::tests::annual_corporate::pr8_form_1702rt_folded_items_are_locked_while_folded; screen_form_module::tests::annual_corporate::pr8_overpayment_choice_cleared_by_an_amount_asks_first",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1702rt_overpayment_choice_is_the_drafts; screen_form_module::tests::annual_corporate::pr8_form_1702rt_dates_are_typed_dates; screen_form_module::tests::annual_corporate::pr8_form_1702rt_entries_open_and_computed_boxes_say_so; screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (the 73 PR 8 lines of locked_and_blank.txt removed); bir-core sample_payloads_test agent_forms::agent_forms_are_derived_from_the_samples (the regenerated 1702RT, 1702MX and 1702EX pins; the sample payload hash tests form_1702rt_*/form_1702mx_*/form_1702ex_*_sample_payload_is_current pass unchanged, so the upload and field map are byte-identical); screen_form_module::tests::annual_corporate::pr8_form_1702rt_schedule_iv_column_c_is_the_forms; screen_form_module::tests::annual_corporate::pr8_form_1702rt_answers_that_clear_typed_boxes_ask_first; screen_form_module::tests::annual_corporate::pr8_form_1702rt_item_42_follows_the_official_mcit_rule; screen_form_module::tests::annual_corporate::pr8_form_1702rt_folded_items_are_locked_while_folded; screen_form_module::tests::annual_corporate::pr8_overpayment_choice_cleared_by_an_amount_asks_first; screen_form_module::tests::annual_corporate::pr8_form_1702rt_column_c_mcit_rows_are_flagged",
    "status": "fixed"
   }
  },
@@ -348,7 +348,7 @@
   },
   "manual-0": {
    "pr": "PR 8",
-   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form; screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged",
+   "proof": "screen_form_module::tests::annual_corporate::pr8_form_1707a_items_hold_their_printed_boxes; screen_form_module::tests::annual_corporate::pr8_item_7_rdo_comes_from_the_profile_and_prints_on_every_form; screen_form_module::tests::annual_corporate::pr8_stored_drafts_open_and_save_unchanged; screen_form_module::tests::annual_corporate::pr8_stored_drafts_save_back_byte_for_byte",
    "status": "fixed"
   },
   "manual-1": {
