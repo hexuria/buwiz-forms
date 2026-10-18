@@ -268,11 +268,11 @@ impl Form1600VtView {
         match key {
             "year" => draft.year.to_string(),
             "sheets" => draft.number_of_attached_sheets.to_string(),
-            "name" => draft.agent_name.clone(),
-            "address" => draft.registered_address.clone(),
-            "zip" => draft.zip_code.clone(),
-            "phone" => draft.contact_number.clone(),
-            "email" => draft.email.clone(),
+            "name" => draft.agent_name.to_string(),
+            "address" => draft.registered_address.to_string(),
+            "zip" => draft.zip_code.to_string(),
+            "phone" => draft.contact_number.to_string(),
+            "email" => draft.email.to_string(),
             "relief_spec" => draft.tax_relief_specify.clone(),
             "prev" => money(draft.tax_remitted_previous),
             "other" => money(draft.other_payments),
@@ -380,11 +380,11 @@ impl Form1600VtView {
             schedule.pop();
         }
         draft.schedule = schedule;
-        draft.agent_name = self.input_text("name", cx);
-        draft.registered_address = self.input_text("address", cx);
-        draft.zip_code = self.input_text("zip", cx).trim().to_string();
-        draft.contact_number = self.input_text("phone", cx).trim().to_string();
-        draft.email = self.input_text("email", cx).trim().to_string();
+        *draft.agent_name = self.input_text("name", cx);
+        *draft.registered_address = self.input_text("address", cx);
+        *draft.zip_code = self.input_text("zip", cx).trim().to_string();
+        *draft.contact_number = self.input_text("phone", cx).trim().to_string();
+        *draft.email = self.input_text("email", cx).trim().to_string();
         draft.tax_relief_specify = self.input_text("relief_spec", cx);
         // An empty penalty box means "use computed"; any amount overrides it.
         parse_errors.extend(penalty_section::apply_overrides(
@@ -893,7 +893,7 @@ impl Form1600VtView {
         .collect();
         let mut children = vec![
             self.readonly_value("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
-            self.readonly_value("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
+            self.readonly_value("Item 6 — RDO Code", d.rdo_code.to_string(), &["rdo_code"]),
             self.text_field("name", layout, !editable),
             self.text_field("address", layout, !editable),
             self.text_field("zip", layout, !editable),

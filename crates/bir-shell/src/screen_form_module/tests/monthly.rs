@@ -1675,16 +1675,19 @@ fn monthly_due_date_day_is_the_filers_as_on_the_official_page() {
 /// that adds no refusal. The host reads the typed draft for every edit
 /// (screen_form_fill's identity check, agent::identity), which refuses
 /// only what serde cannot deserialize: a field missing without
-/// `#[serde(default)]` (1600PT's `contact_number`, 1600VT's and 1600WP's
+/// `#[serde(default)]` (1600PT's and 1600VT's `is_amended`, 1600WP's
 /// `email`) is refused the same way for an ordinary box as for the answers
 /// and an ATC, before any box is written; a field with `#[serde(default)]`
 /// is taken when missing, and so are extra keys an older build wrote.
+/// Since P2-4, 1600PT's and 1600VT's Part I text boxes are such fields
+/// (`KeptText`; `form_1600pt_and_1600vt_drafts_missing_boxes_open_blank`), so
+/// the refused field here is `is_amended`, which they still require.
 #[test]
 fn monthly_answers_refuse_no_draft_the_ordinary_fill_takes() {
     setup();
     for (code, legacy_key) in [
-        ("1600PT", "contact_number"),
-        ("1600VT", "email"),
+        ("1600PT", "is_amended"),
+        ("1600VT", "is_amended"),
         ("1600WP", "email"),
     ] {
         let p = format!("frm{code}:");
@@ -1849,5 +1852,137 @@ fn shared_address_splits_file_what_the_base_filed() {
             );
             assert_eq!(xml[&keys[1]], "", "{code}");
         }
+    }
+}
+
+/// Literal 1600PT and 1600VT drafts stored without some of their Part I
+/// text boxes (an older shape): `fixtures/1600pt-missing-boxes.json` lacks
+/// `contact_number`, `fixtures/1600vt-missing-boxes.json` lacks `zip_code`
+/// and `email`; both carry no profile_baseline, which PR 0c's save adds.
+/// Each is the bytes the save path writes for a new March 2026 draft with
+/// those keys cut out. Their computed penalties are stamped 2026-10-18; a
+/// Draft's are refreshed on every open, so the test restamps them with the
+/// day it runs before storing the row.
+const MISSING_BOXES: [(&str, &str, &[(&str, &str)]); 2] = [
+    (
+        "1600PT",
+        include_str!("fixtures/1600pt-missing-boxes.json"),
+        &[(
+            "contact_number",
+            "Contact Number field on Page 1 Item 9 is required.",
+        )],
+    ),
+    (
+        "1600VT",
+        include_str!("fixtures/1600vt-missing-boxes.json"),
+        &[
+            ("zip_code", "Zip Code field on Page 1 Item 8A is required."),
+            ("email", "E-mail address on page 1 item 11 is required."),
+        ],
+    ),
+];
+
+/// `fixture` with its penalty stamp moved from 2026-10-18 to today.
+fn stamped_today(fixture: &str) -> String {
+    let today = bir_core::forms::penalty_items::today();
+    let due = chrono::NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
+    let late = (today - due).num_days().max(0);
+    assert_eq!(fixture.matches("\"2026-10-18\"").count(), 2);
+    assert_eq!(fixture.matches("\"days_late\":191,").count(), 1);
+    fixture
+        .replace("\"2026-10-18\"", &format!("\"{today}\""))
+        .replace("\"days_late\":191,", &format!("\"days_late\":{late},"))
+}
+
+/// Maintainer decision P2-4 (2026-10-18). Before it, such a draft did not
+/// open at all ("the stored 1600PT draft could not be read: missing field
+/// `contact_number`") and every edit was refused. Now its missing boxes
+/// open blank, not 0 or a default; Check asks for each with the form's own
+/// message; opened and saved, the row is the fixture byte for byte (the
+/// profile baseline a save adds set aside); and once typed, the box files.
+#[test]
+fn form_1600pt_and_1600vt_drafts_missing_boxes_open_blank() {
+    for (code, fixture, missing) in MISSING_BOXES {
+        setup();
+        let p = format!("frm{code}:");
+        let stored = stamped_today(fixture);
+        let literal: Value = serde_json::from_str(&stored).unwrap();
+        for (field, _) in missing {
+            assert!(literal.get(*field).is_none(), "{code}: {field} is missing");
+        }
+        let id = save(code, &open(code, 3)["draft"])["id"].as_i64().unwrap();
+        assert_eq!(id, 1, "{code}");
+        raw_exec(
+            "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+            &[&stored, &id.to_string()],
+        );
+        assert_eq!(raw_row(id).1, stored, "{code}: stored as given");
+        let opened = open(code, 3);
+        assert_eq!(opened["draft"]["id"], json!(id), "{code}");
+        let box_of = |field: &str| match field {
+            "contact_number" => format!("{p}txtPg1Pt1I9ContactNumber"),
+            "zip_code" => format!("{p}txPg1I8ZipCode"),
+            _ => format!("{p}txtPg1Pt1I11Email"),
+        };
+        let messages: Vec<(String, String)> = opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| {
+                (
+                    e["field"].as_str().unwrap().to_string(),
+                    e["message"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        for (field, message) in missing {
+            let key = box_of(field);
+            assert_eq!(opened["values"][&key], "", "{code}: {key} opens blank");
+            assert!(opened["draft"].get(*field).is_none(), "{code}: {field}");
+            assert!(
+                messages.contains(&(field.to_string(), message.to_string())),
+                "{code}: Check asks for {field}: {messages:?}"
+            );
+        }
+        // The boxes the draft holds show as stored.
+        assert_eq!(opened["values"][format!("{p}txtPg1I6RDO")], "039");
+        assert_eq!(raw_row(id).1, stored, "{code}: opening changes nothing");
+        save(code, &opened["draft"]);
+        let saved = raw_row(id).1;
+        let saved = match saved.find(",\"profile_baseline\":") {
+            Some(at) => format!("{}}}", &saved[..at]),
+            None => saved,
+        };
+        assert_eq!(saved, stored, "{code}: opened and saved, byte for byte");
+        // Typed, the box files and the message goes.
+        let (field, _) = missing[0];
+        let key = box_of(field);
+        let value = match field {
+            "contact_number" => "0281234567",
+            "zip_code" => "1100",
+            _ => "books@example.com",
+        };
+        let typed = fill_unlocked(code, &opened["draft"], json!({ &key: value }), &[&key]);
+        assert_eq!(typed["rejected"], json!({}), "{code}");
+        assert_eq!(typed["draft"][field], value, "{code}");
+        let checked = call_async(
+            "screen_form_validate",
+            vec![code.into(), json(typed["draft"].clone())],
+        )
+        .unwrap();
+        assert!(
+            checked["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|e| e["field"] != field),
+            "{code}: {}",
+            checked["errors"]
+        );
+        let kind = kind_of(code).unwrap();
+        assert_eq!(
+            agent::field_map(kind, &typed["draft"]).unwrap()[&key],
+            value
+        );
     }
 }
