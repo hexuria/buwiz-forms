@@ -188,7 +188,125 @@ fn date_part_refusal(part: DatePart, value: &Value) -> Option<String> {
         (DatePart::Year, Some(_)) => shown.len() == 4,
         _ => false,
     };
-    (!fits).then(|| "Type the date as MM/DD/YYYY.".to_string())
+    (!fits).then(|| DATE_ERROR.to_string())
+}
+
+/// The page's own message for a date that is not one (form_page.js
+/// `DATE_ERROR`), so the page and the host read the same.
+pub(super) const DATE_ERROR: &str =
+    "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
+
+/// Whether month/day/year make a date the page's `parseTypedDate` reads: a
+/// real calendar day of a year 1900-2100.
+fn real_date(month: u32, day: u32, year: u32) -> bool {
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400) => {
+            29
+        }
+        2 => 28,
+        _ => 0,
+    };
+    (1900..=2100).contains(&year) && day >= 1 && day <= days
+}
+
+/// A batch's one-date writes judged whole (lesson 13): once its month, day
+/// and year are all there (the batch's own, else what the box shows), they
+/// must be a real date; else every part of it the batch writes is refused
+/// with the page's message, so no part lands alone.
+pub(super) fn refuse_dates(
+    kind: AgentFormKind,
+    shown: &Value,
+    edits: &[(String, Value)],
+) -> Map<String, Value> {
+    let mut out = Map::new();
+    let Some((_, keys)) = ONE_DATES
+        .iter()
+        .find(|(form, _)| *form == kind.form_code() && *form != "2552")
+    else {
+        return out;
+    };
+    if !edits.iter().any(|(key, _)| keys.contains(&key.as_str())) {
+        return out;
+    }
+    // A typed part is missing only when empty; a shown one also when it
+    // is the official zero blank ("00", 1707's "0").
+    let part = |key: &str| -> Option<String> {
+        match edits.iter().find(|(k, _)| k == key) {
+            Some((_, v)) => Some(text(v)).filter(|v| !v.is_empty()),
+            None => Some(shown[key].as_str().unwrap_or_default().trim().to_string())
+                .filter(|v| !v.chars().all(|c| c == '0')),
+        }
+    };
+    let [Some(month), Some(day), Some(year)] = keys.map(part) else {
+        return out;
+    };
+    let number = |v: &str| v.parse::<u32>().ok();
+    let fits = match (number(&month), number(&day), number(&year)) {
+        (Some(m), Some(d), Some(y)) => year.len() == 4 && real_date(m, d, y),
+        _ => false,
+    };
+    if !fits {
+        for (key, _) in edits.iter().filter(|(key, _)| keys.contains(&key.as_str())) {
+            out.insert(key.clone(), Value::from(DATE_ERROR));
+        }
+    }
+    out
+}
+
+/// What a stored one-date box holding only part of a date (a month with
+/// no day, a day with no month) says: the page shows it blank.
+fn partial_date(
+    kind: AgentFormKind,
+    values: &std::collections::BTreeMap<String, String>,
+) -> Option<String> {
+    let (_, [month, day, year]) = ONE_DATES
+        .iter()
+        .find(|(form, _)| *form == kind.form_code())?;
+    let get = |key: &str| {
+        values
+            .get(key)
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default()
+    };
+    let (m, d, y) = (get(month), get(day), get(year));
+    let unset = |v: &str| v.is_empty() || v.chars().all(|c| c == '0');
+    let (no_month, no_day) = (unset(&m), unset(&d));
+    if no_month == no_day {
+        return None;
+    }
+    let what = if no_day { "day" } else { "month" };
+    let m = if no_month {
+        "__".to_string()
+    } else {
+        format!("{m:0>2}")
+    };
+    let d = if no_day {
+        "__".to_string()
+    } else {
+        format!("{d:0>2}")
+    };
+    Some(format!(
+        "The stored date has no {what} ({m}/{d}/{y}); type the full date."
+    ))
+}
+
+/// The page's notices for a draft, shown with its messages: a stored
+/// partial one-date (display only; the draft and upload are unchanged).
+pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
+    let Ok(map) = bir_core::forms::agent::field_map(kind, draft) else {
+        return Vec::new();
+    };
+    let Some(message) = partial_date(kind, &map) else {
+        return Vec::new();
+    };
+    let keys = ONE_DATES
+        .iter()
+        .find(|(form, _)| *form == kind.form_code())
+        .map(|(_, keys)| keys.to_vec())
+        .unwrap_or_default();
+    vec![serde_json::json!({ "field": "one_date", "message": message, "keys": keys })]
 }
 
 /// A column of 2552's Part V row 5.
@@ -360,8 +478,7 @@ fn cell_2552(key: &str) -> Option<Cell> {
 /// Whether the host writes `key` itself (its "cannot be filled here" lock
 /// does not apply on the page). A gated box keeps its own binding.
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
-    cell(kind, key)
-        .is_some_and(|cell| !matches!(cell, Cell::Gate(_) | Cell::ReliefYes | Cell::DatePart(_)))
+    cell(kind, key).is_some_and(|cell| !matches!(cell, Cell::Gate(_) | Cell::ReliefYes))
 }
 
 /// A batch fills a TIN's boxes left to right, and a gated box after the
@@ -954,8 +1071,10 @@ pub(super) fn values(
     if let Some((_, [month, day, year])) =
         ONE_DATES.iter().find(|(form, _)| *form == kind.form_code())
     {
+        // Nor one holding only part of a date (03/00/2026): blank, with a
+        // notice saying what is stored (`notices`, `waits`).
         let unset = |key: &str| map.get(key).is_some_and(|v| v.trim() == "00");
-        if unset(month) && unset(day) {
+        if unset(month) || unset(day) {
             for key in [month, day, year] {
                 map.insert((*key).to_string(), String::new());
             }
@@ -1055,11 +1174,14 @@ fn order_1707_sellers(form: &mut Value) {
     }
 }
 
-/// The error keys of a PR 9 form's message, those drawn under its printed
-/// items first: the page draws a message under the first key's item
-/// (form_page.js `setErrors`), so 1707's "ATC Code on Page 1 Item 3 is
-/// required." (bound, with item 3's boxes, to the page's own domestic/
-/// foreign question under Not on the printed sheet) sits under item 3.
+/// The error keys of a PR 9 form's message, reordered only where its
+/// subject (first) key is drawn under Not on the printed sheet while
+/// another of its keys is drawn under a printed item: that key comes first,
+/// since the page draws a message under its first key's item
+/// (form_page.js `setErrors`). On PR 9's forms that is 1707's "ATC Code on
+/// Page 1 Item 3 is required." (bound with item 3's boxes to the page's own
+/// domestic/foreign question); every other message keeps its order
+/// (tests::as_needed golden). Keys in the part's tables count too.
 pub(super) fn order_error_keys(kind: AgentFormKind, keys: &mut [String]) {
     if !matches!(
         kind.form_code(),
@@ -1067,19 +1189,48 @@ pub(super) fn order_error_keys(kind: AgentFormKind, keys: &mut [String]) {
     ) {
         return;
     }
-    let Some(form) = super::schema_entry(kind.form_code()) else {
+    if let Some(form) = super::schema_entry(kind.form_code()) {
+        order_keys_in(form, keys);
+    }
+}
+
+/// `order_error_keys` on one form's schema.
+pub(super) fn order_keys_in(form: &Value, keys: &mut [String]) {
+    let mut off_sheet = std::collections::BTreeSet::new();
+    let mut drawn = std::collections::BTreeSet::new();
+    for part in form["parts"].as_array().into_iter().flatten() {
+        let off = part["n"] == "Not on the printed sheet";
+        for item in part["items"].as_array().into_iter().flatten() {
+            let fields = item["f"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|field| field["t"] != "hidden")
+                .filter_map(|field| field["k"].as_str());
+            let cells = item["keys"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|row| row.as_array().into_iter().flatten())
+                .filter_map(Value::as_str);
+            for key in fields.chain(cells) {
+                if off {
+                    off_sheet.insert(key.to_string());
+                } else {
+                    drawn.insert(key.to_string());
+                }
+            }
+        }
+    }
+    let Some(first) = keys.first() else {
         return;
     };
-    let off_sheet: std::collections::BTreeSet<String> = form["parts"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|part| part["n"] == "Not on the printed sheet")
-        .flat_map(|part| part["items"].as_array().into_iter().flatten())
-        .flat_map(|item| item["f"].as_array().into_iter().flatten())
-        .filter_map(|field| field["k"].as_str().map(str::to_string))
-        .collect();
-    keys.sort_by_key(|key| off_sheet.contains(key));
+    if !off_sheet.contains(first) {
+        return;
+    }
+    if let Some(at) = keys.iter().position(|key| drawn.contains(key)) {
+        keys[..=at].rotate_right(1);
+    }
 }
 
 /// What Schedule 1's add-more rate shows while its row is blank.
@@ -1088,7 +1239,6 @@ pub(super) const LSE_RATE_WAITS: &str = "Schedule 1's rate is 6/10 of 1%.";
 /// What each box the form fills from another box waits for while it shows
 /// blank (the page shows it in the box).
 pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
-    let _ = draft;
     let mut out = Map::new();
     let fmv_boxes = |prefix: &str| {
         [
@@ -1129,6 +1279,14 @@ pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
             // Item 1 is the return's identity, set where it is started.
             for key in ONE_DATES[2].1 {
                 out.insert(key.to_string(), Value::from(DATE_FROM_NEW_RETURN));
+            }
+            if let Some(why) = bir_core::forms::agent::field_map(kind, draft)
+                .ok()
+                .and_then(|map| partial_date(kind, &map))
+            {
+                for key in ONE_DATES[2].1 {
+                    out.insert(key.to_string(), Value::from(why.clone()));
+                }
             }
             for n in 1..=9 {
                 out.insert(

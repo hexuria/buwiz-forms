@@ -27226,8 +27226,8 @@
       "evidence": "painted form_2552_view.rs (local:relief via binding /tax_relief_specification): 'If yes, specify'; writer-cells printed caption: 'If yes, specify'"
     },
     "frm2552:txtPg1Pt1I12NumOfShare": {
-      "label": "No. of Shares Sold, Bartered, or Exchanged",
-      "evidence": "painted form_2552_view.rs (local:shares_sold via binding /shares_sold): 'No. of shares sold, bartered or exchanged'; writer-cells printed caption: 'No. of Shares Sold, Bartered, or Exchanged' | PR 9 (manual-3): a number of shares, typed as the filer writes it (form_2552.rs shares_sold, text)",
+      "label": "12A No. of Shares Sold, Bartered, or Exchanged",
+      "evidence": "painted form_2552_view.rs (local:shares_sold via binding /shares_sold): 'No. of shares sold, bartered or exchanged'; writer-cells printed caption: 'No. of Shares Sold, Bartered, or Exchanged' | PR 9 (manual-3): a number of shares, typed as the filer writes it (form_2552.rs shares_sold, text) | PR 9 (manual-2): html-frozen/2552-2018/index.html (BIR Form 2552, January 2018) '12 For Initial Public Offering' then '12A No. of Shares Sold, Bartered, or Exchanged'",
       "kind": "int"
     },
     "frm2552:txtPg1P2I18CredTaxWthhld": {
@@ -27937,10 +27937,10 @@
       "evidence": "PR 9 (R3.0): html-frozen/2552-2018/writer-cells.json xbox_joins 'If overpayment: To be issued Tax Credit Certificate'"
     },
     "frm2552:txtPg1Pt1I12TotShare": {
-      "label": "Total Outstanding Shares of Stocks after Listing in the LSE",
+      "label": "12B Total Outstanding Shares of Stocks after Listing in the LSE",
       "kind": "int",
       "computed": false,
-      "evidence": "PR 9 (manual-3): 12B is typed by the filer for an initial public offering (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load like 12A, both opened by kindOfTransaction; form_2552.rs keeps it in outstanding_shares, text, and clears it unless item 11 is an offering); the corpus marks it computed, so the host writes it (rows_as_needed.rs)"
+      "evidence": "PR 9 (manual-3): 12B is typed by the filer for an initial public offering (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load like 12A, both opened by kindOfTransaction; form_2552.rs keeps it in outstanding_shares, text, and clears it unless item 11 is an offering); the corpus marks it computed, so the host writes it (rows_as_needed.rs) | PR 9 (manual-2): html-frozen/2552-2018/index.html (BIR Form 2552, January 2018) '12 For Initial Public Offering' then '12B Total Outstanding Shares of Stocks after Listing in the LSE'"
     },
     "frm2552:txtPg1P2I13TaxATC": {
       "kind": "hidden",
@@ -28087,16 +28087,10 @@
               ]
             },
             {
-              "no": "12A",
-              "l": "For Initial Public Offering: No. of Shares Sold, Bartered, or Exchanged",
+              "no": "12",
+              "l": "For Initial Public Offering",
               "k": [
-                "frm2552:txtPg1Pt1I12NumOfShare"
-              ]
-            },
-            {
-              "no": "12B",
-              "l": "For Initial Public Offering: Total Outstanding Shares of Stocks after Listing in the LSE",
-              "k": [
+                "frm2552:txtPg1Pt1I12NumOfShare",
                 "frm2552:txtPg1Pt1I12TotShare"
               ]
             }

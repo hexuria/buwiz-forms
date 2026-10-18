@@ -1,0 +1,81 @@
+0605	open	due_date	Invalid date entry on item 4.	frm0605:txtDueDateDay frm0605:txtDueDateMonth frm0605:txtDueDateYear
+0605	open	atc	Please enter a valid ATC on Item 6.	txtATCCode
+0605	open	return_period	Please enter a valid Return Period on Item 7.	frm0605:txtReturnPeriodDay frm0605:txtReturnPeriodMonth frm0605:txtReturnPeriodYear
+0605	open	tax_type	Please select Tax Type Code on Item 8.	txtTaxTypeCode
+0605	open	manner_of_payment	Please select Manner of Payment on item 17.	frm0605:itemMannerOfPayment:_1 frm0605:itemMannerOfPayment:_2 frm0605:itemMannerOfPayment:_3 frm0605:itemMannerOfPayment:_4 frm0605:itemMannerOfPayment:_5 frm0605:itemMannerOfPaymentB:_1 frm0605:itemMannerOfPaymentB:_2
+0605	open	type_of_payment	Please select Type of Payment on item 18.	frm0605:itemModeOfPayment:_1 frm0605:itemModeOfPayment:_2 frm0605:itemModeOfPayment:_3
+0605	open	item_19_basic_tax_or_payment	Please enter valid value (greater than 0) for item 19 under Computation of Tax.	frm0605:txtTax19
+0605	sample	atc	Please enter a valid ATC on Item 6.	txtATCCode
+0605	sample	tax_type	Please select Tax Type Code on Item 8.	txtTaxTypeCode
+0605	sample	manner_of_payment	Please select Manner of Payment on item 17.	frm0605:itemMannerOfPayment:_1 frm0605:itemMannerOfPayment:_2 frm0605:itemMannerOfPayment:_3 frm0605:itemMannerOfPayment:_4 frm0605:itemMannerOfPayment:_5 frm0605:itemMannerOfPaymentB:_1 frm0605:itemMannerOfPaymentB:_2
+0605	sample	type_of_payment	Please select Type of Payment on item 18.	frm0605:itemModeOfPayment:_1 frm0605:itemModeOfPayment:_2 frm0605:itemModeOfPayment:_3
+0605	sample	item_19_basic_tax_or_payment	Please enter valid value (greater than 0) for item 19 under Computation of Tax.	frm0605:txtTax19
+1606	open	seller_tin	Please enter the Seller's TIN.	frm1606:txtTINS1 frm1606:txtTINS2 frm1606:txtTINS3
+1606	open	seller_rdo_code	Please enter the Seller's RDO Code.	frm1606:txtRDOCodeS
+1606	open	seller_name	Please enter the Seller's Name.	frm1606:txtSellerName
+1606	open	seller_type	Please select an option for Item 9.	frm1606:optATC13_2 frm1606:optATC13_3
+1606	open	agent_category	Please select an option for Item 6.	frm1606:j_id392:_1 frm1606:j_id392:_2
+1606	open	property_class	Please select an option for the Part IV Schedule 1 Classification.	frm1606:j_id393:_1 frm1606:j_id393:_3 frm1606:j_id393:_5 frm1606:j_id393_8 frm1606:j_id393:_2 frm1606:j_id393:_4 frm1606:j_id393:_6
+1606	open	property_location	Please enter the Location of the Property in Part IV Schedule 1.	frm1606:txtLocation
+1606	open	property_rdo_code	Please enter the RDO Code on Item 5.	frm1606:txtRDOCode16A
+1606	open	tct_number	Please enter the TCT/OCT/CCT No.	frm1606:txtTCT
+1606	open	transaction	Please select an option for Part IV Schedule 2 Item 1.	frm1606:j_id395:_1 frm1606:j_id395:_4 frm1606:j_id395:_2 frm1606:j_id395:_5 frm1606:j_id395:_3
+1606	open	tax_rate	Please select the tax rate on Item 13.	frm1606:txtTaxRate
+1606	sample	seller_tin	Please enter the Seller's TIN.	frm1606:txtTINS1 frm1606:txtTINS2 frm1606:txtTINS3
+1606	sample	seller_rdo_code	Please enter the Seller's RDO Code.	frm1606:txtRDOCodeS
+1606	sample	seller_name	Please enter the Seller's Name.	frm1606:txtSellerName
+1606	sample	seller_type	Please select an option for Item 9.	frm1606:optATC13_2 frm1606:optATC13_3
+1606	sample	agent_category	Please select an option for Item 6.	frm1606:j_id392:_1 frm1606:j_id392:_2
+1606	sample	property_class	Please select an option for the Part IV Schedule 1 Classification.	frm1606:j_id393:_1 frm1606:j_id393:_3 frm1606:j_id393:_5 frm1606:j_id393_8 frm1606:j_id393:_2 frm1606:j_id393:_4 frm1606:j_id393:_6
+1606	sample	property_location	Please enter the Location of the Property in Part IV Schedule 1.	frm1606:txtLocation
+1606	sample	property_rdo_code	Please enter the RDO Code on Item 5.	frm1606:txtRDOCode16A
+1606	sample	tct_number	Please enter the TCT/OCT/CCT No.	frm1606:txtTCT
+1606	sample	transaction	Please select an option for Part IV Schedule 2 Item 1.	frm1606:j_id395:_1 frm1606:j_id395:_4 frm1606:j_id395:_2 frm1606:j_id395:_5 frm1606:j_id395:_3
+1606	sample	tax_rate	Please select the tax rate on Item 13.	frm1606:txtTaxRate
+1706	open	seller_type	Please select an option for Item 3.	frm1706:opt4 frm1706:opt4C
+1706	open	buyer_tin	Please enter the Buyer's TIN.	frm1706:txtTINB1 frm1706:txtTINB2 frm1706:txtTINB3
+1706	open	buyer_rdo_code	Please enter the Buyer's RDO Code.	frm1706:txtRDOCodeB
+1706	open	buyer_name	Please enter the Buyer's Name.	frm1706:txtBuyerName
+1706	open	buyer_address	Please enter the Buyer's address.	frm1706:txtBuyerAddress
+1706	open	property_location	Please enter the Location of the Property.	frm1706:txtLocation
+1706	open	property_rdo_code	Please enter the RDO Code on Item 5.	frm1706:txtRDOCode14A
+1706	open	property_class	Please select an option for the Part IV Schedule 1 Classification.	frm1706:j_id391:_1 frm1706:j_id391:_3 frm1706:j_id391:_5 frm1706:j_id391:_8 frm1706:j_id391:_2 frm1706:j_id391:_4 frm1706:j_id391:_6
+1706	open	tct_number	Please enter the TCT/OCT/CCT No.	frm1706:txtTCT
+1706	open	covers_multiple_properties	Please select an option for Item 10.	frm1706:j_id394:_1 frm1706:j_id394:_2
+1706	open	transaction_type	Please select an option for Part IV Schedule 2.	frm1706:j_id395:_1 frm1706:j_id395:_4 frm1706:j_id395:_2 frm1706:j_id395:_5 frm1706:j_id395:_3
+1706	open	taxable_base_option	Please choose Determination of taxable base in Part IV Schedule 4	frm1706:opt30A frm1706:opt30B frm1706:opt30C frm1706:opt30D frm1706:opt30E frm1706:opt30F
+1706	sample	seller_type	Please select an option for Item 3.	frm1706:opt4 frm1706:opt4C
+1706	sample	buyer_tin	Please enter the Buyer's TIN.	frm1706:txtTINB1 frm1706:txtTINB2 frm1706:txtTINB3
+1706	sample	buyer_rdo_code	Please enter the Buyer's RDO Code.	frm1706:txtRDOCodeB
+1706	sample	buyer_name	Please enter the Buyer's Name.	frm1706:txtBuyerName
+1706	sample	buyer_address	Please enter the Buyer's address.	frm1706:txtBuyerAddress
+1706	sample	property_location	Please enter the Location of the Property.	frm1706:txtLocation
+1706	sample	property_rdo_code	Please enter the RDO Code on Item 5.	frm1706:txtRDOCode14A
+1706	sample	property_class	Please select an option for the Part IV Schedule 1 Classification.	frm1706:j_id391:_1 frm1706:j_id391:_3 frm1706:j_id391:_5 frm1706:j_id391:_8 frm1706:j_id391:_2 frm1706:j_id391:_4 frm1706:j_id391:_6
+1706	sample	tct_number	Please enter the TCT/OCT/CCT No.	frm1706:txtTCT
+1706	sample	covers_multiple_properties	Please select an option for Item 10.	frm1706:j_id394:_1 frm1706:j_id394:_2
+1706	sample	transaction_type	Please select an option for Part IV Schedule 2.	frm1706:j_id395:_1 frm1706:j_id395:_4 frm1706:j_id395:_2 frm1706:j_id395:_5 frm1706:j_id395:_3
+1706	sample	taxable_base_option	Please choose Determination of taxable base in Part IV Schedule 4	frm1706:opt30A frm1706:opt30B frm1706:opt30C frm1706:opt30D frm1706:opt30E frm1706:opt30F
+2000OT	open	transaction_date	Please enter a valid date on Item 1.	frm2000OT:txtTransactionDate
+2000OT	open	atc	Please choose an ATC on item 3.	frm2000OT:ATC_1 frm2000OT:ATC_2 frm2000OT:ATC_3
+2000OT	open	other_party	Please choose one (1) Other Party to the transaction on item 11.	frm2000OT:optParty_1 frm2000OT:optParty_2
+2000OT	open	other_party_name	Please enter a name for item 11A. The name that you will enter corresponds to your choice in item 11.	frm2000OT:txtOtherName
+2000OT	open	other_party_tin	Please enter TIN for item 11B. The TIN that you will enter is the TIN of your entry in item 11A.	frm2000OT:txtOtherTIN
+2000OT	open	nature	Please choose one (1) Nature of Transaction on item 12.	frm2000OT:rbTransNature_1 frm2000OT:rbTransNature_2 frm2000OT:rbTransNature_3
+2000OT	sample	atc	Please choose an ATC on item 3.	frm2000OT:ATC_1 frm2000OT:ATC_2 frm2000OT:ATC_3
+2000OT	sample	other_party	Please choose one (1) Other Party to the transaction on item 11.	frm2000OT:optParty_1 frm2000OT:optParty_2
+2000OT	sample	other_party_name	Please enter a name for item 11A. The name that you will enter corresponds to your choice in item 11.	frm2000OT:txtOtherName
+2000OT	sample	other_party_tin	Please enter TIN for item 11B. The TIN that you will enter is the TIN of your entry in item 11A.	frm2000OT:txtOtherTIN
+2000OT	sample	nature	Please choose one (1) Nature of Transaction on item 12.	frm2000OT:rbTransNature_1 frm2000OT:rbTransNature_2 frm2000OT:rbTransNature_3
+2552	open	transaction_month	Month field on Page 1 Item 1 is required.	frm2552:txtPg1I1Month
+2552	open	transaction	Select an option for Page 1 Item 11 Kind of Transaction.	frm2552:rdoPg1I11TransactionLSE frm2552:rdoPg1I11TransactionPrimary frm2552:rdoPg1I11TransactionSecondary
+2552	sample	transaction	Select an option for Page 1 Item 11 Kind of Transaction.	frm2552:rdoPg1I11TransactionLSE frm2552:rdoPg1I11TransactionPrimary frm2552:rdoPg1I11TransactionSecondary
+1707	open	transaction_month	Month field on Page 1 Item 1 is required.	frm1707:txtPg1I1Month
+1707	open	atc	ATC Code on Page 1 Item 3 is required.	frm1707:rdoPg1I3ATCCorp frm1707:rdoCorpoDomestic frm1707:rdoCorpoForeign frm1707:rdoPg1I3ATCIndiv
+1707	open	sellers[0]	Seller's information in Page 1 should have at least one row.	frm1707:txtPg1I6SellerAddr0 frm1707:txtPg1I6SellerName0 frm1707:txtPg1I6SellerTIN0
+1707	open	buyers[0]	Buyer's information in Page 1 should have at least one row.	frm1707:txtPg1I7BuyerAddr0 frm1707:txtPg1I7BuyerName0 frm1707:txtPg1I7BuyerTIN0
+1707	open	transaction_type	Description of Transaction on Page 1 Item 9 is required.	frm1707:rdoPg1I9TransDescCash frm1707:rdoPg1I9TransDescForeclosure frm1707:rdoPg1I9TransDescInstallment frm1707:rdoPg1I9TransDescOthers
+1707	sample	atc	ATC Code on Page 1 Item 3 is required.	frm1707:rdoPg1I3ATCCorp frm1707:rdoCorpoDomestic frm1707:rdoCorpoForeign frm1707:rdoPg1I3ATCIndiv
+1707	sample	sellers[0]	Seller's information in Page 1 should have at least one row.	frm1707:txtPg1I6SellerAddr0 frm1707:txtPg1I6SellerName0 frm1707:txtPg1I6SellerTIN0
+1707	sample	buyers[0]	Buyer's information in Page 1 should have at least one row.	frm1707:txtPg1I7BuyerAddr0 frm1707:txtPg1I7BuyerName0 frm1707:txtPg1I7BuyerTIN0
+1707	sample	transaction_type	Description of Transaction on Page 1 Item 9 is required.	frm1707:rdoPg1I9TransDescCash frm1707:rdoPg1I9TransDescForeclosure frm1707:rdoPg1I9TransDescInstallment frm1707:rdoPg1I9TransDescOthers

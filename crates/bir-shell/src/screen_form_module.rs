@@ -1893,32 +1893,36 @@ fn occurrence_aliases(kind: AgentFormKind) -> Vec<(&'static String, &'static str
 
 /// A validation error with the schema keys it names: a radio item's group
 /// box becomes its radios, since the page binds each radio by its own key.
-fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
+/// The page keys a message's field names, in the bindings' order.
+fn message_keys(kind: AgentFormKind, field: &str, on_screen: &BTreeSet<String>) -> Vec<String> {
     let def = kind.definition();
+    let mut keys: Vec<String> = Vec::new();
+    for key in agent::error_keys(kind, field) {
+        match def.box_def(&key) {
+            Some(entry) if entry.radio_group => keys.extend(entry.members.iter().cloned()),
+            _ => keys.push(key),
+        }
+    }
+    // A 2550M schedule row has no draft binding of its own.
+    keys.extend(rows_2550m::error_keys(kind, field));
+    // A penalty item's message names the model's field.
+    if keys.is_empty() {
+        keys.extend(penalties::error_keys(kind, field));
+    }
+    // Keys the page cannot bind (not in the schema) are dropped;
+    // the error still carries its field and message.
+    let mut seen = BTreeSet::new();
+    keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+    keys
+}
+
+fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
     let on_screen = schema_keys(kind.form_code());
     Value::Array(
         errors
             .iter()
             .map(|(field, message)| {
-                let mut keys: Vec<String> = Vec::new();
-                for key in agent::error_keys(kind, field) {
-                    match def.box_def(&key) {
-                        Some(entry) if entry.radio_group => {
-                            keys.extend(entry.members.iter().cloned())
-                        }
-                        _ => keys.push(key),
-                    }
-                }
-                // A 2550M schedule row has no draft binding of its own.
-                keys.extend(rows_2550m::error_keys(kind, field));
-                // A penalty item's message names the model's field.
-                if keys.is_empty() {
-                    keys.extend(penalties::error_keys(kind, field));
-                }
-                // Keys the page cannot bind (not in the schema) are dropped;
-                // the error still carries its field and message.
-                let mut seen = BTreeSet::new();
-                keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
+                let mut keys = message_keys(kind, field, on_screen);
                 rows_as_needed::order_error_keys(kind, &mut keys);
                 // The printed item numbers where BIR's message names its
                 // program's own (decision D6; PR 9's forms).
@@ -2063,11 +2067,12 @@ fn evaluate_here(
     } else {
         agent::validate(kind, &mut draft.clone())?
     };
-    Ok((
-        values_json(kind, draft)?,
-        errors_json(kind, &errors),
-        status,
-    ))
+    let mut errors = errors_json(kind, &errors);
+    // PR 9's notices: a stored partial date the page shows blank.
+    if let Some(list) = errors.as_array_mut() {
+        list.extend(rows_as_needed::notices(kind, draft));
+    }
+    Ok((values_json(kind, draft)?, errors, status))
 }
 
 // --------------------------------------------------------- host functions
@@ -3283,7 +3288,14 @@ fn apply_screen_edits(
             (group, edited)
         })
         .collect();
+    // A one-date box's parts are judged whole, as the page reads a date
+    // (PR 9's forms, rows_as_needed.rs).
+    let date_refusals = rows_as_needed::refuse_dates(kind, &shown, &edits);
     for (key, step) in plan_choice_edits(kind, draft, &shown, edits) {
+        if let Some(why) = date_refusals.get(&key) {
+            rejected.insert(key.clone(), why.clone());
+            continue;
+        }
         if !editable {
             rejected.insert(key.clone(), json!("this return is no longer a draft"));
             continue;
