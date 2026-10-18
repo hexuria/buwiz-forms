@@ -10959,6 +10959,9 @@ mod tests {
             ("item_14_amount_of_remittance", 3000.0),
         );
     }
+
+    /// PR 7: 1700, 1701, 1701A and 1701MS.
+    mod annual_individual;
 }
 
 #[cfg(test)]
