@@ -2213,8 +2213,9 @@ fn form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return() {
 
 // ------------------------------------------------- 1701 preview.1
 
-/// The 31 boxes 1701's preview.1 found printed as constants
-/// (tmp/screen-form-audit/runtime.json `v_app_constant_printed`).
+/// The 31 boxes 1701's preview.1 lists as printed constants
+/// (docs/form-findings/1701/findings.json preview.1 names the first of
+/// them; this list is the whole set, kept here as the oracle).
 const PREVIEW_1: [&str; 31] = [
     "frm1701:txtPg2I9ForeignTaxNumber",
     "frm1701:txtPg2IShed3_20Desc",
@@ -2249,99 +2250,119 @@ const PREVIEW_1: [&str; 31] = [
     "frm1701:txtPg4IPart9_9Particulars",
 ];
 
-/// 1701 preview.1: none of the 31 boxes is a constant any more. Each is
-/// bound to the draft or computed from boxes that are, and on a joint,
-/// amended return the page shows what the print prints, for typed values
-/// and for blanks. Part VIII (Tax Relief Availment) items 1, 2, 4, 6, 8
-/// and 9 are the filer's (the official page opens them:
-/// rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json
-/// `disabled: false`); items 3, 5, 7 and 10 are the printed sums
-/// ("Sum of Items 1 and 2", "Item 3 Less Item 4", "Sum of Items 5 and 6",
-/// "Sum of Items 8 and 9"), the oracle here.
-#[test]
-fn form_1701_preview_1_boxes_print_what_the_page_shows() {
-    setup();
-    let kind = kind_of("1701").unwrap();
-    let def = kind.definition();
-    for key in PREVIEW_1 {
-        assert!(
-            !def.unmapped.contains_key(key),
-            "{key}: {:?}",
-            def.unmapped.get(key)
-        );
+/// Part VIII column A's typed items and its totals.
+const PART_VIII_TYPED: [u8; 6] = [1, 2, 4, 6, 8, 9];
+const PART_VIII_TOTALS: [u8; 4] = [3, 5, 7, 10];
+
+fn part_viii_b(key: &str) -> bool {
+    key.starts_with("frm1701:txtPg4IPart8_") && key.ends_with('B')
+}
+
+/// The same value as the screen-form audit's `compare` reads it: the same
+/// amount, or the same text once case and spacing are set aside (the print
+/// writes the editable-save map's 1100.00 and Sample Text where the page
+/// shows 1,100.00 and SAMPLE TEXT).
+fn same_shown(page: &str, sheet: &str) -> bool {
+    match (agent::parse_amount(page), agent::parse_amount(sheet)) {
+        (Some(a), Some(b)) => a == b,
+        _ => {
+            let norm = |t: &str| {
+                t.split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .to_uppercase()
+            };
+            norm(page) == norm(sheet)
+        }
     }
+}
+
+/// A joint, amended return with the spouse claiming foreign tax credits:
+/// every preview.1 box the official page opens is open.
+fn preview_1_return() -> Value {
     let opened = opened("1701");
     let mut answers = joint("1701");
     answers["frm1701:rdoPg1I2AmendedYes"] = json!("true");
     answers["frm1701:rdoPg1I7ATC_II012"] = json!("true");
     answers["frm1701:rdoPg2I4ATC_II012"] = json!("true");
     answers["frm1701:rdoPg2I8ForeignTaxCreditsYes"] = json!("true");
-    let on = take("1701", &opened["draft"], answers);
-    let mut typed = Map::new();
-    let mut amount = 1000.0;
+    take("1701", &opened["draft"], answers)["draft"].clone()
+}
+
+/// 1701 preview.1: none of the 31 boxes is a constant the page and the
+/// print disagree on. Each is bound to the draft, computed from boxes that
+/// are, or (Part VIII column B) shut as the official page keeps it: on a
+/// joint, amended return the page shows what the print prints, for typed
+/// values and for blanks. Part VIII column A's items 1, 2, 4, 6, 8 and 9
+/// are the filer's (the tracked runtime inventory records them enabled);
+/// its items 3, 5, 7 and 10 follow the printed captions' operators ("Sum of
+/// Items 1 and 2", "Item 3 Less Item 4", "Sum of Items 5 and 6", "Sum of
+/// Items 8 and 9"), the oracle here; column B files 0.00.
+#[test]
+fn form_1701_preview_1_boxes_print_what_the_page_shows() {
+    setup();
+    let kind = kind_of("1701").unwrap();
+    let def = kind.definition();
     for key in PREVIEW_1 {
-        let computed = ["_3", "_5", "_7", "_10"]
+        let reason = def.unmapped.get(key).map(String::as_str);
+        if part_viii_b(key) {
+            assert_eq!(
+                reason,
+                Some(bir_core::forms::agent::probe::SHUT_REASON),
+                "{key}"
+            );
+        } else {
+            assert_eq!(reason, None, "{key}");
+        }
+    }
+    let on = preview_1_return();
+    let mut typed = Map::new();
+    let mut amount = 1000;
+    for key in PREVIEW_1 {
+        let total = PART_VIII_TOTALS
             .iter()
-            .any(|n| key.contains(&format!("Part8{n}")));
-        if computed {
+            .any(|n| *key == format!("frm1701:txtPg4IPart8_{n}A"));
+        if total || part_viii_b(key) {
             continue;
         }
         let value = if key.contains("Part7_") || key.contains("Part8_") {
-            amount += 100.0;
+            amount += 100;
             json!(amount.to_string())
         } else {
             json!("Sample Text")
         };
         typed.insert(key.to_string(), value);
     }
-    let filled = fill("1701", &on["draft"], Value::Object(typed.clone()));
-    assert_eq!(filled["rejected"], json!({}));
+    let filled = take("1701", &on, Value::Object(typed.clone()));
     let agree = |filled: &Value, blank: bool| {
         let print = printed("1701", &filled["draft"]);
         for key in PREVIEW_1 {
             let page = filled["values"][key].as_str().unwrap_or_default();
             let sheet = print.get(key).map(String::as_str).unwrap_or_default();
-            // Agreement as the screen-form audit reads it (`compare`):
-            // the same amount, or the same text once case and spacing are
-            // set aside (the print writes the editable-save map's
-            // 1100.00 and Sample Text where the page shows 1,100.00 and
-            // SAMPLE TEXT).
-            let same = match (agent::parse_amount(page), agent::parse_amount(sheet)) {
-                (Some(a), Some(b)) => a == b,
-                _ => {
-                    let norm = |t: &str| {
-                        t.split_whitespace()
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                            .to_uppercase()
-                    };
-                    norm(page) == norm(sheet)
-                }
-            };
-            assert!(same, "{key}: page {page:?}, print {sheet:?}");
-            if !blank {
+            assert!(
+                same_shown(page, sheet),
+                "{key}: page {page:?}, print {sheet:?}"
+            );
+            if part_viii_b(key) {
+                assert_eq!(page, "0.00", "{key}: shut");
+            } else if !blank {
                 assert!(!says_nothing_here(page), "{key}: {page:?} typed");
             }
         }
     };
     agree(&filled, false);
     let value = |key: &str| agent::parse_amount(filled["values"][key].as_str().unwrap()).unwrap();
-    for column in ["A", "B"] {
-        let item = |n: u8| value(&format!("frm1701:txtPg4IPart8_{n}{column}"));
-        assert_eq!(item(3), item(1) + item(2), "{column}: item 3");
-        assert_eq!(item(5), item(3) - item(4), "{column}: item 5");
-        assert_eq!(item(7), item(5) + item(6), "{column}: item 7");
-        assert_eq!(item(10), item(8) + item(9), "{column}: item 10");
-    }
+    let item = |n: u8| value(&format!("frm1701:txtPg4IPart8_{n}A"));
+    assert_eq!(item(3), item(1) + item(2), "item 3");
+    assert_eq!(item(5), item(3) - item(4), "item 5");
+    assert_eq!(item(7), item(5) + item(6), "item 7");
+    assert_eq!(item(10), item(8) + item(9), "item 10");
     // Typed values file as typed.
     let fields = field_map("1701", &filled["draft"]);
-    assert_eq!(
-        fields["frm1701:txtPg4IPart8_1A"],
-        filled["values"]["frm1701:txtPg4IPart8_1A"]
-    );
+    assert_eq!(fields["frm1701:txtPg4IPart8_1A"], "1,300.00");
     assert_eq!(fields["frm1701:txtPg4IPart9_2Particulars"], "SAMPLE TEXT");
-    // Blanks: page and print agree on them too.
-    // A blank amount is 0 (the box takes no empty amount), a blank text "".
+    // Blanks: page and print agree on them too. A blank amount is 0 (the
+    // box takes no empty amount), a blank text "".
     let blanks: Map<String, Value> = typed
         .keys()
         .map(|k| {
@@ -2355,6 +2376,108 @@ fn form_1701_preview_1_boxes_print_what_the_page_shows() {
 
 fn says_nothing_here(text: &str) -> bool {
     text.trim().trim_matches(['0', '.', ',']).is_empty()
+}
+
+/// Part VIII column B stays shut on a joint return: a write is refused with
+/// the shut reason and the column files 0.00.
+#[test]
+fn form_1701_part_viii_column_b_stays_shut_on_a_joint_return() {
+    setup();
+    let on = preview_1_return();
+    let refused = fill("1701", &on, json!({"frm1701:txtPg4IPart8_1B": "500"}));
+    assert_eq!(
+        refused["rejected"]["frm1701:txtPg4IPart8_1B"]
+            .as_str()
+            .map(|why| why.ends_with(bir_core::forms::agent::probe::SHUT_REASON)),
+        Some(true),
+        "{}",
+        refused["rejected"]
+    );
+    assert_eq!(refused["draft"], on);
+    let fields = field_map("1701", &on);
+    for n in 1..=10 {
+        assert_eq!(
+            fields[&format!("frm1701:txtPg4IPart8_{n}B")],
+            "0.00",
+            "{n}B"
+        );
+    }
+}
+
+/// Part VIII column A takes whole pesos, as the official entry filter has
+/// it: a decimal or a minus sign is refused with the reason, its own
+/// display ("1,500.00") is taken, and the totals are whole-peso sums;
+/// item 5 goes negative when item 4 is more than item 3. The four totals
+/// refuse a typed write.
+#[test]
+fn form_1701_part_viii_column_a_takes_whole_pesos() {
+    setup();
+    let on = preview_1_return();
+    for (key, value) in [
+        ("frm1701:txtPg4IPart8_1A", "1500.50"),
+        ("frm1701:txtPg4IPart8_2A", "-100"),
+    ] {
+        let refused = fill("1701", &on, json!({ key: value }));
+        let item = key
+            .trim_start_matches("frm1701:txtPg4IPart8_")
+            .trim_end_matches('A');
+        assert_eq!(
+            refused["rejected"][key],
+            rows_annual_individual::whole_peso_refusal(item),
+            "{key} {value}"
+        );
+    }
+    let filled = take(
+        "1701",
+        &on,
+        json!({
+            "frm1701:txtPg4IPart8_1A": "1,500.00",
+            "frm1701:txtPg4IPart8_2A": "250",
+            "frm1701:txtPg4IPart8_4A": "2000",
+            "frm1701:txtPg4IPart8_6A": "100",
+        }),
+    );
+    let fields = field_map("1701", &filled["draft"]);
+    assert_eq!(fields["frm1701:txtPg4IPart8_3A"], "1,750.00");
+    assert_eq!(
+        agent::parse_amount(&fields["frm1701:txtPg4IPart8_5A"]),
+        Some(-250.0)
+    );
+    assert_eq!(
+        agent::parse_amount(&fields["frm1701:txtPg4IPart8_7A"]),
+        Some(-150.0)
+    );
+    for n in PART_VIII_TOTALS {
+        let key = format!("frm1701:txtPg4IPart8_{n}A");
+        let refused = fill("1701", &filled["draft"], json!({ &key: "5" }));
+        assert!(refused["rejected"][&key].is_string(), "{key} is computed");
+    }
+    // Each typed item takes a whole amount.
+    for n in PART_VIII_TYPED {
+        let key = format!("frm1701:txtPg4IPart8_{n}A");
+        let taken = fill("1701", &on, json!({ &key: "1200" }));
+        assert!(taken["rejected"].get(&key).is_none(), "{key}");
+    }
+}
+
+/// A joint 1701 draft stored with Part VIII amounts opens and saves back
+/// as stored.
+#[test]
+fn form_1701_joint_part_viii_draft_round_trips() {
+    setup();
+    let on = preview_1_return();
+    let filled = take(
+        "1701",
+        &on,
+        json!({"frm1701:txtPg4IPart8_1A": "700", "frm1701:txtPg4IPart8_8A": "300"}),
+    );
+    let saved = save("1701", &filled["draft"]);
+    let reopened = opened("1701");
+    assert_eq!(reopened["draft"], saved["draft"], "opens as stored");
+    let again = save("1701", &reopened["draft"]);
+    assert_eq!(again["draft"], saved["draft"], "saves back as stored");
+    assert_eq!(reopened["values"]["frm1701:txtPg4IPart8_1A"], "700.00");
+    assert_eq!(reopened["values"]["frm1701:txtPg4IPart8_10A"], "300.00");
 }
 
 /// The PR 7 changes keep a stored 1701 draft's upload: the pre-PR 7
