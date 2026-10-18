@@ -22,12 +22,12 @@
   },
   "R3.5": {
    "reason": "frm2200Av2020:tinB#occurrence-2 and #occurrence-3 are the page 2 and page 3 header copies of item 4's TIN (hidden repeat occurrences locked as repeating item 4); the print writes that header from the draft's TIN (html-frozen/2200a-2020/writer-cells.json joins derived:page_header 'Page 2 and page 3 header: TIN / Taxpayer's Name'), so there is nothing for the page to fill twice.",
-   "reviewer": "",
+   "reviewer": "Agree (PR 11 review): html-frozen/2200a-2020/writer-cells.json joins derived:page_header to p2c5 and p3c5 ('Page 2 and page 3 header: TIN / Taxpayer's Name'), so the header copies print from the draft; crates/bir-core/data/agent-forms/2200a-v2020.json marks frm2200Av2020:tinB#occurrence-2 not written for any sample draft, and rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json has the tinB_2 and tinB_3 controls at disabled: true.",
    "status": "not_a_bug"
   },
   "manual-0": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once (one table per ATC and product as printed on pages 2-3, each of the sixty fixed rows once with its printed period and rate; the Others rows under 4) Others (specify); no part named Page 3)",
+   "proof": "screen_form_module::tests::excise::pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once (one table per ATC and product as printed on pages 2-3, each of the sixty fixed rows once with its printed period and rate; the Others rows under 4) Others (specify); no part named Page 3); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (12A, 15 and 19 gated and asked about)",
    "status": "fixed"
   },
   "manual-1": {
@@ -53,8 +53,8 @@
  },
  "2200AN": {
   "R3.1": {
-   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry and Part IV's payment details (items 25-28) are disabled at load in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json: txtTaxAgentNo, txtDateIssue, txtDateExpiry and frm2200ANv2018:txtAgency24 ... txtAmount27 disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
-   "reviewer": "",
+   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry and Part IV's payment details (items 25-28) are disabled at load (load-state basis) in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json: txtTaxAgentNo, txtDateIssue, txtDateExpiry and frm2200ANv2018:txtAgency24 ... txtAmount27 disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
+   "reviewer": "Agree (PR 11 review): rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json has txtTaxAgentNo, txtDateIssue, txtDateExpiry, frm2200ANv2018:txtAgency24, txtNumber26, txtAmount25 and txtAmount27 at disabled: true, and crates/bir-core/data/agent-forms/2200an-v2018.json marks them not written for any sample draft; pinned by pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them. Load-state basis only (no enabled_when in rules/forms/2200an-v2018/fields.json).",
    "status": "not_a_bug"
   },
   "manual-0": {
@@ -74,7 +74,7 @@
   },
   "preview.0": {
    "pr": "PR 11",
-   "proof": "bir-core sample_payloads_test sample_payloads::form_2200an::form_2200an_item_3_files_the_sheets_typed (txtSheets, open on the official page per runtime-control-inventory-v796.json, is the draft's number_of_attached_sheets; a stored draft keeps its shape and still writes '0'); screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (item 3 takes 4 and files it)",
+   "proof": "bir-core sample_payloads_test sample_payloads::form_2200an::form_2200an_item_3_files_the_sheets_typed (txtSheets, open on the official page per runtime-control-inventory-v796.json, is the draft's number_of_attached_sheets; a stored draft keeps its shape and still writes '0'); screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (item 3 takes 4 and files it); screen_form_module::tests::excise::pr11_2200an_item_3_holds_up_to_two_digits (the official box takes two digits)",
    "status": "fixed"
   }
  },
@@ -90,8 +90,8 @@
    "status": "fixed"
   },
   "R3.2": {
-   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry are disabled at load in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: frm2200C:txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue, txtPg1Pt4DateOfExpiry disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
-   "reviewer": "",
+   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry are disabled at load (load-state basis) in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: frm2200C:txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue, txtPg1Pt4DateOfExpiry disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
+   "reviewer": "Agree (PR 11 review): rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json has frm2200C:txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue and txtPg1Pt4DateOfExpiry at disabled: true, and crates/bir-core/data/agent-forms/2200c-v2018.json marks them not written for any sample draft; pinned by pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them.",
    "status": "not_a_bug"
   },
   "manual-0": {
@@ -106,7 +106,7 @@
   },
   "manual-2": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_2200c_item_3_and_schedule_1_read_as_printed (Part V - Schedule 1 is its own part, one table of the printed columns A-J, rows 1-10)",
+   "proof": "screen_form_module::tests::excise::pr11_2200c_item_3_and_schedule_1_read_as_printed (Part V - Schedule 1 is its own part, one table of the printed columns A-J, rows 1-10); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (Part V is off while item 13 or 15 is not ticked, refused with that reason, and a manner change that clears typed rows asks first)",
    "status": "fixed"
   },
   "manual-3": {
@@ -116,7 +116,7 @@
   },
   "manual-4": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_part_ii_is_one_tick_box_per_printed_item (13 'Payment on Actual Performance of Services', 14 and 15 as printed; 15's specify box beside its tick box); screen_form_module::tests::excise::pr11_labels_read_as_printed (item 12 reads the whole question)",
+   "proof": "screen_form_module::tests::excise::pr11_part_ii_is_one_tick_box_per_printed_item (13 'Payment on Actual Performance of Services', 14 and 15 as printed; 15's specify box beside its tick box); screen_form_module::tests::excise::pr11_labels_read_as_printed (item 12 reads the whole question); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (12A and 15 gated and asked about)",
    "status": "fixed"
   }
  },
@@ -194,8 +194,8 @@
    "status": "fixed"
   },
   "R3.5": {
-   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry are disabled at load in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: frm2200P:txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue, txtPg1Pt4DateOfExpiry disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
-   "reviewer": "",
+   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry are disabled at load (load-state basis) in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: frm2200P:txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue, txtPg1Pt4DateOfExpiry disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
+   "reviewer": "Agree (PR 11 review): rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json has frm2200P:txtPg1Pt4TaxAcredNo, txtPg1Pt4DateOfIssue and txtPg1Pt4DateOfExpiry at disabled: true, and crates/bir-core/data/agent-forms/2200p-v2020.json marks them not written for any sample draft; pinned by pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them.",
    "status": "not_a_bug"
   },
   "manual-0": {
@@ -226,23 +226,23 @@
  },
  "2200S": {
   "R3.0": {
-   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry and Part IV's payment details (items 27-30) are disabled at load in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json: txtTaxAgentNo, txtDateIssue, txtDateExpiry and frm2200S:txtAgency33 ... txtAmount36 disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
-   "reviewer": "",
+   "reason": "The tax agent's Accreditation No., Date of Issue and Date of Expiry and Part IV's payment details (items 27-30) are disabled at load (load-state basis) in the official program (the tracked rule record of the untracked official HTA runtime, rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json: txtTaxAgentNo, txtDateIssue, txtDateExpiry and frm2200S:txtAgency33 ... txtAmount36 disabled: true) and this app's field map writes them for no draft (crates/bir-core/data/agent-forms: \"not written by this app's field map for any sample draft\"), so the upload keeps the official default. The page shows each printed item with a note saying so instead of a box that could never save (screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them).",
+   "reviewer": "Agree (PR 11 review): rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json has txtTaxAgentNo, txtDateIssue, txtDateExpiry and frm2200S:txtAgency33 through txtAmount36 at disabled: true, and crates/bir-core/data/agent-forms/2200s-v2018.json marks them not written for any sample draft; the page notes are pinned by screen_form_module::tests::excise::pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them. The basis is the load state only, since rules/forms/2200s-v2018/fields.json has enabled_when null for these keys.",
    "status": "not_a_bug"
   },
   "R8.0": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (on a prepayment, 23A-23C are one penalty group: one Edit opens all three, typed amounts file and 23D adds them); screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form (2200S now in its expected list, its group not on the return while Item 16 is not ticked); bir-core sample_payloads_test sample_payloads::form_2200s::form_2200s_prepayment_penalty_items_follow_the_shared_model (Deadline::Typed, decision D8)",
+   "proof": "screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (on a prepayment, 23A-23C are one penalty group: one Edit opens all three, typed amounts file and 23D adds them); screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form (2200S now in its expected list, its group not on the return while Item 16 is not ticked); bir-core sample_payloads_test sample_payloads::form_2200s::form_2200s_prepayment_penalty_items_follow_the_shared_model (Deadline::Typed, decision D8); screen_form_module::tests::excise::pr11_a_penalty_group_off_the_return_refuses_with_that_reason (off a prepayment the group refuses with \"computed; not part of this return as it stands\")",
    "status": "fixed"
   },
   "manual-0": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed; screen_form_module::tests::excise::pr11_2200s_25b_has_no_tick_box_the_sheet_does_not_print (25B's Pay Penalties flag, which writer-cells.json not_joined says the paper has no box for, is not drawn); screen_form_module::tests::excise::pr11_2200s_leaving_prepayment_asks_before_it_removes_entered_penalties",
+   "proof": "screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed; screen_form_module::tests::excise::pr11_2200s_25b_has_no_tick_box_the_sheet_does_not_print (25B's Pay Penalties flag, which writer-cells.json not_joined says the paper has no box for, is not drawn); screen_form_module::tests::excise::pr11_2200s_leaving_prepayment_asks_before_it_removes_entered_penalties; screen_form_module::tests::excise::pr11_using_the_computed_amounts_asks_before_it_replaces_typed_penalties",
    "status": "fixed"
   },
   "manual-1": {
    "reason": "The page shows exactly what the draft holds: for every relief the draft can hold (no, yes unspecified, special law, international tax treaty) items 14 and 14A and the print agree with the draft (screen_form_module::tests::excise::pr11_2200s_item_14_shows_what_the_draft_holds). The picture's Yes / Special Law came from an older draft in the screenshot database than the one the export read.",
-   "reviewer": "",
+   "reviewer": "Agree (PR 11 review): the page and print match the draft for each relief value, as screen_form_module::tests::excise::pr11_2200s_item_14_shows_what_the_draft_holds drives optTreaty_1, optTreaty_2 and lstTaxTreaty through fill and print.",
    "status": "not_a_bug"
   },
   "manual-2": {
@@ -262,7 +262,7 @@
   },
   "preview.0": {
    "pr": "PR 11",
-   "proof": "bir-core sample_payloads_test sample_payloads::form_2200s: agent_seeds' prepayment seed (the regenerated crates/bir-core/data/agent-forms/2200s-v2018.json binds txtOthMannerofPymnt to /other_scheme_text and txtTax21A-C to the penalty overrides; every sample payload pin unchanged); screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (item 17's text and 23A-23C file what is typed)",
+   "proof": "bir-core sample_payloads_test sample_payloads::form_2200s: agent_seeds' prepayment seed (the regenerated crates/bir-core/data/agent-forms/2200s-v2018.json binds txtOthMannerofPymnt to /other_scheme_text and txtTax21A-C to the penalty overrides; every sample payload pin unchanged); screen_form_module::tests::excise::pr11_newly_bound_boxes_take_and_file_what_is_typed (item 17's text and 23A-23C file what is typed); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (item 17 is off until Other Similar Schemes is ticked, refused with that reason, kept once ticked, and unticking asks first)",
    "status": "fixed"
   }
  },
@@ -299,7 +299,7 @@
   },
   "manual-2": {
    "pr": "PR 11",
-   "proof": "screen_form_module::tests::excise::pr11_2200t_schedule_1_prints_the_2022_rows_and_keeps_the_older_ones_apart (items 17A-17C, 21A-21D and 23A-23C with their printed captions)",
+   "proof": "screen_form_module::tests::excise::pr11_2200t_schedule_1_prints_the_2022_rows_and_keeps_the_older_ones_apart (items 17A-17C, 21A-21D and 23A-23C with their printed captions); screen_form_module::tests::excise::pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about (12A and 15 gated and asked about)",
    "status": "fixed"
   },
   "manual-3": {
