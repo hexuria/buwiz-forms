@@ -2560,6 +2560,8 @@ fn evaluate_here(
     // A message naming another item number than the printed one reads the
     // printed number (D6; PR 8's forms).
     rows_annual_corporate::printed_item_numbers(kind, &mut errors);
+    // The same for 1604F and 1604C (D6, rows_1604.rs).
+    rows_1604::printed_item_numbers(kind, &mut errors);
     let mut errors = errors_json(kind, &errors);
     // A page notice beside the form's own messages (PR 4: a stored 2553 row
     // whose entry is not the one the sheet prints there).

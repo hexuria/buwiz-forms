@@ -1455,3 +1455,193 @@ fn pr6_page_fixture_is_the_hosts() {
         "tools/fixtures/form_1604_page.json is stale; regenerate with UPDATE_PAGE_FIXTURES=1"
     );
 }
+
+fn validate(code: &str, draft: &Value) -> Value {
+    call_async(
+        "screen_form_validate",
+        vec![code.into(), json(draft.clone())],
+    )
+    .unwrap()
+}
+
+fn messages(validated: &Value) -> Vec<String> {
+    validated["errors"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|error| error["message"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// The item number a message cites ("on Item 7A.", "item 11A", "Item
+/// no.1"), as printed numbers are written: digits and at most one letter.
+fn cited_item(message: &str) -> Option<String> {
+    let lower = message.to_ascii_lowercase();
+    let at = lower.find("item ")? + "item ".len();
+    let rest = message[at..].trim_start();
+    let rest = rest
+        .strip_prefix("no.")
+        .or_else(|| rest.strip_prefix("No."))
+        .unwrap_or(rest)
+        .trim_start();
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    let after = &rest[digits.len()..];
+    let mut chars = after.chars();
+    let letter = match (chars.next(), chars.next()) {
+        (Some(c), next)
+            if c.is_ascii_alphabetic() && next.is_none_or(|n| !n.is_ascii_alphanumeric()) =>
+        {
+            c.to_ascii_uppercase().to_string()
+        }
+        _ => String::new(),
+    };
+    Some(format!("{digits}{letter}"))
+}
+
+/// Boxes a sheet prints through a derived writer key: `(form, box, writer
+/// key, the caption's words after the item number)`. 1604F's ZIP prints in
+/// the second address comb ("7 Registered Address (second line, 31
+/// fillable slots) and 7A ZIP Code (last 4 slots)").
+const PRINTED_VIA: [(&str, &str, &str, &str); 3] = [
+    (
+        "1604F",
+        "frm1604f:RegisteredAddress",
+        "derived:address1",
+        "Registered Address",
+    ),
+    (
+        "1604F",
+        "frm1604f:zipCode",
+        "derived:address2_zip",
+        "ZIP Code",
+    ),
+    (
+        "1604C",
+        "frm1604c:registeredAddress",
+        "derived:line:address1",
+        "Registered Address",
+    ),
+];
+
+/// The printed item numbers of the boxes `keys` (writer-cells.json
+/// captions): a joined box's caption's own number, a derived one's the
+/// number before its words.
+fn printed_items_of(code: &str, slug: &str, keys: &Value) -> BTreeSet<String> {
+    let joined = joins(slug);
+    let mut out = BTreeSet::new();
+    for key in keys
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        if let Some((_, _, writer, words)) = PRINTED_VIA
+            .iter()
+            .find(|(form, page, _, _)| *form == code && *page == key)
+        {
+            let caption = printed_at(slug, writer);
+            let before = &caption[..caption.find(words).unwrap()];
+            out.insert(before.split_whitespace().last().unwrap().to_string());
+            continue;
+        }
+        if let Some((_, _, caption)) = joined.iter().find(|(writer, _, _)| writer == key)
+            && let Some(number) = printed_number(caption)
+        {
+            out.insert(number);
+        }
+    }
+    out
+}
+
+/// Maintainer decision D6 (2026-10-18) for 1604F and 1604C: a message
+/// names the item number the printed sheet gives its box. The oracle is
+/// html-frozen/<slug>/writer-cells.json's captions, never the page schema.
+/// With every Part I box the profile fills cleared, each message citing an
+/// item cites one its boxes print under; the rewrites are listed exactly,
+/// and the official wording they replace no longer shows.
+#[test]
+fn d6_1604f_and_1604c_messages_cite_the_printed_item() {
+    setup();
+    let rewrites = [
+        (
+            "1604F",
+            "Please enter a valid Taxpayer's Name on Item 7.",
+            "Please enter a valid Taxpayer's Name on Item 6.",
+        ),
+        (
+            "1604F",
+            "Please enter Taxpayer's Registered Address on Item 9.",
+            "Please enter Taxpayer's Registered Address on Item 7.",
+        ),
+        (
+            "1604F",
+            "Please enter Taxpayer's Zip Code on Item 10.",
+            "Please enter Taxpayer's Zip Code on Item 7A.",
+        ),
+        (
+            "1604F",
+            "Please enter a valid Telephone Number on Item 8.",
+            "Please enter a valid Telephone Number on Item 9.",
+        ),
+        (
+            "1604C",
+            "Please enter Taxpayer's Zip Code on Item 10.",
+            "Please enter Taxpayer's Zip Code on Item 7A.",
+        ),
+    ];
+    for (code, slug) in [("1604F", "1604f-2018"), ("1604C", "1604c-2018")] {
+        let opened = open(code, 0);
+        let mut draft = opened["draft"].clone();
+        for field in [
+            "taxpayer_name",
+            "registered_address",
+            "contact_number",
+            "zip_code",
+        ] {
+            draft[field] = json!("");
+        }
+        let validated = validate(code, &draft);
+        let said = messages(&validated);
+        for (form, official, printed) in rewrites.iter().filter(|(form, _, _)| *form == code) {
+            assert!(said.contains(&printed.to_string()), "{form}: {said:?}");
+            assert!(!said.contains(&official.to_string()), "{form}: {official}");
+        }
+        let mut checked = 0;
+        for error in validated["errors"].as_array().unwrap() {
+            let message = error["message"].as_str().unwrap();
+            let Some(cited) = cited_item(message) else {
+                continue;
+            };
+            let printed = printed_items_of(code, slug, &error["keys"]);
+            assert!(
+                printed.contains(&cited),
+                "{code}: {message:?} cites item {cited}; its boxes {} print at {printed:?}",
+                error["keys"]
+            );
+            checked += 1;
+        }
+        assert!(checked >= 4, "{code}: {checked} messages checked");
+    }
+    // Only the page's messages are reworded: the form's own validation
+    // (bir-core, which the desktop assistant reads) keeps BIR's text.
+    let kind = kind_of("1604F").unwrap();
+    let mut draft = open("1604F", 0)["draft"].clone();
+    draft["zip_code"] = json!("");
+    let core: Vec<String> = agent::validate(kind, &mut draft)
+        .unwrap()
+        .into_iter()
+        .map(|(_, message)| message)
+        .collect();
+    assert!(core.contains(&"Please enter Taxpayer's Zip Code on Item 10.".to_string()));
+    assert_eq!(
+        cited_item("Invalid date entry on Item no.1. Entry"),
+        Some("1".into())
+    );
+    assert_eq!(
+        cited_item("specify date of refund in item 11A."),
+        Some("11A".into())
+    );
+}
