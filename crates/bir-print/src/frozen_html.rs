@@ -71,6 +71,18 @@ fn fill_by_name_with_cells(
     cells: &BTreeMap<String, Vec<String>>,
     plan: &BTreeMap<String, CellFill>,
 ) -> String {
+    fill_by_name_fitted(html, fields, cells, plan, Fit::Estimate)
+}
+
+/// [`fill_by_name_with_cells`] with a single line past its comb sized by
+/// `fit` (the sheet's [`fit_of`]).
+fn fill_by_name_fitted(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &BTreeMap<String, Vec<String>>,
+    plan: &BTreeMap<String, CellFill>,
+    fit: Fit,
+) -> String {
     let tags = input_tags(html);
     if tags.is_empty() {
         return html.to_string();
@@ -100,6 +112,7 @@ fn fill_by_name_with_cells(
                 input_name,
                 value,
                 via_cell,
+                fit,
             };
             fill_text_input(html, &tags, indices, &target, &mut replacements);
         }
@@ -118,6 +131,7 @@ fn fill_by_name_with_cells(
                     input_name: cell,
                     value: line,
                     via_cell: true,
+                    fit,
                 };
                 fill_text_input(html, &tags, indices, &target, &mut replacements);
             }
@@ -157,6 +171,82 @@ enum CellFill {
 const PLAIN_MAX_PT: f64 = 9.0;
 /// Arimo averages about 0.55 em per character; keep a small margin.
 const EM_PER_CHAR: f64 = 0.58;
+
+/// How a sheet sizes text it prints as plain type past its boxes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fit {
+    /// [`EM_PER_CHAR`] per character ([`fit_size`]): every sheet but the
+    /// [`MEASURED_SHEETS`].
+    Estimate,
+    /// The bundled Arimo's own advance widths ([`arimo_ems`]).
+    Measured,
+}
+
+/// Sheets whose plain overflow type is sized by Arimo's advance widths.
+/// 0619E: a 200-character registered address printed item 10's second line
+/// at 8.61 pt by the estimate, but its capitals measure 0.591 em each, so
+/// the line ran 453 pt into a 446.5 pt cell and was cut at the 10A ZIP
+/// Code caption. Every other sheet keeps the estimate and prints byte for
+/// byte as before (`long_text_prints_as_before_on_every_sheet_but_0619e`).
+const MEASURED_SHEETS: [&str; 1] = ["0619e-2018"];
+
+/// The overflow sizing of sheet `slug`.
+fn fit_of(slug: &str) -> Fit {
+    if MEASURED_SHEETS.contains(&slug) {
+        Fit::Measured
+    } else {
+        Fit::Estimate
+    }
+}
+
+/// Units per em of html-frozen/fonts/arimo-latin-wght-normal.woff2.
+const ARIMO_UNITS_PER_EM: f64 = 2048.0;
+/// Its advance widths (`hmtx`, default instance wght 400, the weight the
+/// sheets' `.fi` inputs use) for U+0020 to U+007E, in that order.
+const ARIMO_ADVANCES: [u16; 95] = [
+    569, 569, 727, 1139, 1139, 1821, 1366, 391, 682, 682, 797, 1196, 569, 682, 569, 569, 1139,
+    1139, 1139, 1139, 1139, 1139, 1139, 1139, 1139, 1139, 569, 569, 1196, 1196, 1196, 1139, 2079,
+    1366, 1366, 1479, 1479, 1366, 1251, 1593, 1479, 569, 1024, 1366, 1139, 1706, 1479, 1593, 1366,
+    1593, 1479, 1366, 1251, 1479, 1366, 1933, 1366, 1366, 1251, 569, 569, 569, 961, 1139, 682,
+    1139, 1139, 1024, 1139, 1139, 569, 1139, 1139, 455, 455, 1024, 455, 1706, 1139, 1139, 1139,
+    1139, 682, 1024, 569, 1139, 1024, 1479, 1024, 1024, 1024, 684, 532, 684, 1196,
+];
+/// A character past U+007E (Latin-1's Ñ, É): the widest advance above, so
+/// the type can only come out smaller.
+const ARIMO_WIDEST: u16 = 2079;
+
+/// `text`'s width in ems of Arimo.
+fn arimo_ems(text: &str) -> f64 {
+    let units: u64 = text
+        .chars()
+        .map(|c| {
+            let advance = u32::from(c)
+                .checked_sub(0x20)
+                .and_then(|i| usize::try_from(i).ok())
+                .and_then(|i| ARIMO_ADVANCES.get(i).copied())
+                .unwrap_or(ARIMO_WIDEST);
+            u64::from(advance)
+        })
+        .sum();
+    units as f64 / ARIMO_UNITS_PER_EM
+}
+
+impl Fit {
+    /// The type size (pt) `text` fits `width` pt at, at most
+    /// [`PLAIN_MAX_PT`] and with no floor (as [`fit_size`]).
+    fn size(self, width: f64, text: &str) -> f64 {
+        match self {
+            Self::Estimate => fit_size(width, text.chars().count()),
+            Self::Measured => {
+                let ems = arimo_ems(text);
+                if ems == 0.0 {
+                    return PLAIN_MAX_PT;
+                }
+                ((width - 2.0).max(1.0) / ems).min(PLAIN_MAX_PT)
+            }
+        }
+    }
+}
 
 /// One stacked line of a printed item: its cell, the key that fills it,
 /// its boxes and its width (pt).
@@ -309,7 +399,7 @@ fn fit_size(width: f64, chars: usize) -> f64 {
 /// words: the breaks that let the largest common type size fit, and among
 /// those the nearest each line's share of the width, so the text runs
 /// across every line. Each line's part, and the size.
-fn plain_lines(text: &str, widths: &[f64]) -> (Vec<String>, f64) {
+fn plain_lines(text: &str, widths: &[f64], fit: Fit) -> (Vec<String>, f64) {
     fn walk(level: usize, words: usize, cuts: &mut Vec<usize>, visit: &mut dyn FnMut(&[usize])) {
         if level == cuts.len() - 1 {
             visit(cuts);
@@ -331,8 +421,9 @@ fn plain_lines(text: &str, widths: &[f64]) -> (Vec<String>, f64) {
     let mut visit = |cuts: &[usize]| {
         let (mut size, mut deviation, mut so_far, mut share) = (PLAIN_MAX_PT, 0.0, 0usize, 0.0);
         for (k, width) in widths.iter().enumerate() {
-            let chars = line_text(cuts, k).chars().count();
-            size = size.min(fit_size(*width, chars));
+            let line = line_text(cuts, k);
+            let chars = line.chars().count();
+            size = size.min(fit.size(*width, &line));
             so_far += chars;
             share += width / total;
             deviation += (so_far as f64 - share * length as f64).abs();
@@ -352,7 +443,7 @@ fn plain_lines(text: &str, widths: &[f64]) -> (Vec<String>, f64) {
     let size = lines
         .iter()
         .zip(widths)
-        .map(|(line, width)| fit_size(*width, line.chars().count()))
+        .map(|(line, width)| fit.size(*width, line))
         .fold(PLAIN_MAX_PT, f64::min);
     (lines, size)
 }
@@ -366,6 +457,7 @@ fn line_group_plan(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &WriterCells,
+    fit: Fit,
 ) -> BTreeMap<String, CellFill> {
     let mut plan = BTreeMap::new();
     for group in line_groups(html, cells) {
@@ -405,7 +497,7 @@ fn line_group_plan(
             continue;
         }
         let widths: Vec<f64> = group.iter().map(|line| line.width).collect();
-        let (parts, size) = plain_lines(&text, &widths);
+        let (parts, size) = plain_lines(&text, &widths, fit);
         for (line, part) in group.iter().zip(parts) {
             plan.insert(line.cell.clone(), CellFill::Plain(part, size));
         }
@@ -420,6 +512,8 @@ struct TextTarget<'a> {
     input_name: &'a str,
     value: &'a str,
     via_cell: bool,
+    /// How a line past its comb is sized.
+    fit: Fit,
 }
 
 /// One text value into one cell: a comb gets a character per slot, a plain
@@ -436,6 +530,7 @@ fn fill_text_input(
         input_name,
         value,
         via_cell,
+        fit,
     } = *target;
     // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
     // TIN/branch (`via_cell` false) keep the writer map as-is.
@@ -486,7 +581,7 @@ fn fill_text_input(
         // the last box.
         let whole_line = via_cell || is_email_key(name) || name.starts_with("derived:line:");
         let overflow = (whole_line && chars.len() > ordered.len())
-            .then(|| comb_overflow_line(html, input_name, print, chars.len()))
+            .then(|| comb_overflow_line(html, input_name, print, fit))
             .flatten();
         let spread = overflow.is_none();
         if let Some((at, line)) = overflow {
@@ -1783,8 +1878,9 @@ fn fill_bundle(
 ) -> Result<String, String> {
     let cells = writer_cells(slug)?;
     validate_writer_cells(html, slug, &cells)?;
-    let plan = line_group_plan(html, fields, &cells);
-    let filled = fill_by_name_with_cells(html, fields, &cells.joins, &plan);
+    let fit = fit_of(slug);
+    let plan = line_group_plan(html, fields, &cells, fit);
+    let filled = fill_by_name_fitted(html, fields, &cells.joins, &plan, fit);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
     let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -2236,12 +2332,12 @@ fn base64_encode(bytes: &[u8]) -> String {
 /// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
 /// holding `text` left-aligned in a font small enough to fit. Returns the
 /// insert position just inside the cell and the input tag.
-fn comb_overflow_line(html: &str, cell: &str, text: &str, len: usize) -> Option<(usize, String)> {
+fn comb_overflow_line(html: &str, cell: &str, text: &str, fit: Fit) -> Option<(usize, String)> {
     let open = html.find(&format!("<div id=\"{cell}\""))?;
     let tag = &html[open..open + html[open..].find('>')?];
     let width_at = tag.find(";width:")? + ";width:".len();
     let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
-    overflow_input(html, cell, text, fit_size(width, len))
+    overflow_input(html, cell, text, fit.size(width, text))
 }
 
 /// [`comb_overflow_line`] at type `size` (pt). The input names the cell
@@ -5010,7 +5106,9 @@ mod tests {
 
     /// One long address, pinned: 200 characters over 0619E's two address
     /// lines print as plain type in one size; far longer, the type keeps
-    /// shrinking so the text still fits its cells (no floor).
+    /// shrinking so the text still fits its cells (no floor). The size was
+    /// 8.61 pt by the per-character estimate; 0619E's overflow type is
+    /// measured ([`MEASURED_SHEETS`]), so the same text prints at 8.56 pt.
     #[test]
     fn a_long_address_prints_at_a_pinned_size() {
         let text = words_of(200);
@@ -5020,9 +5118,9 @@ mod tests {
         let (second, again) = printed_cell(&document, "p1c42");
         assert_eq!(format!("{first} {second}"), text);
         assert_eq!(size, again);
-        assert_eq!(size, Some(8.61));
+        assert_eq!(size, Some(8.56));
         assert!(document.contains(
-            "font-size:8.61pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"p1c41\""
+            "font-size:8.56pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"p1c41\""
         ));
         // 600 characters: under 4 pt, and still inside each cell.
         let text = words_of(600);
@@ -5043,5 +5141,105 @@ mod tests {
         }
         assert_eq!(parts.join(" "), text, "nothing is lost");
         assert_eq!(fit_size(1000.0, 5), PLAIN_MAX_PT);
+    }
+
+    /// The capture that found the bug: a 200-character 0619E address, split
+    /// at BIR's character 127 by the print map. Item 10's second line printed
+    /// at 8.61 pt measured 453.1 pt in Arimo, past its 446.5 pt cell, and was
+    /// cut at the 10A ZIP Code caption. Measured, each line's text at its
+    /// size fits its cell less the input's 1 pt left padding, so line 2 ends
+    /// before the caption; the ZIP prints in its own boxes and the whole
+    /// address prints.
+    #[test]
+    fn a_200_character_0619e_address_keeps_line_2_off_the_zip_box() {
+        let first = "UNIT 4512 TOWER B THE RESIDENCES AT GREENBELT 123 ESPERANZA STREET COR. \
+                     MAKATI AVENUE BRGY. SAN LORENZO MAKATI";
+        let second = "CITY METRO MANILA PHILIPPINES NEAR AYALA TRIANGLE GARDENS ACROSS \
+                      GREENBELT 5 MALL GATE 12";
+        assert_eq!(first.chars().count() + 1 + second.chars().count(), 200);
+        // The estimate's size, and what it measured: past the cell.
+        assert!((fit_size(446.52, 89) - 8.61).abs() < 0.005);
+        assert!(arimo_ems(second) * 8.61 > 446.52);
+        let fields = BTreeMap::from([
+            ("frm0619E:txtAddress".to_string(), format!("{first} ")),
+            ("frm0619E:txtAddress2".to_string(), second.to_string()),
+            ("frm0619E:txtZipCode".to_string(), "1226".to_string()),
+        ]);
+        let document = filled_document("0619e-2018", &fields).unwrap();
+        let mut parts = Vec::new();
+        for cell in ["p1c41", "p1c42"] {
+            let (part, size) = printed_cell(&document, cell);
+            let size = size.unwrap_or_else(|| panic!("{cell}: plain type"));
+            let width = comb_cell(&document, cell).unwrap().1;
+            assert!(
+                1.0 + arimo_ems(&part) * size <= width,
+                "{cell}: {part:?} at {size}pt measures {}pt in {width}pt",
+                arimo_ems(&part) * size
+            );
+            parts.push(part);
+        }
+        assert_eq!(parts.join(" "), format!("{first} {second}"));
+        // Line 2's cell ends where the 10A ZIP Code caption starts.
+        assert!(document.contains("<div id=\"p1c42\" class=\"c f\""));
+        assert!(document.contains("left:17.62pt;top:240.62pt;width:446.52pt"));
+        assert!(document.contains("<div id=\"p1c43\" class=\"c\" data-cell-kind=\"label\" data-row=\"11\" data-col=\"34\" style=\"left:464.14pt"));
+        assert_eq!(printed_cell(&document, "p1c44"), ("1226".to_string(), None));
+    }
+
+    /// Every sheet filled three ways: each text join's key holding a
+    /// 200-character text, a 90-character one and a 12-character one (past
+    /// the boxes of most combs, past a line, and fitting), hashed together.
+    fn overflow_print_hash(slug: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let cells = writer_cells(slug).unwrap();
+        let mut hasher = Sha256::new();
+        for len in [200, 90, 12] {
+            let fields: BTreeMap<String, String> = cells
+                .joins
+                .keys()
+                .map(|key| (key.clone(), words_of(len)))
+                .collect();
+            hasher.update(filled_document(slug, &fields).unwrap().as_bytes());
+            hasher.update([0u8]);
+        }
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    /// Goldens: what every sheet printed for long text before 0619E's
+    /// overflow type was measured (`fixtures/overflow-goldens.json`, written
+    /// by the fill at f7b7f475 with `BIR_PRINT_BLESS_OVERFLOW=1`). Every
+    /// other sheet prints byte for byte as it did; 0619E alone changes.
+    #[test]
+    fn long_text_prints_as_before_on_every_sheet_but_0619e() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/fixtures/overflow-goldens.json"
+        );
+        let now: BTreeMap<String, String> = sheet_slugs()
+            .iter()
+            .map(|slug| (slug.clone(), overflow_print_hash(slug)))
+            .collect();
+        if std::env::var_os("BIR_PRINT_BLESS_OVERFLOW").is_some() {
+            std::fs::write(path, serde_json::to_string_pretty(&now).unwrap() + "\n").unwrap();
+            return;
+        }
+        let golden: BTreeMap<String, String> =
+            serde_json::from_str(include_str!("fixtures/overflow-goldens.json")).unwrap();
+        assert_eq!(
+            golden.keys().collect::<Vec<_>>(),
+            now.keys().collect::<Vec<_>>(),
+            "every sheet has a golden"
+        );
+        for (slug, hash) in &now {
+            if MEASURED_SHEETS.contains(&slug.as_str()) {
+                assert_ne!(hash, &golden[slug], "{slug}: its overflow type is measured");
+            } else {
+                assert_eq!(hash, &golden[slug], "{slug}: prints as before");
+            }
+        }
     }
 }
