@@ -162,6 +162,11 @@
    "proof": "screen_form_module::tests::annual_individual::annual_forms_draw_the_rdo_boxes_the_print_fills; bir-core sample_payloads_test sample_payloads::form_1701::form_1701_spouse_rdo_agrees_on_page_print_and_upload; screen_form_module::tests::annual_individual::an_imported_1701_spouse_rdo_off_the_filing_has_a_notice",
    "status": "fixed"
   },
+  "preview.1": {
+   "pr": "PR 7",
+   "proof": "screen_form_module::tests::annual_individual::form_1701_preview_1_boxes_print_what_the_page_shows (all 31 boxes: page and print agree for typed values and blanks; Part VIII column A items 1, 2, 4, 6, 8 and 9 typed, items 3, 5, 7 and 10 following the printed captions' operators; column B shut as the tracked runtime inventory records it, rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json disabled true, filing 0.00); screen_form_module::tests::annual_individual::form_1701_part_viii_column_b_stays_shut_on_a_joint_return; screen_form_module::tests::annual_individual::form_1701_part_viii_column_a_takes_whole_pesos; screen_form_module::tests::annual_individual::form_1701_joint_part_viii_draft_round_trips; screen_form_module::tests::annual_individual::form_1701_stored_draft_files_as_before (the pre-PR 7 fixture files the pr0b-push field map); bir-core sample_payloads_test sample_payloads::form_1701::form_1701_imported_part_viii_files_as_imported; bir-core sample_payloads_test (the official 1701 payloads unchanged)",
+   "status": "fixed"
+  },
   "validation.0": {
    "pr": "PR 7",
    "proof": "screen_form_module::tests::annual_individual::an_official_message_sits_under_the_item_it_cites; screen_form_module::tests::annual_individual::annual_messages_cite_printed_item_numbers",

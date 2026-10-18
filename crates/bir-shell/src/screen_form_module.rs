@@ -2828,6 +2828,9 @@ const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
 const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
+/// A box the official page keeps shut from load (PR 7: 1701 Part VIII
+/// column B, probe.rs `SHUT_ON_OFFICIAL_PAGE`).
+const NOTE_SHUT: &str = "The official form keeps this box shut; it files as 0.00.";
 /// 1701Q's (PR 5) and 1701's (PR 7) penalties kept as the filer entered them.
 const NOTE_KEPT: &str = "Kept as entered before penalties were computed.";
 /// Only for a box a form group is assigned to open (the pinned list).
@@ -2887,6 +2890,8 @@ fn lock_note(reason: &str) -> &'static str {
         || reason == rows_annual_individual::KEPT_AS_ENTERED
     {
         NOTE_KEPT
+    } else if reason.ends_with(bir_core::forms::agent::probe::SHUT_REASON) {
+        NOTE_SHUT
     } else {
         // Unmapped, derived, written by the app, or a field this page
         // cannot write: shut until the form's own work opens it.

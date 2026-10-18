@@ -1159,6 +1159,29 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     tin_cell(kind, key).is_some() || rate_cell(kind, key).is_some()
 }
 
+/// 1701 Part VIII column A's typed items (1, 2, 4, 6, 8 and 9): the
+/// official page's entry filter takes whole pesos only (`wholenumber(event,
+/// true)`, as the PR 7 review read the official HTA; the tracked inventory
+/// records the controls, not their key filters). A page-input limit like
+/// other forms' digit limits: the box refuses a decimal or a minus sign.
+/// Its own display ("1,500.00") is a whole amount and is taken.
+fn whole_peso_item(kind: AgentFormKind, key: &str) -> Option<&'static str> {
+    if kind.form_code() != "1701" {
+        return None;
+    }
+    let item = key
+        .strip_prefix("frm1701:txtPg4IPart8_")?
+        .strip_suffix('A')?;
+    ["1", "2", "4", "6", "8", "9"]
+        .into_iter()
+        .find(|typed| *typed == item)
+}
+
+/// The refusal of a Part VIII column A amount that is not whole pesos.
+pub(super) fn whole_peso_refusal(item: &str) -> String {
+    format!("Part VIII item {item}A takes whole pesos: type digits only, as 1500.")
+}
+
 /// Write `key` when this module owns it: `None` leaves it to the ordinary
 /// fill.
 pub(super) fn fill(
@@ -1167,6 +1190,15 @@ pub(super) fn fill(
     key: &str,
     value: &Value,
 ) -> Option<Result<(), String>> {
+    if let Some(item) = whole_peso_item(kind, key) {
+        let typed = text(value);
+        let fraction = typed
+            .split_once('.')
+            .is_some_and(|(_, cents)| cents.chars().any(|c| c != '0'));
+        if typed.contains('-') || fraction {
+            return Some(Err(whole_peso_refusal(item)));
+        }
+    }
     if let Some(path) = rate_cell(kind, key) {
         return Some((|| {
             if let Some(why) = closed_refusal(kind, draft, key, value) {

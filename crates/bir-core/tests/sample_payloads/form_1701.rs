@@ -446,3 +446,28 @@ fn form_1701_spouse_rdo_agrees_on_page_print_and_upload() {
     single.civil_status = Some(Form1701CivilStatus::Single);
     assert_eq!(single.to_print_field_map()[key], "");
 }
+
+/// An imported 1701 save file keeps its Part VIII column A (PR 7,
+/// preview.1): a save in the official format with item 1A = 500 files
+/// 1A = 500 and item 3A (Sum of Items 1 and 2) = 500; before PR 7 every
+/// Part VIII item was written 0.00. Column B stays 0.00.
+#[test]
+fn form_1701_imported_part_viii_files_as_imported() {
+    let mut source = sample_1701_joint();
+    source.spouse_also_compensation_earner = false;
+    source.spouse.atc = Some(Form1701Atc::Ii012);
+    source.employers[1] = Default::default();
+    source.recompute();
+    let official = source.to_official_xml_payload().unwrap();
+    assert_eq!(official.matches("frm1701:txtPg4IPart8_1A=0.00").count(), 1);
+    let saved = official.replace(
+        "frm1701:txtPg4IPart8_1A=0.00",
+        "frm1701:txtPg4IPart8_1A=500.00",
+    );
+    let mut imported = Form1701Draft::from_bir_xml_payload(&saved).unwrap();
+    imported.recompute();
+    let fields = imported.field_map();
+    assert_eq!(fields["frm1701:txtPg4IPart8_1A"], "500.00");
+    assert_eq!(fields["frm1701:txtPg4IPart8_3A"], "500.00");
+    assert_eq!(fields["frm1701:txtPg4IPart8_1B"], "0.00");
+}
