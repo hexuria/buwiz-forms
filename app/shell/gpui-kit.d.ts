@@ -28130,9 +28130,9 @@ declare module "bir" {
       branch_count: number;
       form_code: string;
       form_name: string;
-      frequency: "Monthly" | "Quarterly" | "Annual";
+      frequency: "Monthly" | "Quarterly" | "Annual" | "As needed";
       taxable_year: number;
-      /** Month 1-12, quarter 1-4, or 0 for an annual return. */
+      /** Month 1-12, quarter 1-4, 0 for an annual return, or an as-needed return's stored period. */
       period: number;
       period_label: string;
       due_date: string;
@@ -28143,6 +28143,31 @@ declare module "bir" {
       return_key: number | null;
   }
   export function deadlines_between(from: string, to: string): DeadlineRow[];
+  export interface AsNeededReturn {
+      draft_id: number;
+      period: number;
+      return_key: number | null;
+      status: string;
+      updated_at: string;
+  }
+  export interface AsNeededForm {
+      tin: string;
+      tin_root: string;
+      branch_code: string;
+      branch_name: string;
+      taxpayer_name: string;
+      branch_count: number;
+      form_code: string;
+      form_name: string;
+      taxable_year: number;
+      /** What dates a return ("Removal"), null when the form has no trigger-date rule. */
+      trigger: string | null;
+      /** When it is due, as the form's guide says. */
+      due_rule: string;
+      /** Saved returns of the form that hold no trigger date yet. */
+      undated: AsNeededReturn[];
+  }
+  export function as_needed_forms(year: number): AsNeededForm[];
   export interface ReturnRow {
       id: number;
       tin: string;

@@ -8,7 +8,9 @@
 
 use chrono::{Datelike, Duration, NaiveDate};
 
-use crate::calendar_rules::{DeadlineOverride, DeadlineResolver, canonical_form_code};
+use crate::calendar_rules::{
+    BusinessDayCalendar, DeadlineOverride, DeadlineResolver, NonWorkingDay, canonical_form_code,
+};
 
 /// One official non-working day.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +132,24 @@ pub fn next_working_day(date: NaiveDate, years: &[HolidayYear]) -> NaiveDate {
     next
 }
 
+/// The working-day calendar of every shipped year: weekends and the listed
+/// holidays are not working days (what banking days are counted on).
+pub fn business_day_calendar() -> BusinessDayCalendar {
+    BusinessDayCalendar::with_non_working_days(
+        OFFICIAL_HOLIDAY_YEARS
+            .iter()
+            .flat_map(|year| {
+                year.dates()
+                    .map(|(date, name)| NonWorkingDay {
+                        source_reference: Some(year.source_reference()),
+                        ..NonWorkingDay::regular_holiday(date, name)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect(),
+    )
+}
+
 /// The stable id of the override a holiday seeds.
 pub fn seed_id(date: NaiveDate) -> String {
     format!("official-holiday-{date}")
@@ -186,6 +206,13 @@ mod tests {
             assert_eq!(year.dates().count(), year.days.len(), "{}", year.year);
             assert!(year.dates().all(|(date, _)| date.year() == year.year));
         }
+    }
+
+    #[test]
+    fn the_working_calendar_skips_the_shipped_holidays() {
+        let calendar = business_day_calendar();
+        assert!(calendar.is_non_working_day(NaiveDate::from_ymd_opt(2026, 6, 12).unwrap()));
+        assert!(calendar.is_business_day(NaiveDate::from_ymd_opt(2026, 6, 11).unwrap()));
     }
 
     #[test]
