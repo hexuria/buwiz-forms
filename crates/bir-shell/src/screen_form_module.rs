@@ -4168,6 +4168,10 @@ mod tests {
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
 
+    // PR 11: 2200A, 2200AN, 2200C, 2200M, 2200P, 2200S and 2200T against
+    // their printed sheets, and decision D8.
+    mod excise;
+
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
 
@@ -4903,10 +4907,12 @@ mod tests {
     fn rows_2200p_added_rows_save() {
         setup();
         let form = schema_entry("2200P").unwrap();
-        let table = form["parts"][4]["items"]
+        // In whichever part the layout puts it (PR 11: Part V Schedule 1).
+        let table = form["parts"]
             .as_array()
             .unwrap()
             .iter()
+            .flat_map(|part| part["items"].as_array().unwrap())
             .find(|it| it["keys"][0][0] == "frm2200P:txtSched1ATC28")
             .expect("added rows table")
             .clone();
@@ -6018,7 +6024,10 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // Less 3 for 2200C, 2200M and 2200P (PR 11): their second RDO
+        // select (rdoPg1Pt1I6RDO) repeats the item's RDO box and is not
+        // drawn.
+        assert_eq!(supplied, 79);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8507,14 +8516,6 @@ mod tests {
         "2000 frm2000:txtTelNum",
         "2000 txtEmail",
         "2000OT frm2000OT:txtLineBus",
-        "2200C frm2200C:txtLOB",
-        "2200M frm2200M:txtPg2RegisteredName",
-        "2200P frm2200P:txtLOB",
-        "2200P frm2200P:txtPg1Pt1I8ContactNumber",
-        "2200P frm2200P:txtPg1Pt1I9Email",
-        "2200P frm2200P:txtPg2RegisteredName",
-        "2200T frm2200Tv2020:registeredName_2",
-        "2200T frm2200Tv2020:registeredName_3",
         "2550Q frm2550qv2024:Pg2TaxPayer",
         "2552 frm2552:txtLOB",
     ];
@@ -9100,7 +9101,9 @@ mod tests {
                 "frm2200M:txtSched1_LocallyExtractedTaxRateE13",
                 "money",
             ),
-            ("2200P", "frm2200P:txtSched1ApplicableRate1", "money"),
+            // Rows 1-25 print their rate (PR 11 does not draw those
+            // boxes); the Others row's is typed.
+            ("2200P", "frm2200P:txtSched1ApplicableRate26", "money"),
             ("1602Q", "frm1602Q:txtSched1Rate13", "money"),
             // Zero-rated sales are an amount.
             ("2550Q", "frm2550qv2024:zeroRatedSales", "money"),
@@ -10056,6 +10059,8 @@ mod tests {
             ("2200C", 1),
             ("2200M", 1),
             ("2200P", 1),
+            // Plus 2200S (PR 11): Items 23A-23C are bound to the overrides.
+            ("2200S", 1),
             ("2200T", 1),
             ("2550M", 1),
             ("2552", 1),
@@ -10213,7 +10218,8 @@ mod tests {
             }
         }
         assert_eq!(found, expected);
-        // The spouse's column on these returns with no spouse.
+        // The spouse's column on these returns with no spouse, and 2200S's
+        // Items 23A-23C while the return is not a prepayment (PR 11).
         not_on_return.sort();
         assert_eq!(
             not_on_return,
@@ -10221,6 +10227,7 @@ mod tests {
                 "1700 frm1700:txtPg1I31B",
                 "1701A frm1701A:txt25B",
                 "1701MS frm1701MS:txtCompromise28b",
+                "2200S frm2200S:txtTax21A",
             ]
         );
     }

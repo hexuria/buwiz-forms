@@ -1799,7 +1799,9 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
     // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
     // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
-    assert_eq!(supplied, 82, "catalog lists, dependent ones included");
+    // Less 3 for 2200C, 2200M and 2200P (PR 11): their second RDO select
+    // (rdoPg1Pt1I6RDO) repeats the item's RDO box and is not drawn.
+    assert_eq!(supplied, 79, "catalog lists, dependent ones included");
 }
 
 #[test]
