@@ -900,7 +900,8 @@ fn cleared_entries(
 /// - 1702RT: Part III's payment rows are items 23 to 26 (the official
 ///   labels run three ahead, form_1702rt_official.rs validate), Schedule I's
 ///   sixth OTHERS row is 17h (the official alert reuses 17g), and the date
-///   of incorporation is item 10.
+///   of incorporation is item 10. Its (Add more...) alerts ("Item 54.2",
+///   "Item i.2") read the printed item and the row ([`rt_popup_row`]).
 /// - 1702MX: the registered name is item 8 and the registered address item
 ///   9 (the date of incorporation is item 10).
 /// - 1702EX: its "(more...)" pop-up alerts name rows the sheet does not
@@ -999,14 +1000,52 @@ fn ex_popup_row(field: &str, message: &str) -> Option<String> {
     Some(format!("{}on item {printed} (row {row})", &message[..at]))
 }
 
+/// The printed item of a 1702RT (Add more...) table: Part IV item 54,
+/// Schedule I item 17i, Schedule II item 4 and Schedule V items 3, 6 and 8
+/// (html-frozen/1702rt-2018c/index.html). The official alerts number the
+/// table's rows from the item's own number ("Item 54.2"), and Schedule I's
+/// from its letter alone ("Item i.2").
+fn rt_printed_item(modal: Form1702RTModal) -> &'static str {
+    match modal {
+        Form1702RTModal::Schedule1Item17i => "17i",
+        other => other.item(),
+    }
+}
+
+/// A 1702RT (Add more...) alert ("Page 2 Item 54.2 Description should not
+/// be blank.", form_1702rt_official.rs validate, field
+/// `more_rows.<row name>`) read with the printed item and the table row:
+/// "Page 2 Item 54 (row 2) Description should not be blank.".
+fn rt_popup_row(field: &str, message: &str) -> Option<String> {
+    let row_name = field.strip_prefix("more_rows.")?;
+    let modal = FORM_1702RT_MODALS
+        .into_iter()
+        .find(|modal| modal.row_name() == row_name)?;
+    let marker = format!("Page {} Item {}.", modal.page(), modal.item());
+    let rest = message.strip_prefix(&marker)?;
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "Page {} Item {} (row {digits}){}",
+        modal.page(),
+        rt_printed_item(modal),
+        &rest[digits.len()..]
+    ))
+}
+
 /// Each message the form's validation gives, with an item number the
 /// printed sheet does not give that item reworded to the printed one.
 pub(super) fn printed_item_numbers(kind: AgentFormKind, errors: &mut [(String, String)]) {
     let code = kind.form_code();
     for (field, message) in errors.iter_mut() {
-        if code == "1702EX"
-            && let Some(reworded) = ex_popup_row(field, message)
-        {
+        let popup = match code {
+            "1702EX" => ex_popup_row(field, message),
+            "1702RT" => rt_popup_row(field, message),
+            _ => None,
+        };
+        if let Some(reworded) = popup {
             *message = reworded;
             continue;
         }

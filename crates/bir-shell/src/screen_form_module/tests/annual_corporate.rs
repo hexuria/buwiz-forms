@@ -3045,3 +3045,83 @@ fn pr8_form_1702ex_popup_alerts_name_the_printed_item() {
     );
     assert!(!found.iter().any(|m| m.contains("item 17.")), "{found:?}");
 }
+
+/// D6 on 1702RT's (Add more...) alerts: the official messages number a
+/// table's rows from its item ("Page 2 Item 54.2", Schedule I's from its
+/// letter alone: "Page 3 Item i.2"), numbers the sheet does not print. They
+/// read the printed item (Part IV item 54, Schedule I item 17i, Schedule II
+/// item 4, Schedule V items 3, 6 and 8, as the page draws them) and the
+/// table row.
+#[test]
+fn pr8_form_1702rt_popup_alerts_name_the_printed_item() {
+    setup();
+    for (stem, item) in [
+        ("txtPg2Pt4I54C1", "54"),
+        ("txtPg3Sc1I17iC1", "17"),
+        ("txtPg3Sc2I4C1", "4"),
+        ("txtPg4Sc5I3C1", "3"),
+        ("txtPg4Sc5I6C1", "6"),
+        ("txtPg4Sc5I8C1", "8"),
+    ] {
+        assert_eq!(placed("1702RT", &rt(stem)).no, item, "{stem}");
+    }
+    let kind = kind_of("1702RT").unwrap();
+    let mut errors: Vec<(String, String)> = [
+        (
+            "txtPg2Pt4I54",
+            "Page 2 Item 54.2 Description should not be blank.",
+        ),
+        (
+            "txtPg3Sc1I17i",
+            "Page 3 Item i.2 Amount should not be zero.",
+        ),
+        (
+            "txtPg3Sc2I4",
+            "Page 3 Item 4.2 Legal Basis should not be blank.",
+        ),
+        (
+            "txtPg4Sc5I3",
+            "Page 4 Item 3.3 Description should not be blank.",
+        ),
+        ("txtPg4Sc5I6", "Page 4 Item 6.2 Amount should not be zero."),
+        (
+            "txtPg4Sc5I8",
+            "Page 4 Item 8.12 Description should not be blank.",
+        ),
+    ]
+    .iter()
+    .map(|(row, message)| (format!("more_rows.{row}"), message.to_string()))
+    .collect();
+    rows_annual_corporate::printed_item_numbers(kind, &mut errors);
+    let reworded: Vec<&str> = errors.iter().map(|(_, m)| m.as_str()).collect();
+    assert_eq!(
+        reworded,
+        [
+            "Page 2 Item 54 (row 2) Description should not be blank.",
+            "Page 3 Item 17i (row 2) Amount should not be zero.",
+            "Page 3 Item 4 (row 2) Legal Basis should not be blank.",
+            "Page 4 Item 3 (row 3) Description should not be blank.",
+            "Page 4 Item 6 (row 2) Amount should not be zero.",
+            "Page 4 Item 8 (row 12) Description should not be blank.",
+        ]
+    );
+    // Through the page's validation.
+    let row = |description: &str, amount: i64| json!({"description": description, "legal_basis": "", "amount": amount});
+    let mut draft = open("1702RT", 0)["draft"].clone();
+    draft["deduction_method"] = json!("Itemized");
+    draft["more_rows"]["item_54"] = json!([row("Credit", 100), row("", 50)]);
+    draft["more_rows"]["schedule_1_item_17i"] = json!([row("Expense", 100), row("Other", 0)]);
+    let found = messages(&validate("1702RT", &draft));
+    for message in [
+        "Page 2 Item 54 (row 2) Description should not be blank.",
+        "Page 3 Item 17i (row 2) Amount should not be zero.",
+    ] {
+        assert!(found.iter().any(|m| m == message), "{message}: {found:?}");
+    }
+    assert!(
+        !found
+            .iter()
+            .any(|m| m.contains("Item 54.") || m.contains("Item i.")),
+        "{found:?}"
+    );
+}
