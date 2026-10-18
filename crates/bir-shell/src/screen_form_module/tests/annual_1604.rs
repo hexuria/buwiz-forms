@@ -1645,3 +1645,158 @@ fn d6_1604f_and_1604c_messages_cite_the_printed_item() {
         Some("11A".into())
     );
 }
+
+/// The Total Amount Remitted bindings of the 1604E pin before PR 6
+/// (crates/bir-core/data/agent-forms/1604e-v2018.json at a7b9e47e^, the
+/// lines that commit removed), literally.
+const PRE_PR6_TOTAL_BINDINGS: &str = r#"
+"frm1604e:txtSched1TotRemAmt3": {"path":"/schedule1/2/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt10": {"path":"/schedule2/9/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt11": {"path":"/schedule2/10/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt2": {"path":"/schedule2/1/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt3": {"path":"/schedule2/2/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt4": {"path":"/schedule2/3/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt5": {"path":"/schedule2/4/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt7": {"path":"/schedule2/6/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt8": {"path":"/schedule2/7/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt9": {"path":"/schedule2/8/penalties","type":"amount"},
+"#;
+
+/// `fixtures/1604e-pre-pr6.json`: a 1604E draft as the save path stored it
+/// before PR 6 (form_1604e.rs and db/ are unchanged since; no
+/// profile_baseline, which PR 0c's save adds). Schedule 1 row 3 holds
+/// 3,500.00 of penalties with no tax withheld and Schedule 2 row 3 10,250.00
+/// beside 10,000.00 withheld: what typing those totals into the row's Total
+/// Amount Remitted box saved (the old binding wrote the typed amount to the
+/// row's penalties, the path the Penalties box still writes). Schedule 1
+/// row 1 (125.00) and Schedule 2 row 6 (300.00) hold penalties on rows
+/// whose Total was never bound.
+const PRE_PR6_1604E: &str = include_str!("fixtures/1604e-pre-pr6.json");
+
+/// Maintainer decision D5 (2026-10-18): each 1604E row that may hold an
+/// amount typed through its Total Amount Remitted box before PR 6 says so;
+/// nothing is changed and the stored bytes stay. The rows are the old pin's
+/// (oracle: its literal bindings), and only those holding penalties.
+#[test]
+fn d5_old_1604e_rows_typed_through_a_total_are_flagged() {
+    // The module's rows are the old pin's bound rows.
+    let mut bound: BTreeMap<u8, Vec<usize>> = BTreeMap::new();
+    for line in PRE_PR6_TOTAL_BINDINGS.lines().filter(|l| !l.is_empty()) {
+        let path = line.split("\"path\":\"/schedule").nth(1).unwrap();
+        let mut parts = path.split('/');
+        let schedule: u8 = parts.next().unwrap().parse().unwrap();
+        let index: usize = parts.next().unwrap().parse().unwrap();
+        assert_eq!(parts.next(), Some("penalties\",\"type\":\"amount\"},"));
+        bound.entry(schedule).or_default().push(index);
+    }
+    let mut ours: BTreeMap<u8, Vec<usize>> = BTreeMap::new();
+    for (schedule, rows) in rows_1604::LEGACY_TOTAL_ROWS {
+        ours.insert(schedule, rows.to_vec());
+    }
+    for rows in bound.values_mut() {
+        rows.sort();
+    }
+    assert_eq!(ours, bound);
+
+    setup();
+    let id = save("1604E", &open("1604E", 0)["draft"])["id"]
+        .as_i64()
+        .unwrap();
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[PRE_PR6_1604E, &id.to_string()],
+    );
+    assert_eq!(raw_row(id).1, PRE_PR6_1604E, "stored as given");
+    let opened = open("1604E", 0);
+    let notice = rows_1604::legacy_total_notice(3);
+    assert_eq!(
+        notice,
+        "Row 3 may hold an amount typed as the total; check it before you file."
+    );
+    let flagged = |errors: &Value| -> Vec<(String, Value)> {
+        errors
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| {
+                e["message"].as_str().is_some_and(|m| {
+                    m.ends_with("may hold an amount typed as the total; check it before you file.")
+                })
+            })
+            .map(|e| (e["field"].as_str().unwrap().to_string(), e["keys"].clone()))
+            .collect()
+    };
+    assert_eq!(
+        flagged(&opened["errors"]),
+        vec![
+            (
+                "schedule1[2].penalties".to_string(),
+                json!([
+                    "frm1604e:txtSched1Penalties3",
+                    "frm1604e:txtSched1TotRemAmt3"
+                ])
+            ),
+            (
+                "schedule2[2].penalties".to_string(),
+                json!([
+                    "frm1604e:txtSched2Penalties3",
+                    "frm1604e:txtSched2TotRemAmt3"
+                ])
+            ),
+        ]
+    );
+    assert!(
+        opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["message"] == notice.as_str())
+            .count()
+            == 2
+    );
+    // Nothing changes: the amounts show as stored and the row is the old bytes.
+    assert_eq!(
+        amount(&opened["values"], "frm1604e:txtSched1Penalties3"),
+        3500.0
+    );
+    assert_eq!(
+        amount(&opened["values"], "frm1604e:txtSched2Penalties3"),
+        10250.0
+    );
+    assert_eq!(
+        amount(&opened["values"], "frm1604e:txtSched2TotRemAmt3"),
+        20250.0
+    );
+    assert_eq!(raw_row(id).1, PRE_PR6_1604E, "opening changes nothing");
+    let validated = validate("1604E", &opened["draft"]);
+    assert_eq!(flagged(&validated["errors"]).len(), 2);
+    // Opened and saved, the row is the fixture byte for byte (the profile
+    // baseline a save records set aside).
+    save("1604E", &opened["draft"]);
+    let saved = raw_row(id).1;
+    let saved = match saved.find(",\"profile_baseline\":") {
+        Some(at) => format!("{}}}", &saved[..at]),
+        None => saved,
+    };
+    assert_eq!(saved, PRE_PR6_1604E, "opened and saved, byte for byte");
+    // Checked and cleared by the filer, the row's notice goes.
+    let cleared = fill(
+        "1604E",
+        &opened["draft"],
+        json!({"frm1604e:txtSched2Penalties3": "0"}),
+    );
+    assert_eq!(
+        flagged(&validate("1604E", &cleared["draft"])["errors"]),
+        vec![(
+            "schedule1[2].penalties".to_string(),
+            json!([
+                "frm1604e:txtSched1Penalties3",
+                "frm1604e:txtSched1TotRemAmt3"
+            ])
+        )]
+    );
+    // The other 1604 returns have no such rows.
+    let fresh = open("1604C", 0);
+    assert!(flagged(&fresh["errors"]).is_empty());
+    assert!(rows_1604::notices(kind_of("1604C").unwrap(), &json!({})).is_empty());
+}

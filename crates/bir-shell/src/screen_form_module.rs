@@ -2569,6 +2569,7 @@ fn evaluate_here(
         list.extend(rows_dst_pt_vat::notices(kind, draft));
         list.extend(rows_annual_corporate::notices(kind, draft));
         list.extend(rows_annual_individual::notices(kind, draft));
+        list.extend(rows_1604::notices(kind, draft));
     }
     Ok((values_json(kind, draft)?, errors, status))
 }

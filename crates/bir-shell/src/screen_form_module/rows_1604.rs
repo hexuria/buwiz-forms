@@ -164,6 +164,56 @@ fn join(parts: &[String]) -> String {
     }
 }
 
+/// 1604E Part II rows whose Total Amount Remitted box was bound to the
+/// row's penalties before PR 6: `(schedule, 0-based rows)`. The pin
+/// before a7b9e47e (crates/bir-core/data/agent-forms/1604e-v2018.json)
+/// bound txtSched1TotRemAmt3 to /schedule1/2/penalties and
+/// txtSched2TotRemAmt2-5 and 7-11 to /schedule2/{1-4,6-10}/penalties
+/// (PR 6's ledger, 1604E manual-0: "a legacy 1604E draft whose penalties
+/// were typed through a Total cell ... still files those penalties"); the
+/// other rows' totals were never bound.
+pub(super) const LEGACY_TOTAL_ROWS: [(u8, &[usize]); 2] =
+    [(1, &[2]), (2, &[1, 2, 3, 4, 6, 7, 8, 9, 10])];
+
+/// What a 1604E row that may hold a total typed as its penalties says
+/// (maintainer decision D5, 2026-10-18).
+pub(super) fn legacy_total_notice(row: usize) -> String {
+    format!("Row {row} may hold an amount typed as the total; check it before you file.")
+}
+
+/// Notices beside the form's own messages; nothing is changed and the
+/// stored bytes stay (D5). 1604E: an amount typed into one of the
+/// [`LEGACY_TOTAL_ROWS`]' Total Amount Remitted boxes was saved as the
+/// row's penalties, so it files as penalties and the form adds the tax
+/// withheld to it. A stored draft cannot tell which box it was typed in;
+/// the binding wrote nothing else, so a row whose penalties are zero holds
+/// none, and each of those rows holding penalties says so under its
+/// Penalties and Total boxes.
+pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
+    if kind.form_code() != "1604E" {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for (schedule, rows) in LEGACY_TOTAL_ROWS {
+        for &index in rows {
+            let penalties = &draft[format!("schedule{schedule}")][index]["penalties"];
+            if penalties.as_f64().is_none_or(|amount| amount == 0.0) {
+                continue;
+            }
+            let row = index + 1;
+            out.push(json!({
+                "field": format!("schedule{schedule}[{index}].penalties"),
+                "message": legacy_total_notice(row),
+                "keys": [
+                    format!("frm1604e:txtSched{schedule}Penalties{row}"),
+                    format!("frm1604e:txtSched{schedule}TotRemAmt{row}"),
+                ],
+            }));
+        }
+    }
+    out
+}
+
 /// Messages that name another item number than the one the printed sheet
 /// gives the box they are about, reworded to the printed number
 /// (maintainer decision D6, 2026-10-18; wording only, as PR 8 does for its
