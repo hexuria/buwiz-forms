@@ -338,50 +338,58 @@ fn pr9_0605_boxes_off_the_sheet_are_named_and_labelled() {
     assert!(strings(&opened["profile_edit"]).contains("txtEmail"));
 }
 
-/// 0605 preview.0 and review F5: item 3's four tick boxes are the draft's
-/// quarter (form_0605.rs `quarter`, written one tick box per quarter by the
-/// field map), which is the return's period identity (agent
-/// `PERIOD_FIELDS`). On an opened return they are locked as its identity,
-/// say what sets them, and refuse a write; they show the draft's quarter as
-/// the print does, for every quarter. (PR 9 first let the page change it;
-/// this replaces that assertion with the identity rule.) A sample's period
-/// part sets it: a_0605_quarter_is_its_quarter.
+/// 0605 preview.0 (fix check 1 undoes review F5): item 3's four tick boxes
+/// are the draft's quarter (form_0605.rs `quarter`, written one tick box per
+/// quarter by the field map). A typed quarter is stored, printed and filed
+/// (the upload's field map), unticking the ticked one clears it, and the
+/// return's identity (its entry number, Form0605Draft::filing_period
+/// OpenEnded) never moves with it.
 #[test]
 fn pr9_0605_quarter_boxes_are_the_drafts_quarter() {
     setup();
+    let kind = kind_of("0605").unwrap();
     let opened = open("0605", 1);
+    let identity = agent::identity(kind, &opened["draft"]).unwrap();
     for key in QUARTERS_0605 {
-        assert_eq!(
-            opened["locks"][key],
-            agent::Lock::Identity.reason(),
-            "{key}"
-        );
-        assert_eq!(
-            opened["waits"][key],
-            rows_as_needed::QUARTER_FROM_THE_PERIOD
-        );
+        assert!(opened["locks"][key].is_null(), "{key} is open");
     }
-    let refused = fill(
-        "0605",
-        &opened["draft"],
-        pick(&QUARTERS_0605, "itemQuarter_2"),
-    );
-    assert_eq!(
-        refused["rejected"]["itemQuarter_2"],
-        rows_as_needed::QUARTER_FROM_THE_PERIOD
-    );
-    assert_eq!(refused["draft"]["quarter"], opened["draft"]["quarter"]);
-    for n in 1..=4u64 {
-        let mut draft = opened["draft"].clone();
-        draft["quarter"] = json!(n);
-        let shown = fill("0605", &draft, json!({}));
+    let mut draft = opened["draft"].clone();
+    for (n, key) in QUARTERS_0605.iter().enumerate() {
+        let filled = fill("0605", &draft, pick(&QUARTERS_0605, key));
+        assert!(
+            filled["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            filled["rejected"]
+        );
+        draft = filled["draft"].clone();
+        assert_eq!(draft["quarter"], n as u64 + 1);
         let map = printed("0605", &draft);
-        for (m, key) in QUARTERS_0605.iter().enumerate() {
-            let on = if m as u64 + 1 == n { "true" } else { "false" };
-            assert_eq!(shown["values"][*key], on, "page {key}");
-            assert_eq!(map[*key], on, "print {key}");
+        let filed = agent::field_map(kind, &draft).unwrap();
+        for (m, other) in QUARTERS_0605.iter().enumerate() {
+            let on = if m == n { "true" } else { "false" };
+            assert_eq!(filled["values"][*other], on, "page {other}");
+            assert_eq!(map[*other], on, "print {other}");
+            assert_eq!(filed[*other], on, "upload {other}");
         }
+        let now = agent::identity(kind, &draft).unwrap();
+        assert_eq!(
+            (now.tin, now.taxable_year, now.period),
+            (
+                identity.tin.clone(),
+                identity.taxable_year,
+                identity.period.clone()
+            )
+        );
     }
+    let kept = fill("0605", &draft, json!({ "itemQuarter_1": "false" }));
+    assert_eq!(kept["draft"]["quarter"], 4);
+    let cleared = fill("0605", &draft, json!({ "itemQuarter_4": "false" }));
+    assert_eq!(cleared["draft"]["quarter"], 0);
+    assert!(
+        QUARTERS_0605
+            .iter()
+            .all(|key| cleared["values"][*key] == "false")
+    );
 }
 
 /// 0605 R6.1, review F10: item 17's Others box is off with what turns it on
@@ -872,8 +880,43 @@ fn pr9_1606_1706_boxes_wait_for_their_answer() {
     assert_eq!(no_and_list["draft"]["tax_relief"], "no");
     // A group key is refused alike.
     let opened = open("1706", 1);
-    let group = fill("1706", &opened["draft"], json!({"frm1706:j_id392": "1"}));
-    assert!(group["rejected"]["frm1706:j_id392"].is_string());
+    for (key, value, tag) in [
+        (
+            "frm1706:j_id392",
+            "1",
+            "Needs item 3 = an individual seller's ATC",
+        ),
+        (
+            "frm1706:j_id393",
+            "1",
+            "Needs item 3 = an individual seller's ATC",
+        ),
+        (
+            "frm1706:opt37",
+            "1",
+            "Needs item 18 below zero (an over-remittance)",
+        ),
+    ] {
+        let group = fill("1706", &opened["draft"], json!({ key: value }));
+        assert_eq!(group["rejected"][key], tag, "{key}");
+    }
+    let opened_1606 = open("1606", 1);
+    let group = fill("1606", &opened_1606["draft"], json!({"frm1606:opt37": "1"}));
+    assert_eq!(
+        group["rejected"]["frm1606:opt37"],
+        "Needs item 18 below zero (an over-remittance)"
+    );
+    // Fix check 11: "false" typed into a text box is text, refused while
+    // shut like any other text.
+    let others = fill(
+        "1606",
+        &opened_1606["draft"],
+        json!({"frm1606:txtOthers20": "false"}),
+    );
+    assert_eq!(
+        others["rejected"]["frm1606:txtOthers20"],
+        "Needs Schedule 2 = Exempt or Others"
+    );
     // F10: 1706 item 18's boxes, bound by the overpaid seed, refuse a tick
     // until item 18 is below zero (recompute would erase it).
     let tag = "Needs item 18 below zero (an over-remittance)";
@@ -884,6 +927,66 @@ fn pr9_1606_1706_boxes_wait_for_their_answer() {
         json!({"frm1706:opt37:_1": "true"}),
     );
     assert_eq!(refused["rejected"]["frm1706:opt37:_1"], tag);
+    // Fix check 9: item 18 below zero opens them; a tick is kept.
+    let mut overpaid: bir_core::forms::form_1706::Form1706Draft =
+        serde_json::from_value(opened["draft"].clone()).unwrap();
+    overpaid.set_amended(true);
+    overpaid.tax_paid_previous = 5_000_000.0;
+    overpaid.recompute();
+    let overpaid = serde_json::to_value(&overpaid).unwrap();
+    let ticked = fill("1706", &overpaid, json!({"frm1706:opt37:_1": "true"}));
+    assert!(
+        ticked["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        ticked["rejected"]
+    );
+    assert_eq!(ticked["draft"]["overpayment"], "refund");
+    // Fix check 10: the two boxes are one official radio pair (both forms'
+    // runtime-control-inventory-v796.json name them frm<form>:opt37), which
+    // never unticks: an untick answers nothing on either form.
+    let untick = fill(
+        "1706",
+        &ticked["draft"],
+        json!({"frm1706:opt37:_1": "false"}),
+    );
+    assert_eq!(untick["draft"]["overpayment"], "refund");
+    for (code, slug) in [("1606", "1606-v2018"), ("1706", "1706-v2018")] {
+        let inventory = std::fs::read_to_string(format!(
+            "{}/../../rules/forms/{slug}/fixtures/runtime-control-inventory-v796.json",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        let inventory: Value = serde_json::from_str(&inventory).unwrap();
+        let names: Vec<&str> = inventory["controls"]
+            .as_array()
+            .or(inventory["static_controls"].as_array())
+            .unwrap()
+            .iter()
+            .filter(|c| {
+                c["id"]
+                    .as_str()
+                    .is_some_and(|id| id.ends_with("opt37:_1") || id.ends_with("opt37:_2"))
+            })
+            .map(|c| c["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            [format!("frm{code}:opt37"), format!("frm{code}:opt37")]
+        );
+    }
+    let mut overpaid_1606: bir_core::forms::form_1606::Form1606Draft =
+        serde_json::from_value(opened_1606["draft"].clone()).unwrap();
+    overpaid_1606.is_amended = true;
+    overpaid_1606.tax_remitted_previous = 5_000_000.0;
+    overpaid_1606.recompute();
+    let overpaid_1606 = serde_json::to_value(&overpaid_1606).unwrap();
+    let ticked = fill("1606", &overpaid_1606, json!({"frm1606:opt37:_1": "true"}));
+    let untick = fill(
+        "1606",
+        &ticked["draft"],
+        json!({"frm1606:opt37:_1": "false"}),
+    );
+    assert_eq!(untick["draft"]["overremittance"], "refund");
     // F12: the conditions the gates read, as the corpus words them.
     assert_eq!(
         corpus["1606"]["frm1606:selTreaty"],
@@ -895,15 +998,16 @@ fn pr9_1606_1706_boxes_wait_for_their_answer() {
     );
 }
 
-/// Review F6: 1606's and 1706's item 11 No clears the relief chosen from
-/// its list, so the page asks first (`removes`) and offers Undo; No with
-/// nothing chosen asks nothing.
+/// Review F6 and fix check 6: 1606's and 1706's item 11 No, or the list's
+/// blank entry (1606 "", 1706 "0"), clears the relief chosen from its list,
+/// so the page asks first (`removes`) and offers Undo; nothing chosen asks
+/// nothing.
 #[test]
 fn pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief() {
     setup();
-    for (code, list, choice) in [
-        ("1606", "frm1606:selTreaty", "0"),
-        ("1706", "frm1706:selTreaty", "1"),
+    for (code, list, choice, blank) in [
+        ("1606", "frm1606:selTreaty", "0", ""),
+        ("1706", "frm1706:selTreaty", "1", "0"),
     ] {
         let yes_key = format!("frm{code}:rdTreaty:_1");
         let no_key = format!("frm{code}:rdTreaty:_2");
@@ -931,12 +1035,90 @@ fn pr9_1606_1706_item_11_no_asks_before_it_clears_the_relief() {
             no["removes"]
         );
         assert_eq!(no["draft"]["tax_relief"], "no");
+        let emptied = fill(code, &chosen["draft"], json!({ list: blank }));
+        assert!(
+            emptied["removes"]["message"].is_string(),
+            "{code}: {}",
+            emptied["removes"]
+        );
+        assert_eq!(emptied["draft"]["tax_relief"], "no");
         let plain = fill(
             code,
             &opened["draft"],
             json!({ &no_key: "true", &yes_key: "false" }),
         );
         assert!(plain["removes"].is_null(), "{code}");
+    }
+}
+
+/// Fix check 3: 1606's and 1706's item 11 Yes is "yes, with nothing picked
+/// from the list yet" (probe.rs CHOICE_OPTION_SETS -> yes_unspecified), so
+/// Yes alone shows the official message and files no relief kind; Yes and a
+/// list choice files that choice, and Yes again keeps it. A stored draft
+/// holding special law opens and files unchanged.
+#[test]
+fn pr9_1606_1706_item_11_yes_waits_for_the_list() {
+    setup();
+    for (code, list, choice, message) in [
+        (
+            "1606",
+            "frm1606:selTreaty",
+            "1",
+            "Please select a tax relief for Item 11.",
+        ),
+        (
+            "1706",
+            "frm1706:selTreaty",
+            "2",
+            "Please specify tax relief you are availing for Item 11.",
+        ),
+    ] {
+        let kind = kind_of(code).unwrap();
+        let yes = format!("frm{code}:rdTreaty:_1");
+        let no = format!("frm{code}:rdTreaty:_2");
+        let opened = open(code, 1);
+        let alone = fill(
+            code,
+            &opened["draft"],
+            json!({ &yes: "true", &no: "false" }),
+        );
+        assert_eq!(alone["draft"]["tax_relief"], "yes_unspecified", "{code}");
+        let checked = call_async(
+            "screen_form_validate",
+            vec![code.into(), json(alone["draft"].clone())],
+        )
+        .unwrap();
+        let messages: Vec<&str> = checked["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["message"].as_str().unwrap())
+            .collect();
+        assert!(messages.contains(&message), "{code}: {messages:?}");
+        let chosen = fill(code, &alone["draft"], json!({ list: choice }));
+        assert_eq!(chosen["draft"]["tax_relief"], "special_law", "{code}");
+        assert_eq!(
+            agent::field_map(kind, &chosen["draft"]).unwrap()[list],
+            choice
+        );
+        let again = fill(
+            code,
+            &chosen["draft"],
+            json!({ &yes: "true", &no: "false" }),
+        );
+        assert_eq!(
+            again["draft"]["tax_relief"], "special_law",
+            "{code} Yes again keeps it"
+        );
+        // A stored draft from before keeps what it files.
+        let saved = save(code, &chosen["draft"]);
+        let reopened = open(code, 1);
+        assert_eq!(reopened["draft"]["tax_relief"], "special_law", "{code}");
+        assert_eq!(
+            agent::field_map(kind, &reopened["draft"]).unwrap(),
+            agent::field_map(kind, &chosen["draft"]).unwrap(),
+            "{code}: {saved}"
+        );
     }
 }
 
@@ -1241,6 +1423,31 @@ fn pr9_2552_part_iv_rows_take_their_amounts() {
         printed("2552", &filled["draft"])["frm2552:txtPg2P4I3Amount"],
         "1,500.00"
     );
+    // Clearing row 3 takes it out of the draft; a blank always goes
+    // through, even into a row the gate would shut.
+    let cleared = fill(
+        "2552",
+        &filled["draft"],
+        json!({"frm2552:txtPg2P4I3TransClass": "", "frm2552:txtPg2P4I3Amount": ""}),
+    );
+    assert!(
+        cleared["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        cleared["rejected"]
+    );
+    assert_eq!(
+        cleared["draft"]["exempt_transactions"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let blank_shut = fill(
+        "2552",
+        &opened["draft"],
+        json!({"frm2552:txtPg2P4I5Amount": ""}),
+    );
+    assert!(blank_shut["rejected"].as_object().unwrap().is_empty());
 }
 
 /// The 2552 official runtime controls (rules/forms/2552-v2018/fixtures).
@@ -1301,6 +1508,16 @@ fn pr9_2552_item_12_takes_whole_numbers_of_shares() {
         &opened["draft"],
         pick(&ITEM_11_2552, "frm2552:rdoPg1I11TransactionPrimary"),
     );
+    // Item 11 and 12B in one batch: item 11 runs first.
+    let mut batch = pick(&ITEM_11_2552, "frm2552:rdoPg1I11TransactionSecondary");
+    batch["frm2552:txtPg1Pt1I12TotShare"] = json!("300000");
+    let one = fill("2552", &opened["draft"], batch);
+    assert!(
+        one["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        one["rejected"]
+    );
+    assert_eq!(one["draft"]["outstanding_shares"], "300000");
     let typed = fill(
         "2552",
         &ipo["draft"],
@@ -1757,7 +1974,7 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
     let cells = [
         ("frm1707:txtPg2P4Sch2NameOfCorpStock1", "Example Corp"),
         ("frm1707:txtPg2P4Sch2NoOfShares1", "1000"),
-        ("frm1707:txtPg2P4Sch2StockCertNo4", "4004"),
+        ("frm1707:txtPg2P4Sch2StockCertNo4", "C-4"),
         ("frm1707:txtPg2P4Sch2NameOfCorpStock4", "Fourth Corp"),
         ("frm1707:txtPg2P4Sch2TaxBaseSellPrice4", "5000"),
         ("frm1707:txtPg2P4Sch3Particulars4", "Broker fee"),
@@ -1780,7 +1997,7 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
         filled["rejected"]
     );
     assert_eq!(filled["draft"]["shares"][0]["number_of_shares"], 1000.0);
-    assert_eq!(filled["draft"]["shares"][3]["certificate_number"], "4004");
+    assert_eq!(filled["draft"]["shares"][3]["certificate_number"], "C-4");
     assert_eq!(filled["draft"]["expenses"][3]["amount"], 250.0);
     let map = printed("1707", &filled["draft"]);
     assert_eq!(map["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000.000");

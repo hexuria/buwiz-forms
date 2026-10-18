@@ -27993,7 +27993,7 @@ declare module "bir" {
       blank: string[];
       /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
       needs: Record<string, string>;
-      /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
+      /** A blank box's reason, shown in the box: what it waits for (a rate its row's ATC, a tick box the amount that ticks it, a date the return it is started with). */
       waits: Record<string, string>;
       /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
       lock_notes: Record<string, string>;

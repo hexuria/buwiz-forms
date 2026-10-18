@@ -85,7 +85,7 @@ export interface ScreenFormOpened {
     blank: string[];
     /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
     needs: Record<string, string>;
-    /** A box the form fills from another box of its row: what it waits for while blank (a rate waits for its ATC; shown in the box). */
+    /** A blank box's reason, shown in the box: what it waits for (a rate its row's ATC, a tick box the amount that ticks it, a date the return it is started with). */
     waits: Record<string, string>;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
@@ -6018,9 +6018,9 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        // 82 = 82 less 1 for 2552 (PR 9: its item 5 runtime RDO select is
-        // a hidden copy of the printed item 5 box) plus 1 for 1707 (PR 9:
-        // its item 5 RDO list, now a box of its printed item).
+        // Less 1 for 2552 (PR 9: its item 5 runtime RDO select is a hidden
+        // copy of the printed item 5 box), plus 1 for 1707 (PR 9: its item 5
+        // RDO list, now a box of its printed item).
         assert_eq!(supplied, 82);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
@@ -9719,16 +9719,19 @@ mod tests {
                 (key.clone(), tag)
             })
             .collect();
-        for key in schema_keys(code) {
-            if let Some(tag) = rows_as_needed::host_condition(code, key) {
-                keys.push((key.clone(), tag));
-            }
+        let hand = hand_gates_2552(code, &checked["draft"]);
+        for (key, tag, _) in &hand {
+            keys.push((key.clone(), tag.clone()));
         }
         let mut off: Vec<String> = keys
             .into_iter()
             .filter(|(key, tag)| {
                 if !shows_nothing(&checked["values"][key]) {
                     return false;
+                }
+                // 2552: off exactly when its hand-listed condition is shut.
+                if let Some((_, _, shut)) = hand.iter().find(|(k, _, _)| k == key) {
+                    return *shut;
                 }
                 let (mut taken, mut refused) = (Vec::new(), Vec::new());
                 for probe in test_probes(checked, code, key) {
@@ -9750,6 +9753,52 @@ mod tests {
         off
     }
 
+    /// 2552's gated boxes, by hand (fix check 5): the official runtime keeps
+    /// each disabled at load (rules/forms/2552-v2018/fixtures/
+    /// runtime-control-inventory-v796.json, disabled: true; 2552's corpus
+    /// records no enabled_when), with its opening condition written out and
+    /// judged here on the draft: `(key, tag, shut now)`.
+    fn hand_gates_2552(code: &str, draft: &Value) -> Vec<(String, String, bool)> {
+        if code != "2552" {
+            return Vec::new();
+        }
+        let offering = matches!(
+            draft["transaction"].as_str(),
+            Some("primary_offering" | "secondary_offering")
+        );
+        let used = |row: usize| {
+            draft["exempt_transactions"].get(row).is_some_and(|r| {
+                r["classification"]
+                    .as_str()
+                    .is_some_and(|c| !c.trim().is_empty())
+                    || r["amount"].as_f64().is_some_and(|a| a != 0.0)
+            })
+        };
+        let tag = "Needs item 11 = Initial Public Offering (Primary or Secondary)";
+        let mut out = vec![
+            (
+                "frm2552:txtPg1Pt1I12NumOfShare".to_string(),
+                tag.to_string(),
+                !offering,
+            ),
+            (
+                "frm2552:txtPg1Pt1I12TotShare".to_string(),
+                tag.to_string(),
+                !offering,
+            ),
+        ];
+        for n in 2..=5 {
+            for stem in ["TransClass", "Amount"] {
+                out.push((
+                    format!("frm2552:txtPg2P4I{n}{stem}"),
+                    format!("Needs Part IV row {}", n - 1),
+                    !used(n - 2),
+                ));
+            }
+        }
+        out
+    }
+
     /// Rule 6: a box another answer turns off is faded with what turns it
     /// on. The oracles: the corpus's own `enabled_when` (read from
     /// rules/forms) and its reviewed tag, and the form's computation, which
@@ -9767,10 +9816,12 @@ mod tests {
             let code = kind.form_code();
             let opened = open(code, page_period_of(code));
             for (key, why) in opened["off"].as_object().unwrap() {
-                // 2552's PR 9 host gates have no corpus condition: their
-                // tag is the host's (tests::as_needed checks the official
-                // inventory keeps those boxes disabled).
-                let host = rows_as_needed::host_condition(code, key);
+                // 2552's PR 9 gates have no corpus condition: their tag is
+                // the hand list's (hand_gates_2552).
+                let host = hand_gates_2552(code, &opened["draft"])
+                    .into_iter()
+                    .find(|(k, _, _)| k == key)
+                    .map(|(_, tag, _)| tag);
                 let condition = corpus[code][key]
                     .as_str()
                     .or(host.as_deref())

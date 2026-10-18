@@ -1799,9 +1799,9 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
     // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
     // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
-    // 82 = 82 less 1 for 2552 (PR 9: its item 5 runtime RDO select is a
-    // hidden copy of the printed item 5 box) plus 1 for 1707 (PR 9: its
-    // item 5 RDO list, now a box of its printed item).
+    // Less 1 for 2552 (PR 9: its item 5 runtime RDO select is a hidden
+    // copy of the printed item 5 box), plus 1 for 1707 (PR 9: its item 5
+    // RDO list, now a box of its printed item).
     assert_eq!(supplied, 82, "catalog lists, dependent ones included");
 }
 
@@ -2430,6 +2430,7 @@ fn page_option_value(option: &Value) -> Option<String> {
 fn every_listed_dropdown_choice_is_accepted_by_the_host() {
     seed_fictional_profile();
     let mut refused = Vec::new();
+    let mut sent = BTreeSet::new();
     for form in schema() {
         let code = form["c"].as_str().unwrap_or_default();
         let Ok(opened) = open(code, page_period_for(code)) else {
@@ -2444,19 +2445,19 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             .flat_map(|it| it["f"].as_array().into_iter().flatten());
         for field in fields {
             let key = field["k"].as_str().unwrap_or_default();
-            // A box another answer turns off is shut on the page too
-            // (form_page.js `isLocked`; PR 9's host refuses it with the tag).
-            if field["t"] != "sel"
-                || field["c"] == 1
-                || locks.contains_key(key)
-                || opened["off"].get(key).is_some()
-            {
+            // A PR 9 gated box that is off now is shut on the page
+            // (form_page.js `isLocked`) and refused by the host with its tag
+            // (tests::as_needed); every other off box is still sent.
+            let gated_off =
+                opened["off"].get(key).is_some() && super::rows_as_needed::is_gated(code, key);
+            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) || gated_off {
                 continue;
             }
             for option in field["o"].as_array().into_iter().flatten() {
                 let Some(value) = page_option_value(option) else {
                     continue;
                 };
+                sent.insert(format!("{code} {key}"));
                 let filled = call(
                     "screen_form_fill",
                     vec![
@@ -2471,6 +2472,16 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                 }
             }
         }
+    }
+    for (code, key) in [
+        ("1601C", "frm1601c:selTreaty"),
+        ("1604C", "frm1604c:select13"),
+    ] {
+        assert!(
+            sent.contains(&format!("{code} {key}")),
+            "{code} {key} is sent: {}",
+            sent.len()
+        );
     }
     // N03 (fixed): 2550M's Schedule 1 ATC selects list the form's own ATC
     // popup and the host writes them through the typed draft.
