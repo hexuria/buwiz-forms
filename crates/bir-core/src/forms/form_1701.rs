@@ -619,21 +619,16 @@ impl Form1701Draft {
     }
 
     /// Part IV Item 2 as the page shows and the sheet prints it (PR 7,
-    /// preview.0): the spouse's RDO the page writes (`spouse_rdo_code`,
-    /// which the upload files), or, for a save file imported before it was
-    /// typed here, the one it carried (`spouse.rdo_code`, which the
-    /// XML-shaped map reads); blank while there is none or the spouse
-    /// column is closed.
+    /// preview.0): the spouse's RDO the upload files (`spouse_rdo_code`,
+    /// which the page writes and an imported save file now sets), blank
+    /// while there is none (the upload's `000`) or the spouse column is
+    /// closed. The XML-shaped map's `spouse.rdo_code` is not read, so page,
+    /// print and upload agree.
     pub fn spouse_rdo_shown(&self) -> String {
         if !self.spouse_column_active() {
             return String::new();
         }
-        let typed = self.spouse_rdo_code.trim();
-        if typed.is_empty() {
-            self.spouse.rdo_code.trim().to_string()
-        } else {
-            typed.to_string()
-        }
+        self.spouse_rdo_code.trim().to_string()
     }
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, _legacy_month: u8) -> Self {

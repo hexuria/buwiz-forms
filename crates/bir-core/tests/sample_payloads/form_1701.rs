@@ -410,19 +410,38 @@ fn form_1701_penalty_items_follow_the_shared_model() {
     }
 }
 
-/// Part IV Item 2 prints the spouse's RDO the page writes and the upload
-/// files (`spouse_rdo_code`), or an imported save file's own when none was
-/// typed here; blank once the spouse column closes (PR 7, preview.0).
+/// Part IV Item 2: the page, the print and the upload read one value,
+/// `spouse_rdo_code`, blank on the page and the print while there is none
+/// (the upload files `000`) and once the spouse column closes. A joint save
+/// file imported with its spouse's RDO keeps it in all three (PR 7 review).
 #[test]
-fn form_1701_spouse_rdo_prints_what_the_page_holds() {
+fn form_1701_spouse_rdo_agrees_on_page_print_and_upload() {
     let key = "frm1701:txtPg2I2SpouseRDOCode";
     let joint = sample_1701_joint();
     assert_eq!(joint.to_print_field_map()[key], "039");
     assert_eq!(joint.field_map()[key], "039");
-    let mut imported = joint.clone();
-    imported.spouse_rdo_code.clear();
-    imported.spouse.rdo_code = "040".into();
-    assert_eq!(imported.to_print_field_map()[key], "040");
+    assert_eq!(joint.spouse_rdo_shown(), "039");
+    // A joint save file in the official 837-field format whose spouse's RDO
+    // is 040 (the spouse a single proprietor only, one Part IV item 3 mark).
+    let mut source = joint.clone();
+    source.spouse_also_compensation_earner = false;
+    source.spouse.atc = Some(Form1701Atc::Ii012);
+    source.employers[1] = Default::default();
+    source.recompute();
+    source.spouse_rdo_code = "040".into();
+    let saved = source.to_official_xml_payload().unwrap();
+    assert_eq!(saved.matches("txtPg2I2SpouseRDOCode=040").count(), 1);
+    let imported = Form1701Draft::from_bir_xml_payload(&saved).unwrap();
+    assert_eq!(imported.spouse_rdo_code, "040");
+    assert_eq!(imported.spouse_rdo_shown(), "040", "page");
+    assert_eq!(imported.to_print_field_map()[key], "040", "print");
+    assert_eq!(imported.field_map()[key], "040", "upload");
+    // None entered: blank on the page and the print, 000 uploaded.
+    let mut none = joint.clone();
+    none.spouse_rdo_code.clear();
+    assert_eq!(none.spouse_rdo_shown(), "");
+    assert_eq!(none.to_print_field_map()[key], "");
+    assert_eq!(none.field_map()[key], "000");
     let mut single = joint.clone();
     single.civil_status = Some(Form1701CivilStatus::Single);
     assert_eq!(single.to_print_field_map()[key], "");
