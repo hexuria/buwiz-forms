@@ -381,14 +381,7 @@ impl Form1600PtView {
             schedule.pop();
         }
         draft.schedule = schedule;
-        // In place: a box the stored draft lacked stays out while blank.
-        draft.set_typed_part_i(
-            self.input_text("name", cx),
-            self.input_text("address", cx),
-            self.input_text("zip", cx).trim().to_string(),
-            self.input_text("phone", cx).trim().to_string(),
-            self.input_text("email", cx).trim().to_string(),
-        );
+        apply_part_i(&mut draft, |key| self.input_text(key, cx));
         draft.tax_relief_specify = self.input_text("relief_spec", cx);
         // An empty penalty box means "use computed"; any amount overrides it.
         parse_errors.extend(penalty_section::apply_overrides(
@@ -1586,6 +1579,20 @@ const HEADER_ACTIONS: FormHeaderActions<Form1600PtView> = FormHeaderActions {
     on_simulate: None,
 };
 
+/// Part I as `sync_from_inputs` reads it from the editor's boxes (`text`:
+/// a box's current text by its key), written in place: a box the stored
+/// draft lacked stays out while blank (P2-4, `KeptText`), and files once
+/// typed.
+fn apply_part_i(draft: &mut Form1600PtDraft, text: impl Fn(&str) -> String) {
+    draft.set_typed_part_i(
+        text("name"),
+        text("address"),
+        text("zip").trim().to_string(),
+        text("phone").trim().to_string(),
+        text("email").trim().to_string(),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Layout, format_tin, parse_amount};
@@ -1613,5 +1620,83 @@ mod tests {
         assert_eq!(parse_amount(""), Some(0.0));
         assert_eq!(parse_amount("12a"), None);
         assert_eq!(format_tin("98765432100000"), "987-654-321-00000");
+    }
+
+    /// P2-4 through the editor's own wiring (`apply_part_i`, which
+    /// `sync_from_inputs` runs on every change and before a save) and its
+    /// save (`save_queueable_draft`): for each of name, address, ZIP,
+    /// contact number and email, a draft stored without the box, saved with
+    /// the box untouched (blank, or spaces) and another box edited, still
+    /// lacks the key; typed and saved, it holds the value.
+    #[test]
+    fn a_missing_part_i_box_stays_out_until_typed_on_the_desktop() {
+        use super::{Form1600PtView, apply_part_i};
+        use bir_core::db::Database;
+        use bir_core::forms::form_1600pt::Form1600PtDraft;
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Agent Corp",
+                "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+                "rdo_code": "039", "line_of_business": "Trading",
+                "registered_address": "123 Sample St Quezon City", "zip_code": "1100",
+                "phone": "0281234567", "email": "agent@example.com",
+                "default_form_type": "1600PT", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        for (field, key, typed) in [
+            ("agent_name", "name", "SAMPLE AGENT CORP"),
+            ("registered_address", "address", "1 SAMPLE ST QUEZON CITY"),
+            ("zip_code", "zip", "1100"),
+            ("contact_number", "phone", "0281234567"),
+            ("email", "email", "agent@example.com"),
+        ] {
+            let db = Database::open_ephemeral().unwrap();
+            let mut value =
+                serde_json::to_value(Form1600PtDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+            value.as_object_mut().unwrap().remove(field);
+            let stored: Form1600PtDraft = serde_json::from_value(value).unwrap();
+            db.save_queueable_draft(&stored).unwrap();
+            let load = || {
+                db.get_queueable_draft::<Form1600PtDraft>(
+                    &stored.tin,
+                    stored.year,
+                    i64::from(stored.month),
+                )
+                .unwrap()
+                .expect("stored")
+            };
+            for untouched in ["", "   "] {
+                let mut draft = load();
+                apply_part_i(&mut draft, |box_key| match box_key {
+                    k if k == key => untouched.to_string(),
+                    // Another box edited in the same sync.
+                    "email" => "edited@example.com".to_string(),
+                    k => Form1600PtView::initial(&load(), k),
+                });
+                db.save_queueable_draft(&draft).unwrap();
+                let saved = serde_json::to_value(load()).unwrap();
+                assert!(
+                    saved.get(field).is_none(),
+                    "{field}: {untouched:?} stays out: {saved}"
+                );
+                if field != "email" {
+                    assert_eq!(saved["email"], "edited@example.com", "{field}");
+                }
+            }
+            let mut draft = load();
+            apply_part_i(&mut draft, |box_key| {
+                if box_key == key {
+                    typed.to_string()
+                } else {
+                    Form1600PtView::initial(&load(), box_key)
+                }
+            });
+            db.save_queueable_draft(&draft).unwrap();
+            assert_eq!(
+                serde_json::to_value(load()).unwrap()[field],
+                typed,
+                "{field} typed"
+            );
+        }
     }
 }
