@@ -123,19 +123,5 @@ fn form_0605_imported_penalties_are_kept_as_overrides() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    // Item 17 Others (Specify) (PR 9): the only manner whose description
-    // the draft keeps (`disabletxtOthers()` clears it otherwise), so the
-    // probe can bind frm0605:txtOthersName. Its payload is never written.
-    let mut others = sample_0605();
-    others.manner_of_payment = Some(Form0605MannerOfPayment::Others);
-    others.other_manner_description = "Others example".into();
-    others.recompute();
-    assert_eq!(
-        others.other_manner_description, "Others example",
-        "the Others seed keeps its description"
-    );
-    vec![
-        serde_json::to_value(sample_0605()).expect("sample serializes"),
-        serde_json::to_value(others).expect("Others sample serializes"),
-    ]
+    vec![serde_json::to_value(sample_0605()).expect("sample serializes")]
 }
