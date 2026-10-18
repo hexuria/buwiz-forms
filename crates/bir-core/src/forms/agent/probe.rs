@@ -328,6 +328,46 @@ const COMPUTED_BY_FORM: &[(&str, &str)] = &[
         "Part IX item 10A Total (Sum of Items 6 to 9): `self.put(PartIx, 10, party, ix_10)`",
     ),
     (
+        "frm1701:txtPg4IPart8_3A",
+        "Part VIII item 3A Sub-Total - Tax Relief (Sum of Items 1 and 2): `self.put(PartViii, 3, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
+        "frm1701:txtPg4IPart8_3B",
+        "Part VIII item 3B Sub-Total - Tax Relief (Sum of Items 1 and 2): `self.put(PartViii, 3, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
+        "frm1701:txtPg4IPart8_5A",
+        "Part VIII item 5A Tax Relief Availment Before Special Tax Credit (Item 3 Less Item 4): `self.put(PartViii, 5, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
+        "frm1701:txtPg4IPart8_5B",
+        "Part VIII item 5B Tax Relief Availment Before Special Tax Credit (Item 3 Less Item 4): `self.put(PartViii, 5, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
+        "frm1701:txtPg4IPart8_7A",
+        "Part VIII item 7A Total Tax Relief Availment - SPECIAL (Sum of Items 5 and 6): `self.put(PartViii, 7, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
+        "frm1701:txtPg4IPart8_7B",
+        "Part VIII item 7B Total Tax Relief Availment - SPECIAL (Sum of Items 5 and 6): `self.put(PartViii, 7, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
+        "frm1701:txtPg4IPart8_10A",
+        "Part VIII item 10A Total Tax Relief Availment - EXEMPT (Sum of Items 8 and 9): `self.put(PartViii, 10, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
+        "frm1701:txtPg4IPart8_10B",
+        "Part VIII item 10B Total Tax Relief Availment - EXEMPT (Sum of Items 8 and 9): `self.put(PartViii, 10, party, ..)`, \
+         rules/forms/1701-v2018/calculations.json 1701-part8-running-totals",
+    ),
+    (
         "frm1701:txtPg4IPart9_10B",
         "Part IX item 10B Total (Sum of Items 6 to 9): `self.put(PartIx, 10, party, ix_10)`",
     ),

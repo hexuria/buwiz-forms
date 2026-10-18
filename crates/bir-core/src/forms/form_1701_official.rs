@@ -571,9 +571,34 @@ impl Form1701Draft {
             let credits = peso(credits);
             self.put(PartVii, 10, party, credits);
 
-            // Part VIII applies only to exempt/special-rate income.
-            for item in 1..=10 {
-                self.put(PartViii, item, party, 0.0);
+            // Part VIII, Tax Relief Availment (PR 7, preview.1): the official
+            // page opens items 1, 2, 4, 6, 8 and 9 for the filer (column A
+            // at load, column B with the spouse;
+            // rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json
+            // `disabled: false`, source lines 3362-3440) and computes items
+            // 3, 5, 7 and 10 (calculations.json 1701-part8-running-totals),
+            // as the sheet prints them: 3 = 1 + 2, 5 = 3 - 4, 7 = 5 + 6,
+            // 10 = 8 + 9. They were all written 0.00 before, which dropped
+            // what the filer typed; a stored draft holds zeros there, so it
+            // files as before.
+            let viii = |this: &mut Self, item: u8| {
+                if active {
+                    this.typed(PartViii, item, party)
+                } else {
+                    this.put(PartViii, item, party, 0.0);
+                    0.0
+                }
+            };
+            let (i1, i2) = (viii(self, 1), viii(self, 2));
+            let i3 = cents(i1 + i2);
+            let i4 = viii(self, 4);
+            let i5 = cents(i3 - i4);
+            let i6 = viii(self, 6);
+            let i7 = cents(i5 + i6);
+            let (i8, i9) = (viii(self, 8), viii(self, 9));
+            let i10 = cents(i8 + i9);
+            for (item, value) in [(3, i3), (5, i5), (7, i7), (10, i10)] {
+                self.put(PartViii, item, party, value);
             }
 
             // Part IX (reconciliation).
