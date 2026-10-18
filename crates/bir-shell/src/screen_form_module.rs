@@ -266,9 +266,10 @@ pub fn register(module: HostModule) -> HostModule {
 
 /// Record the one-time notes an opening offered as seen (D3), each by an
 /// atomic insert-if-absent, and answer the keys this call recorded: the
-/// notes the page shows. Called by the page once the opening is shown, so
-/// a failed opening offers the note again, and of two simultaneous
-/// openings only one shows it. Only one-time note keys are written.
+/// notes the page keeps. Called by the page once it has drawn the opening,
+/// so an opening that fails before then offers the note again. Of two
+/// openings that both drew it, the one whose call records nothing takes it
+/// off (it shows briefly there). Only one-time note keys are written.
 fn screen_form_notes_seen(arguments: &HostArguments) -> HostResult {
     let keys: Vec<String> = match to_json(arguments.value(0)?) {
         Value::Array(keys) => keys

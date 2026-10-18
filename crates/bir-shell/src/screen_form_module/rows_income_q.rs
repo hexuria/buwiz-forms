@@ -538,9 +538,11 @@ pub(super) const NOTE_SEEN_PREFIX: &str = "notice_seen:";
 /// The one-time notes `draft` offers on opening, `{key, text}`:
 /// [`Q3_DEADLINE_NOTE`] for a filed third-quarter 1701Q charged under
 /// October 15 (D3), until it is recorded seen. Nothing is written here: the
-/// page records a note seen once the opening it came with is shown
-/// (`screen_form_notes_seen`, insert-if-absent), so a failed opening offers
-/// it again and only one of two simultaneous openings shows it. A note
+/// page records a note seen once it has drawn the opening it came with
+/// (`screen_form_notes_seen`, insert-if-absent), so an opening that fails
+/// before it is drawn offers it again. Two openings offered it before
+/// either recorded it both draw it; the one whose record call does not
+/// record it then takes it off, so it stays on one page. A note
 /// that cannot be read is left out; it never stops the return opening, and
 /// the filed amounts are never changed.
 pub(super) fn once_notes(

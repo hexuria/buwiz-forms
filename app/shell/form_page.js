@@ -3379,11 +3379,18 @@ function formContent(cx, app, width) {
   return { page, nav, navHead, attn, navRows, parts, sideNav };
 }
 
-export function renderFormPage(cx, app, width) {
-  const page = drawFormPage(cx, app, width);
-  // The page drew whole: its one-time notes are on screen (recordNotesWhenShown).
+/**
+ * After a layout drew the page whole (renderFormPage or renderFormSplit):
+ * its one-time notes are on screen, so recordNotesWhenShown may record them.
+ */
+function notesDrawn(app) {
   const s = app.formUi?.state;
   if (s?.notes?.length && !s.loading && !s.error) s.notesRendered = true;
+}
+
+export function renderFormPage(cx, app, width) {
+  const page = drawFormPage(cx, app, width);
+  notesDrawn(app);
   return page;
 }
 
@@ -3408,6 +3415,13 @@ function drawFormPage(cx, app, width) {
  * keeps one scroll area and a chip row. `L` is the shell's layout().
  */
 export function renderFormSplit(cx, app, L) {
+  const split = drawFormSplit(cx, app, L);
+  // Drawn by this layout (null: the narrow layout draws the page instead).
+  if (split) notesDrawn(app);
+  return split;
+}
+
+function drawFormSplit(cx, app, L) {
   if (L.column < BREAK.formNav) return null;
   const c = formContent(cx, app, L.column);
   if (c.early) return null;

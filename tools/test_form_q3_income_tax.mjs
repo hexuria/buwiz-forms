@@ -135,14 +135,15 @@ const periods = mock("./periods.js", { periodLabel: () => "October 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
 await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
 await mod.evaluate();
-const { FormPageActions, renderFormPage, oneDateText } = mod.namespace;
+const { FormPageActions, renderFormPage, renderFormSplit, oneDateText } = mod.namespace;
 
 let hostValues = { [CIVIL]: "Married", [K("spouse")]: "DELA CRUZ, MARIA", [K("name")]: "DELA CRUZ, JUAN", [MONTH]: "05", [DAY]: "17", [YEAR]: "1980", [K("regMonth")]: "01", [K("regDay")]: "02", [K("regYear")]: "2003" };
 let editable = true;
 const opened = () => ({
   draft: { id: 7 }, status: editable ? "Draft" : "Submitted", editable, values: { ...hostValues }, options: {}, locks: {},
   profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: {}, penalties: [], pools: {}, errors: [],
-  notes: offeredNotes.map((n) => ({ ...n })),
+  // The host offers a one-time note only until it is recorded seen.
+  notes: offeredNotes.filter((n) => !seenKeys.has(n.key)).map((n) => ({ ...n })),
 });
 // D3: the one-time notes the host offers, and the keys it has recorded seen
 // (screen_form_notes_seen records each only if not yet recorded).
@@ -296,22 +297,28 @@ act(undo);
 assert.equal(fills().length, fillsAfterSave, "and a stale Undo does nothing");
 assert.equal(ui.state.values[CIVIL], "Widow/er");
 console.log("PASS 1701Q Civil Status: leaving Married asks first, Undo brings it back, a save retires the Undo.");
-
 // ---- D3: a one-time note is recorded seen only once the page drew it.
+// The mocked host is the real one's shape: it offers the note until the
+// key is recorded seen, and records each key only if not yet recorded.
 const NOTE = { key: "notice_seen:1701q_q3_due_nov15:7", text: "The third-quarter 1701Q is now due November 15, or the next business day." };
 const noteCalls = () => calls.filter((c) => c[0] === "screen_form_notes_seen");
+const WIDE = { column: 1056, padX: 24, mainWidth: 1280 };
+function wideFrame() { owner = null; texts.length = 0; ids.clear(); opacity.clear(); for (const e of entities) e.dirty = true; return renderFormSplit(cx, app, WIDE); }
+async function openOnly() {
+  ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 3 }, cx);
+  await settle();
+}
 editable = false;
 offeredNotes = [NOTE];
 timers.length = 0;
 // An opening the page never draws (it fails before its first frame):
 // nothing is recorded, so the next opening offers the note again.
-ui.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 3 }, cx);
-await settle();
+await openOnly();
 assert.equal(ui.state.notes.length, 1, "the opening holds the note");
 runTimers();
 assert.equal(noteCalls().length, 0, "not drawn, not recorded");
 assert.equal(seenKeys.size, 0);
-// Drawn: shown, then recorded once.
+// Narrow window (renderFormPage): shown, then recorded once.
 await openAll();
 assert.ok(texts.includes(NOTE.text), "the note shows");
 assert.equal(noteCalls().length, 0, "recorded only after the frame");
@@ -322,13 +329,51 @@ frame();
 assert.ok(texts.includes(NOTE.text), "and it stays on this page");
 runTimers();
 assert.equal(noteCalls().length, 1, "recorded once");
-// Two openings at once: the other recorded it first, so this page drops it.
+// The next opening: the host offers nothing.
 await openAll();
-assert.ok(texts.includes(NOTE.text));
+assert.ok(!texts.includes(NOTE.text), "the next opening is silent");
+assert.equal(ui.state.notes.length, 0);
+console.log("PASS D3 (narrow): a one-time note is recorded seen only after the page drew it, and shows once.");
+
+// Wide window (renderFormSplit, 760 px and up): the same.
+seenKeys.clear();
+await openOnly();
+assert.ok(wideFrame(), "the wide layout draws the page");
+assert.ok(texts.includes(NOTE.text), "the note shows on the wide layout");
+const recordsBefore = noteCalls().length;
 runTimers();
-assert.equal(noteCalls().length, 2);
+assert.equal(noteCalls().length, recordsBefore + 1, "then is recorded");
+assert.ok(seenKeys.has(NOTE.key));
+await openOnly();
+wideFrame();
+assert.ok(!texts.includes(NOTE.text), "and the next opening is silent");
+runTimers();
+assert.equal(noteCalls().length, recordsBefore + 1, "nothing more to record");
+console.log("PASS D3 (wide): a one-time note is recorded seen only after the split page drew it, and shows once.");
+
+// Two openings at once: both were offered the note before either recorded
+// it (the host offers it until it is recorded). The one drawn first records
+// it; the other's record call records nothing, so that page drops it.
+seenKeys.clear();
+const other = new FormPageActions(app);
+await openOnly();
+other.open({ code: "TEST", tin: "12345678800000", year: 2026, period: 3 }, cx);
+await settle();
+assert.equal(ui.state.notes.length, 1, "this opening was offered the note");
+assert.equal(other.state.notes.length, 1, "and so was the other");
 frame();
-assert.ok(!texts.includes(NOTE.text), "a note another opening recorded is taken off");
+assert.ok(texts.includes(NOTE.text), "this page draws the note");
+app.formUi = other;
+frame();
+assert.ok(texts.includes(NOTE.text), "and the other page draws it too, before either records it");
+runTimers();
+assert.ok(seenKeys.has(NOTE.key), "the page whose record call ran first recorded it");
+assert.equal(noteCalls().slice(-2).map((c) => c[1].length).join(","), "1,1", "both asked to record it");
+frame();
+assert.ok(!texts.includes(NOTE.text), "and drops it once its record call records nothing");
+app.formUi = ui;
+frame();
+assert.ok(texts.includes(NOTE.text), "while the page that recorded it keeps it");
 offeredNotes = [];
 editable = true;
-console.log("PASS D3: a one-time note is recorded seen only after the page drew it, and shows once.");
+console.log("PASS D3: of two openings offered the note at once, only the one that records it keeps it.");
