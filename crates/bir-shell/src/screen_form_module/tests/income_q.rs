@@ -339,9 +339,10 @@ fn form_1701q_item_11_is_one_date_stored_as_three_boxes() {
             "frm1701q:txtBirthYear"
         ]
     );
-    // No other form's item is marked.
+    // No other form's item is marked but 1801's item 1, the date of death
+    // (PR 10, rows_donor_estate::mark_schema).
     for kind in AgentFormKind::all() {
-        if kind.form_code() != Q {
+        if kind.form_code() != Q && kind.form_code() != "1801" {
             assert!(
                 items(kind.form_code())
                     .iter()

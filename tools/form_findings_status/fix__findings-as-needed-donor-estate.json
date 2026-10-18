@@ -1,0 +1,131 @@
+{
+  "1800": {
+    "R2.0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1800_profile_boxes_are_placed (the line of business, which html-frozen/1800-2018/writer-cells.json lists not_joined, is under 'Not on the printed sheet' with Edit); screen_form_module::tests::donor_estate::pr10_part_v_is_its_own_part_and_the_header_copy_is_not_drawn (the page 2 header copy of the name is not drawn; the print writes it from the draft); screen_form_module::tests::every_filled_profile_box_is_folded_or_offers_edit_in_paper_order (1800's two lines removed from PROFILE_BOXES_NOT_YET_PLACED)"
+    },
+    "R3.0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (no drawn box sits under another number than writer-cells.json prints it at); screen_form_module::tests::donor_estate::pr10_1800_printed_constants_and_disabled_parts_are_notes (items 21, 22, 23 and 24 each show their own number with a note; none of their boxes is drawn)"
+    },
+    "R3.1": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (frm1800v2018:txtATC under item 4, the sheet's 'Alphanumeric Tax Code (ATC)')"
+    },
+    "R3.2": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1800_profile_boxes_are_placed"
+    },
+    "R3.3": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (the deductions under items 28-32); screen_form_module::tests::donor_estate::pr10_part_v_is_its_own_part_and_the_header_copy_is_not_drawn (the page 2 TIN and name are not drawn); screen_form_module::tests::donor_estate::pr10_1800_deductions_are_typed_and_printed"
+    },
+    "R3.5": {
+      "status": "not_a_bug",
+      "reason": "The official program disables these boxes, so they are not boxes the page is missing: rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json records txtTaxAgentNo (source line 1204), txtDateIssue (1217), txtDateExpiry (1230) and Part III's frm1800v2018:txtAgency20 to frm1800v2018:txtAmount23 with frm1800v2018:txtParticular36 (1272 to 1299) \"disabled\": true, and this app's field map never writes them (crates/bir-core/data/agent-forms/1800-v2018.json unmapped: \"not written by this app's field map for any sample draft\"). The page shows items 21-24 and the tax agent line with their printed captions and a note, and draws none of their boxes (screen_form_module::tests::donor_estate::pr10_1800_printed_constants_and_disabled_parts_are_notes, which checks the 19 boxes writer-cells.json joins there against the inventory).",
+      "reviewer": "Agree (PR 10 review): the official program disables these boxes, so the page is not missing them. rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json marks txtTaxAgentNo, txtDateIssue and txtDateExpiry (source lines 1204, 1217, 1230) and all 17 controls at lines 1272-1299 (txtAgency20 through txtAmount23) as disabled: true. Items 21-24 as printed captions with notes is the right fix."
+    },
+    "R4.0": {
+      "status": "not_a_bug",
+      "reason": "The official form stores Item 1 split: rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json records frm1800v2018:txtMonth (select, source line 294), frm1800v2018:txtDate (select, 313) and frm1800v2018:txtYear (text, 349), and this app's draft keeps donation_month, donation_day and donation_year. The finding's own fix is to keep the split, and a library opening shows the parts blank (screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form), as PR 8 found for 1702MX R4.1.",
+      "reviewer": "Agree (PR 10 review): Rule 4 keeps the split the official form stores, so the draft keeps donation_month/day/year. rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json has txtMonth, txtDate and txtYear at source lines 294, 313 and 349. Same verdict PR 0b gave other forms."
+    },
+    "R6.0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1800_item_13_answers_and_13a_waits_for_yes (13A is off with 'Needs item 13 = Yes' and refuses text while item 13 is No, fields.json enabled_when 'Item 13 Yes.'; open once Yes); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1800: 2); screen_form_module::tests::a_box_comes_alive_when_its_answer_holds (1800 item 13 Yes); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; bir_print::frozen_html::donor_estate_print_tests::pr10_1800_13a_and_8a_print_in_their_cells (13A prints in p1c57)"
+    },
+    "preview.0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1800_item_13_answers_and_13a_waits_for_yes (TaxTreatyYN_Y and TaxTreatyYN_N print the page's answer from the draft); screen_form_module::tests::donor_estate::pr10_1800_deductions_are_typed_and_printed (items 28-32 are typed, saved and printed from the draft's deductions); screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form (1800's PR 10 lines removed from locked_and_blank.txt); screen_form_module::tests::donor_estate::pr10_1800_deduction_amounts_keep_their_centavos_or_are_refused"
+    },
+    "manual-0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_part_v_is_its_own_part_and_the_header_copy_is_not_drawn (Schedules A and B and their TOTALs in 'Part V · Schedules')"
+    },
+    "manual-1": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1800_printed_constants_and_disabled_parts_are_notes (item 15 reads '6% (printed on the form)' and item 37 '250,000.00 (printed on the form)', the values html-frozen/1800-2018/index.html preprints; no box)"
+    },
+    "manual-2": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1800_printed_constants_and_disabled_parts_are_notes (one item per printed row: 21 Cash/Bank Debit Memo, 22 Check, 23 Tax Debit Memo, 24 Others (Specify below), with a note); screen_form_module::tests::no_box_is_locked_and_blank_without_a_reason_on_every_form"
+    },
+    "manual-3": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (frm1800v2018:txtZipCode under 8A); screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (8A 'ZIP Code'; item 13 Yes / No); screen_form_module::tests::donor_estate::pr10_1800_email_shows_as_typed (item 11 shows the email as typed; the upload keeps capitals); bir_print::frozen_html::donor_estate_print_tests::pr10_1800_13a_and_8a_print_in_their_cells (8A prints in p1c26)"
+    }
+  },
+  "1801": {
+    "R3.0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (frm1801v2018:txtAtc under item 4)"
+    },
+    "R3.1": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (the frequency boxes under 15D); screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (Monthly, Quarterly, Semi-Annual, Others (specify))"
+    },
+    "R3.2": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_boxes_sit_under_their_printed_item_numbers (items 29-40 and the schedule TOTALs; no 'Additional details'); screen_form_module::tests::donor_estate::pr10_part_v_is_its_own_part_and_the_header_copy_is_not_drawn"
+    },
+    "R3.3": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (item 14's boxes read Yes and No)"
+    },
+    "R4.1": {
+      "status": "not_a_bug",
+      "reason": "The official form stores Item 1 as three boxes: rules/forms/1801-v2018/fixtures/runtime-control-inventory-v796.json records frm1801v2018:txtDateMonth (source line 304), frm1801v2018:txtDateDay (306) and frm1801v2018:txtDateYear (308), and this app's draft keeps death_month, death_day and death_year. The finding's own fix is to keep the split: the draft and the upload keep it, the page shows the three as one date box (manual-0, screen_form_module::tests::donor_estate::pr10_1801_item_1_is_one_date_kept_as_three_boxes), and a library opening shows them blank (screen_form_module::tests::library_sample_shows_blank_period_and_date_boxes_on_every_form).",
+      "reviewer": "Agree (PR 10 review): Rule 4 keeps the split the official form stores. rules/forms/1801-v2018/fixtures/runtime-control-inventory-v796.json has txtDateMonth, txtDateDay and txtDateYear at source lines 304, 306 and 308. The page's one-date box is display-only, and the same PR 0b verdict applies."
+    },
+    "R6.0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1801_item_14_answers_and_14a_waits_for_yes (14A is off with 'Needs item 14 = Yes' and refuses text while item 14 is No, fields.json enabled_when 'Item 14 Yes.'); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form (1801: 7); screen_form_module::tests::a_box_comes_alive_when_its_answer_holds (1801 item 14 Yes); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; bir_print::frozen_html::donor_estate_print_tests::pr10_1801_page_values_print_in_their_cells (14A prints in p1c38)"
+    },
+    "R6.1": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1801_frequency_waits_for_15d (the Others box is off with 'Needs item 15D = Yes and frequency Others' and refuses text until 15D is Yes and the frequency Others; the frequency boxes wait for 15D Yes, by their own key, the group key or in a batch); screen_form_module::tests::a_box_comes_alive_when_its_answer_holds (1801 15D Yes; 15D Yes and Others); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::donor_estate::pr10_1801_frequency_change_asks_before_it_clears; bir_print::frozen_html::donor_estate_print_tests::pr10_1801_page_values_print_in_their_cells (the frequency ticks and the Others text print)"
+    },
+    "manual-0": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1801_item_1_is_one_date_kept_as_three_boxes (item 1 is one_date, blank on a new return; a blank clears, a part that is not a date is refused; the upload keeps the three boxes); tools/test_form_donor_estate.mjs (just shell-ui-test); bir_print::frozen_html::donor_estate_print_tests::pr10_1801_item_1_prints_the_date_of_death (the date prints in item 1, p1c4); screen_form_module::tests::donor_estate::pr10_a_new_returns_date_is_blank_and_quiet_until_checked"
+    },
+    "manual-1": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (15A-15D read Yes / No as writer-cells.json xbox_joins print them; the frequency choices under 15D)"
+    },
+    "manual-2": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_1801_executor_tin_is_typed_per_return (open boxes written into the draft's administrator_tin, in order; typed_tin); screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (heading 'TIN of Executor/Administrator'); tools/test_form_donor_estate.mjs (just shell-ui-test); bir_print::frozen_html::donor_estate_print_tests::pr10_1801_page_values_print_in_their_cells (the executor TIN and branch print in p1c31 and p1c32)"
+    },
+    "manual-3": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (Part IV columns 'A. Exclusive', 'B. Conjugal/Communal', 'C. Total'); screen_form_module::tests::donor_estate::pr10_part_v_is_its_own_part_and_the_header_copy_is_not_drawn (Schedules 1-5 in 'Part V · Schedules')"
+    },
+    "manual-4": {
+      "status": "fixed",
+      "pr": "PR 10",
+      "proof": "screen_form_module::tests::donor_estate::pr10_labels_read_as_printed (one name line after ESTATE OF; item 14's full heading; item 22); screen_form_module::tests::donor_estate::pr10_part_v_is_its_own_part_and_the_header_copy_is_not_drawn (registeredName_2, the page 2 header copy, is not drawn)"
+    }
+  }
+}

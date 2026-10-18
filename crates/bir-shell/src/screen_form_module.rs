@@ -48,6 +48,7 @@ mod rows_2550q;
 mod rows_annual_corporate;
 mod rows_annual_individual;
 mod rows_as_needed;
+mod rows_donor_estate;
 mod rows_dst_pt_vat;
 mod rows_income_q;
 mod rows_monthly;
@@ -96,6 +97,8 @@ export interface ScreenFormOpened {
     whys: Record<string, string>;
     /** A blank box's reason, shown in the box: what it waits for (a rate its row's ATC, a tick box the amount that ticks it, a date the return it is started with). */
     waits: Record<string, string>;
+    /** An untouched date whose message the page holds until it is edited or Check / Save is pressed (1800/1801 item 1). */
+    quiet?: { field: string; keys: string[] } | null;
     /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
     lock_notes: Record<string, string>;
     /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -294,6 +297,7 @@ fn schema() -> &'static [Value] {
             rows_income_q::mark_one_date(form, &code);
             rows_annual_corporate::mark_whole_pesos(form, &code);
             rows_as_needed::mark_calendar_tables(form, &code);
+            rows_donor_estate::mark_schema(form, &code);
             combs::apply_combs(form, &code);
             // 1701A's item 9, printed from `derived:` lines (PR 7).
             rows_annual_individual::mark_pools(form, &code);
@@ -2402,6 +2406,8 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 }
                 // A 2550M schedule row has no draft binding of its own.
                 keys.extend(rows_2550m::error_keys(kind, field));
+                // 1800/1801 boxes the host writes (PR 10, rows_donor_estate.rs).
+                keys.extend(rows_donor_estate::error_keys(kind, field));
                 // A penalty item's message names the model's field.
                 if keys.is_empty() {
                     keys.extend(penalties::error_keys(kind, field));
@@ -2411,8 +2417,10 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
                 let mut seen = BTreeSet::new();
                 keys.retain(|key| on_screen.contains(key) && seen.insert(key.clone()));
                 // The printed item numbers where BIR's message names its
-                // program's own (decision D6; PR 9's forms).
-                let message = rows_as_needed::printed_message(kind, message).unwrap_or(message);
+                // program's own (decision D6; PR 9's and PR 10's forms).
+                let message = rows_as_needed::printed_message(kind, message)
+                    .or_else(|| rows_donor_estate::printed_message(kind, message))
+                    .unwrap_or(message);
                 // The annual individual returns draw a message under the
                 // item it cites (PR 7, rows_annual_individual.rs).
                 rows_annual_individual::cited_keys(kind, message, &mut keys);
@@ -2507,6 +2515,9 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
             atc.elected_other_code(),
         );
     }
+    // PR 10's forms: what the draft keeps where the field map shows it
+    // otherwise (display only).
+    rows_donor_estate::values(kind, draft, &mut map);
     for (key, official) in occurrence_keys(kind) {
         if !map.contains_key(key)
             && let Some(value) = map.get(official).cloned()
@@ -2971,6 +2982,10 @@ fn opened_json(
             whys.insert(key, json!(why));
         }
     }
+    // 1800/1801 (PR 10): an untouched item 1 date says nothing on open,
+    // and the page keeps it quiet until the date is edited or checked.
+    rows_donor_estate::hold_untouched_date(kind, &draft, &mut errors);
+    let quiet = rows_donor_estate::quiet(kind, &draft);
     let lock_notes: Map<String, Value> = locks
         .iter()
         .map(|(key, reason)| {
@@ -3044,6 +3059,7 @@ fn opened_json(
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
         "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
         "errors": errors,
+        "quiet": quiet,
     }))
 }
 
@@ -3859,14 +3875,15 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's, PR 5's, PR 6's, PR 7's, PR 8's and PR 9's forms; the integration merge chains PR 2's and
+    // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's and PR 10's forms; the integration merge chains PR 2's and
     // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
         .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_1604::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_annual_corporate::removes(kind, &before, &draft, &edits))
         .or_else(|| rows_annual_individual::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_as_needed::removes(kind, &before, &draft, &edits));
+        .or_else(|| rows_as_needed::removes(kind, &before, &draft, &edits))
+        .or_else(|| rows_donor_estate::removes(kind, &before, &draft, &edits));
     // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42),
     // each with its note; `null` opens the box.
     let relocks = rows_annual_corporate::live_locks(kind, &draft);
@@ -4244,6 +4261,21 @@ fn plan_choice_edits(
     let mut plain = Vec::new();
     for (key, value) in edits {
         let unticked = is_unticked(&value);
+        // 1801 item 15D's four frequency ticks (PR 10): a lone untick of the
+        // chosen one would be a direct draft step here (three members or
+        // more), which skips the host's own write (it clears the Others
+        // text and asks first: rows_donor_estate.rs). Every other untick
+        // keeps the rule below: one of a group with a box ticked in the
+        // batch, or of a box not shown ticked, writes nothing.
+        if rows_donor_estate::is_frequency_tick(kind, &key) {
+            let group_ticked = group_info(&key).is_some_and(|(g, _)| ticked_groups.contains(&g));
+            let shown_on = shown.get(&key).and_then(Value::as_str) == Some("true");
+            if unticked && (group_ticked || !shown_on) {
+                continue;
+            }
+            plain.push((key, ChoiceStep::Fill(value)));
+            continue;
+        }
         if let Some((type_path, flag_path)) = form_1701_type_paths(kind, &key) {
             let current = draft
                 .pointer(type_path)
@@ -5094,6 +5126,8 @@ mod tests {
     // PR 9: 0605, 1606, 1706, 1707, 2000OT and 2552 against their printed
     // sheets.
     mod as_needed;
+    // PR 10: 1800 and 1801 against their printed sheets.
+    mod donor_estate;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -11429,8 +11463,6 @@ mod tests {
     /// 10 where the sheet prints them, hide the later pages' header copies
     /// and put Line of Business in Not on the printed sheet.
     const PROFILE_BOXES_NOT_YET_PLACED: &[&str] = &[
-        "1800 frm1800v2018:txtLineBus",
-        "1800 frm1800v2018:txtPg2TaxpayerName",
         "2200C frm2200C:txtLOB",
         "2200M frm2200M:txtPg2RegisteredName",
         "2200P frm2200P:txtLOB",
@@ -13773,6 +13805,10 @@ mod tests {
     /// which its corpus gives no condition, are off exactly when their
     /// hand-listed opening condition is shut (`hand_gates_2552`, backed by
     /// rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json).
+    /// 1800's and 1801's tax relief, installment frequency and its Others
+    /// box (PR 10) are off, whatever they show, while the draft does not
+    /// hold their corpus condition: the host refuses what is typed there,
+    /// so probing cannot tell, and the host's own refusal is no oracle.
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         const WP_SCHEDULE: [&str; 4] = [
             "frm1600WP:dtSched:txtTin",
@@ -13804,9 +13840,22 @@ mod tests {
         for (key, tag, _) in &hand {
             keys.push((key.clone(), String::new(), tag.clone()));
         }
+        let draft = &checked["draft"];
+        let relief = !draft["tax_relief"].is_null();
+        let installment = draft["installment_granted"] == json!(true);
+        let others = draft["installment_frequency"] == json!("others");
         let mut off: Vec<String> = keys
             .into_iter()
             .filter(|(key, condition, tag)| {
+                let held = match (code, condition.as_str()) {
+                    ("1800", "Item 13 Yes.") | ("1801", "Item 14 Yes.") => Some(relief),
+                    ("1801", "Item 15D Yes.") => Some(installment),
+                    ("1801", "Item 15B Yes and frequency Others.") => Some(installment && others),
+                    _ => None,
+                };
+                if let Some(held) = held {
+                    return !held;
+                }
                 let item_4 = code == "1600WP"
                     && condition == "Item 4 Yes."
                     && WP_SCHEDULE.iter().any(|stem| {
@@ -14025,8 +14074,12 @@ mod tests {
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,
                 // Schedule 2's specification and item 18's two boxes.
                 ("1706", 8),
-                ("1800", 1),
-                ("1801", 1),
+                // Plus 1 for 1800 (PR 10): item 13A while item 13 is No.
+                ("1800", 2),
+                // Plus 6 for 1801 (PR 10): item 14A while item 14 is No,
+                // item 15D's four frequency boxes and its Others (specify)
+                // while 15D is not Yes.
+                ("1801", 7),
                 ("2000OT", 2),
                 ("2200A", 2),
                 ("2200AN", 1),
@@ -14371,6 +14424,36 @@ mod tests {
                     "frm1701MS:txtIfMarriedJointlyNo5": "true",
                 }))),
             ),
+            // PR 10: 1800 item 13A, 1801 item 14A, item 15D's frequency and
+            // its Others (specify).
+            (
+                "1800",
+                vec!["frm1800v2018:TaxTreaty"],
+                Box::new(by(json!({"frm1800v2018:TaxTreatyYN_Y": "true"}))),
+            ),
+            (
+                "1801",
+                vec!["frm1801v2018:treatyY"],
+                Box::new(by(json!({"frm1801v2018:optTreaty_1": "true"}))),
+            ),
+            (
+                "1801",
+                vec![
+                    "frm1801v2018:freq_Mon",
+                    "frm1801v2018:freq_Qtr",
+                    "frm1801v2018:freq_Semi",
+                    "frm1801v2018:freq_Other",
+                ],
+                Box::new(by(json!({"frm1801v2018:instGranted_1": "true"}))),
+            ),
+            (
+                "1801",
+                vec!["frm1801v2018:freqOtherInput"],
+                Box::new(by(json!({
+                    "frm1801v2018:instGranted_1": "true",
+                    "frm1801v2018:freq_Other": "true",
+                }))),
+            ),
         ];
         for (code, keys, turn_on) in cases {
             let opened = open(code, page_period_of(code));
@@ -14564,6 +14647,18 @@ mod tests {
             ("2000OT", json!({"frm2000OT:rbTransNature_2": "true"})),
             ("2200A", json!({"frm2200Av2020:optTreaty_1": "true"})),
             ("2553", json!({"frm2553:txt13_1": "true"})),
+            // PR 10's answers.
+            ("1800", json!({"frm1800v2018:TaxTreatyYN_Y": "true"})),
+            ("1801", json!({"frm1801v2018:optTreaty_1": "true"})),
+            ("1801", json!({"frm1801v2018:instGranted_1": "true"})),
+            (
+                "1801",
+                json!({"frm1801v2018:instGranted_1": "true", "frm1801v2018:freq_Semi": "true"}),
+            ),
+            (
+                "1801",
+                json!({"frm1801v2018:instGranted_1": "true", "frm1801v2018:freq_Other": "true"}),
+            ),
         ];
         for (code, edits) in states {
             let opened = open(code, page_period_of(code));

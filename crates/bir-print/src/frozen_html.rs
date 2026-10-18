@@ -1172,6 +1172,7 @@ fn writer_cells(slug: &str) -> Result<WriterCells, String> {
         None => WriterCells::empty(),
     };
     merge_sheet_joins(&mut cells, sheet_joins(slug));
+    add_donor_estate_joins(slug, &mut cells);
     Ok(cells)
 }
 
@@ -1275,6 +1276,374 @@ pub fn sheet_join_combs(slug: &str) -> Vec<(String, usize, String)> {
             Some((key.to_string(), slots, printed.to_string()))
         })
         .collect()
+}
+
+/// What a PR 10 Rust-side join prints in its cell.
+#[derive(Clone, Copy)]
+enum SheetValue {
+    /// The writer key's own value.
+    Key(&'static str),
+    /// The writer key's value as a `derived:line:` value: spread over the
+    /// comb, or printed whole on one line when it is longer.
+    Line(&'static str),
+    /// The writer keys' values one after another (a TIN kept in three
+    /// boxes, printed in one comb).
+    Concat(&'static [&'static str]),
+    /// Month, day and year keys in one `MMDDYY` comb, each typed part in its
+    /// own two slots (the year's last two digits); a part not chosen (`00`)
+    /// leaves its slots blank.
+    ShortDate(&'static str, &'static str, &'static str),
+    /// A tick: `X` in the box while the writer key is `true`.
+    Tick(&'static str),
+}
+
+/// PR 10: joins the frozen 1800 and 1801 sheets' writer-cells.json leaves
+/// out although the sheet has the cell (html-frozen is synced from upstream
+/// and never edited here), `(sheet, cell, value)`. Each join supersedes the
+/// `not_joined` / `not_joined_cells` reason writer-cells.json gives for its
+/// key and cell; the sheet's own geometry and printed text
+/// (html-frozen/<slug>/index.html) place it:
+/// - 1801 p1c4: item 1 "Date of Death (MM/DD/YY)", one 6-slot comb
+///   (data-comb-slots 6). Supersedes "item 1 Date of Death: one 6-slot comb
+///   (p1c4) for MMDDYY; three writer keys onto one cell is not a join": the
+///   join is not a writer-cells text join but [`fill_donor_estate_dates`],
+///   which puts each part in its own two slots.
+/// - 1801 p1c31 / p1c32: item 11 "TIN of Executor/Administrator". p1c31
+///   has 9 inputs at slot indices 0-2, 4-6 and 8-10 (the printed dashes
+///   take slots 3 and 7) and its first slot starts 114.74pt in, past the
+///   caption; p1c32 is the 5-slot branch comb, first slot 14.28pt in.
+///   Supersedes "executor TIN (item 11): one mixed 11-slot comb (p1c31)
+///   with printed dashes inside; not split": the nine digits fill the nine
+///   inputs in order.
+/// - 1801 p1c33: item 12 "Contact Number", 11 slots, the first 56.64pt in,
+///   past the caption. Supersedes "item 12 Contact Number comb (p1c33) is
+///   mixed: its printed caption sits inside the slots".
+/// - 1801 p1c38: item 14A "If yes, specify", 15 slots. Supersedes "item 14A
+///   'If yes, specify': the writer holds an option code, not printable
+///   text": 14A is the filer's text on this form.
+/// - 1801 item 15D's frequency boxes, each the box left of its printed
+///   choice on the row at top 344.42pt: p1c50 Monthly (x 303.12pt, text at
+///   315.41pt), p1c53 Quarterly (352.2pt; 364.63pt), p1c51 Semi-Annual
+///   (402.48pt; 415.27pt), p1c52 Others (459.72pt; 471.7pt). Supersedes
+///   "frequency-of-payment options (p1c50 to p1c53): no printed option
+///   labels in the text layer, so not guessed": the labels are in the text
+///   layer at those positions. p1c197 is the input after "(specify)" (its
+///   input starts 46.58pt into the cell, past the text at 491.86pt).
+///   Supersedes "frequency-of-payment 'other' specify: no matching labelled
+///   cell".
+/// - 1801 p1c201: the blank box at the end of item 21's caption "...to be
+///   paid on or before" (its input starts 289.65pt into the caption cell).
+///   Supersedes "no fillable cell on the frozen sheet for this key
+///   (installment year blank)".
+/// - 1800 p1c26: item 8A "ZIP Code", 4 slots after the caption (the first
+///   slot starts 56pt into the cell). Supersedes "8A ZIP cell p1c26 is
+///   mixed: the printed '8A ZIP Code' caption overlaps its slots".
+///   p1c57: item 13A "If yes, specify", 19 slots. Supersedes "item 13A 'If
+///   yes, specify': the writer holds an option code, not printable text".
+const DONOR_ESTATE_JOINS: &[(&str, &str, SheetValue)] = &[
+    (
+        "1801-2018",
+        "p1c4",
+        SheetValue::ShortDate(
+            "frm1801v2018:txtDateMonth",
+            "frm1801v2018:txtDateDay",
+            "frm1801v2018:txtDateYear",
+        ),
+    ),
+    (
+        "1801-2018",
+        "p1c31",
+        SheetValue::Concat(&[
+            "frm1801v2018:txtTINE1",
+            "frm1801v2018:txtTINE2",
+            "frm1801v2018:txtTINE3",
+        ]),
+    ),
+    (
+        "1801-2018",
+        "p1c32",
+        SheetValue::Key("frm1801v2018:txtBranchCodeE"),
+    ),
+    (
+        "1801-2018",
+        "p1c33",
+        SheetValue::Line("frm1801v2018:telephoneNumber"),
+    ),
+    (
+        "1801-2018",
+        "p1c38",
+        SheetValue::Line("frm1801v2018:treatyY"),
+    ),
+    (
+        "1801-2018",
+        "p1c50",
+        SheetValue::Tick("frm1801v2018:freq_Mon"),
+    ),
+    (
+        "1801-2018",
+        "p1c53",
+        SheetValue::Tick("frm1801v2018:freq_Qtr"),
+    ),
+    (
+        "1801-2018",
+        "p1c51",
+        SheetValue::Tick("frm1801v2018:freq_Semi"),
+    ),
+    (
+        "1801-2018",
+        "p1c52",
+        SheetValue::Tick("frm1801v2018:freq_Other"),
+    ),
+    (
+        "1801-2018",
+        "p1c197",
+        SheetValue::Key("frm1801v2018:freqOtherInput"),
+    ),
+    (
+        "1801-2018",
+        "p1c201",
+        SheetValue::Key("frm1801v2018:txtInstallmentYear"),
+    ),
+    (
+        "1800-2018",
+        "p1c26",
+        SheetValue::Key("frm1800v2018:txtZipCode"),
+    ),
+    (
+        "1800-2018",
+        "p1c57",
+        SheetValue::Line("frm1800v2018:TaxTreaty"),
+    ),
+];
+
+/// How a PR 10 sheet prints a writer value (print only; the upload is
+/// unchanged).
+#[derive(Clone, Copy)]
+enum SheetRewrite {
+    /// A date part: `00` (not chosen) prints nothing.
+    ZeroBlank,
+    /// A year in a two-slot `YY` comb: its last two digits; `0` prints
+    /// nothing.
+    TwoDigitYear,
+    /// Without its surrounding spaces.
+    Trim,
+    /// Digits padded with leading zeros to the comb's slots.
+    ZeroPad(usize),
+}
+
+/// PR 10's print rewrites, `(sheet, writer key, rewrite)`. 1800 item 1
+/// "Date of Donation (MM/DD/YY)": writer-cells.json joins txtMonth to p1c5,
+/// txtDate to p1c6 and txtYear to p1c7, each a 2-slot comb; form_1800.rs
+/// writes the 4-digit year and `00`/`0` for parts not chosen, which the
+/// page shows blank. 1800 8A's ZIP is trimmed; 1801 item 11's branch code
+/// fills its 5-slot comb (p1c32).
+const DONOR_ESTATE_REWRITES: &[(&str, &str, SheetRewrite)] = &[
+    (
+        "1800-2018",
+        "frm1800v2018:txtMonth",
+        SheetRewrite::ZeroBlank,
+    ),
+    ("1800-2018", "frm1800v2018:txtDate", SheetRewrite::ZeroBlank),
+    (
+        "1800-2018",
+        "frm1800v2018:txtYear",
+        SheetRewrite::TwoDigitYear,
+    ),
+    ("1800-2018", "frm1800v2018:txtZipCode", SheetRewrite::Trim),
+    (
+        "1801-2018",
+        "frm1801v2018:txtBranchCodeE",
+        SheetRewrite::ZeroPad(5),
+    ),
+];
+
+/// A date part's digits, or `None` for a part not chosen (blank, all
+/// zeros) or not a number.
+fn date_part(text: &str) -> Option<&str> {
+    let text = text.trim();
+    (!text.is_empty() && text.chars().all(|c| c.is_ascii_digit()) && text.chars().any(|c| c != '0'))
+        .then_some(text)
+}
+
+/// A date part as the two slots it prints in: a month or day padded, a
+/// year's last two digits. `None` when it prints nothing.
+fn two_slots(text: &str, year: bool) -> Option<String> {
+    let digits = date_part(text)?;
+    match (year, digits.len()) {
+        (true, n) if n >= 2 => Some(digits[n - 2..].to_string()),
+        (false, 1 | 2) => Some(format!("{digits:0>2}")),
+        _ => None,
+    }
+}
+
+/// The writer key a [`DONOR_ESTATE_JOINS`] value prints under: the key
+/// itself, or a derived key named after its cell.
+fn donor_estate_key(cell: &str, value: SheetValue) -> String {
+    match value {
+        SheetValue::Key(key) | SheetValue::Tick(key) => key.to_string(),
+        SheetValue::Line(_) => format!("derived:line:pr10:{cell}"),
+        SheetValue::Concat(_) | SheetValue::ShortDate(..) => format!("derived:pr10:{cell}"),
+    }
+}
+
+/// The writer keys a derived [`DONOR_ESTATE_JOINS`] value reads.
+fn donor_estate_sources(value: SheetValue) -> Vec<&'static str> {
+    match value {
+        SheetValue::Key(_) | SheetValue::Tick(_) => Vec::new(),
+        SheetValue::Line(key) => vec![key],
+        SheetValue::Concat(keys) => keys.to_vec(),
+        SheetValue::ShortDate(month, day, year) => vec![month, day, year],
+    }
+}
+
+/// `slug`'s [`DONOR_ESTATE_JOINS`] merged into its writer cells: a join
+/// for each (a date is filled by [`fill_donor_estate_dates`] instead), its
+/// keys out of `not_joined` and its cell out of `not_joined_cells`. A key
+/// or cell writer-cells.json already joins is left as it is (a later
+/// re-sync must not fill a cell twice).
+fn add_donor_estate_joins(slug: &str, cells: &mut WriterCells) {
+    for (sheet, cell, value) in DONOR_ESTATE_JOINS {
+        if *sheet != slug {
+            continue;
+        }
+        let key = donor_estate_key(cell, *value);
+        let filled = cells.targets().iter().any(|(_, target)| target == cell);
+        if filled || cells.joined_keys().contains(key.as_str()) {
+            continue;
+        }
+        match value {
+            SheetValue::Tick(_) => cells.xbox_joins.push(XboxJoin {
+                writer_key: key.clone(),
+                html_ids: vec![(*cell).to_string()],
+            }),
+            SheetValue::ShortDate(..) => {}
+            _ => {
+                cells.joins.insert(key.clone(), vec![(*cell).to_string()]);
+            }
+        }
+        cells.not_joined.remove(&key);
+        for source in donor_estate_sources(*value) {
+            cells.not_joined.remove(source);
+        }
+        cells.not_joined_cells.remove(*cell);
+    }
+}
+
+/// `fields` with `slug`'s print rewrites applied and its derived
+/// [`DONOR_ESTATE_JOINS`] values added.
+fn with_donor_estate_values(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let mut out = fields.clone();
+    for (sheet, key, rewrite) in DONOR_ESTATE_REWRITES {
+        if *sheet != slug {
+            continue;
+        }
+        let Some(value) = out.get_mut(*key) else {
+            continue;
+        };
+        *value = match rewrite {
+            SheetRewrite::ZeroBlank => two_slots(value, false).unwrap_or_default(),
+            SheetRewrite::TwoDigitYear => two_slots(value, true).unwrap_or_default(),
+            SheetRewrite::Trim => value.trim().to_string(),
+            SheetRewrite::ZeroPad(width) => {
+                let text = value.trim();
+                if !text.is_empty()
+                    && text.len() < *width
+                    && text.chars().all(|c| c.is_ascii_digit())
+                {
+                    format!("{text:0>width$}", width = *width)
+                } else {
+                    text.to_string()
+                }
+            }
+        };
+    }
+    let get = |key: &str| fields.get(key).map(|v| v.trim()).unwrap_or("");
+    for (sheet, cell, value) in DONOR_ESTATE_JOINS {
+        if *sheet != slug {
+            continue;
+        }
+        let printed = match value {
+            SheetValue::Key(_) | SheetValue::Tick(_) | SheetValue::ShortDate(..) => continue,
+            SheetValue::Line(key) => get(key).to_string(),
+            SheetValue::Concat(keys) => keys.iter().map(|key| get(key)).collect(),
+        };
+        if !printed.is_empty() {
+            out.insert(donor_estate_key(cell, *value), printed);
+        }
+    }
+    out
+}
+
+/// Each [`SheetValue::ShortDate`] of `slug`: every typed part in its own
+/// two slots of the cell; a part not chosen leaves its slots as they are.
+fn fill_donor_estate_dates(html: &str, fields: &BTreeMap<String, String>, slug: &str) -> String {
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for (sheet, cell, value) in DONOR_ESTATE_JOINS {
+        let (true, SheetValue::ShortDate(month, day, year)) = (*sheet == slug, value) else {
+            continue;
+        };
+        let ordered = grouped
+            .get(*cell)
+            .map(|indices| ordered_comb_indices(&tags, indices))
+            .unwrap_or_default();
+        if ordered.len() != 6 {
+            continue;
+        }
+        for (at, (key, is_year)) in [(*month, false), (*day, false), (*year, true)]
+            .into_iter()
+            .enumerate()
+        {
+            let get = fields.get(key).map(String::as_str).unwrap_or("");
+            let Some(digits) = two_slots(get, is_year) else {
+                continue;
+            };
+            for (offset, ch) in digits.chars().enumerate() {
+                let index = ordered[at * 2 + offset];
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, &ch.to_string(), None),
+                ));
+            }
+        }
+    }
+    apply_replacements(html, replacements)
+}
+
+/// Whether `slug`'s PR 10 joins print the value `value` of writer key
+/// `key` (`Some(true)`), hold nothing to print (`Some(false)`: a date part
+/// not chosen, as the page shows it blank), or do not read the key
+/// (`None`). A date part counts as printed only when it reaches the sheet.
+fn donor_estate_prints(slug: &str, key: &str, value: &str) -> Option<bool> {
+    DONOR_ESTATE_JOINS
+        .iter()
+        .filter(|(sheet, _, _)| *sheet == slug)
+        .find_map(|(_, _, joined)| match joined {
+            SheetValue::ShortDate(month, day, _) if key == *month || key == *day => {
+                Some(two_slots(value, false).is_some())
+            }
+            SheetValue::ShortDate(_, _, year) if key == *year => {
+                Some(two_slots(value, true).is_some())
+            }
+            other => donor_estate_sources(*other).contains(&key).then_some(true),
+        })
+}
+
+/// Whether `value` is a PR 10 date part of `slug` not chosen (all zeros),
+/// which the page and the print show blank.
+fn donor_estate_unchosen(slug: &str, key: &str, value: &str) -> bool {
+    let value = value.trim();
+    DONOR_ESTATE_JOINS.iter().any(|(sheet, _, joined)| {
+        *sheet == slug
+            && matches!(joined, SheetValue::ShortDate(..))
+            && donor_estate_sources(*joined).contains(&key)
+    }) && !value.is_empty()
+        && value.chars().all(|c| c == '0')
 }
 
 fn grouped_input_indices<'a>(tags: &[InputTag<'a>]) -> BTreeMap<&'a str, Vec<usize>> {
@@ -1783,8 +2152,10 @@ fn fill_bundle(
 ) -> Result<String, String> {
     let cells = writer_cells(slug)?;
     validate_writer_cells(html, slug, &cells)?;
-    let plan = line_group_plan(html, fields, &cells);
-    let filled = fill_by_name_with_cells(html, fields, &cells.joins, &plan);
+    let fields = &with_donor_estate_values(slug, fields);
+    let filled = fill_donor_estate_dates(html, fields, slug);
+    let plan = line_group_plan(&filled, fields, &cells);
+    let filled = fill_by_name_with_cells(&filled, fields, &cells.joins, &plan);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
     let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -1927,12 +2298,15 @@ pub fn unprinted_keys(
     Ok(fields
         .iter()
         .filter(|(_, value)| !value.trim().is_empty())
-        .map(|(key, _)| key)
-        .filter(|key| {
+        // A PR 10 date part not chosen (`00`) holds nothing to print.
+        .filter(|(key, value)| !donor_estate_unchosen(slug, key, value))
+        .filter(|(key, value)| {
             !stamped.contains(key.as_str())
                 && !joined.contains(key.as_str())
+                && donor_estate_prints(slug, key, value) != Some(true)
                 && !cells.not_joined.contains_key(key.as_str())
         })
+        .map(|(key, _)| key)
         .cloned()
         .collect())
 }
@@ -5043,5 +5417,320 @@ mod tests {
         }
         assert_eq!(parts.join(" "), text, "nothing is lost");
         assert_eq!(fit_size(1000.0, 5), PLAIN_MAX_PT);
+    }
+}
+
+#[cfg(test)]
+mod donor_estate_print_tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    /// Every writer key a sheet's writer-cells.json joins, with a value
+    /// each join kind prints (a deterministic stand-in for a draft).
+    fn every_join_filled(slug: &str) -> BTreeMap<String, String> {
+        let doc: serde_json::Value =
+            serde_json::from_str(writer_cells_json(slug).unwrap()).unwrap();
+        let mut fields = BTreeMap::new();
+        for (section, value) in [
+            ("joins", "ABC123"),
+            ("money_joins", "1,234.56"),
+            ("peso_joins", "1,234.56"),
+            ("xbox_joins", "true"),
+            ("date_joins", "06/15/2025"),
+        ] {
+            for row in doc[section].as_array().into_iter().flatten() {
+                if let Some(key) = row["writer_key"].as_str() {
+                    fields.insert(key.to_string(), value.to_string());
+                }
+            }
+        }
+        // PR 10's joins read their sources too: a value each prints, and
+        // each date part as its form writes it.
+        for (sheet, _, value) in DONOR_ESTATE_JOINS {
+            if *sheet != slug {
+                continue;
+            }
+            for key in donor_estate_sources(*value) {
+                fields.insert(key.to_string(), "123".to_string());
+            }
+            if let SheetValue::Key(key) | SheetValue::Tick(key) = value {
+                let shown = if matches!(value, SheetValue::Tick(_)) {
+                    "true"
+                } else {
+                    "12"
+                };
+                fields.insert(key.to_string(), shown.to_string());
+            }
+        }
+        for (key, part) in [
+            ("frm1801v2018:txtDateMonth", "06"),
+            ("frm1801v2018:txtDateDay", "15"),
+            ("frm1801v2018:txtDateYear", "2025"),
+            ("frm1800v2018:txtMonth", "06"),
+            ("frm1800v2018:txtDate", "15"),
+            ("frm1800v2018:txtYear", "2025"),
+        ] {
+            if fields.contains_key(key) || key.contains(&slug[..4]) {
+                fields.insert(key.to_string(), part.to_string());
+            }
+        }
+        fields
+    }
+
+    fn digest(text: &str) -> String {
+        Sha256::digest(text.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+
+    /// A deterministic value in every key writer-cells.json joins (and, on
+    /// 1800 and 1801, every source PR 10's joins read, with each date part
+    /// as the form writes it), filled and hashed. 1706 and 2000-OT are the
+    /// digests the integration branch's frozen_html.rs gave before PR 10's
+    /// merge (1c30ef2a; PR 0c's overflow and the joins merged since moved
+    /// them off pr0b-push's): PR 10 changes no other form's print. 1800 and
+    /// 1801 pin PR 10's output with its joins filled (the first digests
+    /// filled none of their sources), as merged into integration: there PR
+    /// 0c's overflow prints the test's six-character stand-in whole past the
+    /// shorter combs of joins that are not PR 10's (1800 p1c10, 13, 15, 16,
+    /// 20, 31, 134, 143, 161; 1801 p1c7, 19, 131, 140, 158), and every PR 10
+    /// cell prints as on its branch. The 1800 digest
+    /// also takes the second fix check's year fix: item 1 prints the year's
+    /// last two digits ("25", not "20") in the YY comb p1c7.
+    #[test]
+    fn pr10_joins_leave_every_other_print_byte_for_byte() {
+        for (slug, golden) in [
+            (
+                "1706-2018",
+                "a5bd3e13bf64c5ba3606ee7e748f7997618c0d60cee2e0c5791e00567b0fd61a",
+            ),
+            (
+                "2000-ot-2018",
+                "67e330768e5e245c24fb5fe5d236f1b3ff36ecf7acbff7118591158126e6b689",
+            ),
+            (
+                "1801-2018",
+                "deca5ad3295f2b0b39cd593bf07e0ea38f5c3effc8b2b7f4a99f9674ebdbbfa9",
+            ),
+            (
+                "1800-2018",
+                "1a48c9c09c8d7f5cf8e45e23cd853ace3a8156f641509472417254200ca30952",
+            ),
+        ] {
+            let html = filled_document(slug, &every_join_filled(slug)).unwrap();
+            assert_eq!(digest(&html), golden, "{slug}");
+        }
+        // Only 1800 and 1801 have PR 10 joins.
+        assert!(DONOR_ESTATE_JOINS
+            .iter()
+            .all(|(slug, _, _)| matches!(*slug, "1800-2018" | "1801-2018")));
+    }
+
+    fn fixture_profile() -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Print Fixture Estate", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Brokerage", "registered_address": "1 Fixture St",
+            "zip_code": "1100", "phone": "0281234567", "email": "fixture@example.com",
+            "default_form_type": "1801", "taxpayer_type": "Individual"
+        }))
+        .unwrap()
+    }
+
+    fn estate() -> bir_core::forms::form_1801::Form1801Draft {
+        use bir_core::forms::form_1801::{Form1801Draft, Form1801Frequency};
+        let mut draft = Form1801Draft::new_from_profile(&fixture_profile(), 2026, 1);
+        draft.death_month = 6;
+        draft.death_day = 15;
+        draft.death_year = 2025;
+        draft.administrator_tin = "987654321".into();
+        draft.administrator_branch_code = "00001".into();
+        draft.tax_relief = Some("RA 9504".into());
+        draft.installment_granted = true;
+        draft.installment_frequency = Some(Form1801Frequency::Others);
+        draft.installment_frequency_other = "Annual".into();
+        draft.installment_year = "2027".into();
+        draft.recompute();
+        draft
+    }
+
+    fn comb_text(html: &str, name: &str) -> String {
+        named_values(html, name).concat()
+    }
+
+    fn named_values(html: &str, name: &str) -> Vec<String> {
+        input_tags(html)
+            .into_iter()
+            .filter(|tag| tag.name == name)
+            .map(|tag| attr(tag.tag, "value").unwrap_or("").to_string())
+            .collect()
+    }
+
+    /// PR 10 (1801 manual-0): item 1 prints the date of death in its one
+    /// 6-slot comb p1c4 as the sheet's MM/DD/YY; a date not chosen prints
+    /// nothing.
+    #[test]
+    fn pr10_1801_item_1_prints_the_date_of_death() {
+        let draft = estate();
+        let html = filled_document("1801-2018", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "061525");
+        let mut blank = estate();
+        blank.death_month = 0;
+        blank.death_day = 0;
+        blank.death_year = 0;
+        let fields = blank.to_print_field_map();
+        assert_eq!(fields["frm1801v2018:txtDateMonth"], "00");
+        let html = filled_document("1801-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c4"), "");
+    }
+
+    /// PR 10: what the 1801 page holds prints in its cell: the executor's
+    /// TIN and branch (item 11), the contact number (12), 14A, 15D's
+    /// frequency tick and its Others text, and item 21's year. Every value
+    /// the print map carries still has a box or a reviewed reason.
+    #[test]
+    fn pr10_1801_page_values_print_in_their_cells() {
+        use bir_core::forms::form_1801::Form1801Frequency;
+        let draft = estate();
+        let fields = draft.to_print_field_map();
+        let html = filled_document("1801-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c31"), "987654321");
+        assert_eq!(comb_text(&html, "p1c32"), "00001");
+        assert_eq!(comb_text(&html, "p1c33"), "0281234567");
+        assert_eq!(comb_text(&html, "p1c38"), "RA 9504");
+        assert_eq!(named_values(&html, "p1c52"), vec!["X".to_string()]);
+        for other in ["p1c50", "p1c51", "p1c53"] {
+            assert_eq!(named_values(&html, other), vec![String::new()], "{other}");
+        }
+        assert_eq!(named_values(&html, "p1c197"), vec!["ANNUAL".to_string()]);
+        assert_eq!(named_values(&html, "p1c201"), vec!["2027".to_string()]);
+        assert!(
+            unprinted_keys("1801-2018", &fields).unwrap().is_empty(),
+            "{:?}",
+            unprinted_keys("1801-2018", &fields)
+        );
+        // Each choice ticks its own box.
+        for (frequency, cell) in [
+            (Form1801Frequency::Monthly, "p1c50"),
+            (Form1801Frequency::Quarterly, "p1c53"),
+            (Form1801Frequency::SemiAnnual, "p1c51"),
+        ] {
+            let mut picked = estate();
+            picked.installment_frequency = Some(frequency);
+            let html = filled_document("1801-2018", &picked.to_print_field_map()).unwrap();
+            assert_eq!(named_values(&html, cell), vec!["X".to_string()], "{cell}");
+            assert_eq!(named_values(&html, "p1c52"), vec![String::new()]);
+            assert_eq!(named_values(&html, "p1c197"), vec![String::new()]);
+        }
+        // No executor TIN, no relief: the cells stay blank.
+        let mut none = estate();
+        none.administrator_tin.clear();
+        none.tax_relief = None;
+        let html = filled_document("1801-2018", &none.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&html, "p1c31"), "");
+        assert_eq!(comb_text(&html, "p1c38"), "");
+    }
+
+    /// PR 10: 1800's 13A and 8A ZIP print in their cells.
+    #[test]
+    fn pr10_1800_13a_and_8a_print_in_their_cells() {
+        use bir_core::forms::form_1800::Form1800Draft;
+        let mut draft = Form1800Draft::new_from_profile(&fixture_profile(), 2026, 1);
+        draft.tax_relief = Some("RA 9504".into());
+        draft.recompute();
+        let fields = draft.to_print_field_map();
+        let html = filled_document("1800-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c57"), "RA 9504");
+        assert_eq!(comb_text(&html, "p1c26"), "1100");
+        assert!(unprinted_keys("1800-2018", &fields).unwrap().is_empty());
+        // A relief longer than the comb prints whole on one line.
+        draft.tax_relief = Some("REPUBLIC ACT NO. 9504 SECTION 4".into());
+        let html = filled_document("1800-2018", &draft.to_print_field_map()).unwrap();
+        assert!(html.contains("value=\"REPUBLIC ACT NO. 9504 SECTION 4\""));
+    }
+
+    fn donor(month: u8, day: u8, year: u16) -> BTreeMap<String, String> {
+        use bir_core::forms::form_1800::Form1800Draft;
+        let mut draft = Form1800Draft::new_from_profile(&fixture_profile(), 2026, 1);
+        draft.donation_month = month;
+        draft.donation_day = day;
+        draft.donation_year = year;
+        draft.recompute();
+        draft.to_print_field_map()
+    }
+
+    /// Second fix check, 1800 item 1: the YY comb p1c7 prints the year's
+    /// last two digits (form_1800.rs writes the 4-digit year); a part not
+    /// chosen prints nothing, as the page shows it blank; a typed part
+    /// prints in its own slots.
+    #[test]
+    fn pr10_1800_item_1_prints_as_the_page_shows_it() {
+        let parts = |fields: &BTreeMap<String, String>| {
+            let html = filled_document("1800-2018", fields).unwrap();
+            ["p1c5", "p1c6", "p1c7"].map(|cell| comb_text(&html, cell))
+        };
+        let whole = donor(6, 15, 2025);
+        assert_eq!(whole["frm1800v2018:txtYear"], "2025", "the upload keeps it");
+        assert_eq!(parts(&whole), ["06", "15", "25"]);
+        assert_eq!(parts(&donor(3, 1, 2009)), ["03", "01", "09"]);
+        let fresh = donor(0, 0, 0);
+        assert_eq!(
+            [
+                &fresh["frm1800v2018:txtMonth"],
+                &fresh["frm1800v2018:txtDate"],
+                &fresh["frm1800v2018:txtYear"]
+            ],
+            ["00", "00", "0"]
+        );
+        assert_eq!(parts(&fresh), ["", "", ""]);
+        assert_eq!(parts(&donor(6, 0, 0)), ["06", "", ""]);
+        assert!(unprinted_keys("1800-2018", &fresh).unwrap().is_empty());
+    }
+
+    /// Second fix check, 1801 item 1: each typed part prints in its own
+    /// MM / DD / YY slots of p1c4; a part not chosen leaves its slots
+    /// blank and is no unprinted value (the page shows it blank); a part
+    /// that cannot print is reported.
+    #[test]
+    fn pr10_1801_item_1_prints_each_typed_part() {
+        let slots = |draft: &bir_core::forms::form_1801::Form1801Draft| {
+            let html = filled_document("1801-2018", &draft.to_print_field_map()).unwrap();
+            named_values(&html, "p1c4")
+        };
+        let mut month = estate();
+        month.death_day = 0;
+        month.death_year = 0;
+        assert_eq!(slots(&month), ["0", "6", "", "", "", ""]);
+        let fields = month.to_print_field_map();
+        assert!(unprinted_keys("1801-2018", &fields).unwrap().is_empty());
+        let mut year = estate();
+        year.death_month = 0;
+        year.death_day = 0;
+        assert_eq!(slots(&year), ["", "", "", "", "2", "5"]);
+        let mut odd = fields.clone();
+        odd.insert("frm1801v2018:txtDateMonth".into(), "123".into());
+        assert_eq!(
+            unprinted_keys("1801-2018", &odd).unwrap(),
+            ["frm1801v2018:txtDateMonth"]
+        );
+    }
+
+    /// Second fix check: 1800's 8A ZIP prints trimmed, and 1801's executor
+    /// branch code fills its 5 slots ("1" prints "00001"); the upload keeps
+    /// what the draft holds.
+    #[test]
+    fn pr10_zip_and_branch_print_in_their_slots() {
+        let mut fields = donor(6, 15, 2025);
+        fields.insert("frm1800v2018:txtZipCode".into(), " 1100 ".into());
+        let html = filled_document("1800-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c26"), "1100");
+        let mut draft = estate();
+        draft.administrator_branch_code = "1".into();
+        let fields = draft.to_print_field_map();
+        assert_eq!(fields["frm1801v2018:txtBranchCodeE"], "1");
+        assert_eq!(draft.to_bir_field_map()["frm1801v2018:txtBranchCodeE"], "1");
+        let html = filled_document("1801-2018", &fields).unwrap();
+        assert_eq!(comb_text(&html, "p1c32"), "00001");
     }
 }

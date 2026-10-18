@@ -12,7 +12,8 @@ use serde_json::{Map, Value, json};
 
 use super::{
     rows_1700, rows_2550m, rows_2550q, rows_annual_corporate, rows_annual_individual,
-    rows_as_needed, rows_dst_pt_vat, rows_income_q, rows_monthly, rows_withholding, schema_entry,
+    rows_as_needed, rows_donor_estate, rows_dst_pt_vat, rows_income_q, rows_monthly,
+    rows_withholding, schema_entry,
 };
 
 fn option(value: &str, label: &str) -> Value {
@@ -85,6 +86,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> usize {
         return order;
     }
     if let Some(order) = rows_as_needed::edit_order(kind, key) {
+        return order;
+    }
+    if let Some(order) = rows_donor_estate::edit_order(kind, key) {
         return order;
     }
     location(kind, key).map_or(0, |(_, level)| level + 1)
@@ -175,6 +179,11 @@ pub(super) fn fill(
         return done;
     }
     if let Some(done) = rows_as_needed::fill(kind, draft, key, value, |draft| {
+        agent::fill_as_user(kind, draft, key, value)
+    }) {
+        return done;
+    }
+    if let Some(done) = rows_donor_estate::fill(kind, draft, key, value, |draft, value| {
         agent::fill_as_user(kind, draft, key, value)
     }) {
         return done;
@@ -318,6 +327,7 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || rows_monthly::host_writes(kind, key)
         || rows_annual_individual::host_writes(kind, key)
         || rows_as_needed::host_writes(kind, key)
+        || rows_donor_estate::host_writes(kind, key)
 }
 
 /// 1701A "(add more...)" spouse cell `frm1701A:txtmodalPartIV<A|B>_<n>C3`:

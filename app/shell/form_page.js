@@ -472,7 +472,17 @@ export class FormPageActions {
     // differ from the profile now, never changed by opening it.
     s.profileDiffers = r.profile_differs || [];
     s.saved = Boolean(r.draft && r.draft.id);
+    // An untouched date whose message waits (the host's `quiet`: 1800's and
+    // 1801's item 1 on a new return) says nothing until the filer edits it
+    // or presses Check or Save.
+    s.quiet = r.quiet || null;
     this.setErrors(r.errors);
+  }
+
+  /** The filer edited a quiet date, or asked for every message: it speaks. */
+  unquiet(keys) {
+    const s = this.state;
+    if (s?.quiet && (!keys || keys.some((k) => s.quiet.keys.includes(k)))) s.quiet = null;
   }
 
   /** Create InputStates for one part's text-like controls (only once). */
@@ -717,6 +727,7 @@ export class FormPageActions {
     // it), so focusing or reformatting a box never sends it.
     s.pending[k] = value;
     s.dirty = true;
+    this.unquiet([k]);
     const token = this.token;
     s.editSeq = (s.editSeq || 0) + 1;
     const seq = s.editSeq;
@@ -813,6 +824,7 @@ export class FormPageActions {
     }
     Object.assign(s.pending, edits);
     s.dirty = true;
+    this.unquiet(Object.keys(edits));
     // What the boxes showed, for an answer the filer then cancels.
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k]]));
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
@@ -1728,8 +1740,9 @@ export class FormPageActions {
    */
   setErrors(errors) {
     const s = this.state;
-    // The host holds back what a sample's blank period cannot judge.
-    s.errors = errors || [];
+    // The host holds back what a sample's blank period cannot judge, and
+    // the page a quiet date's message until it speaks.
+    s.errors = (errors || []).filter((e) => !(s.quiet && e.field === s.quiet.field));
     s.messages = {};
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
@@ -1769,6 +1782,7 @@ export class FormPageActions {
 
   check(cx) {
     const s = this.state;
+    this.unquiet();
     this.flush(cx);
     s.announce = true;
     const token = this.token;
@@ -1787,6 +1801,7 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.draft) return;
     if (s.sample) return this.saveSample(cx);
+    this.unquiet();
     // Take whatever is staged before saving, without waiting for the debounce.
     let edits = s.pending;
     s.pending = {};
@@ -2570,8 +2585,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
   const req = fs.some((x) => x.r);
   const tin = isTinItem(it);
   // The host says which boxes the profile fills (the schema's auto flag is
-  // only the extractor's guess).
-  const fromProfile = tin || fs.some((x) => s.profile.has(x.k));
+  // only the extractor's guess). A TIN the host marks `typed_tin` (1801's
+  // executor) is the filer's to type, not the profile's.
+  const fromProfile = (tin && !it.typed_tin) || fs.some((x) => s.profile.has(x.k));
   // Profile boxes keep the profile mark, which turns into Edit while the
   // pointer is over the item or the keyboard is on the button (Tab, then
   // Enter): the edit stays on this return, never in the profile (rule 2).
