@@ -24,7 +24,11 @@ fn date(y: i32, m: u32, d: u32) -> NaiveDate {
 fn profile_codes() -> Vec<String> {
     let mut codes: Vec<String> = DeadlineResolver::official_rules()
         .iter()
-        .flat_map(|rule| rule.form_nos.iter().map(|no| canonical_form_code(no).to_string()))
+        .flat_map(|rule| {
+            rule.form_nos
+                .iter()
+                .map(|no| canonical_form_code(no).to_string())
+        })
         .collect();
     codes.sort();
     codes.dedup();

@@ -424,12 +424,246 @@ pub enum Frequency {
     AsNeeded,
 }
 
+/// What starts an obligation's filing clock (decision D8, 2026-10-18).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FilingTrigger {
+    /// The close of a reporting period: a periodic return.
+    PeriodEnd,
+    /// A taxpayer event (a removal, a withholding, a sale, a death): an
+    /// as-needed return, due relative to the event's date.
+    Event,
+}
+
+/// The period one return of an obligation covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReportingPeriod {
+    Monthly,
+    Quarterly,
+    Annual,
+    /// One return per event.
+    PerEvent,
+}
+
 pub struct OfficialRule {
     pub form_nos: Vec<&'static str>,
     pub form_name: &'static str,
     pub frequency: Frequency,
+    pub filing_trigger: FilingTrigger,
+    pub reporting_period: ReportingPeriod,
     pub description: &'static str,
     pub generator: fn(i32, &[&str], &str, &str) -> Vec<ResolvedTaxDeadline>,
+}
+
+impl OfficialRule {
+    /// An obligation filed when an event happens, not at a period's close.
+    pub fn is_as_needed(&self) -> bool {
+        self.filing_trigger == FilingTrigger::Event
+    }
+}
+
+/// How an as-needed return's due date follows from its trigger date.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DueFromTrigger {
+    /// Due on the trigger date itself (the excise returns: on removal).
+    OnTheDate,
+    /// Due `n` calendar days after the trigger date.
+    DaysAfter(u32),
+    /// Due `n` banking (working) days after the trigger date.
+    BankingDaysAfter(u32),
+    /// Due on day `n` of the month after the trigger date's month.
+    DayOfFollowingMonth(u32),
+    /// Due one year after the trigger date.
+    OneYearAfter,
+    /// The trigger date the filer types is the due date (0605).
+    IsTheDueDate,
+}
+
+/// The due-date rule of one as-needed form, read from its official guide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventDueRule {
+    pub form_code: &'static str,
+    /// What the trigger date is, as a row names it ("Removal").
+    pub trigger: &'static str,
+    pub due: DueFromTrigger,
+    /// Whether a due date on a weekend or holiday moves to the next working
+    /// day. The excise returns are due on removal: the removal date stands,
+    /// as their penalties measure it.
+    pub rolls_to_business_day: bool,
+    pub description: &'static str,
+    /// Where the rule is printed.
+    pub source: &'static str,
+}
+
+/// Every as-needed form whose due date follows from a date its return holds.
+pub const EVENT_DUE_RULES: &[EventDueRule] = &[
+    EventDueRule {
+        form_code: "2200A",
+        trigger: "Removal",
+        due: DueFromTrigger::OnTheDate,
+        rolls_to_business_day: false,
+        description: "Before removal of the alcohol products",
+        source: "rules/forms/2200a-v2020/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "2200AN",
+        trigger: "Removal",
+        due: DueFromTrigger::OnTheDate,
+        rolls_to_business_day: false,
+        description: "Before removal of the covered products",
+        source: "rules/forms/2200an-v2018/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "2200M",
+        trigger: "Removal",
+        due: DueFromTrigger::OnTheDate,
+        rolls_to_business_day: false,
+        description: "Upon removal of the mineral products",
+        source: "rules/forms/2200m-v2018/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "2200P",
+        trigger: "Removal",
+        due: DueFromTrigger::OnTheDate,
+        rolls_to_business_day: false,
+        description: "Before removal of the petroleum products",
+        source: "rules/forms/2200p-v2020/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "2200S",
+        trigger: "Removal",
+        due: DueFromTrigger::OnTheDate,
+        rolls_to_business_day: false,
+        description: "Before removal of the covered products",
+        source: "rules/forms/2200s-v2018/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "2200T",
+        trigger: "Removal",
+        due: DueFromTrigger::OnTheDate,
+        rolls_to_business_day: false,
+        description: "Before removal of the tobacco products",
+        source: "rules/forms/2200t-v2020/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "1600WP",
+        trigger: "Withholding",
+        due: DueFromTrigger::DaysAfter(20),
+        rolls_to_business_day: true,
+        description: "Within 20 days from the date the tax was deducted and withheld",
+        source: "html-frozen/1600wp-2010/guide.html When and Where to File and Remit/Pay",
+    },
+    EventDueRule {
+        form_code: "0605",
+        trigger: "Due date",
+        due: DueFromTrigger::IsTheDueDate,
+        rolls_to_business_day: true,
+        description: "The due date of the tax type paid",
+        source: "html-frozen/0605-1999/guide.html When and Where to File and Pay",
+    },
+    // 1606 is listed with the as-needed forms in decision D8c, but the
+    // calendar files it monthly (a row every month, due the 10th, the same
+    // date this rule gives). Until the maintainer moves it, it stays monthly
+    // and this rule is unused: only as-needed codes get trigger-date rows.
+    EventDueRule {
+        form_code: "1606",
+        trigger: "Transaction",
+        due: DueFromTrigger::DayOfFollowingMonth(10),
+        rolls_to_business_day: true,
+        description: "10th day following the end of the transaction month",
+        source: "rules/forms/1606-v2018/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "1706",
+        trigger: "Transaction",
+        due: DueFromTrigger::DaysAfter(30),
+        rolls_to_business_day: true,
+        description: "Within 30 days after the sale, exchange or disposition",
+        source: "rules/forms/1706-v2018/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "1707",
+        trigger: "Transaction",
+        due: DueFromTrigger::DaysAfter(30),
+        rolls_to_business_day: true,
+        description: "Within 30 days after each sale, barter, exchange or disposition",
+        source: "html-frozen/1707-2021/guide.html When and Where to File and Pay",
+    },
+    EventDueRule {
+        form_code: "2000OT",
+        trigger: "Transaction",
+        due: DueFromTrigger::DayOfFollowingMonth(5),
+        rolls_to_business_day: true,
+        description: "Within five days after the close of the month of the taxable document",
+        source: "rules/forms/2000ot-v2018/workflow.json filing_deadlines",
+    },
+    EventDueRule {
+        form_code: "2552",
+        trigger: "Collection",
+        due: DueFromTrigger::BankingDaysAfter(5),
+        rolls_to_business_day: true,
+        description: "Within five banking days from the date of collection (LSE and secondary offering)",
+        source: "html-frozen/2552-2018/guide.html When and Where to File and Pay",
+    },
+    EventDueRule {
+        form_code: "1800",
+        trigger: "Donation",
+        due: DueFromTrigger::DaysAfter(30),
+        rolls_to_business_day: true,
+        description: "Within 30 days after the date the gift is made",
+        source: "html-frozen/1800-2018/guide.html When and Where to File and Pay",
+    },
+    EventDueRule {
+        form_code: "1801",
+        trigger: "Death",
+        due: DueFromTrigger::OneYearAfter,
+        rolls_to_business_day: true,
+        description: "Within one year from the decedent's death",
+        source: "html-frozen/1801-2018/guide.html When and Where to File and Pay",
+    },
+];
+
+/// 2552's primary public offering: within 30 days from the listing date.
+pub const FORM_2552_PRIMARY_OFFERING_RULE: EventDueRule = EventDueRule {
+    form_code: "2552",
+    trigger: "Listing",
+    due: DueFromTrigger::DaysAfter(30),
+    rolls_to_business_day: true,
+    description: "Within 30 days from the date of listing in the LSE (primary offering)",
+    source: "html-frozen/2552-2018/guide.html When and Where to File and Pay",
+};
+
+/// The due-date rule of an as-needed form, if its return holds a trigger date.
+pub fn event_due_rule(form_code: &str) -> Option<EventDueRule> {
+    EVENT_DUE_RULES
+        .iter()
+        .find(|rule| rule.form_code == form_code)
+        .copied()
+}
+
+impl DueFromTrigger {
+    /// The statutory due date for a trigger on `trigger`, before any move to
+    /// a working day. `working` decides banking days.
+    pub fn due_date(self, trigger: NaiveDate, working: &BusinessDayCalendar) -> Option<NaiveDate> {
+        match self {
+            Self::OnTheDate | Self::IsTheDueDate => Some(trigger),
+            Self::DaysAfter(days) => trigger.checked_add_signed(Duration::days(i64::from(days))),
+            Self::BankingDaysAfter(days) => {
+                let mut date = trigger;
+                for _ in 0..days {
+                    date = date.succ_opt()?;
+                    while working.is_non_working_day(date) {
+                        date = date.succ_opt()?;
+                    }
+                }
+                Some(date)
+            }
+            Self::DayOfFollowingMonth(day) => {
+                let (year, month) = next_month(trigger.year(), trigger.month());
+                NaiveDate::from_ymd_opt(year, month, day)
+            }
+            Self::OneYearAfter => trigger.checked_add_months(chrono::Months::new(12)),
+        }
+    }
 }
 
 pub struct DeadlineResolver;
@@ -557,6 +791,74 @@ impl DeadlineResolver {
         Self::sort_deadlines(deadlines)
     }
 
+    /// The canonical codes of every as-needed (event-triggered) obligation,
+    /// sorted.
+    pub fn as_needed_form_codes() -> Vec<&'static str> {
+        let mut codes: Vec<&'static str> = Self::official_rules()
+            .iter()
+            .filter(|rule| rule.is_as_needed())
+            .flat_map(|rule| rule.form_nos.iter().map(|no| canonical_form_code(no)))
+            .collect();
+        codes.sort_unstable();
+        codes.dedup();
+        codes
+    }
+
+    /// Whether `form_code` (canonical) is filed as needed.
+    pub fn is_as_needed(form_code: &str) -> bool {
+        Self::as_needed_form_codes().contains(&form_code)
+    }
+
+    /// The dated deadline of one as-needed return whose trigger date is
+    /// `trigger`: due per `rule`, moved to the next working day (weekends,
+    /// then `overrides` for that date) when the rule rolls. `working` is the
+    /// calendar banking days are counted on. `None` when the date overflows.
+    pub fn event_deadline(
+        rule: &EventDueRule,
+        trigger: NaiveDate,
+        overrides: &[DeadlineOverride],
+        working: &BusinessDayCalendar,
+    ) -> Option<ResolvedTaxDeadline> {
+        let due = rule.due.due_date(trigger, working)?;
+        let form_name = Self::official_rules()
+            .into_iter()
+            .find(|official| {
+                official.is_as_needed()
+                    && official
+                        .form_nos
+                        .iter()
+                        .any(|no| canonical_form_code(no) == rule.form_code)
+            })
+            .map_or("As Needed / Special / Event-Based", |official| {
+                official.form_name
+            });
+        let mut deadline = ResolvedTaxDeadline {
+            form_code: rule.form_code.to_string(),
+            display_form_no: rule.form_code.to_string(),
+            form_name: form_name.to_string(),
+            period: DeadlinePeriod::EventBased,
+            period_start: Some(trigger),
+            period_end: Some(trigger),
+            deadline: DeadlineKind::Dated {
+                original_deadline: due,
+                final_deadline: due,
+            },
+            status: DeadlineStatus::Normal,
+            description: rule.description.to_string(),
+            source_reference: Some(rule.source.to_string()),
+        };
+        if rule.rolls_to_business_day {
+            deadline.apply_business_day_calendar(&BusinessDayCalendar::default());
+            for deadline_override in overrides {
+                if deadline_override.source_reference.trim().is_empty() {
+                    continue;
+                }
+                deadline.apply_override(deadline_override, &BusinessDayCalendar::default());
+            }
+        }
+        Some(deadline)
+    }
+
     pub fn event_based_obligations() -> Vec<ResolvedTaxDeadline> {
         Self::official_rules()
             .into_iter()
@@ -574,6 +876,8 @@ impl DeadlineResolver {
                 form_nos: vec!["0620", "1600-VT", "1600-PT", "1606", "2200-C"],
                 form_name: "Monthly Remittance / Excise Tax",
                 frequency: Frequency::Monthly,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Monthly,
                 description: "10th day of the following month",
                 generator: |year, forms, desc, name| {
                     Self::gen_monthly(year, forms, desc, name, |y, m| {
@@ -586,6 +890,8 @@ impl DeadlineResolver {
                 form_nos: vec!["0619-E", "0619-F", "1601-C"],
                 form_name: "Withholding Tax Remittance",
                 frequency: Frequency::Monthly,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Monthly,
                 description: "10th day of the following month (Non-eFPS) / 15th for Dec",
                 generator: |year, forms, desc, name| {
                     Self::gen_monthly(year, forms, desc, name, |y, m| {
@@ -599,6 +905,8 @@ impl DeadlineResolver {
                 form_nos: vec!["1601-EQ", "1601-FQ", "1602Q", "1603Q", "1621"],
                 form_name: "Quarterly Withholding Tax",
                 frequency: Frequency::Quarterly,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Quarterly,
                 description: "Last day of the month following the close of the quarter",
                 generator: |year, forms, desc, name| {
                     Self::gen_quarterly(year, forms, desc, name, |y, q| {
@@ -611,6 +919,8 @@ impl DeadlineResolver {
                 form_nos: vec!["1701Q"],
                 form_name: "Quarterly Income Tax Return (Individual)",
                 frequency: Frequency::Quarterly,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Quarterly,
                 // BIR Form 1701Q (January 2018) guidelines, "When and Where
                 // to File": May 15, August 15 and November 15 of the taxable
                 // year (html-frozen/1701q-2018/guide.html;
@@ -647,6 +957,8 @@ impl DeadlineResolver {
                 form_nos: vec!["1702Q"],
                 form_name: "Quarterly Income Tax Return (Corporate)",
                 frequency: Frequency::Quarterly,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Quarterly,
                 description: "60 days after the end of each quarter",
                 generator: |year, forms, desc, name| {
                     Self::gen_quarterly(year, forms, desc, name, |y, q| {
@@ -659,6 +971,8 @@ impl DeadlineResolver {
                 form_nos: vec!["2550-DS", "2550Q", "2551Q"],
                 form_name: "Quarterly Percentage/Value-Added Tax",
                 frequency: Frequency::Quarterly,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Quarterly,
                 description: "25th day following the close of taxable quarter",
                 generator: |year, forms, desc, name| {
                     Self::gen_quarterly(year, forms, desc, name, |y, q| {
@@ -667,22 +981,14 @@ impl DeadlineResolver {
                     })
                 },
             },
-            OfficialRule {
-                form_nos: vec!["2200-M"],
-                form_name: "Quarterly Excise Tax Return (Minerals)",
-                frequency: Frequency::Quarterly,
-                description: "15th day following the close of calendar quarter",
-                generator: |year, forms, desc, name| {
-                    Self::gen_quarterly(year, forms, desc, name, |y, q| {
-                        let (ty, tm) = if q == 4 { (y + 1, 1) } else { (y, q * 3 + 1) };
-                        NaiveDate::from_ymd_opt(ty, tm, 15).unwrap()
-                    })
-                },
-            },
+            // 2200-M is due per removal (decision D8, 2026-10-18), so it is
+            // only in the as-needed rule below; it has no quarterly rule.
             OfficialRule {
                 form_nos: vec!["1604-C", "1604-F"],
                 form_name: "Annual Information Return",
                 frequency: Frequency::Annual,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Annual,
                 description: "January 31 following the calendar year",
                 generator: |year, forms, desc, name| {
                     Self::gen_annual(year, forms, desc, name, |y| {
@@ -694,6 +1000,8 @@ impl DeadlineResolver {
                 form_nos: vec!["1604-E"],
                 form_name: "Annual Information Return",
                 frequency: Frequency::Annual,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Annual,
                 description: "March 1 following the calendar year",
                 generator: |year, forms, desc, name| {
                     Self::gen_annual(year, forms, desc, name, |y| {
@@ -708,6 +1016,8 @@ impl DeadlineResolver {
                 ],
                 form_name: "Annual Income Tax Return",
                 frequency: Frequency::Annual,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Annual,
                 description: "April 15 / 15th day of 4th month following taxable year",
                 generator: |year, forms, desc, name| {
                     Self::gen_annual(year, forms, desc, name, |y| {
@@ -719,6 +1029,8 @@ impl DeadlineResolver {
                 form_nos: vec!["2316"],
                 form_name: "Certificate of Compensation Payment",
                 frequency: Frequency::Annual,
+                filing_trigger: FilingTrigger::PeriodEnd,
+                reporting_period: ReportingPeriod::Annual,
                 description: "February 28 (submission to BIR)",
                 generator: |year, forms, desc, name| {
                     Self::gen_annual(year, forms, desc, name, |y| {
@@ -735,10 +1047,12 @@ impl DeadlineResolver {
                 form_nos: vec![
                     "2552", "1600-WP", "1706", "1707", "1800", "1801", "0605", "0611-A", "0613",
                     "1905", "2200-A", "2200-AN", "2200-M", "2200P", "2200-S", "2200-T", "2553",
-                    "2000",
+                    "2000", "2000-OT",
                 ],
                 form_name: "As Needed / Special / Event-Based",
                 frequency: Frequency::AsNeeded,
+                filing_trigger: FilingTrigger::Event,
+                reporting_period: ReportingPeriod::PerEvent,
                 description: "Based on Special Law / Upon transaction",
                 generator: |_year, forms, desc, name| {
                     forms
@@ -1334,6 +1648,238 @@ mod tests {
         let events = DeadlineResolver::event_based_obligations();
         assert!(events.iter().any(|d| d.form_code == "1800"));
         assert!(events.iter().all(|d| d.final_deadline_date().is_none()));
+    }
+
+    fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    /// Decision D8: every rule says what triggers it and what period a
+    /// return covers, and the two agree with its frequency.
+    #[test]
+    fn every_rule_models_its_trigger_and_reporting_period() {
+        for rule in DeadlineResolver::official_rules() {
+            let expected = match rule.frequency {
+                Frequency::Monthly => (FilingTrigger::PeriodEnd, ReportingPeriod::Monthly),
+                Frequency::Quarterly => (FilingTrigger::PeriodEnd, ReportingPeriod::Quarterly),
+                Frequency::Annual => (FilingTrigger::PeriodEnd, ReportingPeriod::Annual),
+                Frequency::AsNeeded => (FilingTrigger::Event, ReportingPeriod::PerEvent),
+            };
+            assert_eq!(
+                (rule.filing_trigger, rule.reporting_period),
+                expected,
+                "{:?}",
+                rule.form_nos
+            );
+            assert_eq!(rule.is_as_needed(), rule.frequency == Frequency::AsNeeded);
+        }
+    }
+
+    #[test]
+    fn the_as_needed_codes_are_the_event_rules_codes() {
+        let codes = DeadlineResolver::as_needed_form_codes();
+        for code in [
+            "0605", "1600WP", "1706", "1707", "1800", "1801", "2000", "2000OT", "2200A", "2200AN",
+            "2200M", "2200P", "2200S", "2200T", "2552", "2553",
+        ] {
+            assert!(codes.contains(&code), "{code} is as needed");
+        }
+        for code in ["1601C", "2200C", "2551Q", "1701", "1604C", "1606"] {
+            assert!(!DeadlineResolver::is_as_needed(code), "{code} is periodic");
+        }
+        // Every form with a trigger-date rule is an as-needed obligation,
+        // except 1606: its rule is ready, but the calendar still files it
+        // monthly (see EVENT_DUE_RULES), so it has no as-needed rows.
+        for rule in EVENT_DUE_RULES {
+            assert_eq!(
+                codes.contains(&rule.form_code),
+                rule.form_code != "1606",
+                "{}",
+                rule.form_code
+            );
+        }
+    }
+
+    /// Decision D8: 2200M is due per removal, not quarterly on the 15th.
+    #[test]
+    fn form_2200m_is_as_needed_only() {
+        for year in 2025..=2027 {
+            assert!(
+                DeadlineResolver::resolve_taxable_year(year)
+                    .iter()
+                    .filter(|d| d.form_code == "2200M")
+                    .all(|d| d.final_deadline_date().is_none()),
+                "no dated 2200M row in {year}"
+            );
+        }
+        let events = DeadlineResolver::event_based_obligations();
+        assert_eq!(events.iter().filter(|d| d.form_code == "2200M").count(), 1);
+        assert_eq!(
+            event_due_rule("2200M").map(|rule| rule.due),
+            Some(DueFromTrigger::OnTheDate)
+        );
+    }
+
+    /// 2200C: monthly, within 10 days after the month's close, on the next
+    /// working day when that is a weekend.
+    #[test]
+    fn form_2200c_is_due_the_10th_of_the_next_month_and_rolls() {
+        let deadlines = DeadlineResolver::resolve_taxable_year(2026);
+        let month = |m: u8| {
+            deadlines
+                .iter()
+                .find(|d| {
+                    d.form_code == "2200C"
+                        && d.period
+                            == (DeadlinePeriod::Monthly {
+                                taxable_year: 2026,
+                                month: m,
+                            })
+                })
+                .unwrap()
+        };
+        assert_eq!(month(1).final_deadline_date(), Some(ymd(2026, 2, 10)));
+        // October 10, 2026 is a Saturday.
+        assert_eq!(month(9).original_deadline_date(), Some(ymd(2026, 10, 10)));
+        assert_eq!(month(9).final_deadline_date(), Some(ymd(2026, 10, 12)));
+        assert_eq!(month(9).status, DeadlineStatus::WeekendAdjusted);
+        assert_eq!(month(12).final_deadline_date(), Some(ymd(2027, 1, 11)));
+        assert_eq!(event_due_rule("2200C"), None, "2200C is periodic");
+    }
+
+    /// 1600WP: within 20 days from the withholding date
+    /// (html-frozen/1600wp-2010/guide.html), on the next working day.
+    #[test]
+    fn form_1600wp_is_due_20_days_after_the_withholding() {
+        let rule = event_due_rule("1600WP").unwrap();
+        let calendar = BusinessDayCalendar::default();
+        let on =
+            |trigger| DeadlineResolver::event_deadline(&rule, trigger, &[], &calendar).unwrap();
+        let weekday = on(ymd(2026, 10, 1));
+        assert_eq!(weekday.final_deadline_date(), Some(ymd(2026, 10, 21)));
+        assert_eq!(weekday.status, DeadlineStatus::Normal);
+        assert_eq!(weekday.period_start, Some(ymd(2026, 10, 1)));
+        // October 25, 2026 is a Sunday.
+        let sunday = on(ymd(2026, 10, 5));
+        assert_eq!(sunday.original_deadline_date(), Some(ymd(2026, 10, 25)));
+        assert_eq!(sunday.final_deadline_date(), Some(ymd(2026, 10, 26)));
+        assert_eq!(sunday.status, DeadlineStatus::WeekendAdjusted);
+        assert_eq!(sunday.period, DeadlinePeriod::EventBased);
+    }
+
+    #[test]
+    fn the_trigger_date_rules_compute_each_form_s_due_date() {
+        let calendar = BusinessDayCalendar::default();
+        let due = |code: &str, trigger| {
+            DeadlineResolver::event_deadline(
+                &event_due_rule(code).unwrap(),
+                trigger,
+                &[],
+                &calendar,
+            )
+            .unwrap()
+        };
+        // On removal, and a Saturday removal is not moved.
+        let removal = due("2200A", ymd(2026, 10, 10));
+        assert_eq!(removal.final_deadline_date(), Some(ymd(2026, 10, 10)));
+        assert_eq!(removal.status, DeadlineStatus::Normal);
+        for code in ["2200AN", "2200M", "2200P", "2200S", "2200T"] {
+            assert_eq!(
+                due(code, ymd(2026, 10, 7)).final_deadline_date(),
+                Some(ymd(2026, 10, 7)),
+                "{code}"
+            );
+        }
+        assert_eq!(
+            due("0605", ymd(2026, 10, 15)).final_deadline_date(),
+            Some(ymd(2026, 10, 15))
+        );
+        assert_eq!(
+            due("1606", ymd(2026, 9, 18)).final_deadline_date(),
+            Some(ymd(2026, 10, 12)),
+            "October 10 is a Saturday"
+        );
+        assert_eq!(
+            due("1706", ymd(2026, 9, 1)).final_deadline_date(),
+            Some(ymd(2026, 10, 1))
+        );
+        assert_eq!(
+            due("1707", ymd(2026, 9, 1)).final_deadline_date(),
+            Some(ymd(2026, 10, 1))
+        );
+        assert_eq!(
+            due("2000OT", ymd(2026, 12, 3)).final_deadline_date(),
+            Some(ymd(2027, 1, 5))
+        );
+        // Five banking days from Thursday October 8 skip the weekend.
+        assert_eq!(
+            due("2552", ymd(2026, 10, 8)).final_deadline_date(),
+            Some(ymd(2026, 10, 15))
+        );
+        let primary = DeadlineResolver::event_deadline(
+            &FORM_2552_PRIMARY_OFFERING_RULE,
+            ymd(2026, 10, 8),
+            &[],
+            &calendar,
+        )
+        .unwrap();
+        assert_eq!(primary.final_deadline_date(), Some(ymd(2026, 11, 9)));
+        assert_eq!(
+            due("1800", ymd(2026, 9, 15)).final_deadline_date(),
+            Some(ymd(2026, 10, 15))
+        );
+        assert_eq!(
+            due("1801", ymd(2024, 2, 29)).final_deadline_date(),
+            Some(ymd(2025, 2, 28))
+        );
+    }
+
+    #[test]
+    fn banking_days_skip_the_working_calendar_s_holidays() {
+        let calendar =
+            BusinessDayCalendar::with_non_working_days(vec![NonWorkingDay::regular_holiday(
+                ymd(2026, 10, 12),
+                "Configured Monday holiday",
+            )]);
+        assert_eq!(
+            DueFromTrigger::BankingDaysAfter(5).due_date(ymd(2026, 10, 8), &calendar),
+            Some(ymd(2026, 10, 16))
+        );
+    }
+
+    #[test]
+    fn a_holiday_override_moves_a_rolling_event_deadline_but_not_a_removal() {
+        let holiday = DeadlineOverride {
+            id: "h".to_string(),
+            title: "Configured holiday".to_string(),
+            source_reference: "test".to_string(),
+            affected_form_codes: vec!["1600WP".to_string(), "2200A".to_string()],
+            original_deadline: ymd(2026, 10, 21),
+            adjusted_deadline: ymd(2026, 10, 22),
+            affected_regions: Vec::new(),
+            affected_taxpayer_types: Vec::new(),
+            effective_from: None,
+            effective_until: None,
+            expires_at: None,
+        };
+        let calendar = BusinessDayCalendar::default();
+        let wp = DeadlineResolver::event_deadline(
+            &event_due_rule("1600WP").unwrap(),
+            ymd(2026, 10, 1),
+            std::slice::from_ref(&holiday),
+            &calendar,
+        )
+        .unwrap();
+        assert_eq!(wp.final_deadline_date(), Some(ymd(2026, 10, 22)));
+        assert_eq!(wp.status, DeadlineStatus::Extended);
+        let removal = DeadlineResolver::event_deadline(
+            &event_due_rule("2200A").unwrap(),
+            ymd(2026, 10, 21),
+            std::slice::from_ref(&holiday),
+            &calendar,
+        )
+        .unwrap();
+        assert_eq!(removal.final_deadline_date(), Some(ymd(2026, 10, 21)));
     }
 
     #[test]
