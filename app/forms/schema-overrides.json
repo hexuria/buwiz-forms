@@ -9368,7 +9368,7 @@
       "evidence": "N04: not supported by this app's 1701 model. form_1701_official.rs: 'Supported: taxpayer and joint-filing spouse columns without exempt or special-rate income. Part X (consolidated schedules) and the attachment pages are only used with exempt/special-rate income, so they keep the page's defaults; such a return does not validate here.' These {EX|SP} rows belong to those attachment pages, which the draft does not hold, so the runtime row template is hidden rather than shown as a box that never saves."
     },
     "layout": {
-      "evidence": "PR 7: the printed sheet's parts and items in paper order (html-frozen/1701-2018/index.html, BIR Form 1701 January 2018 (ENCS), and its writer-cells.json captions): items 1-3, Part I items 4-21A, Part II items 22-33 with the overpayment boxes printed unnumbered after item 32, Part IV (the spouse) items 1-12A, Part V's Schedules 1-6 (Schedule 1's employer rows as one table, Schedule 6's NOLCO rows 4-7 and 9-12 as tables), and Parts VI-IX in their own parts (R3.0-R3.6, R3.10, R5.3, manual-2 to manual-5: the extracted schema had put Schedule 1 cells under Part IV item 1, copies of items 9A and 12A in Schedule 4, the NOLCO rows under Parts VII and IX, and Parts VI and VIII inside Part VII). Item 5 RDO Code and Part IV item 2, which the print fills from the draft (writer-cells joins frm1701:txtPg1I5RDOCode '5 RDO Code' and frm1701:txtPg2I2SpouseRDOCode '2 RDO Code (Part IV)'), are drawn (R2.2, preview.0). Item 1's month has no box on this sheet (writer-cells not_joined frm1701:txtPg1I1Month: 'item 1 prints only a YYYY comb on the 2018 sheet; the fiscal month has no box') and Line of Business none either, so both are in Not on the printed sheet. Part III (details of payment), which the field map writes empty, stays hidden. Field keys, values, the official XML and the print map are unchanged.",
+      "evidence": "PR 7: the printed sheet's parts and items in paper order (html-frozen/1701-2018/index.html, BIR Form 1701 January 2018 (ENCS), and its writer-cells.json captions): items 1-3, Part I items 4-21A, Part II items 22-33 with the overpayment boxes printed unnumbered after item 32, Part IV (the spouse) items 1-12A, Part V's Schedules 1-6 (Schedule 1's employer rows as one table, Schedule 6's NOLCO rows 4-7 and 9-12 as tables), and Parts VI-IX in their own parts (R3.0-R3.6, R3.10, R5.3, manual-2 to manual-5: the extracted schema had put Schedule 1 cells under Part IV item 1, copies of items 9A and 12A in Schedule 4, the NOLCO rows under Parts VII and IX, and Parts VI and VIII inside Part VII). Item 5 RDO Code and Part IV item 2, which the print fills from the draft (writer-cells joins frm1701:txtPg1I5RDOCode '5 RDO Code' and frm1701:txtPg2I2SpouseRDOCode '2 RDO Code (Part IV)'), are drawn (R2.2, preview.0). Item 1's month has no box on this sheet (writer-cells not_joined frm1701:txtPg1I1Month: 'item 1 prints only a YYYY comb on the 2018 sheet; the fiscal month has no box') and Line of Business none either, so both are in Not on the printed sheet. Part III (details of payment), which the field map writes empty, stays hidden. Field keys, values, the official XML and the print map are unchanged. Part III (items 34-37, 'PART III - Details of Payment' on html-frozen/1701-2018/index.html; writer-cells joins '34 Cash/Bank Debit Memo, Drawee Bank/Agency' to '37 Others, Drawee Bank/Agency') shows each printed item with a note instead of a box: the official program disables its sixteen boxes at load (rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json, disabled true, source lines 934-960) (R3.11).",
       "parts": [
         {
           "n": "Page 1",
@@ -9672,6 +9672,31 @@
               "k": [
                 "frm1701:txtPg1I33NumberOfAttachments"
               ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "34",
+              "l": "Cash/Bank Debit Memo",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+            },
+            {
+              "no": "35",
+              "l": "Check",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+            },
+            {
+              "no": "36",
+              "l": "Tax Debit Memo",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+            },
+            {
+              "no": "37",
+              "l": "Others (specify below)",
+              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
             }
           ]
         },
@@ -12379,19 +12404,19 @@
       "evidence": "item (unnumbered): agent box label: 'Status'"
     },
     "frm1701MS:txtPg1TIN1": {
-      "label": "A. TIN (1-3)",
+      "label": "TIN (1-3)",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtPg1TIN2": {
-      "label": "A. TIN (4-6)",
+      "label": "TIN (4-6)",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtPg1TIN3": {
-      "label": "A. TIN (7-9)",
+      "label": "TIN (7-9)",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtPg1BranchCode": {
-      "label": "A. Branch code",
+      "label": "Branch code",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtTaxpayerNo8a": {
@@ -12475,19 +12500,19 @@
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtPg2TIN1Spouse": {
-      "label": "B. TIN (1-3)",
+      "label": "TIN (1-3)",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtPg2TIN2Spouse": {
-      "label": "B. TIN (4-6)",
+      "label": "TIN (4-6)",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtPg2TIN3Spouse": {
-      "label": "B. TIN (7-9)",
+      "label": "TIN (7-9)",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtPg2BranchCodeSpouse": {
-      "label": "B. Branch code",
+      "label": "Branch code",
       "evidence": "PR 7 (manual-2): the printed caption of the box (html-frozen/1701ms-2024/writer-cells.json caption and html-frozen/1701ms-2024/index.html)"
     },
     "frm1701MS:txtRDOCodeb": {
@@ -12785,7 +12810,7 @@
       "evidence": "Item 3: the official control is disabled at load (rules/forms/1701ms-v2024/fixtures/runtime-control-inventory-v47.json: id frm1701MS:txtOtherAmount, source line 2271) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
     },
     "layout": {
-      "evidence": "PR 7: the printed sheet's parts and items in paper order (html-frozen/1701ms-2024/index.html, BIR Form 1701-MS August 2024, and its writer-cells.json captions): items 1-5, Part I items 6-18 in columns A (taxpayer/filer) and B (spouse), Part II items 19-35, Part IV.A items 1-4, IV.B1 items 5-18B, IV.B2 items 19-25, Part V items 1-10 and Part VI item 1. Each box is the item the print fills from it: form_1701ms.rs `page_amounts` pairs every amount control with the draft field `print_amounts` prints under that item (R3.0-R3.3, manual-1: Part V's boxes had been merged into Part IV items of the same number). Item 4 Civil Status is the page's select, which the sheet prints in its item 4 box (derived:civil_status '4 Civil Status'). The page 2 header copies, the page counter and Part III (details of payment, which the model does not hold) stay hidden. Field keys, values, the official XML and the print map are unchanged.",
+      "evidence": "PR 7: the printed sheet's parts and items in paper order (html-frozen/1701ms-2024/index.html, BIR Form 1701-MS August 2024, and its writer-cells.json captions): items 1-5, Part I items 6-18 in columns A (taxpayer/filer) and B (spouse), Part II items 19-35, Part IV.A items 1-4, IV.B1 items 5-18B, IV.B2 items 19-25, Part V items 1-10 and Part VI item 1. Each box is the item the print fills from it: form_1701ms.rs `page_amounts` pairs every amount control with the draft field `print_amounts` prints under that item (R3.0-R3.3, manual-1: Part V's boxes had been merged into Part IV items of the same number). Item 4 Civil Status is the page's select, which the sheet prints in its item 4 box (derived:civil_status '4 Civil Status'). The page 2 header copies, the page counter and Part III (details of payment, which the model does not hold) stay hidden. Field keys, values, the official XML and the print map are unchanged. Item 6 is drawn as two TIN combs, column A and column B, each the sheet's 3-3-3-5 boxes (html-frozen/1701ms-2024/index.html '6 Taxpayer Identification Number (TIN)' over 'A. Taxpayer/Filer' and 'B. Spouse') (R5.0).",
       "parts": [
         {
           "n": "Page 1",
@@ -12837,12 +12862,18 @@
           "items": [
             {
               "no": "6",
-              "l": "Taxpayer Identification Number (TIN)",
+              "l": "Taxpayer Identification Number (TIN) – A. Taxpayer/Filer",
               "k": [
                 "frm1701MS:txtPg1TIN1",
                 "frm1701MS:txtPg1TIN2",
                 "frm1701MS:txtPg1TIN3",
-                "frm1701MS:txtPg1BranchCode",
+                "frm1701MS:txtPg1BranchCode"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Taxpayer Identification Number (TIN) – B. Spouse",
+              "k": [
                 "frm1701MS:txtPg2TIN1Spouse",
                 "frm1701MS:txtPg2TIN2Spouse",
                 "frm1701MS:txtPg2TIN3Spouse",
@@ -13946,6 +13977,38 @@
     "frm1701MS:txtMaxPage": {
       "kind": "hidden",
       "evidence": "PR 7 (R3.3): the page counter of the eBIRForms page, not a box on the paper form (writer-cells not_joined frm1701MS:txtCurrentPage/txtMaxPage); the field map keeps writing it."
+    },
+    "frm1701MS:txtSalesReturnsNo6a": {
+      "label": "A. Taxpayer/Filer",
+      "evidence": "PR 7 (R3.5, manual-2): column A of Part IV.B1 item 6 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+    },
+    "frm1701MS:txtSalesReturnsNo6b": {
+      "label": "B. Spouse",
+      "evidence": "PR 7 (R3.5, manual-2): column B of Part IV.B1 item 6 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\")"
+    },
+    "frm1701MS:txtOptionalDeductionNo11a": {
+      "label": "A. Taxpayer/Filer",
+      "evidence": "PR 7 (R3.5, manual-2): column A of Part IV.B1 item 11 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+    },
+    "frm1701MS:txtOptionalDeductionNo11b": {
+      "label": "B. Spouse",
+      "evidence": "PR 7 (R3.5, manual-2): column B of Part IV.B1 item 11 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\")"
+    },
+    "frm1701MS:txtNetIncomeLossNo12a": {
+      "label": "A. Taxpayer/Filer",
+      "evidence": "PR 7 (R3.5, manual-2): column A of Part IV.B1 item 12 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+    },
+    "frm1701MS:txtNetIncomeLossNo12b": {
+      "label": "B. Spouse",
+      "evidence": "PR 7 (R3.5, manual-2): column B of Part IV.B1 item 12 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\")"
+    },
+    "frm1701MS:txtTaxPaidPreviouslyFiledNo6a": {
+      "label": "A. Taxpayer/Filer",
+      "evidence": "PR 7 (R3.5, manual-2): column A of Part V item 6 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+    },
+    "frm1701MS:txtTaxPaidPreviouslyFiledNo6b": {
+      "label": "B. Spouse",
+      "evidence": "PR 7 (R3.5, manual-2): column B of Part V item 6 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\")"
     }
   },
   "1701Q": {
