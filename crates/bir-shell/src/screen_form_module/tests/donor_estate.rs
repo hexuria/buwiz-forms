@@ -1080,7 +1080,7 @@ fn pr10_1801_frequency_waits_for_15d() {
         assert_eq!(no["draft"]["installment_frequency_other"], "");
         assert_eq!(
             no["removes"]["message"],
-            "Answering No at item 15D clears its frequency of payment and the Others (specify) text. Continue?"
+            "Answering No at item 15D clears its frequency of payment and the Others (specify) text (\"Annual\"). Continue?"
         );
         let map = printed("1801", &no["draft"]);
         assert_eq!(map[&p("freq_Other")], "false");
@@ -1145,4 +1145,271 @@ fn pr10_drafts_stored_before_pr10_save_back_byte_for_byte() {
     assert_eq!(opened["values"]["frm1801v2018:freq_Other"], "true");
     assert_eq!(opened["values"]["frm1801v2018:freqOtherInput"], "ANNUAL");
     assert_eq!(opened["values"]["frm1801v2018:txtDateYear"], "2025");
+}
+
+/// Review fix 3: Amended Return No zeroes 1800's 17C and 1801's 19B (the
+/// forms' `recompute` clears `tax_paid_previous`), so the page asks first
+/// and offers Undo, by the box or the group box; with nothing typed there
+/// it asks nothing.
+#[test]
+fn pr10_amended_return_no_asks_before_it_clears_the_tax_paid_before() {
+    setup();
+    for (code, yes, no, group, box_key, item) in [
+        (
+            "1800",
+            "frm1800v2018:AmendedRtn_1",
+            "frm1800v2018:AmendedRtn_2",
+            "frm1800v2018:AmendedRtn",
+            "frm1800v2018:TaxCredit17C",
+            "17C",
+        ),
+        (
+            "1801",
+            "frm1801v2018:amendedRtn_1",
+            "frm1801v2018:amendedRtn_2",
+            "frm1801v2018:amendedRtn",
+            "frm1801v2018:txtCredits_TaxPrev",
+            "19B",
+        ),
+    ] {
+        let opened = open(code, 1);
+        let amended = fill(code, &opened["draft"], pick(&[yes, no], yes));
+        let quiet = fill(code, &amended["draft"], pick(&[yes, no], no));
+        assert!(quiet["removes"].is_null(), "{code}: nothing typed");
+        let typed = fill(code, &amended["draft"], json!({ box_key: "1,000.00" }));
+        assert_eq!(typed["draft"]["tax_paid_previous"], 1000.0, "{code}");
+        for edits in [pick(&[yes, no], no), json!({ group: "2" })] {
+            let cleared = fill(code, &typed["draft"], edits.clone());
+            assert_eq!(cleared["draft"]["tax_paid_previous"], 0.0, "{code} {edits}");
+            assert_eq!(
+                cleared["removes"]["message"],
+                format!(
+                    "Answering No at Amended Return clears item {item} (\u{20b1}1,000.00). Continue?"
+                ),
+                "{code} {edits}"
+            );
+            assert_eq!(cleared["removes"]["done"], format!("Cleared item {item}"));
+        }
+    }
+}
+
+/// Review fix 4: one batch that removes several things names them all in
+/// one question (1801: item 14 No and 15D No together).
+#[test]
+fn pr10_one_batch_names_every_removal() {
+    setup();
+    let p = |k: &str| format!("frm1801v2018:{k}");
+    let opened = open("1801", 1);
+    let set = fill(
+        "1801",
+        &opened["draft"],
+        json!({
+            p("optTreaty_1"): "true",
+            p("optTreaty_2"): "false",
+            p("treatyY"): "RA 9504",
+            p("instGranted_1"): "true",
+            p("instGranted_2"): "false",
+            p("freq_Other"): "true",
+            p("freqOtherInput"): "Annual",
+        }),
+    );
+    assert!(set["rejected"].as_object().unwrap().is_empty(), "{set}");
+    let both = fill(
+        "1801",
+        &set["draft"],
+        json!({
+            p("optTreaty_1"): "false",
+            p("optTreaty_2"): "true",
+            p("instGranted_1"): "false",
+            p("instGranted_2"): "true",
+        }),
+    );
+    assert!(both["draft"]["tax_relief"].is_null());
+    assert_eq!(both["draft"]["installment_granted"], false);
+    assert_eq!(
+        both["removes"]["message"],
+        "Answering No at item 14 clears item 14A (\"RA 9504\"). Answering No at item 15D \
+         clears its frequency of payment and the Others (specify) text (\"Annual\"). Continue?"
+    );
+    assert_eq!(both["removes"]["rows"], 2);
+    assert_eq!(
+        both["removes"]["done"],
+        "Cleared item 14A; Cleared item 15D's frequency"
+    );
+}
+
+/// Review fix 5: changing 15D's frequency from Others for another choice
+/// clears the Others (specify) text, which the official serializer never
+/// files then (form_1801.rs `to_bir_field_map` writes freqOtherInput only
+/// for Others; `set_installment_granted`, the port of `installmentGranted`,
+/// clears it), and unticking the chosen frequency clears it: both ask
+/// first. Changing one choice for another with nothing typed asks nothing.
+#[test]
+fn pr10_1801_frequency_change_asks_before_it_clears() {
+    setup();
+    let p = |k: &str| format!("frm1801v2018:{k}");
+    let freq = [
+        p("freq_Mon"),
+        p("freq_Qtr"),
+        p("freq_Semi"),
+        p("freq_Other"),
+    ];
+    let freq_refs: Vec<&str> = freq.iter().map(String::as_str).collect();
+    let opened = open("1801", 1);
+    let others = fill(
+        "1801",
+        &opened["draft"],
+        json!({ p("instGranted_1"): "true", p("freq_Other"): "true", p("freqOtherInput"): "Annual" }),
+    );
+    assert_eq!(others["draft"]["installment_frequency_other"], "Annual");
+    let monthly = fill("1801", &others["draft"], pick(&freq_refs, &p("freq_Mon")));
+    assert_eq!(monthly["draft"]["installment_frequency"], "monthly");
+    assert_eq!(monthly["draft"]["installment_frequency_other"], "");
+    assert_eq!(
+        monthly["removes"]["message"],
+        "Changing item 15D's frequency from Others clears the Others (specify) text (\"Annual\"). Continue?"
+    );
+    assert_eq!(
+        uploaded("1801", &monthly["draft"])[&p("freqOtherInput")],
+        ""
+    );
+    let quarterly = fill("1801", &monthly["draft"], pick(&freq_refs, &p("freq_Qtr")));
+    assert_eq!(quarterly["draft"]["installment_frequency"], "quarterly");
+    assert!(quarterly["removes"].is_null());
+    let unticked = fill(
+        "1801",
+        &quarterly["draft"],
+        json!({ p("freq_Qtr"): "false" }),
+    );
+    assert!(unticked["draft"]["installment_frequency"].is_null());
+    assert_eq!(
+        unticked["removes"]["message"],
+        "Unticking the frequency of payment at item 15D clears it. Continue?"
+    );
+    let from_others = fill(
+        "1801",
+        &others["draft"],
+        json!({ p("freq_Other"): "false" }),
+    );
+    assert!(from_others["draft"]["installment_frequency"].is_null());
+    assert_eq!(
+        from_others["removes"]["message"],
+        "Unticking the frequency of payment at item 15D clears it and the Others (specify) text (\"Annual\"). Continue?"
+    );
+}
+
+/// Review fix 6: a new return's item 1 date is blank on both forms, and
+/// says nothing until the filer checks: the open carries no date message,
+/// Check (screen_form_validate) still reports it, and bir-core's own
+/// validation is unchanged.
+#[test]
+fn pr10_a_new_returns_date_is_blank_and_quiet_until_checked() {
+    use bir_core::forms::FormValidator;
+    setup();
+    for (code, keys, field, message) in [
+        (
+            "1800",
+            [
+                "frm1800v2018:txtMonth",
+                "frm1800v2018:txtDate",
+                "frm1800v2018:txtYear",
+            ],
+            "donation_date",
+            "Please enter a valid date on Item 1.",
+        ),
+        (
+            "1801",
+            [
+                "frm1801v2018:txtDateMonth",
+                "frm1801v2018:txtDateDay",
+                "frm1801v2018:txtDateYear",
+            ],
+            "death_date",
+            "Please enter a valid Return Date",
+        ),
+    ] {
+        let opened = open(code, 1);
+        for key in keys {
+            assert_eq!(opened["values"][key], "", "{code} {key}");
+        }
+        let fields = |errors: &Value| -> Vec<String> {
+            errors
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|e| e["field"].as_str().unwrap().to_string())
+                .collect()
+        };
+        assert!(
+            !fields(&opened["errors"]).contains(&field.to_string()),
+            "{code}"
+        );
+        let checked = validated(code, &opened["draft"]);
+        assert!(
+            checked["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["field"] == field && e["message"] == message),
+            "{code}: Check reports the date"
+        );
+        let core: Vec<(String, String)> = match code {
+            "1800" => FormValidator::validate(
+                &serde_json::from_value::<bir_core::forms::form_1800::Form1800Draft>(
+                    opened["draft"].clone(),
+                )
+                .unwrap(),
+            ),
+            _ => FormValidator::validate(
+                &serde_json::from_value::<bir_core::forms::form_1801::Form1801Draft>(
+                    opened["draft"].clone(),
+                )
+                .unwrap(),
+            ),
+        };
+        assert!(
+            core.iter().any(|(f, m)| f == field && m == message),
+            "{code}"
+        );
+        // Saved and opened again with a date typed, its message shows.
+        let mut typed = opened["draft"].clone();
+        let month = if code == "1800" {
+            "donation_month"
+        } else {
+            "death_month"
+        };
+        typed[month] = json!(13);
+        let saved = save(code, &typed);
+        let reopened = open(code, 1);
+        assert_eq!(reopened["draft"][month], 13, "{code}: {saved}");
+        assert!(
+            fields(&reopened["errors"]).contains(&field.to_string()),
+            "{code}"
+        );
+    }
+}
+
+/// Review fix 7: a deduction amount with more than two decimals is
+/// refused, never rounded; the bound is on the stored amount, so
+/// 999999999999.995 (which rounds to 1,000,000,000,000.00) is refused and
+/// 999,999,999,999.99 kept.
+#[test]
+fn pr10_1800_deduction_amounts_keep_their_centavos_or_are_refused() {
+    setup();
+    let key = "frm1800v2018:txtDeductionAmount28";
+    let opened = open("1800", 1);
+    for bad in ["10.005", "1.999", "999999999999.995", "1e13"] {
+        let refused = fill("1800", &opened["draft"], json!({ key: bad }));
+        assert!(rejected(&refused, key).is_some(), "{bad}");
+        assert_eq!(refused["draft"], opened["draft"], "{bad}");
+    }
+    let kept = fill(
+        "1800",
+        &opened["draft"],
+        json!({ key: "999,999,999,999.99" }),
+    );
+    assert!(kept["rejected"].as_object().unwrap().is_empty(), "{kept}");
+    assert_eq!(kept["draft"]["deductions"][0]["amount"], 999_999_999_999.99);
+    let two = fill("1800", &opened["draft"], json!({ key: "10.50" }));
+    assert_eq!(two["draft"]["deductions"][0]["amount"], 10.5);
 }

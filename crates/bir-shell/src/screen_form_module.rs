@@ -2378,6 +2378,8 @@ fn opened_json(
         }
     }
     blank_sample(&blank, &mut values, &mut errors);
+    // 1800/1801 (PR 10): an untouched item 1 date says nothing on open.
+    rows_donor_estate::hold_untouched_date(kind, &draft, &mut errors);
     let lock_notes: Map<String, Value> = locks
         .iter()
         .map(|(key, reason)| {
@@ -3489,6 +3491,12 @@ fn plan_choice_edits(
         .collect();
     let mut plain = Vec::new();
     for (key, value) in edits {
+        // 1800/1801 (PR 10): the host writes these answers through the
+        // typed draft and its setters, ticks and unticks alike.
+        if rows_donor_estate::host_writes(kind, &key) {
+            plain.push((key, ChoiceStep::Fill(value)));
+            continue;
+        }
         let unticked = is_unticked(&value);
         if let Some((type_path, flag_path)) = form_1701_type_paths(kind, &key) {
             let current = draft

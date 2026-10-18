@@ -39,7 +39,7 @@
 use bir_core::forms::agent::{self, AgentFormKind};
 use bir_core::forms::form_1800::{FORM_1800_DEDUCTIONS, Form1800Deduction, Form1800Draft};
 use bir_core::forms::form_1801::{Form1801Draft, Form1801Frequency};
-use bir_core::forms::official_inputs::within_round_limit;
+use bir_core::forms::official_inputs::{cents, has_cent_precision, within_round_limit};
 use serde_json::{Map, Value, json};
 
 use super::rows_1700::with_tin_part;
@@ -316,11 +316,26 @@ fn deduction_amount(value: &Value) -> Result<f64, String> {
     if shown.is_empty() {
         return Ok(0.0);
     }
-    agent::parse_amount(&shown)
-        .filter(|amount| amount.is_finite() && *amount >= 0.0 && within_round_limit(*amount))
-        .ok_or_else(|| {
-            format!("`{shown}` is not an amount: enter pesos and centavos below 1,000,000,000,000.")
-        })
+    let refused =
+        || format!("`{shown}` is not an amount: enter pesos and centavos below 1,000,000,000,000.");
+    // More than two decimals is refused, never rounded away (the other 1800
+    // money boxes: form_1800.rs `has_cent_precision`).
+    let decimals = shown.split_once('.').map_or(0, |(_, cents)| {
+        cents.chars().filter(char::is_ascii_digit).count()
+    });
+    let amount = agent::parse_amount(&shown).ok_or_else(refused)?;
+    // The bound applies to what is stored: the amount at centavos.
+    let stored = cents(amount);
+    if decimals > 2
+        || !has_cent_precision(amount)
+        || !amount.is_finite()
+        || amount < 0.0
+        || !within_round_limit(amount)
+        || !within_round_limit(stored)
+    {
+        return Err(refused());
+    }
+    Ok(stored)
 }
 
 #[inline(never)]
@@ -439,9 +454,26 @@ fn fill_1801_installment(draft: &mut Value, granted: bool) -> Result<(), String>
     store(draft, &form)
 }
 
+/// 15D's frequency set to `frequency`. A frequency other than Others
+/// clears the Others (specify) text: the official serializer never files it
+/// then (this port's `to_bir_field_map` writes `freqOtherInput` only for
+/// Others, and `set_installment_granted`, the port of the official
+/// `installmentGranted`, clears it with the frequency), and the tracked
+/// function inventory's `freqOtherChecked` (rules/forms/1801-v2018/
+/// fixtures/validation-function-inventory-v796.json, source lines
+/// 4942-4945) ties the box to `freq_Other` alone. Kept, a hidden text would
+/// come back unseen with Others. The page asks first ([`removes`]).
+fn set_frequency(form: &mut Form1801Draft, frequency: Option<Form1801Frequency>) {
+    form.installment_frequency = frequency;
+    if frequency != Some(Form1801Frequency::Others) {
+        form.installment_frequency_other.clear();
+    }
+    form.recompute();
+}
+
 /// 15D's frequency: ticking a choice (or the group box's value) picks it
-/// while 15D is Yes; unticking one leaves the answer as it is (another box
-/// of the group is ticked instead, or the group is cleared by its blank).
+/// while 15D is Yes; unticking the chosen one clears the group (another
+/// box's untick says nothing: the ticked box carries the answer).
 #[inline(never)]
 fn fill_1801_frequency(
     draft: &mut Value,
@@ -455,8 +487,7 @@ fn fill_1801_frequency(
             // The page sends the untick of the box it leaves; the answer
             // is the ticked one's. A lone untick clears the group.
             if form.installment_frequency == which {
-                form.installment_frequency = None;
-                form.recompute();
+                set_frequency(&mut form, None);
                 return store(draft, &form);
             }
             return Ok(());
@@ -464,8 +495,7 @@ fn fill_1801_frequency(
         None => {
             let choice = text(value);
             if choice.is_empty() {
-                form.installment_frequency = None;
-                form.recompute();
+                set_frequency(&mut form, None);
                 return store(draft, &form);
             }
             Some(
@@ -482,8 +512,7 @@ fn fill_1801_frequency(
     if !form.installment_granted {
         return Err(ANSWER_15D_FIRST.to_string());
     }
-    form.installment_frequency = picked;
-    form.recompute();
+    set_frequency(&mut form, picked);
     store(draft, &form)
 }
 
@@ -610,6 +639,15 @@ pub(super) fn values(
             {
                 map.insert("frm1800v2018:txtEmail".into(), email.trim().to_string());
             }
+            for (key, field) in [
+                ("frm1800v2018:txtMonth", "donation_month"),
+                ("frm1800v2018:txtDate", "donation_day"),
+                ("frm1800v2018:txtYear", "donation_year"),
+            ] {
+                if draft[field].as_u64() == Some(0) && map.contains_key(key) {
+                    map.insert(key.into(), String::new());
+                }
+            }
         }
         "1801" => {
             for (key, field) in [
@@ -623,6 +661,34 @@ pub(super) fn values(
             }
         }
         _ => {}
+    }
+}
+
+/// The draft fields of each form's item 1 date, and its error's field.
+fn item_1_date(kind: AgentFormKind) -> Option<([&'static str; 3], &'static str)> {
+    match kind.form_code() {
+        "1800" => Some((
+            ["donation_month", "donation_day", "donation_year"],
+            "donation_date",
+        )),
+        "1801" => Some((["death_month", "death_day", "death_year"], "death_date")),
+        _ => None,
+    }
+}
+
+/// On opening a return whose item 1 date nobody has typed (all three parts
+/// 0, as a new return starts), the page shows no message for it yet; Check,
+/// which validates, and save still report it (display only: the form's
+/// validation is unchanged).
+pub(super) fn hold_untouched_date(kind: AgentFormKind, draft: &Value, errors: &mut Value) {
+    let Some((parts, field)) = item_1_date(kind) else {
+        return;
+    };
+    if !parts.iter().all(|part| draft[*part].as_u64() == Some(0)) {
+        return;
+    }
+    if let Value::Array(list) = errors {
+        list.retain(|error| error["field"] != field);
     }
 }
 
@@ -666,15 +732,47 @@ pub(super) fn printed_message(kind: AgentFormKind, message: &str) -> Option<&'st
         .map(|(_, _, printed)| *printed)
 }
 
+/// `1234.5` -> `1,234.50`.
+fn pesos(amount: f64) -> String {
+    let cents = (amount * 100.0).round() as i64;
+    let (whole, cents) = ((cents / 100).abs(), (cents % 100).abs());
+    let digits = whole.to_string();
+    let mut grouped = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(c);
+    }
+    format!(
+        "{}{grouped}.{cents:02}",
+        if amount < 0.0 { "-" } else { "" }
+    )
+}
+
+/// The Amended Return boxes of each form (its group box too).
+fn amended_key(kind: AgentFormKind, key: &str) -> bool {
+    match kind.form_code() {
+        "1800" => key.starts_with("frm1800v2018:AmendedRtn"),
+        "1801" => key.starts_with("frm1801v2018:amendedRtn"),
+        _ => false,
+    }
+}
+
 /// When `edits` turned `before` into `after` by removing what the filer
 /// typed, what the page asks first (`message`), what the Undo toast says
-/// (`done`) and how many rows went; `None` when nothing typed went.
+/// (`done`) and how many things went; `None` when nothing typed went. Every
+/// removal of one batch is in the one question (an answer to item 14 and
+/// one to 15D together name both).
 pub(super) fn removes(
     kind: AgentFormKind,
     before: &Value,
     after: &Value,
     edits: &Map<String, Value>,
 ) -> Option<Value> {
+    if !matches!(kind.form_code(), "1800" | "1801") {
+        return None;
+    }
     let touched =
         |cells: &dyn Fn(Cell) -> bool| edits.keys().any(|key| cell(kind, key).is_some_and(cells));
     let typed_text = |draft: &Value, field: &str| {
@@ -684,41 +782,86 @@ pub(super) fn removes(
             .filter(|t| !t.is_empty())
             .map(str::to_string)
     };
-    match kind.form_code() {
-        "1800" | "1801" if touched(&|c| matches!(c, Cell::Relief1800(_) | Cell::Relief1801(_))) => {
-            let (item, sub) = if kind.form_code() == "1800" {
-                ("13", "13A")
+    // `(sentence, done)` for each removal.
+    let mut removed: Vec<(String, String)> = Vec::new();
+    // Amended Return No: the form's recompute zeroes 1800's 17C and 1801's
+    // 19B (`tax_paid_previous`, form_1800.rs / form_1801.rs `recompute`).
+    if edits.keys().any(|key| amended_key(kind, key)) {
+        let was = before["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        let now = after["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        if was != 0.0 && now == 0.0 {
+            let item = if kind.form_code() == "1800" {
+                "17C"
             } else {
-                ("14", "14A")
+                "19B"
             };
-            let held = typed_text(before, "tax_relief")?;
-            after["tax_relief"].is_null().then(|| {
-                json!({
-                    "message": format!("Answering No at item {item} clears item {sub} (\"{held}\"). Continue?"),
-                    "done": format!("Cleared item {sub}"),
-                    "rows": 1,
-                })
-            })
+            removed.push((
+                format!(
+                    "Answering No at Amended Return clears item {item} (\u{20b1}{}).",
+                    pesos(was)
+                ),
+                format!("Cleared item {item}"),
+            ));
         }
-        "1801" if touched(&|c| matches!(c, Cell::Installment1801(_))) => {
-            let frequency = !before["installment_frequency"].is_null()
-                && after["installment_frequency"].is_null();
-            let other = typed_text(before, "installment_frequency_other").is_some()
-                && typed_text(after, "installment_frequency_other").is_none();
-            if !frequency && !other {
-                return None;
-            }
-            let what = match (frequency, other) {
-                (true, true) => "its frequency of payment and the Others (specify) text",
-                (true, false) => "its frequency of payment",
-                _ => "the Others (specify) text",
-            };
-            Some(json!({
-                "message": format!("Answering No at item 15D clears {what}. Continue?"),
-                "done": "Cleared item 15D's frequency",
-                "rows": 1,
-            }))
-        }
-        _ => None,
     }
+    if touched(&|c| matches!(c, Cell::Relief1800(_) | Cell::Relief1801(_)))
+        && let Some(held) = typed_text(before, "tax_relief")
+        && after["tax_relief"].is_null()
+    {
+        let (item, sub) = if kind.form_code() == "1800" {
+            ("13", "13A")
+        } else {
+            ("14", "14A")
+        };
+        removed.push((
+            format!("Answering No at item {item} clears item {sub} (\"{held}\")."),
+            format!("Cleared item {sub}"),
+        ));
+    }
+    let frequency =
+        !before["installment_frequency"].is_null() && after["installment_frequency"].is_null();
+    let other = typed_text(before, "installment_frequency_other");
+    let other_gone = other.is_some() && typed_text(after, "installment_frequency_other").is_none();
+    let others = |held: &Option<String>| {
+        held.as_deref()
+            .map(|text| format!("the Others (specify) text (\"{text}\")"))
+            .unwrap_or_default()
+    };
+    if touched(&|c| matches!(c, Cell::Installment1801(_))) && (frequency || other_gone) {
+        let what = match (frequency, other_gone) {
+            (true, true) => format!("its frequency of payment and {}", others(&other)),
+            (true, false) => "its frequency of payment".to_string(),
+            _ => others(&other),
+        };
+        removed.push((
+            format!("Answering No at item 15D clears {what}."),
+            "Cleared item 15D's frequency".to_string(),
+        ));
+    } else if touched(&|c| matches!(c, Cell::Frequency1801(_))) && (frequency || other_gone) {
+        // A frequency unticked, or Others changed for another choice.
+        let sentence = match (frequency, other_gone) {
+            (true, true) => format!(
+                "Unticking the frequency of payment at item 15D clears it and {}.",
+                others(&other)
+            ),
+            (true, false) => {
+                "Unticking the frequency of payment at item 15D clears it.".to_string()
+            }
+            _ => format!(
+                "Changing item 15D's frequency from Others clears {}.",
+                others(&other)
+            ),
+        };
+        removed.push((sentence, "Cleared item 15D's frequency".to_string()));
+    }
+    if removed.is_empty() {
+        return None;
+    }
+    let rows = removed.len();
+    let (sentences, done): (Vec<String>, Vec<String>) = removed.into_iter().unzip();
+    Some(json!({
+        "message": format!("{} Continue?", sentences.join(" ")),
+        "done": done.join("; "),
+        "rows": rows,
+    }))
 }
