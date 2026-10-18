@@ -263,6 +263,7 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            rows_as_needed::mark_calendar_tables(form, &code);
             combs::apply_combs(form, &code);
         }
         forms
@@ -2319,6 +2320,8 @@ fn opened_json(
         draft: from_profile_draft,
     };
     let mut locks = locks(kind, &from_profile);
+    // PR 9's forms' computed boxes the probe called derived.
+    rows_as_needed::relock(kind, &mut locks);
     // A computed penalty is locked until Edit penalties opens its group.
     for group in penalties::groups(kind) {
         if !penalties::edited(&group, &draft) {
@@ -5177,10 +5180,12 @@ mod tests {
         let form = schema_entry("2552").unwrap();
         for s in 1..=3 {
             let first = format!("frm2552:txtPg2Pt5Sch{s}_1Col1");
-            let table = form["parts"][4]["items"]
+            // Part V is its own part since PR 9's printed layout.
+            let table = form["parts"]
                 .as_array()
                 .unwrap()
                 .iter()
+                .flat_map(|part| part["items"].as_array().unwrap())
                 .find(|it| it["keys"][0][0] == first.as_str())
                 .unwrap_or_else(|| panic!("2552 Schedule {s} table"))
                 .clone();
@@ -6001,7 +6006,9 @@ mod tests {
         // options (schema-overrides.json, from each form's official HTA).
         // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The
         // 36 2550M Schedule 1 ATC lists (N03) are table cells, not fields.
-        assert_eq!(supplied, 82);
+        // Less 1 for 2552 (PR 9): its item 5 runtime RDO select is a hidden
+        // copy of the printed item 5 box.
+        assert_eq!(supplied, 81);
         assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     }
 
@@ -8497,7 +8504,6 @@ mod tests {
         "2200T frm2200Tv2020:registeredName_2",
         "2200T frm2200Tv2020:registeredName_3",
         "2550Q frm2550qv2024:Pg2TaxPayer",
-        "2552 frm2552:txtLOB",
     ];
 
     #[test]
@@ -9132,6 +9138,7 @@ mod tests {
         }
         let mut locked = Vec::new();
         let (mut typed, mut refused) = (0, 0);
+        let mut closed_2552: Vec<String> = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -9156,6 +9163,13 @@ mod tests {
                 }
                 let filled = fill(code, &opened["draft"], json!({ &key: "12/10/2020" }));
                 if let Some(reason) = filled["rejected"][&key].as_str() {
+                    // 2552's Part V dates wait for item 11 to pick their
+                    // schedule (catalogs.rs inactive_schedule); PR 9 draws
+                    // row 5's too: asserted exactly below.
+                    if code == "2552" && reason.starts_with("Item 11 (Kind of Transaction)") {
+                        closed_2552.push(key.clone());
+                        continue;
+                    }
                     // Refused by its form's own rule (a later schedule row
                     // before the first, a schedule another answer turns
                     // off), never for the date.
@@ -9177,6 +9191,17 @@ mod tests {
             refused < 150,
             "{refused} date boxes refused for another rule"
         );
+        // Every 2552 Part V date box drawn, and only those, waits for item
+        // 11 on a return that has not answered it.
+        let mut part_v_dates: Vec<String> = screen_types("2552")
+            .into_iter()
+            .filter(|(key, t)| t == "date" && key.starts_with("frm2552:txtPg2Pt5Sch"))
+            .map(|(key, _)| key)
+            .collect();
+        part_v_dates.sort();
+        closed_2552.sort();
+        assert!(closed_2552.contains(&"frm2552:txtPg2Pt5Sch3Date5".to_string()));
+        assert_eq!(closed_2552, part_v_dates);
         let mut expected: Vec<&str> = DATE_BOXES_LOCKED_FOR_OTHER_REASONS.to_vec();
         expected.sort_unstable();
         locked.sort();
@@ -9227,9 +9252,6 @@ mod tests {
         "2550Q frm2550qv2024:RtnPeriodToNo4: cannot be filled here: derived by the app: changes with /return_period_to/day, /return_period_to/month, /return_period_to/year but never shows one field's value",
         "2551Q txtDateExpiry: cannot be filled here: written by the app without a draft field (a constant or the period)",
         "2551Q txtDateIssue: cannot be filled here: written by the app without a draft field (a constant or the period)",
-        "2552 frm2552:txtPg2Pt5Sch1Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
-        "2552 frm2552:txtPg2Pt5Sch2Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
-        "2552 frm2552:txtPg2Pt5Sch3Date5: cannot be filled here: derived by the app: changes with /transaction but never shows one field's value",
     ];
 
     /// Every field of a form with its schema entry (hidden ones too).

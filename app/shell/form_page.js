@@ -2000,6 +2000,13 @@ function scheduleTable(cx, ui, it, width) {
         const shown = col.t === "money" ? formatMoney(value || (ui.isComputedBox(k) ? "0" : ""), col.w) : col.t === "date" ? shownDate(value) : value;
         const hint = !shown ? ui.reasonFor(k) : "";
         cell = lockedBox(cx, shown || hint, colW - 16, { right: !hint && col.t === "money", hint: Boolean(hint) });
+      } else if (col.t === "date" && it.calendar) {
+        // Rule 4: a schedule's date box has its own calendar too, in the
+        // tables the host marks (2000's Schedules 2-4); typing works as in
+        // any date box.
+        const row = ui.itemIdForKey(k);
+        const box = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 52 }).h(30);
+        cell = div().flex().flex_row().items_center().gap(SPACE[1]).child(box).child(datePicker(cx, ui, `${row}-${r}-${c}`, { single: { k, l: col.l, t: "date" } }, row));
       } else {
         cell = TextField(cx, s.inputs.get(k), { id: `fp-${k}`, label: `${col.l}, row ${no}`, width: colW - 16 }).h(30);
       }

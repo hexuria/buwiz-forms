@@ -26646,8 +26646,9 @@
       "evidence": "painted form_2552_view.rs (local:relief via binding /tax_relief_specification): 'If yes, specify'; writer-cells printed caption: 'If yes, specify'"
     },
     "frm2552:txtPg1Pt1I12NumOfShare": {
-      "label": "No. of shares sold, bartered or exchanged",
-      "evidence": "painted form_2552_view.rs (local:shares_sold via binding /shares_sold): 'No. of shares sold, bartered or exchanged'; writer-cells printed caption: 'No. of Shares Sold, Bartered, or Exchanged'"
+      "label": "No. of Shares Sold, Bartered, or Exchanged",
+      "evidence": "painted form_2552_view.rs (local:shares_sold via binding /shares_sold): 'No. of shares sold, bartered or exchanged'; writer-cells printed caption: 'No. of Shares Sold, Bartered, or Exchanged' | PR 9 (manual-3): a number of shares, typed as the filer writes it (form_2552.rs shares_sold, text)",
+      "kind": "int"
     },
     "frm2552:txtPg1P2I18CredTaxWthhld": {
       "label": "Creditable tax withheld per BIR Form 2307",
@@ -26663,15 +26664,21 @@
     },
     "Pg2Pt5Sch1SubTotal": {
       "label": "Page 2 Part 5 Sch 1 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 5 Sch 1 Sub Total'"
+      "evidence": "PR 9: the add-more popup's subtotal, form_2552.rs popup_subtotal (the sum of the add-more rows' tax due), which row 5 prints as OTHERS",
+      "kind": "money",
+      "computed": true
     },
     "Pg2Pt5Sch2SubTotal": {
       "label": "Page 2 Part 5 Sch 2 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 5 Sch 2 Sub Total'"
+      "evidence": "PR 9: the add-more popup's subtotal, form_2552.rs popup_subtotal (the sum of the add-more rows' tax due), which row 5 prints as OTHERS",
+      "kind": "money",
+      "computed": true
     },
     "Pg2Pt5Sch3SubTotal": {
       "label": "Page 2 Part 5 Sch 3 Sub Total",
-      "evidence": "agent box label: 'Page 2 Part 5 Sch 3 Sub Total'"
+      "evidence": "PR 9: the add-more popup's subtotal, form_2552.rs popup_subtotal (the sum of the add-more rows' tax due), which row 5 prints as OTHERS",
+      "kind": "money",
+      "computed": true
     },
     "txtEnroll": {
       "kind": "hidden",
@@ -27027,7 +27034,8 @@
     },
     "frm2552:txtPg2P4I2Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 2 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I2Amount)"
+      "evidence": "P4: printed caption 'Part IV row 2 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I2Amount) | PR 9 (manual-0): Part IV row 2's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[1].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:3": {
       "label": "Part IV row 2 Transaction Classification",
@@ -27043,7 +27051,8 @@
     },
     "frm2552:txtPg2P4I3Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 3 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I3Amount)"
+      "evidence": "P4: printed caption 'Part IV row 3 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I3Amount) | PR 9 (manual-0): Part IV row 3's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[2].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:5": {
       "label": "Part IV row 3 Transaction Classification",
@@ -27059,7 +27068,8 @@
     },
     "frm2552:txtPg2P4I4Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 4 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I4Amount)"
+      "evidence": "P4: printed caption 'Part IV row 4 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I4Amount) | PR 9 (manual-0): Part IV row 4's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[3].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:7": {
       "label": "Part IV row 4 Transaction Classification",
@@ -27075,7 +27085,8 @@
     },
     "frm2552:txtPg2P4I5Amount": {
       "label": "Amount Involved",
-      "evidence": "P4: printed caption 'Part IV row 5 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I5Amount)"
+      "evidence": "P4: printed caption 'Part IV row 5 Amount Involved' (html-frozen/2552-2018/writer-cells.json joins frm2552:txtPg2P4I5Amount) | PR 9 (manual-0): Part IV row 5's amount is typed by the filer (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json keeps rows 2-5 disabled until the row before is used; form_2552.rs exempt_transactions[4].amount); the corpus marks it computed, so the host writes it (rows_as_needed.rs)",
+      "computed": false
     },
     "item:4:10": {
       "label": "Part IV row 5 Transaction Classification",
@@ -27308,6 +27319,705 @@
     "frm2552:txtPg1Pt3I29Date": {
       "kind": "hidden",
       "evidence": "Item 3: the official control is disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: id frm2552:txtPg1Pt3I29Date, source line 1140) and this app's field map never writes it (agent form: 'not written by this app's field map for any sample draft'), so the box could never save; hidden rather than shown as an editable box."
+    },
+    "frm2552:rdoPg1I2AmendedYes": {
+      "label": "Yes",
+      "evidence": "PR 9: html-frozen/2552-2018/writer-cells.json xbox_joins '2 Amended Return Yes'; the box sets /is_amended true (crates/bir-core/data/agent-forms/2552-v2018.json), so it reads Yes"
+    },
+    "frm2552:rdoPg1I2AmendedNo": {
+      "label": "No",
+      "evidence": "PR 9: html-frozen/2552-2018/writer-cells.json xbox_joins '2 Amended Return No'; the box sets /is_amended false, so it reads No"
+    },
+    "frm2552:rdoPg1I10TaxReliefYes": {
+      "label": "Yes",
+      "evidence": "PR 9 (R3.3): html-frozen/2552-2018/writer-cells.json xbox_joins '10 Tax relief Yes'"
+    },
+    "frm2552:rdoPg1I10TaxReliefNo": {
+      "label": "No",
+      "evidence": "PR 9 (R3.3): html-frozen/2552-2018/writer-cells.json xbox_joins '10 Tax relief No'"
+    },
+    "frm2552:rdoPg1I11TransactionLSE": {
+      "label": "11A Shares of Stocks Listed and Traded through the LSE",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11A Shares Listed and Traded through the LSE'; html-frozen/2552-2018/index.html (BIR Form 2552, January 2018) '11A Shares of Stocks Listed and Traded through the LSE'"
+    },
+    "frm2552:rdoPg1I11TransactionPrimary": {
+      "label": "11B Initial Public Offering: Primary",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Primary'"
+    },
+    "frm2552:rdoPg1I11TransactionSecondary": {
+      "label": "11B Initial Public Offering: Secondary",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Secondary'"
+    },
+    "frm2552:rdoPg1OverpaymentRefund": {
+      "label": "To be refunded",
+      "evidence": "PR 9 (R3.0): html-frozen/2552-2018/writer-cells.json xbox_joins 'If overpayment: To be refunded'"
+    },
+    "frm2552:rdoPg1OverpaymentTaxCredCert": {
+      "label": "To be issued Tax Credit Certificate",
+      "evidence": "PR 9 (R3.0): html-frozen/2552-2018/writer-cells.json xbox_joins 'If overpayment: To be issued Tax Credit Certificate'"
+    },
+    "frm2552:txtPg1Pt1I12TotShare": {
+      "label": "Total Outstanding Shares of Stocks after Listing in the LSE",
+      "kind": "int",
+      "computed": false,
+      "evidence": "PR 9 (manual-3): 12B is typed by the filer for an initial public offering (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load like 12A, both opened by kindOfTransaction; form_2552.rs keeps it in outstanding_shares, text, and clears it unless item 11 is an offering); the corpus marks it computed, so the host writes it (rows_as_needed.rs)"
+    },
+    "frm2552:txtPg1P2I13TaxATC": {
+      "kind": "hidden",
+      "evidence": "PR 9: the ATC is preprinted on the item 13 row (html-frozen/2552-2018/writer-cells.json not_joined: 'ATC PT 200/201/202 is preprinted'); the item's caption names it"
+    },
+    "frm2552:txtPg1P2I14TaxATC": {
+      "kind": "hidden",
+      "evidence": "PR 9: the ATC is preprinted on the item 14 row (html-frozen/2552-2018/writer-cells.json not_joined: 'ATC PT 200/201/202 is preprinted'); the item's caption names it"
+    },
+    "frm2552:txtPg1P2I15TaxATC": {
+      "kind": "hidden",
+      "evidence": "PR 9: the ATC is preprinted on the item 15 row (html-frozen/2552-2018/writer-cells.json not_joined: 'ATC PT 200/201/202 is preprinted'); the item's caption names it"
+    },
+    "frm2552:rdoPg1Pt1I5RDO": {
+      "kind": "hidden",
+      "evidence": "PR 9 (manual-2): the official program's injected copy of item 5 (html-frozen/2552-2018/writer-cells.json not_joined: 'duplicate of frm2552:txtPg1I5RDO (same RDO), which prints in item 5'); the page shows item 5 once"
+    },
+    "frm2552:txtCurrentPage": {
+      "kind": "hidden",
+      "evidence": "PR 9 (R3.1): html-frozen/2552-2018/writer-cells.json not_joined: 'page counter of the eBIRForms page, not a box on the paper form'"
+    },
+    "Pg2Pt5Sch1PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9: the official add-more popup's row count, not a box on the paper form"
+    },
+    "Pg2Pt5Sch2PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9: the official add-more popup's row count, not a box on the paper form"
+    },
+    "Pg2Pt5Sch3PopLength": {
+      "kind": "hidden",
+      "evidence": "PR 9: the official add-more popup's row count, not a box on the paper form"
+    },
+    "layout": {
+      "evidence": "PR 9: the printed sheet's own items, from html-frozen/2552-2018/index.html (BIR Form 2552, January 2018) (Items 1-3, Part I 4-12, Part II 13-25, Part III 26-29, Part IV, Part V Schedules 1-3, Part VI) and html-frozen/2552-2018/writer-cells.json. Field keys, values, the official XML and the print map are unchanged.",
+      "parts": [
+        {
+          "n": "Page 1",
+          "items": [
+            {
+              "no": "1",
+              "l": "Date of Transaction or Date of Listing of Share of Stocks on the Stock Exchange (MM/DD/YYYY)",
+              "k": [
+                "frm2552:txtPg1I1Month",
+                "frm2552:txtPg1I1Day",
+                "frm2552:txtPg1I1Year"
+              ]
+            },
+            {
+              "no": "2",
+              "l": "Amended Return?",
+              "k": [
+                "frm2552:rdoPg1I2AmendedYes",
+                "frm2552:rdoPg1I2AmendedNo"
+              ]
+            },
+            {
+              "no": "3",
+              "l": "Number of sheet/s attached",
+              "k": [
+                "frm2552:txtPg1I3NoOfSheets"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part I · Background Information",
+          "items": [
+            {
+              "no": "4",
+              "l": "Taxpayer Identification Number (TIN)",
+              "k": [
+                "frm2552:txtPg1TIN1",
+                "frm2552:txtPg1TIN2",
+                "frm2552:txtPg1TIN3",
+                "frm2552:txtPg1TIN4"
+              ]
+            },
+            {
+              "no": "5",
+              "l": "RDO Code",
+              "k": [
+                "frm2552:txtPg1I5RDO"
+              ]
+            },
+            {
+              "no": "6",
+              "l": "Name of Stockbroker/Issuing Corporation (Last Name, First Name, Middle Name for Individuals OR Registered Name for Non-Individuals)",
+              "k": [
+                "frm2552:txtPg1Pt1I6Name"
+              ]
+            },
+            {
+              "no": "7",
+              "l": "Registered Address",
+              "k": [
+                "frm2552:txtPg1Pt1I7RegisteredAddress",
+                "frm2552:txtPg1Pt1I7RegisteredAddress2"
+              ]
+            },
+            {
+              "no": "7A",
+              "l": "ZIP Code",
+              "k": [
+                "frm2552:txPg1I7ZipCode"
+              ]
+            },
+            {
+              "no": "8",
+              "l": "Contact Number",
+              "k": [
+                "frm2552:txtPg1Pt1I8ContactNumber"
+              ]
+            },
+            {
+              "no": "9",
+              "l": "Email Address",
+              "k": [
+                "frm2552:txtPg1Pt1I9Email"
+              ]
+            },
+            {
+              "no": "10",
+              "l": "Are you availing of tax relief under Special Law or International Tax Treaty?",
+              "k": [
+                "frm2552:rdoPg1I10TaxReliefYes",
+                "frm2552:rdoPg1I10TaxReliefNo"
+              ]
+            },
+            {
+              "no": "10A",
+              "l": "If yes, specify",
+              "k": [
+                "frm2552:txtPg1Pt1I10TaxReliefSpec"
+              ]
+            },
+            {
+              "no": "11",
+              "l": "Kinds of Transaction",
+              "k": [
+                "frm2552:rdoPg1I11TransactionLSE",
+                "frm2552:rdoPg1I11TransactionPrimary",
+                "frm2552:rdoPg1I11TransactionSecondary"
+              ]
+            },
+            {
+              "no": "12A",
+              "l": "For Initial Public Offering: No. of Shares Sold, Bartered, or Exchanged",
+              "k": [
+                "frm2552:txtPg1Pt1I12NumOfShare"
+              ]
+            },
+            {
+              "no": "12B",
+              "l": "For Initial Public Offering: Total Outstanding Shares of Stocks after Listing in the LSE",
+              "k": [
+                "frm2552:txtPg1Pt1I12TotShare"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part II · Computation of Tax",
+          "items": [
+            {
+              "no": "13",
+              "l": "Tax Due, ATC PT 200 (From Part V Schedule 1 Item 6)",
+              "k": [
+                "frm2552:txtPg1P2I13TaxATC",
+                "frm2552:txtPg1P2I13TaxDue"
+              ]
+            },
+            {
+              "no": "14",
+              "l": "Tax Due, ATC PT 201 (From Part V Schedule 2 Item 6)",
+              "k": [
+                "frm2552:txtPg1P2I14TaxATC",
+                "frm2552:txtPg1P2I14TaxDue"
+              ]
+            },
+            {
+              "no": "15",
+              "l": "Tax Due, ATC PT 202 (From Part V Schedule 3 Item 6)",
+              "k": [
+                "frm2552:txtPg1P2I15TaxATC",
+                "frm2552:txtPg1P2I15TaxDue"
+              ]
+            },
+            {
+              "no": "16",
+              "l": "TOTAL TAX DUE (Sum of Items 13 to 15)",
+              "k": [
+                "frm2552:txtPg1P2I16TotTaxDue"
+              ]
+            },
+            {
+              "no": "17",
+              "l": "Less: Tax Paid in Return Previously Filed, if this is an Amended Return",
+              "k": [
+                "frm2552:txtPg1P2I17TaxPaidInPrevRtrn"
+              ]
+            },
+            {
+              "no": "18",
+              "l": "Creditable Tax Withheld per BIR Form No. 2307",
+              "k": [
+                "frm2552:txtPg1P2I18CredTaxWthhld"
+              ]
+            },
+            {
+              "no": "19",
+              "l": "Total Tax Credits/Payments (Sum of Items 17 to 18)",
+              "k": [
+                "frm2552:txtPg1P2I19TotTaxCredPmnt"
+              ]
+            },
+            {
+              "no": "20",
+              "l": "Total Tax Still Due/(Overpayment) (Item 16 Less Item 19)",
+              "k": [
+                "frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt"
+              ]
+            },
+            {
+              "no": "21",
+              "l": "Surcharge",
+              "k": [
+                "frm2552:txtPg1P2I21Surcharge"
+              ]
+            },
+            {
+              "no": "22",
+              "l": "Interest",
+              "k": [
+                "frm2552:txtPg1P2I22Interest"
+              ]
+            },
+            {
+              "no": "23",
+              "l": "Compromise",
+              "k": [
+                "frm2552:txtPg1P2I23Compromise"
+              ]
+            },
+            {
+              "no": "24",
+              "l": "Total Penalties (Sum of Items 21 to 23)",
+              "k": [
+                "frm2552:txtPg1P2I24TotPenalties"
+              ]
+            },
+            {
+              "no": "25",
+              "l": "TOTAL AMOUNT PAYABLE/(OVERPAYMENT) (Sum of Items 20 and 24); if overpayment, mark one box only",
+              "k": [
+                "frm2552:txtPg1P2I25TotAmntPyable",
+                "frm2552:rdoPg1OverpaymentRefund",
+                "frm2552:rdoPg1OverpaymentTaxCredCert"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part III · Details of Payment",
+          "items": [
+            {
+              "no": "26",
+              "l": "Cash/Bank Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "27",
+              "l": "Check",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "28",
+              "l": "Tax Debit Memo",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            },
+            {
+              "no": "29",
+              "l": "Others (Specify below)",
+              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+            }
+          ]
+        },
+        {
+          "n": "Part IV · Summary of Transactions not subject to Tax",
+          "items": [
+            {
+              "no": "",
+              "l": "Transactions not subject to tax",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "Transaction Classification",
+                  "Amount Involved"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2P4I1TransClass",
+                    "frm2552:txtPg2P4I1Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I2TransClass",
+                    "frm2552:txtPg2P4I2Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I3TransClass",
+                    "frm2552:txtPg2P4I3Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I4TransClass",
+                    "frm2552:txtPg2P4I4Amount"
+                  ],
+                  [
+                    "frm2552:txtPg2P4I5TransClass",
+                    "frm2552:txtPg2P4I5Amount"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "n": "Part V · Details of Taxable Transactions",
+          "items": [
+            {
+              "no": "",
+              "l": "Schedule 1 – Sale, Barter or Exchange of Shares of Stock Listed and Traded Through the LSE",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "(a) Date",
+                  "(b) Seller",
+                  "(c) Buyer",
+                  "(d) Issuing Corporation",
+                  "(e) Number of Shares",
+                  "(f) Tax Base",
+                  "(g) Tax Rate",
+                  "(h) Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date1",
+                    "frm2552:txtPg2Pt5Sch1Seller1",
+                    "frm2552:txtPg2Pt5Sch1Buyer1",
+                    "frm2552:txtPg2Pt5Sch1Corp1",
+                    "frm2552:txtPg2Pt5Sch1NumShares1",
+                    "frm2552:txtPg2Pt5Sch1TaxBase1",
+                    "frm2552:txtPg2Pt5Sch1TaxRate1",
+                    "frm2552:txtPg2Pt5Sch1TaxDue1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date2",
+                    "frm2552:txtPg2Pt5Sch1Seller2",
+                    "frm2552:txtPg2Pt5Sch1Buyer2",
+                    "frm2552:txtPg2Pt5Sch1Corp2",
+                    "frm2552:txtPg2Pt5Sch1NumShares2",
+                    "frm2552:txtPg2Pt5Sch1TaxBase2",
+                    "frm2552:txtPg2Pt5Sch1TaxRate2",
+                    "frm2552:txtPg2Pt5Sch1TaxDue2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date3",
+                    "frm2552:txtPg2Pt5Sch1Seller3",
+                    "frm2552:txtPg2Pt5Sch1Buyer3",
+                    "frm2552:txtPg2Pt5Sch1Corp3",
+                    "frm2552:txtPg2Pt5Sch1NumShares3",
+                    "frm2552:txtPg2Pt5Sch1TaxBase3",
+                    "frm2552:txtPg2Pt5Sch1TaxRate3",
+                    "frm2552:txtPg2Pt5Sch1TaxDue3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date4",
+                    "frm2552:txtPg2Pt5Sch1Seller4",
+                    "frm2552:txtPg2Pt5Sch1Buyer4",
+                    "frm2552:txtPg2Pt5Sch1Corp4",
+                    "frm2552:txtPg2Pt5Sch1NumShares4",
+                    "frm2552:txtPg2Pt5Sch1TaxBase4",
+                    "frm2552:txtPg2Pt5Sch1TaxRate4",
+                    "frm2552:txtPg2Pt5Sch1TaxDue4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch1Date5",
+                    "frm2552:txtPg2Pt5Sch1Seller5",
+                    "frm2552:txtPg2Pt5Sch1Buyer5",
+                    "frm2552:txtPg2Pt5Sch1Corp5",
+                    "frm2552:txtPg2Pt5Sch1NumShares5",
+                    "frm2552:txtPg2Pt5Sch1TaxBase5",
+                    "frm2552:txtPg2Pt5Sch1TaxRate5",
+                    "frm2552:txtPg2Pt5Sch1TaxDue5"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "6",
+              "l": "TOTAL (Sum of Items 1h to 5h) (To Part II Item 13)",
+              "k": [
+                "frm2552:txtPg2Pt5Sch1TaxDueTot"
+              ]
+            },
+            {
+              "table": "frm2552:txtPg2Pt5Sch1_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 1 add-more subtotal (row 5 prints it as OTHERS)",
+              "k": [
+                "Pg2Pt5Sch1SubTotal"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 – Sale/Exchange of Shares of Stock through Primary Public Offering",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "(a) Date",
+                  "(b) Seller",
+                  "(c) Buyer",
+                  "(d) Issuing Corporation",
+                  "(e) Number of Shares",
+                  "(f) Tax Base",
+                  "(g) Tax Rate",
+                  "(h) Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date1",
+                    "frm2552:txtPg2Pt5Sch2Seller1",
+                    "frm2552:txtPg2Pt5Sch2Buyer1",
+                    "frm2552:txtPg2Pt5Sch2Corp1",
+                    "frm2552:txtPg2Pt5Sch2NumShares1",
+                    "frm2552:txtPg2Pt5Sch2TaxBase1",
+                    "frm2552:txtPg2Pt5Sch2TaxRate1",
+                    "frm2552:txtPg2Pt5Sch2TaxDue1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date2",
+                    "frm2552:txtPg2Pt5Sch2Seller2",
+                    "frm2552:txtPg2Pt5Sch2Buyer2",
+                    "frm2552:txtPg2Pt5Sch2Corp2",
+                    "frm2552:txtPg2Pt5Sch2NumShares2",
+                    "frm2552:txtPg2Pt5Sch2TaxBase2",
+                    "frm2552:txtPg2Pt5Sch2TaxRate2",
+                    "frm2552:txtPg2Pt5Sch2TaxDue2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date3",
+                    "frm2552:txtPg2Pt5Sch2Seller3",
+                    "frm2552:txtPg2Pt5Sch2Buyer3",
+                    "frm2552:txtPg2Pt5Sch2Corp3",
+                    "frm2552:txtPg2Pt5Sch2NumShares3",
+                    "frm2552:txtPg2Pt5Sch2TaxBase3",
+                    "frm2552:txtPg2Pt5Sch2TaxRate3",
+                    "frm2552:txtPg2Pt5Sch2TaxDue3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date4",
+                    "frm2552:txtPg2Pt5Sch2Seller4",
+                    "frm2552:txtPg2Pt5Sch2Buyer4",
+                    "frm2552:txtPg2Pt5Sch2Corp4",
+                    "frm2552:txtPg2Pt5Sch2NumShares4",
+                    "frm2552:txtPg2Pt5Sch2TaxBase4",
+                    "frm2552:txtPg2Pt5Sch2TaxRate4",
+                    "frm2552:txtPg2Pt5Sch2TaxDue4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch2Date5",
+                    "frm2552:txtPg2Pt5Sch2Seller5",
+                    "frm2552:txtPg2Pt5Sch2Buyer5",
+                    "frm2552:txtPg2Pt5Sch2Corp5",
+                    "frm2552:txtPg2Pt5Sch2NumShares5",
+                    "frm2552:txtPg2Pt5Sch2TaxBase5",
+                    "frm2552:txtPg2Pt5Sch2TaxRate5",
+                    "frm2552:txtPg2Pt5Sch2TaxDue5"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "6",
+              "l": "TOTAL (Sum of Items 1h to 5h) (To Part II Item 14)",
+              "k": [
+                "frm2552:txtPg2Pt5Sch2TaxDueTot"
+              ]
+            },
+            {
+              "table": "frm2552:txtPg2Pt5Sch2_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 2 add-more subtotal (row 5 prints it as OTHERS)",
+              "k": [
+                "Pg2Pt5Sch2SubTotal"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 – Sale/Exchange of Shares of Stock through Secondary Public Offering",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "(a) Date",
+                  "(b) Seller",
+                  "(c) Buyer",
+                  "(d) Issuing Corporation",
+                  "(e) Number of Shares",
+                  "(f) Tax Base",
+                  "(g) Tax Rate",
+                  "(h) Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date1",
+                    "frm2552:txtPg2Pt5Sch3Seller1",
+                    "frm2552:txtPg2Pt5Sch3Buyer1",
+                    "frm2552:txtPg2Pt5Sch3Corp1",
+                    "frm2552:txtPg2Pt5Sch3NumShares1",
+                    "frm2552:txtPg2Pt5Sch3TaxBase1",
+                    "frm2552:txtPg2Pt5Sch3TaxRate1",
+                    "frm2552:txtPg2Pt5Sch3TaxDue1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date2",
+                    "frm2552:txtPg2Pt5Sch3Seller2",
+                    "frm2552:txtPg2Pt5Sch3Buyer2",
+                    "frm2552:txtPg2Pt5Sch3Corp2",
+                    "frm2552:txtPg2Pt5Sch3NumShares2",
+                    "frm2552:txtPg2Pt5Sch3TaxBase2",
+                    "frm2552:txtPg2Pt5Sch3TaxRate2",
+                    "frm2552:txtPg2Pt5Sch3TaxDue2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date3",
+                    "frm2552:txtPg2Pt5Sch3Seller3",
+                    "frm2552:txtPg2Pt5Sch3Buyer3",
+                    "frm2552:txtPg2Pt5Sch3Corp3",
+                    "frm2552:txtPg2Pt5Sch3NumShares3",
+                    "frm2552:txtPg2Pt5Sch3TaxBase3",
+                    "frm2552:txtPg2Pt5Sch3TaxRate3",
+                    "frm2552:txtPg2Pt5Sch3TaxDue3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date4",
+                    "frm2552:txtPg2Pt5Sch3Seller4",
+                    "frm2552:txtPg2Pt5Sch3Buyer4",
+                    "frm2552:txtPg2Pt5Sch3Corp4",
+                    "frm2552:txtPg2Pt5Sch3NumShares4",
+                    "frm2552:txtPg2Pt5Sch3TaxBase4",
+                    "frm2552:txtPg2Pt5Sch3TaxRate4",
+                    "frm2552:txtPg2Pt5Sch3TaxDue4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt5Sch3Date5",
+                    "frm2552:txtPg2Pt5Sch3Seller5",
+                    "frm2552:txtPg2Pt5Sch3Buyer5",
+                    "frm2552:txtPg2Pt5Sch3Corp5",
+                    "frm2552:txtPg2Pt5Sch3NumShares5",
+                    "frm2552:txtPg2Pt5Sch3TaxBase5",
+                    "frm2552:txtPg2Pt5Sch3TaxRate5",
+                    "frm2552:txtPg2Pt5Sch3TaxDue5"
+                  ]
+                ]
+              }
+            },
+            {
+              "no": "6",
+              "l": "TOTAL (Sum of Items 1h to 5h) (To Part II Item 15)",
+              "k": [
+                "frm2552:txtPg2Pt5Sch3TaxDueTot"
+              ]
+            },
+            {
+              "table": "frm2552:txtPg2Pt5Sch3_1Col1"
+            },
+            {
+              "no": "",
+              "l": "Schedule 3 add-more subtotal (row 5 prints it as OTHERS)",
+              "k": [
+                "Pg2Pt5Sch3SubTotal"
+              ]
+            }
+          ]
+        },
+        {
+          "n": "Part VI · Details of Transactions not Subject to Percentage Tax",
+          "items": [
+            {
+              "no": "",
+              "l": "Transactions not subject to percentage tax",
+              "grid": {
+                "start": 1,
+                "cols": [
+                  "Date (MM/DD/YYYY)",
+                  "Seller",
+                  "Buyer",
+                  "Issuing Corporation",
+                  "Number of Shares"
+                ],
+                "keys": [
+                  [
+                    "frm2552:txtPg2Pt6Date1",
+                    "frm2552:txtPg2Pt6Seller1",
+                    "frm2552:txtPg2Pt6Buyer1",
+                    "frm2552:txtPg2Pt6Corp1",
+                    "frm2552:txtPg2Pt6NumShares1"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date2",
+                    "frm2552:txtPg2Pt6Seller2",
+                    "frm2552:txtPg2Pt6Buyer2",
+                    "frm2552:txtPg2Pt6Corp2",
+                    "frm2552:txtPg2Pt6NumShares2"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date3",
+                    "frm2552:txtPg2Pt6Seller3",
+                    "frm2552:txtPg2Pt6Buyer3",
+                    "frm2552:txtPg2Pt6Corp3",
+                    "frm2552:txtPg2Pt6NumShares3"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date4",
+                    "frm2552:txtPg2Pt6Seller4",
+                    "frm2552:txtPg2Pt6Buyer4",
+                    "frm2552:txtPg2Pt6Corp4",
+                    "frm2552:txtPg2Pt6NumShares4"
+                  ],
+                  [
+                    "frm2552:txtPg2Pt6Date5",
+                    "frm2552:txtPg2Pt6Seller5",
+                    "frm2552:txtPg2Pt6Buyer5",
+                    "frm2552:txtPg2Pt6Corp5",
+                    "frm2552:txtPg2Pt6NumShares5"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "n": "Not on the printed sheet",
+          "items": [
+            {
+              "no": "",
+              "l": "Line of Business (the 2018 sheet has no line-of-business item)",
+              "k": [
+                "frm2552:txtLOB"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "2553": {

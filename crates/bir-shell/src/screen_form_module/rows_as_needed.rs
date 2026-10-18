@@ -19,6 +19,17 @@
 //!   "Exempt or Others" specification; 1706's items 8 and 9 (an individual
 //!   seller at item 3), relief list (item 11 Yes) and Schedule 2
 //!   specification. A blank (clearing) always goes through.
+//! - 2552 item 11 picks the Part V schedule, and all three schedules keep
+//!   their rows in the one draft list (form_2552.rs `schedule`): the
+//!   binding alone would move the rows typed under one schedule into the
+//!   next. The host answers it with `Form2552Draft::set_transaction`, which
+//!   clears them as the official `kindOfTransaction` does, and reports the
+//!   removal ([`removes`]) so the page asks first and offers Undo.
+//! - 2552 boxes the corpus marks computed or the probe could not bind,
+//!   which the filer types: Part IV rows 2-5's amounts
+//!   (`exempt_transactions`), 12B (`outstanding_shares`) and Part V row 5
+//!   while the schedule is not folded (row 5 reads OTHERS once the add-more
+//!   rows hold rows 5 onward; they are edited there).
 //!
 //! Field keys, the official XML and the print map are the forms' own and
 //! unchanged.
@@ -27,6 +38,9 @@ use bir_core::forms::agent::AgentFormKind;
 use bir_core::forms::form_0605::Form0605Draft;
 use bir_core::forms::form_1606::Form1606Draft;
 use bir_core::forms::form_1706::Form1706Draft;
+use bir_core::forms::form_2552::{
+    FORM_2552_ROWS, Form2552Draft, Form2552ExemptRow, Form2552ShareRow, Form2552Transaction,
+};
 use serde_json::{Map, Value};
 
 use super::rows_1700::with_tin_part;
@@ -42,7 +56,37 @@ pub(super) enum Cell {
     BuyerTin1706(usize),
     /// A box the official page opens only on another answer.
     Gate(Gate),
+    /// 2552 item 11: Part V schedule 1-3.
+    Transaction2552(u8),
+    /// 2552 Part IV row 2-5's amount (row index 1-4).
+    PartIvAmount2552(usize),
+    /// 2552 item 12B.
+    OutstandingShares2552,
+    /// 2552 Part V row 5 of schedule 1-3.
+    Row5_2552(u8, Row5),
 }
+
+/// A column of 2552's Part V row 5.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Row5 {
+    Date,
+    Seller,
+    Buyer,
+    Corp,
+    NumShares,
+    TaxBase,
+    TaxRate,
+}
+
+const ROW5_COLUMNS: [(&str, Row5); 7] = [
+    ("Date", Row5::Date),
+    ("Seller", Row5::Seller),
+    ("Buyer", Row5::Buyer),
+    ("Corp", Row5::Corp),
+    ("NumShares", Row5::NumShares),
+    ("TaxBase", Row5::TaxBase),
+    ("TaxRate", Row5::TaxRate),
+];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Gate {
@@ -86,8 +130,36 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
             "frm1706:txtOthers21" => Some(Cell::Gate(Gate::Transaction1706)),
             _ => tin_part(key.strip_prefix("frm1706:txtTINB")?).map(Cell::BuyerTin1706),
         },
+        "2552" => cell_2552(key),
         _ => None,
     }
+}
+
+fn cell_2552(key: &str) -> Option<Cell> {
+    let rest = key.strip_prefix("frm2552:")?;
+    match rest {
+        "rdoPg1I11TransactionLSE" => return Some(Cell::Transaction2552(1)),
+        "rdoPg1I11TransactionPrimary" => return Some(Cell::Transaction2552(2)),
+        "rdoPg1I11TransactionSecondary" => return Some(Cell::Transaction2552(3)),
+        "txtPg1Pt1I12TotShare" => return Some(Cell::OutstandingShares2552),
+        _ => {}
+    }
+    if let Some(n) = rest
+        .strip_prefix("txtPg2P4I")
+        .and_then(|r| r.strip_suffix("Amount"))
+        .and_then(|n| n.parse::<usize>().ok())
+    {
+        return (2..=FORM_2552_ROWS)
+            .contains(&n)
+            .then_some(Cell::PartIvAmount2552(n - 1));
+    }
+    let rest = rest.strip_prefix("txtPg2Pt5Sch")?;
+    let schedule = rest.chars().next()?.to_digit(10)? as u8;
+    let column = rest[1..].strip_suffix('5')?;
+    let (_, col) = ROW5_COLUMNS.iter().find(|(name, _)| *name == column)?;
+    // Schedule 1's rate is the fixed 6/10 of 1%.
+    ((1..=3).contains(&schedule) && !(schedule == 1 && *col == Row5::TaxRate))
+        .then_some(Cell::Row5_2552(schedule, *col))
 }
 
 /// Whether the host writes `key` itself (its "cannot be filled here" lock
@@ -102,6 +174,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
     match cell(kind, key)? {
         Cell::SellerTin1606(part) | Cell::BuyerTin1706(part) => Some(1 + part),
         Cell::Gate(_) => Some(1),
+        // Item 11 picks the schedule before its rows are typed.
+        Cell::Transaction2552(_) => Some(0),
+        Cell::PartIvAmount2552(_) | Cell::OutstandingShares2552 | Cell::Row5_2552(..) => Some(1),
         Cell::Quarter0605(_) => None,
     }
 }
@@ -145,6 +220,10 @@ pub(super) fn fill(
         Cell::Quarter0605(quarter) => fill_0605_quarter(draft, quarter, value),
         Cell::SellerTin1606(part) => fill_1606_seller_tin(draft, part, value),
         Cell::BuyerTin1706(part) => fill_1706_buyer_tin(draft, part, value),
+        Cell::Transaction2552(schedule) => fill_2552_transaction(draft, schedule, value),
+        Cell::PartIvAmount2552(row) => fill_2552_part_iv(draft, row, value),
+        Cell::OutstandingShares2552 => fill_2552_outstanding(draft, value),
+        Cell::Row5_2552(_, column) => fill_2552_row5(draft, column, value),
         Cell::Gate(gate) => {
             if blank(value) || open(gate, draft) {
                 ordinary(draft)
@@ -213,6 +292,164 @@ fn fill_1706_buyer_tin(draft: &mut Value, part: usize, value: &Value) -> Result<
     store(draft, &form)
 }
 
+/// A typed amount: blank is zero.
+fn amount(value: &Value) -> Result<f64, String> {
+    let shown = text(value);
+    if shown.is_empty() {
+        return Ok(0.0);
+    }
+    bir_core::forms::agent::parse_amount(&shown)
+        .filter(|amount| *amount >= 0.0)
+        .ok_or_else(|| format!("`{shown}` is not an amount."))
+}
+
+/// 2552 item 11: the official `kindOfTransaction` clears the Part V rows
+/// when the schedule changes (`Form2552Draft::set_transaction`); unticking
+/// a box answers nothing (a radio: another box is ticked instead).
+#[inline(never)]
+fn fill_2552_transaction(draft: &mut Value, schedule: u8, value: &Value) -> Result<(), String> {
+    if !ticked(value) {
+        return Ok(());
+    }
+    let mut form: Form2552Draft = typed(draft)?;
+    form.set_transaction(match schedule {
+        1 => Form2552Transaction::LocalStockExchange,
+        2 => Form2552Transaction::PrimaryOffering,
+        _ => Form2552Transaction::SecondaryOffering,
+    });
+    store(draft, &form)
+}
+
+#[inline(never)]
+fn fill_2552_part_iv(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+    let amount = amount(value)?;
+    let mut form: Form2552Draft = typed(draft)?;
+    if amount == 0.0 && form.exempt_transactions.len() <= row {
+        return Ok(());
+    }
+    if form.exempt_transactions.len() <= row {
+        form.exempt_transactions
+            .resize(row + 1, Form2552ExemptRow::default());
+    }
+    form.exempt_transactions[row].amount = amount;
+    while form
+        .exempt_transactions
+        .last()
+        .is_some_and(|last| *last == Form2552ExemptRow::default())
+    {
+        form.exempt_transactions.pop();
+    }
+    form.recompute();
+    store(draft, &form)
+}
+
+#[inline(never)]
+fn fill_2552_outstanding(draft: &mut Value, value: &Value) -> Result<(), String> {
+    let mut form: Form2552Draft = typed(draft)?;
+    form.outstanding_shares = text(value);
+    form.recompute();
+    store(draft, &form)
+}
+
+/// What a 2552 row 5 box says once the add-more rows hold row 5 onward.
+pub(super) const ROW5_FOLDED: &str = "Row 5 reads OTHERS while the add-more rows hold row 5 onward: change it in the add-more table.";
+
+#[inline(never)]
+fn fill_2552_row5(draft: &mut Value, column: Row5, value: &Value) -> Result<(), String> {
+    let mut form: Form2552Draft = typed(draft)?;
+    if form.schedule_is_folded() {
+        return Err(ROW5_FOLDED.to_string());
+    }
+    let at = FORM_2552_ROWS - 1;
+    let shown = text(value);
+    let number = matches!(column, Row5::NumShares | Row5::TaxBase | Row5::TaxRate);
+    let filling = if number {
+        amount(value)? != 0.0
+    } else {
+        !shown.is_empty()
+    };
+    if form.schedule.len() <= at {
+        if !filling {
+            return Ok(());
+        }
+        form.schedule.resize(at + 1, Form2552ShareRow::default());
+    }
+    let row = &mut form.schedule[at];
+    match column {
+        Row5::Date => row.date = shown,
+        Row5::Seller => row.seller = shown,
+        Row5::Buyer => row.buyer = shown,
+        Row5::Corp => row.issuing_corporation = shown,
+        Row5::NumShares => row.number_of_shares = amount(value)?,
+        Row5::TaxBase => row.tax_base = amount(value)?,
+        Row5::TaxRate => row.tax_rate = amount(value)?,
+    }
+    // A cleared last row goes, as the official Delete does.
+    let lse = form.transaction == Form2552Transaction::LocalStockExchange;
+    while form.schedule.last().is_some_and(|last| {
+        last.date.is_empty()
+            && last.seller.is_empty()
+            && last.buyer.is_empty()
+            && last.issuing_corporation.is_empty()
+            && last.number_of_shares == 0.0
+            && last.tax_base == 0.0
+            && (last.tax_rate == 0.0 || lse)
+    }) {
+        form.schedule.pop();
+    }
+    form.recompute();
+    store(draft, &form)
+}
+
+/// The boxes this module shuts, and why, over the probed locks: 2552's
+/// add-more tax due (h) cells and Schedule 1's fixed rate (g), which
+/// form_2552.rs `recompute` computes (the probe saw them change with the
+/// item 11 answer and called them derived), and the add-more subtotals.
+pub(super) fn relock(kind: AgentFormKind, locks: &mut Map<String, Value>) {
+    if kind.form_code() != "2552" {
+        return;
+    }
+    let computed = Value::from("computed by BIR's own formulas");
+    for n in 1..=9 {
+        for schedule in 1..=3 {
+            locks.insert(
+                format!("frm2552:txtPg2Pt5Sch{schedule}_{n}Col8"),
+                computed.clone(),
+            );
+        }
+        locks.insert(format!("frm2552:txtPg2Pt5Sch1_{n}Col7"), computed.clone());
+    }
+    for schedule in 1..=3 {
+        locks.insert(format!("Pg2Pt5Sch{schedule}SubTotal"), computed.clone());
+    }
+}
+
+/// Rule 4 for a schedule's date boxes: 2552's and 1707's tables with a date
+/// column carry `calendar: true`, so each of their date boxes gets its own
+/// calendar on the page (form_page.js `scheduleTable`, PR 4's hunk for
+/// 2000, taken unchanged). Other forms' tables are their own groups'.
+pub(super) fn mark_calendar_tables(form: &mut Value, code: &str) {
+    if !matches!(code, "2552" | "1707") {
+        return;
+    }
+    let items = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
+    for item in items {
+        let dated = item["cols"]
+            .as_array()
+            .is_some_and(|cols| cols.iter().any(|col| col["t"] == "date"));
+        if dated {
+            item["calendar"] = Value::Bool(true);
+        }
+    }
+}
+
+/// What Schedule 1's add-more rate shows while its row is blank.
+pub(super) const LSE_RATE_WAITS: &str = "Schedule 1's rate is 6/10 of 1%.";
+
 /// What each box the form fills from another box waits for while it shows
 /// blank (the page shows it in the box).
 pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
@@ -251,6 +488,14 @@ pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
         "1706" => {
             for (key, why) in fmv_boxes("frm1706:opt29") {
                 out.insert(key, Value::from(why));
+            }
+        }
+        "2552" => {
+            for n in 1..=9 {
+                out.insert(
+                    format!("frm2552:txtPg2Pt5Sch1_{n}Col7"),
+                    Value::from(LSE_RATE_WAITS),
+                );
             }
         }
         _ => {}
@@ -550,6 +795,48 @@ pub(super) fn removes(
     after: &Value,
     edits: &Map<String, Value>,
 ) -> Option<Value> {
-    let _ = (kind, before, after, edits);
-    None
+    if kind.form_code() != "2552"
+        || !edits
+            .keys()
+            .any(|key| key.starts_with("frm2552:rdoPg1I11Transaction"))
+    {
+        return None;
+    }
+    let typed_rows = |draft: &Value| {
+        draft["schedule"].as_array().map_or(0, |rows| {
+            rows.iter()
+                .filter(|row| {
+                    row.as_object().is_some_and(|fields| {
+                        fields.iter().any(|(field, value)| match value {
+                            Value::String(text) => !text.trim().is_empty(),
+                            // The rate and tax due follow the schedule.
+                            Value::Number(n) => {
+                                !matches!(field.as_str(), "tax_rate" | "tax_due")
+                                    && n.as_f64().is_some_and(|n| n != 0.0)
+                            }
+                            _ => false,
+                        })
+                    })
+                })
+                .count()
+        })
+    };
+    let (had, has) = (typed_rows(before), typed_rows(after));
+    if had == 0 || has >= had {
+        return None;
+    }
+    let schedule = match before["transaction"].as_str() {
+        Some("local_stock_exchange") => "Schedule 1",
+        Some("primary_offering") => "Schedule 2",
+        _ => "Schedule 3",
+    };
+    let rows = had - has;
+    let plural = if rows == 1 { "" } else { "s" };
+    Some(serde_json::json!({
+        "message": format!(
+            "Changing item 11 removes the {rows} Part V {schedule} row{plural} you typed. Continue?"
+        ),
+        "done": format!("Removed {rows} {schedule} row{plural}"),
+        "rows": rows,
+    }))
 }

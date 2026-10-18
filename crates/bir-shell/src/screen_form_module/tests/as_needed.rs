@@ -14,6 +14,7 @@ const FORMS: &[(&str, &str)] = &[
     ("1606", "1606-2018"),
     ("1706", "1706-2018"),
     ("2000OT", "2000-ot-2018"),
+    ("2552", "2552-2018"),
 ];
 
 fn writer_cells(slug: &str) -> Value {
@@ -943,4 +944,283 @@ fn pr9_messages_name_the_printed_item_numbers() {
         "{shown:?}"
     );
     assert!(!shown.iter().any(|m| official("1706", m)), "{shown:?}");
+}
+
+// ------------------------------------------------------------------ 2552
+
+/// On every PR 9 form, a tick box labelled Yes or No writes what it says:
+/// its binding's "true" option sets a flag to true for Yes and false for
+/// No (2552's item 2 boxes showed the other answer before PR 9). Oracle:
+/// the probed bindings (crates/bir-core/data/agent-forms).
+#[test]
+fn pr9_yes_and_no_boxes_write_what_they_say() {
+    let mut checked = 0;
+    for &(code, _) in FORMS {
+        let def = kind_of(code).unwrap().definition();
+        for d in drawn(code) {
+            let want = match d.label.as_str() {
+                "Yes" => true,
+                "No" => false,
+                _ => continue,
+            };
+            let Some(Binding::Choice { options }) = def.bindings.get(&d.key).map(|b| &b.binding)
+            else {
+                continue;
+            };
+            let sets: Vec<&Value> = options
+                .iter()
+                .filter(|o| o.value == "true")
+                .flat_map(|o| o.set.values())
+                .filter(|v| v.is_boolean())
+                .collect();
+            if sets.is_empty() {
+                continue;
+            }
+            assert!(
+                sets.iter().all(|v| **v == Value::Bool(want)),
+                "{code} {} reads {} but writes {sets:?}",
+                d.key,
+                d.label
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked >= 6, "{checked}");
+    assert_eq!(placed("2552", "frm2552:rdoPg1I2AmendedYes").label, "Yes");
+    assert_eq!(placed("2552", "frm2552:rdoPg1I2AmendedNo").label, "No");
+}
+
+/// 2552 R3.2, R4.0, R7.0, manual-0, manual-1, manual-4: page 2 is its
+/// printed parts. Part IV is one table of its five rows; Part V Schedules
+/// 1-3 are tables of their eight printed columns, rows 1-5 numbered from
+/// 1, each with its item 6 total and its add-more rows; Part VI a table of
+/// its five rows. Number of Shares columns are whole numbers, each table
+/// with a date column has its calendar, and Part III shows items 26-29
+/// with a note (the official program keeps them disabled).
+#[test]
+fn pr9_2552_page_2_is_its_printed_parts() {
+    let form = schema_entry("2552").unwrap();
+    let parts: Vec<&Value> = form["parts"].as_array().unwrap().iter().collect();
+    let part = |name: &str| {
+        *parts
+            .iter()
+            .find(|p| p["n"] == name)
+            .unwrap_or_else(|| panic!("2552 has {name}"))
+    };
+    let tables = |name: &str| -> Vec<Value> {
+        part(name)["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|it| it["rows"].is_number())
+            .cloned()
+            .collect()
+    };
+    let iv = tables("Part IV · Summary of Transactions not subject to Tax");
+    assert_eq!(iv.len(), 1);
+    assert_eq!(iv[0]["rows"], 5);
+    assert_eq!(iv[0]["cols"][0]["l"], "Transaction Classification");
+    assert_eq!(iv[0]["cols"][1]["l"], "Amount Involved");
+    let v = tables("Part V · Details of Taxable Transactions");
+    assert_eq!(v.len(), 6, "three schedules and their add-more rows");
+    for (n, table) in v.iter().step_by(2).enumerate() {
+        assert_eq!(table["rows"], 5);
+        assert_eq!(table["start"], 1);
+        assert_eq!(table["cols"].as_array().unwrap().len(), 8);
+        assert_eq!(
+            table["keys"][0][0],
+            format!("frm2552:txtPg2Pt5Sch{}Date1", n + 1)
+        );
+        assert_eq!(table["cols"][0]["t"], "date");
+        assert_eq!(table["cols"][4]["t"], "int", "Number of Shares");
+        assert_eq!(table["calendar"], true);
+        for (c, letter) in ["a", "b", "c", "d", "e", "f", "g", "h"].iter().enumerate() {
+            assert!(
+                table["cols"][c]["l"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with(&format!("({letter})"))
+            );
+        }
+    }
+    let vi = tables("Part VI · Details of Transactions not Subject to Percentage Tax");
+    assert_eq!(vi[0]["rows"], 5);
+    assert_eq!(vi[0]["calendar"], true);
+    assert_eq!(vi[0]["cols"][4]["t"], "int");
+    let sheet = sheet_text("2552-2018");
+    for name in [
+        "Part IV – Summary of Transactions not subject to Tax",
+        "Part V – Details of Taxable Transactions",
+        "Part VI – Details of Transactions not Subject to Percentage Tax",
+        "Part III – Details of Payment",
+    ] {
+        assert!(sheet.contains(name), "{name}");
+    }
+    let iii: Vec<String> = part("Part III · Details of Payment")["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|it| {
+            assert!(it["note"].as_str().is_some_and(|n| n.starts_with("No box")));
+            it["no"].as_str().unwrap().to_string()
+        })
+        .collect();
+    assert_eq!(iii, ["26", "27", "28", "29"]);
+    let inventory: Value = serde_json::from_str(
+        &std::fs::read_to_string(format!(
+            "{}/../../rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let controls = inventory["controls"]
+        .as_array()
+        .or(inventory["static_controls"].as_array())
+        .unwrap();
+    let part_iii: Vec<&Value> = controls
+        .iter()
+        .filter(|c| c["id"].as_str().is_some_and(|id| id.contains("Pt3")))
+        .collect();
+    assert!(!part_iii.is_empty());
+    assert!(part_iii.iter().all(|c| c["disabled"] == true));
+}
+
+/// 2552 manual-0: Part IV rows 2-5's amounts, which the corpus marks
+/// computed, are typed by the filer into their row (form_2552.rs
+/// exempt_transactions) and print in the row's Amount Involved cell.
+#[test]
+fn pr9_2552_part_iv_rows_take_their_amounts() {
+    setup();
+    let opened = open("2552", 1);
+    for n in 2..=5 {
+        let key = format!("frm2552:txtPg2P4I{n}Amount");
+        assert!(opened["locks"][&key].is_null(), "{key}");
+        assert_eq!(
+            printed_caption("2552-2018", &key).unwrap(),
+            format!("Part IV row {n} Amount Involved")
+        );
+    }
+    let filled = fill(
+        "2552",
+        &opened["draft"],
+        json!({
+            "frm2552:txtPg2P4I3TransClass": "Gift",
+            "frm2552:txtPg2P4I3Amount": "1500",
+        }),
+    );
+    assert!(filled["rejected"].as_object().unwrap().is_empty());
+    assert_eq!(filled["draft"]["exempt_transactions"][2]["amount"], 1500.0);
+    assert_eq!(
+        printed("2552", &filled["draft"])["frm2552:txtPg2P4I3Amount"],
+        "1,500.00"
+    );
+    let cleared = fill(
+        "2552",
+        &filled["draft"],
+        json!({"frm2552:txtPg2P4I3TransClass": "", "frm2552:txtPg2P4I3Amount": ""}),
+    );
+    assert_eq!(cleared["draft"]["exempt_transactions"], json!([]));
+}
+
+/// 2552 manual-3: 12B is the filer's whole number of shares (form_2552.rs
+/// outstanding_shares), typed for an initial public offering and printed
+/// in its cell; 12A alike.
+#[test]
+fn pr9_2552_item_12_takes_whole_numbers_of_shares() {
+    setup();
+    assert_eq!(placed("2552", "frm2552:txtPg1Pt1I12TotShare").t, "int");
+    assert_eq!(placed("2552", "frm2552:txtPg1Pt1I12NumOfShare").t, "int");
+    let opened = open("2552", 1);
+    assert!(opened["locks"]["frm2552:txtPg1Pt1I12TotShare"].is_null());
+    let ipo = fill(
+        "2552",
+        &opened["draft"],
+        pick(
+            &[
+                "frm2552:rdoPg1I11TransactionLSE",
+                "frm2552:rdoPg1I11TransactionPrimary",
+                "frm2552:rdoPg1I11TransactionSecondary",
+            ],
+            "frm2552:rdoPg1I11TransactionPrimary",
+        ),
+    );
+    let typed = fill(
+        "2552",
+        &ipo["draft"],
+        json!({"frm2552:txtPg1Pt1I12TotShare": "250000", "frm2552:txtPg1Pt1I12NumOfShare": "1000"}),
+    );
+    assert_eq!(typed["draft"]["outstanding_shares"], "250000");
+    let map = printed("2552", &typed["draft"]);
+    assert_eq!(map["frm2552:txtPg1Pt1I12TotShare"], "250000");
+    assert_eq!(map["frm2552:txtPg1Pt1I12NumOfShare"], "1000");
+}
+
+const ITEM_11_2552: [&str; 3] = [
+    "frm2552:rdoPg1I11TransactionLSE",
+    "frm2552:rdoPg1I11TransactionPrimary",
+    "frm2552:rdoPg1I11TransactionSecondary",
+];
+
+/// 2552 item 11 and Part V row 5: changing item 11 clears the rows typed
+/// under the old schedule, as the official kindOfTransaction does, so they
+/// never move into the new schedule's table, and the page asks first
+/// (`removes`) with Undo. Row 5 is typed like rows 1-4 until the add-more
+/// rows hold row 5 onward; then it reads OTHERS and says where to edit.
+#[test]
+fn pr9_2552_item_11_asks_before_it_clears_part_v_and_row_5_fills() {
+    setup();
+    let opened = open("2552", 1);
+    let lse = fill(
+        "2552",
+        &opened["draft"],
+        pick(&ITEM_11_2552, ITEM_11_2552[0]),
+    );
+    assert!(lse["removes"].is_null());
+    let row5 = fill(
+        "2552",
+        &lse["draft"],
+        json!({
+            "frm2552:txtPg2Pt5Sch1Seller5": "A Seller",
+            "frm2552:txtPg2Pt5Sch1TaxBase5": "10000",
+        }),
+    );
+    assert!(
+        row5["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        row5["rejected"]
+    );
+    assert_eq!(row5["draft"]["schedule"][4]["seller"], "A Seller");
+    assert_eq!(row5["values"]["frm2552:txtPg2Pt5Sch1Seller5"], "A SELLER");
+    assert_eq!(row5["values"]["frm2552:txtPg2Pt5Sch1TaxDue5"], "60.00");
+    // Item 11 to Primary: asks first, and the typed rows go.
+    let primary = fill("2552", &row5["draft"], pick(&ITEM_11_2552, ITEM_11_2552[1]));
+    assert_eq!(primary["removes"]["rows"], 1);
+    assert!(
+        primary["removes"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Schedule 1")
+    );
+    assert_eq!(primary["draft"]["schedule"], json!([]));
+    assert_eq!(primary["values"]["frm2552:txtPg2Pt5Sch2Seller5"], "");
+    // The same answer again removes nothing.
+    let again = fill("2552", &row5["draft"], pick(&ITEM_11_2552, ITEM_11_2552[0]));
+    assert!(again["removes"].is_null());
+    assert_eq!(again["draft"]["schedule"][4]["seller"], "A Seller");
+    // Folded: six rows, row 5 reads OTHERS and refuses with where to edit.
+    let mut typed: bir_core::forms::form_2552::Form2552Draft =
+        serde_json::from_value(row5["draft"].clone()).unwrap();
+    typed.schedule.push(typed.schedule[4].clone());
+    let folded = serde_json::to_value(&typed).unwrap();
+    let refused = fill(
+        "2552",
+        &folded,
+        json!({"frm2552:txtPg2Pt5Sch1Seller5": "Other"}),
+    );
+    assert_eq!(
+        refused["rejected"]["frm2552:txtPg2Pt5Sch1Seller5"],
+        rows_as_needed::ROW5_FOLDED
+    );
+    assert_eq!(refused["values"]["frm2552:txtPg2Pt5Sch1Seller5"], "OTHERS");
 }
