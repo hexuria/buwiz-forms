@@ -208,7 +208,7 @@ fn branch_fields(branch: &BranchRef) -> serde_json::Map<String, Value> {
 /// the taxable years that can fall in that window, with the return's status.
 fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Value>, HostError> {
     use chrono::Datelike;
-    let overrides = db.get_deadline_overrides();
+    let global = db.get_deadline_overrides();
     let working = bir_core::official_holidays::business_day_calendar();
     // An annual return for year Y is due in Y+1, so the window's first year
     // minus one is the earliest taxable year that can have a deadline in it.
@@ -216,10 +216,26 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
     let last_year = to.year();
     let mut rows = Vec::new();
     for branch in branches(db)? {
+        // The profile's own deadline overrides apply on top of the stored
+        // global ones, as the Google Calendar sync and the desktop
+        // dashboard apply them.
+        let profile = db.get_profile(&branch.tin).map_err(error)?;
         // As-needed returns of any taxable year whose due date falls in the
         // window (an estate's year-later deadline, a return filed under
         // another year).
-        rows.extend(as_needed_rows(db, &branch, &overrides, &working, from, to)?);
+        let event_overrides = match &profile {
+            Some(profile) => bir_core::forms::event_trigger::event_overrides(db, profile, &global)
+                .map_err(error)?,
+            None => global.clone(),
+        };
+        rows.extend(as_needed_rows(
+            db,
+            &branch,
+            &event_overrides,
+            &working,
+            from,
+            to,
+        )?);
         for year in first_year..=last_year {
             let Ok(year16) = u16::try_from(year) else {
                 continue;
@@ -233,6 +249,12 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             let drafts = db
                 .list_draft_summaries(&branch.tin, year16)
                 .map_err(error)?;
+            let mut overrides = global.clone();
+            if let Some(profile) = &profile {
+                overrides.extend(bir_core::integration::profile_deadline_overrides_for_year(
+                    profile, year16,
+                ));
+            }
             for deadline in DeadlineResolver::deadlines_for_forms(&codes, year, &overrides) {
                 let Some(due) = deadline.final_deadline_date() else {
                     continue;
@@ -782,6 +804,102 @@ mod tests {
         assert_eq!(rows[0]["due_date"], "2027-01-11");
     }
 
+    /// Round 2, item 5: a deadline override on the taxpayer's own profile
+    /// moves Home's rows exactly as it moves the Google Calendar events:
+    /// the 1600WP withholding of October 5 (due Monday October 26) and
+    /// 1601C September (due Monday October 12), both moved by the profile.
+    #[test]
+    fn home_and_the_calendar_sync_agree_on_a_profile_overridden_date() {
+        setup_as_needed();
+        let profile = with_database(|db| {
+            let mut profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut version = bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
+            version.id = "user-version".into();
+            version.source = bir_core::profile::TaxProfileVersionSource::UserOverride;
+            version.status = bir_core::profile::TaxProfileVersionStatus::NeedsReview;
+            let moved = |id: &str, code: &str, from: (u32, u32), to: (u32, u32)| {
+                bir_core::profile::ProfileDeadlineOverride {
+                    id: id.into(),
+                    title: "Profile extension".into(),
+                    source_reference: "RMC test".into(),
+                    affected_form_codes: vec![code.into()],
+                    original_deadline: NaiveDate::from_ymd_opt(2026, from.0, from.1).unwrap(),
+                    adjusted_deadline: NaiveDate::from_ymd_opt(2026, to.0, to.1).unwrap(),
+                    reason: None,
+                }
+            };
+            version.deadline_overrides = vec![
+                moved("wp", "1600WP", (10, 26), (11, 3)),
+                moved("c", "1601C", (10, 12), (10, 20)),
+            ];
+            profile.profile_versions = vec![version];
+            // Confirmed as the app confirms one: with a reviewed plan.
+            let plan = profile
+                .profile_version_confirmation_plan(
+                    "user-version",
+                    NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+                )
+                .unwrap();
+            assert!(profile.apply_profile_version_confirmation_plan(&plan));
+            Ok(db
+                .save_profile_with_confirmation_plan(profile, &plan)
+                .unwrap())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-10-01", "2026-11-30"])).unwrap());
+        let home = |code: &str, label_start: &str| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| {
+                    r["form_code"] == code
+                        && r["period_label"].as_str().unwrap().starts_with(label_start)
+                })
+                .unwrap_or_else(|| panic!("{code} {label_start}"))["due_date"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let (events, _) = with_database(|db| {
+            Ok(bir_core::google_calendar::build_desired_events(db, &profile).unwrap())
+        })
+        .unwrap();
+        let synced = |key_part: &str| {
+            events
+                .iter()
+                .find(|event| event.obligation_key.contains(key_part))
+                .unwrap_or_else(|| panic!("{key_part}"))
+                .body["start"]["date"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(home("1600WP", "Withholding"), "2026-11-03");
+        assert_eq!(synced(":1600WP:return-"), "2026-11-03");
+        assert_eq!(home("1601C", "September"), "2026-10-20");
+        assert_eq!(synced("2026:1601C:m09"), "2026-10-20");
+    }
+
+    /// The field names `interface <name>` declares in DECLARATIONS, sorted.
+    fn declared_fields(name: &str) -> Vec<&'static str> {
+        let start = DECLARATIONS
+            .find(&format!("export interface {name} {{"))
+            .unwrap_or_else(|| panic!("interface {name}"));
+        let body = &DECLARATIONS[start..];
+        let body = &body[body.find('{').unwrap() + 1..body.find('}').unwrap()];
+        let mut fields: Vec<&str> = body
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("/**") && !line.starts_with('*'))
+            .filter_map(|line| {
+                line.split_once(':')
+                    .map(|(field, _)| field.trim_end_matches('?'))
+            })
+            .collect();
+        fields.sort_unstable();
+        fields
+    }
+
     fn keys(value: &Value) -> Vec<&str> {
         let mut keys: Vec<&str> = value
             .as_object()
@@ -872,15 +990,13 @@ mod tests {
             keys(&with_undated["undated"][0]),
             ["draft_id", "period", "return_key", "status", "updated_at"]
         );
-        // And the declarations name the same fields.
-        for field in [
-            "trigger: string | null;",
-            "due_rule: string;",
-            "undated: AsNeededReturn[];",
-            "updated_at: string;",
-        ] {
-            assert!(DECLARATIONS.contains(field), "{field}");
-        }
+        // And each TypeScript interface declares exactly those fields.
+        assert_eq!(declared_fields("DeadlineRow"), keys(dated));
+        assert_eq!(declared_fields("AsNeededForm"), keys(with_undated));
+        assert_eq!(
+            declared_fields("AsNeededReturn"),
+            keys(&with_undated["undated"][0])
+        );
     }
 
     #[test]

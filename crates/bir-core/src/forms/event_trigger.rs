@@ -16,9 +16,16 @@
 //! ([`PREFILLED_TRIGGER_FORMS`]) a Draft counts only once the page recorded
 //! that the filer wrote the date (`trigger_date_entered`, a flag on the
 //! flattened `SubmissionLifecycle`, absent and so byte-identical on every
-//! draft saved before it existed); a return that has left Draft was filed
-//! with its date, so it counts. The other as-needed forms start with the
-//! date blank (0, empty or `None`), so any date they hold was typed.
+//! draft saved before it existed). A return that left Draft files the date
+//! it holds, typed or not, so it is dated by that date; a cancelled queue
+//! makes it a Draft again, and without the flag it is undated again. The
+//! other as-needed forms start with the date blank (0, empty or `None`), so
+//! any date they hold was typed.
+//!
+//! No migration: a Draft of a pre-filled form saved by the first D8c build
+//! (which dated any held date) and never re-typed has no flag and is now
+//! undated. That build was never released (its branch chain is unmerged),
+//! so no stored return depends on the old reading.
 
 use chrono::NaiveDate;
 use serde_json::Value;
@@ -48,22 +55,15 @@ fn date_from(draft: &Value, year: &str, month: &str, day: &str) -> Option<NaiveD
     NaiveDate::from_ymd_opt(year, number(draft, month)?, number(draft, day)?)
 }
 
-/// 2000OT's Item 1 as stored: the page writes `MM/DD/YYYY`; the desktop
-/// view stores the text as typed, so a month or day of one digit
-/// (`M/D/YYYY`) is read too. Anything else (another separator, a two-digit
-/// year, a day that does not exist, extra text) is no date.
-fn date_from_text(text: &str) -> Option<NaiveDate> {
-    let parts: Vec<&str> = text.trim().split('/').collect();
-    let [month, day, year] = parts.as_slice() else {
-        return None;
-    };
-    let digits = |part: &str, lengths: std::ops::RangeInclusive<usize>| {
-        lengths.contains(&part.len()) && part.bytes().all(|b| b.is_ascii_digit())
-    };
-    if !digits(month, 1..=2) || !digits(day, 1..=2) || !digits(year, 4..=4) {
-        return None;
-    }
-    NaiveDate::from_ymd_opt(year.parse().ok()?, month.parse().ok()?, day.parse().ok()?)
+/// 2000OT's Item 1 as stored, dated only when the form's own validator
+/// takes it: `MM/DD/YYYY` (its `date_parts`), not before 2018 and not after
+/// `today` (`Form2000OTDraft::validate`). Anything else (`M/D/YYYY`, which
+/// the desktop view can store as typed, another separator, an impossible
+/// day, a year out of range) is no date.
+fn date_from_text(text: &str, today: NaiveDate) -> Option<NaiveDate> {
+    let (month, day, year) = super::form_2000ot::date_parts(text)?;
+    let date = NaiveDate::from_ymd_opt(year, month, day)?;
+    (year >= 2018 && date <= today).then_some(date)
 }
 
 /// The as-needed forms whose constructor pre-fills the trigger date.
@@ -116,40 +116,61 @@ pub fn event_trigger_from_json(form_code: &str, data_json: &str) -> Option<Event
     if !date_was_entered(form_code, &draft) {
         return None;
     }
-    let date = match form_code {
+    if form_code == "2552" {
+        // Item 11 picks the rule: a primary offering is due from the
+        // listing date, the LSE and a secondary offering from collection.
+        match draft.get("transaction").and_then(Value::as_str) {
+            Some("primary_offering") => rule = FORM_2552_PRIMARY_OFFERING_RULE,
+            Some("local_stock_exchange" | "secondary_offering") => {}
+            _ => return None,
+        }
+    }
+    let date = held_trigger_date(form_code, &draft)?;
+    Some(EventTrigger { date, rule })
+}
+
+/// The trigger date a draft of `form_code` holds in its fields, entered or
+/// pre-filled (what [`event_trigger_from_json`] reads once it counts).
+pub fn held_trigger_date(form_code: &str, draft: &Value) -> Option<NaiveDate> {
+    match form_code {
         // Item 1: the removal date (the excise returns), the withholding
         // date (1600WP).
         "2200A" | "2200AN" | "2200M" | "2200P" | "2200S" | "2200T" | "1600WP" => {
-            date_from(&draft, "year", "month", "day")
+            date_from(draft, "year", "month", "day")
         }
         "0605" => date_from(draft.get("due_date")?, "year", "month", "day"),
-        "1706" | "1707" => date_from(
-            &draft,
+        "1706" | "1707" | "2552" => date_from(
+            draft,
             "transaction_year",
             "transaction_month",
             "transaction_day",
         ),
-        "2552" => {
-            // Item 11 picks the rule: a primary offering is due from the
-            // listing date, the LSE and a secondary offering from collection.
-            match draft.get("transaction").and_then(Value::as_str) {
-                Some("primary_offering") => rule = FORM_2552_PRIMARY_OFFERING_RULE,
-                Some("local_stock_exchange" | "secondary_offering") => {}
-                _ => return None,
-            }
-            date_from(
-                &draft,
-                "transaction_year",
-                "transaction_month",
-                "transaction_day",
-            )
-        }
-        "2000OT" => date_from_text(draft.get("transaction_date")?.as_str()?),
-        "1800" => date_from(&draft, "donation_year", "donation_month", "donation_day"),
-        "1801" => date_from(&draft, "death_year", "death_month", "death_day"),
+        "2000OT" => date_from_text(
+            draft.get("transaction_date")?.as_str()?,
+            super::penalty_items::today(),
+        ),
+        "1800" => date_from(draft, "donation_year", "donation_month", "donation_day"),
+        "1801" => date_from(draft, "death_year", "death_month", "death_day"),
         _ => None,
-    }?;
-    Some(EventTrigger { date, rule })
+    }
+}
+
+/// The overrides a branch's as-needed deadlines are resolved with: the
+/// stored global ones, then the profile's own for every year of its Forms
+/// Set. The Home and Calendar feed and the Google Calendar sync both use it,
+/// so they agree on a moved date.
+pub fn event_overrides(
+    db: &crate::db::Database,
+    profile: &crate::profile::TaxpayerProfile,
+    global: &[crate::calendar_rules::DeadlineOverride],
+) -> Result<Vec<crate::calendar_rules::DeadlineOverride>, crate::db::DbError> {
+    let mut overrides = global.to_vec();
+    for year in db.list_forms_set_years(&profile.tin.full())? {
+        overrides.extend(crate::integration::profile_deadline_overrides_for_year(
+            profile, year,
+        ));
+    }
+    Ok(overrides)
 }
 
 /// A saved as-needed return that holds its entered trigger date, with the
@@ -296,8 +317,8 @@ mod tests {
 
         let mut dst = super::super::form_2000ot::Form2000OTDraft::new_from_profile(&p, 2026);
         assert_eq!(trigger_of("2000OT", &dst), None, "no transaction date yet");
-        dst.transaction_date = "12/03/2026".to_string();
-        assert_eq!(trigger_of("2000OT", &dst).unwrap().date, ymd(2026, 12, 3));
+        dst.transaction_date = "09/03/2026".to_string();
+        assert_eq!(trigger_of("2000OT", &dst).unwrap().date, ymd(2026, 9, 3));
 
         let mut stock = super::super::form_2552::Form2552Draft::new_from_profile(&p, 2026, 10, 8);
         stock.set_transaction(super::super::form_2552::Form2552Transaction::LocalStockExchange);
@@ -330,27 +351,35 @@ mod tests {
 
     /// 2000OT's Item 1 as the page and the desktop view store it.
     #[test]
-    fn form_2000ot_reads_the_slash_dates_it_stores_and_nothing_else() {
-        for (text, date) in [
-            ("12/03/2026", Some(ymd(2026, 12, 3))),
-            ("  12/03/2026 ", Some(ymd(2026, 12, 3))),
-            ("6/5/2026", Some(ymd(2026, 6, 5))),
-            ("06/5/2026", Some(ymd(2026, 6, 5))),
-            ("2026-12-03", None),
-            ("12-03-2026", None),
-            ("12/03/26", None),
-            ("02/30/2026", None),
-            ("12/03/2026 x", None),
-            ("1/2/3/2026", None),
-            ("", None),
-        ] {
-            let json = serde_json::json!({ "transaction_date": text }).to_string();
-            assert_eq!(
-                event_trigger_from_json("2000OT", &json).map(|t| t.date),
-                date,
-                "{text:?}"
-            );
-        }
+    fn form_2000ot_dates_only_what_its_validator_accepts() {
+        // Today pinned to October 19, 2026: the validator refuses a future
+        // date and one before 2018.
+        super::super::penalty_items::with_clock(ymd(2026, 10, 19), || {
+            for (text, date) in [
+                ("09/03/2026", Some(ymd(2026, 9, 3))),
+                ("  09/03/2026 ", Some(ymd(2026, 9, 3))),
+                ("10/19/2026", Some(ymd(2026, 10, 19))),
+                ("01/01/2018", Some(ymd(2018, 1, 1))),
+                ("10/20/2026", None),
+                ("12/31/2017", None),
+                ("01/01/0001", None),
+                ("1/2/2026", None),
+                ("6/5/2026", None),
+                ("2026-09-03", None),
+                ("09-03-2026", None),
+                ("09/03/26", None),
+                ("02/30/2026", None),
+                ("09/03/2026 x", None),
+                ("", None),
+            ] {
+                let json = serde_json::json!({ "transaction_date": text }).to_string();
+                assert_eq!(
+                    event_trigger_from_json("2000OT", &json).map(|t| t.date),
+                    date,
+                    "{text:?}"
+                );
+            }
+        });
     }
 
     #[test]

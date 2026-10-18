@@ -275,7 +275,7 @@ pub struct Form2000OTDraft {
 }
 
 /// `(month, day, year)` of a well-formed `MM/DD/YYYY` date.
-fn date_parts(value: &str) -> Option<(u32, u32, i32)> {
+pub(crate) fn date_parts(value: &str) -> Option<(u32, u32, i32)> {
     let parts: Vec<&str> = value.trim().split('/').collect();
     if parts.len() != 3
         || parts[0].len() != 2

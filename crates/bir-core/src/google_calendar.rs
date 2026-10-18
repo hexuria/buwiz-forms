@@ -579,12 +579,7 @@ pub fn build_desired_events(
     // trigger date is a dated event too, keyed by the return, so the user
     // keeps one event per return (`event_trigger::dated_event_returns`, the
     // rows Home and the Calendar list).
-    let mut overrides = global_overrides.clone();
-    for year in db.list_forms_set_years(&tin)? {
-        overrides.extend(crate::integration::profile_deadline_overrides_for_year(
-            profile, year,
-        ));
-    }
+    let overrides = crate::forms::event_trigger::event_overrides(db, profile, &global_overrides)?;
     let working = crate::official_holidays::business_day_calendar();
     for dated in crate::forms::event_trigger::dated_event_returns(db, &tin, &overrides, &working)? {
         if !selection.allows(&dated.summary.form_code) {

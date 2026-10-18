@@ -2095,7 +2095,66 @@ fn mark_trigger_date(kind: AgentFormKind, draft: &mut Value, key: &str) {
     if writes_the_date {
         let pointer = lifecycle_pointer(draft, "trigger_date_entered");
         set_draft_path(draft, &pointer, json!(true));
+        if let Some(print) = trigger_fingerprint(kind, draft) {
+            TYPED_TRIGGERS.with(|typed| typed.borrow_mut().insert(print));
+        }
     }
+}
+
+thread_local! {
+    /// The trigger dates this host wrote from the page's own typed writes
+    /// (form, TIN, the date fields as JSON). The flag a client sends back
+    /// is never trusted: a save keeps it only for a date in here, or for
+    /// the stored return's own flagged date (`settle_trigger_flag`).
+    static TYPED_TRIGGERS: std::cell::RefCell<BTreeSet<(String, String, String)>> =
+        const { std::cell::RefCell::new(BTreeSet::new()) };
+}
+
+/// What identifies a draft's trigger date: its form, TIN and date fields.
+fn trigger_fingerprint(kind: AgentFormKind, draft: &Value) -> Option<(String, String, String)> {
+    let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
+    if fields.is_empty() {
+        return None;
+    }
+    let values: Vec<&Value> = fields
+        .iter()
+        .map(|field| draft.get(*field).unwrap_or(&Value::Null))
+        .collect();
+    Some((
+        kind.form_code().to_string(),
+        draft["tin"].as_str().unwrap_or_default().to_string(),
+        serde_json::to_string(&values).ok()?,
+    ))
+}
+
+/// Before a save: `trigger_date_entered` is what the host knows, never
+/// what the client sent. It stays set only when this host wrote the date
+/// from a typed write, or the stored return already held exactly this date
+/// with the flag; otherwise it is removed, so a crafted payload cannot
+/// date a pre-filled return.
+fn settle_trigger_flag(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &mut Value,
+) -> Result<(), String> {
+    let Some(print) = trigger_fingerprint(kind, draft) else {
+        return Ok(());
+    };
+    let typed = TYPED_TRIGGERS.with(|typed| typed.borrow().contains(&print));
+    let kept = !typed
+        && stored_return(db, kind, draft)?.is_some_and(|stored| {
+            stored.get("trigger_date_entered") == Some(&Value::Bool(true))
+                && trigger_fingerprint(kind, &stored).as_ref() == Some(&print)
+        });
+    let pointer = lifecycle_pointer(draft, "trigger_date_entered");
+    if typed || kept {
+        set_draft_path(draft, &pointer, json!(true));
+    } else if let Some((parent, leaf)) = pointer.rsplit_once('/')
+        && let Some(Value::Object(object)) = draft.pointer_mut(parent)
+    {
+        object.remove(leaf);
+    }
+    Ok(())
 }
 
 /// How a profile note names a box's two values.
@@ -3106,10 +3165,14 @@ fn screen_form_sample_period(
             let mut draft =
                 load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
             write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
-            // The filer typed this complete period: where it is the trigger
-            // date (a removal's Item 1), the return is dated (D8c).
-            for (key, _) in &parts {
-                mark_trigger_date(kind, &mut draft, key);
+            // The filer typed this period. Only a typed day makes it the
+            // trigger date (a removal's Item 1): a monthly form's period is
+            // complete with month and year alone, and its day is then still
+            // the constructor's (D8c), as in `open_screen_form`.
+            if typed.day.is_some() {
+                for (key, _) in &parts {
+                    mark_trigger_date(kind, &mut draft, key);
+                }
             }
             agent::compute(kind, &mut draft).map_err(host_error)?;
             // A per-transaction form numbered by entry, not by date, cannot
@@ -4415,8 +4478,12 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
     }
     let amendment = take_amendment_mark(&mut draft);
     let id = with_database(|db| match &amendment {
-        Some(mark) => save_amendment(db, kind, &mut draft, mark).map_err(host_error),
+        Some(mark) => {
+            settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+            save_amendment(db, kind, &mut draft, mark).map_err(host_error)
+        }
         None => {
+            settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
             refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
             agent::save_draft(kind, db, &mut draft).map_err(host_error)
         }
@@ -4463,6 +4530,7 @@ fn save_sample(kind: AgentFormKind, mut draft: Value, mark: &SampleMark) -> Host
             next_free_entry(db, kind, &mut draft).map_err(host_error)?;
         }
         refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
+        settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         let id = agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
         let status = agent::identity(kind, &draft).map_err(host_error)?.status;
         Ok(json(json!({
@@ -5376,6 +5444,162 @@ mod tests {
                 "{code}: the typed date is the trigger"
             );
         }
+    }
+
+    /// A taxpayer (the dashboard feeds list taxpayers, not bare profiles)
+    /// filing `codes` in 2026, at the test TIN.
+    fn setup_taxpayer_filing(codes: &[&str]) {
+        use_ephemeral_database();
+        with_database(|db| {
+            db.create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+                tin_root: "123456788".into(),
+                name: "Example Trading Corp".into(),
+                taxpayer_type: bir_core::profile::TaxpayerType::Corporation,
+                birth_date: None,
+                head_office: bir_core::tax_profile::BranchFacts {
+                    rdo_code: "040".into(),
+                    registered_address: "1 Example Street, Pasig".into(),
+                    zip_code: "1600".into(),
+                    phone: "0280000000".into(),
+                    email: "office@example.com".into(),
+                },
+            })
+            .map_err(|error| HostError::new(error.to_string()))?;
+            db.set_yearly_forms(TIN, 2026, codes)
+                .map_err(|error| HostError::new(error.to_string()))?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// Round 2, item 1: a monthly form's sample period is complete with
+    /// month and year alone; its day is then the constructor's, so the
+    /// saved return is undated: no dated row, listed with no date yet.
+    #[test]
+    fn a_month_and_year_sample_period_does_not_date_a_prefilled_return() {
+        for code in ["2200A", "2200M", "2200P", "2200T", "1600WP"] {
+            setup_taxpayer_filing(&[code]);
+            let kind = kind_of(code).unwrap();
+            let mut parts = Map::new();
+            for (key, part) in sample_period_parts(kind) {
+                match part {
+                    PeriodPart::Year => parts.insert(key, json!("2026")),
+                    PeriodPart::Month => parts.insert(key, json!("09")),
+                    PeriodPart::Day | PeriodPart::Date => None,
+                    other => panic!("{code}: unexpected period part {other:?}"),
+                };
+            }
+            let answer = sample_period(TIN, code, Value::Object(parts));
+            assert_eq!(
+                answer["complete"], true,
+                "{code}: month and year complete it"
+            );
+            let sample = answer["sample"]["draft"].clone();
+            assert!(
+                sample.get("trigger_date_entered").is_none(),
+                "{code}: {sample}"
+            );
+            let saved = save(code, &sample);
+            let id = saved["id"].as_i64().unwrap();
+            assert_eq!(stored_trigger(id), None, "{code}: undated");
+            let rows = call(
+                "deadlines_between",
+                vec!["2026-01-01".into(), "2027-12-31".into()],
+            )
+            .unwrap();
+            assert!(
+                rows.as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|r| r["form_code"] != code),
+                "{code}: no dated row"
+            );
+            let listed = call("as_needed_forms", vec![2026_i64.into()]).unwrap();
+            assert_eq!(listed[0]["form_code"], code);
+            assert_eq!(
+                listed[0]["undated"][0]["draft_id"], id,
+                "{code}: listed undated"
+            );
+        }
+    }
+
+    /// Round 2, item 12: `PREFILLED_TRIGGER_FORMS` is kept by hand, so
+    /// every as-needed form's new return (this year and an earlier one,
+    /// where some constructors date January 1) is built: one that holds a
+    /// trigger date nobody typed must be on the list.
+    #[test]
+    fn every_as_needed_form_that_prefills_its_trigger_date_is_listed() {
+        use bir_core::forms::event_trigger::{
+            PREFILLED_TRIGGER_FORMS, held_trigger_date, trigger_paths,
+        };
+        setup();
+        let mut checked = 0;
+        for code in bir_core::calendar_rules::DeadlineResolver::as_needed_form_codes() {
+            if trigger_paths(code).is_empty() || kind_of(code).is_err() {
+                continue;
+            }
+            let monthly = schema_entry(code).is_some_and(|form| form["freq"] == "Monthly");
+            for year in [YEAR, YEAR - 1] {
+                let opened = call_async(
+                    "screen_form_open",
+                    vec![
+                        TIN.into(),
+                        code.into(),
+                        year.into(),
+                        (if monthly { 9 } else { 1 }).into(),
+                    ],
+                )
+                .unwrap_or_else(|error| panic!("{code} opens: {error}"));
+                if held_trigger_date(code, &opened["draft"]).is_some() {
+                    assert!(
+                        PREFILLED_TRIGGER_FORMS.contains(&code),
+                        "{code} pre-fills its trigger date but is not in PREFILLED_TRIGGER_FORMS"
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked >= 28, "{checked}");
+    }
+
+    /// Round 2, item 11: the flag a client sends is not kept. A crafted
+    /// draft marked entered saves without it; a date the page typed keeps
+    /// it, and so does the stored flagged date when the return is saved
+    /// again unchanged.
+    #[test]
+    fn a_client_sent_trigger_flag_is_not_trusted() {
+        setup_taxpayer_filing(&["1600WP"]);
+        let opened = open("1600WP", 9);
+        let mut crafted = opened["draft"].clone();
+        crafted["trigger_date_entered"] = json!(true);
+        let saved = save("1600WP", &crafted);
+        assert!(saved["draft"].get("trigger_date_entered").is_none());
+        assert_eq!(stored_trigger(stored_id(&saved)), None);
+
+        let day = key_bound_to("1600WP", "/day");
+        let filled = fill("1600WP", &saved["draft"], json!({ day: "14" }));
+        let dated = save("1600WP", &filled["draft"]);
+        let id = stored_id(&dated);
+        assert_eq!(
+            stored_trigger(id),
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 14)
+        );
+        // Opened again (in a fresh session) and saved as it stands: the
+        // stored flag stays.
+        TYPED_TRIGGERS.with(|typed| typed.borrow_mut().clear());
+        let reopened = open("1600WP", 9);
+        let again = save("1600WP", &reopened["draft"]);
+        assert_eq!(again["draft"]["trigger_date_entered"], true);
+        assert_eq!(
+            stored_trigger(stored_id(&again)),
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 14)
+        );
+        // A crafted day change does not carry the stored flag along.
+        let mut moved = again["draft"].clone();
+        moved["day"] = json!(21);
+        let moved = save("1600WP", &moved);
+        assert!(moved["draft"].get("trigger_date_entered").is_none());
+        assert_eq!(stored_trigger(stored_id(&moved)), None);
     }
 
     #[test]

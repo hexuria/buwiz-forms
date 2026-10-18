@@ -117,6 +117,50 @@ fn form_1600wp_one_atc_penalty_items_follow_the_shared_model() {
     );
 }
 
+/// D8c round 2, item 2: a queued return files the date it holds, typed or
+/// not, so it is dated by that date; cancelling the queue makes it a Draft
+/// again, and a Draft without the entered flag is undated.
+#[test]
+fn form_1600wp_a_cancelled_queue_is_undated_again() {
+    let db = bir_core::db::Database::open_ephemeral().unwrap();
+    let draft = sample_no_atc();
+    assert!(!draft.lifecycle().trigger_date_entered);
+    let id = db.save_queueable_draft(&draft).unwrap();
+    assert_eq!(
+        db.draft_event_trigger(id).unwrap(),
+        None,
+        "a Draft, not entered"
+    );
+    let mut queued = db
+        .list_queueable_drafts::<Form1600WpDraft>(&draft.tin, 2025)
+        .unwrap()
+        .into_iter()
+        .map(|(_, draft)| draft)
+        .next()
+        .unwrap();
+    queued
+        .queue(bir_core::filing_queue::QueueAuthSource::Gui)
+        .expect("the sample queues");
+    let id = db.save_queued_queueable(&queued).unwrap();
+    assert_eq!(
+        db.draft_event_trigger(id)
+            .unwrap()
+            .map(|trigger| trigger.date),
+        chrono::NaiveDate::from_ymd_opt(2025, 8, 31),
+        "queued: dated by the date it files"
+    );
+    let reverted = db.cancel_queued_queueable(&queued).unwrap();
+    assert_eq!(
+        reverted.lifecycle().status,
+        bir_core::forms::FilingStatus::Draft
+    );
+    assert_eq!(
+        db.draft_event_trigger(id).unwrap(),
+        None,
+        "cancelled: a Draft again, undated"
+    );
+}
+
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![
