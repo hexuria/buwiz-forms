@@ -14,7 +14,7 @@
 //!   printed one ([`PRINTED_MESSAGES`]); the checks and the filed data are
 //!   unchanged.
 
-use bir_core::forms::agent::AgentFormKind;
+use bir_core::forms::agent::{AgentFormKind, Binding};
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use bir_core::forms::{FilingStatus, form_2200a, form_2200an, form_2200c, form_2200m};
 use bir_core::forms::{form_2200p, form_2200s, form_2200t};
@@ -59,6 +59,9 @@ fn stored_before_typed_due_date<F: QueueableForm + DeserializeOwned>(draft: &Val
 }
 
 /// Put the draft on its typed due date (`PenaltyItems::join_typed_due_date`).
+/// The typed form only decides the new model version; the draft's JSON is
+/// changed at that one key, so every other key it holds (one this build
+/// does not know included) stays as it is.
 #[inline(never)]
 fn join_typed_due_date<F: QueueableForm + DeserializeOwned>(draft: &mut Value) {
     let Ok(mut form) = serde_json::from_value::<F>(draft.clone()) else {
@@ -67,8 +70,13 @@ fn join_typed_due_date<F: QueueableForm + DeserializeOwned>(draft: &mut Value) {
     for items in F::penalty_items() {
         items.join_typed_due_date(&mut form);
     }
-    if let Ok(value) = serde_json::to_value(&form) {
-        *draft = value;
+    let Ok(joined) = serde_json::to_value(&form) else {
+        return;
+    };
+    if let (Some(fields), Some(version)) =
+        (draft.as_object_mut(), joined.get("penalty_model_version"))
+    {
+        fields.insert("penalty_model_version".to_string(), version.clone());
     }
 }
 
@@ -192,6 +200,39 @@ pub(super) fn untick_writes_its_option(kind: AgentFormKind, key: &str) -> bool {
     kind.form_code() == "2200S" && key == "frm2200S:chkPymntManner_3"
 }
 
+/// What unticking the ticked member of an excise return's three-way manner
+/// of payment item writes at `path`: the item unanswered, which is the
+/// field's own default (`none` / `unanswered`). The shared rule writes
+/// `null` there, which these forms' manner fields cannot hold (the fill
+/// failed as "not a 2200S draft"). `None` for every other form and path.
+pub(super) fn unanswered(kind: AgentFormKind, path: &str) -> Option<Value> {
+    let value = match (excise(kind)?, path) {
+        (QueueableKind::Form2200A, "/manner_of_payment") => {
+            serde_json::to_value(form_2200a::Form2200APayment::default())
+        }
+        (QueueableKind::Form2200AN, "/manner") => {
+            serde_json::to_value(form_2200an::Form2200ANManner::default())
+        }
+        (QueueableKind::Form2200C, "/manner") => {
+            serde_json::to_value(form_2200c::Form2200CManner::default())
+        }
+        (QueueableKind::Form2200M, "/manner_of_payment") => {
+            serde_json::to_value(form_2200m::Form2200MPayment::default())
+        }
+        (QueueableKind::Form2200P, "/manner_of_payment") => {
+            serde_json::to_value(form_2200p::Form2200PPayment::default())
+        }
+        (QueueableKind::Form2200S, "/manner") => {
+            serde_json::to_value(form_2200s::Form2200SManner::default())
+        }
+        (QueueableKind::Form2200T, "/manner_of_payment") => {
+            serde_json::to_value(form_2200t::Form2200TPayment::default())
+        }
+        _ => return None,
+    };
+    value.ok()
+}
+
 /// The penalty locks of an excise return as this fill leaves them, for the
 /// page to apply at once (`relocks`): a group still computed is locked as
 /// computed, one kept as entered says so, an edited one is open (`null`).
@@ -220,16 +261,52 @@ pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Valu
 /// What a gated box holds in the draft.
 #[derive(Clone, Copy)]
 enum Track {
-    /// A text field: held while not blank.
-    Text(&'static str),
-    /// An amount: held while not zero.
-    Amount(&'static str),
-    /// Schedule rows: each row with a typed amount or text is one entry.
-    Rows(&'static [&'static str]),
+    /// One box (a text or an amount): one entry while it shows a value.
+    One,
+    /// Schedule rows: each row with a box showing a value is one entry.
+    Rows(&'static [Table]),
     /// The penalty overrides (2200S Items 23A-23C): each non-zero one is one
     /// entry. Locked and refused by the penalty rules, not by a gate.
     Overrides,
 }
+
+/// A schedule table: `(draft list, box stems, first row, last row)`; box
+/// `{stem}{n}` sits in row `n`.
+type Table = (&'static str, &'static [&'static str], u32, u32);
+
+/// 2200C Part V Schedule 1.
+const PART_V_2200C: &[Table] = &[(
+    "/schedule",
+    &[
+        "CPPexmpt",
+        "CPPexcise",
+        "CPPnonexcise",
+        "GRnetVat",
+        "GRexciseNet",
+        "GRexciseExmpt",
+        "GRnonexcise",
+    ],
+    1,
+    10,
+)];
+
+/// 2200S Schedule 1: the fixed beverage rows, then the Others rows.
+const SCHEDULE_1_2200S: &[Table] = &[
+    ("/beverages", &["txtSalesValue", "txtVolumeRemovals"], 0, 9),
+    (
+        "/others",
+        &[
+            "txtsched1Atc",
+            "txtsched1Desc",
+            "txtsched1TaxBracket",
+            "txtsched1AppTaxRate",
+            "txtsched1SalesValue",
+            "txtsched1VolumeRemovals",
+        ],
+        0,
+        11,
+    ),
+];
 
 /// Boxes the form clears while another answer does not hold (its own
 /// computation, `recompute`), with what turns them on. The host refuses a
@@ -244,10 +321,26 @@ struct Gate {
     track: Track,
 }
 
-/// `(stem, from, to)` row keys `stem{n}` for `n` in `from..=to`.
-fn row_keys(prefix: &str, stems: &[&str], rows: std::ops::RangeInclusive<u32>) -> Vec<String> {
-    rows.flat_map(|n| stems.iter().map(move |stem| format!("{prefix}{stem}{n}")))
+/// The keys of `tables`, row by row (the first is the gate's probe).
+fn table_keys(prefix: &str, tables: &[Table]) -> Vec<String> {
+    tables
+        .iter()
+        .flat_map(|(_, stems, first, last)| {
+            (*first..=*last)
+                .flat_map(move |n| stems.iter().map(move |stem| format!("{prefix}{stem}{n}")))
+        })
         .collect()
+}
+
+/// The row of `tables` box `key` sits in (`/others/3`).
+fn row_of(tables: &[Table], key: &str) -> Option<String> {
+    let tail = key.rsplit(':').next()?;
+    tables.iter().find_map(|(list, stems, first, last)| {
+        stems.iter().find_map(|stem| {
+            let n: u32 = tail.strip_prefix(stem)?.parse().ok()?;
+            (*first..=*last).contains(&n).then(|| format!("{list}/{n}"))
+        })
+    })
 }
 
 const NEEDS_12: &str = "Needs item 12 = Yes";
@@ -265,6 +358,14 @@ fn gate(item: &'static str, tag: &'static str, keys: Vec<String>, track: Track) 
 
 /// The gates of an excise return, read off each form's `recompute` (what
 /// it clears and on which answer).
+///
+/// Three of them are enabled at load in the official program
+/// (rules/forms/<form>/fixtures/runtime-control-inventory-v796.json):
+/// 2200T item 15 (`paymentOther`), 2200C Part V Schedule 1 (`CPPexmpt1`
+/// and the rest) and 2200S Schedule 1 (`txtsched1Atc0`,
+/// `txtsched1SalesValue0`). The page there takes a value before the answer;
+/// the port's recompute clears it unless that answer holds, so the host
+/// keeps them shut until it does rather than take a value and lose it.
 fn gates(code: &str) -> Vec<Gate> {
     let one = |prefix: &str, key: &str| vec![format!("{prefix}{key}")];
     match code {
@@ -275,47 +376,29 @@ fn gates(code: &str) -> Vec<Gate> {
                 "frm2200Tv2020:"
             };
             vec![
-                gate(
-                    "item 12A",
-                    NEEDS_12,
-                    one(p, "treatyY"),
-                    Track::Text("/tax_relief_specify"),
-                ),
-                gate(
-                    "item 15",
-                    NEEDS_15,
-                    one(p, "paymentOther"),
-                    Track::Text("/other_scheme_description"),
-                ),
+                gate("item 12A", NEEDS_12, one(p, "treatyY"), Track::One),
+                // 2200T: enabled at load officially; the port's recompute
+                // clears it unless item 15 = Other Similar Schemes.
+                gate("item 15", NEEDS_15, one(p, "paymentOther"), Track::One),
                 gate(
                     "item 19",
                     NEEDS_AMENDED,
                     one(p, "txtPrevReturn"),
-                    Track::Amount("/previous_payment"),
+                    Track::One,
                 ),
             ]
         }
         "2200AN" => {
             let p = "frm2200ANv2018:";
             vec![
-                gate(
-                    "item 12A",
-                    NEEDS_12,
-                    one(p, "lstSpecialTax"),
-                    Track::Text("/tax_relief_specify"),
-                ),
+                gate("item 12A", NEEDS_12, one(p, "lstSpecialTax"), Track::One),
                 gate(
                     "item 15",
                     NEEDS_15,
                     one(p, "MannerOfPaymentOthers"),
-                    Track::Text("/manner_other"),
+                    Track::One,
                 ),
-                gate(
-                    "item 19",
-                    NEEDS_AMENDED,
-                    one(p, "txt19"),
-                    Track::Amount("/previous_payment"),
-                ),
+                gate("item 19", NEEDS_AMENDED, one(p, "txt19"), Track::One),
             ]
         }
         "2200C" => {
@@ -325,37 +408,27 @@ fn gates(code: &str) -> Vec<Gate> {
                     "item 12A",
                     NEEDS_12,
                     one(p, "txtPg1I12TaxReliefSpecify"),
-                    Track::Text("/tax_relief_specify"),
+                    Track::One,
                 ),
                 gate(
                     "item 15",
                     NEEDS_15,
                     one(p, "txtPg1Pt2MOPOtherDesc"),
-                    Track::Text("/manner_other"),
+                    Track::One,
                 ),
                 gate(
                     "item 19",
                     NEEDS_AMENDED,
                     one(p, "txtPg1P3I19PmntOnRtrnPrevFiled"),
-                    Track::Amount("/previous_payment"),
+                    Track::One,
                 ),
+                // Enabled at load officially; the port's recompute clears it
+                // unless item 13 or item 15 is ticked (resetPartFive).
                 gate(
                     "Part V Schedule 1",
                     "Needs item 13 or item 15",
-                    row_keys(
-                        p,
-                        &[
-                            "CPPexmpt",
-                            "CPPexcise",
-                            "CPPnonexcise",
-                            "GRnetVat",
-                            "GRexciseNet",
-                            "GRexciseExmpt",
-                            "GRnonexcise",
-                        ],
-                        1..=10,
-                    ),
-                    Track::Rows(&["/schedule"]),
+                    table_keys(p, PART_V_2200C),
+                    Track::Rows(PART_V_2200C),
                 ),
             ]
         }
@@ -370,55 +443,42 @@ fn gates(code: &str) -> Vec<Gate> {
                     "item 12A",
                     NEEDS_12,
                     one(p, "txtPg1I12TaxReliefSpecify"),
-                    Track::Text("/tax_relief_specify"),
+                    Track::One,
                 ),
                 gate(
                     "item 15",
                     NEEDS_15,
                     one(p, "txtPg1Pt2MOPOtherDesc"),
-                    Track::Text("/other_scheme_description"),
+                    Track::One,
                 ),
                 gate(
                     "item 19",
                     NEEDS_AMENDED,
                     one(p, "txtPg1P3I19PmntOnRtrnPrevFiled"),
-                    Track::Amount("/previous_payment"),
+                    Track::One,
                 ),
             ]
         }
         "2200S" => {
             let p = "frm2200S:";
-            let mut schedule = row_keys(p, &["txtSalesValue", "txtVolumeRemovals"], 0..=9);
-            schedule.extend(row_keys(
-                p,
-                &[
-                    "txtsched1Atc",
-                    "txtsched1Desc",
-                    "txtsched1TaxBracket",
-                    "txtsched1AppTaxRate",
-                    "txtsched1SalesValue",
-                    "txtsched1VolumeRemovals",
-                ],
-                0..=11,
-            ));
             vec![
+                // The text is kept only with item 17 ticked, and item 17
+                // only on a prepayment (item 16): recompute clears both
+                // off it.
                 gate(
                     "item 17",
-                    "Needs item 17 = Other Similar Schemes",
+                    "Needs item 16 = Prepayment and item 17 = Other Similar Schemes",
                     one(p, "txtOthMannerofPymnt"),
-                    Track::Text("/other_scheme_text"),
+                    Track::One,
                 ),
-                gate(
-                    "item 21",
-                    NEEDS_AMENDED,
-                    one(p, "txtTax19"),
-                    Track::Amount("/previous_payment"),
-                ),
+                gate("item 21", NEEDS_AMENDED, one(p, "txtTax19"), Track::One),
+                // Enabled at load officially; the port's recompute clears it
+                // unless item 15 = Payment on Actual Removal.
                 gate(
                     "Schedule 1",
                     "Needs item 15 = Payment on Actual Removal",
-                    schedule,
-                    Track::Rows(&["/beverages", "/others"]),
+                    table_keys(p, SCHEDULE_1_2200S),
+                    Track::Rows(SCHEDULE_1_2200S),
                 ),
                 gate(
                     "items 23A-23C",
@@ -436,10 +496,25 @@ fn gates(code: &str) -> Vec<Gate> {
     }
 }
 
-/// A value shown as nothing: blank, all zeros (`0.00`) or unticked.
-fn shows_nothing(shown: &str) -> bool {
-    let shown = shown.trim();
-    shown == "false" || shown.chars().all(|c| matches!(c, '0' | '.' | ',' | '-'))
+/// Whether a gated box takes amounts (its binding, or 2200S's Others rate,
+/// which `catalogs` writes).
+fn is_amount(kind: AgentFormKind, key: &str) -> bool {
+    key.starts_with("frm2200S:txtsched1AppTaxRate")
+        || matches!(
+            kind.definition()
+                .bindings
+                .get(key)
+                .map(|bound| &bound.binding),
+            Some(Binding::Amount { .. } | Binding::Whole { .. })
+        )
+}
+
+/// Whether `text` is the box's own empty value: blank, or on an amount box
+/// zero (`0`, `0.00`, what it shows cleared). A text box's `0` is a value.
+fn empty(kind: AgentFormKind, key: &str, text: &str) -> bool {
+    let text = text.trim();
+    text.is_empty()
+        || (is_amount(kind, key) && bir_core::forms::agent::parse_amount(text) == Some(0.0))
 }
 
 fn text_of(value: &Value) -> String {
@@ -466,7 +541,9 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
 /// `next`), if it does: 2200AN item 3 takes two digits (the official box's
 /// maxlength), and a gated box whose answer does not hold keeps nothing
 /// (the form's computation clears it), so the write is refused with what
-/// turns it on, never taken and lost. `None` for every other form.
+/// turns it on, never taken and lost. Only the box's own empty value (a
+/// blank; an amount box's zero) passes unasked. `None` for every other
+/// form.
 pub(super) fn refusal(
     kind: AgentFormKind,
     next: &Value,
@@ -484,13 +561,13 @@ pub(super) fn refusal(
         return Some("Item 3 holds up to two digits".to_string());
     }
     let gate = gated(kind, key)?;
-    if shows_nothing(&typed) {
+    if empty(kind, key, &typed) {
         return None;
     }
     let mut copy = next.clone();
     bir_core::forms::agent::compute(kind, &mut copy).ok()?;
     let shown = bir_core::forms::agent::field_map(kind, &copy).ok()?;
-    shows_nothing(shown.get(key).map_or("", String::as_str)).then(|| {
+    empty(kind, key, shown.get(key).map_or("", String::as_str)).then(|| {
         super::conditions::tag(kind.form_code(), key).unwrap_or_else(|| gate.tag.to_string())
     })
 }
@@ -509,11 +586,11 @@ pub(super) fn off(kind: AgentFormKind, draft: &Value, values: &Value) -> Map<Str
         }
         let probe = &gate.keys[0];
         let shown = values[probe.as_str()].as_str().unwrap_or_default();
-        if !shows_nothing(shown) || !super::conditions::cleared(kind, draft, probe, shown) {
+        if !empty(kind, probe, shown) || !super::conditions::cleared(kind, draft, probe, shown) {
             continue;
         }
         for key in &gate.keys {
-            if shows_nothing(values[key.as_str()].as_str().unwrap_or_default()) {
+            if empty(kind, key, values[key.as_str()].as_str().unwrap_or_default()) {
                 off.insert(
                     key.clone(),
                     json!(
@@ -527,42 +604,11 @@ pub(super) fn off(kind: AgentFormKind, draft: &Value, values: &Value) -> Map<Str
     off
 }
 
-/// How many entries `track` holds in `draft`.
-fn held(track: Track, draft: &Value) -> usize {
-    let filled = |value: &Value| match value {
-        Value::String(text) => !text.trim().is_empty(),
-        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
-        _ => false,
-    };
-    match track {
-        Track::Text(path) | Track::Amount(path) => {
-            usize::from(draft.pointer(path).is_some_and(filled))
-        }
-        Track::Rows(paths) => paths
-            .iter()
-            .flat_map(|path| {
-                draft
-                    .pointer(path)
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-            })
-            .filter(|row| {
-                row.as_object().is_some_and(|row| {
-                    row.values().any(|cell| {
-                        filled(cell)
-                            || cell
-                                .as_object()
-                                .is_some_and(|inner| inner.values().any(filled))
-                    })
-                })
-            })
-            .count(),
-        Track::Overrides => ["surcharge", "interest", "compromise"]
-            .iter()
-            .filter(|component| filled(&draft["penalty_overrides"][**component]))
-            .count(),
-    }
+/// Whether the penalty override behind `key` holds a typed amount.
+fn override_typed(kind: AgentFormKind, draft: &Value, key: &str) -> bool {
+    super::penalties::path_of(kind, key)
+        .and_then(|path| draft.pointer(&path).and_then(Value::as_f64))
+        .is_some_and(|amount| amount != 0.0)
 }
 
 /// The printed item a box sits under on the page (`21A`).
@@ -591,8 +637,9 @@ fn listed(names: &[String]) -> String {
 /// ask first and offer Undo (the `removes` of the fill response):
 /// - an answer that turns a gate off clears what was typed behind it
 ///   (`gates`: item 12A, 15 or 19, 2200S item 17 and Schedule 1, 2200C Part
-///   V, 2200S Items 23A-23C off a prepayment); a box the filer blanked
-///   themselves is not asked about;
+///   V, 2200S Items 23A-23C off a prepayment). Every box that showed a value
+///   and no longer does counts, except the boxes the batch writes itself (a
+///   box the filer blanked is theirs); a schedule counts its rows;
 /// - "Use the computed amounts" (a whole penalty group blanked) replaces the
 ///   amounts typed there, or kept from before decision D8 (the 0.00 says
 ///   nothing), as 1701 does.
@@ -604,27 +651,45 @@ pub(super) fn removes(
 ) -> Option<Value> {
     excise(kind)?;
     let code = kind.form_code();
+    let shown = |draft: &Value| bir_core::forms::agent::field_map(kind, draft).unwrap_or_default();
+    let (was, now) = (shown(before), shown(after));
+    let holds = |map: &std::collections::BTreeMap<String, String>, key: &str| {
+        !empty(kind, key, map.get(key).map_or("", String::as_str))
+    };
     let mut removed: Vec<String> = Vec::new();
     let mut count = 0;
     for gate in gates(code) {
-        if gate.keys.iter().any(|key| edits.contains_key(key)) {
+        let gone: Vec<&String> = gate
+            .keys
+            .iter()
+            .filter(|key| !edits.contains_key(key.as_str()))
+            .filter(|key| match gate.track {
+                Track::Overrides => {
+                    override_typed(kind, before, key) && !override_typed(kind, after, key)
+                }
+                _ => holds(&was, key) && !holds(&now, key),
+            })
+            .collect();
+        let entries = match gate.track {
+            Track::Rows(tables) => gone
+                .iter()
+                .filter_map(|key| row_of(tables, key))
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            _ => gone.len(),
+        };
+        if entries == 0 {
             continue;
         }
-        let (was, now) = (held(gate.track, before), held(gate.track, after));
-        if was > now {
-            count += was - now;
-            removed.push(match gate.track {
-                Track::Rows(_) => {
-                    let rows = was - now;
-                    format!(
-                        "{} ({rows} row{})",
-                        gate.item,
-                        if rows == 1 { "" } else { "s" }
-                    )
-                }
-                _ => gate.item.to_string(),
-            });
-        }
+        count += entries;
+        removed.push(match gate.track {
+            Track::Rows(_) => format!(
+                "{} ({entries} row{})",
+                gate.item,
+                if entries == 1 { "" } else { "s" }
+            ),
+            _ => gate.item.to_string(),
+        });
     }
     let mut replaced: Vec<String> = Vec::new();
     for group in super::penalties::groups(kind) {
@@ -788,9 +853,23 @@ pub(super) fn printed_message(kind: AgentFormKind, message: &str) -> Option<&'st
 }
 
 #[cfg(test)]
+/// Every host gate of `code` (the penalty group aside) as `(item, tag,
+/// keys)`, for `tests::excise` to check each key against the form's own
+/// computation.
+pub(super) fn gate_list(code: &str) -> Vec<(&'static str, &'static str, Vec<String>)> {
+    gates(code)
+        .into_iter()
+        .filter(|gate| !matches!(gate.track, Track::Overrides))
+        .map(|gate| (gate.item, gate.tag, gate.keys))
+        .collect()
+}
+
+#[cfg(test)]
 /// The tag of a PR 11 host gate on a box the corpus gives no condition, for
-/// the shared rule-6 tests (`tests::excise` checks each gate against the
-/// form's own computation).
+/// the shared rule-6 tests (`tests::excise::
+/// pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut` checks
+/// every key of every gate against the form's own computation, shut and
+/// open).
 pub(super) fn host_condition(code: &str, key: &str) -> Option<String> {
     let kind = AgentFormKind::from_code(code)?;
     if super::conditions::tag(code, key).is_some() {

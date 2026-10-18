@@ -3623,9 +3623,14 @@ fn plan_choice_edits(
                     continue;
                 }
                 if members >= 3 {
+                    // An excise return's manner item ends unanswered, the
+                    // value its field holds then, not `null` (PR 11).
                     let sets = true_option_paths(def, &key)
                         .into_iter()
-                        .map(|path| (path, Value::Null))
+                        .map(|path| {
+                            let blank = rows_excise::unanswered(kind, &path).unwrap_or(Value::Null);
+                            (path, blank)
+                        })
                         .collect();
                     plain.push((key, ChoiceStep::Set(sets)));
                 } else {
@@ -9721,8 +9726,10 @@ mod tests {
     /// (PR 11's host gates) the probes it takes refused with exactly the box's
     /// reviewed tag (app/forms/condition-labels.json for a corpus condition;
     /// the excise returns' boxes the corpus gives none, their host
-    /// condition, which tests::excise checks against the form's own
-    /// computation).
+    /// condition; `tests::excise::
+    /// pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut`
+    /// checks every key of every host gate against the form's own
+    /// `compute`, shut and open).
     fn oracle_off(code: &str, checked: &Value) -> Vec<String> {
         let corpus = conditions::tests::derived();
         let tags: Value =
@@ -9788,8 +9795,10 @@ mod tests {
             let opened = open(code, page_period_of(code));
             for (key, why) in opened["off"].as_object().unwrap() {
                 // The excise returns' PR 11 host gates have no corpus
-                // condition: their tag is the host's (tests::excise checks
-                // each against the form's own computation).
+                // condition: their tag is the host's (tests::excise::
+                // pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut
+                // checks every key of every host gate against the form's
+                // own compute, shut and open).
                 let host = rows_excise::host_condition(code, key);
                 let condition = corpus[code][key]
                     .as_str()

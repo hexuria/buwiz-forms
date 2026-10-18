@@ -1918,7 +1918,7 @@ fn pr11_a_box_an_answer_erases_is_shut_refused_and_asked_about() {
             json!({"frm2200S:chkPymntManner_2": "true", "frm2200S:chkPymntManner_3": "true"}),
             json!({"frm2200S:chkPymntManner_3": "false"}),
             "item 17",
-            "Needs item 17 = Other Similar Schemes",
+            "Needs item 16 = Prepayment and item 17 = Other Similar Schemes",
         ),
         (
             "2200S",
@@ -2110,4 +2110,340 @@ fn pr11_a_penalty_group_off_the_return_refuses_with_that_reason() {
         blank["rejected"][keys[0]],
         format!("`{}` is {}", keys[0], penalties::NOT_ON_RETURN)
     );
+}
+
+// ------------------------------------------------- PR 11 review, round 2
+
+/// The answers that open each host gate (`rows_excise::gate_list`), by
+/// form and the item the gate names.
+fn gate_opener(code: &str, item: &str) -> Value {
+    let p = match code {
+        "2200A" => "frm2200Av2020:",
+        "2200T" => "frm2200Tv2020:",
+        "2200AN" => "frm2200ANv2018:",
+        other => return gate_opener_2018(other, item),
+    };
+    match (code, item) {
+        ("2200AN", "item 12A") => json!({ format!("{p}OptSpecialTax1"): "true" }),
+        ("2200AN", "item 15") => json!({ format!("{p}MannerOfPayment3"): "true" }),
+        ("2200AN", "item 19") => json!({ format!("{p}AmendedRtn1"): "true" }),
+        (_, "item 12A") => json!({ format!("{p}optTreaty_1"): "true" }),
+        (_, "item 15") => json!({ format!("{p}optPayment_3"): "true" }),
+        (_, "item 19") => json!({ format!("{p}amendedRtn_1"): "true" }),
+        _ => panic!("{code}: no opener for {item}"),
+    }
+}
+
+fn gate_opener_2018(code: &str, item: &str) -> Value {
+    let p = format!("frm{code}:");
+    match (code, item) {
+        ("2200S", "item 17") => json!({
+            format!("{p}chkPymntManner_2"): "true",
+            format!("{p}chkPymntManner_3"): "true",
+        }),
+        ("2200S", "item 21") => json!({ format!("{p}amendedRtn_1"): "true" }),
+        ("2200S", "Schedule 1") => json!({ format!("{p}chkPymntManner_1"): "true" }),
+        ("2200C", "Part V Schedule 1") => {
+            json!({ format!("{p}rdoPg1Pt2MOPPaymentActual"): "true" })
+        }
+        (_, "item 12A") => json!({ format!("{p}rdoPg1I12TaxReliefYes"): "true" }),
+        (_, "item 15") => json!({ format!("{p}rdoPg1Pt2MOPOther"): "true" }),
+        (_, "item 19") => json!({ format!("{p}rdoPg1I2AmendedYes"): "true" }),
+        _ => panic!("{code}: no opener for {item}"),
+    }
+}
+
+/// Write `value` at the draft path of `key` straight into `draft`, adding
+/// blank rows (the probe's row templates) up to the key's row. 2200S's
+/// Others rate has no binding (the page shows it reformatted, catalogs.rs
+/// writes it): its path is `/others/{n}/rate`.
+fn write_at_binding(code: &str, draft: &mut Value, key: &str, value: Value) -> String {
+    let def = kind_of(code).unwrap().definition();
+    let path = match key.strip_prefix("frm2200S:txtsched1AppTaxRate") {
+        Some(row) => format!("/others/{row}/rate"),
+        None => binding_path(code, key),
+    };
+    for (list, template) in &def.rows {
+        let Some(rest) = path.strip_prefix(&format!("{list}/")) else {
+            continue;
+        };
+        let row: usize = rest.split('/').next().unwrap().parse().unwrap();
+        let rows = draft.pointer_mut(list).unwrap().as_array_mut().unwrap();
+        while rows.len() <= row {
+            rows.push(template.clone());
+        }
+    }
+    set_draft_path(draft, &path, value);
+    assert!(
+        draft.pointer(&path).is_some(),
+        "{code}: {key} written at {path}"
+    );
+    path
+}
+
+/// What `key` shows after the form's own `compute` of `draft`.
+fn computed_shows(code: &str, draft: &Value, key: &str) -> String {
+    let kind = kind_of(code).unwrap();
+    let mut draft = draft.clone();
+    agent::compute(kind, &mut draft).unwrap();
+    agent::field_map(kind, &draft)
+        .unwrap()
+        .get(key)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Round 2, item 1: every key of every host gate (2200A, 2200AN, 2200C,
+/// 2200M, 2200P, 2200S and 2200T; the penalty group aside), checked
+/// against the form's own computation. A probe written straight at the
+/// key's binding path (an amount 1, a text `X`) is cleared by `compute`
+/// exactly while the host reports the gate shut, and kept once the
+/// answers that open it hold, when the host no longer reports it off.
+#[test]
+fn pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut() {
+    setup();
+    let mut checked = 0;
+    for code in [
+        "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S", "2200T",
+    ] {
+        let kind = kind_of(code).unwrap();
+        let shut = open(code, 1);
+        for (item, tag, keys) in rows_excise::gate_list(code) {
+            let opened = fill(code, &shut["draft"], gate_opener(code, item));
+            assert_eq!(opened["rejected"], json!({}), "{code}: {item} opens");
+            for key in &keys {
+                let amount = matches!(
+                    kind.definition().bindings.get(key).map(|b| &b.binding),
+                    Some(Binding::Amount { .. } | Binding::Whole { .. }) | None
+                );
+                let probe = if amount { json!(1.0) } else { json!("X") };
+                let expected = if amount { "1.00" } else { "X" };
+                // Shut: the host says so, and the form clears the probe.
+                assert_eq!(
+                    shut["off"][key.as_str()]
+                        .as_str()
+                        .map(|why| why == tag || conditions::tag(code, key).as_deref() == Some(why)),
+                    Some(true),
+                    "{code}: {key} is off with {tag:?} while {item} is shut"
+                );
+                let mut direct = shut["draft"].clone();
+                let path = write_at_binding(code, &mut direct, key, probe.clone());
+                let shown = computed_shows(code, &direct, key);
+                assert!(
+                    shown.trim().is_empty() || agent::parse_amount(&shown) == Some(0.0),
+                    "{code}: the form clears {key} ({path}) while {item} is shut: {shown:?}"
+                );
+                // Open: the host says so, and the form keeps the probe.
+                assert!(
+                    opened["off"].get(key.as_str()).is_none(),
+                    "{code}: {key} is not off once {item} is open"
+                );
+                let mut direct = opened["draft"].clone();
+                write_at_binding(code, &mut direct, key, probe);
+                assert_eq!(
+                    computed_shows(code, &direct, key),
+                    expected,
+                    "{code}: the form keeps {key} ({path}) once {item} is open"
+                );
+                checked += 1;
+            }
+        }
+    }
+    // 2200A, 2200T, 2200AN, 2200M, 2200P: 3 each; 2200C 3 + 70; 2200S 2 + 92.
+    assert_eq!(checked, 15 + 73 + 94);
+}
+
+/// Round 2, item 2: 2200S item 17's text is kept only with item 17 ticked
+/// on a prepayment (item 16), so its refusal names both: ticking item 17
+/// with the manner unanswered does not open it.
+#[test]
+fn pr11_2200s_item_17_text_names_items_16_and_17() {
+    setup();
+    let opened = open("2200S", 1);
+    let key = "frm2200S:txtOthMannerofPymnt";
+    let tag = "Needs item 16 = Prepayment and item 17 = Other Similar Schemes";
+    assert_eq!(opened["off"][key], tag);
+    let refused = fill(
+        "2200S",
+        &opened["draft"],
+        json!({ "frm2200S:chkPymntManner_3": "true", key: "Sample scheme" }),
+    );
+    assert_eq!(refused["rejected"][key], tag);
+    assert_eq!(refused["draft"]["other_scheme_text"], "");
+    assert_eq!(refused["draft"]["manner"], "unanswered");
+}
+
+/// Round 2, item 4: unticking the ticked member of an excise return's
+/// three-way manner item leaves the item unanswered (the field's own
+/// default), where the shared rule's `null` failed the fill ("not a 2200S
+/// draft"). One key per form; 2200C's manner is a yes/no pair beside item
+/// 13 in the probe, so its untick keeps the official flip and item 13's
+/// untick leaves it unanswered.
+#[test]
+fn pr11_unticking_the_manner_of_payment_leaves_it_unanswered() {
+    setup();
+    let cases = [
+        (
+            "2200A",
+            "frm2200Av2020:optPayment_1",
+            "/manner_of_payment",
+            "none",
+        ),
+        (
+            "2200AN",
+            "frm2200ANv2018:MannerOfPayment2",
+            "/manner",
+            "unanswered",
+        ),
+        (
+            "2200C",
+            "frm2200C:rdoPg1Pt2MOPPaymentActual",
+            "/manner",
+            "unanswered",
+        ),
+        (
+            "2200M",
+            "frm2200M:rdoPg1Pt2MOPPrepayment",
+            "/manner_of_payment",
+            "none",
+        ),
+        (
+            "2200P",
+            "frm2200P:rdoPg1Pt2MOPOther",
+            "/manner_of_payment",
+            "none",
+        ),
+        (
+            "2200S",
+            "frm2200S:chkPymntManner_1",
+            "/manner",
+            "unanswered",
+        ),
+        (
+            "2200T",
+            "frm2200Tv2020:optPayment_2",
+            "/manner_of_payment",
+            "none",
+        ),
+    ];
+    for (code, key, path, unanswered) in cases {
+        let opened = open(code, 1);
+        assert_eq!(
+            opened["draft"].pointer(path),
+            Some(&json!(unanswered)),
+            "{code}"
+        );
+        let ticked = fill(code, &opened["draft"], json!({ key: "true" }));
+        assert_eq!(ticked["values"][key], "true", "{code}: {key} ticked");
+        assert_ne!(
+            ticked["draft"].pointer(path),
+            Some(&json!(unanswered)),
+            "{code}"
+        );
+        let unticked = fill(code, &ticked["draft"], json!({ key: "false" }));
+        assert_eq!(unticked["rejected"], json!({}), "{code}: {key}");
+        assert_eq!(unticked["values"][key], "false", "{code}: {key} unticked");
+        assert_eq!(
+            unticked["draft"].pointer(path),
+            Some(&json!(unanswered)),
+            "{code}: {key} leaves the item unanswered"
+        );
+    }
+}
+
+/// Round 2, item 5: an answer that clears a schedule asks about every row
+/// the filer typed that the batch does not write itself: with three 2200S
+/// Schedule 1 rows typed, blanking row 1 in the batch that leaves the
+/// payment on actual removal asks about rows 2 and 3.
+#[test]
+fn pr11_a_cleared_schedule_asks_about_each_row_the_batch_does_not_write() {
+    setup();
+    let opened = open("2200S", 1);
+    let typed = fill(
+        "2200S",
+        &opened["draft"],
+        json!({
+            "frm2200S:chkPymntManner_1": "true",
+            "frm2200S:txtSalesValue0": "100",
+            "frm2200S:txtSalesValue1": "200",
+            "frm2200S:txtSalesValue2": "300",
+        }),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    let shut = fill(
+        "2200S",
+        &typed["draft"],
+        json!({ "frm2200S:txtSalesValue0": "", "frm2200S:chkPymntManner_2": "true" }),
+    );
+    assert_eq!(
+        shut["removes"],
+        json!({
+            "message": "This answer removes what you typed in Schedule 1 (2 rows). Continue?",
+            "done": "Removed 2 entries",
+            "rows": 2,
+        })
+    );
+    // Writing every typed row itself asks nothing.
+    let all = fill(
+        "2200S",
+        &typed["draft"],
+        json!({
+            "frm2200S:txtSalesValue0": "",
+            "frm2200S:txtSalesValue1": "",
+            "frm2200S:txtSalesValue2": "",
+            "frm2200S:chkPymntManner_2": "true",
+        }),
+    );
+    assert!(all["removes"].is_null());
+}
+
+/// Round 2, item 6: only a box's own empty value passes a shut gate
+/// unasked: a blank, or on an amount box zero. A text such as `0`, `.` or
+/// `-` is a value, so it is refused with the reason, and taken once open.
+#[test]
+fn pr11_a_shut_text_box_refuses_zero_with_the_reason() {
+    setup();
+    let opened = open("2200A", 1);
+    let text = "frm2200Av2020:treatyY";
+    for value in ["0", "0.00", ".", "-", ","] {
+        let refused = fill("2200A", &opened["draft"], json!({ text: value }));
+        assert_eq!(
+            refused["rejected"][text], "Needs item 12 = Yes",
+            "{value:?} is a value"
+        );
+    }
+    let blank = fill("2200A", &opened["draft"], json!({ text: "" }));
+    assert_eq!(blank["rejected"], json!({}));
+    let taken = fill(
+        "2200A",
+        &opened["draft"],
+        json!({ "frm2200Av2020:optTreaty_1": "true", text: "0" }),
+    );
+    assert_eq!(taken["rejected"], json!({}));
+    assert_eq!(taken["draft"]["tax_relief_specify"], "0");
+    // An amount box's zero is its empty value; any other amount refuses.
+    let amount = "frm2200Av2020:txtPrevReturn";
+    for value in ["0", "0.00"] {
+        let zero = fill("2200A", &opened["draft"], json!({ amount: value }));
+        assert_eq!(zero["rejected"], json!({}), "{value:?}");
+    }
+    let refused = fill("2200A", &opened["draft"], json!({ amount: "0.01" }));
+    assert_eq!(refused["rejected"][amount], "Needs Amended Return = Yes");
+}
+
+/// Round 2, item 7: joining the typed due date changes the draft's model
+/// version alone; a key the typed draft does not know survives.
+#[test]
+fn pr11_joining_the_typed_due_date_keeps_every_other_key() {
+    setup();
+    let kind = kind_of("2200A").unwrap();
+    let mut draft: Value = serde_json::from_str(STORED[0].1.trim_end()).unwrap();
+    assert_eq!(draft["penalty_model_version"], 1);
+    draft["a_key_this_build_does_not_know"] = json!({ "kept": true });
+    let mut expected = draft.clone();
+    expected["penalty_model_version"] = json!(2);
+    let groups = penalties::groups(kind);
+    let blanked = groups[0].keys.clone();
+    rows_excise::join_if_group_blanked(kind, &mut draft, &groups, &blanked, &Map::new());
+    assert_eq!(draft, expected);
 }
