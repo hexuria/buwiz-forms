@@ -1855,6 +1855,9 @@ fn shared_address_splits_file_what_the_base_filed() {
     }
 }
 
+/// A form's missing boxes: `(draft field, the message Check gives)`.
+type MissingBoxes = &'static [(&'static str, &'static str)];
+
 /// Literal 1600PT and 1600VT drafts stored without some of their Part I
 /// text boxes (an older shape): `fixtures/1600pt-missing-boxes.json` lacks
 /// `contact_number`, `fixtures/1600vt-missing-boxes.json` lacks `zip_code`
@@ -1863,7 +1866,7 @@ fn shared_address_splits_file_what_the_base_filed() {
 /// those keys cut out. Their computed penalties are stamped 2026-10-18; a
 /// Draft's are refreshed on every open, so the test restamps them with the
 /// day it runs before storing the row.
-const MISSING_BOXES: [(&str, &str, &[(&str, &str)]); 2] = [
+const MISSING_BOXES: [(&str, &str, MissingBoxes); 2] = [
     (
         "1600PT",
         include_str!("fixtures/1600pt-missing-boxes.json"),
