@@ -2716,9 +2716,12 @@ function itemRow(cx, ui, it, pi, ii, width) {
     const parts = [date.month, date.day, date.year];
     const locked = !s.editable || parts.every((f) => f.c || ui.isLocked(f.k));
     const input = s.inputs.get(date.oneKey);
+    // A blank locked date says why it waits, as every locked box does.
+    const shown = shownDate(oneDateText(s.values, date));
+    const hint = !shown ? parts.map((f) => ui.reasonFor(f.k)).find(Boolean) || "" : "";
     const box =
       locked || !input
-        ? lockedBox(cx, shownDate(oneDateText(s.values, date)), controlWidth({ t: "date" }, inner))
+        ? lockedBox(cx, shown || hint, controlWidth({ t: "date" }, inner), { hint: Boolean(hint) })
         : TextField(cx, input, { id: `fp-${date.oneKey}`, label: it.l, width: controlWidth({ t: "date" }, inner), error: false });
     controls = div().flex().flex_row().items_end().gap(SPACE[1]).child(box);
     if (!locked) controls.child(datePicker(cx, ui, id, date));

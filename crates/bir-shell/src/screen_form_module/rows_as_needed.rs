@@ -89,6 +89,224 @@ pub(super) enum Cell {
     ExpenseD1707(usize),
     /// 1606 and 1706 item 11 Yes.
     ReliefYes,
+    /// A part of a one-date box (1706 Schedule 2 item 7, 1707 item 1).
+    DatePart(DatePart),
+}
+
+/// Which part of a date a one-date box's key holds.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum DatePart {
+    Month,
+    Day,
+    Year,
+}
+
+/// The month, day and year keys of each one-date box (PR 5's page box,
+/// form_page.js `oneDate`): `(form, [month, day, year])`.
+const ONE_DATES: [(&str, [&str; 3]); 3] = [
+    (
+        "1706",
+        [
+            "frm1706:txtDateMonthI",
+            "frm1706:txtDateDayI",
+            "frm1706:txtDateYearI",
+        ],
+    ),
+    (
+        "1707",
+        [
+            "frm1707:txtPg1I1Month",
+            "frm1707:txtPg1I1Day",
+            "frm1707:txtPg1I1Year",
+        ],
+    ),
+    (
+        "2552",
+        [
+            "frm2552:txtPg1I1Month",
+            "frm2552:txtPg1I1Day",
+            "frm2552:txtPg1I1Year",
+        ],
+    ),
+];
+
+fn date_part(code: &str, key: &str) -> Option<DatePart> {
+    let (_, keys) = ONE_DATES.iter().find(|(form, _)| *form == code)?;
+    let at = keys.iter().position(|k| *k == key)?;
+    Some([DatePart::Month, DatePart::Day, DatePart::Year][at])
+}
+
+/// Rule 4 for the one-date boxes: their item is marked `one_date`, so the
+/// page shows the three boxes as one date ("Mar 15, 2026"), typed or picked,
+/// and sends the three parts together; the draft keeps them split.
+pub(super) fn mark_one_date(form: &mut Value, code: &str) {
+    let Some((_, keys)) = ONE_DATES.iter().find(|(form, _)| *form == code) else {
+        return;
+    };
+    let items = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
+    for item in items {
+        let mut fields: Vec<&str> = item["f"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|field| field["k"].as_str())
+            .collect();
+        fields.sort_unstable();
+        let mut wanted = keys.to_vec();
+        wanted.sort_unstable();
+        if fields == wanted {
+            item["one_date"] = Value::Bool(true);
+        }
+    }
+}
+
+/// Write a whole-number box's blank, 0.
+fn fill_whole_zero(kind: AgentFormKind, draft: &mut Value, key: &str) -> Result<(), String> {
+    bir_core::forms::agent::fill_as_user(kind, draft, key, &Value::from("0"))
+}
+
+/// Lesson 13 on a one-date box's part: blank clears it; anything else is
+/// the part of a MM/DD/YYYY date (a month 01-12, a day 01-31, a 4-digit
+/// year), as the page sends it.
+fn date_part_refusal(part: DatePart, value: &Value) -> Option<String> {
+    let shown = text(value);
+    if shown.is_empty() {
+        return None;
+    }
+    let number: Option<u32> = shown
+        .chars()
+        .all(|c| c.is_ascii_digit())
+        .then(|| shown.parse().ok())
+        .flatten();
+    let fits = match (part, number) {
+        (DatePart::Month, Some(n)) => shown.len() <= 2 && (1..=12).contains(&n),
+        (DatePart::Day, Some(n)) => shown.len() <= 2 && (1..=31).contains(&n),
+        (DatePart::Year, Some(_)) => shown.len() == 4,
+        _ => false,
+    };
+    (!fits).then(|| DATE_ERROR.to_string())
+}
+
+/// The page's own message for a date that is not one (form_page.js
+/// `DATE_ERROR`), so the page and the host read the same.
+pub(super) const DATE_ERROR: &str =
+    "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
+
+/// Whether month/day/year make a date the page's `parseTypedDate` reads: a
+/// real calendar day of a year 1900-2100.
+fn real_date(month: u32, day: u32, year: u32) -> bool {
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400) => {
+            29
+        }
+        2 => 28,
+        _ => 0,
+    };
+    (1900..=2100).contains(&year) && day >= 1 && day <= days
+}
+
+/// A batch's one-date writes judged whole (lesson 13): once its month, day
+/// and year are all there (the batch's own, else what the box shows), they
+/// must be a real date; else every part of it the batch writes is refused
+/// with the page's message, so no part lands alone.
+pub(super) fn refuse_dates(
+    kind: AgentFormKind,
+    shown: &Value,
+    edits: &[(String, Value)],
+) -> Map<String, Value> {
+    let mut out = Map::new();
+    let Some((_, keys)) = ONE_DATES
+        .iter()
+        .find(|(form, _)| *form == kind.form_code() && *form != "2552")
+    else {
+        return out;
+    };
+    if !edits.iter().any(|(key, _)| keys.contains(&key.as_str())) {
+        return out;
+    }
+    // A typed part is missing only when empty; a shown one also when it
+    // is the official zero blank ("00", 1707's "0").
+    let part = |key: &str| -> Option<String> {
+        match edits.iter().find(|(k, _)| k == key) {
+            Some((_, v)) => Some(text(v)).filter(|v| !v.is_empty()),
+            None => Some(shown[key].as_str().unwrap_or_default().trim().to_string())
+                .filter(|v| !v.chars().all(|c| c == '0')),
+        }
+    };
+    let [Some(month), Some(day), Some(year)] = keys.map(part) else {
+        return out;
+    };
+    let number = |v: &str| v.parse::<u32>().ok();
+    let fits = match (number(&month), number(&day), number(&year)) {
+        (Some(m), Some(d), Some(y)) => year.len() == 4 && real_date(m, d, y),
+        _ => false,
+    };
+    if !fits {
+        for (key, _) in edits.iter().filter(|(key, _)| keys.contains(&key.as_str())) {
+            out.insert(key.clone(), Value::from(DATE_ERROR));
+        }
+    }
+    out
+}
+
+/// What a stored one-date box holding only part of a date (a month with
+/// no day, a day with no month) says: the page shows it blank.
+fn partial_date(
+    kind: AgentFormKind,
+    values: &std::collections::BTreeMap<String, String>,
+) -> Option<String> {
+    let (_, [month, day, year]) = ONE_DATES
+        .iter()
+        .find(|(form, _)| *form == kind.form_code())?;
+    let get = |key: &str| {
+        values
+            .get(key)
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default()
+    };
+    let (m, d, y) = (get(month), get(day), get(year));
+    let unset = |v: &str| v.is_empty() || v.chars().all(|c| c == '0');
+    let (no_month, no_day) = (unset(&m), unset(&d));
+    if no_month == no_day {
+        return None;
+    }
+    let what = if no_day { "day" } else { "month" };
+    let m = if no_month {
+        "__".to_string()
+    } else {
+        format!("{m:0>2}")
+    };
+    let d = if no_day {
+        "__".to_string()
+    } else {
+        format!("{d:0>2}")
+    };
+    Some(format!(
+        "The stored date has no {what} ({m}/{d}/{y}); type the full date."
+    ))
+}
+
+/// The page's notices for a draft, shown with its messages: a stored
+/// partial one-date (display only; the draft and upload are unchanged).
+pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
+    let Ok(map) = bir_core::forms::agent::field_map(kind, draft) else {
+        return Vec::new();
+    };
+    let Some(message) = partial_date(kind, &map) else {
+        return Vec::new();
+    };
+    let keys = ONE_DATES
+        .iter()
+        .find(|(form, _)| *form == kind.form_code())
+        .map(|(_, keys)| keys.to_vec())
+        .unwrap_or_default();
+    vec![serde_json::json!({ "field": "one_date", "message": message, "keys": keys })]
 }
 
 /// A column of 2552's Part V row 5.
@@ -149,6 +367,12 @@ pub(super) fn part_iv_tag(row: usize) -> String {
 }
 
 pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
+    // 2552's item 1 is the return's identity: its fill keeps that lock.
+    if kind.form_code() != "2552"
+        && let Some(part) = date_part(kind.form_code(), key)
+    {
+        return Some(Cell::DatePart(part));
+    }
     let tin_part = |suffix: &str| match suffix {
         "1" => Some(0),
         "2" => Some(1),
@@ -271,7 +495,7 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
         Cell::Shares1707(..) | Cell::ExpenseD1707(_) => Some(1),
         // Item 17's manner before its Others text in one batch.
         Cell::Others0605 => Some(1),
-        Cell::Quarter0605(_) | Cell::ReliefYes => None,
+        Cell::Quarter0605(_) | Cell::ReliefYes | Cell::DatePart(_) => None,
     }
 }
 
@@ -348,6 +572,15 @@ pub(super) fn fill(
                 ordinary(draft)
             }
         }
+        Cell::DatePart(part) => match date_part_refusal(part, value) {
+            Some(why) => Err(why),
+            // 1707's parts are whole numbers: a cleared part is the official
+            // blank 0 (`00`), which the page shows as no date.
+            None if kind.form_code() == "1707" && text(value).is_empty() => {
+                fill_whole_zero(kind, draft, key)
+            }
+            None => ordinary(draft),
+        },
         Cell::ReliefYes => {
             // Yes again keeps the relief chosen from the list (Yes is "yes,
             // unspecified": probe.rs CHOICE_OPTION_SETS).
@@ -833,6 +1066,20 @@ pub(super) fn values(
     draft: &Value,
     map: &mut std::collections::BTreeMap<String, String>,
 ) {
+    // A one-date box whose month and day are both still the official blank
+    // `00` (a return not yet dated) shows no date at all, never "00/00/2026".
+    if let Some((_, [month, day, year])) =
+        ONE_DATES.iter().find(|(form, _)| *form == kind.form_code())
+    {
+        // Nor one holding only part of a date (03/00/2026): blank, with a
+        // notice saying what is stored (`notices`, `waits`).
+        let unset = |key: &str| map.get(key).is_some_and(|v| v.trim() == "00");
+        if unset(month) || unset(day) {
+            for key in [month, day, year] {
+                map.insert((*key).to_string(), String::new());
+            }
+        }
+    }
     if kind.form_code() == "1707"
         && let Some(address) = draft["registered_address"].as_str()
         && map.contains_key("frm1707:ProfileAddress1")
@@ -927,13 +1174,71 @@ fn order_1707_sellers(form: &mut Value) {
     }
 }
 
+/// The error keys of a PR 9 form's message, reordered only where its
+/// subject (first) key is drawn under Not on the printed sheet while
+/// another of its keys is drawn under a printed item: that key comes first,
+/// since the page draws a message under its first key's item
+/// (form_page.js `setErrors`). On PR 9's forms that is 1707's "ATC Code on
+/// Page 1 Item 3 is required." (bound with item 3's boxes to the page's own
+/// domestic/foreign question); every other message keeps its order
+/// (tests::as_needed golden). Keys in the part's tables count too.
+pub(super) fn order_error_keys(kind: AgentFormKind, keys: &mut [String]) {
+    if !matches!(
+        kind.form_code(),
+        "0605" | "1606" | "1706" | "1707" | "2000OT" | "2552"
+    ) {
+        return;
+    }
+    if let Some(form) = super::schema_entry(kind.form_code()) {
+        order_keys_in(form, keys);
+    }
+}
+
+/// `order_error_keys` on one form's schema.
+pub(super) fn order_keys_in(form: &Value, keys: &mut [String]) {
+    let mut off_sheet = std::collections::BTreeSet::new();
+    let mut drawn = std::collections::BTreeSet::new();
+    for part in form["parts"].as_array().into_iter().flatten() {
+        let off = part["n"] == "Not on the printed sheet";
+        for item in part["items"].as_array().into_iter().flatten() {
+            let fields = item["f"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|field| field["t"] != "hidden")
+                .filter_map(|field| field["k"].as_str());
+            let cells = item["keys"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|row| row.as_array().into_iter().flatten())
+                .filter_map(Value::as_str);
+            for key in fields.chain(cells) {
+                if off {
+                    off_sheet.insert(key.to_string());
+                } else {
+                    drawn.insert(key.to_string());
+                }
+            }
+        }
+    }
+    let Some(first) = keys.first() else {
+        return;
+    };
+    if !off_sheet.contains(first) {
+        return;
+    }
+    if let Some(at) = keys.iter().position(|key| drawn.contains(key)) {
+        keys[..=at].rotate_right(1);
+    }
+}
+
 /// What Schedule 1's add-more rate shows while its row is blank.
 pub(super) const LSE_RATE_WAITS: &str = "Schedule 1's rate is 6/10 of 1%.";
 
 /// What each box the form fills from another box waits for while it shows
 /// blank (the page shows it in the box).
 pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
-    let _ = draft;
     let mut out = Map::new();
     let fmv_boxes = |prefix: &str| {
         [
@@ -971,6 +1276,18 @@ pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
             }
         }
         "2552" => {
+            // Item 1 is the return's identity, set where it is started.
+            for key in ONE_DATES[2].1 {
+                out.insert(key.to_string(), Value::from(DATE_FROM_NEW_RETURN));
+            }
+            if let Some(why) = bir_core::forms::agent::field_map(kind, draft)
+                .ok()
+                .and_then(|map| partial_date(kind, &map))
+            {
+                for key in ONE_DATES[2].1 {
+                    out.insert(key.to_string(), Value::from(why.clone()));
+                }
+            }
             for n in 1..=9 {
                 out.insert(
                     format!("frm2552:txtPg2Pt5Sch1_{n}Col7"),

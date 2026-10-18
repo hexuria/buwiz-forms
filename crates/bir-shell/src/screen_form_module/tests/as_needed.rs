@@ -2074,3 +2074,525 @@ fn pr9_1707_schedule_1_date_is_a_date() {
         "03/15/2026"
     );
 }
+
+// ------------------------------------------------------- one-date boxes
+
+/// The one-date boxes (PR 5's page box): `(form, item, [month, day, year])`.
+const ONE_DATE_BOXES: [(&str, &str, [&str; 3]); 3] = [
+    (
+        "1706",
+        "7",
+        [
+            "frm1706:txtDateMonthI",
+            "frm1706:txtDateDayI",
+            "frm1706:txtDateYearI",
+        ],
+    ),
+    (
+        "1707",
+        "1",
+        [
+            "frm1707:txtPg1I1Month",
+            "frm1707:txtPg1I1Day",
+            "frm1707:txtPg1I1Year",
+        ],
+    ),
+    (
+        "2552",
+        "1",
+        [
+            "frm2552:txtPg1I1Month",
+            "frm2552:txtPg1I1Day",
+            "frm2552:txtPg1I1Year",
+        ],
+    ),
+];
+
+/// 1706 manual-2, 1707 manual-1, 2552 manual-2: each date the sheet prints
+/// as MM/DD/YYYY over three stored boxes is one date box on the page
+/// (`one_date`, form_page.js `oneDate`: shown "Mar 15, 2026", typed or
+/// picked, sent as the three parts); the draft keeps them split. A return
+/// not yet dated shows no date, never "00/00/2026". Lesson 13: a blank
+/// clears the parts, anything else must be a MM/DD/YYYY date's parts with a
+/// 4-digit year; 2552's item 1 is the return's identity and says what sets
+/// it.
+#[test]
+fn pr9_dates_over_three_boxes_are_one_date_box() {
+    setup();
+    for (code, no, keys) in ONE_DATE_BOXES {
+        let items = items_numbered(code, no);
+        let item = items
+            .iter()
+            .find(|it| it["one_date"] == true)
+            .unwrap_or_else(|| panic!("{code} item {no} is one date box"));
+        let mut fields: Vec<&str> = item["f"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["k"].as_str().unwrap())
+            .collect();
+        fields.sort_unstable();
+        let mut want = keys.to_vec();
+        want.sort_unstable();
+        assert_eq!(fields, want, "{code}");
+        // form_page.js `dateParts` finds the parts by their labels.
+        for (key, word) in keys.iter().zip(["month", "day", "year"]) {
+            let label = placed(code, key).label.to_ascii_lowercase();
+            assert!(label.contains(word), "{code} {key}: {label}");
+        }
+    }
+    // A return not yet dated: no "00" anywhere in item 1.
+    for code in ["1707", "2552"] {
+        let opened = open(code, 1);
+        let keys = ONE_DATE_BOXES
+            .iter()
+            .find(|(c, _, _)| *c == code)
+            .unwrap()
+            .2;
+        for key in keys {
+            assert_eq!(opened["values"][key], "", "{code} {key}");
+        }
+        assert_eq!(
+            agent::field_map(kind_of(code).unwrap(), &opened["draft"]).unwrap()[keys[1]],
+            "00",
+            "{code}: the upload keeps the official blank day"
+        );
+    }
+    let opened = open("2552", 1);
+    for key in ONE_DATE_BOXES[2].2 {
+        assert_eq!(opened["waits"][key], rows_as_needed::DATE_FROM_NEW_RETURN);
+        assert!(opened["locks"][key].is_string());
+    }
+    // Review item 7: the host writes 1706's and 1707's date parts itself
+    // (rows_as_needed.rs fill), so no "cannot be filled here" lock applies;
+    // 2552's item 1 keeps its identity lock.
+    for (code, _, keys) in ONE_DATE_BOXES {
+        let kind = kind_of(code).unwrap();
+        for key in keys {
+            assert_eq!(
+                catalogs::host_writes(kind, key),
+                code != "2552",
+                "{code} {key}"
+            );
+        }
+    }
+    // Lesson 13 on 1706's and 1707's boxes, as the page sends them.
+    for (code, _, keys) in &ONE_DATE_BOXES[..2] {
+        let opened = open(code, 1);
+        let date = fill(
+            code,
+            &opened["draft"],
+            json!({ keys[0]: "03", keys[1]: "15", keys[2]: "2026" }),
+        );
+        assert!(
+            date["rejected"].as_object().unwrap().is_empty(),
+            "{code}: {}",
+            date["rejected"]
+        );
+        let map = printed(code, &date["draft"]);
+        assert_eq!(
+            (
+                map[keys[0]].as_str(),
+                map[keys[1]].as_str(),
+                map[keys[2]].as_str()
+            ),
+            ("03", "15", "2026"),
+            "{code}"
+        );
+        // Each part alone, then the whole date the way the page's
+        // parseTypedDate reads it: a real calendar day of 1900-2100, with
+        // the page's own message (form_page.js DATE_ERROR).
+        let page = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../app/shell/form_page.js"
+        ))
+        .unwrap();
+        assert!(page.contains(&format!(
+            "const DATE_ERROR = \"{}\";",
+            rows_as_needed::DATE_ERROR
+        )));
+        for bad in [
+            json!({ keys[0]: "13" }),
+            json!({ keys[1]: "32" }),
+            json!({ keys[2]: "26" }),
+            json!({ keys[0]: "March" }),
+            json!({ keys[0]: "02", keys[1]: "31", keys[2]: "2026" }),
+            json!({ keys[0]: "02", keys[1]: "29", keys[2]: "2026" }),
+            json!({ keys[0]: "04", keys[1]: "31" }),
+            json!({ keys[2]: "0000" }),
+            json!({ keys[2]: "1899" }),
+            json!({ keys[2]: "2101" }),
+        ] {
+            let refused = fill(code, &date["draft"], bad.clone());
+            for key in bad.as_object().unwrap().keys() {
+                assert_eq!(
+                    refused["rejected"][key],
+                    rows_as_needed::DATE_ERROR,
+                    "{code} {bad}"
+                );
+            }
+            assert_eq!(
+                printed(code, &refused["draft"]),
+                printed(code, &date["draft"]),
+                "{code} {bad}: no part lands alone"
+            );
+        }
+        for good in [
+            json!({ keys[0]: "02", keys[1]: "29", keys[2]: "2024" }),
+            json!({ keys[0]: "12", keys[1]: "31", keys[2]: "2100" }),
+            json!({ keys[0]: "01", keys[1]: "01", keys[2]: "1900" }),
+        ] {
+            let taken = fill(code, &date["draft"], good.clone());
+            assert!(
+                taken["rejected"].as_object().unwrap().is_empty(),
+                "{code} {good}: {}",
+                taken["rejected"]
+            );
+        }
+        let cleared = fill(
+            code,
+            &date["draft"],
+            json!({ keys[0]: "", keys[1]: "", keys[2]: "" }),
+        );
+        assert!(
+            cleared["rejected"].as_object().unwrap().is_empty(),
+            "{code}: {}",
+            cleared["rejected"]
+        );
+        assert!(
+            keys.iter().all(|k| cleared["values"][*k] == ""),
+            "{code}: {}",
+            cleared["values"]
+        );
+    }
+}
+
+/// Lesson 13 and 6 on the one-date boxes: a stored draft from pr0b-push
+/// (literal fixtures, each holding a legacy partial or short date: 1706's
+/// installment date "3"/"5"/"26", 1707's and 2552's month 3 with day 0)
+/// opens and saves unchanged, byte for byte, until its filer edits it.
+#[test]
+fn pr9_stored_one_dates_open_and_save_unchanged() {
+    for (code, fixture) in [
+        ("1706", include_str!("fixtures/pr9_legacy_1706.json")),
+        ("1707", include_str!("fixtures/pr9_legacy_1707.json")),
+        ("2552", include_str!("fixtures/pr9_legacy_2552.json")),
+    ] {
+        setup();
+        let stored: Value = serde_json::from_str(fixture).unwrap();
+        // A row of the form for the fixture's period, then its bytes in it.
+        let mut seed = stored.clone();
+        seed["id"] = Value::Null;
+        let first = save(code, &seed);
+        assert_eq!(first["id"], 1, "{code}");
+        with_database(|db| {
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET data_json = ?1 WHERE id = 1",
+                    [fixture],
+                )
+                .map(|_| ())
+                .map_err(|e| HostError::new(e.to_string()))
+        })
+        .unwrap();
+        let opened = open(code, 1);
+        let raw_now = || -> String {
+            with_database(|db| {
+                db.conn_for_tests()
+                    .query_row("SELECT data_json FROM form_drafts WHERE id = 1", [], |r| {
+                        r.get(0)
+                    })
+                    .map_err(|e| HostError::new(e.to_string()))
+            })
+            .unwrap()
+        };
+        assert_eq!(raw_now(), fixture, "{code}: opening writes nothing");
+        // 1707's and 2552's stored month 3 with day 0 shows blank, with
+        // what is stored said where the date is (display only).
+        if code != "1706" {
+            let keys = ONE_DATE_BOXES
+                .iter()
+                .find(|(form, _, _)| *form == code)
+                .unwrap()
+                .2;
+            let why = "The stored date has no day (03/__/2026); type the full date.";
+            for key in keys {
+                assert_eq!(opened["values"][key], "", "{code} {key}");
+            }
+            let notice = opened["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|e| e["message"] == why)
+                .unwrap_or_else(|| panic!("{code}: {}", opened["errors"]));
+            assert_eq!(notice["keys"], json!(keys), "{code}");
+            assert_eq!(placed(code, keys[0]).no, "1", "{code}");
+            if code == "2552" {
+                for key in keys {
+                    assert_eq!(opened["waits"][key], why, "{code} {key}");
+                }
+            }
+        }
+        // The host hands numbers to the page as f64 (`1` and `1.0` alike).
+        fn same(a: &Value, b: &Value) -> bool {
+            match (a, b) {
+                (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
+                (Value::Object(x), Value::Object(y)) => {
+                    x.len() == y.len()
+                        && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same(v, w)))
+                }
+                (Value::Array(x), Value::Array(y)) => {
+                    x.len() == y.len() && x.iter().zip(y).all(|(v, w)| same(v, w))
+                }
+                _ => a == b,
+            }
+        }
+        // The profile baseline (PR 0c) is recorded on open and on save, the
+        // row's last key; set aside, the draft is the stored one.
+        let mut shown = opened["draft"].clone();
+        if let Some(map) = shown.as_object_mut() {
+            map.remove("profile_baseline");
+        }
+        assert!(same(&shown, &stored), "{code}: opens unchanged");
+        let filed = |draft: &Value| agent::field_map(kind_of(code).unwrap(), draft).unwrap();
+        assert_eq!(
+            filed(&opened["draft"]),
+            filed(&stored),
+            "{code}: files unchanged"
+        );
+        save(code, &opened["draft"]);
+        let saved = raw_now();
+        let saved = match saved.find(",\"profile_baseline\":") {
+            Some(at) => {
+                let baseline: Value =
+                    serde_json::from_str(&saved[at + 20..saved.len() - 1]).unwrap();
+                assert!(baseline.is_object(), "{code}: the baseline is the last key");
+                format!("{}}}", &saved[..at])
+            }
+            None => saved,
+        };
+        assert_eq!(saved, fixture, "{code}: saved byte for byte");
+    }
+}
+
+/// 1707 manual-1: item 3 reads its printed ATC options, and the "ATC Code
+/// on Page 1 Item 3 is required." message names item 3's boxes, so the page
+/// draws it under item 3, which no Additional details group holds.
+#[test]
+fn pr9_1707_item_3_message_sits_under_item_3() {
+    setup();
+    assert_eq!(
+        labels_of("1707", "3"),
+        ["II030 Individual", "IC110 Corporation"]
+    );
+    let opened = open("1707", 1);
+    let error = opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["message"] == "ATC Code on Page 1 Item 3 is required.")
+        .expect("item 3's message on a fresh return");
+    let keys: Vec<&str> = error["keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|k| k.as_str().unwrap())
+        .collect();
+    // The page draws a message under its first key's item.
+    let at = placed("1707", keys[0]);
+    assert_eq!(
+        (at.no.as_str(), at.part.as_str()),
+        ("3", "Page 1"),
+        "{keys:?}"
+    );
+    assert!(
+        keys.iter()
+            .all(|key| placed("1707", key).item != "Additional details")
+    );
+}
+
+/// 2552 manual-2: item 5 is one RDO box (the runtime selector stays a
+/// hidden copy); items 11 and 12 carry their printed headings and 11A's
+/// caption is the printed one (html-frozen/2552-2018/index.html).
+#[test]
+fn pr9_2552_items_5_11_and_12_read_as_printed() {
+    let sheet = sheet_text("2552-2018");
+    let five: Vec<String> = items_numbered("2552", "5")
+        .iter()
+        .flat_map(|it| it["f"].as_array().cloned().unwrap_or_default())
+        .filter(|f| f["t"] != "hidden")
+        .map(|f| f["k"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(five, ["frm2552:txtPg1I5RDO"]);
+    assert!(
+        !drawn("2552")
+            .iter()
+            .any(|d| d.key == "frm2552:rdoPg1Pt1I5RDO")
+    );
+    assert!(schema_keys("2552").contains("frm2552:rdoPg1Pt1I5RDO"));
+    assert_eq!(item("2552", "11")["l"], "Kinds of Transaction");
+    assert!(sheet.contains("11 Kinds of Transaction"));
+    let lse = placed("2552", "frm2552:rdoPg1I11TransactionLSE");
+    assert_eq!(
+        lse.label,
+        "11A Shares of Stocks Listed and Traded through the LSE"
+    );
+    assert!(sheet.contains("11A Shares of Stocks Listed and Traded through the LSE"));
+    // Item 12 is its printed heading, with 12A and 12B under it.
+    assert!(sheet.contains("12 For Initial Public Offering"));
+    assert_eq!(item("2552", "12")["l"], "For Initial Public Offering");
+    let twelve: Vec<(String, String)> = items_numbered("2552", "12")
+        .iter()
+        .flat_map(|it| it["f"].as_array().cloned().unwrap_or_default())
+        .map(|f| {
+            (
+                f["k"].as_str().unwrap().to_string(),
+                f["l"].as_str().unwrap_or_default().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        twelve,
+        [
+            (
+                "frm2552:txtPg1Pt1I12NumOfShare".to_string(),
+                "12A No. of Shares Sold, Bartered, or Exchanged".to_string()
+            ),
+            (
+                "frm2552:txtPg1Pt1I12TotShare".to_string(),
+                "12B Total Outstanding Shares of Stocks after Listing in the LSE".to_string()
+            ),
+        ]
+    );
+    for (key, label) in &twelve {
+        assert!(sheet.contains(label.as_str()), "{label}");
+        assert_eq!(placed("2552", key).no, "12", "{key}");
+    }
+    assert!(items_numbered("2552", "12A").is_empty());
+    assert!(items_numbered("2552", "12B").is_empty());
+}
+
+/// Review item 4: the error-key reorder moves only a message whose subject
+/// key is drawn under Not on the printed sheet while another of its keys is
+/// drawn under a printed item; on the six forms' fresh returns and samples
+/// that is 1707's item 3 message alone. Oracle: each message's keys in the
+/// bindings' own order (`message_keys`); the golden pins every message.
+#[test]
+fn pr9_error_key_order_moves_only_the_1707_item_3_message() {
+    setup();
+    let mut lines = Vec::new();
+    let mut moved = BTreeSet::new();
+    for (code, _) in FORMS {
+        let kind = kind_of(code).unwrap();
+        for (source, opened) in [("open", open(code, 1)), ("sample", sample(code))] {
+            for error in opened["errors"].as_array().unwrap() {
+                let keys: Vec<String> = error["keys"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|k| k.as_str().unwrap().to_string())
+                    .collect();
+                let field = error["field"].as_str().unwrap();
+                if field != "one_date" {
+                    let bound = message_keys(kind, field, schema_keys(code));
+                    let mut sorted = bound.clone();
+                    sorted.sort();
+                    let mut ours = keys.clone();
+                    ours.sort();
+                    assert_eq!(ours, sorted, "{code} {field}: the same keys");
+                    if keys != bound {
+                        moved.insert((code.to_string(), error["message"].to_string()));
+                    }
+                }
+                lines.push(format!(
+                    "{code}\t{source}\t{field}\t{}\t{}",
+                    error["message"].as_str().unwrap(),
+                    keys.join(" ")
+                ));
+            }
+        }
+    }
+    assert_eq!(
+        moved,
+        BTreeSet::from([(
+            "1707".to_string(),
+            "\"ATC Code on Page 1 Item 3 is required.\"".to_string()
+        )])
+    );
+    let golden_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/screen_form_module/tests/fixtures/pr9_error_keys.golden.tsv"
+    );
+    let got = lines.join("\n") + "\n";
+    if std::env::var_os("UPDATE_PR9_GOLDEN").is_some() {
+        std::fs::write(golden_path, &got).unwrap();
+    }
+    assert_eq!(got, std::fs::read_to_string(golden_path).unwrap());
+}
+
+/// Review item 8: the reorder reads Not on the printed sheet's tables
+/// (`keys` rows) as well as its fields; a subject key there yields to the
+/// first key drawn under a printed item, and a drawn subject never moves.
+#[test]
+fn pr9_error_key_order_reads_off_sheet_tables() {
+    let mut tables = 0;
+    for (code, _) in FORMS {
+        let kind = kind_of(code).unwrap();
+        let schema = schema_entry(code).unwrap();
+        let mut off = Vec::new();
+        let mut drawn = Vec::new();
+        for part in schema["parts"].as_array().unwrap() {
+            let here = part["n"] == "Not on the printed sheet";
+            for item in part["items"].as_array().unwrap() {
+                if let Some(rows) = item["keys"].as_array() {
+                    let cells: Vec<String> = rows
+                        .iter()
+                        .flat_map(|row| row.as_array().cloned().unwrap_or_default())
+                        .filter_map(|k| k.as_str().map(str::to_string))
+                        .collect();
+                    if here {
+                        tables += 1;
+                        off.extend(cells);
+                    } else {
+                        drawn.extend(cells);
+                    }
+                }
+                for field in item["f"].as_array().into_iter().flatten() {
+                    if field["t"] == "hidden" {
+                        continue;
+                    }
+                    let key = field["k"].as_str().unwrap().to_string();
+                    if here { off.push(key) } else { drawn.push(key) }
+                }
+            }
+        }
+        let Some(d) = drawn.first() else {
+            continue;
+        };
+        for k in &off {
+            let mut keys = vec![k.clone(), "x".to_string(), d.clone()];
+            rows_as_needed::order_error_keys(kind, &mut keys);
+            assert_eq!(keys, [d.clone(), k.clone(), "x".to_string()], "{code}");
+            let mut keys = vec![d.clone(), k.clone()];
+            rows_as_needed::order_error_keys(kind, &mut keys);
+            assert_eq!(keys, [d.clone(), k.clone()], "{code}");
+        }
+    }
+    // None of the six forms has a table there today; a synthetic schema
+    // shows one is read.
+    assert_eq!(tables, 0);
+    let form = json!({"parts": [
+        {"n": "Part I", "items": [{"f": [{"k": "a", "t": "text"}]}]},
+        {"n": "Not on the printed sheet", "items": [
+            {"rows": 1, "keys": [["t1", "t2"]]},
+            {"f": [{"k": "h", "t": "hidden"}]},
+        ]},
+    ]});
+    let mut keys = ["t2", "h", "a"].map(String::from);
+    rows_as_needed::order_keys_in(&form, &mut keys);
+    assert_eq!(keys, ["a", "t2", "h"]);
+    // A hidden copy is drawn nowhere, so it never leads the reorder.
+    let mut keys = ["h", "a"].map(String::from);
+    rows_as_needed::order_keys_in(&form, &mut keys);
+    assert_eq!(keys, ["h", "a"]);
+}
