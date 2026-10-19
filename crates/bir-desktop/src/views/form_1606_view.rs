@@ -249,6 +249,26 @@ impl Form1606View {
             .unwrap_or_default()
     }
 
+    /// The filer typed in a sale-date box (decision P5-7): record the part,
+    /// or take it out when the box was cleared, before the edit is read.
+    fn note_sale_date_typed(&mut self, field: &'static str, cx: &App) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let key = match field {
+            "transaction_month" => "month",
+            "transaction_day" => "day",
+            _ => "year",
+        };
+        let value = self.input_text(key, cx).trim().parse::<u32>().unwrap_or(0);
+        bir_core::forms::event_trigger::note_trigger_typed(
+            "1606",
+            &mut self.draft.lifecycle,
+            field,
+            value,
+        );
+    }
+
     /// Read every editor value into the draft, then recompute and validate.
     /// A malformed number is reported instead of becoming zero.
     fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
@@ -1224,11 +1244,20 @@ impl QueueableFormView for Form1606View {
             let value = Self::initial(&draft, &key);
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
+            let trigger_field = match key.as_str() {
+                "month" => Some("transaction_month"),
+                "day" => Some("transaction_day"),
+                "year" => Some("transaction_year"),
+                _ => None,
+            };
             subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                move |this: &mut Self, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
+                        if let Some(field) = trigger_field {
+                            this.note_sale_date_typed(field, cx);
+                        }
                         this.sync_from_inputs(cx);
                     }
                 },
@@ -1287,7 +1316,11 @@ impl QueueableFormView for Form1606View {
 
     /// 1606 is event-based: each dashboard open-ended slot is one transaction.
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1606Draft {
-        Form1606Draft::new_from_profile(profile, year, u32::from(period.max(1)))
+        let mut draft = Form1606Draft::new_from_profile(profile, year, u32::from(period.max(1)));
+        // This view records the typed sale date (sync_from_inputs), so its
+        // new drafts follow the typed-trigger model (decision P5-7).
+        draft.lifecycle.trigger_date_model = true;
+        draft
     }
 }
 

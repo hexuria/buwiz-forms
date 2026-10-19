@@ -164,11 +164,15 @@ impl EditorState {
             }
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
+            let typed_key = key.clone();
             self._subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
-                |this: &mut V, _, event: &InputEvent, _, cx| {
+                move |this: &mut V, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
+                        if this.draft().lifecycle().is_editable() {
+                            this.input_typed(&typed_key, cx);
+                        }
                         this.kit_mut().revision += 1;
                         sync(this, cx);
                     }
@@ -310,6 +314,9 @@ pub trait KitView:
     fn print_field_map(&self) -> BTreeMap<String, String> {
         self.draft().field_map()
     }
+    /// The filer typed in the editor `key` (an edit event, before it is
+    /// read). The 1706 view records its typed transaction date here.
+    fn input_typed(&mut self, _key: &str, _cx: &App) {}
 }
 
 fn element_id(slug: &str, suffix: &str) -> ElementId {

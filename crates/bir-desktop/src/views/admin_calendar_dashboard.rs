@@ -15,6 +15,9 @@ use crate::components::date_input::{DateInput, DateInputState};
 use crate::components::form_multi_select;
 use crate::components::multi_select::{MultiSelect, MultiSelectEvent, MultiSelectState};
 
+/// What the override list says of an entry it cannot read (decision P5-10).
+pub(crate) const DAMAGED_OVERRIDE_NOTE: &str = "Couldn't read this entry; kept as stored";
+
 pub enum AdminCalendarEvent {
     OverridesChanged,
 }
@@ -44,6 +47,9 @@ pub struct AdminCalendarDashboard {
     rules: Vec<OfficialRule>,
     deadlines: Vec<ResolvedTaxDeadline>,
     overrides: Vec<DeadlineOverride>,
+    /// Stored entries that cannot be read (decision P5-10): listed, kept
+    /// as stored by every save.
+    damaged_overrides: Vec<String>,
     // Override editor modal
     override_editor_open: bool,
     editing_override_id: Option<String>,
@@ -67,13 +73,13 @@ impl AdminCalendarDashboard {
         let rules = DeadlineResolver::official_rules();
         // The shipped official holidays (D8a): adds only what was never
         // offered and keeps every override the user saved.
-        let overrides = db
+        let (overrides, damaged_overrides) = db
             .lock()
             .map(|d| {
                 if let Err(error) = d.seed_official_holidays() {
                     tracing::warn!(%error, "official holidays not seeded");
                 }
-                d.get_deadline_overrides()
+                (d.get_deadline_overrides(), d.damaged_deadline_overrides())
             })
             .unwrap_or_default();
 
@@ -107,6 +113,7 @@ impl AdminCalendarDashboard {
             rules,
             deadlines,
             overrides,
+            damaged_overrides,
             override_editor_open: false,
             editing_override_id: None,
             override_editor_error: None,
@@ -125,6 +132,11 @@ impl AdminCalendarDashboard {
             .db
             .lock()
             .map(|d| d.get_deadline_overrides())
+            .unwrap_or_default();
+        self.damaged_overrides = self
+            .db
+            .lock()
+            .map(|d| d.damaged_deadline_overrides())
             .unwrap_or_default();
         self.deadlines = DeadlineResolver::resolve_deadline_calendar_year_with_overrides(
             self.selected_year,
@@ -588,7 +600,33 @@ impl AdminCalendarDashboard {
             });
         }
 
-        if self.overrides.is_empty() {
+        // Entries that cannot be read: shown, never erased (decision P5-10).
+        for (idx, raw) in self.damaged_overrides.iter().enumerate() {
+            let shown: String = raw.chars().take(160).collect();
+            container = container.child(rsx! {
+                <div
+                    id={SharedString::from(format!("damaged-override-{}", idx))}
+                    w_full
+                    p_4
+                    bg={cx.theme().background}
+                    border_1
+                    border_color={cx.theme().danger.opacity(0.4)}
+                    rounded_xl
+                    flex
+                    flex_col
+                    gap_1
+                >
+                    <div text_sm font_weight={FontWeight::BOLD} text_color={cx.theme().danger}>
+                        {DAMAGED_OVERRIDE_NOTE}
+                    </div>
+                    <div text_xs text_color={cx.theme().muted_foreground}>
+                        {shown}
+                    </div>
+                </div>
+            });
+        }
+
+        if self.overrides.is_empty() && self.damaged_overrides.is_empty() {
             container = container.child(rsx! {
                 <div w_full py_8 flex justify_center>
                     <div text_sm text_color={cx.theme().muted_foreground}>
