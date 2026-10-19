@@ -663,14 +663,20 @@ const TINOS_ADVANCES: &[(u32, u16)] = &[
 /// out smaller.
 const FALLBACK_EMS: f64 = 1.3;
 
-/// What a tab counts, in ems. The print keeps a typed tab (an input's value
-/// and the static page's `white-space:pre` span both draw it), and Chromium
-/// draws one 2.22 em wide in Arimo and 2.0 em in Tinos; 2.3 em is above
-/// both.
-const TAB_EMS: f64 = 2.3;
+/// How many space advances apart Chromium sets tab stops (CSS `tab-size`,
+/// 8 by default). A plain input's value keeps a typed tab, which Chromium
+/// draws to the next stop. Measured in headless Chrome in an `<input>` with
+/// the eBIRForms faces (2048 px type): the stops are 8 × (the face's space
+/// advance + word-spacing + letter-spacing) apart from the start of the
+/// line, Arimo 8 × 569 and Tinos 8 × 512 font units; the tab takes no
+/// letter- or word-spacing of its own; and a tab that would end less than
+/// half a space advance short of its stop runs on to the next one. The
+/// stacked-line overflow path ([`plain_lines`]) splits a value into words,
+/// so there a tab or a no-break space prints as a single space.
+const TAB_SPACES: f64 = 8.0;
 
 /// Whether word-spacing applies after `c`: a space or a no-break space
-/// (U+00A0), as Chromium spaces both.
+/// (U+00A0); headless Chrome adds an `<input>`'s word-spacing to both.
 fn is_word_space(c: char) -> bool {
     c == ' ' || c == '\u{a0}'
 }
@@ -690,20 +696,23 @@ impl Face {
         }
     }
 
-    /// `text`'s advance width in ems of this face; a tab counts
-    /// [`TAB_EMS`], another character it does not map [`FALLBACK_EMS`].
+    /// `text`'s advance width in ems of this face; a tab counts a whole
+    /// tab stop, [`TAB_SPACES`] space advances (the most it takes; where it
+    /// ends is [`SheetType::width`]'s), another character the face does not
+    /// map [`FALLBACK_EMS`].
     fn ems(self, text: &str) -> f64 {
+        text.chars().map(|c| self.char_ems(c)).sum()
+    }
+
+    /// [`Face::ems`] of one character.
+    fn char_ems(self, c: char) -> f64 {
+        if c == '\t' {
+            return TAB_SPACES * self.char_ems(' ');
+        }
         let table = self.advances();
-        text.chars()
-            .map(|c| {
-                if c == '\t' {
-                    return TAB_EMS;
-                }
-                table
-                    .binary_search_by_key(&u32::from(c), |(cp, _)| *cp)
-                    .map_or(FALLBACK_EMS, |at| f64::from(table[at].1) / UNITS_PER_EM)
-            })
-            .sum()
+        table
+            .binary_search_by_key(&u32::from(c), |(cp, _)| *cp)
+            .map_or(FALLBACK_EMS, |at| f64::from(table[at].1) / UNITS_PER_EM)
     }
 }
 
@@ -853,17 +862,67 @@ impl SheetType {
 
     /// The width (pt) `text` sets at `size` pt with `letter` spacing: its
     /// advances in this face, the word-spacing on every space and the
-    /// letter-spacing on every character.
+    /// letter-spacing on every character; a tab runs to the next tab stop
+    /// ([`TAB_SPACES`]).
     fn width(&self, letter: Spacing, text: &str, size: f64) -> f64 {
+        if text.contains('\t') {
+            return self.width_with_tabs(letter, text, size);
+        }
         let spaces = text.chars().filter(|c| is_word_space(*c)).count() as f64;
         let chars = text.chars().count() as f64;
         self.face.ems(text) * size + spaces * self.word.at(size) + chars * letter.at(size)
     }
 
+    /// [`SheetType::width`] of a text with tabs, set left to right: each
+    /// tab ends at the next multiple of the stop, 8 × (space advance +
+    /// word-spacing + letter-spacing), from the line's start, or at the one
+    /// after it when it would end less than half a space advance short.
+    fn width_with_tabs(&self, letter: Spacing, text: &str, size: f64) -> f64 {
+        let (word, letter) = (self.word.at(size), letter.at(size));
+        let space = self.face.char_ems(' ') * size;
+        let stop = TAB_SPACES * (space + word + letter);
+        text.chars().fold(0.0, |at, c| {
+            if c == '\t' {
+                if stop <= 0.0 {
+                    return at;
+                }
+                let mut advance = stop - at.rem_euclid(stop);
+                if advance < space / 2.0 {
+                    advance += stop;
+                }
+                at + advance
+            } else if is_word_space(c) {
+                at + self.face.char_ems(c) * size + word + letter
+            } else {
+                at + self.face.char_ems(c) * size + letter
+            }
+        })
+    }
+
     /// The largest type size (pt), at most `max` and rounded down to 0.01
     /// pt, at which `text` sets within `room` pt: the width is linear in the
-    /// size, `ems × size + spaces × word + characters × letter`.
+    /// size, `ems × size + spaces × word + characters × letter`. A text with
+    /// tabs, where a tab ends is not linear in the size, is searched over
+    /// the hundredths of a point.
     fn fit(&self, letter: Spacing, room: f64, text: &str, max: f64) -> f64 {
+        if text.contains('\t') {
+            let sets =
+                |hundredths: i64| self.width(letter, text, hundredths as f64 / 100.0) <= room;
+            let (mut low, mut high) = (1_i64, ((max * 100.0).floor() as i64).max(1));
+            if sets(high) {
+                return floor_size(high as f64 / 100.0);
+            }
+            // `low` sets (or is the 0.01 pt floor); `high` does not.
+            while high - low > 1 {
+                let middle = low + (high - low) / 2;
+                if sets(middle) {
+                    low = middle;
+                } else {
+                    high = middle;
+                }
+            }
+            return floor_size(low as f64 / 100.0);
+        }
         let spaces = text.chars().filter(|c| is_word_space(*c)).count() as f64;
         let chars = text.chars().count() as f64;
         let per_pt = self.face.ems(text) + spaces * self.word.em + chars * letter.em;
@@ -1332,23 +1391,37 @@ fn fill_text_input(
             ));
         }
     } else {
+        // A split cell ([`SINGLE_CHARACTER_CELLS`]) holding no more
+        // characters than boxes prints one per box at its class's size
+        // (`split_single_character_cells`); a longer value prints once, as
+        // a plain line measured across the whole cell, its boxes empty.
+        let split =
+            sheet.split.iter().any(|(cell, _)| *cell == input_name) && splits(tags, indices);
+        let overflow = (split && !fits_one_per_box(print, indices.len()))
+            .then(|| comb_overflow_line(html, input_name, print, sheet))
+            .flatten();
+        if let Some((at, line)) = overflow {
+            replacements.push((at, at, line));
+            for (offset, &index) in indices.iter().enumerate() {
+                let writer = (via_cell && offset == 0).then_some(print);
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, "", writer),
+                ));
+            }
+            return;
+        }
         // A value longer than its plain input prints smaller, measured, so
-        // it stays inside the input; one that fits keeps its bytes. Each
-        // input of the cell is measured by its own room: a split cell
-        // ([`SINGLE_CHARACTER_CELLS`]) holding one character per box keeps
-        // the class size, and one it cannot split keeps the whole value in
-        // its first box only (`split_single_character_cells`).
+        // it stays inside the input; one that fits keeps its bytes.
         let width = via_cell
             .then(|| plain_cell_width(html, input_name))
             .flatten();
-        let split =
-            sheet.split.iter().any(|(cell, _)| *cell == input_name) && splits(tags, indices);
-        let split_fits = split && fits_one_per_box(print, indices.len());
-        for (offset, &index) in indices.iter().enumerate() {
+        for &index in indices {
             let writer = via_cell.then_some(print);
             let tag = set_value(tags[index].tag, print, writer);
             let size = width
-                .filter(|_| !split_fits && (!split || offset == 0))
+                .filter(|_| !split)
                 .and_then(|width| plain_input_size(sheet, width, tags[index].tag, print));
             let tag = size.map_or_else(|| tag.clone(), |size| with_font_size(&tag, size));
             replacements.push((tags[index].start, tags[index].end, tag));
@@ -2679,19 +2752,41 @@ const SHEET_JOINS: &[(&str, &[SheetJoin])] = &[(
 /// Text cells drawn as a row of one-character inputs that are not a comb
 /// (no `data-slot-index`), per sheet, each with how a code shorter than its
 /// boxes sits in them. A text join writes its whole value into every input
-/// of its cell, so these are re-split one character per box. Only the
-/// sheets listed: 1600wp-2010's attachment-period dates (p1c62-p1c67) have
-/// the same cells and are left to its own group (PR 3).
-const SINGLE_CHARACTER_CELLS: &[(&str, &[(&str, bool)])] = &[(
-    "2550m-2007",
-    // Item 3 sheets (a count, right-aligned), item 5 RDO, item 10 ZIP.
-    &[("p1c3", true), ("p1c130", false), ("p1c21", false)],
-)];
+/// of its cell, so these are re-split one character per box. A value with
+/// more characters than boxes prints once as a plain line across the cell
+/// (`fill_text_input`). Every joined cell of this shape on the frozen
+/// sheets is listed.
+const SINGLE_CHARACTER_CELLS: &[(&str, &[(&str, bool)])] = &[
+    (
+        "1600wp-2010",
+        // The attachment's "FOR THE PERIOD (MM/DD/YYYY)": from MM, DD and
+        // YYYY, to MM, DD and YYYY, one-character boxes (maxlength 1).
+        &[
+            ("p1c62", false),
+            ("p1c63", false),
+            ("p1c64", false),
+            ("p1c65", false),
+            ("p1c66", false),
+            ("p1c67", false),
+        ],
+    ),
+    (
+        "2550m-2007",
+        // Item 3 sheets (a count, right-aligned), item 5 RDO, item 10 ZIP.
+        &[("p1c3", true), ("p1c130", false), ("p1c21", false)],
+    ),
+];
+
+/// The sheets of [`SINGLE_CHARACTER_CELLS`] whose split cells have been
+/// rewritten since they were listed (PR 4) whether a value was written or
+/// not. 1600WP's, listed in round 6, are rewritten only when filled, so a
+/// document that leaves them empty prints them as before.
+const SPLIT_REWRITES_UNFILLED: &[&str] = &["2550m-2007"];
 
 /// One character per input of `slug`'s [`SINGLE_CHARACTER_CELLS`], in the
 /// inputs' order. A value with more characters than boxes, or with
-/// characters other than letters and digits, prints whole in the first box
-/// (nothing is cut) and the other boxes stay empty.
+/// characters other than letters and digits, was printed by the fill as a
+/// line across the cell, its boxes empty, and is left as it is.
 fn split_single_character_cells(slug: &str, html: &str) -> String {
     let Some((_, cells)) = SINGLE_CHARACTER_CELLS.iter().find(|(s, _)| *s == slug) else {
         return html.to_string();
@@ -2707,31 +2802,30 @@ fn split_single_character_cells(slug: &str, html: &str) -> String {
             continue;
         }
         let first = tags[indices[0]].tag;
-        let value = attr(first, "data-writer-value")
-            .or_else(|| attr(first, "value"))
-            .unwrap_or("");
+        let written = attr(first, "data-writer-value").or_else(|| attr(first, "value"));
+        // An unfilled cell is left as the sheet draws it, except on the
+        // sheets whose split cells every fill has rewritten, filled or not
+        // (an empty box gains `value=""`; the goldens pin those bytes).
+        if written.is_none() && !SPLIT_REWRITES_UNFILLED.contains(&slug) {
+            continue;
+        }
+        let value = written.unwrap_or("");
         let chars: Vec<char> = value.chars().collect();
         let boxes = indices.len();
-        let fits = fits_one_per_box(value, boxes);
-        let pad = if fits && *right {
-            boxes - chars.len()
+        if !fits_one_per_box(value, boxes) {
+            continue;
+        }
+        let pad = if *right {
+            boxes.saturating_sub(chars.len())
         } else {
             0
         };
         for (offset, &index) in indices.iter().enumerate() {
-            // Not fitting, the first box keeps the whole value as written.
-            if !fits && offset == 0 {
-                continue;
-            }
-            let shown = if !fits {
-                String::new()
-            } else {
-                offset
-                    .checked_sub(pad)
-                    .and_then(|at| chars.get(at))
-                    .map(char::to_string)
-                    .unwrap_or_default()
-            };
+            let shown = offset
+                .checked_sub(pad)
+                .and_then(|at| chars.get(at))
+                .map(char::to_string)
+                .unwrap_or_default();
             // The writer's whole value stays on the first box only, as a
             // comb keeps it on its first slot.
             let tag = if offset == 0 {
@@ -4813,19 +4907,24 @@ mod tests {
         // A one-digit count sits in the right-hand box.
         assert_eq!(fields["frm2550m:txtSheets"], "3");
         assert_eq!(boxes("p1c3"), vec![String::new(), "3".to_string()]);
-        // A value longer than its boxes prints whole in the first one.
+        // A value longer than its boxes prints once, as a plain line across
+        // the cell; its boxes stay empty, the writer's value on the first.
+        // (Replaced in round 6, D4: it printed whole in the first box.)
         let mut long = fields.clone();
         long.insert("frm2550m:txtZipCode".into(), "123456".into());
         let html = filled_document("2550m-2007", &long).unwrap();
-        assert_eq!(
-            named_values(&html, "p1c21"),
-            vec![
-                "123456".to_string(),
-                String::new(),
-                String::new(),
-                String::new()
-            ]
-        );
+        assert_eq!(named_values(&html, "p1c21"), vec![String::new(); 4]);
+        let writer_values: Vec<Option<&str>> = input_tags(&html)
+            .into_iter()
+            .filter(|tag| tag.name == "p1c21")
+            .map(|tag| attr(tag.tag, "data-writer-value"))
+            .collect();
+        assert_eq!(writer_values, vec![Some("123456"), None, None, None]);
+        let (text, size) = printed_cells(&html).remove("p1c21").unwrap();
+        assert_eq!(text, "123456");
+        let sheet = SheetType::of(bundle("2550m-2007").unwrap().css);
+        let width = plain_cell_width(&html, "p1c21").unwrap();
+        assert_eq!(size, Some(fit_line(&sheet, width, "123456")));
         // A branch other than 00000 prints over the sheet's 00000 (the
         // comb's inputs carry 0s as values; the html-frozen file is not
         // edited).
@@ -5602,6 +5701,9 @@ mod tests {
             let end = at + inner[at..].find('>').unwrap();
             let tag = &inner[at..end];
             from = end;
+            if tag.contains(" data-overflow-of=\"") {
+                continue;
+            }
             if let Some(classes) = attr(tag, "class") {
                 out.push((input_room(width, tag), classes, tag));
             }
@@ -6059,7 +6161,11 @@ mod tests {
                     let Some(size) = size else {
                         continue;
                     };
-                    let width = comb_cell(&document, &cell).unwrap().1;
+                    // Over a comb, or over a split cell's boxes.
+                    let width = comb_cell(&document, &cell)
+                        .map(|(_, width)| width)
+                        .or_else(|| plain_cell_width(&document, &cell))
+                        .unwrap();
                     let measured = sheet.width(sheet.letter, &text, size);
                     assert!(
                         1.0 + measured <= width,
@@ -6076,17 +6182,29 @@ mod tests {
                                 continue;
                             }
                             let style = attr(input, "style").unwrap_or("");
-                            let size = style
+                            let shrunk: Option<f64> = style
                                 .find("font-size:")
                                 .and_then(|at| style[at + "font-size:".len()..].split("pt").next())
-                                .and_then(|size| size.parse().ok())
-                                .or_else(|| sheet.size_for(classes))
-                                .unwrap_or_else(|| panic!("{slug} {cell}: a type size"));
-                            let measured = sheet.width(sheet.letter_for(classes), &text, size);
-                            assert!(
-                            measured <= room + FIT_EPSILON_PT,
-                            "{slug} {case} {cell}: {text:?} at {size}pt measures {measured}pt in a {room}pt box"
-                        );
+                                .and_then(|size| size.parse().ok());
+                            let letter = sheet.letter_for(classes);
+                            if let Some(size) = shrunk {
+                                // Shrunk: it sets within the room less 1 pt.
+                                let measured = sheet.width(letter, &text, size);
+                                assert!(
+                                    measured <= room - 1.0,
+                                    "{slug} {case} {cell}: {text:?} shrunk to {size}pt measures {measured}pt in a {room}pt box"
+                                );
+                            } else {
+                                // Unshrunk: it fit at its class size.
+                                let size = sheet
+                                    .size_for(classes)
+                                    .unwrap_or_else(|| panic!("{slug} {cell}: a type size"));
+                                let measured = sheet.width(letter, &text, size);
+                                assert!(
+                                    measured <= room + FIT_EPSILON_PT,
+                                    "{slug} {case} {cell}: {text:?} unshrunk at {size}pt measures {measured}pt in a {room}pt box"
+                                );
+                            }
                             boxes += 1;
                         }
                     }
@@ -6319,12 +6437,6 @@ mod tests {
             let n = face.ems("\u{00D1}");
             assert!(n > 0.5 && n < 1.0, "{face:?} Ñ: {n}");
         }
-        // A tab counts 2.3 em in both faces (Chromium: 2.22 em in Arimo, 2.0
-        // em in Tinos); the print keeps it as typed.
-        assert_eq!(TAB_EMS, 2.3);
-        for face in [Face::Arimo, Face::Tinos] {
-            assert_eq!(face.ems("\t"), TAB_EMS, "{face:?}");
-        }
         // A no-break space takes the word-spacing as a space does.
         let sheet = SheetType::of(bundle("1604f-2018").unwrap().css);
         let spacing =
@@ -6337,6 +6449,72 @@ mod tests {
             Face::Tinos.ems("A"),
             Face::Tinos.advances()[33].1 as f64 / 2048.0
         );
+    }
+
+    /// Round 6, D8: tabs and no-break spaces measure what headless Chrome
+    /// draws. Each width is an `<input>`'s scrollWidth in Chrome
+    /// (`--headless=new`) with the eBIRForms Arimo or Tinos face at 2048 px
+    /// type, where one font unit is one pixel, with no spacing, 100 px
+    /// word-spacing or 50 px letter-spacing: a tab runs to the next stop,
+    /// 8 × (space + word-spacing + letter-spacing) from the line's start,
+    /// or the one after when it would end less than half a space short
+    /// (`AAA'`); a no-break space takes the word-spacing.
+    #[test]
+    fn tabs_and_no_break_spaces_measure_as_headless_chrome_draws_them() {
+        let measured: [(Face, f64, f64, &str, f64); 33] = [
+            (Face::Arimo, 0.0, 0.0, "A\tB", 5918.0),
+            (Face::Arimo, 0.0, 0.0, "\tB", 5918.0),
+            (Face::Arimo, 0.0, 0.0, "AAA\tB", 5918.0),
+            (Face::Arimo, 0.0, 0.0, "AAA'\tB", 10470.0),
+            (Face::Arimo, 0.0, 0.0, "AAAAAAAAAA\tB", 19574.0),
+            (Face::Arimo, 0.0, 0.0, "A\t\tB", 10470.0),
+            (Face::Arimo, 0.0, 0.0, "A\tB\tC", 10583.0),
+            (Face::Arimo, 0.0, 0.0, "A\u{a0}B", 3301.0),
+            (Face::Arimo, 0.0, 0.0, "A B", 3301.0),
+            (Face::Arimo, 100.0, 0.0, "A\tB", 6718.0),
+            (Face::Arimo, 100.0, 0.0, "AAA'\tB", 6718.0),
+            (Face::Arimo, 100.0, 0.0, "AAAAAAAAAA\tB", 17422.0),
+            (Face::Arimo, 100.0, 0.0, "A\t\tB", 12070.0),
+            (Face::Arimo, 100.0, 0.0, "A\u{a0}B", 3401.0),
+            (Face::Arimo, 0.0, 50.0, "A\tB", 6368.0),
+            (Face::Arimo, 0.0, 50.0, "AAA'\tB", 11320.0),
+            (Face::Arimo, 0.0, 50.0, "AAAAAAAAAA\tB", 16272.0),
+            (Face::Arimo, 0.0, 50.0, "A\tB\tC", 11433.0),
+            (Face::Arimo, 0.0, 50.0, "A\u{a0}B", 3451.0),
+            (Face::Tinos, 0.0, 0.0, "A\tB", 5462.0),
+            (Face::Tinos, 0.0, 0.0, "AAA\tB", 9558.0),
+            (Face::Tinos, 0.0, 0.0, "AAA'\tB", 9558.0),
+            (Face::Tinos, 0.0, 0.0, "A\t\tB", 9558.0),
+            (Face::Tinos, 0.0, 0.0, "AAAAAAAAAA\tB", 17750.0),
+            (Face::Tinos, 0.0, 0.0, "A\u{a0}B", 3357.0),
+            (Face::Tinos, 100.0, 0.0, "AAA\tB", 6262.0),
+            (Face::Tinos, 100.0, 0.0, "AAA'\tB", 11158.0),
+            (Face::Tinos, 100.0, 0.0, "A\tB\tC", 11158.0),
+            (Face::Tinos, 100.0, 0.0, "A\u{a0}B", 3457.0),
+            (Face::Tinos, 0.0, 50.0, "AAA\tB", 10408.0),
+            (Face::Tinos, 0.0, 50.0, "AAAAAAAAAA\tB", 19400.0),
+            (Face::Tinos, 0.0, 50.0, "A\tB\tC", 10408.0),
+            (Face::Tinos, 0.0, 50.0, "A\u{a0}B", 3507.0),
+        ];
+        for (face, word, letter, text, chrome) in measured {
+            let sheet = SheetType {
+                face,
+                word: Spacing { pt: word, em: 0.0 },
+                ..SheetType::plain()
+            };
+            let letter = Spacing {
+                pt: letter,
+                em: 0.0,
+            };
+            assert_eq!(
+                sheet.width(letter, text, 2048.0),
+                chrome,
+                "{face:?} word {word} {text:?}"
+            );
+        }
+        // A tab's most is a whole stop: 8 space advances.
+        assert_eq!(Face::Arimo.ems("\t"), 8.0 * 569.0 / 2048.0);
+        assert_eq!(Face::Tinos.ems("\t"), 8.0 * 512.0 / 2048.0);
     }
 
     /// A printed size is rounded down to 0.01 pt, never to the nearest:
@@ -6463,11 +6641,42 @@ mod tests {
     /// number of keys filled.
     fn fitting_plain_print_hash(slug: &str) -> (String, usize) {
         use sha2::{Digest, Sha256};
+        let fields = fitting_plain_fields(slug);
+        let document = filled_document(slug, &fields).unwrap();
+        let hash = Sha256::digest(document.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        (hash, fields.len())
+    }
+
+    /// Whether `cell` of sheet `slug` is one whose layout round 6 fixed
+    /// (1600WP's attachment-period dates, which every earlier fill printed
+    /// whole into each one-character box): the goldens recorded with the
+    /// earlier fills leave its joins out, and
+    /// `split_cells_print_one_character_per_box_or_one_line` pins it.
+    fn layout_fixed_in_round_6(slug: &str, cell: &str) -> bool {
+        slug == "1600wp-2010"
+            && SheetType::of_sheet(slug, "")
+                .split
+                .iter()
+                .any(|(split, _)| *split == cell)
+    }
+
+    /// The fields [`fitting_plain_print_hash`] fills.
+    fn fitting_plain_fields(slug: &str) -> BTreeMap<String, String> {
         let loaded = bundle(slug).unwrap();
         let cells = writer_cells(slug).unwrap();
-        let sheet = SheetType::of(loaded.css);
+        let sheet = SheetType::of_sheet(slug, loaded.css);
         let mut fields = BTreeMap::new();
         for (key, ids) in &cells.joins {
+            // A split cell takes one character per box, not a plain line.
+            if ids
+                .iter()
+                .any(|cell| sheet.split.iter().any(|(split, _)| split == cell))
+            {
+                continue;
+            }
             // As recorded: each cell's first input, its room less 1 pt.
             let boxes: Option<Vec<(f64, &str)>> = ids
                 .iter()
@@ -6491,12 +6700,7 @@ mod tests {
                 fields.insert(key.clone(), words_of(len));
             }
         }
-        let document = filled_document(slug, &fields).unwrap();
-        let hash = Sha256::digest(document.as_bytes())
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
-        (hash, fields.len())
+        fields
     }
 
     /// A value that fits its boxes prints byte for byte as before; a value
@@ -6504,7 +6708,11 @@ mod tests {
     /// once by the fill before every sheet's type was measured
     /// (`fixtures/fitting-goldens.json` for the combs,
     /// `fixtures/fitting-plain-goldens.json` for the plain boxes) and are
-    /// never rewritten: the test has no way to bless them.
+    /// never rewritten: the test has no way to bless them. Round 6 left the
+    /// split cells (2550M's and 1600WP's) out of the plain boxes, since
+    /// they take one character per box, and recorded those two sheets'
+    /// entries again with dcc6386a's fill, the way
+    /// `fitting-band-goldens.json` was.
     #[test]
     fn fitting_text_prints_as_before_on_every_sheet() {
         let combs: BTreeMap<String, String> = sheet_slugs()
@@ -6541,9 +6749,10 @@ mod tests {
     /// takes no more characters than a comb has boxes, one character per
     /// box in a split cell, and in each input of a plain cell sets within
     /// that input's whole room at its class's size, measured in the sheet's
-    /// type. Plain-box values reach the band where the round-4 fill shrank a
-    /// value that fit (the 1 pt spare), the split cells and the cells with
-    /// several inputs.
+    /// type. Some plain-box values reach the band where the round-4 fill
+    /// shrank a value that fit (the 1 pt spare); [`band_box_fields`] puts
+    /// one in every band box. The joins of [`layout_fixed_in_round_6`]
+    /// cells are left out.
     fn band_fields(slug: &str) -> BTreeMap<String, String> {
         const ADDRESS: &str =
             "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA";
@@ -6555,6 +6764,9 @@ mod tests {
         let grouped = grouped_input_indices(&tags);
         let mut fields = BTreeMap::new();
         for (key, ids) in &cells.joins {
+            if ids.iter().any(|cell| layout_fixed_in_round_6(slug, cell)) {
+                continue;
+            }
             let split = ids.iter().any(|cell| {
                 sheet.split.iter().any(|(split, _)| split == cell)
                     && grouped
@@ -6619,13 +6831,15 @@ mod tests {
 
     /// A value that fits its boxes to the edge prints byte for byte as at
     /// dcc6386a, the last commit before every sheet's type was measured
-    /// (round 5: the 1 pt spare, split cells and cells with several inputs
-    /// shrank such values). `fixtures/fitting-band-goldens.json` holds, per
-    /// sheet, the SHA-256 of the document dcc6386a's fill printed for
-    /// [`band_fields`]: the fields were written out by this commit's code,
-    /// dcc6386a was exported with `git archive dcc6386a` into a scratch
-    /// directory, and a scratch binary depending on its bir-print filled
-    /// and hashed each sheet. The test cannot bless it.
+    /// (round 5: the 1 pt spare and the split cells shrank such values).
+    /// `fixtures/fitting-band-goldens.json` holds, per sheet, the SHA-256 of
+    /// the document dcc6386a's fill printed for [`band_fields`]: the fields
+    /// were written out by this branch's code, dcc6386a was exported with
+    /// `git archive dcc6386a` into a scratch directory, and a scratch binary
+    /// depending on its bir-print filled and hashed each sheet. Round 6
+    /// recorded the 1600wp-2010 entry again that way, without its
+    /// attachment dates ([`layout_fixed_in_round_6`]). The test cannot
+    /// bless it.
     #[test]
     fn fitting_band_prints_as_at_dcc6386a_on_every_sheet() {
         let golden: BTreeMap<String, String> =
@@ -6634,15 +6848,9 @@ mod tests {
         let now: BTreeMap<String, String> = sheet_slugs()
             .iter()
             .map(|slug| {
-                use sha2::{Digest, Sha256};
                 let fields = band_fields(slug);
                 filled += fields.len();
-                let document = filled_document(slug, &fields).unwrap();
-                let hash = Sha256::digest(document.as_bytes())
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect();
-                (slug.clone(), hash)
+                (slug.clone(), document_hash(slug, &fields))
             })
             .collect();
         assert!(filled > 500, "{filled} joins filled to the edge");
@@ -6656,73 +6864,454 @@ mod tests {
         );
     }
 
-    /// Round 5, finding 1: a split one-character cell (2550M's ZIP, RDO and
-    /// sheets count) holding exactly as many characters as it has boxes
-    /// prints one per box at its class's size, with no inline size; finding
-    /// 3: a cell with several inputs each holding the whole value (1600WP's
-    /// attachment dates) keeps the class size while the value fits each
-    /// input, and sizes each input by its own room when it does not.
+    /// The SHA-256 of the document sheet `slug` prints for `fields`.
+    fn document_hash(slug: &str, fields: &BTreeMap<String, String>) -> String {
+        use sha2::{Digest, Sha256};
+        let document = filled_document(slug, fields).unwrap();
+        Sha256::digest(document.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    /// One band box of a sheet: a text join printing in a single plain cell
+    /// with one input, not a comb or a split cell, filled with a value that
+    /// sets at the input's class size within its room but not within the
+    /// room less 1 pt (the band the round-4 fill shrank). The value is the
+    /// longest start of the address, else of "1234567890 ABC...", else of
+    /// "1234567890ABC...", that lands in the band.
+    struct BandBox {
+        key: String,
+        cell: String,
+        value: String,
+        room: f64,
+        width: f64,
+    }
+
+    /// Every band box of sheet `slug` ([`BandBox`]).
+    fn band_boxes(slug: &str) -> Vec<BandBox> {
+        const POOLS: [&str; 3] = [
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA",
+            "1234567890 ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        ];
+        let loaded = bundle(slug).unwrap();
+        let sheet = SheetType::of_sheet(slug, loaded.css);
+        let cells = writer_cells(slug).unwrap();
+        let tags = input_tags(loaded.html);
+        let grouped = grouped_input_indices(&tags);
+        let mut boxes = Vec::new();
+        for (key, ids) in &cells.joins {
+            let [cell] = ids.as_slice() else {
+                continue;
+            };
+            let Some(indices) = grouped.get(cell.as_str()) else {
+                continue;
+            };
+            if indices.len() != 1
+                || tags[indices[0]].slot.is_some()
+                || sheet.split.iter().any(|(split, _)| split == cell)
+            {
+                continue;
+            }
+            let [(room, classes, _)] = plain_inputs(loaded.html, cell)[..] else {
+                continue;
+            };
+            let Some(size) = sheet.size_for(classes) else {
+                continue;
+            };
+            let letter = sheet.letter_for(classes);
+            let found = POOLS.iter().find_map(|pool| {
+                (1..=pool.len())
+                    .rev()
+                    .map(|n| pool[..n].trim_end())
+                    .filter(|text| !text.is_empty())
+                    .map(|text| (text, sheet.width(letter, text, size)))
+                    .find(|(_, width)| room - 1.0 < *width && *width <= room)
+            });
+            if let Some((value, width)) = found {
+                boxes.push(BandBox {
+                    key: key.clone(),
+                    cell: cell.clone(),
+                    value: value.to_string(),
+                    room,
+                    width,
+                });
+            }
+        }
+        boxes
+    }
+
+    /// Every band box of every sheet ([`band_boxes`], 1,456 of them) holds
+    /// a value in its 1 pt band and prints byte for byte as at dcc6386a:
+    /// `fixtures/fitting-band-box-goldens.json` holds, per sheet, the
+    /// SHA-256 of the document dcc6386a's fill printed for that sheet's
+    /// band-box values (recorded as `fitting-band-goldens.json` was). A
+    /// fill that kept the 1 pt spare shrinks every one of these values
+    /// (round 6 checked it fails this test). The test cannot bless it.
     #[test]
-    fn split_and_several_input_cells_shrink_only_what_overflows() {
-        let mut split_cells = 0;
+    fn every_band_box_prints_as_at_dcc6386a() {
+        let golden: BTreeMap<String, String> =
+            serde_json::from_str(include_str!("fixtures/fitting-band-box-goldens.json")).unwrap();
+        let mut total = 0;
+        let mut now = BTreeMap::new();
+        for slug in sheet_slugs() {
+            let boxes = band_boxes(&slug);
+            if boxes.is_empty() {
+                continue;
+            }
+            total += boxes.len();
+            let fields: BTreeMap<String, String> = boxes
+                .iter()
+                .map(|band| (band.key.clone(), band.value.clone()))
+                .collect();
+            assert_eq!(fields.len(), boxes.len(), "{slug}: one key per box");
+            let document = filled_document(&slug, &fields).unwrap();
+            for band in &boxes {
+                assert!(
+                    band.room - 1.0 < band.width && band.width <= band.room,
+                    "{slug} {}: {:?} measures {} in {}",
+                    band.cell,
+                    band.value,
+                    band.width,
+                    band.room
+                );
+                let inputs = plain_inputs(&document, &band.cell);
+                let [(_, _, tag)] = inputs[..] else {
+                    panic!("{slug} {}: one input", band.cell);
+                };
+                assert!(
+                    !tag.contains("font-size"),
+                    "{slug} {}: {:?} keeps its class size: {tag}",
+                    band.cell,
+                    band.value
+                );
+            }
+            now.insert(slug.clone(), document_hash(&slug, &fields));
+        }
+        assert_eq!(total, 1456, "band boxes");
+        assert_eq!(golden, now, "every band box prints as at dcc6386a");
+    }
+
+    /// The 0.02 pt allowance ([`FIT_EPSILON_PT`]): a value the model puts
+    /// 0.01 pt over its input's room prints at its class size (unshrunk);
+    /// 0.03 pt over, it shrinks to set within the room less 1 pt.
+    #[test]
+    fn a_value_a_hair_over_its_room_keeps_its_size() {
+        let slug = "0605-1999";
+        let loaded = bundle(slug).unwrap();
+        let sheet = SheetType::of_sheet(slug, loaded.css);
+        let [(room, classes, tag)] = plain_inputs(loaded.html, "p1c33")[..] else {
+            panic!("0605 p1c33 has one input");
+        };
+        let width = plain_cell_width(loaded.html, "p1c33").unwrap();
+        let inset = width - room;
+        let size = sheet.size_for(classes).unwrap();
+        let letter = sheet.letter_for(classes);
+        let text = "UNIT 1203 TWELFTH";
+        let measured = sheet.width(letter, text, size);
+        // A cell whose input's room is the value's width less `over` pt.
+        let at = |over: f64| plain_input_size(&sheet, measured - over + inset, tag, text);
+        assert_eq!(at(0.0), None);
+        assert_eq!(at(0.01), None, "0.01 pt over: unshrunk");
+        let shrunk = at(0.03).expect("0.03 pt over: shrunk");
+        let room = measured - 0.03;
+        assert_eq!(shrunk, sheet.fit(letter, room - 1.0, text, size));
+        assert!(shrunk < size);
+        assert!(sheet.width(letter, text, shrunk) <= room - 1.0);
+    }
+
+    /// Round 6, D4: a split one-character cell (1600WP's attachment-period
+    /// dates, 2550M's sheets count, RDO and ZIP) prints a value of no more
+    /// characters than boxes one character per box at its class's size,
+    /// like a comb, and a longer one once, as a single plain line measured
+    /// across the whole cell, its boxes empty. The split cells listed are
+    /// every joined cell of one-character inputs on the frozen sheets.
+    #[test]
+    fn split_cells_print_one_character_per_box_or_one_line() {
+        let mut listed = Vec::new();
+        let mut found = Vec::new();
         for slug in sheet_slugs() {
             let loaded = bundle(&slug).unwrap();
             let sheet = SheetType::of_sheet(&slug, loaded.css);
             let cells = writer_cells(&slug).unwrap();
             let tags = input_tags(loaded.html);
             let grouped = grouped_input_indices(&tags);
+            for ids in cells.joins.values() {
+                for cell in ids {
+                    if grouped
+                        .get(cell.as_str())
+                        .is_some_and(|indices| splits(&tags, indices))
+                    {
+                        found.push(format!("{slug} {cell}"));
+                    }
+                }
+            }
             for (cell, _) in sheet.split {
+                listed.push(format!("{slug} {cell}"));
                 let indices = &grouped[*cell];
-                assert!(splits(&tags, indices), "{slug} {cell}");
                 let (key, _) = cells
                     .joins
                     .iter()
                     .find(|(_, ids)| ids.iter().any(|id| id == cell))
                     .unwrap();
-                let value = &"1234567890"[..indices.len()];
-                let document =
+                let fill = |value: &str| {
                     filled_document(&slug, &BTreeMap::from([(key.clone(), value.to_string())]))
-                        .unwrap();
+                        .unwrap()
+                };
+                // As many characters as boxes: one per box.
+                let value = &"1234567890"[..indices.len()];
+                let document = fill(value);
                 let inputs = plain_inputs(&document, cell);
                 assert_eq!(inputs.len(), indices.len(), "{slug} {cell}");
                 for (offset, (_, _, tag)) in inputs.iter().enumerate() {
                     assert!(!tag.contains("font-size"), "{slug} {cell}: {tag}");
                     assert_eq!(attr(tag, "value"), Some(&value[offset..=offset]));
                 }
-                split_cells += 1;
+                assert!(!document.contains(&format!("data-overflow-of=\"{cell}\"")));
+                // Longer: one line over the cell, the boxes empty.
+                let long = "1234567890";
+                let document = fill(long);
+                for (_, _, tag) in plain_inputs(&document, cell) {
+                    assert_eq!(attr(tag, "value"), Some(""), "{slug} {cell}: {tag}");
+                }
+                let line = printed_cells(&document).remove(*cell);
+                let (text, size) = line.expect("an overflow line");
+                assert_eq!(text, long);
+                let size = size.unwrap();
+                let width = plain_cell_width(&document, cell).unwrap();
+                assert!(1.0 + sheet.width(sheet.letter, long, size) <= width);
+                assert_eq!(
+                    document
+                        .matches(&format!("data-overflow-of=\"{cell}\""))
+                        .count(),
+                    1
+                );
             }
         }
-        assert_eq!(split_cells, 3, "2550M's three split cells");
-        // 1600WP's attachment dates: two inputs each holding the whole value.
+        found.sort();
+        listed.sort();
+        assert_eq!(found, listed, "every joined split cell is listed");
+        assert_eq!(listed.len(), 9);
+        // 1600WP's dates: "01" and "2024" one per box, "20240101" one line.
         let slug = "1600wp-2010";
         let loaded = bundle(slug).unwrap();
         let sheet = SheetType::of_sheet(slug, loaded.css);
-        let cells = writer_cells(slug).unwrap();
-        let (key, _) = cells
-            .joins
-            .iter()
-            .find(|(_, ids)| ids.iter().any(|id| id == "p1c62"))
-            .expect("a join prints in p1c62");
-        for (value, shrinks) in [("1", false), ("2024", true)] {
-            let document =
-                filled_document(slug, &BTreeMap::from([(key.clone(), value.to_string())])).unwrap();
-            let inputs = plain_inputs(&document, "p1c62");
-            assert_eq!(inputs.len(), 2);
-            for (room, classes, tag) in inputs {
-                assert_eq!(attr(tag, "value"), Some(value));
-                let size = sheet.size_for(classes).unwrap();
-                let letter = sheet.letter_for(classes);
-                if shrinks {
-                    let style = attr(tag, "style").unwrap();
-                    let at = style.find("font-size:").expect("an inline size") + "font-size:".len();
-                    let printed: f64 = style[at..].split("pt").next().unwrap().parse().unwrap();
-                    assert!(printed < size);
-                    assert!(sheet.width(letter, value, printed) <= room - 1.0, "{tag}");
-                } else {
-                    assert!(sheet.width(letter, value, size) <= room);
+        let fields = BTreeMap::from([
+            ("derived:att_from_mm".to_string(), "01".to_string()),
+            ("derived:att_from_yyyy".to_string(), "2024".to_string()),
+            ("derived:att_to_yyyy".to_string(), "20240101".to_string()),
+        ]);
+        let document = filled_document(slug, &fields).unwrap();
+        let boxes = |cell: &str| -> Vec<String> {
+            plain_inputs(&document, cell)
+                .iter()
+                .map(|(_, _, tag)| {
                     assert!(!tag.contains("font-size"), "{tag}");
-                }
+                    attr(tag, "value").unwrap().to_string()
+                })
+                .collect()
+        };
+        assert_eq!(boxes("p1c62"), ["0", "1"]);
+        assert_eq!(boxes("p1c64"), ["2", "0", "2", "4"]);
+        assert_eq!(boxes("p1c67"), ["", "", "", ""]);
+        let (text, size) = printed_cells(&document).remove("p1c67").unwrap();
+        assert_eq!(text, "20240101");
+        let width = plain_cell_width(&document, "p1c67").unwrap();
+        assert!(1.0 + sheet.width(sheet.letter, &text, size.unwrap()) <= width);
+        assert_eq!(document.matches("data-overflow-of=\"p1c6").count(), 1);
+    }
+
+    /// The writer key of the text join that prints in `cell` of `slug`.
+    fn key_of(slug: &str, cell: &str) -> String {
+        writer_cells(slug)
+            .unwrap()
+            .joins
+            .into_iter()
+            .find(|(_, ids)| ids.iter().any(|id| id == cell))
+            .unwrap()
+            .0
+    }
+
+    /// The `<div id="{cell}" ...>...</div>` of `cell` in `document`.
+    fn cell_html<'a>(document: &'a str, cell: &str) -> &'a str {
+        let open = document.find(&format!("<div id=\"{cell}\"")).unwrap();
+        let close = open + document[open..].find("</div>").unwrap() + "</div>".len();
+        &document[open..close]
+    }
+
+    /// Round 6, D3: values with a tab or a no-break space, printed. On a
+    /// Tinos sheet (0605, 1604F) and an Arimo sheet (2200AN), a value that
+    /// fits prints its cell byte for byte as dcc6386a's fill did (the
+    /// literals are that fill's output, from a scratch binary on `git
+    /// archive dcc6386a`); a longer one shrinks to set within its room less
+    /// 1 pt, measured with the tab's stop and the no-break space's
+    /// word-spacing.
+    #[test]
+    fn tab_and_no_break_space_values_print_as_measured() {
+        let fitting: [(&str, &str, &str, &str, &str); 6] = [
+            (
+                "0605-1999",
+                "frm0605:txtLineBus",
+                "p1c33",
+                "UNIT\t1203 TWELFTH FLOOR",
+                P1C33_TAB,
+            ),
+            (
+                "0605-1999",
+                "frm0605:txtLineBus",
+                "p1c33",
+                "UNIT\u{a0}1203 TWELFTH FLOOR",
+                P1C33_NBSP,
+            ),
+            (
+                "1604f-2018",
+                "frm1604f:txtSched1Date1",
+                "p1c48",
+                "UNIT\t1203 TWELFTH F",
+                P1C48_TAB,
+            ),
+            (
+                "1604f-2018",
+                "frm1604f:txtSched1Date1",
+                "p1c48",
+                "UNIT\u{a0}1203 TWELFTH FLOO",
+                P1C48_NBSP,
+            ),
+            (
+                "2200an-2018",
+                "frm2200ANv2018:txtXGOthers1Name",
+                "p2c246",
+                "UNIT\t1203 TWELFTH FLOOR CURVE BUILDIN",
+                P2C246_TAB,
+            ),
+            (
+                "2200an-2018",
+                "frm2200ANv2018:txtXGOthers1Name",
+                "p2c246",
+                "UNIT\u{a0}1203 TWELFTH FLOOR CURVE BUILDIN",
+                P2C246_NBSP,
+            ),
+        ];
+        for (slug, key, cell, value, dcc6386a) in fitting {
+            let document = filled_document(
+                slug,
+                &BTreeMap::from([(key.to_string(), value.to_string())]),
+            )
+            .unwrap();
+            assert_eq!(
+                cell_html(&document, cell),
+                dcc6386a,
+                "{slug} {cell} {value:?}"
+            );
+        }
+        // Headless Chrome's widths (pt) of such values at their class
+        // sizes, each set at 100 times its size, spacing included (an
+        // `<input>`'s scrollWidth px × 0.75 / 100): the model's are within
+        // 0.01 pt. 1604F's "UNIT<TAB>1203 TWELFTH FLOO" overflows its
+        // 99.6 pt room: "UNIT" (16.62 pt) is past the first stop (16.51
+        // pt), so the tab runs to the second.
+        for (slug, cell, value, chrome) in [
+            ("1604f-2018", "p1c48", "UNIT\t1203 TWELFTH FLOO", 101.715),
+            (
+                "1604f-2018",
+                "p1c48",
+                "UNIT\u{a0}1203 TWELFTH FLOO",
+                87.3825,
+            ),
+            ("0605-1999", "p1c33", "UNIT\t1203 TWELFTH FLOOR", 149.94),
+            (
+                "0605-1999",
+                "p1c33",
+                "UNIT\u{a0}1203 TWELFTH FLOOR",
+                137.145,
+            ),
+            (
+                "2200an-2018",
+                "p2c246",
+                "UNIT\t1203 TWELFTH FLOOR CURVE BUILDIN",
+                187.26,
+            ),
+            (
+                "2200an-2018",
+                "p2c246",
+                "UNIT\u{a0}1203 TWELFTH FLOOR CURVE BUILDIN",
+                172.7025,
+            ),
+        ] {
+            let loaded = bundle(slug).unwrap();
+            let sheet = SheetType::of_sheet(slug, loaded.css);
+            let [(room, classes, _)] = plain_inputs(loaded.html, cell)[..] else {
+                panic!("{slug} {cell}: one input");
+            };
+            let size = sheet.size_for(classes).unwrap();
+            let model = sheet.width(sheet.letter_for(classes), value, size);
+            assert!(
+                (model - chrome).abs() <= 0.01,
+                "{slug} {cell} {value:?}: {model} against Chrome's {chrome}"
+            );
+            let document = filled_document(
+                slug,
+                &BTreeMap::from([(key_of(slug, cell), value.to_string())]),
+            )
+            .unwrap();
+            let [(_, _, tag)] = plain_inputs(&document, cell)[..] else {
+                panic!("{slug} {cell}: one input");
+            };
+            assert_eq!(
+                tag.contains("font-size"),
+                chrome > room,
+                "{slug} {cell} {value:?}: shrunk only past its {room} pt room"
+            );
+        }
+        for (slug, key, cell, face) in [
+            ("0605-1999", "frm0605:txtLineBus", "p1c33", Face::Tinos),
+            (
+                "2200an-2018",
+                "frm2200ANv2018:txtXGOthers1Name",
+                "p2c246",
+                Face::Arimo,
+            ),
+        ] {
+            let loaded = bundle(slug).unwrap();
+            let sheet = SheetType::of_sheet(slug, loaded.css);
+            assert_eq!(sheet.face, face);
+            for space in ["\t", "\u{a0}"] {
+                let value = format!(
+                    "UNIT{space}1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG"
+                );
+                let document =
+                    filled_document(slug, &BTreeMap::from([(key.to_string(), value.clone())]))
+                        .unwrap();
+                let [(room, classes, tag)] = plain_inputs(&document, cell)[..] else {
+                    panic!("{slug} {cell}: one input");
+                };
+                assert_eq!(attr(tag, "value"), Some(value.as_str()));
+                let letter = sheet.letter_for(classes);
+                let class_size = sheet.size_for(classes).unwrap();
+                assert!(sheet.width(letter, &value, class_size) > room + FIT_EPSILON_PT);
+                let style = attr(tag, "style").unwrap();
+                let at = style.find("font-size:").expect("an inline size") + "font-size:".len();
+                let size: f64 = style[at..].split("pt").next().unwrap().parse().unwrap();
+                assert!(size < class_size, "{slug} {cell} {space:?}");
+                assert!(
+                    sheet.width(letter, &value, size) <= room - 1.0,
+                    "{slug} {cell} {space:?}: at {size}pt"
+                );
+                assert!(
+                    sheet.width(letter, &value, size + 0.01) > room - 1.0,
+                    "{slug} {cell} {space:?}: the largest size that sets"
+                );
             }
         }
     }
+
+    // dcc6386a's fill of the fitting values of
+    // `tab_and_no_break_space_values_print_as_measured`, cell by cell.
+    const P1C33_TAB: &str = "<div id=\"p1c33\" class=\"c f\" data-cell-kind=\"field\" data-row=\"14\" data-col=\"72\" data-field-kind=\"text\" data-field-name=\"p1c33\" style=\"left:418.44pt;top:246.12pt;width:158.4pt;height:18.96pt\"><input type=\"text\" class=\"fi fh22\" id=\"p1c33-i\" name=\"p1c33\" style=\"inset:0.75pt 0.75pt 0.75pt 0.75pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\t1203 TWELFTH FLOOR\" data-writer-value=\"UNIT\t1203 TWELFTH FLOOR\"></div>";
+    const P1C33_NBSP: &str = "<div id=\"p1c33\" class=\"c f\" data-cell-kind=\"field\" data-row=\"14\" data-col=\"72\" data-field-kind=\"text\" data-field-name=\"p1c33\" style=\"left:418.44pt;top:246.12pt;width:158.4pt;height:18.96pt\"><input type=\"text\" class=\"fi fh22\" id=\"p1c33-i\" name=\"p1c33\" style=\"inset:0.75pt 0.75pt 0.75pt 0.75pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\u{a0}1203 TWELFTH FLOOR\" data-writer-value=\"UNIT\u{a0}1203 TWELFTH FLOOR\"></div>";
+    const P1C48_TAB: &str = "<div id=\"p1c48\" class=\"c f\" data-cell-kind=\"field\" data-row=\"22\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p1c48\" style=\"left:86.42pt;top:360.17pt;width:100.56pt;height:24.6pt\"><input type=\"text\" class=\"fi fh25\" id=\"p1c48-i\" name=\"p1c48\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\t1203 TWELFTH F\" data-writer-value=\"UNIT\t1203 TWELFTH F\"></div>";
+    const P1C48_NBSP: &str = "<div id=\"p1c48\" class=\"c f\" data-cell-kind=\"field\" data-row=\"22\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p1c48\" style=\"left:86.42pt;top:360.17pt;width:100.56pt;height:24.6pt\"><input type=\"text\" class=\"fi fh25\" id=\"p1c48-i\" name=\"p1c48\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\u{a0}1203 TWELFTH FLOO\" data-writer-value=\"UNIT\u{a0}1203 TWELFTH FLOO\"></div>";
+    const P2C246_TAB: &str = "<div id=\"p2c246\" class=\"c f\" data-cell-kind=\"field\" data-row=\"38\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p2c246\" style=\"left:60.72pt;top:685.18pt;width:189.41pt;height:14.76pt\"><input type=\"text\" class=\"fi fh7\" id=\"p2c246-i\" name=\"p2c246\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\t1203 TWELFTH FLOOR CURVE BUILDIN\" data-writer-value=\"UNIT\t1203 TWELFTH FLOOR CURVE BUILDIN\"></div>";
+    const P2C246_NBSP: &str = "<div id=\"p2c246\" class=\"c f\" data-cell-kind=\"field\" data-row=\"38\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p2c246\" style=\"left:60.72pt;top:685.18pt;width:189.41pt;height:14.76pt\"><input type=\"text\" class=\"fi fh7\" id=\"p2c246-i\" name=\"p2c246\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\u{a0}1203 TWELFTH FLOOR CURVE BUILDIN\" data-writer-value=\"UNIT\u{a0}1203 TWELFTH FLOOR CURVE BUILDIN\"></div>";
 }
