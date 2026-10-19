@@ -451,6 +451,25 @@ impl Database {
         self.save_form_draft_v2(tin, form_code, year, &period, status, draft)
     }
 
+    /// The stored row [`Self::save_form_draft`] would replace for these
+    /// arguments: `None` when it would add a new open-ended entry (an
+    /// open-ended form saved with no entry, or entry 0).
+    pub fn form_draft_for_save<T: serde::de::DeserializeOwned>(
+        &self,
+        tin: &str,
+        form_code: &str,
+        year: u16,
+        quarter: Option<u8>,
+    ) -> Result<Option<T>, DbError> {
+        if matches!(frequency_for_form(form_code), FilingFrequency::OpenEnded)
+            && quarter.is_none_or(|value| value == 0)
+        {
+            return Ok(None);
+        }
+        let period = period_from_legacy_slot(form_code, quarter, 1);
+        self.get_form_draft_v2(tin, form_code, year, &period)
+    }
+
     /// Load a generic form draft for a specific (tin, form_code, year, quarter).
     pub fn get_form_draft<T: serde::de::DeserializeOwned>(
         &self,

@@ -84,6 +84,14 @@ pub struct SubmissionLifecycle {
     /// or printed.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub trigger_date_entered: bool,
+    /// The trigger-date fields the filer has typed on this return so far
+    /// (top-level draft fields, sorted), kept so a date typed over two
+    /// sessions, or one part edited after a restart, still counts. Written
+    /// by the host only, from the stored row and its own typed writes;
+    /// absent (empty) on every draft saved before it existed. Never filed
+    /// or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trigger_parts_typed: Vec<String>,
 }
 
 impl Default for SubmissionLifecycle {
@@ -110,6 +118,7 @@ impl Default for SubmissionLifecycle {
             profile_edits: Vec::new(),
             profile_baseline: std::collections::BTreeMap::new(),
             trigger_date_entered: false,
+            trigger_parts_typed: Vec::new(),
         }
     }
 }

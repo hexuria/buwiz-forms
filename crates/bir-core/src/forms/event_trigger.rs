@@ -14,10 +14,16 @@
 //! day; 1606 and 1706: today or January 1; 2552: the date its caller
 //! passes), so a stored date alone does not say the event happened then.
 //! For those forms ([`PREFILLED_TRIGGER_FORMS`]) a Draft counts only once
-//! the page recorded that the filer wrote every part of the date it needs
-//! (`trigger_date_entered`, a flag on the
-//! flattened `SubmissionLifecycle`, absent and so byte-identical on every
-//! draft saved before it existed). A return that left Draft files the date
+//! the filer has typed every part of the date it needs. The record is
+//! durable, on the flattened `SubmissionLifecycle`: `trigger_parts_typed`
+//! (the date fields typed so far) and `trigger_date_entered` (set once
+//! every part needed is typed; parts the return's identity fixes count as
+//! given). Both are skipped when empty, so a draft saved before them keeps
+//! its bytes until edited. The host writes both on every save, from the
+//! stored row's typed parts that still hold their stored value and its
+//! own typed writes; a client's value is never kept. So a date typed over
+//! two sessions, or one part edited after a restart, still counts; a
+//! cleared part no longer does. A return that left Draft files the date
 //! it holds, typed or not, so it is dated by that date; a cancelled queue
 //! makes it a Draft again, and without the flag it is undated again. The
 //! other as-needed forms start with the date blank (0, empty or `None`), so

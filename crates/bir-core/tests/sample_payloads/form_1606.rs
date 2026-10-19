@@ -10,6 +10,10 @@ fn sample_1606() -> Form1606Draft {
     let mut draft = Form1606Draft::new_from_profile(&dummy_profile("1606", "Corporation"), 2025, 1);
     draft.transaction_month = 6;
     draft.transaction_day = 15;
+    // The sale date is the filer's (decision P4-3: an undated 1606 Draft
+    // computes no penalties). Never filed or printed, so the payload pins
+    // are unchanged.
+    draft.lifecycle.trigger_date_entered = true;
     draft.is_amended = true;
     draft.taxes_withheld = Some(true);
     // Fictitious seller; 987-654-321 passes the official check digit.
