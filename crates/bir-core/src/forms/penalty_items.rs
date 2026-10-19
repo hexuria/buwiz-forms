@@ -261,6 +261,41 @@ pub fn resolve_due_date(
         .into_iter()
         .find(|deadline| deadline.form_code == form_code && &deadline.period == period)
         .and_then(|deadline| deadline.final_deadline_date())
+        .or_else(|| month_rule_due_date(form_code, period, overrides))
+}
+
+/// An as-needed form due on a day of the month after its event's month
+/// (1606, decision P4-3: the 10th after the sale) whose penalties name that
+/// month: the same date its former monthly row gave (the day, moved off
+/// weekends, then by `overrides`), so the filed penalties do not change.
+fn month_rule_due_date(
+    form_code: &str,
+    period: &DeadlinePeriod,
+    overrides: &[DeadlineOverride],
+) -> Option<NaiveDate> {
+    let DeadlinePeriod::Monthly {
+        taxable_year,
+        month,
+    } = period
+    else {
+        return None;
+    };
+    let rule = crate::calendar_rules::event_due_rule(form_code)
+        .filter(|_| DeadlineResolver::is_as_needed(form_code))?;
+    if !matches!(
+        rule.due,
+        crate::calendar_rules::DueFromTrigger::DayOfFollowingMonth(_)
+    ) {
+        return None;
+    }
+    let first_of_month = NaiveDate::from_ymd_opt(*taxable_year, u32::from(*month), 1)?;
+    DeadlineResolver::event_deadline(
+        &rule,
+        first_of_month,
+        overrides,
+        &crate::calendar_rules::BusinessDayCalendar::default(),
+    )?
+    .final_deadline_date()
 }
 
 impl<F> PenaltyItems<F> {
@@ -538,3 +573,37 @@ macro_rules! queueable_penalty_items {
     }};
 }
 pub(crate) use queueable_penalty_items;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Decision P4-3 moved 1606 off the monthly rule; its penalties still
+    /// run from the date that rule gave. The rule it shared with 0620 (the
+    /// 10th of the next month) still resolves 0620, so every 1606 month in
+    /// 2025-2027, with no overrides and with the shipped holidays, must
+    /// give 0620's date.
+    #[test]
+    fn form_1606_penalties_keep_the_former_monthly_due_date() {
+        let holidays = crate::official_holidays::holiday_overrides(
+            crate::official_holidays::OFFICIAL_HOLIDAY_YEARS,
+        );
+        for overrides in [Vec::new(), holidays] {
+            for taxable_year in 2025..=2027 {
+                for month in 1..=12 {
+                    let period = DeadlinePeriod::Monthly {
+                        taxable_year,
+                        month,
+                    };
+                    let former = resolve_due_date("0620", &period, &overrides);
+                    assert!(former.is_some());
+                    assert_eq!(
+                        resolve_due_date("1606", &period, &overrides),
+                        former,
+                        "{taxable_year}-{month}"
+                    );
+                }
+            }
+        }
+    }
+}
