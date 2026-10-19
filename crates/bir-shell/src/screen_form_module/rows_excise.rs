@@ -9,6 +9,9 @@
 //!   computed" until the filer chooses Edit penalties, and blanking them
 //!   ("Use the computed amounts") puts the return on the typed due date.
 //!   Nothing changes on open, so a stored draft saves back byte for byte.
+//!   Decision P4-4 (2026-10-19) puts 1800 and 1801 on the same model (their
+//!   due date: 30 days after the donation, one year after the death), so
+//!   the kept-as-entered helpers below ([`typed_due`]) take them too.
 //! - **Printed item numbers (decision D6).** Where BIR's message names its
 //!   program's item number and the sheet prints another, the page shows the
 //!   printed one ([`PRINTED_MESSAGES`]); the checks and the filed data are
@@ -16,7 +19,8 @@
 
 use bir_core::forms::agent::{AgentFormKind, Binding};
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
-use bir_core::forms::{FilingStatus, form_2200a, form_2200an, form_2200c, form_2200m};
+use bir_core::forms::{FilingStatus, form_1800, form_1801};
+use bir_core::forms::{form_2200a, form_2200an, form_2200c, form_2200m};
 use bir_core::forms::{form_2200p, form_2200s, form_2200t};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
@@ -39,6 +43,17 @@ fn excise(kind: AgentFormKind) -> Option<QueueableKind> {
             | QueueableKind::Form2200T),
         ) => Some(queueable),
         _ => None,
+    }
+}
+
+/// The return `kind` is if its penalties run from a date the filer types:
+/// an excise return (decision D8) or 1800 and 1801 (decision P4-4).
+fn typed_due(kind: AgentFormKind) -> Option<QueueableKind> {
+    match kind {
+        AgentFormKind::Queueable(
+            queueable @ (QueueableKind::Form1800 | QueueableKind::Form1801),
+        ) => Some(queueable),
+        _ => excise(kind),
     }
 }
 
@@ -88,6 +103,8 @@ fn penalty_controls<F: QueueableForm>() -> Vec<&'static str> {
 
 fn before_d8(kind: QueueableKind, draft: &Value) -> bool {
     match kind {
+        QueueableKind::Form1800 => stored_before_typed_due_date::<form_1800::Form1800Draft>(draft),
+        QueueableKind::Form1801 => stored_before_typed_due_date::<form_1801::Form1801Draft>(draft),
         QueueableKind::Form2200A => {
             stored_before_typed_due_date::<form_2200a::Form2200ADraft>(draft)
         }
@@ -115,6 +132,8 @@ fn before_d8(kind: QueueableKind, draft: &Value) -> bool {
 
 fn controls(kind: QueueableKind) -> Vec<&'static str> {
     match kind {
+        QueueableKind::Form1800 => penalty_controls::<form_1800::Form1800Draft>(),
+        QueueableKind::Form1801 => penalty_controls::<form_1801::Form1801Draft>(),
         QueueableKind::Form2200A => penalty_controls::<form_2200a::Form2200ADraft>(),
         QueueableKind::Form2200AN => penalty_controls::<form_2200an::Form2200ANDraft>(),
         QueueableKind::Form2200C => penalty_controls::<form_2200c::Form2200CDraft>(),
@@ -127,9 +146,10 @@ fn controls(kind: QueueableKind) -> Vec<&'static str> {
 }
 
 /// [`KEPT_AS_ENTERED`] for a penalty box of an excise return stored before
-/// D8, `None` for every other box and form.
+/// D8, or of a 1800 or 1801 return stored before P4-4; `None` for every
+/// other box and form.
 pub(super) fn penalty_lock(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
-    let kind = excise(kind)?;
+    let kind = typed_due(kind)?;
     (controls(kind).contains(&key) && before_d8(kind, draft)).then_some(KEPT_AS_ENTERED)
 }
 
@@ -151,7 +171,7 @@ pub(super) fn join_if_group_blanked(
     blanked: &[String],
     rejected: &Map<String, Value>,
 ) {
-    let Some(queueable) = excise(kind) else {
+    let Some(queueable) = typed_due(kind) else {
         return;
     };
     let whole = groups.iter().any(|group| {
@@ -164,6 +184,8 @@ pub(super) fn join_if_group_blanked(
         return;
     }
     match queueable {
+        QueueableKind::Form1800 => join_typed_due_date::<form_1800::Form1800Draft>(draft),
+        QueueableKind::Form1801 => join_typed_due_date::<form_1801::Form1801Draft>(draft),
         QueueableKind::Form2200A => join_typed_due_date::<form_2200a::Form2200ADraft>(draft),
         QueueableKind::Form2200AN => join_typed_due_date::<form_2200an::Form2200ANDraft>(draft),
         QueueableKind::Form2200C => join_typed_due_date::<form_2200c::Form2200CDraft>(draft),
@@ -236,7 +258,7 @@ pub(super) fn unanswered(kind: AgentFormKind, path: &str) -> Option<Value> {
 /// Empty for every other form.
 pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut locks = Map::new();
-    if excise(kind).is_none() {
+    if typed_due(kind).is_none() {
         return locks;
     }
     for group in super::penalties::groups(kind) {

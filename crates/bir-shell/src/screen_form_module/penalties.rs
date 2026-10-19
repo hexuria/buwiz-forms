@@ -251,12 +251,19 @@ pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
                     // A kept 8% amount opens with Edit so a blank can clear it.
                     "applies": applies(kind, group, draft)
                         || group.keys.iter().any(|key| kept_amount_path(kind, draft, key).is_some()),
-                    "kept": super::rows_income_q::kept_as_entered(kind, &group.keys, draft)
-                        || super::rows_annual_individual::kept_as_entered(kind, &group.keys, draft)
-                        // An excise return stored before decision D8 (PR 11).
-                        || super::rows_excise::kept_as_entered(kind, &group.keys, draft),
+                    "kept": kept(kind, group, draft),
                 })
             })
             .collect(),
     )
+}
+
+/// Whether the group's boxes are still on the amounts the draft was stored
+/// with, before its penalties were computed: a 1701Q (PR 5) or 1701 (PR 7)
+/// column, an excise return stored before decision D8 (PR 11), or a 1800 or
+/// 1801 return stored before decision P4-4.
+pub(super) fn kept(kind: AgentFormKind, group: &Group, draft: &Value) -> bool {
+    super::rows_income_q::kept_as_entered(kind, &group.keys, draft)
+        || super::rows_annual_individual::kept_as_entered(kind, &group.keys, draft)
+        || super::rows_excise::kept_as_entered(kind, &group.keys, draft)
 }
