@@ -9948,8 +9948,24 @@ mod tests {
                     year_traces(value, year, &format!("{path}/{index}"), out);
                 }
             }
-            Value::String(text) if text.contains(&year.to_string()) => {
-                out.push(format!("{path} = {text}"))
+            Value::String(text) => {
+                // A timestamp's digits can spell the year by accident —
+                // "...T14:48:13.202738+00:00" is no trace of 2027 — so a
+                // string that parses as a date or timestamp is a trace only
+                // when its own year is the placeholder's.
+                use chrono::Datelike;
+                let stamp_year = chrono::DateTime::parse_from_rfc3339(text)
+                    .map(|stamp| stamp.year())
+                    .or_else(|_| {
+                        chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").map(|date| date.year())
+                    });
+                let traced = match stamp_year {
+                    Ok(stamped) => i64::from(stamped) == year,
+                    Err(_) => text.contains(&year.to_string()),
+                };
+                if traced {
+                    out.push(format!("{path} = {text}"));
+                }
             }
             Value::Number(number) if number.as_i64() == Some(year) => {
                 out.push(format!("{path} = {number}"))
