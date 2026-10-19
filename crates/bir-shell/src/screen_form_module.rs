@@ -294,6 +294,7 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            mark_radio_groups(form, &code);
             rows_dst_pt_vat::mark_calendar_tables(form, &code);
             rows_income_q::mark_one_date(form, &code);
             rows_annual_corporate::mark_whole_pesos(form, &code);
@@ -438,6 +439,28 @@ fn page_type(
 
 /// Apply [`page_type`] to every field, and to every schedule column whose
 /// bound cells all agree.
+/// Each box of a one-answer group carries its group's member count (`rg`),
+/// so the page unticks the ticked box of a group of three or more however
+/// the group's boxes are split over items or drawn (2200S's manner of
+/// payment is items 15 and 16 as radios and item 17 as a tick box).
+fn mark_radio_groups(form: &mut Value, code: &str) {
+    let Some(kind) = AgentFormKind::from_code(code) else {
+        return;
+    };
+    let groups = one_answer_groups(kind);
+    let fields = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten())
+        .flat_map(|item| item["f"].as_array_mut().into_iter().flatten());
+    for field in fields {
+        if let Some((_, members)) = field["k"].as_str().and_then(|key| groups.get(key)) {
+            field["rg"] = Value::from(*members);
+        }
+    }
+}
+
 fn retype_by_binding(form: &mut Value, code: &str) {
     let Some(kind) = AgentFormKind::from_code(code) else {
         return;
@@ -4242,6 +4265,70 @@ fn true_option_paths(def: &AgentFormDef, key: &str) -> Vec<String> {
     }
 }
 
+/// The unanswered variants an answer-list field may have, tried in this
+/// order once `null` does not parse (2000OT's ATC writes `Unanswered`).
+pub(crate) const UNTICK_UNANSWERED: [&str; 4] = ["unanswered", "none", "Unanswered", "None"];
+
+/// What unticking the ticked member of a group of three or more does at one
+/// of its draft paths (decision P4-18).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum UntickWrite {
+    /// Writes this value: `null` where the field is nullable (the item
+    /// unanswered, as before), else the field's own unanswered variant
+    /// ([`UNTICK_UNANSWERED`]) where it is an answer list that has one:
+    /// PR 11's excise manner items, and the groups whose `null` failed the
+    /// whole fill on 1601EQ, 1602Q, 1700, 1701, 1701A, 1701MS, 1702EX, 2000
+    /// and 2000OT.
+    Blank(Value),
+    /// Keeps the answer: the field takes any text, so it is not an answer
+    /// list and only `null` would blank it.
+    KeptText,
+    /// Keeps the answer: the field has no `null` and none of
+    /// [`UNTICK_UNANSWERED`]. 2552 item 11 is the one case: its
+    /// `Form2552Transaction::Unspecified` default is not one of those
+    /// variants, the group box refuses a blank ("must be one of LSE,
+    /// Primary, Secondary"), and PR 9 decided an untick keeps the answer.
+    KeptNoBlank,
+}
+
+/// [`UntickWrite`] for each of `paths`, judged per path by writing the
+/// candidate on a copy of `draft` (with the paths before it written) and
+/// checking the copy still parses as the form's draft. A path that keeps
+/// its answer never stops the other paths' writes, nor the rest of the
+/// edit.
+pub(crate) fn untick_blanks(
+    kind: AgentFormKind,
+    draft: &Value,
+    paths: &[String],
+) -> Vec<(String, UntickWrite)> {
+    let parses = |candidate: &Value| agent::identity(kind, candidate).is_ok();
+    let mut next = draft.clone();
+    let mut writes = Vec::new();
+    for path in paths {
+        let fits = |value: &Value| {
+            let mut copy = next.clone();
+            set_draft_path(&mut copy, path, value.clone());
+            parses(&copy)
+        };
+        let write = if fits(&Value::Null) {
+            UntickWrite::Blank(Value::Null)
+        } else if fits(&json!("\u{1}not an answer")) {
+            UntickWrite::KeptText
+        } else {
+            UNTICK_UNANSWERED
+                .iter()
+                .map(|variant| json!(variant))
+                .find(|variant| fits(variant))
+                .map_or(UntickWrite::KeptNoBlank, UntickWrite::Blank)
+        };
+        if let UntickWrite::Blank(value) = &write {
+            set_draft_path(&mut next, path, value.clone());
+        }
+        writes.push((path.clone(), write));
+    }
+    writes
+}
+
 /// 1701 Item 6 and Part IV Item 3: the filer type and its "also a
 /// compensation earner" flag. Compensation Earner alone is its own filer
 /// type (ATC II011); beside Single Proprietor or Professional it marks mixed
@@ -4260,6 +4347,50 @@ fn form_1701_type_paths(kind: AgentFormKind, key: &str) -> Option<(&'static str,
     }
 }
 
+/// Each one-answer box's (group id, member count): a radio of a group box
+/// (`radio_group`) is in that group; radio boxes without a group box (1701
+/// Item 7's ATCs) form one group per draft field their tick writes
+/// (`path:<pointer>`), when two or more write it. A box the host writes
+/// itself (`catalogs::host_writes`) joins no such group: its probed binding
+/// is not what its tick does (1700's Schedule 1 row 2 Spouse box was bound
+/// to item 17's filing status, so unticking it blanked item 17).
+fn one_answer_groups(kind: AgentFormKind) -> BTreeMap<String, (String, usize)> {
+    let def = kind.definition();
+    let implicit_path = |entry: &BoxDef| -> Option<String> {
+        if entry.group.is_some()
+            || !entry.kind.contains("radio")
+            || catalogs::host_writes(kind, &entry.key)
+        {
+            return None;
+        }
+        let paths = true_option_paths(def, &entry.key);
+        (paths.len() == 1).then(|| paths[0].clone())
+    };
+    let mut implicit: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for entry in &def.boxes {
+        if let Some(path) = implicit_path(entry) {
+            implicit.entry(path).or_default().push(entry.key.clone());
+        }
+    }
+    let mut groups = BTreeMap::new();
+    for entry in &def.boxes {
+        if let Some(group) = entry
+            .group
+            .as_deref()
+            .and_then(|g| def.box_def(g))
+            .filter(|g| g.radio_group)
+        {
+            groups.insert(entry.key.clone(), (group.key.clone(), group.members.len()));
+        } else if let Some(path) = implicit_path(entry) {
+            let members = implicit.get(&path).map_or(0, Vec::len);
+            if members >= 2 {
+                groups.insert(entry.key.clone(), (format!("path:{path}"), members));
+            }
+        }
+    }
+    groups
+}
+
 /// Turn the page's checkbox edits into writes that keep a radio group to one
 /// answer. The probe binds each member's `"false"` to some other answer
 /// (unticking Single Proprietor wrote Professional), and a batch that ticks
@@ -4267,8 +4398,9 @@ fn form_1701_type_paths(kind: AgentFormKind, key: &str) -> Option<(&'static str,
 /// "other" answer. So:
 /// - a group with a ticked member in the batch ignores its unticked members;
 /// - unticking a member that is not ticked does nothing;
-/// - unticking the ticked member of a group of three or more clears the
-///   group (a yes/no pair keeps its official flip).
+/// - unticking the ticked member of a group of three or more leaves the
+///   item unanswered where its field can say so, and otherwise keeps the
+///   answer (`untick_blanks`); a yes/no pair keeps its official flip.
 ///
 /// Edits keep their dependency order otherwise.
 fn plan_choice_edits(
@@ -4278,36 +4410,9 @@ fn plan_choice_edits(
     edits: Vec<(String, Value)>,
 ) -> Vec<(String, ChoiceStep)> {
     let def = kind.definition();
-    // Radio boxes without a group box (1701 Item 7's ATCs) form one group
-    // per draft field their tick writes.
-    let implicit_path = |key: &str| -> Option<String> {
-        let entry = def.box_def(key)?;
-        if entry.group.is_some() || !entry.kind.contains("radio") {
-            return None;
-        }
-        let paths = true_option_paths(def, key);
-        (paths.len() == 1).then(|| paths[0].clone())
-    };
-    let mut implicit: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for entry in &def.boxes {
-        if let Some(path) = implicit_path(&entry.key) {
-            implicit.entry(path).or_default().push(entry.key.clone());
-        }
-    }
+    let groups = one_answer_groups(kind);
     // (group id, member count) of a one-answer box.
-    let group_info = |key: &str| -> Option<(String, usize)> {
-        if let Some(group) = def
-            .box_def(key)
-            .and_then(|e| e.group.as_deref())
-            .and_then(|g| def.box_def(g))
-            .filter(|g| g.radio_group)
-        {
-            return Some((group.key.clone(), group.members.len()));
-        }
-        let path = implicit_path(key)?;
-        let members = implicit.get(&path).map_or(0, Vec::len);
-        (members >= 2).then(|| (format!("path:{path}"), members))
-    };
+    let group_info = |key: &str| -> Option<(String, usize)> { groups.get(key).cloned() };
     let group_of = |key: &str| -> Option<&BoxDef> {
         let group = def.box_def(key)?.group.as_deref()?;
         def.box_def(group).filter(|entry| entry.radio_group)
@@ -4414,11 +4519,6 @@ fn plan_choice_edits(
                 {
                     continue;
                 }
-                // 2552 item 11 has no unanswered state to go back to (PR 9):
-                // unticking its answer keeps it.
-                if rows_as_needed::untick_keeps_the_answer(kind, &key) {
-                    continue;
-                }
                 // 2200S item 17 is a tick box of its own (PR 11): unticking
                 // it writes its false option, not the group's blank.
                 if rows_excise::untick_writes_its_option(kind, &key) {
@@ -4426,13 +4526,14 @@ fn plan_choice_edits(
                     continue;
                 }
                 if members >= 3 {
-                    // An excise return's manner item ends unanswered, the
-                    // value its field holds then, not `null` (PR 11).
-                    let sets = true_option_paths(def, &key)
+                    // Decision P4-18: the item ends unanswered as its field
+                    // can hold it, or the untick writes nothing (still
+                    // judged like any edit: a locked box says why).
+                    let sets = untick_blanks(kind, draft, &true_option_paths(def, &key))
                         .into_iter()
-                        .map(|path| {
-                            let blank = rows_excise::unanswered(kind, &path).unwrap_or(Value::Null);
-                            (path, blank)
+                        .filter_map(|(path, write)| match write {
+                            UntickWrite::Blank(value) => Some((path, value)),
+                            UntickWrite::KeptText | UntickWrite::KeptNoBlank => None,
                         })
                         .collect();
                     plain.push((key, ChoiceStep::Set(sets)));
