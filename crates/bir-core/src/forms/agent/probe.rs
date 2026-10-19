@@ -732,6 +732,19 @@ mod choice_list_tests {
 /// records all ten `disabled: true` (source lines 3363, 3373, 3379, 3389,
 /// 3395, 3405, 3411, 3431, 3441 and 3447), unlike Part VII and Part IX
 /// column B; form_1701_official.rs files them 0.00 (PR 7 review).
+/// The official ATC popup's tick boxes (`AtcCode1..n`, one per ATC the
+/// item 10 category offers), with evidence: `(form code, key prefix)`. A
+/// tick puts that ATC in a Part II row (`toggle_atc`) and the field map
+/// writes the box from `atc_rows` (form_1600pt.rs / form_1600vt.rs
+/// `to_bir_field_map`), but the number of slots follows item 10, so the
+/// probe tied each slot to `/agent_category`: a tick wrote the category,
+/// never the ATC, and the box still showed unticked (PR 14 review F10).
+/// The host writes them (bir-shell rows_monthly.rs `Cell::Slot`).
+const POPUP_SLOTS: &[(&str, &str)] = &[("1600PT", "AtcCode"), ("1600VT", "AtcCode")];
+
+const POPUP_SLOT_REASON: &str = "the ATC popup's tick box: it chooses a Part II row's ATC \
+     (toggle_atc), which the host writes; the slots follow item 10";
+
 const SHUT_ON_OFFICIAL_PAGE: &[(&str, &str)] = &[
     ("1701", "frm1701:txtPg4IPart8_1B"),
     ("1701", "frm1701:txtPg4IPart8_2B"),
@@ -2275,6 +2288,14 @@ fn decide(
             None
         }
     };
+    if POPUP_SLOTS.iter().any(|(form, prefix)| {
+        *form == def.form_code
+            && key
+                .strip_prefix(prefix)
+                .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    }) {
+        return Err(POPUP_SLOT_REASON.to_string());
+    }
     let echoes: Option<Vec<&(String, ValueKind, bool)>> = evidence.echoes.get(key).map(|echoes| {
         echoes
             .iter()
