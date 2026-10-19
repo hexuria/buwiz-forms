@@ -1,0 +1,9507 @@
+{
+ "0605 frm0605:itemMannerOfPayment:_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "SelfAssessment"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "SelfAssessment"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_1 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_1 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "SelfAssessment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "SelfAssessment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "Penalties"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "Penalties"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_2 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_2 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "Penalties"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "Penalties"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "TaxDepositOrAdvancePayment"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "TaxDepositOrAdvancePayment"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_3 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_3 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "TaxDepositOrAdvancePayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "TaxDepositOrAdvancePayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "IncomeTaxSecondInstallmentIndividual"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "IncomeTaxSecondInstallmentIndividual"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_4 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_4 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "IncomeTaxSecondInstallmentIndividual"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "IncomeTaxSecondInstallmentIndividual"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_5 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "Others"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "Others"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_5 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemMannerOfPayment:_5 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "Others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "Others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemMannerOfPaymentB:_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "PreliminaryOrFinalAssessmentOrDeficiencyTax"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "PreliminaryOrFinalAssessmentOrDeficiencyTax"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemMannerOfPaymentB:_1 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemMannerOfPaymentB:_1 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "PreliminaryOrFinalAssessmentOrDeficiencyTax"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "PreliminaryOrFinalAssessmentOrDeficiencyTax"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemMannerOfPaymentB:_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "AccountsReceivableOrDelinquentAccount"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "AccountsReceivableOrDelinquentAccount"
+   },
+   "rejected": {
+    "frm0605:itemMannerOfPayment": "`frm0605:itemMannerOfPayment` must be one of 1, 2, 3, 4, 5, B:_1, B:_2 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemMannerOfPaymentB:_2 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemMannerOfPaymentB:_2 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "AccountsReceivableOrDelinquentAccount"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "AccountsReceivableOrDelinquentAccount"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/type_of_payment": "Installment"
+   },
+   "rejected": {
+    "frm0605:itemModeOfPayment": "`frm0605:itemModeOfPayment` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": "Installment"
+   },
+   "rejected": {
+    "frm0605:itemModeOfPayment": "`frm0605:itemModeOfPayment` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_1 false": {
+  "after": {
+   "fields": {
+    "/type_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_1 tick": {
+  "after": {
+   "fields": {
+    "/type_of_payment": "Installment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": "Installment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/type_of_payment": "PartialPayment"
+   },
+   "rejected": {
+    "frm0605:itemModeOfPayment": "`frm0605:itemModeOfPayment` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": "PartialPayment"
+   },
+   "rejected": {
+    "frm0605:itemModeOfPayment": "`frm0605:itemModeOfPayment` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_2 false": {
+  "after": {
+   "fields": {
+    "/type_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_2 tick": {
+  "after": {
+   "fields": {
+    "/type_of_payment": "PartialPayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": "PartialPayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/type_of_payment": "FullPayment"
+   },
+   "rejected": {
+    "frm0605:itemModeOfPayment": "`frm0605:itemModeOfPayment` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": "FullPayment"
+   },
+   "rejected": {
+    "frm0605:itemModeOfPayment": "`frm0605:itemModeOfPayment` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_3 false": {
+  "after": {
+   "fields": {
+    "/type_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "0605 frm0605:itemModeOfPayment:_3 tick": {
+  "after": {
+   "fields": {
+    "/type_of_payment": "FullPayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/type_of_payment": "FullPayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1600PT AtcCode1 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode1 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode10 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode10 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode11 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode11 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode15 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode15 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode2 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode2 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode20 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode20 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode3 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode3 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode4 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode4 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode6 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode6 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode7 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600PT AtcCode7 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode1 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode1 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode10 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode10 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode12 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode12 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode2 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode2 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode3 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode3 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode4 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode4 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode7 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode7 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode8 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode8 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "government"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode9 false": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1600VT AtcCode9 tick": {
+  "after": null,
+  "before": {
+   "fields": {
+    "/agent_category": "private"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1601EQ frm1601EQ:ifCarriedOver blank (group)": {
+  "after": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {
+    "frm1601EQ:if": "`frm1601EQ:if` must be one of Refund, IssueCert, CarriedOver (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {
+    "frm1601EQ:if": "`frm1601EQ:if` must be one of Refund, IssueCert, CarriedOver (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1601EQ frm1601EQ:ifCarriedOver false": {
+  "after": {
+   "fields": {
+    "/over_remittance": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1601EQ draft: invalid type: null, expected string or map"
+  }
+ },
+ "1601EQ frm1601EQ:ifCarriedOver tick": {
+  "after": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1601EQ frm1601EQ:ifIssueCert blank (group)": {
+  "after": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1601EQ:if": "`frm1601EQ:if` must be one of Refund, IssueCert, CarriedOver (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1601EQ:if": "`frm1601EQ:if` must be one of Refund, IssueCert, CarriedOver (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1601EQ frm1601EQ:ifIssueCert false": {
+  "after": {
+   "fields": {
+    "/over_remittance": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1601EQ draft: invalid type: null, expected string or map"
+  }
+ },
+ "1601EQ frm1601EQ:ifIssueCert tick": {
+  "after": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1601EQ frm1601EQ:ifRefund blank (group)": {
+  "after": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {
+    "frm1601EQ:if": "`frm1601EQ:if` must be one of Refund, IssueCert, CarriedOver (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {
+    "frm1601EQ:if": "`frm1601EQ:if` must be one of Refund, IssueCert, CarriedOver (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1601EQ frm1601EQ:ifRefund false": {
+  "after": {
+   "fields": {
+    "/over_remittance": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1601EQ draft: invalid type: null, expected string or map"
+  }
+ },
+ "1601EQ frm1601EQ:ifRefund tick": {
+  "after": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1602Q frm1602Q:OverRemittance1 blank (group)": {
+  "after": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {
+    "frm1602Q:OverRemittance": "`frm1602Q:OverRemittance` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {
+    "frm1602Q:OverRemittance": "`frm1602Q:OverRemittance` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1602Q frm1602Q:OverRemittance1 false": {
+  "after": {
+   "fields": {
+    "/over_remittance": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1602Q draft: invalid type: null, expected string or map"
+  }
+ },
+ "1602Q frm1602Q:OverRemittance1 tick": {
+  "after": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1602Q frm1602Q:OverRemittance2 blank (group)": {
+  "after": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1602Q:OverRemittance": "`frm1602Q:OverRemittance` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1602Q:OverRemittance": "`frm1602Q:OverRemittance` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1602Q frm1602Q:OverRemittance2 false": {
+  "after": {
+   "fields": {
+    "/over_remittance": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1602Q draft: invalid type: null, expected string or map"
+  }
+ },
+ "1602Q frm1602Q:OverRemittance2 tick": {
+  "after": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1602Q frm1602Q:OverRemittance3 blank (group)": {
+  "after": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {
+    "frm1602Q:OverRemittance": "`frm1602Q:OverRemittance` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {
+    "frm1602Q:OverRemittance": "`frm1602Q:OverRemittance` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1602Q frm1602Q:OverRemittance3 false": {
+  "after": {
+   "fields": {
+    "/over_remittance": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1602Q draft: invalid type: null, expected string or map"
+  }
+ },
+ "1602Q frm1602Q:OverRemittance3 tick": {
+  "after": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/over_remittance": "carried_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id393:_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id393:_1 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id393:_1 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id393:_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id393:_2 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id393:_2 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id393:_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id393:_3 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id393:_3 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id393:_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id393:_4 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id393:_4 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id393:_5 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id393:_5 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id393:_5 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id393:_6 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id393:_6 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id393:_6 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id393_8 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {
+    "frm1606:j_id393": "`frm1606:j_id393` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id393_8 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id393_8 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id395:_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "cash_sale"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "cash_sale"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id395:_1 false": {
+  "after": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id395:_1 tick": {
+  "after": {
+   "fields": {
+    "/transaction": "cash_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "cash_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id395:_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "exempt"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "exempt"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id395:_2 false": {
+  "after": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id395:_2 tick": {
+  "after": {
+   "fields": {
+    "/transaction": "exempt"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "exempt"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id395:_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "installment_sale"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "installment_sale"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id395:_3 false": {
+  "after": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id395:_3 tick": {
+  "after": {
+   "fields": {
+    "/transaction": "installment_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "installment_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id395:_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "foreclosure_sale"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "foreclosure_sale"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id395:_4 false": {
+  "after": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id395:_4 tick": {
+  "after": {
+   "fields": {
+    "/transaction": "foreclosure_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "foreclosure_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:j_id395:_5 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "others"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "others"
+   },
+   "rejected": {
+    "frm1606:j_id395": "`frm1606:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:j_id395:_5 false": {
+  "after": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:j_id395:_5 tick": {
+  "after": {
+   "fields": {
+    "/transaction": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:opt28A blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "gross_selling_price"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "gross_selling_price"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:opt28A false": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:opt28A tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "gross_selling_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "gross_selling_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:opt28B blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "fair_market_value"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "fair_market_value"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:opt28B false": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:opt28B tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "fair_market_value"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "fair_market_value"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:opt28C blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "bid_price"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "bid_price"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:opt28C false": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:opt28C tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "bid_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "bid_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:opt28D blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "installment_collected"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "installment_collected"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:opt28D false": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:opt28D tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "installment_collected"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "installment_collected"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1606 frm1606:opt28E blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "others"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "others"
+   },
+   "rejected": {
+    "frm1606:opt28": "`frm1606:opt28` must be one of A, D, B, E, C (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1606 frm1606:opt28E false": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1606 frm1606:opt28E tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_box": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_box": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusLS blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusLS false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1700 draft: invalid type: null, expected string or map"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusLS tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusM blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusM false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1700 draft: invalid type: null, expected string or map"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusM tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusS blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusS false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1700 draft: invalid type: null, expected string or map"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusS tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusW blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {
+    "frm1700:rdoPg1I15CivilStatus": "`frm1700:rdoPg1I15CivilStatus` must be one of LS, M, S, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusW false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1700 draft: invalid type: null, expected string or map"
+  }
+ },
+ "1700 frm1700:rdoPg1I15CivilStatusW tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusLS blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "LegallySeparated"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "LegallySeparated"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusLS false": {
+  "after": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusLS tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "LegallySeparated"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "LegallySeparated"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusM blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "Married"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "Married"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusM false": {
+  "after": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusM tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "Married"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "Married"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusS blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "Single"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "Single"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusS false": {
+  "after": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusS tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "Single"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "Single"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusW blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "Widowed"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "Widowed"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I16CivilStatus": "`frm1701:rdoPg1I16CivilStatus` must be one of S, M, LS, W (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusW false": {
+  "after": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I16CivilStatusW tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "Widowed"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "Widowed"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I21TaxRateG false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I21TaxRateG tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I21TaxRateP false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I21TaxRateP tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeE blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "Estate"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "Estate"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeE false": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeE tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "Estate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "Estate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeP blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "Professional"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "Professional"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeP false": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeP tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "Professional"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "Professional"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeS blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "SingleProprietor"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "SingleProprietor"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeS false": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeS tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "SingleProprietor"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "SingleProprietor"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeT blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "Trust"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "Trust"
+   },
+   "rejected": {
+    "frm1701:rdoPg1I6TaxpayerType": "`frm1701:rdoPg1I6TaxpayerType` must be one of S, P, E, T (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeT false": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I6TaxpayerTypeT tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_type": "Trust"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_type": "Trust"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II011 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II011 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii011"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii011"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II012 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II012 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II013 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II013 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II014 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II014 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II015 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II015 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II016 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II016 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II017 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg1I7ATC_II017 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentCarryOver blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {
+    "frm1701:rdoPg1Overpayment": "`frm1701:rdoPg1Overpayment` must be one of Refund, TCC, CarryOver (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {
+    "frm1701:rdoPg1Overpayment": "`frm1701:rdoPg1Overpayment` must be one of Refund, TCC, CarryOver (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentCarryOver false": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "None"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701 draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentCarryOver tick": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentRefund blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "Refund"
+   },
+   "rejected": {
+    "frm1701:rdoPg1Overpayment": "`frm1701:rdoPg1Overpayment` must be one of Refund, TCC, CarryOver (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment_disposition": "Refund"
+   },
+   "rejected": {
+    "frm1701:rdoPg1Overpayment": "`frm1701:rdoPg1Overpayment` must be one of Refund, TCC, CarryOver (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentRefund false": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "None"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701 draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentRefund tick": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "Refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment_disposition": "Refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentTCC blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {
+    "frm1701:rdoPg1Overpayment": "`frm1701:rdoPg1Overpayment` must be one of Refund, TCC, CarryOver (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {
+    "frm1701:rdoPg1Overpayment": "`frm1701:rdoPg1Overpayment` must be one of Refund, TCC, CarryOver (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentTCC false": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "None"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701 draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701 frm1701:rdoPg1OverpaymentTCC tick": {
+  "after": {
+   "fields": {
+    "/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I12TaxRateG false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I12TaxRateG tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I12TaxRateP false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I12TaxRateP tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II011 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II011 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii011"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii011"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II012 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II012 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II013 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II013 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II014 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II014 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II015 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II015 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II016 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II016 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II017 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701 frm1701:rdoPg2I4ATC_II017 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optATC_1 false": {
+  "after": {
+   "fields": {
+    "/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optATC_1 tick": {
+  "after": {
+   "fields": {
+    "/atc": "i_i012"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "i_i012"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optATC_2 false": {
+  "after": {
+   "fields": {
+    "/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optATC_2 tick": {
+  "after": {
+   "fields": {
+    "/atc": "i_i014"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "i_i014"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optATC_3 false": {
+  "after": {
+   "fields": {
+    "/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optATC_3 tick": {
+  "after": {
+   "fields": {
+    "/atc": "i_i015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "i_i015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optATC_4 false": {
+  "after": {
+   "fields": {
+    "/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optATC_4 tick": {
+  "after": {
+   "fields": {
+    "/atc": "i_i017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "i_i017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701A frm1701A:optCivilStatus_1 false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_1 tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "single"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701A frm1701A:optCivilStatus_2 false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_2 tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "married"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701A frm1701A:optCivilStatus_3 false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_3 tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "separated"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {
+    "frm1701A:optCivilStatus": "`frm1701A:optCivilStatus` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701A frm1701A:optCivilStatus_4 false": {
+  "after": {
+   "fields": {
+    "/civil_status": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optCivilStatus_4 tick": {
+  "after": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/civil_status": "widow"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optRefund_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {
+    "frm1701A:optRefund": "`frm1701A:optRefund` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {
+    "frm1701A:optRefund": "`frm1701A:optRefund` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701A frm1701A:optRefund_1 false": {
+  "after": {
+   "fields": {
+    "/overpayment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optRefund_1 tick": {
+  "after": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optRefund_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1701A:optRefund": "`frm1701A:optRefund` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1701A:optRefund": "`frm1701A:optRefund` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701A frm1701A:optRefund_2 false": {
+  "after": {
+   "fields": {
+    "/overpayment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optRefund_2 tick": {
+  "after": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optRefund_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {
+    "frm1701A:optRefund": "`frm1701A:optRefund` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {
+    "frm1701A:optRefund": "`frm1701A:optRefund` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701A frm1701A:optRefund_3 false": {
+  "after": {
+   "fields": {
+    "/overpayment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optRefund_3 tick": {
+  "after": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_1 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "i_i012"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "i_i012"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_2 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_2 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "i_i014"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "i_i014"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_3 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_3 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "i_i015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "i_i015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_4 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optSpouseATC_4 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "i_i017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "i_i017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optSpouseTaxRate_1 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optSpouseTaxRate_1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "i_i014"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "i_i014"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optSpouseTaxRate_2 false": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optSpouseTaxRate_2 tick": {
+  "after": {
+   "fields": {
+    "/spouse/atc": "i_i017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/atc": "i_i017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optTaxRate_1 false": {
+  "after": {
+   "fields": {
+    "/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optTaxRate_1 tick": {
+  "after": {
+   "fields": {
+    "/atc": "i_i012"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "i_i012"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701A frm1701A:optTaxRate_2 false": {
+  "after": {
+   "fields": {
+    "/atc": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701A draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701A frm1701A:optTaxRate_2 tick": {
+  "after": {
+   "fields": {
+    "/atc": "i_i015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "i_i015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedJointlyNo5 blank (group)": {
+  "after": {
+   "fields": {
+    "/filing": "jointly"
+   },
+   "rejected": {
+    "frm1701MS:txtIfMarried": "`frm1701MS:txtIfMarried` must be one of JointlyNo5, SeparatelyNo5, NotApplicableNo5 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/filing": "jointly"
+   },
+   "rejected": {
+    "frm1701MS:txtIfMarried": "`frm1701MS:txtIfMarried` must be one of JointlyNo5, SeparatelyNo5, NotApplicableNo5 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedJointlyNo5 false": {
+  "after": {
+   "fields": {
+    "/filing": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedJointlyNo5 tick": {
+  "after": {
+   "fields": {
+    "/filing": "jointly"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/filing": "jointly"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedNotApplicableNo5 blank (group)": {
+  "after": {
+   "fields": {
+    "/filing": "not_applicable"
+   },
+   "rejected": {
+    "frm1701MS:txtIfMarried": "`frm1701MS:txtIfMarried` must be one of JointlyNo5, SeparatelyNo5, NotApplicableNo5 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/filing": "not_applicable"
+   },
+   "rejected": {
+    "frm1701MS:txtIfMarried": "`frm1701MS:txtIfMarried` must be one of JointlyNo5, SeparatelyNo5, NotApplicableNo5 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedNotApplicableNo5 false": {
+  "after": {
+   "fields": {
+    "/filing": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedNotApplicableNo5 tick": {
+  "after": {
+   "fields": {
+    "/filing": "not_applicable"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/filing": "not_applicable"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedSeparatelyNo5 blank (group)": {
+  "after": {
+   "fields": {
+    "/filing": "separately"
+   },
+   "rejected": {
+    "frm1701MS:txtIfMarried": "`frm1701MS:txtIfMarried` must be one of JointlyNo5, SeparatelyNo5, NotApplicableNo5 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/filing": "separately"
+   },
+   "rejected": {
+    "frm1701MS:txtIfMarried": "`frm1701MS:txtIfMarried` must be one of JointlyNo5, SeparatelyNo5, NotApplicableNo5 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedSeparatelyNo5 false": {
+  "after": {
+   "fields": {
+    "/filing": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtIfMarriedSeparatelyNo5 tick": {
+  "after": {
+   "fields": {
+    "/filing": "separately"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/filing": "separately"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11a1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/source": "business"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "business"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11a1 false": {
+  "after": {
+   "fields": {
+    "/spouse/source": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11a1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/source": "business"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "business"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11b1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/source": "mixed"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "mixed"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11b1 false": {
+  "after": {
+   "fields": {
+    "/spouse/source": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11b1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/source": "mixed"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "mixed"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11c1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/source": "profession"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "profession"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11c1 false": {
+  "after": {
+   "fields": {
+    "/spouse/source": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11c1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/source": "profession"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "profession"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11d1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/source": "compensation"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "compensation"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo11": "`frm1701MS:txtTaxpayerNo11` must be one of a1, b1, c1, d1 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11d1 false": {
+  "after": {
+   "fields": {
+    "/spouse/source": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo11d1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/source": "compensation"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/source": "compensation"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12b1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "graduated",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "graduated",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12b1 false": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12b1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "graduated",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "graduated",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12c blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "eight_percent"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "eight_percent"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12c false": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12c tick": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "eight_percent"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "eight_percent"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12c1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "eight_percent",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "eight_percent",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12c1 false": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12c1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "eight_percent",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "eight_percent",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12d blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "exempt"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "exempt"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12d false": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12d tick": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "exempt"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "exempt"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12d1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "exempt",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "exempt",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12d1 false": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12d1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "exempt",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "exempt",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12e blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "special"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "special"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12e false": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12e tick": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "special"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "special"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12e1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "special",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "special",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {
+    "frm1701MS:txtTaxpayerNo12": "`frm1701MS:txtTaxpayerNo12` must be one of b1, c1, d1, e1, c, d, e (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12e1 false": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "unanswered",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1701MS draft: invalid type: null, expected string or map"
+  }
+ },
+ "1701MS frm1701MS:txtTaxpayerNo12e1 tick": {
+  "after": {
+   "fields": {
+    "/spouse/tax_option": "special",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse/tax_option": "special",
+    "/taxpayer/tax_option": "unanswered"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optATC_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Ii012"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii012"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optATC_1 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optATC_1 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optATC_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Ii014"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii014"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optATC_2 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optATC_2 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optATC_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optATC_3 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optATC_3 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optATC_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Ii015"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii015"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optATC_4 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optATC_4 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optATC_5 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optATC_5 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optATC_5 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optATC_6 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Ii016"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii016"
+   },
+   "rejected": {
+    "frm1701q:optATC": "`frm1701q:optATC` must be one of II012, II014, II013, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optATC_6 false": {
+  "after": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optATC_6 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii012"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii012"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_1 false": {
+  "after": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_1 tick": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii012"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii014"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii014"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_2 false": {
+  "after": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_2 tick": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii014"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii013"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii013"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_3 false": {
+  "after": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_3 tick": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii013"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii011"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii011"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_4 false": {
+  "after": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_4 tick": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii011"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii011"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_5 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii015"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii015"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_5 false": {
+  "after": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_5 tick": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii015"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_6 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii017"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii017"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_6 false": {
+  "after": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_6 tick": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii017"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_7 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii016"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii016"
+   },
+   "rejected": {
+    "frm1701q:optSpouseATC": "`frm1701q:optSpouseATC` must be one of II012, II014, II013, II011, II015, II017, II016 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_7 false": {
+  "after": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseATC_7 tick": {
+  "after": {
+   "fields": {
+    "/spouse_atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_atc": "Ii016"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseType_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_type": "SingleProprietor"
+   },
+   "rejected": {
+    "frm1701q:optSpouseType": "`frm1701q:optSpouseType` must be one of Single, Professional, Compensation (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": "SingleProprietor"
+   },
+   "rejected": {
+    "frm1701q:optSpouseType": "`frm1701q:optSpouseType` must be one of Single, Professional, Compensation (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseType_1 false": {
+  "after": {
+   "fields": {
+    "/spouse_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseType_1 tick": {
+  "after": {
+   "fields": {
+    "/spouse_type": "SingleProprietor"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": "SingleProprietor"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseType_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_type": "Professional"
+   },
+   "rejected": {
+    "frm1701q:optSpouseType": "`frm1701q:optSpouseType` must be one of Single, Professional, Compensation (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": "Professional"
+   },
+   "rejected": {
+    "frm1701q:optSpouseType": "`frm1701q:optSpouseType` must be one of Single, Professional, Compensation (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseType_2 false": {
+  "after": {
+   "fields": {
+    "/spouse_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseType_2 tick": {
+  "after": {
+   "fields": {
+    "/spouse_type": "Professional"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": "Professional"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optSpouseType_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/spouse_type": "CompensationEarner"
+   },
+   "rejected": {
+    "frm1701q:optSpouseType": "`frm1701q:optSpouseType` must be one of Single, Professional, Compensation (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": "CompensationEarner"
+   },
+   "rejected": {
+    "frm1701q:optSpouseType": "`frm1701q:optSpouseType` must be one of Single, Professional, Compensation (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optSpouseType_3 false": {
+  "after": {
+   "fields": {
+    "/spouse_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optSpouseType_3 tick": {
+  "after": {
+   "fields": {
+    "/spouse_type": "CompensationEarner"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/spouse_type": "CompensationEarner"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optType_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/filer_type": "SingleProprietor"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "SingleProprietor"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optType_1 false": {
+  "after": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optType_1 tick": {
+  "after": {
+   "fields": {
+    "/filer_type": "SingleProprietor"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "SingleProprietor"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optType_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/filer_type": "Professional"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "Professional"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optType_2 false": {
+  "after": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optType_2 tick": {
+  "after": {
+   "fields": {
+    "/filer_type": "Professional"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "Professional"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optType_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/filer_type": "Estate"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "Estate"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optType_3 false": {
+  "after": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optType_3 tick": {
+  "after": {
+   "fields": {
+    "/filer_type": "Estate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "Estate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1701Q frm1701q:optType_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/filer_type": "Trust"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "Trust"
+   },
+   "rejected": {
+    "frm1701q:optType": "`frm1701q:optType` must be one of Single, Professional, Estate, Trust (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1701Q frm1701q:optType_4 false": {
+  "after": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1701Q frm1701q:optType_4 tick": {
+  "after": {
+   "fields": {
+    "/filer_type": "Trust"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/filer_type": "Trust"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentCarryOver blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {
+    "frm1702EX:rdoPg1Overpayment": "`frm1702EX:rdoPg1Overpayment` must be one of CarryOver, Refund, TCC (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {
+    "frm1702EX:rdoPg1Overpayment": "`frm1702EX:rdoPg1Overpayment` must be one of CarryOver, Refund, TCC (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentCarryOver false": {
+  "after": {
+   "fields": {
+    "/overpayment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1702EX draft: invalid type: null, expected string or map"
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentCarryOver tick": {
+  "after": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "carry_over"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentRefund blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {
+    "frm1702EX:rdoPg1Overpayment": "`frm1702EX:rdoPg1Overpayment` must be one of CarryOver, Refund, TCC (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {
+    "frm1702EX:rdoPg1Overpayment": "`frm1702EX:rdoPg1Overpayment` must be one of CarryOver, Refund, TCC (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentRefund false": {
+  "after": {
+   "fields": {
+    "/overpayment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1702EX draft: invalid type: null, expected string or map"
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentRefund tick": {
+  "after": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentTCC blank (group)": {
+  "after": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1702EX:rdoPg1Overpayment": "`frm1702EX:rdoPg1Overpayment` must be one of CarryOver, Refund, TCC (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {
+    "frm1702EX:rdoPg1Overpayment": "`frm1702EX:rdoPg1Overpayment` must be one of CarryOver, Refund, TCC (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentTCC false": {
+  "after": {
+   "fields": {
+    "/overpayment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 1702EX draft: invalid type: null, expected string or map"
+  }
+ },
+ "1702EX frm1702EX:rdoPg1OverpaymentTCC tick": {
+  "after": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/overpayment": "tax_credit_certificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702MX frm1702MX:rdoPg1Pt2I21CarriedOver false": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1702MX frm1702MX:rdoPg1Pt2I21CarriedOver tick": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702MX frm1702MX:rdoPg1Pt2I21IssueTCC false": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1702MX frm1702MX:rdoPg1Pt2I21IssueTCC tick": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702MX frm1702MX:rdoPg1Pt2I21Refund false": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1702MX frm1702MX:rdoPg1Pt2I21Refund tick": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "Refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "Refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentCarried blank (group)": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {
+    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {
+    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentCarried false": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentCarried tick": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "CarryOver"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentIssued blank (group)": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {
+    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {
+    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentIssued false": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentIssued tick": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentRefunded blank (group)": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "Refund"
+   },
+   "rejected": {
+    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "Refund"
+   },
+   "rejected": {
+    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentRefunded false": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentRefunded tick": {
+  "after": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "Refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/part_ii/overpayment_disposition": "Refund"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id391:_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id391:_1 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id391:_1 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id391:_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id391:_2 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id391:_2 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "agricultural"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id391:_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id391:_3 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id391:_3 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id391:_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id391:_4 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id391:_4 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "industrial"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id391:_5 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id391:_5 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id391:_5 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_residential"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id391:_6 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id391:_6 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id391:_6 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "condominium_commercial"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id391:_8 blank (group)": {
+  "after": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {
+    "frm1706:j_id391": "`frm1706:j_id391` must be one of 1, 3, 5, 8, 2, 4, 6 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id391:_8 false": {
+  "after": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/property_class": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id391:_8 tick": {
+  "after": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/property_class": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id395:_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id395:_1 false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id395:_1 tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id395:_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "exempt"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "exempt"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id395:_2 false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id395:_2 tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "exempt"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "exempt"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id395:_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id395:_3 false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id395:_3 tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id395:_4 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id395:_4 false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id395:_4 tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:j_id395:_5 blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {
+    "frm1706:j_id395": "`frm1706:j_id395` must be one of 1, 4, 2, 5, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:j_id395:_5 false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:j_id395:_5 tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:opt30A blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "gross_selling_price"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "gross_selling_price"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:opt30A false": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:opt30A tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "gross_selling_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "gross_selling_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:opt30B blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "bid_price"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "bid_price"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:opt30B false": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:opt30B tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "bid_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "bid_price"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:opt30C blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "fair_market_value"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "fair_market_value"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:opt30C false": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:opt30C tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "fair_market_value"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "fair_market_value"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:opt30D blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "taxable_installment"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "taxable_installment"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:opt30D false": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:opt30D tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "taxable_installment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "taxable_installment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:opt30E blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "unutilized_proceeds"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "unutilized_proceeds"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:opt30E false": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:opt30E tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "unutilized_proceeds"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "unutilized_proceeds"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1706 frm1706:opt30F blank (group)": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "others"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "others"
+   },
+   "rejected": {
+    "frm1706:opt30": "`frm1706:opt30` must be one of A, B, C, D, E, F (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1706 frm1706:opt30F false": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1706 frm1706:opt30F tick": {
+  "after": {
+   "fields": {
+    "/taxable_base_option": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxable_base_option": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescCash blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescCash false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescCash tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "cash_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescForeclosure blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescForeclosure false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescForeclosure tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "foreclosure_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescInstallment blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescInstallment false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescInstallment tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "installment_sale"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescOthers blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {
+    "frm1707:rdoPg1I9TransDesc": "`frm1707:rdoPg1I9TransDesc` must be one of Cash, Foreclosure, Installment, Others (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescOthers false": {
+  "after": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1707 frm1707:rdoPg1I9TransDescOthers tick": {
+  "after": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction_type": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1801 frm1801v2018:freq_Mon blank (group)": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  }
+ },
+ "1801 frm1801v2018:freq_Mon false": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1801 frm1801v2018:freq_Mon tick": {
+  "after": {
+   "fields": {
+    "/installment_frequency": "monthly"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": "monthly"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1801 frm1801v2018:freq_Other blank (group)": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  }
+ },
+ "1801 frm1801v2018:freq_Other false": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1801 frm1801v2018:freq_Other tick": {
+  "after": {
+   "fields": {
+    "/installment_frequency": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": "others"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1801 frm1801v2018:freq_Qtr blank (group)": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  }
+ },
+ "1801 frm1801v2018:freq_Qtr false": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1801 frm1801v2018:freq_Qtr tick": {
+  "after": {
+   "fields": {
+    "/installment_frequency": "quarterly"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": "quarterly"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "1801 frm1801v2018:freq_Semi blank (group)": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": null
+  }
+ },
+ "1801 frm1801v2018:freq_Semi false": {
+  "after": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "1801 frm1801v2018:freq_Semi tick": {
+  "after": {
+   "fields": {
+    "/installment_frequency": "semi_annual"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/installment_frequency": "semi_annual"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000 frm2000:optMode_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "edst"
+   },
+   "rejected": {
+    "frm2000:optMode": "`frm2000:optMode` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/affixture_mode": "edst"
+   },
+   "rejected": {
+    "frm2000:optMode": "`frm2000:optMode` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000 frm2000:optMode_1 false": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000 draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000 frm2000:optMode_1 tick": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "edst"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/affixture_mode": "edst"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000 frm2000:optMode_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "constructive"
+   },
+   "rejected": {
+    "frm2000:optMode": "`frm2000:optMode` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/affixture_mode": "constructive"
+   },
+   "rejected": {
+    "frm2000:optMode": "`frm2000:optMode` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000 frm2000:optMode_2 false": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000 draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000 frm2000:optMode_2 tick": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "constructive"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/affixture_mode": "constructive"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000 frm2000:optMode_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "loose_stamps"
+   },
+   "rejected": {
+    "frm2000:optMode": "`frm2000:optMode` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/affixture_mode": "loose_stamps"
+   },
+   "rejected": {
+    "frm2000:optMode": "`frm2000:optMode` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000 frm2000:optMode_3 false": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000 draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000 frm2000:optMode_3 tick": {
+  "after": {
+   "fields": {
+    "/affixture_mode": "loose_stamps"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/affixture_mode": "loose_stamps"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000 frm2000:optParty_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/other_party": "creditor"
+   },
+   "rejected": {
+    "frm2000:optParty": "`frm2000:optParty` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/other_party": "creditor"
+   },
+   "rejected": {
+    "frm2000:optParty": "`frm2000:optParty` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000 frm2000:optParty_1 false": {
+  "after": {
+   "fields": {
+    "/other_party": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000 draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000 frm2000:optParty_1 tick": {
+  "after": {
+   "fields": {
+    "/other_party": "creditor"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/other_party": "creditor"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000 frm2000:optParty_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/other_party": "debtor"
+   },
+   "rejected": {
+    "frm2000:optParty": "`frm2000:optParty` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/other_party": "debtor"
+   },
+   "rejected": {
+    "frm2000:optParty": "`frm2000:optParty` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000 frm2000:optParty_2 false": {
+  "after": {
+   "fields": {
+    "/other_party": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000 draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000 frm2000:optParty_2 tick": {
+  "after": {
+   "fields": {
+    "/other_party": "debtor"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/other_party": "debtor"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000 frm2000:optParty_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/other_party": "none"
+   },
+   "rejected": {
+    "frm2000:optParty": "`frm2000:optParty` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/other_party": "none"
+   },
+   "rejected": {
+    "frm2000:optParty": "`frm2000:optParty` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000 frm2000:optParty_3 false": {
+  "after": {
+   "fields": {
+    "/other_party": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000 draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000 frm2000:optParty_3 tick": {
+  "after": {
+   "fields": {
+    "/other_party": "none"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/other_party": "none"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000OT frm2000OT:ATC_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Do102"
+   },
+   "rejected": {
+    "frm2000OT:ATC": "`frm2000OT:ATC` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Do102"
+   },
+   "rejected": {
+    "frm2000OT:ATC": "`frm2000OT:ATC` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000OT frm2000OT:ATC_1 false": {
+  "after": {
+   "fields": {
+    "/atc": "Unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000OT draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000OT frm2000OT:ATC_1 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Do102"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Do102"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000OT frm2000OT:ATC_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Do122"
+   },
+   "rejected": {
+    "frm2000OT:ATC": "`frm2000OT:ATC` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Do122"
+   },
+   "rejected": {
+    "frm2000OT:ATC": "`frm2000OT:ATC` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000OT frm2000OT:ATC_2 false": {
+  "after": {
+   "fields": {
+    "/atc": "Unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000OT draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000OT frm2000OT:ATC_2 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Do122"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Do122"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000OT frm2000OT:ATC_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/atc": "Do125"
+   },
+   "rejected": {
+    "frm2000OT:ATC": "`frm2000OT:ATC` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/atc": "Do125"
+   },
+   "rejected": {
+    "frm2000OT:ATC": "`frm2000OT:ATC` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000OT frm2000OT:ATC_3 false": {
+  "after": {
+   "fields": {
+    "/atc": "Unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000OT draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000OT frm2000OT:ATC_3 tick": {
+  "after": {
+   "fields": {
+    "/atc": "Do125"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/atc": "Do125"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/nature": "shares_of_stock"
+   },
+   "rejected": {
+    "frm2000OT:rbTransNature": "`frm2000OT:rbTransNature` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/nature": "shares_of_stock"
+   },
+   "rejected": {
+    "frm2000OT:rbTransNature": "`frm2000OT:rbTransNature` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_1 false": {
+  "after": {
+   "fields": {
+    "/nature": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000OT draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_1 tick": {
+  "after": {
+   "fields": {
+    "/nature": "shares_of_stock"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/nature": "shares_of_stock"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/nature": "real_property_capital_asset"
+   },
+   "rejected": {
+    "frm2000OT:rbTransNature": "`frm2000OT:rbTransNature` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/nature": "real_property_capital_asset"
+   },
+   "rejected": {
+    "frm2000OT:rbTransNature": "`frm2000OT:rbTransNature` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_2 false": {
+  "after": {
+   "fields": {
+    "/nature": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000OT draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_2 tick": {
+  "after": {
+   "fields": {
+    "/nature": "real_property_capital_asset"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/nature": "real_property_capital_asset"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/nature": "real_property_ordinary_asset"
+   },
+   "rejected": {
+    "frm2000OT:rbTransNature": "`frm2000OT:rbTransNature` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/nature": "real_property_ordinary_asset"
+   },
+   "rejected": {
+    "frm2000OT:rbTransNature": "`frm2000OT:rbTransNature` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_3 false": {
+  "after": {
+   "fields": {
+    "/nature": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "error": "not a 2000OT draft: invalid type: null, expected string or map"
+  }
+ },
+ "2000OT frm2000OT:rbTransNature_3 tick": {
+  "after": {
+   "fields": {
+    "/nature": "real_property_ordinary_asset"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/nature": "real_property_ordinary_asset"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200A frm2200Av2020:optPayment_1 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200A frm2200Av2020:optPayment_1 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200A frm2200Av2020:optPayment_2 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200A frm2200Av2020:optPayment_2 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200A frm2200Av2020:optPayment_3 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200A frm2200Av2020:optPayment_3 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200AN frm2200ANv2018:MannerOfPayment1 false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200AN frm2200ANv2018:MannerOfPayment1 tick": {
+  "after": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200AN frm2200ANv2018:MannerOfPayment2 false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200AN frm2200ANv2018:MannerOfPayment2 tick": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200AN frm2200ANv2018:MannerOfPayment3 false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200AN frm2200ANv2018:MannerOfPayment3 tick": {
+  "after": {
+   "fields": {
+    "/manner": "other"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "other"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPOther blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {
+    "frm2200M:rdoPg1Pt2MOP": "`frm2200M:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {
+    "frm2200M:rdoPg1Pt2MOP": "`frm2200M:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPOther false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPOther tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPPaymentActual blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {
+    "frm2200M:rdoPg1Pt2MOP": "`frm2200M:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {
+    "frm2200M:rdoPg1Pt2MOP": "`frm2200M:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPPaymentActual false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPPaymentActual tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPPrepayment blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {
+    "frm2200M:rdoPg1Pt2MOP": "`frm2200M:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {
+    "frm2200M:rdoPg1Pt2MOP": "`frm2200M:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPPrepayment false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200M frm2200M:rdoPg1Pt2MOPPrepayment tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPOther blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {
+    "frm2200P:rdoPg1Pt2MOP": "`frm2200P:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {
+    "frm2200P:rdoPg1Pt2MOP": "`frm2200P:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPOther false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPOther tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPPaymentActual blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {
+    "frm2200P:rdoPg1Pt2MOP": "`frm2200P:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {
+    "frm2200P:rdoPg1Pt2MOP": "`frm2200P:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPPaymentActual false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPPaymentActual tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPPrepayment blank (group)": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {
+    "frm2200P:rdoPg1Pt2MOP": "`frm2200P:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {
+    "frm2200P:rdoPg1Pt2MOP": "`frm2200P:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPPrepayment false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200P frm2200P:rdoPg1Pt2MOPPrepayment tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200S frm2200S:chkPymntManner_1 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner": "actual_removal",
+    "/other_scheme": false
+   },
+   "rejected": {
+    "frm2200S:chkPymntManner": "`frm2200S:chkPymntManner` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner": "actual_removal",
+    "/other_scheme": false
+   },
+   "rejected": {
+    "frm2200S:chkPymntManner": "`frm2200S:chkPymntManner` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200S frm2200S:chkPymntManner_1 false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "unanswered",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200S frm2200S:chkPymntManner_1 tick": {
+  "after": {
+   "fields": {
+    "/manner": "actual_removal",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "actual_removal",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200S frm2200S:chkPymntManner_2 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": false
+   },
+   "rejected": {
+    "frm2200S:chkPymntManner": "`frm2200S:chkPymntManner` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": false
+   },
+   "rejected": {
+    "frm2200S:chkPymntManner": "`frm2200S:chkPymntManner` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200S frm2200S:chkPymntManner_2 false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "unanswered",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200S frm2200S:chkPymntManner_2 tick": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200S frm2200S:chkPymntManner_3 blank (group)": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": true
+   },
+   "rejected": {
+    "frm2200S:chkPymntManner": "`frm2200S:chkPymntManner` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": true
+   },
+   "rejected": {
+    "frm2200S:chkPymntManner": "`frm2200S:chkPymntManner` must be one of 1, 2, 3 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200S frm2200S:chkPymntManner_3 false": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": false
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200S frm2200S:chkPymntManner_3 tick": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": true
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment",
+    "/other_scheme": true
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200T frm2200Tv2020:optPayment_1 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200T frm2200Tv2020:optPayment_1 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200T frm2200Tv2020:optPayment_2 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200T frm2200Tv2020:optPayment_2 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200T frm2200Tv2020:optPayment_3 false": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "none"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200T frm2200Tv2020:optPayment_3 tick": {
+  "after": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner_of_payment": "other_scheme"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter1 blank (group)": {
+  "after": {
+   "fields": {
+    "/quarter": "First"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/quarter": "First"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter1 false": {
+  "after": {
+   "fields": {
+    "/quarter": "First"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter1": "`frm2550qv2024:OptQuarter1` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "First"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter1": "`frm2550qv2024:OptQuarter1` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter1 tick": {
+  "after": {
+   "fields": {
+    "/quarter": "First"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter1": "`frm2550qv2024:OptQuarter1` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "First"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter1": "`frm2550qv2024:OptQuarter1` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter2 blank (group)": {
+  "after": {
+   "fields": {
+    "/quarter": "Second"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Second"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter2 false": {
+  "after": {
+   "fields": {
+    "/quarter": "Second"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter2": "`frm2550qv2024:OptQuarter2` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Second"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter2": "`frm2550qv2024:OptQuarter2` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter2 tick": {
+  "after": {
+   "fields": {
+    "/quarter": "Second"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter2": "`frm2550qv2024:OptQuarter2` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Second"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter2": "`frm2550qv2024:OptQuarter2` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter3 blank (group)": {
+  "after": {
+   "fields": {
+    "/quarter": "Third"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Third"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter3 false": {
+  "after": {
+   "fields": {
+    "/quarter": "Third"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter3": "`frm2550qv2024:OptQuarter3` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Third"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter3": "`frm2550qv2024:OptQuarter3` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter3 tick": {
+  "after": {
+   "fields": {
+    "/quarter": "Third"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter3": "`frm2550qv2024:OptQuarter3` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Third"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter3": "`frm2550qv2024:OptQuarter3` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter4 blank (group)": {
+  "after": {
+   "fields": {
+    "/quarter": "Fourth"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Fourth"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter": "`frm2550qv2024:OptQuarter` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter4 false": {
+  "after": {
+   "fields": {
+    "/quarter": "Fourth"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter4": "`frm2550qv2024:OptQuarter4` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Fourth"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter4": "`frm2550qv2024:OptQuarter4` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:OptQuarter4 tick": {
+  "after": {
+   "fields": {
+    "/quarter": "Fourth"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter4": "`frm2550qv2024:OptQuarter4` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/quarter": "Fourth"
+   },
+   "rejected": {
+    "frm2550qv2024:OptQuarter4": "`frm2550qv2024:OptQuarter4` picks which return this is; reopen the form for another TIN or period"
+   },
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification1 blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Micro"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Micro"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification1 false": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification1 tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Micro"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Micro"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification2 blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Small"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Small"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification2 false": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification2 tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Small"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Small"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification3 blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Medium"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Medium"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification3 false": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification3 tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Medium"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Medium"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification4 blank (group)": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Large"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Large"
+   },
+   "rejected": {
+    "frm2550qv2024:taxPayerClassification": "`frm2550qv2024:taxPayerClassification` must be one of 1, 2, 3, 4 (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification4 false": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": null
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2550Q frm2550qv2024:taxPayerClassification4 tick": {
+  "after": {
+   "fields": {
+    "/taxpayer_classification": "Large"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/taxpayer_classification": "Large"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionLSE blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "local_stock_exchange"
+   },
+   "rejected": {
+    "frm2552:rdoPg1I11Transaction": "`frm2552:rdoPg1I11Transaction` must be one of LSE, Primary, Secondary (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "local_stock_exchange"
+   },
+   "rejected": {
+    "frm2552:rdoPg1I11Transaction": "`frm2552:rdoPg1I11Transaction` must be one of LSE, Primary, Secondary (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionLSE false": {
+  "after": {
+   "fields": {
+    "/transaction": "local_stock_exchange"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "local_stock_exchange"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionLSE tick": {
+  "after": {
+   "fields": {
+    "/transaction": "local_stock_exchange"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "local_stock_exchange"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionPrimary blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "primary_offering"
+   },
+   "rejected": {
+    "frm2552:rdoPg1I11Transaction": "`frm2552:rdoPg1I11Transaction` must be one of LSE, Primary, Secondary (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "primary_offering"
+   },
+   "rejected": {
+    "frm2552:rdoPg1I11Transaction": "`frm2552:rdoPg1I11Transaction` must be one of LSE, Primary, Secondary (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionPrimary false": {
+  "after": {
+   "fields": {
+    "/transaction": "primary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "primary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionPrimary tick": {
+  "after": {
+   "fields": {
+    "/transaction": "primary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "primary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionSecondary blank (group)": {
+  "after": {
+   "fields": {
+    "/transaction": "secondary_offering"
+   },
+   "rejected": {
+    "frm2552:rdoPg1I11Transaction": "`frm2552:rdoPg1I11Transaction` must be one of LSE, Primary, Secondary (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/transaction": "secondary_offering"
+   },
+   "rejected": {
+    "frm2552:rdoPg1I11Transaction": "`frm2552:rdoPg1I11Transaction` must be one of LSE, Primary, Secondary (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionSecondary false": {
+  "after": {
+   "fields": {
+    "/transaction": "secondary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "secondary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2552 frm2552:rdoPg1I11TransactionSecondary tick": {
+  "after": {
+   "fields": {
+    "/transaction": "secondary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/transaction": "secondary_offering"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ }
+}

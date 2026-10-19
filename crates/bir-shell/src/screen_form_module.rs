@@ -5302,6 +5302,10 @@ mod tests {
     // PR 11: 2200A, 2200AN, 2200C, 2200M, 2200P, 2200S and 2200T against
     // their printed sheets, and decision D8.
     mod excise;
+    // PR 14: unticking a ticked answer never fails an edit (P4-18): the
+    // sweep and its recorder, then the rule's own tests.
+    mod radio_untick;
+    mod radio_untick_rule;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
