@@ -1708,10 +1708,10 @@ fn d5_old_1604e_rows_typed_through_a_total_are_flagged() {
     );
     assert_eq!(raw_row(id).1, PRE_PR6_1604E, "stored as given");
     let opened = open("1604E", 0);
-    let notice = rows_1604::legacy_total_notice(3);
+    let notice = rows_1604::legacy_total_notice(2, 3);
     assert_eq!(
         notice,
-        "Row 3 may hold an amount typed as the total; check it before you file."
+        "Schedule 2, row 3 may hold an amount typed as the total; check it before you file."
     );
     let flagged = |errors: &Value| -> Vec<(String, Value)> {
         errors
@@ -1752,7 +1752,20 @@ fn d5_old_1604e_rows_typed_through_a_total_are_flagged() {
             .iter()
             .filter(|e| e["message"] == notice.as_str())
             .count()
-            == 2
+            == 1
+    );
+    // Each notice names its schedule (P4-11).
+    let schedule_1 = rows_1604::legacy_total_notice(1, 3);
+    assert_eq!(
+        schedule_1,
+        "Schedule 1, row 3 may hold an amount typed as the total; check it before you file."
+    );
+    assert!(
+        opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["field"] == "schedule1[2].penalties" && e["message"] == schedule_1.as_str())
     );
     // Nothing changes: the amounts show as stored and the row is the old bytes.
     assert_eq!(
@@ -1941,7 +1954,7 @@ fn d5_an_unsaved_draft_says_to_save_before_marking_checked() {
         notices[0]["message"],
         format!(
             "{} {}",
-            rows_1604::legacy_total_notice(3),
+            rows_1604::legacy_total_notice(2, 3),
             rows_1604::SAVE_TO_CHECK
         )
     );
@@ -1968,6 +1981,6 @@ fn d5_an_unsaved_draft_says_to_save_before_marking_checked() {
         .find(|e| e["field"] == "schedule2[2].penalties")
         .cloned()
         .unwrap();
-    assert_eq!(saved["message"], rows_1604::legacy_total_notice(3));
+    assert_eq!(saved["message"], rows_1604::legacy_total_notice(2, 3));
     assert_eq!(saved["dismiss"], "2:2");
 }

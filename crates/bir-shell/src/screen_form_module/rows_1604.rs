@@ -176,9 +176,12 @@ pub(super) const LEGACY_TOTAL_ROWS: [(u8, &[usize]); 2] =
     [(1, &[2]), (2, &[1, 2, 3, 4, 6, 7, 8, 9, 10])];
 
 /// What a 1604E row that may hold a total typed as its penalties says
-/// (maintainer decision D5, 2026-10-18).
-pub(super) fn legacy_total_notice(row: usize) -> String {
-    format!("Row {row} may hold an amount typed as the total; check it before you file.")
+/// (maintainer decision D5, 2026-10-18), naming its schedule (P4-11,
+/// 2026-10-19).
+pub(super) fn legacy_total_notice(schedule: u8, row: usize) -> String {
+    format!(
+        "Schedule {schedule}, row {row} may hold an amount typed as the total; check it before you file."
+    )
 }
 
 /// What a D5 notice adds on a draft not saved yet, which cannot be marked
@@ -284,9 +287,9 @@ pub(super) fn notices(
             }
             let row = index + 1;
             let message = if dismissible {
-                legacy_total_notice(row)
+                legacy_total_notice(schedule, row)
             } else {
-                format!("{} {SAVE_TO_CHECK}", legacy_total_notice(row))
+                format!("{} {SAVE_TO_CHECK}", legacy_total_notice(schedule, row))
             };
             let mut notice = json!({
                 "field": format!("schedule{schedule}[{index}].penalties"),
