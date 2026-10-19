@@ -65,11 +65,24 @@ pub fn fill_by_name(html: &str, fields: &BTreeMap<String, String>) -> String {
 
 /// `plan`: the stacked-line cells whose item's text overflows its boxes
 /// ([`line_group_plan`]), printed as planned instead of from their key.
+/// Outside a bundle: Arimo, no spacing ([`SheetType::plain`]).
 fn fill_by_name_with_cells(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &BTreeMap<String, Vec<String>>,
     plan: &BTreeMap<String, CellFill>,
+) -> String {
+    fill_by_name_set(html, fields, cells, plan, &SheetType::plain())
+}
+
+/// [`fill_by_name_with_cells`] with a value longer than its boxes measured
+/// in `sheet`'s type.
+fn fill_by_name_set(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &BTreeMap<String, Vec<String>>,
+    plan: &BTreeMap<String, CellFill>,
+    sheet: &SheetType,
 ) -> String {
     let tags = input_tags(html);
     if tags.is_empty() {
@@ -100,6 +113,7 @@ fn fill_by_name_with_cells(
                 input_name,
                 value,
                 via_cell,
+                sheet,
             };
             fill_text_input(html, &tags, indices, &target, &mut replacements);
         }
@@ -118,6 +132,7 @@ fn fill_by_name_with_cells(
                     input_name: cell,
                     value: line,
                     via_cell: true,
+                    sheet,
                 };
                 fill_text_input(html, &tags, indices, &target, &mut replacements);
             }
@@ -838,24 +853,90 @@ fn floor_size(size: f64) -> f64 {
     ((size * 100.0).floor() / 100.0).max(0.01)
 }
 
-/// `text`'s width in ems of Arimo.
+/// `text`'s width in ems of Arimo (the tests that show the old estimate).
+#[cfg(test)]
 fn arimo_ems(text: &str) -> f64 {
     Face::Arimo.ems(text)
 }
 
-/// The type size (pt) `text` fits `width` pt at, measured in the bundled
-/// Arimo's own advance widths ([`arimo_ems`]), at most [`PLAIN_MAX_PT`] and
-/// with no floor: text that would not fit shrinks further rather than run
-/// past its cell (nothing is lost). Every sheet sizes its plain overflow
-/// type this way (maintainer decision P4-7, 2026-10-19; 0619E and 0619F
-/// first, where a 200-character address ran past its cells by the old
-/// 0.58 em-per-character estimate).
-fn fit_text(width: f64, text: &str) -> f64 {
-    let ems = arimo_ems(text);
-    if ems == 0.0 {
-        return PLAIN_MAX_PT;
+/// The type size (pt) a line of `text` past a comb of `width` pt prints
+/// at: measured in the sheet's own face with its word- and letter-spacing
+/// ([`SheetType::fit`]), within the cell less the line's 1 pt left padding
+/// and 1 pt to spare, at most [`PLAIN_MAX_PT`], rounded down to 0.01 pt.
+/// Every sheet sizes its overflow type this way (maintainer decision P4-7,
+/// 2026-10-19): a value that fits its boxes prints byte for byte as
+/// before; a value longer than its boxes is measured.
+fn fit_line(sheet: &SheetType, width: f64, text: &str) -> f64 {
+    sheet.fit(sheet.letter, (width - 2.0).max(1.0), text, PLAIN_MAX_PT)
+}
+
+/// A plain (`data-field-kind="text"`) box `cell` of `html`: the room (pt)
+/// its input leaves for text (the cell's width less the input's left and
+/// right inset, less 1 pt to spare) and the input's class list.
+fn plain_box<'a>(html: &'a str, cell: &str) -> Option<(f64, &'a str)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let tag = &html[open..open + html[open..].find('>')?];
+    if attr(tag, "data-field-kind") != Some("text") {
+        return None;
     }
-    ((width - 2.0).max(1.0) / ems).min(PLAIN_MAX_PT)
+    let width_at = tag.find(";width:")? + ";width:".len();
+    let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
+    let input_at = open + html[open..].find("<input")?;
+    let input = &html[input_at..input_at + html[input_at..].find('>')?];
+    let (left, right) = inset(attr(input, "style").unwrap_or(""));
+    Some((width - left - right - 1.0, attr(input, "class")?))
+}
+
+/// The left and right of an input's `inset:` (1 to 4 lengths, pt).
+fn inset(style: &str) -> (f64, f64) {
+    let Some(at) = style.find("inset:") else {
+        return (0.0, 0.0);
+    };
+    let values: Vec<f64> = style[at + "inset:".len()..]
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .split_whitespace()
+        .filter_map(|v| v.strip_suffix("pt").and_then(|n| n.parse().ok()))
+        .collect();
+    match values.as_slice() {
+        [all] => (*all, *all),
+        [_, sides] | [_, sides, _] => (*sides, *sides),
+        [_, right, _, left] => (*left, *right),
+        _ => (0.0, 0.0),
+    }
+}
+
+/// The type size (pt) value `text` prints at in plain box `cell` when it
+/// is longer than the box at its class's size: measured in the sheet's
+/// type ([`SheetType::fit`]) within the box, rounded down to 0.01 pt.
+/// `None` while it fits (it prints byte for byte as before) or `cell` is
+/// not a plain box.
+fn plain_box_size(html: &str, cell: &str, text: &str, sheet: &SheetType) -> Option<f64> {
+    let (room, classes) = plain_box(html, cell)?;
+    let size = sheet.size_for(classes)?;
+    let letter = sheet.letter_for(classes);
+    (sheet.width(letter, text, size) > room).then(|| sheet.fit(letter, room, text, size))
+}
+
+/// `tag` with `font-size:{size}pt` last in its inline style.
+fn with_font_size(tag: &str, size: f64) -> String {
+    let declaration = format!("font-size:{size:.2}pt");
+    if let Some(at) = tag.find(" style=\"") {
+        let value_at = at + " style=\"".len();
+        if let Some(end) = tag[value_at..].find('"') {
+            let end = value_at + end;
+            let style = tag[value_at..end].trim_end_matches(';');
+            return format!("{}{style};{declaration}{}", &tag[..value_at], &tag[end..]);
+        }
+    }
+    let close = tag.rfind('>').unwrap_or(tag.len());
+    let close = if tag[..close].ends_with('/') {
+        close - 1
+    } else {
+        close
+    };
+    format!("{} style=\"{declaration}\"{}", &tag[..close], &tag[close..])
 }
 
 /// One stacked line of a printed item: its cell, the key that fills it,
@@ -1009,7 +1090,7 @@ fn fit_size(width: f64, chars: usize) -> f64 {
 /// words: the breaks that let the largest common type size fit, and among
 /// those the nearest each line's share of the width, so the text runs
 /// across every line. Each line's part, and the size.
-fn plain_lines(text: &str, widths: &[f64]) -> (Vec<String>, f64) {
+fn plain_lines(text: &str, widths: &[f64], sheet: &SheetType) -> (Vec<String>, f64) {
     fn walk(level: usize, words: usize, cuts: &mut Vec<usize>, visit: &mut dyn FnMut(&[usize])) {
         if level == cuts.len() - 1 {
             visit(cuts);
@@ -1033,7 +1114,7 @@ fn plain_lines(text: &str, widths: &[f64]) -> (Vec<String>, f64) {
         for (k, width) in widths.iter().enumerate() {
             let line = line_text(cuts, k);
             let chars = line.chars().count();
-            size = size.min(fit_text(*width, &line));
+            size = size.min(fit_line(sheet, *width, &line));
             so_far += chars;
             share += width / total;
             deviation += (so_far as f64 - share * length as f64).abs();
@@ -1053,7 +1134,7 @@ fn plain_lines(text: &str, widths: &[f64]) -> (Vec<String>, f64) {
     let size = lines
         .iter()
         .zip(widths)
-        .map(|(line, width)| fit_text(*width, line))
+        .map(|(line, width)| fit_line(sheet, *width, line))
         .fold(PLAIN_MAX_PT, f64::min);
     (lines, size)
 }
@@ -1067,6 +1148,7 @@ fn line_group_plan(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &WriterCells,
+    sheet: &SheetType,
 ) -> BTreeMap<String, CellFill> {
     let mut plan = BTreeMap::new();
     for group in line_groups(html, cells) {
@@ -1106,7 +1188,7 @@ fn line_group_plan(
             continue;
         }
         let widths: Vec<f64> = group.iter().map(|line| line.width).collect();
-        let (parts, size) = plain_lines(&text, &widths);
+        let (parts, size) = plain_lines(&text, &widths, sheet);
         for (line, part) in group.iter().zip(parts) {
             plan.insert(line.cell.clone(), CellFill::Plain(part, size));
         }
@@ -1121,6 +1203,8 @@ struct TextTarget<'a> {
     input_name: &'a str,
     value: &'a str,
     via_cell: bool,
+    /// The sheet's type, which a value longer than its boxes is measured in.
+    sheet: &'a SheetType,
 }
 
 /// One text value into one cell: a comb gets a character per slot, a plain
@@ -1137,6 +1221,7 @@ fn fill_text_input(
         input_name,
         value,
         via_cell,
+        sheet,
     } = *target;
     // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
     // TIN/branch (`via_cell` false) keep the writer map as-is.
@@ -1187,7 +1272,7 @@ fn fill_text_input(
         // the last box.
         let whole_line = via_cell || is_email_key(name) || name.starts_with("derived:line:");
         let overflow = (whole_line && chars.len() > ordered.len())
-            .then(|| comb_overflow_line(html, input_name, print))
+            .then(|| comb_overflow_line(html, input_name, print, sheet))
             .flatten();
         let spread = overflow.is_none();
         if let Some((at, line)) = overflow {
@@ -1208,13 +1293,16 @@ fn fill_text_input(
             ));
         }
     } else {
+        // A value longer than its plain box prints smaller, measured, so it
+        // stays inside the box; one that fits keeps its bytes.
+        let shrink = via_cell
+            .then(|| plain_box_size(html, input_name, print, sheet))
+            .flatten();
         for &index in indices {
             let writer = via_cell.then_some(print);
-            replacements.push((
-                tags[index].start,
-                tags[index].end,
-                set_value(tags[index].tag, print, writer),
-            ));
+            let tag = set_value(tags[index].tag, print, writer);
+            let tag = shrink.map_or_else(|| tag.clone(), |size| with_font_size(&tag, size));
+            replacements.push((tags[index].start, tags[index].end, tag));
         }
     }
 }
@@ -2484,8 +2572,9 @@ fn fill_bundle(
 ) -> Result<String, String> {
     let cells = writer_cells(slug)?;
     validate_writer_cells(html, slug, &cells)?;
-    let plan = line_group_plan(html, fields, &cells);
-    let filled = fill_by_name_with_cells(html, fields, &cells.joins, &plan);
+    let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| SheetType::of(loaded.css));
+    let plan = line_group_plan(html, fields, &cells, &sheet);
+    let filled = fill_by_name_set(html, fields, &cells.joins, &plan, &sheet);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
     let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -2937,12 +3026,17 @@ fn base64_encode(bytes: &[u8]) -> String {
 /// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
 /// holding `text` left-aligned in a font small enough to fit. Returns the
 /// insert position just inside the cell and the input tag.
-fn comb_overflow_line(html: &str, cell: &str, text: &str) -> Option<(usize, String)> {
+fn comb_overflow_line(
+    html: &str,
+    cell: &str,
+    text: &str,
+    sheet: &SheetType,
+) -> Option<(usize, String)> {
     let open = html.find(&format!("<div id=\"{cell}\""))?;
     let tag = &html[open..open + html[open..].find('>')?];
     let width_at = tag.find(";width:")? + ";width:".len();
     let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
-    overflow_input(html, cell, text, fit_text(width, text))
+    overflow_input(html, cell, text, fit_line(sheet, width, text))
 }
 
 /// [`comb_overflow_line`] at type `size` (pt). The input names the cell
@@ -5431,6 +5525,14 @@ mod tests {
         }
     }
 
+    /// Whether a plain overflow line `text` at `size` pt sets within a
+    /// comb `width` pt wide on sheet `slug`: measured in the sheet's face
+    /// with its word- and letter-spacing, after the line's 1 pt padding.
+    fn line_fits(slug: &str, text: &str, size: f64, width: f64) -> bool {
+        let sheet = SheetType::of(bundle(slug).unwrap().css);
+        1.0 + sheet.width(sheet.letter, text, size) <= width
+    }
+
     /// Every frozen sheet slug with a writer-cells file.
     fn sheet_slugs() -> Vec<String> {
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
@@ -5589,7 +5691,7 @@ mod tests {
                                 .unwrap_or_else(|| panic!("{slug} {}: a plain line", line.cell));
                             assert!(!part.is_empty(), "{slug} {}: every line used", line.cell);
                             assert!(
-                                part.chars().count() as f64 * EM_PER_CHAR * size <= line.width,
+                                line_fits(&slug, &part, size, line.width),
                                 "{slug} {}: {part:?} at {size}pt fits {}pt",
                                 line.cell,
                                 line.width
@@ -5670,7 +5772,7 @@ mod tests {
                     let (part, size) = overlay.unwrap_or_else(|| panic!("{slug} {key}: plain"));
                     assert_eq!(part, text, "{slug} {key}: whole");
                     assert!(
-                        len as f64 * EM_PER_CHAR * size <= width,
+                        line_fits(&slug, &part, size, width),
                         "{slug} {key}: {len} characters at {size}pt fit {width}pt"
                     );
                     if shrunk {
@@ -5712,8 +5814,9 @@ mod tests {
     /// One long address, pinned: 200 characters over 0619E's two address
     /// lines print as plain type in one size; far longer, the type keeps
     /// shrinking so the text still fits its cells (no floor). The size was
-    /// 8.61 pt by the per-character estimate; 0619E's overflow type is
-    /// measured (P4-7, [`fit_text`]), so the same text prints at 8.56 pt.
+    /// 8.61 pt by the per-character estimate, 8.56 pt measured to the
+    /// nearest 0.01 pt, and 8.55 pt now that the measured size is rounded
+    /// down to 0.01 pt (rounding never adds width; [`floor_size`]).
     #[test]
     fn a_long_address_prints_at_a_pinned_size() {
         let text = words_of(200);
@@ -5723,9 +5826,9 @@ mod tests {
         let (second, again) = printed_cell(&document, "p1c42");
         assert_eq!(format!("{first} {second}"), text);
         assert_eq!(size, again);
-        assert_eq!(size, Some(8.56));
+        assert_eq!(size, Some(8.55));
         assert!(document.contains(
-            "font-size:8.56pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"p1c41\""
+            "font-size:8.55pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"p1c41\""
         ));
         // 600 characters: under 4 pt, and still inside each cell.
         let text = words_of(600);
@@ -5738,14 +5841,18 @@ mod tests {
             let width = comb_cell(&document, cell).unwrap().1;
             assert!(size < 4.0, "{cell}: {size}");
             assert!(
-                part.chars().count() as f64 * EM_PER_CHAR * size <= width,
+                line_fits("0619e-2018", &part, size, width),
                 "{cell}: {} characters at {size}pt fit {width}pt",
                 part.chars().count()
             );
             parts.push(part);
         }
         assert_eq!(parts.join(" "), text, "nothing is lost");
-        assert_eq!(fit_size(1000.0, 5), PLAIN_MAX_PT);
+        let sheet = SheetType::plain();
+        assert_eq!(
+            sheet.fit(sheet.letter, 998.0, "UNIT 1", PLAIN_MAX_PT),
+            PLAIN_MAX_PT
+        );
     }
 
     /// The bug as found: a 200-character 0619E registered address
@@ -5796,14 +5903,19 @@ mod tests {
         assert_eq!(printed_cell(&document, "p1c44"), ("1226".to_string(), None));
     }
 
-    /// Per cell, on every sheet (P4-7): each text join's key holding a
-    /// 200-character text, then a 90-character one, and the review's sweep
-    /// probe (a 200-character all-caps address in every name, address,
-    /// email, employer and business box), print so that each plain line's
-    /// text, measured in Arimo at its size, fits its cell less the input's
-    /// 1 pt left padding. The inputs are synthetic. On 0619E and 0619F the
-    /// address typed across its two keys (111 + 89 characters) prints the
-    /// very same document as typed whole, so it is checked once.
+    /// Per cell, on every sheet (P4-7): every text join filled with a
+    /// 200-character text, then with a 90-character one, then the review's
+    /// sweep probe (the 200-character address below in each join whose
+    /// printed caption contains "address", "name", "email", "employer" or
+    /// "business", in any case: "6A Seller name", "Donee A name"). Each
+    /// plain overflow line over a comb, measured in the sheet's face with
+    /// its word- and letter-spacing at its printed size, sets within its
+    /// cell after the line's 1 pt padding; each plain box's value, at the
+    /// size it prints (its class's, or the smaller inline size a value
+    /// longer than the box takes), sets within the box less its input's
+    /// inset. The inputs are synthetic. On 0619E and 0619F the address
+    /// typed across its two keys (111 + 89 characters) prints the very same
+    /// document as typed whole, so it is checked once.
     #[test]
     fn every_sheet_fits_every_plain_line_in_its_cell() {
         let first = "UNIT 4512 TOWER B THE RESIDENCES AT GREENBELT 123 ESPERANZA STREET COR. \
@@ -5825,8 +5937,10 @@ mod tests {
                 "{slug}: typed across the two lines, it prints as typed whole"
             );
         }
-        let mut lines = 0;
+        let (mut lines, mut boxes, mut swept) = (0, 0, 0);
         for slug in sheet_slugs() {
+            let loaded = bundle(&slug).unwrap();
+            let sheet = SheetType::of(loaded.css);
             let cells = writer_cells(&slug).unwrap();
             let every = |text: &str| -> BTreeMap<String, String> {
                 cells
@@ -5842,13 +5956,15 @@ mod tests {
                     ids.first()
                         .and_then(|id| cells.captions.get(id))
                         .is_some_and(|caption| {
-                            ["Address", "Name", "Email", "Employer", "Business"]
+                            let caption = caption.to_lowercase();
+                            ["address", "name", "email", "employer", "business"]
                                 .iter()
                                 .any(|word| caption.contains(word))
                         })
                 })
                 .map(|(key, _)| (key.clone(), whole.clone()))
                 .collect();
+            swept += sweep.len();
             for (case, fields) in [
                 ("200", every(&words_of(200))),
                 ("90", every(&words_of(90))),
@@ -5860,16 +5976,46 @@ mod tests {
                         continue;
                     };
                     let width = comb_cell(&document, &cell).unwrap().1;
-                    let measured = arimo_ems(&text) * size;
+                    let measured = sheet.width(sheet.letter, &text, size);
                     assert!(
                         1.0 + measured <= width,
                         "{slug} {case} {cell}: {text:?} at {size}pt measures {measured}pt in {width}pt"
                     );
                     lines += 1;
                 }
+                for ids in cells.joins.values() {
+                    for cell in ids {
+                        let Some((room, classes)) = plain_box(&document, cell) else {
+                            continue;
+                        };
+                        let input_at = document.find(&format!("<div id=\"{cell}\"")).unwrap();
+                        let input_at = input_at + document[input_at..].find("<input").unwrap();
+                        let input =
+                            &document[input_at..input_at + document[input_at..].find('>').unwrap()];
+                        let text = attr(input, "value").unwrap_or("").replace("&amp;", "&");
+                        if text.is_empty() {
+                            continue;
+                        }
+                        let style = attr(input, "style").unwrap_or("");
+                        let size = style
+                            .find("font-size:")
+                            .and_then(|at| style[at + "font-size:".len()..].split("pt").next())
+                            .and_then(|size| size.parse().ok())
+                            .or_else(|| sheet.size_for(classes))
+                            .unwrap_or_else(|| panic!("{slug} {cell}: a type size"));
+                        let measured = sheet.width(sheet.letter_for(classes), &text, size);
+                        assert!(
+                            measured <= room,
+                            "{slug} {case} {cell}: {text:?} at {size}pt measures {measured}pt in a {room}pt box"
+                        );
+                        boxes += 1;
+                    }
+                }
             }
         }
         assert!(lines > 500, "{lines} plain lines checked");
+        assert!(boxes > 500, "{boxes} plain boxes checked");
+        assert!(swept > 100, "{swept} joins swept");
     }
     /// Every sheet filled three ways: each text join's key holding a
     /// 200-character text, a 90-character one and a 12-character one (past
@@ -5983,14 +6129,190 @@ mod tests {
             changed, CHANGED_BY_MEASURING,
             "the sheets measuring changed"
         );
-        // 0619E and 0619F print as they did once measured alone.
+    }
+
+    /// Each sheet's type is read from its form.css: the 11 sheets that set
+    /// `.fi` in Tinos measure in Tinos, the rest in Arimo, and the `.fi`
+    /// word-spacing is each sheet's own (fixed points: it does not scale
+    /// with the size); no `.fi` sets a letter-spacing, the size classes do.
+    #[test]
+    fn each_sheet_measures_in_its_own_face_and_spacing() {
+        const TINOS: [&str; 11] = [
+            "0605-1999",
+            "1601c-2018",
+            "1602q-2019",
+            "1603q-2018",
+            "1604e-2018",
+            "1604f-2018",
+            "2200c-2018",
+            "2200p-2020",
+            "2200t-2022",
+            "2550m-2007",
+            "2553-1999",
+        ];
+        for slug in sheet_slugs() {
+            let sheet = SheetType::of(bundle(&slug).unwrap().css);
+            let face = if TINOS.contains(&slug.as_str()) {
+                Face::Tinos
+            } else {
+                Face::Arimo
+            };
+            assert_eq!(sheet.face, face, "{slug}");
+            assert_eq!(sheet.word.em, 0.0, "{slug}");
+            assert_eq!(sheet.letter, Spacing::default(), "{slug}");
+        }
+        for (slug, pt) in [
+            ("1604f-2018", 0.3238),
+            ("2200t-2022", 0.4092),
+            ("1600-pt-2018", 0.2778),
+            ("1604e-2018", 0.1518),
+            ("1600wp-2010", 0.0546),
+            ("0605-1999", -0.1071),
+            ("0619e-2018", 0.0),
+        ] {
+            assert_eq!(
+                SheetType::of(bundle(slug).unwrap().css).word.pt,
+                pt,
+                "{slug}"
+            );
+        }
+        // A size class's letter-spacing (0605's .fh10) and size.
+        let sheet = SheetType::of(bundle("0605-1999").unwrap().css);
         assert_eq!(
-            now["0619e-2018"],
-            "fd3930f958c67f4d379e537a31dab670787b2024d6e3ded6a36fc9d910284ffa"
+            sheet.letter_for("fi fh10"),
+            Spacing {
+                pt: 0.0102,
+                em: 0.0
+            }
+        );
+        assert_eq!(sheet.size_for("fi fh10"), Some(9.47));
+        // The measure: advances, plus the word-spacing on each space, plus
+        // the letter-spacing on each character.
+        let tinos = SheetType::of(bundle("1604f-2018").unwrap().css);
+        let text = "AB CD";
+        let expected = Face::Tinos.ems(text) * 9.0 + 0.3238;
+        assert!((tinos.width(tinos.letter, text, 9.0) - expected).abs() < 1e-9);
+        let letter = Spacing { pt: 0.5, em: 0.1 };
+        let expected = Face::Tinos.ems(text) * 9.0 + 0.3238 + 5.0 * (0.5 + 0.9);
+        assert!((tinos.width(letter, text, 9.0) - expected).abs() < 1e-9);
+        // The review's word-spacing regression texts (narrow letters, many
+        // spaces), on every sheet at each width: measured with the sheet's
+        // spacing, each line sets within its comb after its 1 pt padding.
+        let texts = [
+            "ILIGAN LILIO IMPERIAL LIMITLESS INDIVISIBLE LIMITING INITIAL ILLUMINATED ILIGAN CITY",
+            "LILIAN ILIGAN LILI INI LIMIT INDIA LIMITED PILI LILIO INC",
+            "IVIRIS IN ILIAN LIMIT LILIA SILI TIPIL INITIAL LIMITING INC",
+            "UNIT 1011 TILL INTERNATIONAL ILLINOIS MILL ISLAND LIMITED ITI BILIT",
+            "DELA CRUZ JUAN CARLO SANTOS ILAGAN MIRANDA VILLANUEVA IMPORT INC",
+        ];
+        for slug in sheet_slugs() {
+            let sheet = SheetType::of(bundle(&slug).unwrap().css);
+            for width in [100.0, 150.0, 200.0, 300.0, 446.52] {
+                for text in texts {
+                    let size = fit_line(&sheet, width, text);
+                    let set = sheet.width(sheet.letter, text, size);
+                    assert!(
+                        1.0 + set <= width,
+                        "{slug} {width}pt: {text} sets {set}pt at {size}pt"
+                    );
+                }
+            }
+        }
+        // The fit is the largest size that sets within the room, rounded down.
+        let size = tinos.fit(letter, 100.0, text, 50.0);
+        assert!(tinos.width(letter, text, size) <= 100.0);
+        assert!(tinos.width(letter, text, size + 0.01) > 100.0);
+    }
+
+    /// A character the face does not map is drawn from another font: it
+    /// counts 1.3 em, more than CJK or an emoji takes (about 1.2 em), so the
+    /// type comes out small enough; a mapped one counts its own advance.
+    #[test]
+    fn an_unmapped_character_counts_wide() {
+        for face in [Face::Arimo, Face::Tinos] {
+            for c in ['\u{0416}', '\u{4E2D}', '\u{1F600}', '\u{0150}'] {
+                assert_eq!(face.ems(&c.to_string()), FALLBACK_EMS, "{face:?} {c}");
+            }
+            const { assert!(FALLBACK_EMS >= 1.3) };
+            // Latin-1's Ñ is mapped, at its own width.
+            let n = face.ems("\u{00D1}");
+            assert!(n > 0.5 && n < 1.0, "{face:?} Ñ: {n}");
+        }
+        assert_eq!(Face::Arimo.ems("A"), 1366.0 / 2048.0);
+        assert_eq!(
+            Face::Tinos.ems("A"),
+            Face::Tinos.advances()[33].1 as f64 / 2048.0
+        );
+    }
+
+    /// A printed size is rounded down to 0.01 pt, never to the nearest:
+    /// rounding never adds width.
+    #[test]
+    fn a_printed_size_rounds_down() {
+        assert_eq!(floor_size(8.559), 8.55);
+        assert_eq!(floor_size(8.5), 8.5);
+        assert_eq!(floor_size(0.001), 0.01);
+        let sheet = SheetType::plain();
+        let text = words_of(200);
+        let size = sheet.fit(sheet.letter, 444.52, &text, PLAIN_MAX_PT);
+        assert_eq!(size, floor_size(size));
+        assert!(sheet.width(sheet.letter, &text, size) <= 444.52);
+    }
+
+    /// A plain box's value longer than the box prints smaller, measured, so
+    /// it stays inside (0605's 80-character registered address, p1c38,
+    /// 365.51 pt, showed 61 characters); one that fits keeps its bytes.
+    #[test]
+    fn a_plain_box_value_longer_than_its_box_is_measured() {
+        let slug = "0605-1999";
+        let loaded = bundle(slug).unwrap();
+        let sheet = SheetType::of(loaded.css);
+        let cells = writer_cells(slug).unwrap();
+        let (key, _) = cells
+            .joins
+            .iter()
+            .find(|(_, ids)| ids.iter().any(|id| id == "p1c38"))
+            .expect("a join prints in p1c38");
+        let (room, classes) = plain_box(loaded.html, "p1c38").unwrap();
+        let class_size = sheet.size_for(classes).unwrap();
+        let read = |document: &str| -> (String, Option<f64>) {
+            let at = document.find("<div id=\"p1c38\"").unwrap();
+            let at = at + document[at..].find("<input").unwrap();
+            let input = &document[at..at + document[at..].find('>').unwrap()];
+            let style = attr(input, "style").unwrap_or("");
+            let size = style
+                .find("font-size:")
+                .and_then(|at| style[at + "font-size:".len()..].split("pt").next())
+                .and_then(|size| size.parse().ok());
+            (attr(input, "value").unwrap_or("").to_string(), size)
+        };
+        let long = words_of(80);
+        let document =
+            filled_document(slug, &BTreeMap::from([(key.clone(), long.clone())])).unwrap();
+        let (value, size) = read(&document);
+        assert_eq!(value, long, "the whole value prints");
+        let size = size.expect("a smaller size");
+        assert!(size < class_size);
+        assert!(sheet.width(sheet.letter_for(classes), &value, size) <= room);
+        let fitting = words_of(20);
+        let document =
+            filled_document(slug, &BTreeMap::from([(key.clone(), fitting.clone())])).unwrap();
+        assert_eq!(
+            read(&document),
+            (fitting, None),
+            "a value that fits keeps its size"
+        );
+        // The size goes last in the input's own style.
+        assert_eq!(
+            with_font_size(
+                "<input class=\"fi fh15\" style=\"inset:0.75pt\" value=\"X\">",
+                7.5
+            ),
+            "<input class=\"fi fh15\" style=\"inset:0.75pt;font-size:7.50pt\" value=\"X\">"
         );
         assert_eq!(
-            now["0619f-2018"],
-            "905ce0375498434a605f3bc82f4fa658db618a0bca4be641b89afc2795a33544"
+            with_font_size("<input class=\"fi\" value=\"X\">", 7.5),
+            "<input class=\"fi\" value=\"X\" style=\"font-size:7.50pt\">"
         );
     }
 
@@ -6040,46 +6362,6 @@ mod tests {
             .collect()
     }
 
-    /// A plain (`data-field-kind="text"`) box of a sheet: the room (pt) its
-    /// input leaves for text (the cell's width less the input's left and
-    /// right inset, less 1 pt) and the input's class list.
-    fn plain_box(html: &str, cell: &str) -> Option<(f64, String)> {
-        let open = html.find(&format!("<div id=\"{cell}\""))?;
-        let tag = &html[open..open + html[open..].find('>')?];
-        if attr(tag, "data-field-kind") != Some("text") {
-            return None;
-        }
-        let width_at = tag.find(";width:")? + ";width:".len();
-        let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
-        let input_at = open + html[open..].find("<input")?;
-        let input = &html[input_at..input_at + html[input_at..].find('>')?];
-        let (left, right) = inset(attr(input, "style").unwrap_or(""));
-        Some((
-            width - left - right - 1.0,
-            attr(input, "class")?.to_string(),
-        ))
-    }
-
-    /// The left and right of an input's `inset:` (1 to 4 lengths, pt).
-    fn inset(style: &str) -> (f64, f64) {
-        let Some(at) = style.find("inset:") else {
-            return (0.0, 0.0);
-        };
-        let values: Vec<f64> = style[at + "inset:".len()..]
-            .split(';')
-            .next()
-            .unwrap_or("")
-            .split_whitespace()
-            .filter_map(|v| v.strip_suffix("pt").and_then(|n| n.parse().ok()))
-            .collect();
-        match values.as_slice() {
-            [all] => (*all, *all),
-            [_, sides] | [_, sides, _] => (*sides, *sides),
-            [_, right, _, left] => (*left, *right),
-            _ => (0.0, 0.0),
-        }
-    }
-
     /// Every sheet filled with values that fit its plain boxes: each text
     /// join whose cells are all plain boxes holding the longest address
     /// text that sets within each of them at its own class's size, in the
@@ -6092,7 +6374,7 @@ mod tests {
         let sheet = SheetType::of(loaded.css);
         let mut fields = BTreeMap::new();
         for (key, ids) in &cells.joins {
-            let boxes: Option<Vec<(f64, String)>> = ids
+            let boxes: Option<Vec<(f64, &str)>> = ids
                 .iter()
                 .map(|cell| plain_box(loaded.html, cell))
                 .collect();
