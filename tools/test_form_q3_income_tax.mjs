@@ -135,7 +135,7 @@ const periods = mock("./periods.js", { periodLabel: () => "October 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
 await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
 await mod.evaluate();
-const { FormPageActions, renderFormPage, renderFormSplit, oneDateText } = mod.namespace;
+const { FormPageActions, renderFormPage, renderFormSplit, oneDateText, NOTE_CHECKS } = mod.namespace;
 
 let hostValues = { [CIVIL]: "Married", [K("spouse")]: "DELA CRUZ, MARIA", [K("name")]: "DELA CRUZ, JUAN", [MONTH]: "05", [DAY]: "17", [YEAR]: "1980", [K("regMonth")]: "01", [K("regDay")]: "02", [K("regYear")]: "2003" };
 let editable = true;
@@ -312,10 +312,20 @@ editable = false;
 offeredNotes = [NOTE];
 timers.length = 0;
 // An opening the page never draws (it fails before its first frame):
-// nothing is recorded, so the next opening offers the note again.
+// nothing is recorded, so the next opening offers the note again. It
+// checks NOTE_CHECKS (50) times in all, then gives up.
+let checks = 0;
+const check = ui.recordNotesWhenShown.bind(ui);
+ui.recordNotesWhenShown = (...args) => {
+  checks += 1;
+  return check(...args);
+};
 await openOnly();
 assert.equal(ui.state.notes.length, 1, "the opening holds the note");
 runTimers();
+assert.equal(NOTE_CHECKS, 50);
+assert.equal(checks, NOTE_CHECKS, "50 checks, then it gives up");
+delete ui.recordNotesWhenShown;
 assert.equal(noteCalls().length, 0, "not drawn, not recorded");
 assert.equal(seenKeys.size, 0);
 // Narrow window (renderFormPage): shown, then recorded once.

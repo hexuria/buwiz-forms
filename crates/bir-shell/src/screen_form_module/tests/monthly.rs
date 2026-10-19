@@ -1992,7 +1992,8 @@ fn form_1600pt_and_1600vt_drafts_missing_boxes_open_blank() {
 
 /// 1600PT's and 1600VT's Part I text boxes the page fills: `(draft field,
 /// box key after the form's prefix, a value to type)`.
-const PART_I_BOXES: [(&str, &str, &str); 5] = [
+const PART_I_BOXES: [(&str, &str, &str); 6] = [
+    ("rdo_code", "txtPg1I6RDO", "039"),
     (
         "agent_name",
         "txtPg1Pt1I7WithholdingAgentsName",
@@ -2039,6 +2040,12 @@ fn row_holds(id: i64, field: &str) -> bool {
 /// kept and saved.
 #[test]
 fn form_1600pt_and_1600vt_a_blank_page_edit_keeps_a_missing_box_out() {
+    // The six fields KeptText keeps, RDO included.
+    let mut fields = PART_I_BOXES.map(|(field, _, _)| field);
+    let mut kept = rows_monthly::KEPT_PART_I;
+    fields.sort_unstable();
+    kept.sort_unstable();
+    assert_eq!(fields, kept);
     for code in ["1600PT", "1600VT"] {
         for (field, tail, typed) in PART_I_BOXES {
             let key = format!("frm{code}:{tail}");
@@ -2101,5 +2108,45 @@ fn form_1600pt_and_1600vt_save_keeps_a_missing_box_out() {
             "",
             "{code}"
         );
+    }
+}
+
+/// Round 5, item 4: an amendment's save keeps a Part I key out too. A
+/// filed 1600PT stored without `agent_name`, amended and saved with "   "
+/// there, is stored without the key (the filed original lacked it); an
+/// amendment saved with a typed name stores it.
+#[test]
+fn form_1600pt_an_amendment_keeps_a_missing_box_out() {
+    let code = "1600PT";
+    for (sent, kept) in [("   ", false), ("SAMPLE AGENT CORP", true)] {
+        let id = store_without(code, "agent_name");
+        let mut filed: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+        filed["status"] = json!("Submitted");
+        filed["submitted_at"] = json!("2026-04-10T01:02:03+00:00");
+        raw_exec(
+            "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+            &[&serde_json::to_string(&filed).unwrap(), &id.to_string()],
+        );
+        let amended = call_async(
+            "screen_form_amend",
+            vec![
+                TIN.into(),
+                code.into(),
+                YEAR.into(),
+                3i64.into(),
+                json(json!(null)),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("{code} amends: {error}"));
+        assert!(amended["draft"][AMENDMENT_MARK].is_object(), "an amendment");
+        assert!(amended["draft"].get("agent_name").is_none());
+        let mut draft = amended["draft"].clone();
+        draft["agent_name"] = json!(sent);
+        let saved = save(code, &draft);
+        let row: Value = serde_json::from_str(&raw_row(saved["id"].as_i64().unwrap()).1).unwrap();
+        assert_eq!(row.get("agent_name").is_some(), kept, "{sent:?}: {row}");
+        if kept {
+            assert_eq!(row["agent_name"], sent);
+        }
     }
 }

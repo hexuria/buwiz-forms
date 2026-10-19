@@ -44,6 +44,8 @@ const VALIDATE_DELAY = 300;
 const PERIOD_ASK_DELAY = 300;
 /** Debounce for live print-preview sync (ms after the last keystroke). */
 const LIVE_PREVIEW_DELAY = 120;
+/** How many times, 100 ms apart, a one-time note waits for its page to be drawn before it is left unrecorded (`recordNotesWhenShown`). */
+export const NOTE_CHECKS = 50;
 
 /**
  * A listed dropdown option as `{ value, label }`. The schema writes many
@@ -485,9 +487,10 @@ export class FormPageActions {
 
   /**
    * Record the opening's one-time notes seen once the page has drawn them
-   * (`s.notesRendered`, set by the layout that draws them), checking every
-   * 100 ms. After 50 checks (about 5 s) with the notes still not drawn it
-   * gives up and records nothing, so the next opening offers them again.
+   * (`s.notesRendered`, set by the layout that draws them): it checks at
+   * once and then every 100 ms, `NOTE_CHECKS` (50) checks in all, about 5
+   * s; with the notes still not drawn it gives up, recording nothing, so the
+   * next opening offers them again.
    * The host records each only if not yet recorded; a note another opening
    * recorded first is taken off this page. Nothing is recorded for a page
    * that was left.
@@ -496,7 +499,7 @@ export class FormPageActions {
     const s = this.state;
     if (token !== this.token || !s?.notes?.some((n) => !n.recorded)) return;
     if (!s.notesRendered) {
-      if (tries < 50) cx.timer.after(100, (tcx) => this.recordNotesWhenShown(tcx, token, tries + 1));
+      if (tries + 1 < NOTE_CHECKS) cx.timer.after(100, (tcx) => this.recordNotesWhenShown(tcx, token, tries + 1));
       return;
     }
     const pending = s.notes.filter((n) => !n.recorded);

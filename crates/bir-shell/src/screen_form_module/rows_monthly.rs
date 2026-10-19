@@ -678,7 +678,7 @@ fn pesos(amount: f64) -> String {
 
 /// 1600PT's and 1600VT's Part I text fields that a stored draft may lack
 /// (P2-4, `KeptText` in bir-core).
-const KEPT_PART_I: [&str; 6] = [
+pub(super) const KEPT_PART_I: [&str; 6] = [
     "rdo_code",
     "agent_name",
     "registered_address",
