@@ -2939,7 +2939,6 @@ fn opened_json(
     let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
     if let Value::Array(list) = &mut errors {
         list.extend(rows_annual_corporate::rt_item_42_notice(
-            kind,
             stored_item_42,
             &draft,
         ));

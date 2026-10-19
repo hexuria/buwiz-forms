@@ -1206,11 +1206,7 @@ pub(super) fn take_item_42_held(draft: &mut Value) -> Option<i64> {
 /// amount than it held says so on open, beside the form's own messages, so
 /// the change is never silent. Nothing else changes; once saved, the draft
 /// holds the computed amount.
-pub(super) fn rt_item_42_notice(
-    kind: AgentFormKind,
-    held: Option<i64>,
-    draft: &Value,
-) -> Vec<Value> {
+pub(super) fn rt_item_42_notice(held: Option<i64>, draft: &Value) -> Vec<Value> {
     let Some(held) = held else {
         return Vec::new();
     };
@@ -1244,7 +1240,7 @@ fn whole_pesos(amount: i64) -> String {
     let digits = amount.unsigned_abs().to_string();
     let mut grouped = String::new();
     for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             grouped.push(',');
         }
         grouped.push(c);
