@@ -25,7 +25,7 @@
 //! they were); a client's value is never kept. A profile import restores
 //! a user-chosen backup, so it brings the stored records back unchanged.
 //! The desktop 1606 and 1706 views record their own date edits
-//! ([`note_trigger_edits`]). So a date typed over
+//! ([`note_trigger_typed`]). So a date typed over
 //! two sessions, or one part edited after a restart, still counts; a
 //! cleared part no longer does. A return that left Draft files the date
 //! it holds, typed or not, so it is dated by that date; a cancelled queue
@@ -33,10 +33,13 @@
 //! other as-needed forms start with the date blank (0, empty or `None`), so
 //! any date they hold was typed.
 //!
-//! No migration: a Draft of a pre-filled form saved by the first D8c build
-//! (which dated any held date) and never re-typed has no flag and is now
-//! undated. The D8c build was never released (its branch chain is
-//! unmerged), so no released return depends on the old reading.
+//! Penalties (decision P5-7) wait for the typed date only on a Draft that
+//! carries `trigger_date_model`, written when the draft is created by a
+//! path that records typing (the shell page, the desktop 1606 and 1706
+//! views). A row without it (stored before the marker, or created by a
+//! desktop view or the agent that does not record typing) computes its
+//! penalties from the date it holds, exactly as before; on Home and the
+//! Calendar it stays undated until its date is typed, as it was before.
 
 use chrono::NaiveDate;
 use serde_json::Value;
@@ -191,31 +194,26 @@ pub fn parts_complete(form_code: &str, parts: &std::collections::BTreeSet<String
             .all(|field| given.contains(field) || parts.contains(*field))
 }
 
-/// Record trigger-date edits made outside the shell page (the desktop views):
-/// each `(field, before, after)` whose value changed is typed, or taken out
-/// when cleared to 0, and the flag follows [`parts_complete`].
-pub fn note_trigger_edits(
+/// Record a trigger-date box the filer typed in outside the shell page (a
+/// desktop view's edit event, so retyping the pre-filled value counts too):
+/// `field` with the value it now holds is typed, or taken out when cleared
+/// to 0, and the flag follows [`parts_complete`]. A field that is not one of
+/// the form's trigger fields changes nothing.
+pub fn note_trigger_typed(
     form_code: &str,
     lifecycle: &mut super::queueable::SubmissionLifecycle,
-    edits: &[(&str, u32, u32)],
+    field: &str,
+    value: u32,
 ) {
-    let fields = trigger_paths(form_code);
+    if !trigger_paths(form_code).contains(&field) {
+        return;
+    }
     let mut parts: std::collections::BTreeSet<String> =
         lifecycle.trigger_parts_typed.iter().cloned().collect();
-    let mut changed = false;
-    for (field, before, after) in edits {
-        if before == after || !fields.contains(field) {
-            continue;
-        }
-        changed = true;
-        if *after == 0 {
-            parts.remove(*field);
-        } else {
-            parts.insert(field.to_string());
-        }
-    }
-    if !changed {
-        return;
+    if value == 0 {
+        parts.remove(field);
+    } else {
+        parts.insert(field.to_string());
     }
     lifecycle.trigger_date_entered = parts_complete(form_code, &parts);
     lifecycle.trigger_parts_typed = parts.into_iter().collect();
