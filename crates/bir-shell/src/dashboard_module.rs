@@ -232,10 +232,10 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             }
         };
         // The as-needed rows' overrides: global, then the profile's for
-        // every Forms Set year (as the Google Calendar sync uses).
+        // every Forms Set year (one definition with the Google Calendar
+        // sync and the penalty clock, decision P5-9).
         let event_overrides = match &profile {
-            Some(profile) => bir_core::forms::event_trigger::event_overrides(db, profile, &global)
-                .map_err(error)?,
+            Some(profile) => bir_core::forms::event_trigger::as_needed_overrides(&global, profile),
             None => global.clone(),
         };
         // As-needed returns of any taxable year whose due date falls in the
@@ -262,12 +262,14 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             let drafts = db
                 .list_draft_summaries(&branch.tin, year16)
                 .map_err(error)?;
-            let mut overrides = global.clone();
-            if let Some(profile) = &profile {
-                overrides.extend(bir_core::integration::profile_deadline_overrides_for_year(
-                    profile, year16,
-                ));
-            }
+            let overrides = match &profile {
+                Some(profile) => bir_core::forms::event_trigger::periodic_overrides(
+                    &global,
+                    profile,
+                    Some(year16),
+                ),
+                None => global.clone(),
+            };
             for deadline in DeadlineResolver::deadlines_for_forms(&codes, year, &overrides) {
                 let Some(due) = deadline.final_deadline_date() else {
                     continue;
@@ -955,6 +957,112 @@ mod tests {
             .expect("the 1606 return syncs");
         assert!(event.obligation_key.contains(":1606:return-"));
         assert_eq!(event.body["start"]["date"], "2026-10-12");
+    }
+
+    /// Decision P5-9: the penalty clock uses exactly the Calendar's
+    /// override set. An override saved only in the 2027 Forms Set (a
+    /// profile version effective January 1, 2027) moves the 2026 sale's
+    /// 1606 deadline from October 12 to October 20, 2026 on the Calendar
+    /// and in the penalty due date the open page computes from; a typed
+    /// penalty amount stays as entered.
+    #[test]
+    fn a_2027_forms_set_override_moves_a_2026_sale_on_the_calendar_and_its_penalties() {
+        use bir_core::forms::form_1606::Form1606Draft;
+        use bir_core::penalties::PenaltyComponent;
+
+        setup();
+        let window = args(&["2026-09-01", "2026-12-31"]);
+        let due = |rows: &Value| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["form_code"] == "1606")
+                .expect("the dated 1606 row")["due_date"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let profile = with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1606"]).unwrap();
+            db.set_yearly_forms(HEAD, 2027, &["1606"]).unwrap();
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut sale = Form1606Draft::new_from_profile(&profile, 2026, 1);
+            (
+                sale.transaction_month,
+                sale.transaction_day,
+                sale.transaction_year,
+            ) = (9, 18, 2026);
+            sale.lifecycle.trigger_date_model = true;
+            sale.lifecycle.trigger_date_entered = true;
+            sale.lifecycle.trigger_parts_typed = vec![
+                "transaction_day".into(),
+                "transaction_month".into(),
+                "transaction_year".into(),
+            ];
+            sale.penalty
+                .penalty_overrides
+                .set(PenaltyComponent::Compromise, Some(500.0));
+            db.save_queueable_draft(&sale).unwrap();
+            Ok(profile)
+        })
+        .unwrap();
+        let penalty_due = |profile: &bir_core::profile::TaxpayerProfile| {
+            with_database(|db| {
+                let (_, draft) = db
+                    .list_queueable_drafts::<Form1606Draft>(HEAD, 2026)
+                    .unwrap()
+                    .pop()
+                    .expect("the stored sale");
+                Ok(crate::screen_form_module::finish(db, profile, draft).unwrap())
+            })
+            .unwrap()
+        };
+        assert_eq!(
+            due(&to_json(&deadlines_between(&window).unwrap())),
+            "2026-10-12"
+        );
+        assert_eq!(penalty_due(&profile)["penalty_due_date"], "2026-10-12");
+
+        let profile = with_database(|db| {
+            let mut profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut version = bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
+            version.id = "forms-set-2027".into();
+            version.source = bir_core::profile::TaxProfileVersionSource::UserOverride;
+            version.status = bir_core::profile::TaxProfileVersionStatus::NeedsReview;
+            version.deadline_overrides = vec![bir_core::profile::ProfileDeadlineOverride {
+                id: "sale".into(),
+                title: "Profile extension".into(),
+                source_reference: "RMC test".into(),
+                affected_form_codes: vec!["1606".into()],
+                original_deadline: NaiveDate::from_ymd_opt(2026, 10, 12).unwrap(),
+                adjusted_deadline: NaiveDate::from_ymd_opt(2026, 10, 20).unwrap(),
+                reason: None,
+            }];
+            profile.profile_versions = vec![version];
+            let plan = profile
+                .profile_version_confirmation_plan(
+                    "forms-set-2027",
+                    NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+                )
+                .unwrap();
+            assert!(profile.apply_profile_version_confirmation_plan(&plan));
+            Ok(db
+                .save_profile_with_confirmation_plan(profile, &plan)
+                .unwrap())
+        })
+        .unwrap();
+        assert!(
+            bir_core::integration::profile_deadline_overrides_for_year(&profile, 2026).is_empty(),
+            "the override belongs to 2027 only"
+        );
+        assert_eq!(
+            due(&to_json(&deadlines_between(&window).unwrap())),
+            "2026-10-20"
+        );
+        let opened = penalty_due(&profile);
+        assert_eq!(opened["penalty_due_date"], "2026-10-20");
+        assert_eq!(opened["compromise"], 500.0, "the typed amount stays");
+        assert_eq!(opened["penalty_overrides"]["compromise"], 500.0);
     }
 
     /// Round 3, item 5: a profile row that cannot be read skips that
