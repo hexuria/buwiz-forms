@@ -905,7 +905,8 @@ impl SheetType {
     /// tabs, where a tab ends is neither linear nor monotone in the size
     /// (with spacing in points, a smaller size can push a tab past a
     /// stop), is scanned down from `max` a hundredth of a point at a time
-    /// to the first size that sets.
+    /// to the first size that sets, returned as that exact hundredth (0.01
+    /// pt when none sets).
     fn fit(&self, letter: Spacing, room: f64, text: &str, max: f64) -> f64 {
         if text.contains('\t') {
             let top = ((max * 100.0).floor() as i64).max(1);
@@ -913,7 +914,7 @@ impl SheetType {
                 .rev()
                 .find(|hundredths| self.width(letter, text, *hundredths as f64 / 100.0) <= room)
                 .unwrap_or(1);
-            return floor_size(size as f64 / 100.0);
+            return size as f64 / 100.0;
         }
         let spaces = text.chars().filter(|c| is_word_space(*c)).count() as f64;
         let chars = text.chars().count() as f64;
@@ -943,12 +944,18 @@ fn arimo_ems(text: &str) -> f64 {
 /// The type size (pt) a line of `text` past a comb of `width` pt prints
 /// at: measured in the sheet's own face with its word- and letter-spacing
 /// ([`SheetType::fit`]), within the cell less the line's 1 pt left padding
-/// and 1 pt to spare, at most [`PLAIN_MAX_PT`], rounded down to 0.01 pt.
-/// Every sheet sizes its overflow type this way (maintainer decision P4-7,
+/// and 1 pt to spare (a cell under 3 pt wide keeps 1 pt, or what is past
+/// the padding when that is less), at most [`PLAIN_MAX_PT`], rounded down
+/// to 0.01 pt. Every sheet sizes its overflow type this way (maintainer decision P4-7,
 /// 2026-10-19): a value that fits its boxes prints byte for byte as
 /// before; a value longer than its boxes is measured.
 fn fit_line(sheet: &SheetType, width: f64, text: &str) -> f64 {
-    sheet.fit(sheet.letter, (width - 2.0).max(1.0), text, PLAIN_MAX_PT)
+    sheet.fit(
+        sheet.letter,
+        (width - 2.0).max((width - 1.0).min(1.0)),
+        text,
+        PLAIN_MAX_PT,
+    )
 }
 
 /// How much wider than its room a value may measure and still fit: Chromium
@@ -997,9 +1004,9 @@ fn inset(style: &str) -> (f64, f64) {
 /// The type size (pt) `text` prints at in plain input `tag` of a cell
 /// `width` pt wide when it is longer than the input: wider, at its class's
 /// size, than the input's whole room (and [`FIT_EPSILON_PT`]). It is then
-/// measured in the sheet's type ([`SheetType::fit`]) to set within the room
-/// less 1 pt to spare, rounded down to 0.01 pt. `None` while it fits: it
-/// prints byte for byte as before.
+/// measured in the sheet's type ([`SheetType::fit`]) to set within
+/// [`shrunk_room`], the room less 1 pt to spare, at a whole hundredth of a
+/// point. `None` while it fits: it prints byte for byte as before.
 fn plain_input_size(sheet: &SheetType, width: f64, tag: &str, text: &str) -> Option<f64> {
     let classes = attr(tag, "class")?;
     let size = sheet.size_for(classes)?;
@@ -1010,10 +1017,10 @@ fn plain_input_size(sheet: &SheetType, width: f64, tag: &str, text: &str) -> Opt
 }
 
 /// The width (pt) a shrunk value sets within in an input of `room` pt: the
-/// room less 1 pt to spare, but never under 1 pt (an input under 2 pt wide
-/// gets 1 pt). The fit test bounds a shrunk value by this same width.
+/// room less 1 pt to spare; an input under 2 pt wide gets 1 pt, or its
+/// whole room when that is under 1 pt, never more than the room.
 fn shrunk_room(room: f64) -> f64 {
-    (room - 1.0).max(1.0)
+    (room - 1.0).max(room.min(1.0))
 }
 
 /// `tag` with `font-size:{size}pt` last in its inline style.
@@ -4921,7 +4928,7 @@ mod tests {
         assert_eq!(writer_values, vec![Some("123456"), None, None, None]);
         let (text, size) = printed_cells(&html).remove("p1c21").unwrap();
         assert_eq!(text, "123456");
-        // At the overflow line's full 9 pt: "123456" sets within the cell.
+        // The line prints at 9 pt.
         assert_eq!(size, Some(9.0));
         // A branch other than 00000 prints over the sheet's 00000 (the
         // comb's inputs carry 0s as values; the html-frozen file is not
@@ -6186,11 +6193,12 @@ mod tests {
                                 .and_then(|size| size.parse().ok());
                             let letter = sheet.letter_for(classes);
                             if let Some(size) = shrunk {
-                                // Shrunk: it sets within the room less 1 pt
-                                // (never under 1 pt: [`shrunk_room`]).
+                                // Shrunk: it sets within the room less 1 pt;
+                                // a room under 2 pt, within the room.
                                 let measured = sheet.width(letter, &text, size);
+                                let bound = if room >= 2.0 { room - 1.0 } else { room };
                                 assert!(
-                                    measured <= shrunk_room(room),
+                                    measured <= bound,
                                     "{slug} {case} {cell}: {text:?} shrunk to {size}pt measures {measured}pt in a {room}pt box"
                                 );
                             } else {
@@ -6542,6 +6550,24 @@ mod tests {
         assert!((784..=900).all(|h| sheet.width(letter, text, h as f64 / 100.0) > 44.724));
     }
 
+    /// Round 8: a tab fit returns the hundredth that sets as it is, not
+    /// rounded down again (0.29 * 100 is 28.999..., which floor_size would
+    /// print as 0.28). With no spacing the width scales with the size, so a
+    /// room exactly as wide as the text at h/100 pt fits it at h/100 pt.
+    #[test]
+    fn a_tab_fit_returns_its_exact_hundredth() {
+        let sheet = SheetType::plain();
+        let letter = Spacing::default();
+        let text = "\tA";
+        for hundredths in 1..=900 {
+            let size = hundredths as f64 / 100.0;
+            let room = sheet.width(letter, text, size);
+            assert_eq!(sheet.fit(letter, room, text, 9.0), size, "{hundredths}");
+        }
+        let room = sheet.width(letter, text, 0.29);
+        assert_eq!(sheet.fit(letter, room, text, 9.0), 0.29);
+    }
+
     /// A printed size is rounded down to 0.01 pt, never to the nearest:
     /// rounding never adds width.
     #[test]
@@ -6590,6 +6616,7 @@ mod tests {
         assert_eq!(value, long, "the whole value prints");
         let size = size.expect("a smaller size");
         assert!(size < class_size);
+        assert!(room >= 2.0);
         assert!(sheet.width(sheet.letter_for(classes), &value, size) <= room - 1.0);
         let fitting = words_of(20);
         let document =
@@ -7041,6 +7068,7 @@ mod tests {
         assert_eq!(at(0.01), None, "0.01 pt over: unshrunk");
         let shrunk = at(0.03).expect("0.03 pt over: shrunk");
         let room = measured - 0.03;
+        assert!(room >= 2.0);
         assert_eq!(shrunk, sheet.fit(letter, room - 1.0, text, size));
         assert!(shrunk < size);
         assert!(sheet.width(letter, text, shrunk) <= room - 1.0);
@@ -7319,6 +7347,7 @@ mod tests {
                 let at = style.find("font-size:").expect("an inline size") + "font-size:".len();
                 let size: f64 = style[at..].split("pt").next().unwrap().parse().unwrap();
                 assert!(size < class_size, "{slug} {cell} {space:?}");
+                assert!(room >= 2.0);
                 assert!(
                     sheet.width(letter, &value, size) <= room - 1.0,
                     "{slug} {cell} {space:?}: at {size}pt"
