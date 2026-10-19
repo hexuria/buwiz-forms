@@ -2567,3 +2567,31 @@ fn every_kept_reason_maps_to_the_kept_note() {
     assert!(table.contains(&lock), "{lock}");
     assert_eq!(opened["lock_notes"][key], NOTE_KEPT);
 }
+
+/// Round 4 (item 5): KEPT_NOTES is complete. Every module of
+/// screen_form_module that declares a `KEPT_AS_ENTERED` constant has its
+/// row, and the table has no other: a new module constant without a row
+/// fails here.
+#[test]
+fn kept_notes_has_a_row_for_every_kept_constant() {
+    let dir = format!("{}/src/screen_form_module", env!("CARGO_MANIFEST_DIR"));
+    let mut declaring: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let source = std::fs::read_to_string(&path).ok()?;
+            let declares = source
+                .lines()
+                .any(|line| line.contains("const KEPT_AS_ENTERED: &str"));
+            declares.then(|| path.file_stem()?.to_str().map(str::to_string))
+        })
+        .flatten()
+        .collect();
+    declaring.sort();
+    assert_eq!(
+        declaring,
+        ["rows_annual_individual", "rows_excise", "rows_income_q"],
+        "add a KEPT_NOTES row for each module constant"
+    );
+    assert_eq!(KEPT_NOTES.len(), declaring.len());
+}

@@ -375,16 +375,17 @@ impl Form1702RTDraft {
         let net = p4.item_39_net_taxable_income_or_loss;
         if before_2020 {
             // Decision P5-2: before 2020 the page's branch below 20 taxes
-            // Item 39 at 30% (1702rt-item41-rate-tax), which Item 40 shows.
+            // Item 39 at 30% (1702rt-item41-rate-tax), which Item 40 shows,
+            // and Part V Item 57 is Item 35 times that rate / 100
+            // (1702rt-item57-special-tax: "Only before 2020, Item 57 = Item
+            // 35 times income-tax rate / 100; for 2020+ this function leaves
+            // Item 57 untouched."); OSD has already cleared Item 57.
+            //
             // The rule puts the zero floor on 2020+ only ("For 2020+, ...
             // nonpositive net forced to zero; before 2020 it uses 30%") and
             // the official body is not in the tree, so it is followed
             // literally (round 3, F3): a negative Item 39 gives a negative
             // Item 41, as the no-floor MCIT does.
-            // and Part V Item 57 is Item 35 times that rate / 100
-            // (1702rt-item57-special-tax: "Only before 2020, Item 57 = Item
-            // 35 times income-tax rate / 100; for 2020+ this function leaves
-            // Item 57 untouched."); OSD has already cleared Item 57.
             p4.item_40_income_tax_rate_percent = RATE_BEFORE_2020_PERCENT;
             p4.item_41_normal_income_tax_due = percent_of(net, RATE_BEFORE_2020_PERCENT);
             if itemized {

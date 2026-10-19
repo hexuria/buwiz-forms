@@ -1481,25 +1481,15 @@ pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
     }
 }
 
-/// A 1701 draft stored, or a save file imported, before the penalty model
-/// has no `penalty` / `spouse_penalty` object, so an amount typed after Edit
-/// penalties has no override to land in. Give the column its (default,
-/// version 0) state first: the typed amount becomes its override and the
-/// column joins the model as form_1701_official.rs `official_recompute`
-/// documents.
+/// A 1701 or 1701Q draft stored, or a save file imported, before the
+/// penalty model has no `penalty` / `spouse_penalty` object, so an amount
+/// typed after Edit penalties has no override to land in (round 4: a keyless
+/// 1701Q's typed 64A was refused). Give the column its (default, version 0)
+/// state first: the typed amount becomes its override and the column joins
+/// the model (form_1701_official.rs `official_recompute`; form_1701q.rs's
+/// `PenaltySlot`). `penalties::applies` uses it on its trial copy too, so a
+/// kept keyless column reads as on the return; opening writes nothing.
 pub(super) fn make_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
-    if kind.form_code() != "1701" {
-        return;
-    }
-    give_state(kind, draft, key);
-}
-
-/// [`make_room`] for `penalties::applies`'s trial copy only (never a draft
-/// that is stored or filed): a 1701 or 1701Q column stored before the
-/// penalty model (no `penalty` / `spouse_penalty` key) gets a default
-/// state, so the trial's overrides land and a kept column reads as on the
-/// return. 1701Q's typed writes keep their own path (round 3, F1).
-pub(super) fn trial_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
     if matches!(kind.form_code(), "1701" | "1701Q") {
         give_state(kind, draft, key);
     }

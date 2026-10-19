@@ -2878,17 +2878,18 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     }
 }
 
-/// A lock's reason as a filer reads it (see the NOTE_* texts).
 /// Each module's "kept as entered" lock reason and the note it shows, one
 /// entry per module constant (round 3, F7): `lock_note` looks a reason up
 /// here by the constant itself, so a module rewording its constant keeps
-/// its note.
+/// its note. A test fails when a module declares a `KEPT_AS_ENTERED` the
+/// table lacks.
 const KEPT_NOTES: [(&str, &str); 3] = [
     (rows_income_q::KEPT_AS_ENTERED, NOTE_KEPT),
     (rows_annual_individual::KEPT_AS_ENTERED, NOTE_KEPT),
     (rows_excise::KEPT_AS_ENTERED, NOTE_KEPT),
 ];
 
+/// A lock's reason as a filer reads it (see the NOTE_* texts).
 fn lock_note(reason: &str) -> &'static str {
     use bir_core::forms::agent::Lock;
     if let Some((_, note)) = KEPT_NOTES.iter().find(|(kept, _)| *kept == reason) {

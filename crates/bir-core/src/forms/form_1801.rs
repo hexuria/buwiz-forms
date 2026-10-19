@@ -1457,7 +1457,7 @@ mod tests {
         // Saturday 2025-10-04 moves to Monday.
         assert_eq!(due(date(2024, 10, 4)), Some(date(2025, 10, 6)));
         assert_eq!(due(date(2024, 2, 29)), Some(date(2025, 2, 28)));
-        // An official holiday (P5-4): 2026-04-09, Araw ng Kagitingan, moves
+        // An official holiday (maintainer decision: roll past official holidays): 2026-04-09, Araw ng Kagitingan, moves
         // to Friday, April 10.
         assert_eq!(due(date(2025, 4, 9)), Some(date(2026, 4, 10)));
         let mut blank = sample();

@@ -1737,3 +1737,57 @@ fn form_1701q_keyless_kept_columns_say_so_and_offer_edit() {
         }
     }
 }
+
+/// Round 4 (item 1): after Edit penalties, a keyless 1701Q takes typed
+/// penalties in the filer's column (64A-66A) and the spouse's (64B-66B):
+/// make_room gives the column its state, the amounts become its overrides
+/// and file; opening the stored row first changes none of its bytes.
+#[test]
+fn form_1701q_keyless_columns_take_typed_penalties() {
+    use bir_core::forms::form_1701q::{Form1701QDraft, Form1701QParty};
+    setup();
+    let mut keyless: Value = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    let fields = keyless.as_object_mut().unwrap();
+    fields.remove("penalty");
+    fields.remove("spouse_penalty");
+    let mut legacy: Form1701QDraft = serde_json::from_value(keyless).unwrap();
+    legacy.has_spouse = true;
+    legacy.set_amount(64, Form1701QParty::Spouse, Some(125.0));
+    legacy.recompute();
+    let bytes = serde_json::to_string(&legacy).unwrap();
+    assert!(!bytes.contains("\"penalty\""), "keyless");
+    let opened = open(Q, 1);
+    let id = save(Q, &opened["draft"])["id"].as_i64().unwrap();
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&bytes, &id.to_string()],
+    );
+    let opened = open(Q, 1);
+    assert_eq!(raw_row(id).1, bytes, "opening changes no stored byte");
+    for (keys, typed) in [
+        (
+            ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"],
+            ["300", "20", "1500"],
+        ),
+        (
+            ["frm1701q:txt64B", "frm1701q:txt65B", "frm1701q:txt66B"],
+            ["200", "10", "500"],
+        ),
+    ] {
+        let edits: Map<String, Value> = keys
+            .iter()
+            .zip(typed)
+            .map(|(key, value)| (key.to_string(), json!(value)))
+            .collect();
+        let filled = fill_unlocked(Q, &opened["draft"], Value::Object(edits), &keys);
+        assert_eq!(filled["rejected"], json!({}), "{}", keys[0]);
+        let files = field_map(Q, &filled["draft"]);
+        for (key, value) in keys.iter().zip(typed) {
+            assert_eq!(
+                agent::parse_amount(&files[*key]),
+                agent::parse_amount(value),
+                "{key} files what was typed"
+            );
+        }
+    }
+}

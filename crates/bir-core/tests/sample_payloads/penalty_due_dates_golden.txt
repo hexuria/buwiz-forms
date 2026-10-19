@@ -90,6 +90,12 @@
 1600wp#2 items0 trigger=period due=none filed=2026-12-25 none
 1600wp#2 items0 trigger=period due=none filed=2026-12-30 none
 1600wp#2 items0 trigger=period due=none filed=2027-04-09 none
+1601c#0 items0 trigger=period due=2025-07-10 filed=2025-07-10 0.00/0.00/0.00
+1601c#0 items0 trigger=period due=2025-07-10 filed=2025-07-11 4750.00/6.25/5000.00
+1601c#0 items0 trigger=period due=2025-07-10 filed=2025-07-12 4750.00/12.49/5000.00
+1601c#0 items0 trigger=period due=2025-07-10 filed=2025-07-13 4750.00/18.74/5000.00
+1601c#0 items0 trigger=period due=2025-07-10 filed=2025-07-14 4750.00/24.99/5000.00
+1601c#0 items0 trigger=period due=2025-07-10 filed=2025-08-19 4750.00/249.86/5000.00
 1601eq#0 items0 trigger=period due=2025-04-30 filed=2025-04-30 0.00/0.00/0.00
 1601eq#0 items0 trigger=period due=2025-04-30 filed=2025-05-01 4346.69/5.72/5000.00
 1601eq#0 items0 trigger=period due=2025-04-30 filed=2025-05-02 4346.69/11.43/5000.00

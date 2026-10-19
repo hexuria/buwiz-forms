@@ -231,10 +231,10 @@ pub(super) fn applies(kind: AgentFormKind, group: &Group, draft: &Value) -> bool
     let mut copy = draft.clone();
     // A 1701 or 1701Q column stored before the penalty model has no state
     // for the trial's overrides to land in; give the copy one first
-    // (rows_annual_individual.rs trial_room), or the trial reads a kept
+    // (rows_annual_individual.rs make_room), or the trial reads a kept
     // column as off the return. The draft itself is not touched.
     if let Some(key) = group.keys.first() {
-        super::rows_annual_individual::trial_room(kind, &mut copy, key);
+        super::rows_annual_individual::make_room(kind, &mut copy, key);
     }
     for component in COMPONENTS {
         let path = format!("{}/penalty_overrides/{component}", group.prefix);

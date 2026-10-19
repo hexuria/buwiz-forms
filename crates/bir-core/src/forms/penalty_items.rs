@@ -280,15 +280,17 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
     )
 }
 
-/// The calendar a typed due date moves on (decisions P4-2, P4-4 and P5-4:
-/// the next working day): exactly the weekends plus the official holidays
-/// the app ships, the `original_deadline` of each entry of
+/// The calendar a typed due date moves on (maintainer decisions: a typed due
+/// date moves to the next working day, past weekends and official
+/// holidays): the weekends plus the official holidays the app ships, the `original_deadline` of each entry of
 /// `DeadlineResolver::seed_2026_holiday_overrides` (built once). 1800, 1801
 /// and 2200C read it through [`next_business_day`].
 ///
 /// - Official holidays are known only for the years whose proclamation
 ///   ships (2026 today); other years roll off weekends only until theirs is
-///   added in an app update (maintainer decision P4-6).
+///   added in an app update (maintainer decision: ship the 2026 list now,
+///   add each year's proclamation later). The 2026 seed lacks Eid'l Fitr
+///   and Eid'l Adha, which are added when their proclamations are sourced.
 /// - It is not the stored deadline overrides (`Database::
 ///   get_deadline_overrides`): those move only the calendar deadlines of the
 ///   forms in their `affected_form_codes`, and a typed due date has no

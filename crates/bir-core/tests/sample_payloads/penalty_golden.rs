@@ -1,5 +1,6 @@
-//! Round 3 (F9) golden: every queueable form but 1800, 1801 and 2200C keeps
-//! the penalty due dates and amounts it had before PR 13 (e86b1424), for a
+//! Round 3 (F9) golden: every queueable form but 1800, 1801 and 2200C, and
+//! 1601C, keeps the penalty due dates and amounts it had before PR 13
+//! (e86b1424), for a
 //! fixed set of trigger dates and filing dates around the 2026 official
 //! holidays. `penalty_due_dates_golden.txt` was written by this same module
 //! run on the e86b1424 tree; this test recomputes it on the current code.
@@ -11,7 +12,14 @@
 //! and tried with each trigger date written into its `year` / `month` /
 //! `day`; a calendar form's trigger is its period, so its filing dates are
 //! what vary.
+//!
+//! Every agent seed must resolve to a form this covers (round 4): the one
+//! exception is 2551Q, whose penalties come from its own engine call on the
+//! wall clock with a private deadline (form_2551q.rs `recompute`), not from
+//! the penalty-items model or its calendar, so it cannot be pinned here; a
+//! test checks that its source never reads the typed-date calendar.
 
+use bir_core::forms::penalty_items::PenaltyItems;
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use chrono::{Datelike, NaiveDate};
 use serde_json::Value;
@@ -51,11 +59,23 @@ fn filings(trigger: NaiveDate) -> Vec<NaiveDate> {
 }
 
 fn lines_for<F: QueueableForm>(package: &str, index: usize, seed: &Value, out: &mut Vec<String>) {
+    lines_for_items::<F>(package, index, seed, &F::penalty_items(), out);
+}
+
+fn lines_for_items<F>(
+    package: &str,
+    index: usize,
+    seed: &Value,
+    declarations: &[PenaltyItems<F>],
+    out: &mut Vec<String>,
+) where
+    F: Clone + serde::Serialize + serde::de::DeserializeOwned,
+{
     let Ok(form) = serde_json::from_value::<F>(seed.clone()) else {
         out.push(format!("{package}#{index} unreadable"));
         return;
     };
-    for (n, items) in F::penalty_items().iter().enumerate() {
+    for (n, items) in declarations.iter().enumerate() {
         let typed = items.typed_due_date.is_some();
         let cases: Vec<(String, F)> = if typed {
             triggers()
@@ -102,13 +122,21 @@ fn lines_for<F: QueueableForm>(package: &str, index: usize, seed: &Value, out: &
 pub(crate) fn golden_lines() -> Vec<String> {
     let mut out = Vec::new();
     for (package, seeds) in super::agent_seeds() {
-        let Some(kind) = QueueableKind::ALL
+        if package == "1601c" {
+            let items = [bir_core::forms::form_1601c::Form1601CDraft::penalty_items()];
+            for (index, seed) in seeds.iter().enumerate() {
+                lines_for_items(package, index, seed, &items, &mut out);
+            }
+            continue;
+        }
+        if package == "2551q" {
+            continue;
+        }
+        let kind = QueueableKind::ALL
             .iter()
             .copied()
             .find(|kind| kind.form_code().eq_ignore_ascii_case(package))
-        else {
-            continue;
-        };
+            .unwrap_or_else(|| panic!("agent seed {package} has no form kind the golden covers"));
         if CHANGED.contains(&kind.form_code()) {
             continue;
         }
@@ -124,13 +152,32 @@ fn golden_path() -> std::path::PathBuf {
         .join("tests/sample_payloads/penalty_due_dates_golden.txt")
 }
 
+/// Writes the golden (run on the e86b1424 tree with `--ignored`); it fails
+/// after writing, so a recording never passes as a check.
+#[test]
+#[ignore = "records the golden; run on the e86b1424 tree"]
+fn record_penalty_golden() {
+    let lines = golden_lines().join("\n") + "\n";
+    std::fs::write(golden_path(), &lines).unwrap();
+    panic!(
+        "golden written to {}; this run compared nothing",
+        golden_path().display()
+    );
+}
+
+/// 2551Q, the one seed the golden cannot pin, never reads the calendar
+/// PR 13 changed.
+#[test]
+fn form_2551q_penalties_do_not_read_the_typed_date_calendar() {
+    let source = include_str!("../../src/forms/form_2551q.rs");
+    for name in ["next_business_day", "deadline_calendar", "typed_due_date"] {
+        assert!(!source.contains(name), "{name}");
+    }
+}
+
 #[test]
 fn every_other_form_keeps_its_penalty_due_dates_and_amounts() {
     let lines = golden_lines().join("\n") + "\n";
-    if std::env::var_os("PR13_WRITE_PENALTY_GOLDEN").is_some() {
-        std::fs::write(golden_path(), &lines).unwrap();
-        return;
-    }
     let golden = std::fs::read_to_string(golden_path()).unwrap();
     assert!(
         golden.lines().count() > 1_000,

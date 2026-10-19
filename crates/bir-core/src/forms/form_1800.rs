@@ -916,7 +916,7 @@ mod tests {
         // Sunday 2025-03-30 and Saturday 2024-03-30 move to Monday.
         assert_eq!(due(date(2025, 2, 28)), Some(date(2025, 3, 31)));
         assert_eq!(due(date(2024, 2, 29)), Some(date(2024, 4, 1)));
-        // An official holiday (decision P4-2 and P5-4): 2026-04-09 is Araw
+        // An official holiday (maintainer decision: roll past official holidays): 2026-04-09 is Araw
         // ng Kagitingan, one of the app's seeded holidays, so a donation on
         // 2026-03-10 is due Friday, April 10.
         assert_eq!(due(date(2026, 3, 10)), Some(date(2026, 4, 10)));
@@ -925,7 +925,7 @@ mod tests {
         assert_eq!(due(date(2026, 3, 4)), Some(date(2026, 4, 6)));
         // Official holidays are known only for the years whose proclamation
         // ships (2026 today); other years roll off weekends only until
-        // theirs is added (decision P4-6): Friday 2027-04-09 does not roll
+        // theirs is added (maintainer decision: ship 2026, add later years): Friday 2027-04-09 does not roll
         // yet.
         assert_eq!(due(date(2027, 3, 10)), Some(date(2027, 4, 9)));
         let mut blank = sample();
